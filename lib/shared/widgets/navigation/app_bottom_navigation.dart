@@ -35,7 +35,7 @@ class AppBottomNavigation extends StatelessWidget {
     final bottomInset = isIos ? 0.0 : mediaQuery.viewPadding.bottom;
 
     return ColoredBox(
-      color: const Color(0xFF4D4D4D),
+      color: const Color(0xFF272727),
       child: SizedBox(
         height: contentHeight + bottomInset,
         child: Stack(

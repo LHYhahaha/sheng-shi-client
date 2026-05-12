@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -259,16 +260,29 @@ class _HomePageState extends ConsumerState<HomePage> {
                       return const SliverToBoxAdapter(child: SizedBox.shrink());
                     }
 
+                    const crossAxisCount = 2;
+                    const crossAxisSpacing = 8.0;
+                    final tileWidth =
+                        (constraints.crossAxisExtent -
+                            crossAxisSpacing * (crossAxisCount - 1)) /
+                        crossAxisCount;
+                    final coverCacheWidth = math.max(
+                      1,
+                      (tileWidth * MediaQuery.devicePixelRatioOf(context))
+                          .round(),
+                    );
+
                     return SliverMasonryGrid.count(
-                      crossAxisCount: 2,
+                      crossAxisCount: crossAxisCount,
                       mainAxisSpacing: 8,
-                      crossAxisSpacing: 8,
+                      crossAxisSpacing: crossAxisSpacing,
                       childCount: _items.length,
                       itemBuilder: (context, index) {
                         final item = _items[index];
 
                         return _HomeDramaCard(
                           data: item,
+                          coverCacheWidth: coverCacheWidth,
                           onTap: () {
                             context.go(
                               RoutePaths.playerLocation(
@@ -339,7 +353,9 @@ class _VipCrown extends StatelessWidget {
       'assets/mock/vip_crown_figma.png',
       width: 36,
       height: 34,
+      cacheWidth: (36 * MediaQuery.devicePixelRatioOf(context)).round(),
       fit: BoxFit.contain,
+      filterQuality: FilterQuality.low,
     );
   }
 }
@@ -437,9 +453,14 @@ class _HomeCategoryTab extends StatelessWidget {
 }
 
 class _HomeDramaCard extends StatelessWidget {
-  const _HomeDramaCard({required this.data, required this.onTap});
+  const _HomeDramaCard({
+    required this.data,
+    required this.coverCacheWidth,
+    required this.onTap,
+  });
 
   final Drama data;
+  final int coverCacheWidth;
   final VoidCallback onTap;
 
   @override
@@ -458,10 +479,12 @@ class _HomeDramaCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image(
-                    image: AssetImage(data.coverAssetPath),
+                  Image.asset(
+                    data.coverAssetPath,
+                    cacheWidth: coverCacheWidth,
                     fit: BoxFit.cover,
                     alignment: Alignment.topCenter,
+                    filterQuality: FilterQuality.low,
                   ),
                   const DecoratedBox(
                     decoration: BoxDecoration(

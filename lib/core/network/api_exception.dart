@@ -80,7 +80,7 @@ class ApiException implements Exception {
         cause: error,
         stackTrace: error.stackTrace,
       ),
-      DioExceptionType.badResponse => fromHttpResponse(
+      DioExceptionType.badResponse => ApiException.fromHttpResponse(
         statusCode: statusCode,
         data: response?.data,
         requestId: requestId,
@@ -120,6 +120,10 @@ class ApiException implements Exception {
   }
 
   static ApiErrorCode _codeFromStatus(int? statusCode) {
+    if (statusCode == null) {
+      return ApiErrorCode.badResponse;
+    }
+
     return switch (statusCode) {
       401 => ApiErrorCode.unauthorized,
       403 => ApiErrorCode.forbidden,
@@ -146,7 +150,8 @@ class ApiException implements Exception {
       return null;
     }
 
-    final fromHeader = response.headers.value('x-request-id') ??
+    final fromHeader =
+        response.headers.value('x-request-id') ??
         response.headers.value('x-trace-id');
     if (fromHeader != null && fromHeader.isNotEmpty) {
       return fromHeader;

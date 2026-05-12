@@ -118,10 +118,7 @@ class ApiClient {
     }
   }
 
-  T _decode<T>(
-    Response<Object?> response,
-    T Function(Object? data) decoder,
-  ) {
+  T _decode<T>(Response<Object?> response, T Function(Object? data) decoder) {
     final statusCode = response.statusCode;
     if (statusCode == null || statusCode < 200 || statusCode >= 300) {
       throw ApiException.fromHttpResponse(
@@ -170,7 +167,8 @@ class ApiClient {
   }
 
   String? _requestIdFromResponse(Response<Object?> response) {
-    final fromHeader = response.headers.value('x-request-id') ??
+    final fromHeader =
+        response.headers.value('x-request-id') ??
         response.headers.value('x-trace-id');
     if (fromHeader != null && fromHeader.isNotEmpty) {
       return fromHeader;

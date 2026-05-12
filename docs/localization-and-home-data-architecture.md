@@ -17,6 +17,8 @@
 
 ## 多语言边界
 
+默认语言使用英文。当前应用在 `MaterialApp.router` 中固定 `locale: Locale('en')`，不会跟随系统语言自动切到中文；中文文案保留给后续语言设置功能使用。
+
 ### 本地多语言
 
 这些文案由客户端维护，走 `AppLocalizations`：

@@ -180,6 +180,8 @@ context.l10n.navHome
 context.l10n.retry
 ```
 
+应用默认语言为英文。当前在 `MaterialApp.router` 中固定 `locale: Locale('en')`，中文文案仅作为后续语言切换能力的资源储备。
+
 规则：
 
 - 本地 UI 文案统一放 `lib/l10n/app_localizations.dart`。
