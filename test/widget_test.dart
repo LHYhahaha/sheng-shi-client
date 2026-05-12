@@ -6,7 +6,7 @@ void main() {
   testWidgets('shows the app shell', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
 
-    expect(find.text('KiligBox'), findsOneWidget);
+    expect(find.text('KillgBox'), findsOneWidget);
     expect(find.text('Popular'), findsOneWidget);
     expect(find.text('Found You,Hea'), findsWidgets);
     expect(find.text('Home'), findsOneWidget);

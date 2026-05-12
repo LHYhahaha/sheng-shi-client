@@ -102,7 +102,7 @@ class _HomePageState extends State<HomePage> {
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 29, 16, 0),
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
                 child: _HomeTitleBar(
                   onMembershipTap: () => context.go(RoutePaths.membership),
                 ),
@@ -117,21 +117,29 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(13, 18, 13, 24),
-              sliver: SliverMasonryGrid.count(
-                crossAxisCount: 2,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 9,
-                childCount: _items.length,
-                itemBuilder: (context, index) {
-                  return _HomeDramaCard(
-                    data: _items[index],
-                    onTap: () {
-                      context.go(
-                        RoutePaths.playerLocation(
-                          dramaId: _items[index].id,
-                          episodeId: 'episode-1',
-                        ),
+              padding: const EdgeInsets.fromLTRB(13, 2, 12, 24),
+              sliver: SliverLayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.crossAxisExtent <= 0) {
+                    return const SliverToBoxAdapter(child: SizedBox.shrink());
+                  }
+
+                  return SliverMasonryGrid.count(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                    childCount: _items.length,
+                    itemBuilder: (context, index) {
+                      return _HomeDramaCard(
+                        data: _items[index],
+                        onTap: () {
+                          context.go(
+                            RoutePaths.playerLocation(
+                              dramaId: _items[index].id,
+                              episodeId: 'episode-1',
+                            ),
+                          );
+                        },
                       );
                     },
                   );
@@ -165,32 +173,32 @@ class _HomePageState extends State<HomePage> {
         id: '$tab-$seed-1',
         title: 'Found You,Heart\nThiefFound You,Heart Th...',
         tags: const ['Rebirth', 'Rebirth'],
-        imageAspectRatio: 171 / 242,
+        imageAspectRatio: 171 / 226,
         isExclusive: true,
       ),
       _HomeDramaCardData(
         id: '$tab-$seed-2',
         title: 'Found You,Hea',
         tags: const ['Rebirth'],
-        imageAspectRatio: 171 / 236,
+        imageAspectRatio: 171 / 226,
       ),
       _HomeDramaCardData(
         id: '$tab-$seed-3',
         title: 'Found You,Heart\nThiefFound You,Heart Th...',
         tags: const ['Rebirth'],
-        imageAspectRatio: 171 / 205,
+        imageAspectRatio: 171 / 226,
       ),
       _HomeDramaCardData(
         id: '$tab-$seed-4',
         title: 'Found You,Hea',
         tags: const ['Rebirth'],
-        imageAspectRatio: 171 / 260,
+        imageAspectRatio: 171 / 226,
       ),
       _HomeDramaCardData(
         id: '$tab-$seed-5',
         title: 'Found You,Heart\nThiefFound You,Heart Th...',
         tags: const ['Rebirth'],
-        imageAspectRatio: 171 / 232,
+        imageAspectRatio: 171 / 226,
       ),
     ];
   }
@@ -207,12 +215,12 @@ class _HomeTitleBar extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            'KiligBox',
+            'KillgBox',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               color: AppColors.textPrimary,
-              fontSize: 19,
-              fontWeight: FontWeight.w800,
-              height: 1,
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+              height: 1.5,
             ),
           ),
         ),
@@ -233,67 +241,13 @@ class _VipCrown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 39,
-      height: 31,
-      child: CustomPaint(painter: _VipCrownPainter()),
+    return Image.asset(
+      'assets/mock/vip_crown_figma.png',
+      width: 36,
+      height: 34,
+      fit: BoxFit.contain,
     );
   }
-}
-
-class _VipCrownPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final fill = Paint()
-      ..color = AppColors.gold
-      ..style = PaintingStyle.fill;
-    final stroke = Paint()
-      ..color = const Color(0xFF5A2D00)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-
-    final crown = Path()
-      ..moveTo(size.width * 0.08, size.height * 0.35)
-      ..lineTo(size.width * 0.28, size.height * 0.56)
-      ..lineTo(size.width * 0.50, size.height * 0.18)
-      ..lineTo(size.width * 0.72, size.height * 0.56)
-      ..lineTo(size.width * 0.92, size.height * 0.35)
-      ..lineTo(size.width * 0.82, size.height * 0.82)
-      ..lineTo(size.width * 0.18, size.height * 0.82)
-      ..close();
-
-    canvas.drawPath(crown, fill);
-    canvas.drawPath(crown, stroke);
-
-    final dotPaint = Paint()..color = const Color(0xFFFFC35A);
-    for (final center in [
-      Offset(size.width * 0.08, size.height * 0.35),
-      Offset(size.width * 0.50, size.height * 0.18),
-      Offset(size.width * 0.92, size.height * 0.35),
-    ]) {
-      canvas.drawCircle(center, 3.1, dotPaint);
-    }
-
-    final textPainter = TextPainter(
-      text: const TextSpan(
-        text: 'VIP',
-        style: TextStyle(
-          color: Color(0xFF6F3700),
-          fontSize: 7,
-          fontStyle: FontStyle.italic,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    textPainter.paint(
-      canvas,
-      Offset((size.width - textPainter.width) / 2, size.height * 0.55),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _HomeTabsHeaderDelegate extends SliverPersistentHeaderDelegate {
@@ -379,9 +333,9 @@ class _HomeCategoryTab extends StatelessWidget {
         label,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
           color: selected ? AppColors.textPrimary : AppColors.textSecondary,
-          fontSize: 16,
+          fontSize: 15,
           fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
-          height: 1,
+          height: 1.5,
         ),
       ),
     );
@@ -397,7 +351,7 @@ class _HomeDramaCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFF2B2235),
+      color: const Color(0xFF2A2230),
       borderRadius: BorderRadius.circular(AppRadii.sm),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -411,7 +365,7 @@ class _HomeDramaCard extends StatelessWidget {
                 fit: StackFit.expand,
                 children: [
                   const Image(
-                    image: AssetImage('assets/mock/drama_cover.png'),
+                    image: AssetImage('assets/mock/drama_cover_figma.png'),
                     fit: BoxFit.cover,
                     alignment: Alignment.topCenter,
                   ),
@@ -439,7 +393,7 @@ class _HomeDramaCard extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 7, 8, 9),
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -449,20 +403,20 @@ class _HomeDramaCard extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textPrimary,
-                      fontSize: 12.5,
-                      height: 1.08,
+                      color: const Color(0xFFE0E0E0),
+                      fontSize: 12,
+                      height: 1.3,
                     ),
                   ),
                   const SizedBox(height: 8),
                   SizedBox(
-                    height: 18,
+                    height: 16,
                     child: Row(
                       children: [
                         for (final tag in data.tags.indexed) ...[
-                          Flexible(child: _HomeTag(label: tag.$2)),
+                          _HomeTag(label: tag.$2),
                           if (tag.$1 != data.tags.length - 1)
-                            const SizedBox(width: 7),
+                            const SizedBox(width: 8),
                         ],
                       ],
                     ),
@@ -483,21 +437,23 @@ class _ExclusiveBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 31,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      width: 60,
+      height: 18,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       alignment: Alignment.center,
       decoration: const BoxDecoration(
-        color: AppColors.primary,
+        color: Color(0xFFFF2267),
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(AppRadii.sm),
+          topRight: Radius.circular(6),
+          bottomLeft: Radius.circular(6),
         ),
       ),
       child: Text(
         'Exclusive',
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
           color: AppColors.textPrimary,
-          fontSize: 14,
-          height: 1,
+          fontSize: 11,
+          height: 14 / 11,
         ),
       ),
     );
@@ -535,13 +491,12 @@ class _HomeTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 18,
-      constraints: const BoxConstraints(minWidth: 58, maxWidth: 68),
-      padding: const EdgeInsets.symmetric(horizontal: 9),
+      height: 16,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: const Color(0xFF5E5864),
-        borderRadius: BorderRadius.circular(5),
+        color: const Color(0x3DD9D9D9),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
         label,
@@ -549,8 +504,8 @@ class _HomeTag extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
           color: const Color(0xFFC5BEC9),
-          fontSize: 10,
-          height: 1,
+          fontSize: 9,
+          height: 1.3,
         ),
       ),
     );
