@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../shell/app_shell.dart';
 import '../../features/home/presentation/pages/home_page.dart';
+import '../../features/my_list/presentation/pages/my_list_page.dart';
 import '../../features/player/presentation/pages/player_page.dart';
 import '../../l10n/app_localizations.dart';
 import '../../shared/widgets/feature_placeholder_page.dart';
@@ -44,10 +45,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: RoutePaths.myList,
                 name: RouteNames.myList,
-                builder: (context, state) => FeaturePlaceholderPage(
-                  title: context.l10n.myListPlaceholderTitle,
-                  description: context.l10n.myListPlaceholderDescription,
-                ),
+                builder: (context, state) => const MyListPage(),
               ),
             ],
           ),

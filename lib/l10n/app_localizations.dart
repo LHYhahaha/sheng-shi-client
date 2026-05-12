@@ -35,6 +35,22 @@ class AppLocalizations {
   String get feedEmpty => _text(en: 'There is no content for now~', zh: '暂无内容');
   String get feedLoadFailed => _text(en: 'Load failed', zh: '加载失败');
   String get retry => _text(en: 'Retry', zh: '重试');
+  String get myListCollectionTab =>
+      _text(en: 'Collection list list', zh: '收藏列表');
+  String get myListPlayTab => _text(en: 'Play list', zh: '播放列表');
+  String get myListChoose => _text(en: 'Choose', zh: '选择');
+  String get myListCancel => _text(en: 'Cancel', zh: '取消');
+  String get myListEdit => _text(en: 'Edit', zh: '编辑');
+  String get myListDelete => _text(en: 'Delete', zh: '删除');
+  String get myListEmptyTitle => _text(en: 'Nothing here yet', zh: '暂无内容');
+  String get myListEmptyDescription => _text(
+    en: 'Saved dramas and watch history will appear here.',
+    zh: '收藏的短剧和播放记录会展示在这里。',
+  );
+
+  String myListDeleteCount(int count) {
+    return _text(en: 'Delete ($count)', zh: '删除 ($count)');
+  }
 
   String get forYouPlaceholderTitle => navForYou;
   String get forYouPlaceholderDescription =>

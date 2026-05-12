@@ -1,0 +1,771 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+
+import '../../../../app/shell/app_shell_chrome.dart';
+import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/theme/app_colors.dart';
+import '../../data/my_list_repository_provider.dart';
+import '../../domain/my_list_item.dart';
+
+class MyListPage extends ConsumerStatefulWidget {
+  const MyListPage({super.key});
+
+  @override
+  ConsumerState<MyListPage> createState() => _MyListPageState();
+}
+
+class _MyListPageState extends ConsumerState<MyListPage> {
+  MyListTab _selectedTab = MyListTab.collection;
+  bool _isChoosing = false;
+  bool _isLoading = true;
+  Object? _loadError;
+  List<MyListItem> _items = const [];
+  final Set<String> _selectedIds = {};
+  late final AppShellBottomNavigationVisible _shellChrome;
+
+  @override
+  void initState() {
+    super.initState();
+    _shellChrome = ref.read(appShellBottomNavigationVisibleProvider.notifier);
+    _loadItems();
+  }
+
+  @override
+  void dispose() {
+    _shellChrome.show();
+    super.dispose();
+  }
+
+  Future<void> _loadItems() async {
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+      _selectedIds.clear();
+    });
+
+    try {
+      final items = await ref
+          .read(myListRepositoryProvider)
+          .fetchItems(tab: _selectedTab);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _items = items;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadError = error;
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _selectTab(MyListTab tab) {
+    if (_selectedTab == tab) {
+      return;
+    }
+    setState(() {
+      _selectedTab = tab;
+      _isChoosing = false;
+    });
+    _shellChrome.show();
+    _loadItems();
+  }
+
+  void _toggleChoosing() {
+    setState(() {
+      _isChoosing = true;
+      _selectedIds.clear();
+    });
+    _shellChrome.hide();
+  }
+
+  void _cancelChoosing() {
+    setState(() {
+      _isChoosing = false;
+      _selectedIds.clear();
+    });
+    _shellChrome.show();
+  }
+
+  void _toggleItem(String id) {
+    if (!_isChoosing) {
+      return;
+    }
+
+    setState(() {
+      if (!_selectedIds.add(id)) {
+        _selectedIds.remove(id);
+      }
+    });
+  }
+
+  void _deleteSelected() {
+    if (_selectedIds.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _items = _items
+          .where((item) => !_selectedIds.contains(item.id))
+          .toList(growable: false);
+      _selectedIds.clear();
+      _isChoosing = false;
+    });
+    _shellChrome.show();
+  }
+
+  void _deleteItem(String id) {
+    setState(() {
+      _items = _items.where((item) => item.id != id).toList(growable: false);
+      _selectedIds.remove(id);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+
+    return Scaffold(
+      backgroundColor: AppColors.black,
+      body: SafeArea(
+        bottom: false,
+        child: Stack(
+          children: [
+            SlidableAutoCloseBehavior(
+              closeWhenOpened: true,
+              closeWhenTapped: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _MyListHeader(
+                    choosing: _isChoosing,
+                    canEdit: _selectedTab == MyListTab.collection,
+                    onEdit: _toggleChoosing,
+                    onCancel: _cancelChoosing,
+                  ),
+                  _MyListTabs(
+                    selectedTab: _selectedTab,
+                    onSelected: _selectTab,
+                  ),
+                  Expanded(child: _buildBody(l10n)),
+                ],
+              ),
+            ),
+            if (_isChoosing)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _DeleteBar(
+                  count: _selectedIds.length,
+                  onDelete: _deleteSelected,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody(AppLocalizations l10n) {
+    if (_isLoading) {
+      return const Center(
+        child: SizedBox.square(
+          dimension: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AppColors.primary,
+          ),
+        ),
+      );
+    }
+
+    if (_loadError != null) {
+      return Center(
+        child: Text(
+          l10n.feedLoadFailed,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+        ),
+      );
+    }
+
+    if (_items.isEmpty) {
+      return _EmptyMyList(
+        title: l10n.myListEmptyTitle,
+        description: l10n.myListEmptyDescription,
+      );
+    }
+
+    return ListView.separated(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        15,
+        36,
+        _isChoosing ? 108 + MediaQuery.viewPaddingOf(context).bottom : 24,
+      ),
+      itemCount: _items.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 16),
+      itemBuilder: (context, index) {
+        final item = _items[index];
+        return _MyListRowSwipeAction(
+          enabled: !_isChoosing && _selectedTab == MyListTab.play,
+          item: item,
+          onDelete: () => _deleteItem(item.id),
+          child: _MyListRow(
+            item: item,
+            choosing: _isChoosing,
+            selected: _selectedIds.contains(item.id),
+            onTap: _isChoosing ? () => _toggleItem(item.id) : null,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MyListHeader extends StatelessWidget {
+  const _MyListHeader({
+    required this.choosing,
+    required this.canEdit,
+    required this.onEdit,
+    required this.onCancel,
+  });
+
+  final bool choosing;
+  final bool canEdit;
+  final VoidCallback onEdit;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final showTrailing = choosing || canEdit;
+
+    return SizedBox(
+      height: 72,
+      child: Stack(
+        children: [
+          if (choosing)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 27,
+              child: Text(
+                l10n.myListChoose,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  height: 1.1,
+                ),
+              ),
+            )
+          else
+            Positioned(
+              left: 17,
+              top: 24,
+              child: Text(
+                l10n.navMyList,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  height: 1.1,
+                ),
+              ),
+            ),
+          if (showTrailing)
+            Positioned(
+              right: 16,
+              top: choosing ? 23 : 18,
+              child: choosing
+                  ? TextButton(
+                      onPressed: onCancel,
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF909090),
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(58, 36),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        l10n.myListCancel,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          height: 1.1,
+                        ),
+                      ),
+                    )
+                  : _HeaderMoreMenu(onEdit: onEdit),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderMoreMenu extends StatelessWidget {
+  const _HeaderMoreMenu({required this.onEdit});
+
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<_HeaderMenuAction>(
+      onSelected: (action) {
+        switch (action) {
+          case _HeaderMenuAction.edit:
+            onEdit();
+        }
+      },
+      color: const Color(0xFF2A2230),
+      elevation: 0,
+      offset: const Offset(-4, 34),
+      padding: EdgeInsets.zero,
+      splashRadius: 1,
+      tooltip: '',
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      itemBuilder: (context) => [
+        PopupMenuItem<_HeaderMenuAction>(
+          value: _HeaderMenuAction.edit,
+          height: 38,
+          child: Text(
+            context.l10n.myListEdit,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppColors.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+      child: const SizedBox(
+        width: 32,
+        height: 32,
+        child: Icon(
+          Icons.more_horiz_rounded,
+          color: AppColors.textPrimary,
+          size: 24,
+        ),
+      ),
+    );
+  }
+}
+
+enum _HeaderMenuAction { edit }
+
+class _MyListTabs extends StatelessWidget {
+  const _MyListTabs({required this.selectedTab, required this.onSelected});
+
+  final MyListTab selectedTab;
+  final ValueChanged<MyListTab> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+
+    return SizedBox(
+      height: 28,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 16,
+            top: 0,
+            child: _TabLabel(
+              text: l10n.myListCollectionTab,
+              active: selectedTab == MyListTab.collection,
+              onTap: () => onSelected(MyListTab.collection),
+            ),
+          ),
+          Positioned(
+            left: 188,
+            top: 0,
+            child: _TabLabel(
+              text: l10n.myListPlayTab,
+              active: selectedTab == MyListTab.play,
+              onTap: () => onSelected(MyListTab.play),
+            ),
+          ),
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ColoredBox(
+              color: AppColors.divider,
+              child: SizedBox(height: 1),
+            ),
+          ),
+          Positioned(
+            left: selectedTab == MyListTab.collection ? 16 : 188,
+            bottom: 0,
+            child: ColoredBox(
+              color: AppColors.primary,
+              child: SizedBox(
+                width: selectedTab == MyListTab.collection ? 139 : 63,
+                height: 2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TabLabel extends StatelessWidget {
+  const _TabLabel({
+    required this.text,
+    required this.active,
+    required this.onTap,
+  });
+
+  final String text;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
+        height: 28,
+        child: Text(
+          text,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: active ? AppColors.textPrimary : const Color(0xFF909090),
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            height: 1.18,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MyListRowSwipeAction extends StatelessWidget {
+  const _MyListRowSwipeAction({
+    required this.enabled,
+    required this.item,
+    required this.onDelete,
+    required this.child,
+  });
+
+  final bool enabled;
+  final MyListItem item;
+  final VoidCallback onDelete;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) {
+      return child;
+    }
+
+    return Slidable(
+      key: ValueKey(item.id),
+      groupTag: 'my-list-play',
+      closeOnScroll: true,
+      endActionPane: ActionPane(
+        motion: const ScrollMotion(),
+        extentRatio: 0.18,
+        dragDismissible: false,
+        children: [
+          CustomSlidableAction(
+            onPressed: (_) => onDelete(),
+            autoClose: true,
+            backgroundColor: const Color(0xFFFF2E46),
+            padding: EdgeInsets.zero,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.delete_rounded,
+                  color: AppColors.textPrimary,
+                  size: 22,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  context.l10n.myListDelete,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    height: 1.1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _MyListRow extends StatelessWidget {
+  const _MyListRow({
+    required this.item,
+    required this.choosing,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final MyListItem item;
+  final bool choosing;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final row = SizedBox(
+      height: 101,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (choosing) ...[
+            SizedBox(
+              width: 32,
+              height: 101,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _SelectionCircle(selected: selected),
+              ),
+            ),
+          ],
+          _CoverImage(assetPath: item.coverAssetPath),
+          const SizedBox(width: 12),
+          Expanded(child: _RowCopy(item: item)),
+        ],
+      ),
+    );
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: row,
+    );
+  }
+}
+
+class _CoverImage extends StatelessWidget {
+  const _CoverImage({required this.assetPath});
+
+  final String assetPath;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: Stack(
+        children: [
+          Image.asset(
+            assetPath,
+            width: 74,
+            height: 101,
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.medium,
+          ),
+          const Positioned(
+            left: 0,
+            bottom: 0,
+            child: ColoredBox(
+              color: AppColors.primary,
+              child: SizedBox(width: 39, height: 2),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RowCopy extends StatelessWidget {
+  const _RowCopy({required this.item});
+
+  final MyListItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 7),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: AppColors.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              height: 1.15,
+            ),
+          ),
+          const SizedBox(height: 9),
+          Text(
+            item.introduction,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textPrimary.withValues(alpha: 0.5),
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
+              height: 1.55,
+            ),
+          ),
+          const Spacer(),
+          RichText(
+            text: TextSpan(
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                height: 1.15,
+              ),
+              children: [
+                TextSpan(
+                  text: 'EP.${item.currentEpisode}',
+                  style: const TextStyle(color: AppColors.primary),
+                ),
+                TextSpan(
+                  text: ' / ${item.episodeCount}',
+                  style: const TextStyle(color: Color(0xFFAEAEAE)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectionCircle extends StatelessWidget {
+  const _SelectionCircle({required this.selected});
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 140),
+      width: 20,
+      height: 20,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: selected ? AppColors.primary : Colors.transparent,
+        border: Border.all(
+          color: selected ? AppColors.primary : AppColors.textPrimary,
+        ),
+      ),
+      child: selected
+          ? const Icon(Icons.check_rounded, size: 15, color: Colors.white)
+          : null,
+    );
+  }
+}
+
+class _DeleteBar extends StatelessWidget {
+  const _DeleteBar({required this.count, required this.onDelete});
+
+  final int count;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = count > 0;
+
+    return ColoredBox(
+      color: const Color(0xFF2A2230),
+      child: SizedBox(
+        height: 84 + MediaQuery.viewPaddingOf(context).bottom,
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewPaddingOf(context).bottom,
+          ),
+          child: Center(
+            child: TextButton.icon(
+              onPressed: enabled ? onDelete : null,
+              icon: Icon(
+                Icons.delete_outline_rounded,
+                color: enabled
+                    ? AppColors.textPrimary
+                    : AppColors.textPrimary.withValues(alpha: 0.42),
+                size: 18,
+              ),
+              label: Text(context.l10n.myListDeleteCount(count)),
+              style: TextButton.styleFrom(
+                foregroundColor: enabled
+                    ? AppColors.textPrimary
+                    : AppColors.textPrimary.withValues(alpha: 0.42),
+                disabledForegroundColor: AppColors.textPrimary.withValues(
+                  alpha: 0.42,
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  height: 1.2,
+                ),
+                overlayColor: Colors.transparent,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyMyList extends StatelessWidget {
+  const _EmptyMyList({required this.title, required this.description});
+
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: AppColors.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

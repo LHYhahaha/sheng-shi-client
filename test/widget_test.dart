@@ -1,4 +1,5 @@
 import 'package:drama_client/app/app.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -25,10 +26,8 @@ void main() {
 
     await tester.tap(find.text('My list'));
     await tester.pumpAndSettle();
-    expect(
-      find.text('Collection list and play list come in M4.'),
-      findsOneWidget,
-    );
+    expect(find.text('Collection list list'), findsOneWidget);
+    expect(find.text('Raja Iblis Hidup Kembali'), findsOneWidget);
 
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
@@ -38,5 +37,82 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('enters collection edit mode from the header menu', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('My list'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.more_horiz_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose'), findsOneWidget);
+    expect(find.text('Cancel'), findsOneWidget);
+    expect(find.text('Delete (0)'), findsOneWidget);
+
+    await tester.tap(find.text('Raja Iblis Hidup Kembali'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete (1)'), findsOneWidget);
+  });
+
+  testWidgets('reveals play list delete action before deleting', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('My list'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Play list'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete'), findsNothing);
+
+    await tester.drag(
+      find.text('Raja Iblis Hidup Kembali'),
+      const Offset(-80, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Raja Iblis Hidup Kembali'), findsOneWidget);
+    expect(find.text('Delete'), findsWidgets);
+
+    await tester.tap(find.text('Delete').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Raja Iblis Hidup Kembali'), findsNothing);
+  });
+
+  testWidgets('closes play list delete action when tapping elsewhere', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('My list'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Play list'));
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.text('Raja Iblis Hidup Kembali'),
+      const Offset(-80, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Delete'), findsWidgets);
+
+    await tester.tapAt(const Offset(24, 250));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete'), findsNothing);
+    expect(find.text('Raja Iblis Hidup Kembali'), findsOneWidget);
   });
 }

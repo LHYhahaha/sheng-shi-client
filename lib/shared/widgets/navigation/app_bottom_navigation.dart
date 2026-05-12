@@ -23,22 +23,19 @@ class AppBottomNavigation extends StatelessWidget {
     _BottomNavigationItem(
       label: _BottomNavigationLabel.forYou,
       selectedAssetPath: 'assets/navigation/for_you_selected.png',
-      unselectedAssetPath:
-          'assets/navigation/for_you_unselected.png',
+      unselectedAssetPath: 'assets/navigation/for_you_unselected.png',
       fallbackIcon: Icons.play_circle_fill_rounded,
     ),
     _BottomNavigationItem(
       label: _BottomNavigationLabel.myList,
       selectedAssetPath: 'assets/navigation/my_list_selected.png',
-      unselectedAssetPath:
-          'assets/navigation/my_list_unselected.png',
+      unselectedAssetPath: 'assets/navigation/my_list_unselected.png',
       fallbackIcon: Icons.explore_rounded,
     ),
     _BottomNavigationItem(
       label: _BottomNavigationLabel.profile,
       selectedAssetPath: 'assets/navigation/profile_selected.png',
-      unselectedAssetPath:
-          'assets/navigation/profile_unselected.png',
+      unselectedAssetPath: 'assets/navigation/profile_unselected.png',
       fallbackIcon: Icons.person_rounded,
     ),
   ];
