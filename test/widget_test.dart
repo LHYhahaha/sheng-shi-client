@@ -5,7 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   testWidgets('shows the app shell', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
-
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
     expect(find.text('KillgBox'), findsOneWidget);
     expect(find.text('Popular'), findsOneWidget);
     expect(find.text('Found You,Hea'), findsWidgets);
@@ -19,6 +20,8 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('My list'));
     await tester.pumpAndSettle();

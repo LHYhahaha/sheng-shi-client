@@ -1,36 +1,42 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../features/drama/data/drama_repository_provider.dart';
+import '../../../../features/drama/domain/drama.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
 
-class HomePage extends StatefulWidget {
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  ConsumerState<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
-  static const _tabs = ['Popular', 'New', 'Ranking', 'Original', 'Asian'];
-
+class _HomePageState extends ConsumerState<HomePage> {
   final _scrollController = ScrollController();
-  final List<_HomeDramaCardData> _items = [];
+  final List<DramaCategory> _categories = [];
+  final List<Drama> _items = [];
 
   int _selectedTab = 0;
-  int _page = 0;
+  int _loadGeneration = 0;
+  String? _nextPageToken;
+  Object? _initialError;
+  Object? _loadMoreError;
+  bool _isInitialLoading = true;
   bool _isLoadingMore = false;
-  bool _hasMore = true;
 
   @override
   void initState() {
     super.initState();
-    _items.addAll(_buildPage(0));
     _scrollController.addListener(_onScroll);
+    unawaited(_loadInitialFeed());
   }
 
   @override
@@ -42,7 +48,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _onScroll() {
-    if (!_hasMore || _isLoadingMore || !_scrollController.hasClients) {
+    if (_nextPageToken == null ||
+        _isLoadingMore ||
+        !_scrollController.hasClients) {
       return;
     }
 
@@ -52,43 +60,142 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _loadInitialFeed({String? preferredCategoryId}) async {
+    final generation = ++_loadGeneration;
+    setState(() {
+      _isInitialLoading = true;
+      _isLoadingMore = false;
+      _initialError = null;
+      _loadMoreError = null;
+      _nextPageToken = null;
+      _items.clear();
+    });
+
+    try {
+      final repository = ref.read(dramaRepositoryProvider);
+      final categories = await repository.listHomeCategories();
+
+      if (!mounted || generation != _loadGeneration) {
+        return;
+      }
+
+      if (categories.isEmpty) {
+        setState(() {
+          _categories.clear();
+          _selectedTab = 0;
+          _isInitialLoading = false;
+        });
+        return;
+      }
+
+      final selectedIndex = _resolveSelectedIndex(
+        categories,
+        preferredCategoryId,
+      );
+      final selectedCategory = categories[selectedIndex];
+      final page = await repository.listHomeFeed(
+        categoryId: selectedCategory.id,
+      );
+
+      if (!mounted || generation != _loadGeneration) {
+        return;
+      }
+
+      setState(() {
+        _categories
+          ..clear()
+          ..addAll(categories);
+        _selectedTab = selectedIndex;
+        _items.addAll(page.items);
+        _nextPageToken = page.nextPageToken;
+        _isInitialLoading = false;
+      });
+    } catch (error) {
+      if (!mounted || generation != _loadGeneration) {
+        return;
+      }
+
+      setState(() {
+        _initialError = error;
+        _isInitialLoading = false;
+      });
+    }
+  }
+
+  int _resolveSelectedIndex(
+    List<DramaCategory> categories,
+    String? preferredCategoryId,
+  ) {
+    final index = categories.indexWhere(
+      (category) => category.id == preferredCategoryId,
+    );
+    return index == -1 ? 0 : index;
+  }
+
   Future<void> _loadMore() async {
-    setState(() => _isLoadingMore = true);
-
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-
-    if (!mounted) {
+    final pageToken = _nextPageToken;
+    if (pageToken == null || _categories.isEmpty) {
       return;
     }
 
-    final nextPage = _page + 1;
     setState(() {
-      _page = nextPage;
-      _items.addAll(_buildPage(nextPage));
-      _isLoadingMore = false;
-      _hasMore = nextPage < 3;
+      _isLoadingMore = true;
+      _loadMoreError = null;
     });
+
+    try {
+      final repository = ref.read(dramaRepositoryProvider);
+      final page = await repository.listHomeFeed(
+        categoryId: _categories[_selectedTab].id,
+        pageToken: pageToken,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _items.addAll(page.items);
+        _nextPageToken = page.nextPageToken;
+        _isLoadingMore = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _loadMoreError = error;
+        _isLoadingMore = false;
+      });
+    }
   }
 
   void _selectTab(int index) {
-    if (_selectedTab == index) {
+    if (_selectedTab == index || index >= _categories.length) {
       return;
     }
 
+    final categoryId = _categories[index].id;
     setState(() {
       _selectedTab = index;
-      _page = 0;
-      _hasMore = true;
+      _items.clear();
+      _nextPageToken = null;
+      _isInitialLoading = true;
       _isLoadingMore = false;
-      _items
-        ..clear()
-        ..addAll(_buildPage(0));
+      _initialError = null;
+      _loadMoreError = null;
     });
-    _scrollController.animateTo(
-      0,
-      duration: const Duration(milliseconds: 240),
-      curve: Curves.easeOut,
-    );
+
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOut,
+      );
+    }
+
+    unawaited(_loadInitialFeed(preferredCategoryId: categoryId));
   }
 
   @override
@@ -112,95 +219,82 @@ class _HomePageState extends State<HomePage> {
               pinned: true,
               delegate: _HomeTabsHeaderDelegate(
                 selectedTab: _selectedTab,
-                tabs: _tabs,
+                tabs: List<DramaCategory>.unmodifiable(_categories),
                 onTabChanged: _selectTab,
               ),
             ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(13, 2, 12, 24),
-              sliver: SliverLayoutBuilder(
-                builder: (context, constraints) {
-                  if (constraints.crossAxisExtent <= 0) {
-                    return const SliverToBoxAdapter(child: SizedBox.shrink());
-                  }
+            if (_isInitialLoading)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            else if (_initialError != null)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: _HomeErrorState(onRetry: _loadInitialFeed),
+              )
+            else if (_items.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Text(
+                    context.l10n.feedEmpty,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(13, 2, 12, 24),
+                sliver: SliverLayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.crossAxisExtent <= 0) {
+                      return const SliverToBoxAdapter(child: SizedBox.shrink());
+                    }
 
-                  return SliverMasonryGrid.count(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                    childCount: _items.length,
-                    itemBuilder: (context, index) {
-                      return _HomeDramaCard(
-                        data: _items[index],
-                        onTap: () {
-                          context.go(
-                            RoutePaths.playerLocation(
-                              dramaId: _items[index].id,
-                              episodeId: 'episode-1',
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  );
-                },
+                    return SliverMasonryGrid.count(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                      childCount: _items.length,
+                      itemBuilder: (context, index) {
+                        final item = _items[index];
+
+                        return _HomeDramaCard(
+                          data: item,
+                          onTap: () {
+                            context.go(
+                              RoutePaths.playerLocation(
+                                dramaId: item.id,
+                                episodeId: 'episode-1',
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
               ),
-            ),
             SliverToBoxAdapter(
               child: _HomeFeedFooter(
                 isLoading: _isLoadingMore,
-                hasMore: _hasMore,
+                hasMore: _nextPageToken != null,
+                error: _loadMoreError,
+                onRetry: _loadMore,
               ),
             ),
           ],
         ),
       ),
     );
-  }
-
-  List<_HomeDramaCardData> _buildPage(int page) {
-    final tab = _tabs[_selectedTab];
-    final seed = page * 6;
-
-    return [
-      _HomeDramaCardData(
-        id: '$tab-$seed-0',
-        title: 'Found You,Hea',
-        tags: const ['Rebirth'],
-        imageAspectRatio: 171 / 226,
-      ),
-      _HomeDramaCardData(
-        id: '$tab-$seed-1',
-        title: 'Found You,Heart\nThiefFound You,Heart Th...',
-        tags: const ['Rebirth', 'Rebirth'],
-        imageAspectRatio: 171 / 226,
-        isExclusive: true,
-      ),
-      _HomeDramaCardData(
-        id: '$tab-$seed-2',
-        title: 'Found You,Hea',
-        tags: const ['Rebirth'],
-        imageAspectRatio: 171 / 226,
-      ),
-      _HomeDramaCardData(
-        id: '$tab-$seed-3',
-        title: 'Found You,Heart\nThiefFound You,Heart Th...',
-        tags: const ['Rebirth'],
-        imageAspectRatio: 171 / 226,
-      ),
-      _HomeDramaCardData(
-        id: '$tab-$seed-4',
-        title: 'Found You,Hea',
-        tags: const ['Rebirth'],
-        imageAspectRatio: 171 / 226,
-      ),
-      _HomeDramaCardData(
-        id: '$tab-$seed-5',
-        title: 'Found You,Heart\nThiefFound You,Heart Th...',
-        tags: const ['Rebirth'],
-        imageAspectRatio: 171 / 226,
-      ),
-    ];
   }
 }
 
@@ -257,7 +351,7 @@ class _HomeTabsHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.onTabChanged,
   });
 
-  final List<String> tabs;
+  final List<DramaCategory> tabs;
   final int selectedTab;
   final ValueChanged<int> onTabChanged;
 
@@ -296,7 +390,7 @@ class _HomeTabsHeaderDelegate extends SliverPersistentHeaderDelegate {
             separatorBuilder: (context, index) => const SizedBox(width: 31),
             itemBuilder: (context, index) {
               return _HomeCategoryTab(
-                label: tabs[index],
+                label: tabs[index].title,
                 selected: index == selectedTab,
                 onTap: () => onTabChanged(index),
               );
@@ -345,7 +439,7 @@ class _HomeCategoryTab extends StatelessWidget {
 class _HomeDramaCard extends StatelessWidget {
   const _HomeDramaCard({required this.data, required this.onTap});
 
-  final _HomeDramaCardData data;
+  final Drama data;
   final VoidCallback onTap;
 
   @override
@@ -360,12 +454,12 @@ class _HomeDramaCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AspectRatio(
-              aspectRatio: data.imageAspectRatio,
+              aspectRatio: data.coverAspectRatio,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  const Image(
-                    image: AssetImage('assets/mock/drama_cover_figma.png'),
+                  Image(
+                    image: AssetImage(data.coverAssetPath),
                     fit: BoxFit.cover,
                     alignment: Alignment.topCenter,
                   ),
@@ -388,7 +482,11 @@ class _HomeDramaCard extends StatelessWidget {
                       right: 0,
                       child: _ExclusiveBadge(),
                     ),
-                  const Positioned(right: 9, bottom: 10, child: _ViewCount()),
+                  Positioned(
+                    right: 9,
+                    bottom: 10,
+                    child: _ViewCount(label: data.viewCountLabel),
+                  ),
                 ],
               ),
             ),
@@ -408,19 +506,21 @@ class _HomeDramaCard extends StatelessWidget {
                       height: 1.3,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    height: 16,
-                    child: Row(
-                      children: [
-                        for (final tag in data.tags.indexed) ...[
-                          _HomeTag(label: tag.$2),
-                          if (tag.$1 != data.tags.length - 1)
-                            const SizedBox(width: 8),
+                  if (data.tags.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 16,
+                      child: Row(
+                        children: [
+                          for (final tag in data.tags.indexed) ...[
+                            _HomeTag(label: tag.$2),
+                            if (tag.$1 != data.tags.length - 1)
+                              const SizedBox(width: 8),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -449,7 +549,7 @@ class _ExclusiveBadge extends StatelessWidget {
         ),
       ),
       child: Text(
-        'Exclusive',
+        context.l10n.exclusive,
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
           color: AppColors.textPrimary,
           fontSize: 11,
@@ -461,7 +561,9 @@ class _ExclusiveBadge extends StatelessWidget {
 }
 
 class _ViewCount extends StatelessWidget {
-  const _ViewCount();
+  const _ViewCount({required this.label});
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -471,7 +573,7 @@ class _ViewCount extends StatelessWidget {
         const Icon(Icons.play_arrow, color: AppColors.textPrimary, size: 14),
         const SizedBox(width: 2),
         Text(
-          '84.1 M',
+          label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
             color: AppColors.textPrimary,
             fontSize: 11,
@@ -512,11 +614,41 @@ class _HomeTag extends StatelessWidget {
   }
 }
 
+class _HomeErrorState extends StatelessWidget {
+  const _HomeErrorState({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          context.l10n.feedLoadFailed,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 12),
+        TextButton(onPressed: onRetry, child: Text(context.l10n.retry)),
+      ],
+    );
+  }
+}
+
 class _HomeFeedFooter extends StatelessWidget {
-  const _HomeFeedFooter({required this.isLoading, required this.hasMore});
+  const _HomeFeedFooter({
+    required this.isLoading,
+    required this.hasMore,
+    required this.error,
+    required this.onRetry,
+  });
 
   final bool isLoading;
   final bool hasMore;
+  final Object? error;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -530,8 +662,10 @@ class _HomeFeedFooter extends StatelessWidget {
                   dimension: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
+              : error != null
+              ? TextButton(onPressed: onRetry, child: Text(context.l10n.retry))
               : Text(
-                  hasMore ? '' : 'There is no content for now~',
+                  hasMore ? '' : context.l10n.feedEmpty,
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
@@ -540,20 +674,4 @@ class _HomeFeedFooter extends StatelessWidget {
       ),
     );
   }
-}
-
-class _HomeDramaCardData {
-  const _HomeDramaCardData({
-    required this.id,
-    required this.title,
-    required this.tags,
-    required this.imageAspectRatio,
-    this.isExclusive = false,
-  });
-
-  final String id;
-  final String title;
-  final List<String> tags;
-  final double imageAspectRatio;
-  final bool isExclusive;
 }

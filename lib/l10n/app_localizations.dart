@@ -1,0 +1,118 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
+class AppLocalizations {
+  const AppLocalizations(this.locale);
+
+  static const supportedLocales = [Locale('en'), Locale('zh')];
+
+  static const LocalizationsDelegate<AppLocalizations> delegate =
+      _AppLocalizationsDelegate();
+
+  final Locale locale;
+
+  static AppLocalizations of(BuildContext context) {
+    final localizations = Localizations.of<AppLocalizations>(
+      context,
+      AppLocalizations,
+    );
+    assert(localizations != null, 'AppLocalizations is missing from context.');
+    return localizations!;
+  }
+
+  static AppLocalizations maybeOf(BuildContext context) {
+    return Localizations.of<AppLocalizations>(context, AppLocalizations) ??
+        const AppLocalizations(Locale('en'));
+  }
+
+  String get appTitle => _text(en: 'Drama Client', zh: '短剧客户端');
+  String get navHome => _text(en: 'Home', zh: '首页');
+  String get navForYou => _text(en: 'For you', zh: '推荐');
+  String get navMyList => _text(en: 'My list', zh: '片单');
+  String get navProfile => _text(en: 'Profile', zh: '我的');
+  String get exclusive => _text(en: 'Exclusive', zh: '独家');
+  String get feedLoading => _text(en: 'Loading...', zh: '加载中...');
+  String get feedEmpty => _text(en: 'There is no content for now~', zh: '暂无内容');
+  String get feedLoadFailed => _text(en: 'Load failed', zh: '加载失败');
+  String get retry => _text(en: 'Retry', zh: '重试');
+
+  String get forYouPlaceholderTitle => navForYou;
+  String get forYouPlaceholderDescription =>
+      _text(en: 'Short drama playback feed comes in M3.', zh: '短剧播放流将在 M3 接入。');
+  String get myListPlaceholderTitle => navMyList;
+  String get myListPlaceholderDescription => _text(
+    en: 'Collection list and play list come in M4.',
+    zh: '收藏列表和播放列表将在 M4 接入。',
+  );
+  String get profilePlaceholderTitle => navProfile;
+  String get profilePlaceholderDescription => _text(
+    en: 'Guest/login state, wallet, and membership entries come in M4.',
+    zh: '游客/登录态、钱包和会员入口将在 M4 接入。',
+  );
+  String get storePlaceholderTitle => _text(en: 'Store', zh: '充值');
+  String get storePlaceholderDescription => _text(
+    en: 'Coin and VIP recharge packages come in M5.',
+    zh: '金币和 VIP 充值套餐将在 M5 接入。',
+  );
+  String get walletPlaceholderTitle => _text(en: 'My Wallet', zh: '钱包');
+  String get walletPlaceholderDescription => _text(
+    en: 'Balance and wallet actions come in M5.',
+    zh: '余额和钱包操作将在 M5 接入。',
+  );
+  String get membershipPlaceholderTitle => _text(en: 'Membership', zh: '会员');
+  String get membershipPlaceholderDescription =>
+      _text(en: 'VIP plans and benefits come in M5.', zh: 'VIP 套餐和权益将在 M5 接入。');
+  String get languagePlaceholderTitle => _text(en: 'Language', zh: '语言');
+  String get languagePlaceholderDescription => _text(
+    en: 'Language settings are deferred until after MVP localization.',
+    zh: '语言设置将在 MVP 多语言基础完成后接入。',
+  );
+  String get transactionHistoryPlaceholderTitle =>
+      _text(en: 'Transaction history', zh: '交易记录');
+  String get transactionHistoryPlaceholderDescription => _text(
+    en: 'Wallet transaction records come in M5.',
+    zh: '钱包交易记录将在 M5 接入。',
+  );
+  String get consumptionHistoryPlaceholderTitle =>
+      _text(en: 'Consumption history', zh: '消费记录');
+  String get consumptionHistoryPlaceholderDescription => _text(
+    en: 'Episode unlock and coin consumption records come in M5.',
+    zh: '剧集解锁和金币消费记录将在 M5 接入。',
+  );
+  String get recordCoinsPlaceholderTitle =>
+      _text(en: 'Record Coins', zh: '金币记录');
+  String get recordCoinsPlaceholderDescription => _text(
+    en: 'Check-in and reward coins come in M5.',
+    zh: '签到和奖励金币将在 M5 接入。',
+  );
+
+  String _text({required String en, required String zh}) {
+    return locale.languageCode == 'zh' ? zh : en;
+  }
+}
+
+extension AppLocalizationsX on BuildContext {
+  AppLocalizations get l10n => AppLocalizations.of(this);
+}
+
+class _AppLocalizationsDelegate
+    extends LocalizationsDelegate<AppLocalizations> {
+  const _AppLocalizationsDelegate();
+
+  @override
+  bool isSupported(Locale locale) {
+    return AppLocalizations.supportedLocales.any(
+      (supported) => supported.languageCode == locale.languageCode,
+    );
+  }
+
+  @override
+  Future<AppLocalizations> load(Locale locale) {
+    return SynchronousFuture(AppLocalizations(locale));
+  }
+
+  @override
+  bool shouldReload(covariant LocalizationsDelegate<AppLocalizations> old) {
+    return false;
+  }
+}

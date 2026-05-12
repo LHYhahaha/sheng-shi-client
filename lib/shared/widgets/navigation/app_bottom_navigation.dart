@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../l10n/app_localizations.dart';
+
 class AppBottomNavigation extends StatelessWidget {
   const AppBottomNavigation({
     required this.currentIndex,
@@ -12,10 +14,13 @@ class AppBottomNavigation extends StatelessWidget {
   static const _iconSize = 24.0;
 
   static const _items = [
-    _BottomNavigationItem(Icons.home_rounded, 'Home'),
-    _BottomNavigationItem(Icons.play_circle_fill_rounded, 'For you'),
-    _BottomNavigationItem(Icons.explore_rounded, 'My list'),
-    _BottomNavigationItem(Icons.person_rounded, 'Profile'),
+    _BottomNavigationItem(Icons.home_rounded, _BottomNavigationLabel.home),
+    _BottomNavigationItem(
+      Icons.play_circle_fill_rounded,
+      _BottomNavigationLabel.forYou,
+    ),
+    _BottomNavigationItem(Icons.explore_rounded, _BottomNavigationLabel.myList),
+    _BottomNavigationItem(Icons.person_rounded, _BottomNavigationLabel.profile),
   ];
 
   final int currentIndex;
@@ -49,7 +54,7 @@ class AppBottomNavigation extends StatelessWidget {
                       for (final item in _items.indexed)
                         _AppBottomNavigationItem(
                           icon: item.$2.icon,
-                          label: item.$2.label,
+                          label: item.$2.label.resolve(context.l10n),
                           selected: item.$1 == currentIndex,
                           height: contentHeight,
                           onTap: () => onDestinationSelected(item.$1),
@@ -150,5 +155,21 @@ class _BottomNavigationItem {
   const _BottomNavigationItem(this.icon, this.label);
 
   final IconData icon;
-  final String label;
+  final _BottomNavigationLabel label;
+}
+
+enum _BottomNavigationLabel {
+  home,
+  forYou,
+  myList,
+  profile;
+
+  String resolve(AppLocalizations l10n) {
+    return switch (this) {
+      _BottomNavigationLabel.home => l10n.navHome,
+      _BottomNavigationLabel.forYou => l10n.navForYou,
+      _BottomNavigationLabel.myList => l10n.navMyList,
+      _BottomNavigationLabel.profile => l10n.navProfile,
+    };
+  }
 }
