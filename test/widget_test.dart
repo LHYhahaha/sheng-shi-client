@@ -8,5 +8,31 @@ void main() {
 
     expect(find.text('Short Drama Client'), findsOneWidget);
     expect(find.text('Open demo player'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('For you'), findsOneWidget);
+    expect(find.text('My list'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
+  });
+
+  testWidgets('switches between bottom navigation destinations', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+
+    await tester.tap(find.text('My list'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Collection list and play list come in M4.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Guest/login state, wallet, and membership entries come in M4.',
+      ),
+      findsOneWidget,
+    );
   });
 }

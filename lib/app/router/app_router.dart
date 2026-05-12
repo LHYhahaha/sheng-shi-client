@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../shell/app_shell.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/player/presentation/pages/player_page.dart';
 import '../../shared/widgets/feature_placeholder_page.dart';
@@ -11,18 +12,58 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: RoutePaths.home,
     routes: [
-      GoRoute(
-        path: RoutePaths.home,
-        name: RouteNames.home,
-        builder: (context, state) => const HomePage(),
-      ),
-      GoRoute(
-        path: RoutePaths.forYou,
-        name: RouteNames.forYou,
-        builder: (context, state) => const FeaturePlaceholderPage(
-          title: 'For you',
-          description: 'Short drama playback feed comes in M3.',
-        ),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return AppShell(navigationShell: navigationShell);
+        },
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RoutePaths.home,
+                name: RouteNames.home,
+                builder: (context, state) => const HomePage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RoutePaths.forYou,
+                name: RouteNames.forYou,
+                builder: (context, state) => const FeaturePlaceholderPage(
+                  title: 'For you',
+                  description: 'Short drama playback feed comes in M3.',
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RoutePaths.myList,
+                name: RouteNames.myList,
+                builder: (context, state) => const FeaturePlaceholderPage(
+                  title: 'My list',
+                  description: 'Collection list and play list come in M4.',
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RoutePaths.profile,
+                name: RouteNames.profile,
+                builder: (context, state) => const FeaturePlaceholderPage(
+                  title: 'Profile',
+                  description:
+                      'Guest/login state, wallet, and membership entries come in M4.',
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       GoRoute(
         path: RoutePaths.player,
@@ -33,23 +74,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
           return PlayerPage(dramaId: dramaId, episodeId: episodeId);
         },
-      ),
-      GoRoute(
-        path: RoutePaths.myList,
-        name: RouteNames.myList,
-        builder: (context, state) => const FeaturePlaceholderPage(
-          title: 'My list',
-          description: 'Collection list and play list come in M4.',
-        ),
-      ),
-      GoRoute(
-        path: RoutePaths.profile,
-        name: RouteNames.profile,
-        builder: (context, state) => const FeaturePlaceholderPage(
-          title: 'Profile',
-          description:
-              'Guest/login state, wallet, and membership entries come in M4.',
-        ),
       ),
       GoRoute(
         path: RoutePaths.store,

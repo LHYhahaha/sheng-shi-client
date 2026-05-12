@@ -1,0 +1,75 @@
+import 'package:flutter/material.dart';
+
+import '../theme/app_colors.dart';
+import '../theme/app_radii.dart';
+
+class AppSegmentedTabs extends StatelessWidget {
+  const AppSegmentedTabs({
+    required this.tabs,
+    required this.selectedIndex,
+    required this.onChanged,
+    super.key,
+  });
+
+  final List<String> tabs;
+  final int selectedIndex;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AppRadii.sm),
+      ),
+      padding: const EdgeInsets.all(3),
+      child: Row(
+        children: [
+          for (final entry in tabs.indexed)
+            Expanded(
+              child: _Segment(
+                label: entry.$2,
+                selected: entry.$1 == selectedIndex,
+                onTap: () => onChanged(entry.$1),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Segment extends StatelessWidget {
+  const _Segment({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? AppColors.surfaceMuted : Colors.transparent,
+      borderRadius: BorderRadius.circular(AppRadii.sm),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadii.sm),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: selected ? AppColors.textPrimary : AppColors.textSecondary,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
