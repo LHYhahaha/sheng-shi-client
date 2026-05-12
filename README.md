@@ -5,6 +5,7 @@ Flutter short drama client.
 ## Documentation
 
 - [Technical Architecture](docs/technical-architecture.md)
+- [Development Schedule](docs/development-schedule.md)
 
 ## Flutter Version
 
