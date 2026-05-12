@@ -65,7 +65,7 @@ class MockDramaRepository implements DramaRepository {
     Drama(
       id: 'found-you',
       title: 'Found You,Hea',
-      coverAssetPath: 'assets/mock/drama_cover_figma.png',
+      coverAssetPath: 'assets/images/home/drama_cover_figma.png',
       viewCountLabel: '84.1 M',
       episodeCount: 52,
       categoryId: 'popular',
@@ -75,7 +75,7 @@ class MockDramaRepository implements DramaRepository {
     Drama(
       id: 'heart-thief',
       title: 'Found You,Heart\nThiefFound You,Heart Th...',
-      coverAssetPath: 'assets/mock/drama_cover_figma.png',
+      coverAssetPath: 'assets/images/home/drama_cover_figma.png',
       viewCountLabel: '84.1 M',
       episodeCount: 60,
       categoryId: 'new',
@@ -86,7 +86,7 @@ class MockDramaRepository implements DramaRepository {
     Drama(
       id: 'reborn-love',
       title: 'Found You,Hea',
-      coverAssetPath: 'assets/mock/drama_cover_figma.png',
+      coverAssetPath: 'assets/images/home/drama_cover_figma.png',
       viewCountLabel: '84.1 M',
       episodeCount: 48,
       categoryId: 'ranking',
@@ -96,7 +96,7 @@ class MockDramaRepository implements DramaRepository {
     Drama(
       id: 'secret-vow',
       title: 'Found You,Heart\nThiefFound You,Heart Th...',
-      coverAssetPath: 'assets/mock/drama_cover_figma.png',
+      coverAssetPath: 'assets/images/home/drama_cover_figma.png',
       viewCountLabel: '84.1 M',
       episodeCount: 66,
       categoryId: 'original',
@@ -106,7 +106,7 @@ class MockDramaRepository implements DramaRepository {
     Drama(
       id: 'asian-reunion',
       title: 'Found You,Hea',
-      coverAssetPath: 'assets/mock/drama_cover_figma.png',
+      coverAssetPath: 'assets/images/home/drama_cover_figma.png',
       viewCountLabel: '84.1 M',
       episodeCount: 45,
       categoryId: 'asian',

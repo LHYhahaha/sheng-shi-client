@@ -305,15 +305,22 @@ abstract interface class DramaRepository {
 
 ```text
 assets/
-  mock/
-    drama_cover.png
-    drama_cover_figma.png
-    vip_crown_figma.png
+  images/
+    home/
+      drama_cover.png
+      drama_cover_figma.png
+      vip_crown_figma.png
+  navigation/
+    bottom_tab/
+      home_selected.png
+      home_unselected.png
+      ...
 ```
 
 规则：
 
-- mock 资源放 `assets/mock/`。
+- 正式图片按业务或页面放在 `assets/images/`。
+- 底部导航图标统一放 `assets/navigation/bottom_tab/`，选中态和未选中态分别导出独立图片。
 - 正式图片建议按用途继续拆分，例如 `assets/images/`、`assets/icons/`。
 - 新增资源后必须在 `pubspec.yaml` 中登记。
 - 业务模型中如果同时支持本地 mock 图和远程图，建议引入明确字段或 value object，避免把 `coverAssetPath` 直接沿用到远程接口。

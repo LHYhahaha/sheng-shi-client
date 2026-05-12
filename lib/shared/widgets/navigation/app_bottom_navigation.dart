@@ -14,13 +14,33 @@ class AppBottomNavigation extends StatelessWidget {
   static const _iconSize = 24.0;
 
   static const _items = [
-    _BottomNavigationItem(Icons.home_rounded, _BottomNavigationLabel.home),
     _BottomNavigationItem(
-      Icons.play_circle_fill_rounded,
-      _BottomNavigationLabel.forYou,
+      label: _BottomNavigationLabel.home,
+      selectedAssetPath: 'assets/navigation/home_selected.png',
+      unselectedAssetPath: 'assets/navigation/home_unselected.png',
+      fallbackIcon: Icons.home_rounded,
     ),
-    _BottomNavigationItem(Icons.explore_rounded, _BottomNavigationLabel.myList),
-    _BottomNavigationItem(Icons.person_rounded, _BottomNavigationLabel.profile),
+    _BottomNavigationItem(
+      label: _BottomNavigationLabel.forYou,
+      selectedAssetPath: 'assets/navigation/for_you_selected.png',
+      unselectedAssetPath:
+          'assets/navigation/for_you_unselected.png',
+      fallbackIcon: Icons.play_circle_fill_rounded,
+    ),
+    _BottomNavigationItem(
+      label: _BottomNavigationLabel.myList,
+      selectedAssetPath: 'assets/navigation/my_list_selected.png',
+      unselectedAssetPath:
+          'assets/navigation/my_list_unselected.png',
+      fallbackIcon: Icons.explore_rounded,
+    ),
+    _BottomNavigationItem(
+      label: _BottomNavigationLabel.profile,
+      selectedAssetPath: 'assets/navigation/profile_selected.png',
+      unselectedAssetPath:
+          'assets/navigation/profile_unselected.png',
+      fallbackIcon: Icons.person_rounded,
+    ),
   ];
 
   final int currentIndex;
@@ -53,8 +73,10 @@ class AppBottomNavigation extends StatelessWidget {
                     children: [
                       for (final item in _items.indexed)
                         _AppBottomNavigationItem(
-                          icon: item.$2.icon,
                           label: item.$2.label.resolve(context.l10n),
+                          selectedAssetPath: item.$2.selectedAssetPath,
+                          unselectedAssetPath: item.$2.unselectedAssetPath,
+                          fallbackIcon: item.$2.fallbackIcon,
                           selected: item.$1 == currentIndex,
                           height: contentHeight,
                           onTap: () => onDestinationSelected(item.$1),
@@ -90,15 +112,19 @@ class _HomeIndicator extends StatelessWidget {
 
 class _AppBottomNavigationItem extends StatelessWidget {
   const _AppBottomNavigationItem({
-    required this.icon,
     required this.label,
+    required this.selectedAssetPath,
+    required this.unselectedAssetPath,
+    required this.fallbackIcon,
     required this.selected,
     required this.height,
     required this.onTap,
   });
 
-  final IconData icon;
   final String label;
+  final String selectedAssetPath;
+  final String unselectedAssetPath;
+  final IconData fallbackIcon;
   final bool selected;
   final double height;
   final VoidCallback onTap;
@@ -120,10 +146,19 @@ class _AppBottomNavigationItem extends StatelessWidget {
               top: 9,
               child: SizedBox.square(
                 dimension: AppBottomNavigation._iconSize,
-                child: Icon(
-                  icon,
-                  size: AppBottomNavigation._iconSize,
-                  color: color,
+                child: Image.asset(
+                  selected ? selectedAssetPath : unselectedAssetPath,
+                  width: AppBottomNavigation._iconSize,
+                  height: AppBottomNavigation._iconSize,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.low,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Icon(
+                      fallbackIcon,
+                      size: AppBottomNavigation._iconSize,
+                      color: color,
+                    );
+                  },
                 ),
               ),
             ),
@@ -152,10 +187,17 @@ class _AppBottomNavigationItem extends StatelessWidget {
 }
 
 class _BottomNavigationItem {
-  const _BottomNavigationItem(this.icon, this.label);
+  const _BottomNavigationItem({
+    required this.label,
+    required this.selectedAssetPath,
+    required this.unselectedAssetPath,
+    required this.fallbackIcon,
+  });
 
-  final IconData icon;
   final _BottomNavigationLabel label;
+  final String selectedAssetPath;
+  final String unselectedAssetPath;
+  final IconData fallbackIcon;
 }
 
 enum _BottomNavigationLabel {

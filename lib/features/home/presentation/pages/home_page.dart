@@ -350,7 +350,7 @@ class _VipCrown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Image.asset(
-      'assets/mock/vip_crown_figma.png',
+      'assets/images/home/vip_crown_figma.png',
       width: 36,
       height: 34,
       cacheWidth: (36 * MediaQuery.devicePixelRatioOf(context)).round(),
