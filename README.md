@@ -4,7 +4,9 @@ Flutter short drama client.
 
 ## Documentation
 
+- [项目结构与开发规范](docs/project-structure-and-conventions.md)
 - [Technical Architecture](docs/technical-architecture.md)
+- [多语言与首页数据架构规范](docs/localization-and-home-data-architecture.md)
 - [Development Schedule](docs/development-schedule.md)
 
 ## Flutter Version
