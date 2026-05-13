@@ -259,6 +259,41 @@ void main() {
     expect(find.text('EP.02'), findsOneWidget);
   });
 
+  testWidgets('for you feed does not inherit single drama player state', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('For you'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(PageView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Found You, Heart Thief'), findsOneWidget);
+
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(110, 260));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(PageView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('EP.02'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.chevron_left).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('For you'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Found You, Heart Thief'), findsOneWidget);
+    expect(find.text('Watch Now'), findsOneWidget);
+    expect(find.text('EP.02'), findsNothing);
+  });
+
   testWidgets('opens language settings from profile', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
     await tester.pump(const Duration(seconds: 1));

@@ -212,7 +212,25 @@ class PlayerPaywallOverlay extends StatelessWidget {
               child: SizedBox(
                 width: 275,
                 height: 44,
-                child: FilledButton(onPressed: onTap, child: Text(label)),
+                child: FilledButton(
+                  onPressed: onTap,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.textPrimary,
+                    disabledBackgroundColor: AppColors.primary.withValues(
+                      alpha: 0.45,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      height: 18 / 14,
+                    ),
+                  ),
+                  child: Text(label),
+                ),
               ),
             ),
           ),

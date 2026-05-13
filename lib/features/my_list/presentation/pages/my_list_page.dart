@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
@@ -124,16 +126,22 @@ class _MyListPageState extends ConsumerState<MyListPage> {
 
     if (state.isEmpty) {
       return _EmptyMyList(
-        title: l10n.myListEmptyTitle,
         description: l10n.myListEmptyDescription,
+        actionLabel: l10n.myListWatchPopular,
+        onActionTap: () => context.go(RoutePaths.home),
       );
     }
 
+    final isPlayList = state.selectedTab == MyListTab.play;
     return ListView.separated(
       padding: EdgeInsets.fromLTRB(
         16,
         15,
-        36,
+        state.isCollectionEditing
+            ? 4
+            : isPlayList
+            ? 0
+            : 36,
         state.isCollectionEditing
             ? 108 + MediaQuery.viewPaddingOf(context).bottom
             : 24,
@@ -149,13 +157,16 @@ class _MyListPageState extends ConsumerState<MyListPage> {
           onDelete: () => controller.deleteItem(item.id),
           onOpened: () => controller.openPlayItem(item.id),
           onClosed: () => controller.closeOpenPlayItem(item.id),
-          child: _MyListRow(
-            item: item,
-            choosing: state.isCollectionEditing,
-            selected: state.selectedIds.contains(item.id),
-            onTap: state.isCollectionEditing
-                ? () => controller.toggleSelection(item.id)
-                : controller.closeAnyOpenPlayItem,
+          child: Padding(
+            padding: EdgeInsets.only(right: isPlayList ? 36 : 0),
+            child: _MyListRow(
+              item: item,
+              choosing: state.isCollectionEditing,
+              selected: state.selectedIds.contains(item.id),
+              onTap: state.isCollectionEditing
+                  ? () => controller.toggleSelection(item.id)
+                  : controller.closeAnyOpenPlayItem,
+            ),
           ),
         );
       },
@@ -418,7 +429,7 @@ class _MyListRowSwipeAction extends StatelessWidget {
         closeOnScroll: true,
         endActionPane: ActionPane(
           motion: const ScrollMotion(),
-          extentRatio: 0.18,
+          extentRatio: 56 / 359,
           dragDismissible: false,
           children: [
             CustomSlidableAction(
@@ -683,42 +694,50 @@ class _DeleteBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = count > 0;
+    final isIos = Theme.of(context).platform == TargetPlatform.iOS;
+    final bottomInset = isIos ? 0.0 : MediaQuery.viewPaddingOf(context).bottom;
+    final contentHeight = isIos ? 84.0 : 64.0;
 
     return ColoredBox(
       color: AppColors.surfacePanel,
       child: SizedBox(
-        height: 84 + MediaQuery.viewPaddingOf(context).bottom,
-        child: Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewPaddingOf(context).bottom,
-          ),
-          child: Center(
-            child: TextButton.icon(
-              onPressed: enabled ? onDelete : null,
-              icon: Icon(
-                Icons.delete_outline_rounded,
-                color: enabled
-                    ? AppColors.textPrimary
-                    : AppColors.textPrimary.withValues(alpha: 0.42),
-                size: 18,
-              ),
-              label: Text(context.l10n.myListDeleteCount(count)),
-              style: TextButton.styleFrom(
-                foregroundColor: enabled
-                    ? AppColors.textPrimary
-                    : AppColors.textPrimary.withValues(alpha: 0.42),
-                disabledForegroundColor: AppColors.textPrimary.withValues(
-                  alpha: 0.42,
+        height: contentHeight + bottomInset,
+        child: Stack(
+          children: [
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              height: contentHeight,
+              child: Center(
+                child: TextButton.icon(
+                  onPressed: enabled ? onDelete : null,
+                  icon: Icon(
+                    Icons.delete_outline_rounded,
+                    color: enabled
+                        ? AppColors.textPrimary
+                        : AppColors.textPrimary.withValues(alpha: 0.42),
+                    size: 18,
+                  ),
+                  label: Text(context.l10n.myListDeleteCount(count)),
+                  style: TextButton.styleFrom(
+                    foregroundColor: enabled
+                        ? AppColors.textPrimary
+                        : AppColors.textPrimary.withValues(alpha: 0.42),
+                    disabledForegroundColor: AppColors.textPrimary.withValues(
+                      alpha: 0.42,
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      height: 1.2,
+                    ),
+                    overlayColor: Colors.transparent,
+                  ),
                 ),
-                textStyle: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  height: 1.2,
-                ),
-                overlayColor: Colors.transparent,
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -726,40 +745,106 @@ class _DeleteBar extends StatelessWidget {
 }
 
 class _EmptyMyList extends StatelessWidget {
-  const _EmptyMyList({required this.title, required this.description});
+  const _EmptyMyList({
+    required this.description,
+    required this.actionLabel,
+    required this.onActionTap,
+  });
 
-  final String title;
   final String description;
+  final String actionLabel;
+  final VoidCallback onActionTap;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
+    return Padding(
+      padding: const EdgeInsets.only(top: 84),
+      child: Align(
+        alignment: Alignment.topCenter,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: AppColors.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
+            const _EmptyIllustration(),
+            const SizedBox(height: 28),
             Text(
               description,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: AppColors.textSecondary,
-                fontSize: 12,
-                height: 1.4,
+                fontSize: 14,
+                height: 21 / 14,
+              ),
+            ),
+            const SizedBox(height: 28),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onActionTap,
+              child: Container(
+                width: 275,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  actionLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    height: 24 / 16,
+                  ),
+                ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _EmptyIllustration extends StatelessWidget {
+  const _EmptyIllustration();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: 120,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 92,
+            height: 74,
+            decoration: BoxDecoration(
+              color: AppColors.surfacePanel.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.textPrimary.withValues(alpha: 0.08),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 30,
+            child: Container(
+              width: 66,
+              height: 10,
+              decoration: BoxDecoration(
+                color: AppColors.textPrimary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+          Icon(
+            Icons.movie_filter_outlined,
+            color: AppColors.textPrimary.withValues(alpha: 0.3),
+            size: 42,
+          ),
+        ],
       ),
     );
   }

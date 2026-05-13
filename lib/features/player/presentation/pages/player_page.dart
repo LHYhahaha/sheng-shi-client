@@ -42,6 +42,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   late final PageController _pageController;
   AppShellBottomNavigationVisible? _shellChrome;
 
+  String get _sessionKey {
+    return switch (widget.feedMode) {
+      PlayerFeedMode.forYou => 'for-you-tab',
+      PlayerFeedMode.singleDrama =>
+        'single:${widget.dramaId}:${widget.episodeId}',
+    };
+  }
+
   @override
   void initState() {
     super.initState();
@@ -55,9 +63,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     Future<void>.microtask(() {
       _shellChrome?.hide();
       ref
-          .read(playerUiControllerProvider.notifier)
+          .read(playerUiControllerProvider(_sessionKey).notifier)
           .startSession(widget.episodeId ?? '1');
-      ref.read(playerFeedControllerProvider.notifier).load(_feedConfig);
+      ref
+          .read(playerFeedControllerProvider(_sessionKey).notifier)
+          .load(_feedConfig);
     });
   }
 
@@ -80,41 +90,42 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final feedState = ref.watch(playerFeedControllerProvider);
-    final feedController = ref.read(playerFeedControllerProvider.notifier);
-    final uiState = ref.watch(playerUiControllerProvider);
-    final uiController = ref.read(playerUiControllerProvider.notifier);
+    final sessionKey = _sessionKey;
+    final feedProvider = playerFeedControllerProvider(sessionKey);
+    final uiProvider = playerUiControllerProvider(sessionKey);
+    final feedState = ref.watch(feedProvider);
+    final feedController = ref.read(feedProvider.notifier);
+    final uiState = ref.watch(uiProvider);
+    final uiController = ref.read(uiProvider.notifier);
 
-    ref.listen(
-      playerFeedControllerProvider.select((state) => state.currentItem),
-      (previous, next) {
-        if (next == null || previous?.id == next.id) {
-          return;
-        }
+    ref.listen(feedProvider.select((state) => state.currentItem), (
+      previous,
+      next,
+    ) {
+      if (next == null || previous?.id == next.id) {
+        return;
+      }
 
-        ref
-            .read(playerUiControllerProvider.notifier)
-            .selectEpisode(next.episode);
-      },
-    );
+      ref.read(uiProvider.notifier).selectEpisode(next.episode);
+    });
 
-    ref.listen(
-      playerFeedControllerProvider.select((state) => state.currentIndex),
-      (previous, next) {
-        if (!_pageController.hasClients) {
-          return;
-        }
+    ref.listen(feedProvider.select((state) => state.currentIndex), (
+      previous,
+      next,
+    ) {
+      if (!_pageController.hasClients) {
+        return;
+      }
 
-        final currentPage = _pageController.page?.round();
-        if (currentPage != next) {
-          _pageController.animateToPage(
-            next,
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-          );
-        }
-      },
-    );
+      final currentPage = _pageController.page?.round();
+      if (currentPage != next) {
+        _pageController.animateToPage(
+          next,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -231,9 +242,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     }
 
     final targetIndex = ref
-        .read(playerFeedControllerProvider.notifier)
+        .read(playerFeedControllerProvider(_sessionKey).notifier)
         .selectEpisode(episode);
-    ref.read(playerUiControllerProvider.notifier).selectEpisode(episode);
+    ref
+        .read(playerUiControllerProvider(_sessionKey).notifier)
+        .selectEpisode(episode);
     if (_pageController.hasClients) {
       _pageController.animateToPage(
         targetIndex,
@@ -261,7 +274,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           initialTab: initialTab,
           currentEpisode:
               ref
-                  .read(playerFeedControllerProvider)
+                  .read(playerFeedControllerProvider(_sessionKey))
                   .currentItem
                   ?.episode
                   .number ??
@@ -299,6 +312,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       return;
     }
 
-    ref.read(playerUiControllerProvider.notifier).unlockPaywallAndPlay();
+    ref
+        .read(playerUiControllerProvider(_sessionKey).notifier)
+        .unlockPaywallAndPlay();
   }
 }

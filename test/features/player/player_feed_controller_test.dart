@@ -8,12 +8,13 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('loads single drama feed from requested episode', () async {
     final container = _createContainer();
-    final controller = container.read(playerFeedControllerProvider.notifier);
+    final provider = playerFeedControllerProvider('single');
+    final controller = container.read(provider.notifier);
 
     await controller.load(
       const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: '3'),
     );
-    final state = container.read(playerFeedControllerProvider);
+    final state = container.read(provider);
 
     expect(state.isLoading, isFalse);
     expect(state.error, isNull);
@@ -24,11 +25,12 @@ void main() {
 
   test('loads for you feed and updates current index', () async {
     final container = _createContainer();
-    final controller = container.read(playerFeedControllerProvider.notifier);
+    final provider = playerFeedControllerProvider('for-you');
+    final controller = container.read(provider.notifier);
 
     await controller.load(const PlayerFeedConfig.forYou());
     controller.setCurrentIndex(1);
-    final state = container.read(playerFeedControllerProvider);
+    final state = container.read(provider);
 
     expect(state.items, hasLength(2));
     expect(state.currentIndex, 1);
@@ -38,17 +40,47 @@ void main() {
 
   test('selects episode by moving to an existing feed item', () async {
     final container = _createContainer();
-    final controller = container.read(playerFeedControllerProvider.notifier);
+    final provider = playerFeedControllerProvider('single');
+    final controller = container.read(provider.notifier);
 
     await controller.load(
       const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: '1'),
     );
     final targetIndex = controller.selectEpisode(_episode(2));
-    final state = container.read(playerFeedControllerProvider);
+    final state = container.read(provider);
 
     expect(targetIndex, 1);
     expect(state.currentIndex, 1);
     expect(state.currentItem?.episode.number, 2);
+  });
+
+  test('keeps for you and single drama feed sessions isolated', () async {
+    final container = _createContainer();
+    final forYouProvider = playerFeedControllerProvider('for-you-tab');
+    final singleProvider = playerFeedControllerProvider('single:drama-a:1');
+
+    await container
+        .read(forYouProvider.notifier)
+        .load(const PlayerFeedConfig.forYou());
+    container.read(forYouProvider.notifier).setCurrentIndex(1);
+
+    await container
+        .read(singleProvider.notifier)
+        .load(
+          const PlayerFeedConfig.singleDrama(
+            dramaId: 'drama-a',
+            episodeId: '3',
+          ),
+        );
+
+    final forYouState = container.read(forYouProvider);
+    final singleState = container.read(singleProvider);
+
+    expect(forYouState.currentIndex, 1);
+    expect(forYouState.currentItem?.mode, PlayerFeedMode.forYou);
+    expect(forYouState.currentItem?.content.id, 'drama-b');
+    expect(singleState.currentItem?.mode, PlayerFeedMode.singleDrama);
+    expect(singleState.currentItem?.episode.number, 3);
   });
 }
 

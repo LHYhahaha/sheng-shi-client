@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/player_content.dart';
 
 final playerUiControllerProvider =
-    NotifierProvider<PlayerUiController, PlayerUiState>(PlayerUiController.new);
+    NotifierProvider.family<PlayerUiController, PlayerUiState, String>(
+      PlayerUiController.new,
+    );
 
 class PlayerUiState {
   const PlayerUiState({
@@ -39,6 +41,10 @@ class PlayerUiState {
 enum PlayerPaywallState { hidden, unlock, memberUnlock }
 
 class PlayerUiController extends Notifier<PlayerUiState> {
+  PlayerUiController(this.sessionKey);
+
+  final String sessionKey;
+
   @override
   PlayerUiState build() => const PlayerUiState.initial();
 

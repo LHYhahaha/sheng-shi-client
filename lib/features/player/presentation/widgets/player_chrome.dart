@@ -6,6 +6,14 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../domain/player_content.dart';
 
+abstract final class _PlayerLayoutMetrics {
+  static const forYouActionRailBottom = 160.0;
+  static const singleActionRailBottom = 161.0;
+  static const forYouWatchNowBottom = 24.0;
+  static const forYouMetaGap = 58.0;
+  static const singleBottomActionBottom = 41.0;
+}
+
 class PlayerChrome extends StatelessWidget {
   const PlayerChrome({
     required this.content,
@@ -37,8 +45,10 @@ class PlayerChrome extends StatelessWidget {
     final mediaQuery = MediaQuery.of(context);
     final bottomInset = mediaQuery.padding.bottom;
     final bottomFrameHeight = forYouLayout ? bottomInset : 0.0;
-    final forYouWatchNowBottom = bottomInset + 24;
-    final forYouMetaBottom = forYouWatchNowBottom + 58;
+    final forYouWatchNowBottom =
+        bottomInset + _PlayerLayoutMetrics.forYouWatchNowBottom;
+    final forYouMetaBottom =
+        forYouWatchNowBottom + _PlayerLayoutMetrics.forYouMetaGap;
 
     return Stack(
       children: [
@@ -158,7 +168,11 @@ class PlayerChrome extends StatelessWidget {
         ],
         Positioned(
           right: 17,
-          bottom: bottomInset + (forYouLayout ? 172 : 175),
+          bottom:
+              bottomInset +
+              (forYouLayout
+                  ? _PlayerLayoutMetrics.forYouActionRailBottom
+                  : _PlayerLayoutMetrics.singleActionRailBottom),
           child: PlayerActionRail(
             likeCountLabel: content.likeCountLabel,
             onEpisodesTap: onEpisodesTap,
@@ -188,31 +202,28 @@ class PlayerChrome extends StatelessWidget {
           ),
           Positioned(
             left: 16,
-            bottom: bottomInset + 12,
+            bottom: bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: onUnlockTap,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 168),
-                  height: 24,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.gold.withValues(alpha: 0.8),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    context.l10n.playerBecomeMember,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF4B2C0D),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      height: 16 / 12,
-                    ),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 168),
+                height: 24,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  context.l10n.playerBecomeMember,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF4B2C0D),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    height: 16 / 12,
                   ),
                 ),
               ),
@@ -220,7 +231,7 @@ class PlayerChrome extends StatelessWidget {
           ),
           Positioned(
             right: 31,
-            bottom: bottomInset + 18,
+            bottom: bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
             child: Row(
               children: [
                 const Icon(

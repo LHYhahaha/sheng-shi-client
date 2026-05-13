@@ -46,6 +46,8 @@ class AppLocalizations {
     en: 'Saved dramas and watch history will appear here.',
     zh: '收藏的短剧和播放记录会展示在这里。',
   );
+  String get myListWatchPopular =>
+      _text(en: 'Watch popular dramas', zh: '观看热门短剧');
   String get profileLogin => _text(en: 'Log in >', zh: '登录 >');
   String get profileGuest => _text(en: 'Guest', zh: '游客');
   String get profileMembershipJoin => _text(en: 'Join Membership', zh: '开通会员');

@@ -5,7 +5,7 @@ import '../domain/player_content.dart';
 import '../domain/player_feed.dart';
 
 final playerFeedControllerProvider =
-    NotifierProvider<PlayerFeedController, PlayerFeedState>(
+    NotifierProvider.family<PlayerFeedController, PlayerFeedState, String>(
       PlayerFeedController.new,
     );
 
@@ -58,6 +58,9 @@ class PlayerFeedState {
 }
 
 class PlayerFeedController extends Notifier<PlayerFeedState> {
+  PlayerFeedController(this.sessionKey);
+
+  final String sessionKey;
   int _generation = 0;
 
   @override
