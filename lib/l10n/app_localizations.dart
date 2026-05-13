@@ -64,6 +64,25 @@ class AppLocalizations {
   String get profileTopUp => _text(en: 'Top Up', zh: '充值');
   String get profileWallet => _text(en: 'Wallet >', zh: '钱包 >');
   String get profileLanguage => _text(en: 'Language', zh: '语言');
+  String get authDeviceLogin => _text(en: 'Continue with Device', zh: '使用设备登录');
+  String get authGoogleLogin =>
+      _text(en: 'Sign in with Google', zh: '使用 Google 登录');
+  String get authFacebookLogin =>
+      _text(en: 'Sign in with Facebook', zh: '使用 Facebook 登录');
+  String get authClaimCoins => _text(en: 'Claim 150 coins!', zh: '领取 150 金币!');
+  String get authTermsCopy => _text(
+    en: 'By continuing, you agree to our Terms of Use & Privacy Policy.',
+    zh: '继续即表示你同意我们的用户协议和隐私政策。',
+  );
+  String get authAccountActions => _text(en: 'Account actions', zh: '账号操作');
+  String get authAccountTitle => _text(en: 'Account', zh: '账号');
+  String get authLogout => _text(en: 'Log out', zh: '退出登录');
+  String get authDeleteAccount => _text(en: 'Delete account', zh: '注销账号');
+  String get authDeleteAccountMessage => _text(
+    en: 'This is a mock delete account confirmation for MVP testing.',
+    zh: '当前为 MVP 测试用注销账号确认，不会删除真实数据。',
+  );
+  String get authDeleteAccountConfirm => _text(en: 'Delete', zh: '注销');
   String get walletTitle => _text(en: 'My Wallet', zh: '钱包');
   String get walletCoins => _text(en: 'Coins', zh: '金币');
   String get walletBonus => _text(en: 'Bonus', zh: '赠币');

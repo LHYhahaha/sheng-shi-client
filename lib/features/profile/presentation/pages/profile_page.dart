@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../auth/application/auth_controller.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/profile_controller.dart';
@@ -17,7 +18,16 @@ class ProfilePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
-    final state = ref.watch(profileControllerProvider);
+    final profileState = ref.watch(profileControllerProvider);
+    final authState = ref.watch(authControllerProvider);
+    final authUser = authState.user;
+    final state = profileState.copyWith(
+      isLoggedIn: authState.isLoggedIn,
+      userId: authUser?.id ?? profileState.userId,
+      nickname: authUser?.nickname,
+      avatarAssetPath:
+          authUser?.avatarAssetPath ?? profileState.avatarAssetPath,
+    );
 
     return Scaffold(
       backgroundColor: AppColors.black,
@@ -26,7 +36,10 @@ class ProfilePage extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 28, 16, 24),
           children: [
-            ProfileHeader(state: state),
+            ProfileHeader(
+              state: state,
+              onLoginTap: () => context.push(RoutePaths.auth),
+            ),
             const SizedBox(height: 21),
             ProfileMembershipCard(
               membership: state.membership,

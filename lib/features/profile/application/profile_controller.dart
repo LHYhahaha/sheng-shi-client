@@ -36,6 +36,23 @@ class ProfileState {
   bool get canOpenTopUp => coins.topUpEnabled;
 
   bool get canOpenLanguage => language.entryEnabled;
+
+  ProfileState copyWith({
+    bool? isLoggedIn,
+    String? userId,
+    String? nickname,
+    String? avatarAssetPath,
+  }) {
+    return ProfileState(
+      isLoggedIn: isLoggedIn ?? this.isLoggedIn,
+      userId: userId ?? this.userId,
+      nickname: nickname,
+      avatarAssetPath: avatarAssetPath ?? this.avatarAssetPath,
+      membership: membership,
+      coins: coins,
+      language: language,
+    );
+  }
 }
 
 class ProfileMembershipState {

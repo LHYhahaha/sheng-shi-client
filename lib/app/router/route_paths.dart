@@ -4,6 +4,8 @@ abstract final class RoutePaths {
   static const player = '/player/:dramaId/:episodeId';
   static const myList = '/my-list';
   static const profile = '/profile';
+  static const auth = '/auth';
+  static const account = '/account';
   static const store = '/store';
   static const wallet = '/wallet';
   static const membership = '/membership';

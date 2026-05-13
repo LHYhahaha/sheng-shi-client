@@ -78,6 +78,74 @@ void main() {
     expect(find.text('3000 Coins + 300bonus'), findsOneWidget);
   });
 
+  testWidgets('opens auth from profile and logs in with mock provider', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Log in >'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Continue with Device'), findsOneWidget);
+    expect(find.text('Sign in with Google'), findsOneWidget);
+    expect(find.text('Sign in with Facebook'), findsOneWidget);
+
+    await tester.tap(find.text('Sign in with Google'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Google User'), findsOneWidget);
+    expect(find.text('Account actions'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Google User'), findsOneWidget);
+    expect(find.text('Log in >'), findsNothing);
+  });
+
+  testWidgets('account page logs out and confirms delete account', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Log in >'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue with Device'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Account actions'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Account'), findsOneWidget);
+    expect(find.text('Log out'), findsOneWidget);
+    expect(find.text('Delete account'), findsOneWidget);
+
+    await tester.tap(find.text('Delete account'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('This is a mock delete account confirmation for MVP testing.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Account'), findsOneWidget);
+
+    await tester.tap(find.text('Log out'));
+    await tester.pumpAndSettle();
+    expect(find.text('Log in >'), findsOneWidget);
+  });
+
   testWidgets('opens membership from profile and confirms mock purchase', (
     tester,
   ) async {

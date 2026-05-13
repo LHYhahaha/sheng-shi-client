@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../shell/app_shell.dart';
+import '../../features/auth/presentation/pages/account_page.dart';
+import '../../features/auth/presentation/pages/auth_page.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/membership/presentation/pages/membership_page.dart';
 import '../../features/my_list/presentation/pages/my_list_page.dart';
@@ -76,6 +78,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.store,
         name: RouteNames.store,
         builder: (context, state) => const StorePage(),
+      ),
+      GoRoute(
+        path: RoutePaths.auth,
+        name: RouteNames.auth,
+        builder: (context, state) => const AuthPage(),
+      ),
+      GoRoute(
+        path: RoutePaths.account,
+        name: RouteNames.account,
+        builder: (context, state) => const AccountPage(),
       ),
       GoRoute(
         path: RoutePaths.wallet,
