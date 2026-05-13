@@ -63,4 +63,83 @@ void main() {
       StorePurchaseStatus.cancelled,
     );
   });
+
+  test('ignores repeated actions while purchase is processing', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final controller = container.read(storeControllerProvider.notifier);
+
+    await controller.load();
+    controller.showConfirmation();
+
+    final purchase = controller.confirmMockPurchase();
+    controller.confirmMockPurchase();
+    controller.cancelMockPurchase();
+
+    expect(
+      container.read(storeControllerProvider).purchaseStatus,
+      StorePurchaseStatus.processing,
+    );
+
+    await purchase;
+    expect(
+      container.read(storeControllerProvider).purchaseStatus,
+      StorePurchaseStatus.success,
+    );
+
+    controller.cancelMockPurchase();
+    expect(
+      container.read(storeControllerProvider).purchaseStatus,
+      StorePurchaseStatus.success,
+    );
+  });
+
+  test(
+    'resets purchase status when confirmation is closed or reopened',
+    () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final controller = container.read(storeControllerProvider.notifier);
+
+      await controller.load();
+      controller.showConfirmation();
+      controller.cancelMockPurchase();
+      expect(
+        container.read(storeControllerProvider).purchaseStatus,
+        StorePurchaseStatus.cancelled,
+      );
+
+      controller.hideConfirmation();
+      var state = container.read(storeControllerProvider);
+      expect(state.confirmationPackage, isNull);
+      expect(state.purchaseStatus, StorePurchaseStatus.idle);
+
+      controller.selectPackage('coins_3000_bonus');
+      controller.showConfirmation();
+      state = container.read(storeControllerProvider);
+
+      expect(state.confirmationPackage?.id, 'coins_3000_bonus');
+      expect(state.purchaseStatus, StorePurchaseStatus.idle);
+    },
+  );
+
+  test(
+    'closing confirmation cancels pending mock purchase completion',
+    () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final controller = container.read(storeControllerProvider.notifier);
+
+      await controller.load();
+      controller.showConfirmation();
+
+      final purchase = controller.confirmMockPurchase();
+      controller.hideConfirmation();
+      await purchase;
+
+      final state = container.read(storeControllerProvider);
+      expect(state.confirmationPackage, isNull);
+      expect(state.purchaseStatus, StorePurchaseStatus.idle);
+    },
+  );
 }

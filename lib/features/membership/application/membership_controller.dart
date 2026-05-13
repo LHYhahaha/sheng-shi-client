@@ -104,6 +104,7 @@ class MembershipState {
 
 class MembershipController extends Notifier<MembershipState> {
   int _generation = 0;
+  int _purchaseGeneration = 0;
 
   @override
   MembershipState build() => const MembershipState.initial();
@@ -160,6 +161,7 @@ class MembershipController extends Notifier<MembershipState> {
       return;
     }
 
+    _purchaseGeneration++;
     state = state.copyWith(
       confirmationPlanId: selectedPlan.id,
       purchaseStatus: MembershipPurchaseStatus.idle,
@@ -167,6 +169,7 @@ class MembershipController extends Notifier<MembershipState> {
   }
 
   void hideConfirmation() {
+    _purchaseGeneration++;
     state = state.copyWith(
       purchaseStatus: MembershipPurchaseStatus.idle,
       clearConfirmation: true,
@@ -175,17 +178,25 @@ class MembershipController extends Notifier<MembershipState> {
 
   Future<void> confirmMockPurchase() async {
     if (state.confirmationPlan == null ||
-        state.purchaseStatus == MembershipPurchaseStatus.processing) {
+        state.purchaseStatus != MembershipPurchaseStatus.idle) {
       return;
     }
 
+    final purchaseGeneration = _purchaseGeneration;
+    final planId = state.confirmationPlanId;
     state = state.copyWith(purchaseStatus: MembershipPurchaseStatus.processing);
     await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (purchaseGeneration != _purchaseGeneration ||
+        state.confirmationPlanId != planId ||
+        state.purchaseStatus != MembershipPurchaseStatus.processing) {
+      return;
+    }
+
     state = state.copyWith(purchaseStatus: MembershipPurchaseStatus.success);
   }
 
   void cancelMockPurchase() {
-    if (state.purchaseStatus == MembershipPurchaseStatus.processing) {
+    if (state.purchaseStatus != MembershipPurchaseStatus.idle) {
       return;
     }
 

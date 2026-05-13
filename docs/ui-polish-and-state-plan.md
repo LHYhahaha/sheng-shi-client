@@ -108,3 +108,6 @@ flutter test
 - Phase 2 batch 2: Player / For You lightweight empty/error/retry,
   unavailable episode, locked paywall, sheet/back behavior, and session
   isolation coverage completed for review.
+- Phase 2 batch 3: Store / Recharge and Membership mock purchase edge
+  states, disabled processing actions, close/reset behavior, package switch
+  reset, and restore mock feedback coverage completed for review.

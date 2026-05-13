@@ -95,6 +95,7 @@ class StoreState {
 
 class StoreController extends Notifier<StoreState> {
   int _generation = 0;
+  int _purchaseGeneration = 0;
 
   @override
   StoreState build() => const StoreState.initial();
@@ -152,6 +153,7 @@ class StoreController extends Notifier<StoreState> {
       return;
     }
 
+    _purchaseGeneration++;
     state = state.copyWith(
       confirmationPackageId: selectedPackage.id,
       purchaseStatus: StorePurchaseStatus.idle,
@@ -159,6 +161,7 @@ class StoreController extends Notifier<StoreState> {
   }
 
   void hideConfirmation() {
+    _purchaseGeneration++;
     state = state.copyWith(
       purchaseStatus: StorePurchaseStatus.idle,
       clearConfirmation: true,
@@ -167,17 +170,25 @@ class StoreController extends Notifier<StoreState> {
 
   Future<void> confirmMockPurchase() async {
     if (state.confirmationPackage == null ||
-        state.purchaseStatus == StorePurchaseStatus.processing) {
+        state.purchaseStatus != StorePurchaseStatus.idle) {
       return;
     }
 
+    final purchaseGeneration = _purchaseGeneration;
+    final packageId = state.confirmationPackageId;
     state = state.copyWith(purchaseStatus: StorePurchaseStatus.processing);
     await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (purchaseGeneration != _purchaseGeneration ||
+        state.confirmationPackageId != packageId ||
+        state.purchaseStatus != StorePurchaseStatus.processing) {
+      return;
+    }
+
     state = state.copyWith(purchaseStatus: StorePurchaseStatus.success);
   }
 
   void cancelMockPurchase() {
-    if (state.purchaseStatus == StorePurchaseStatus.processing) {
+    if (state.purchaseStatus != StorePurchaseStatus.idle) {
       return;
     }
 

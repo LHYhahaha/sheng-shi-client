@@ -69,4 +69,86 @@ void main() {
       );
     },
   );
+
+  test(
+    'ignores repeated actions while membership purchase is processing',
+    () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final controller = container.read(membershipControllerProvider.notifier);
+
+      await controller.load();
+      controller.showConfirmation();
+
+      final purchase = controller.confirmMockPurchase();
+      controller.confirmMockPurchase();
+      controller.cancelMockPurchase();
+
+      expect(
+        container.read(membershipControllerProvider).purchaseStatus,
+        MembershipPurchaseStatus.processing,
+      );
+
+      await purchase;
+      expect(
+        container.read(membershipControllerProvider).purchaseStatus,
+        MembershipPurchaseStatus.success,
+      );
+
+      controller.cancelMockPurchase();
+      expect(
+        container.read(membershipControllerProvider).purchaseStatus,
+        MembershipPurchaseStatus.success,
+      );
+    },
+  );
+
+  test(
+    'resets purchase status when membership confirmation is closed or reopened',
+    () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final controller = container.read(membershipControllerProvider.notifier);
+
+      await controller.load();
+      controller.showConfirmation();
+      controller.cancelMockPurchase();
+      expect(
+        container.read(membershipControllerProvider).purchaseStatus,
+        MembershipPurchaseStatus.cancelled,
+      );
+
+      controller.hideConfirmation();
+      var state = container.read(membershipControllerProvider);
+      expect(state.confirmationPlan, isNull);
+      expect(state.purchaseStatus, MembershipPurchaseStatus.idle);
+
+      controller.selectPlan('monthly_vip');
+      controller.showConfirmation();
+      state = container.read(membershipControllerProvider);
+
+      expect(state.confirmationPlan?.id, 'monthly_vip');
+      expect(state.purchaseStatus, MembershipPurchaseStatus.idle);
+    },
+  );
+
+  test(
+    'closing membership confirmation cancels pending mock purchase completion',
+    () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final controller = container.read(membershipControllerProvider.notifier);
+
+      await controller.load();
+      controller.showConfirmation();
+
+      final purchase = controller.confirmMockPurchase();
+      controller.hideConfirmation();
+      await purchase;
+
+      final state = container.read(membershipControllerProvider);
+      expect(state.confirmationPlan, isNull);
+      expect(state.purchaseStatus, MembershipPurchaseStatus.idle);
+    },
+  );
 }
