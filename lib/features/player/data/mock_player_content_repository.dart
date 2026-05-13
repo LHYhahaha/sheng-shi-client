@@ -7,18 +7,19 @@ class MockPlayerContentRepository implements PlayerContentRepository {
 
   @override
   Future<PlayerContent> getPlayerContent({required String dramaId}) async {
+    final profile = _profileFor(dramaId);
+
     return Future<PlayerContent>.delayed(
       _networkDelay,
       () => PlayerContent(
         id: dramaId,
-        title: 'Reborn: The Cure',
-        playTitle: 'A Life That Shines Again',
-        synopsis:
-            'For seven years, Yun Seo-rin has given everything to her billionaire husband and their daughter. On her birthday, she discovers they are celebrating her husband’s half-sister instead.',
-        viewCountLabel: '16.6M Views',
-        likeCountLabel: '43.2K',
+        title: profile.title,
+        playTitle: profile.playTitle,
+        synopsis: profile.synopsis,
+        viewCountLabel: profile.viewCountLabel,
+        likeCountLabel: profile.likeCountLabel,
         backgroundAssetPath: 'assets/images/player/player_background.png',
-        posterAssetPath: 'assets/images/player/recommend_1.png',
+        posterAssetPath: profile.posterAssetPath,
         episodes: List<PlayerEpisode>.generate(50, (index) {
           final number = index + 1;
           return PlayerEpisode(
@@ -68,4 +69,75 @@ class MockPlayerContentRepository implements PlayerContentRepository {
       ),
     );
   }
+
+  _MockPlayerContentProfile _profileFor(String dramaId) {
+    final normalizedId = dramaId.replaceFirst(RegExp(r'-\d+$'), '');
+    return _profiles[normalizedId] ?? _profiles['found-you']!;
+  }
+}
+
+const _profiles = {
+  'found-you': _MockPlayerContentProfile(
+    title: 'Reborn: The Cure',
+    playTitle: 'My Secret Deal With The Playboy',
+    synopsis:
+        'Emily Carter is a renowned surgeon and the heir to the immensely wealthy Carter family.',
+    viewCountLabel: '16.6M Views',
+    likeCountLabel: '43.2K',
+    posterAssetPath: 'assets/images/player/recommend_1.png',
+  ),
+  'heart-thief': _MockPlayerContentProfile(
+    title: 'Heart Thief',
+    playTitle: 'Found You, Heart Thief',
+    synopsis:
+        'A surgeon who no longer believes in love meets the one person who can expose the secret she has protected for years.',
+    viewCountLabel: '18.2M Views',
+    likeCountLabel: '51.8K',
+    posterAssetPath: 'assets/images/player/recommend_2.png',
+  ),
+  'reborn-love': _MockPlayerContentProfile(
+    title: 'Second Chance Vow',
+    playTitle: 'Love After Rebirth',
+    synopsis:
+        'After waking up before the night everything fell apart, Mira decides to rewrite her marriage and reclaim her future.',
+    viewCountLabel: '12.4M Views',
+    likeCountLabel: '39.6K',
+    posterAssetPath: 'assets/images/player/recommend_3.png',
+  ),
+  'secret-vow': _MockPlayerContentProfile(
+    title: 'Secret Vow',
+    playTitle: 'The Heiress Returns',
+    synopsis:
+        'A hidden heiress returns under a new identity, but every step toward revenge pulls her closer to an impossible romance.',
+    viewCountLabel: '21.9M Views',
+    likeCountLabel: '62.1K',
+    posterAssetPath: 'assets/images/player/recommend_4.png',
+  ),
+  'asian-reunion': _MockPlayerContentProfile(
+    title: 'Reunion Contract',
+    playTitle: 'Married Again at Dawn',
+    synopsis:
+        'A contract marriage becomes a second chance when two former lovers are forced to protect the same family secret.',
+    viewCountLabel: '9.7M Views',
+    likeCountLabel: '28.4K',
+    posterAssetPath: 'assets/images/player/recommend_1.png',
+  ),
+};
+
+class _MockPlayerContentProfile {
+  const _MockPlayerContentProfile({
+    required this.title,
+    required this.playTitle,
+    required this.synopsis,
+    required this.viewCountLabel,
+    required this.likeCountLabel,
+    required this.posterAssetPath,
+  });
+
+  final String title;
+  final String playTitle;
+  final String synopsis;
+  final String viewCountLabel;
+  final String likeCountLabel;
+  final String posterAssetPath;
 }

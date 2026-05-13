@@ -1,0 +1,124 @@
+import 'package:drama_client/features/player/application/player_feed_controller.dart';
+import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
+import 'package:drama_client/features/player/domain/player_content.dart';
+import 'package:drama_client/features/player/domain/player_feed.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('loads single drama feed from requested episode', () async {
+    final container = _createContainer();
+    final controller = container.read(playerFeedControllerProvider.notifier);
+
+    await controller.load(
+      const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: '3'),
+    );
+    final state = container.read(playerFeedControllerProvider);
+
+    expect(state.isLoading, isFalse);
+    expect(state.error, isNull);
+    expect(state.items, hasLength(3));
+    expect(state.currentItem?.content.id, 'drama-a');
+    expect(state.currentItem?.episode.number, 3);
+  });
+
+  test('loads for you feed and updates current index', () async {
+    final container = _createContainer();
+    final controller = container.read(playerFeedControllerProvider.notifier);
+
+    await controller.load(const PlayerFeedConfig.forYou());
+    controller.setCurrentIndex(1);
+    final state = container.read(playerFeedControllerProvider);
+
+    expect(state.items, hasLength(2));
+    expect(state.currentIndex, 1);
+    expect(state.currentItem?.mode, PlayerFeedMode.forYou);
+    expect(state.currentItem?.content.id, 'drama-b');
+  });
+
+  test('selects episode by moving to an existing feed item', () async {
+    final container = _createContainer();
+    final controller = container.read(playerFeedControllerProvider.notifier);
+
+    await controller.load(
+      const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: '1'),
+    );
+    final targetIndex = controller.selectEpisode(_episode(2));
+    final state = container.read(playerFeedControllerProvider);
+
+    expect(targetIndex, 1);
+    expect(state.currentIndex, 1);
+    expect(state.currentItem?.episode.number, 2);
+  });
+}
+
+ProviderContainer _createContainer() {
+  final container = ProviderContainer(
+    overrides: [
+      playerFeedRepositoryProvider.overrideWithValue(_FakeFeedRepo()),
+    ],
+  );
+  addTearDown(container.dispose);
+  return container;
+}
+
+class _FakeFeedRepo implements PlayerFeedRepository {
+  @override
+  Future<List<PlayerFeedItem>> listSingleDramaFeed({
+    required String dramaId,
+    required String episodeId,
+  }) async {
+    final content = _content(dramaId);
+    final items = content.episodes
+        .map((episode) {
+          return PlayerFeedItem(
+            id: '$dramaId-${episode.id}',
+            mode: PlayerFeedMode.singleDrama,
+            content: content,
+            episode: episode,
+          );
+        })
+        .toList(growable: false);
+    final index = items.indexWhere((item) => item.episode.number == 3);
+    return episodeId == '3'
+        ? [...items.sublist(index), ...items.sublist(0, index)]
+        : items;
+  }
+
+  @override
+  Future<List<PlayerFeedItem>> listForYouFeed() async {
+    return [
+      PlayerFeedItem(
+        id: 'a-1',
+        mode: PlayerFeedMode.forYou,
+        content: _content('drama-a'),
+        episode: _episode(1),
+      ),
+      PlayerFeedItem(
+        id: 'b-1',
+        mode: PlayerFeedMode.forYou,
+        content: _content('drama-b'),
+        episode: _episode(1),
+      ),
+    ];
+  }
+}
+
+PlayerContent _content(String id) {
+  return PlayerContent(
+    id: id,
+    title: 'Title $id',
+    playTitle: 'Play $id',
+    synopsis: 'Synopsis $id',
+    viewCountLabel: '1M Views',
+    likeCountLabel: '1K',
+    backgroundAssetPath: 'assets/images/player/player_background.png',
+    posterAssetPath: 'assets/images/player/recommend_1.png',
+    episodes: [_episode(1), _episode(2), _episode(3)],
+    recommendations: const [],
+  );
+}
+
+PlayerEpisode _episode(int number) {
+  return PlayerEpisode(id: 'ep-$number', number: number, isLocked: false);
+}

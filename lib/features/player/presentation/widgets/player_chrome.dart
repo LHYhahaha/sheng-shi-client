@@ -16,6 +16,8 @@ class PlayerChrome extends StatelessWidget {
     required this.onShareTap,
     required this.onMoreTap,
     required this.onUnlockTap,
+    this.onBackTap,
+    this.forYouLayout = false,
     super.key,
   });
 
@@ -27,108 +29,136 @@ class PlayerChrome extends StatelessWidget {
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
   final VoidCallback onUnlockTap;
+  final VoidCallback? onBackTap;
+  final bool forYouLayout;
 
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final bottomInset = mediaQuery.padding.bottom;
+    final bottomFrameHeight = forYouLayout ? bottomInset : 0.0;
+    final forYouWatchNowBottom = bottomInset + 24;
+    final forYouMetaBottom = forYouWatchNowBottom + 58;
 
     return Stack(
       children: [
-        Positioned.fill(
-          child: Image.asset(content.backgroundAssetPath, fit: BoxFit.cover),
-        ),
-        Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withValues(alpha: 0.78),
-                  Colors.transparent,
-                  Colors.transparent,
-                  Colors.black.withValues(alpha: 0.72),
-                ],
-                stops: const [0, 0.19, 0.78, 1],
-              ),
-            ),
+        const Positioned.fill(child: ColoredBox(color: AppColors.black)),
+        Positioned(
+          left: 0,
+          top: 0,
+          right: 0,
+          bottom: bottomFrameHeight,
+          child: ClipRRect(
+            borderRadius: forYouLayout
+                ? const BorderRadius.vertical(bottom: Radius.circular(10))
+                : BorderRadius.zero,
+            child: Image.asset(content.backgroundAssetPath, fit: BoxFit.cover),
           ),
         ),
         Positioned(
           left: 0,
+          top: 0,
           right: 0,
-          bottom: 0,
-          height: 79 + bottomInset,
-          child: const ColoredBox(color: Color(0xFF141414)),
-        ),
-        SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: Row(
-              children: [
-                _IconTapTarget(
-                  icon: Icons.chevron_left,
-                  iconSize: 28,
-                  onTap: () {
-                    if (context.canPop()) {
-                      context.pop();
-                    } else {
-                      context.go(RoutePaths.home);
-                    }
-                  },
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'EP.${episodeNumber.toString().padLeft(2, '0')}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    height: 18 / 14,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  context.l10n.playerSpeed,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    height: 18 / 14,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                const Icon(Icons.more_horiz, color: Colors.white, size: 24),
-              ],
-            ),
-          ),
-        ),
-        Center(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onTogglePlay,
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 160),
-              opacity: isPlaying ? 0 : 1,
-              child: Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.48),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.play_arrow_rounded,
-                  color: Colors.white,
-                  size: 46,
+          bottom: bottomFrameHeight,
+          child: ClipRRect(
+            borderRadius: forYouLayout
+                ? const BorderRadius.vertical(bottom: Radius.circular(10))
+                : BorderRadius.zero,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: forYouLayout ? 0.28 : 0.78),
+                    Colors.transparent,
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: forYouLayout ? 0.58 : 0.72),
+                  ],
+                  stops: const [0, 0.2, 0.68, 1],
                 ),
               ),
             ),
           ),
         ),
+        if (!forYouLayout) ...[
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 79 + bottomInset,
+            child: const ColoredBox(color: Color(0xFF141414)),
+          ),
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: Row(
+                children: [
+                  _IconTapTarget(
+                    icon: Icons.chevron_left,
+                    iconSize: 28,
+                    onTap:
+                        onBackTap ??
+                        () {
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go(RoutePaths.home);
+                          }
+                        },
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'EP.${episodeNumber.toString().padLeft(2, '0')}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      height: 18 / 14,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    context.l10n.playerSpeed,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      height: 18 / 14,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  const Icon(Icons.more_horiz, color: Colors.white, size: 24),
+                ],
+              ),
+            ),
+          ),
+          Center(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onTogglePlay,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 160),
+                opacity: isPlaying ? 0 : 1,
+                child: Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.48),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow_rounded,
+                    color: Colors.white,
+                    size: 46,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
         Positioned(
           right: 17,
-          bottom: bottomInset + 175,
+          bottom: bottomInset + (forYouLayout ? 172 : 175),
           child: PlayerActionRail(
             likeCountLabel: content.likeCountLabel,
             onEpisodesTap: onEpisodesTap,
@@ -139,69 +169,78 @@ class PlayerChrome extends StatelessWidget {
         Positioned(
           left: 16,
           right: 91,
-          bottom: bottomInset + 91,
-          child: PlayerBottomMeta(content: content),
+          bottom: forYouLayout ? forYouMetaBottom : bottomInset + 91,
+          child: PlayerBottomMeta(content: content, showChevron: !forYouLayout),
         ),
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: bottomInset + 78,
-          child: const PlayerProgress(value: 0.2),
-        ),
-        Positioned(
-          left: 16,
-          bottom: bottomInset + 12,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onUnlockTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 168),
-                height: 24,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.gold.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(3),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  context.l10n.playerBecomeMember,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF4B2C0D),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    height: 16 / 12,
+        if (forYouLayout)
+          Positioned(
+            left: 16,
+            right: 98,
+            bottom: forYouWatchNowBottom,
+            child: _WatchNowButton(onTap: onTogglePlay),
+          )
+        else ...[
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: bottomInset + 78,
+            child: const PlayerProgress(value: 0.2),
+          ),
+          Positioned(
+            left: 16,
+            bottom: bottomInset + 12,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onUnlockTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 168),
+                  height: 24,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.gold.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    context.l10n.playerBecomeMember,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF4B2C0D),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      height: 16 / 12,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-        Positioned(
-          right: 31,
-          bottom: bottomInset + 18,
-          child: Row(
-            children: [
-              const Icon(
-                Icons.file_download_outlined,
-                color: Colors.white,
-                size: 22,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                context.l10n.playerDownload,
-                style: const TextStyle(
+          Positioned(
+            right: 31,
+            bottom: bottomInset + 18,
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.file_download_outlined,
                   color: Colors.white,
-                  fontSize: 12,
-                  height: 14 / 12,
+                  size: 22,
                 ),
-              ),
-            ],
+                const SizedBox(width: 4),
+                Text(
+                  context.l10n.playerDownload,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    height: 14 / 12,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -254,10 +293,46 @@ class PlayerActionRail extends StatelessWidget {
   }
 }
 
+class _WatchNowButton extends StatelessWidget {
+  const _WatchNowButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        height: 36,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.54),
+          borderRadius: BorderRadius.circular(3),
+        ),
+        child: Text(
+          context.l10n.playerWatchNow,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            height: 18 / 14,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class PlayerBottomMeta extends StatelessWidget {
-  const PlayerBottomMeta({required this.content, super.key});
+  const PlayerBottomMeta({
+    required this.content,
+    this.showChevron = true,
+    super.key,
+  });
 
   final PlayerContent content;
+  final bool showChevron;
 
   @override
   Widget build(BuildContext context) {
@@ -266,7 +341,7 @@ class PlayerBottomMeta extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          '${content.playTitle} >',
+          showChevron ? '${content.playTitle} >' : content.playTitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(

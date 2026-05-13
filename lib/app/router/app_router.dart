@@ -35,10 +35,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: RoutePaths.forYou,
                 name: RouteNames.forYou,
-                builder: (context, state) => FeaturePlaceholderPage(
-                  title: context.l10n.forYouPlaceholderTitle,
-                  description: context.l10n.forYouPlaceholderDescription,
-                ),
+                builder: (context, state) => const PlayerPage.forYou(),
               ),
             ],
           ),

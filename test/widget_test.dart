@@ -35,6 +35,45 @@ void main() {
     expect(find.text('Language'), findsOneWidget);
   });
 
+  testWidgets('opens for you player feed and swipes to next item', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('For you'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('My Secret Deal With The Playboy'), findsOneWidget);
+    expect(find.text('Watch Now'), findsOneWidget);
+
+    await tester.drag(find.byType(PageView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Found You, Heart Thief'), findsOneWidget);
+  });
+
+  testWidgets('opens home drama as single drama feed and swipes episodes', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tapAt(const Offset(110, 260));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('EP.01'), findsOneWidget);
+
+    await tester.drag(find.byType(PageView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('EP.02'), findsOneWidget);
+  });
+
   testWidgets('opens language settings from profile', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
     await tester.pump(const Duration(seconds: 1));
