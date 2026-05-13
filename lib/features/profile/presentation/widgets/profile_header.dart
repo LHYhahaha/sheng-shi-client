@@ -5,10 +5,16 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../application/profile_controller.dart';
 
 class ProfileHeader extends StatelessWidget {
-  const ProfileHeader({required this.state, this.onLoginTap, super.key});
+  const ProfileHeader({
+    required this.state,
+    this.onLoginTap,
+    this.onAccountTap,
+    super.key,
+  });
 
   final ProfileState state;
   final VoidCallback? onLoginTap;
+  final VoidCallback? onAccountTap;
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +24,7 @@ class ProfileHeader extends StatelessWidget {
         : l10n.profileLogin;
 
     return InkWell(
-      onTap: state.isLoggedIn ? null : onLoginTap,
+      onTap: state.isLoggedIn ? onAccountTap : onLoginTap,
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       child: SizedBox(

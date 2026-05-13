@@ -1,5 +1,8 @@
 enum AuthProviderType { device, google, facebook }
 
+const authDefaultAvatarAssetPath =
+    'assets/images/profile/profile_avatar_figma.png';
+
 class AuthUser {
   const AuthUser({
     required this.id,

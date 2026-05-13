@@ -76,6 +76,8 @@ class AppLocalizations {
     en: 'By continuing, you agree to our Terms of Use & Privacy Policy.',
     zh: '继续即表示你同意我们的用户协议和隐私政策。',
   );
+  String get authLoadFailed =>
+      _text(en: 'Login failed. Please try again.', zh: '登录失败，请重试。');
   String get authAccountActions => _text(en: 'Account actions', zh: '账号操作');
   String get authAccountTitle => _text(en: 'Account', zh: '账号');
   String get authLogout => _text(en: 'Log out', zh: '退出登录');

@@ -6,15 +6,28 @@ import '../../../../app/router/route_paths.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/auth_controller.dart';
+import '../../domain/auth_session.dart';
 
-class AccountPage extends ConsumerWidget {
+class AccountPage extends ConsumerStatefulWidget {
   const AccountPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AccountPage> createState() => _AccountPageState();
+}
+
+class _AccountPageState extends ConsumerState<AccountPage> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => ref.read(authControllerProvider.notifier).load());
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(authControllerProvider);
     final controller = ref.read(authControllerProvider.notifier);
     final user = state.user;
+    final isBusy = state.isLoading;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0014),
@@ -33,8 +46,7 @@ class AccountPage extends ConsumerWidget {
                         CircleAvatar(
                           radius: 36,
                           backgroundImage: AssetImage(
-                            user?.avatarAssetPath ??
-                                'assets/images/profile/profile_avatar_figma.png',
+                            user?.avatarAssetPath ?? authDefaultAvatarAssetPath,
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -62,6 +74,7 @@ class AccountPage extends ConsumerWidget {
                   const SizedBox(height: 40),
                   _AccountActionRow(
                     label: context.l10n.authLogout,
+                    isLoading: isBusy,
                     onTap: () async {
                       await controller.logout();
                       if (context.mounted) {
@@ -73,6 +86,7 @@ class AccountPage extends ConsumerWidget {
                   _AccountActionRow(
                     label: context.l10n.authDeleteAccount,
                     destructive: true,
+                    enabled: !isBusy,
                     onTap: () => _showDeleteAccountDialog(context, controller),
                   ),
                 ],
@@ -141,7 +155,13 @@ class _AccountHeader extends StatelessWidget {
         child: Row(
           children: [
             IconButton(
-              onPressed: context.pop,
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(RoutePaths.profile);
+                }
+              },
               icon: const Icon(Icons.chevron_left_rounded, size: 20),
               color: AppColors.textPrimary,
               padding: EdgeInsets.zero,
@@ -171,16 +191,20 @@ class _AccountActionRow extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.destructive = false,
+    this.enabled = true,
+    this.isLoading = false,
   });
 
   final String label;
   final VoidCallback onTap;
   final bool destructive;
+  final bool enabled;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: enabled && !isLoading ? onTap : null,
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       child: Container(
@@ -191,15 +215,29 @@ class _AccountActionRow extends StatelessWidget {
           color: const Color(0xFF17101F),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: destructive
-                ? const Color(0xFFFF5A7A)
-                : AppColors.textPrimary,
-            fontWeight: FontWeight.w600,
-            height: 1.5,
-          ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: destructive
+                      ? const Color(0xFFFF5A7A)
+                      : AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  height: 1.5,
+                ),
+              ),
+            ),
+            if (isLoading)
+              const SizedBox.square(
+                dimension: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.primary,
+                ),
+              ),
+          ],
         ),
       ),
     );

@@ -23,7 +23,7 @@ class MockAuthRepository implements AuthRepository {
           AuthProviderType.google => 'Google User',
           AuthProviderType.facebook => 'Facebook User',
         },
-        avatarAssetPath: 'assets/images/profile/profile_avatar_figma.png',
+        avatarAssetPath: authDefaultAvatarAssetPath,
         provider: provider,
       ),
     );

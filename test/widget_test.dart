@@ -1,10 +1,17 @@
 import 'package:drama_client/app/app.dart';
+import 'package:drama_client/app/router/route_paths.dart';
+import 'package:drama_client/features/auth/data/auth_repository_provider.dart';
+import 'package:drama_client/features/auth/domain/auth_repository.dart';
+import 'package:drama_client/features/auth/domain/auth_session.dart';
+import 'package:drama_client/features/auth/presentation/pages/account_page.dart';
+import 'package:drama_client/features/profile/presentation/pages/language_page.dart';
 import 'package:drama_client/features/store/presentation/pages/store_page.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 void main() {
   testWidgets('shows the app shell', (tester) async {
@@ -99,13 +106,28 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Google User'), findsOneWidget);
-    expect(find.text('Account actions'), findsOneWidget);
+    expect(find.text('Log in >'), findsNothing);
+  });
 
-    await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
+  testWidgets('opens account from logged-in profile header', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    expect(find.text('Google User'), findsOneWidget);
-    expect(find.text('Log in >'), findsNothing);
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Log in >'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sign in with Google'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Google User'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Account'), findsOneWidget);
+    expect(find.text('Log out'), findsOneWidget);
+    expect(find.text('Delete account'), findsOneWidget);
   });
 
   testWidgets('account page logs out and confirms delete account', (
@@ -123,7 +145,7 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Account actions'));
+    await tester.tap(find.text('Device User'));
     await tester.pumpAndSettle();
 
     expect(find.text('Account'), findsOneWidget);
@@ -327,6 +349,76 @@ void main() {
     expect(find.text('简体中文'), findsOneWidget);
   });
 
+  testWidgets('account back falls back to profile without navigation stack', (
+    tester,
+  ) async {
+    final router = GoRouter(
+      initialLocation: RoutePaths.account,
+      routes: [
+        GoRoute(
+          path: RoutePaths.account,
+          builder: (context, state) => const AccountPage(),
+        ),
+        GoRoute(
+          path: RoutePaths.profile,
+          builder: (context, state) =>
+              const Scaffold(body: Text('Profile fallback')),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(
+            _SignedInAuthRepository(AuthProviderType.google),
+          ),
+        ],
+        child: _TestRouterApp(router: router),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Account'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Profile fallback'), findsOneWidget);
+  });
+
+  testWidgets('language back falls back to profile without navigation stack', (
+    tester,
+  ) async {
+    final router = GoRouter(
+      initialLocation: RoutePaths.language,
+      routes: [
+        GoRoute(
+          path: RoutePaths.language,
+          builder: (context, state) => const LanguagePage(),
+        ),
+        GoRoute(
+          path: RoutePaths.profile,
+          builder: (context, state) =>
+              const Scaffold(body: Text('Profile fallback')),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(child: _TestRouterApp(router: router)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Language'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Profile fallback'), findsOneWidget);
+  });
+
   testWidgets('enters collection edit mode from the header menu', (
     tester,
   ) async {
@@ -439,4 +531,55 @@ void main() {
       findsOneWidget,
     );
   });
+}
+
+class _TestRouterApp extends StatelessWidget {
+  const _TestRouterApp({required this.router});
+
+  final GoRouter router;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp.router(
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
+      routerConfig: router,
+    );
+  }
+}
+
+class _SignedInAuthRepository implements AuthRepository {
+  _SignedInAuthRepository(this.provider);
+
+  final AuthProviderType provider;
+
+  @override
+  Future<AuthSession> fetchSession() async {
+    return AuthSession(
+      user: AuthUser(
+        id: '15589299',
+        nickname: switch (provider) {
+          AuthProviderType.device => 'Device User',
+          AuthProviderType.google => 'Google User',
+          AuthProviderType.facebook => 'Facebook User',
+        },
+        avatarAssetPath: authDefaultAvatarAssetPath,
+        provider: provider,
+      ),
+    );
+  }
+
+  @override
+  Future<AuthSession> login(AuthProviderType provider) => fetchSession();
+
+  @override
+  Future<AuthSession> logout() async => const AuthSession.guest();
+
+  @override
+  Future<AuthSession> deleteAccount() async => const AuthSession.guest();
 }

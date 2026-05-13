@@ -79,6 +79,10 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> login(AuthProviderType provider) async {
+    if (state.pendingProvider != null) {
+      return;
+    }
+
     state = state.copyWith(pendingProvider: provider, clearError: true);
 
     try {
@@ -99,6 +103,10 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> logout() async {
+    if (state.isLoading) {
+      return;
+    }
+
     state = state.copyWith(isLoading: true, clearError: true);
     final session = await ref.read(authRepositoryProvider).logout();
     state = state.copyWith(
@@ -110,6 +118,10 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> deleteAccount() async {
+    if (state.isLoading) {
+      return;
+    }
+
     state = state.copyWith(isLoading: true, clearError: true);
     final session = await ref.read(authRepositoryProvider).deleteAccount();
     state = state.copyWith(

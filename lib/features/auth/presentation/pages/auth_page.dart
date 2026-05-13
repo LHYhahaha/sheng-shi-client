@@ -17,6 +17,8 @@ class AuthPage extends ConsumerStatefulWidget {
 }
 
 class _AuthPageState extends ConsumerState<AuthPage> {
+  bool _returnedAfterLogin = false;
+
   @override
   void initState() {
     super.initState();
@@ -28,14 +30,29 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     final state = ref.watch(authControllerProvider);
     final controller = ref.read(authControllerProvider.notifier);
 
+    ref.listen(authControllerProvider.select((state) => state.isLoggedIn), (
+      previous,
+      next,
+    ) {
+      if (!next || _returnedAfterLogin) {
+        return;
+      }
+      _returnedAfterLogin = true;
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go(RoutePaths.profile);
+      }
+    });
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0014),
+      backgroundColor: AppColors.black,
       body: SafeArea(
         bottom: false,
         child: Stack(
           children: [
             Positioned(
-              top: 4,
+              top: 8,
               left: 6,
               child: IconButton(
                 onPressed: () {
@@ -88,17 +105,36 @@ class _LoginPanel extends StatelessWidget {
     return Align(
       alignment: Alignment.bottomCenter,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 200),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          0,
+          16,
+          MediaQuery.viewPaddingOf(context).bottom + 168,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (state.error != null) ...[
+              Text(
+                l10n.authLoadFailed,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.primary,
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
             AuthActionButton(
               label: l10n.authDeviceLogin,
               icon: Icons.phone_iphone_rounded,
               backgroundColor: const Color(0xFF262033),
               foregroundColor: AppColors.textPrimary,
               isLoading: state.pendingProvider == AuthProviderType.device,
-              onPressed: () => controller.login(AuthProviderType.device),
+              onPressed: state.pendingProvider == null
+                  ? () => controller.login(AuthProviderType.device)
+                  : null,
             ),
             const SizedBox(height: 12),
             AuthActionButton(
@@ -107,7 +143,9 @@ class _LoginPanel extends StatelessWidget {
               backgroundColor: AppColors.textPrimary,
               foregroundColor: const Color(0xFF1A1A1A),
               isLoading: state.pendingProvider == AuthProviderType.google,
-              onPressed: () => controller.login(AuthProviderType.google),
+              onPressed: state.pendingProvider == null
+                  ? () => controller.login(AuthProviderType.google)
+                  : null,
             ),
             const SizedBox(height: 12),
             Stack(
@@ -119,7 +157,9 @@ class _LoginPanel extends StatelessWidget {
                   backgroundColor: const Color(0xFF5981EF),
                   foregroundColor: AppColors.textPrimary,
                   isLoading: state.pendingProvider == AuthProviderType.facebook,
-                  onPressed: () => controller.login(AuthProviderType.facebook),
+                  onPressed: state.pendingProvider == null
+                      ? () => controller.login(AuthProviderType.facebook)
+                      : null,
                 ),
                 Positioned(
                   top: -12,

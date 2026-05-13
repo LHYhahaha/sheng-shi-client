@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../auth/domain/auth_session.dart';
+
 final profileControllerProvider =
     NotifierProvider<ProfileController, ProfileState>(ProfileController.new);
 
@@ -18,7 +20,7 @@ class ProfileState {
     : isLoggedIn = false,
       userId = '15589299',
       nickname = null,
-      avatarAssetPath = 'assets/images/profile/profile_avatar_figma.png',
+      avatarAssetPath = authDefaultAvatarAssetPath,
       membership = const ProfileMembershipState.mock(),
       coins = const ProfileCoinsState.mock(),
       language = const ProfileLanguageState.enabled();

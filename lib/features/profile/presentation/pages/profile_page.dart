@@ -39,6 +39,7 @@ class ProfilePage extends ConsumerWidget {
             ProfileHeader(
               state: state,
               onLoginTap: () => context.push(RoutePaths.auth),
+              onAccountTap: () => context.push(RoutePaths.account),
             ),
             const SizedBox(height: 21),
             ProfileMembershipCard(

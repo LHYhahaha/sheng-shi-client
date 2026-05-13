@@ -41,7 +41,7 @@ class AuthActionButton extends StatelessWidget {
           disabledBackgroundColor: backgroundColor.withValues(alpha: 0.65),
           disabledForegroundColor: foregroundColor.withValues(alpha: 0.75),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
           ),
           textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.w700,
