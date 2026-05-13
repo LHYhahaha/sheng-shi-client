@@ -5,6 +5,8 @@ import '../shell/app_shell.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/my_list/presentation/pages/my_list_page.dart';
 import '../../features/player/presentation/pages/player_page.dart';
+import '../../features/profile/presentation/pages/language_page.dart';
+import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../l10n/app_localizations.dart';
 import '../../shared/widgets/feature_placeholder_page.dart';
 import 'route_names.dart';
@@ -54,10 +56,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: RoutePaths.profile,
                 name: RouteNames.profile,
-                builder: (context, state) => FeaturePlaceholderPage(
-                  title: context.l10n.profilePlaceholderTitle,
-                  description: context.l10n.profilePlaceholderDescription,
-                ),
+                builder: (context, state) => const ProfilePage(),
               ),
             ],
           ),
@@ -100,10 +99,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RoutePaths.language,
         name: RouteNames.language,
-        builder: (context, state) => FeaturePlaceholderPage(
-          title: context.l10n.languagePlaceholderTitle,
-          description: context.l10n.languagePlaceholderDescription,
-        ),
+        builder: (context, state) => const LanguagePage(),
       ),
       GoRoute(
         path: RoutePaths.transactionHistory,

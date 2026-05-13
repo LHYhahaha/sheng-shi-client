@@ -47,6 +47,23 @@ class AppLocalizations {
     en: 'Saved dramas and watch history will appear here.',
     zh: '收藏的短剧和播放记录会展示在这里。',
   );
+  String get profileLogin => _text(en: 'Log in >', zh: '登录 >');
+  String get profileGuest => _text(en: 'Guest', zh: '游客');
+  String get profileMembershipJoin => _text(en: 'Join Membership', zh: '开通会员');
+  String get profileMembership => _text(en: 'Membership', zh: '会员');
+  String get profileMembershipSubtitle =>
+      _text(en: 'to enjoy all series for free', zh: '免费观看全部短剧');
+  String get profileMembershipValidUntil =>
+      _text(en: 'Valid time 16/05/26', zh: '有效期至 16/05/26');
+  String get profileJoin => _text(en: 'Join', zh: '开通');
+  String get profileRenewal => _text(en: 'Renewal', zh: '续费');
+  String get profileSeriesBenefit => _text(en: '8K+ series', zh: '8K+ 短剧');
+  String get profileDailyPoints => _text(en: 'Daily points', zh: '每日积分');
+  String get profileDownload => _text(en: 'Download', zh: '下载');
+  String get profileFullHd => _text(en: '1080p', zh: '1080p');
+  String get profileCoins => _text(en: 'Coins', zh: '金币');
+  String get profileTopUp => _text(en: 'Top Up', zh: '充值');
+  String get profileLanguage => _text(en: 'Language', zh: '语言');
 
   String myListDeleteCount(int count) {
     return _text(en: 'Delete ($count)', zh: '删除 ($count)');

@@ -31,12 +31,41 @@ void main() {
 
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
-    expect(
-      find.text(
-        'Guest/login state, wallet, and membership entries come in M4.',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Log in >'), findsOneWidget);
+    expect(find.text('Language'), findsOneWidget);
+  });
+
+  testWidgets('opens language settings from profile', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Language'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Language'), findsOneWidget);
+    expect(find.text('简体中文'), findsOneWidget);
+    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+  });
+
+  testWidgets('changes app locale from language settings', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Language'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('简体中文'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('语言'), findsOneWidget);
+    expect(find.text('English'), findsOneWidget);
+    expect(find.text('简体中文'), findsOneWidget);
   });
 
   testWidgets('enters collection edit mode from the header menu', (
