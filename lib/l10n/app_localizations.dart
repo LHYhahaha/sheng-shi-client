@@ -35,8 +35,7 @@ class AppLocalizations {
   String get feedEmpty => _text(en: 'There is no content for now~', zh: '暂无内容');
   String get feedLoadFailed => _text(en: 'Load failed', zh: '加载失败');
   String get retry => _text(en: 'Retry', zh: '重试');
-  String get myListCollectionTab =>
-      _text(en: 'Collection list list', zh: '收藏列表');
+  String get myListCollectionTab => _text(en: 'Collection list', zh: '收藏列表');
   String get myListPlayTab => _text(en: 'Play list', zh: '播放列表');
   String get myListChoose => _text(en: 'Choose', zh: '选择');
   String get myListCancel => _text(en: 'Cancel', zh: '取消');

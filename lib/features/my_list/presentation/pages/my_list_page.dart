@@ -5,7 +5,8 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
-import '../../data/my_list_repository_provider.dart';
+import '../../../../shared/theme/app_radii.dart';
+import '../../application/my_list_controller.dart';
 import '../../domain/my_list_item.dart';
 
 class MyListPage extends ConsumerStatefulWidget {
@@ -16,19 +17,13 @@ class MyListPage extends ConsumerStatefulWidget {
 }
 
 class _MyListPageState extends ConsumerState<MyListPage> {
-  MyListTab _selectedTab = MyListTab.collection;
-  bool _isChoosing = false;
-  bool _isLoading = true;
-  Object? _loadError;
-  List<MyListItem> _items = const [];
-  final Set<String> _selectedIds = {};
   late final AppShellBottomNavigationVisible _shellChrome;
 
   @override
   void initState() {
     super.initState();
     _shellChrome = ref.read(appShellBottomNavigationVisibleProvider.notifier);
-    _loadItems();
+    Future.microtask(() => ref.read(myListControllerProvider.notifier).load());
   }
 
   @override
@@ -37,100 +32,22 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     super.dispose();
   }
 
-  Future<void> _loadItems() async {
-    setState(() {
-      _isLoading = true;
-      _loadError = null;
-      _selectedIds.clear();
-    });
-
-    try {
-      final items = await ref
-          .read(myListRepositoryProvider)
-          .fetchItems(tab: _selectedTab);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _items = items;
-        _isLoading = false;
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _loadError = error;
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _selectTab(MyListTab tab) {
-    if (_selectedTab == tab) {
-      return;
-    }
-    setState(() {
-      _selectedTab = tab;
-      _isChoosing = false;
-    });
-    _shellChrome.show();
-    _loadItems();
-  }
-
-  void _toggleChoosing() {
-    setState(() {
-      _isChoosing = true;
-      _selectedIds.clear();
-    });
-    _shellChrome.hide();
-  }
-
-  void _cancelChoosing() {
-    setState(() {
-      _isChoosing = false;
-      _selectedIds.clear();
-    });
-    _shellChrome.show();
-  }
-
-  void _toggleItem(String id) {
-    if (!_isChoosing) {
-      return;
-    }
-
-    setState(() {
-      if (!_selectedIds.add(id)) {
-        _selectedIds.remove(id);
-      }
-    });
-  }
-
-  void _deleteSelected() {
-    if (_selectedIds.isEmpty) {
-      return;
-    }
-
-    setState(() {
-      _items = _items
-          .where((item) => !_selectedIds.contains(item.id))
-          .toList(growable: false);
-      _selectedIds.clear();
-      _isChoosing = false;
-    });
-    _shellChrome.show();
-  }
-
-  void _deleteItem(String id) {
-    setState(() {
-      _items = _items.where((item) => item.id != id).toList(growable: false);
-      _selectedIds.remove(id);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final state = ref.watch(myListControllerProvider);
+    final controller = ref.read(myListControllerProvider.notifier);
+
+    ref.listen(
+      myListControllerProvider.select((state) => state.isCollectionEditing),
+      (previous, next) {
+        if (next) {
+          _shellChrome.hide();
+        } else {
+          _shellChrome.show();
+        }
+      },
+    );
 
     return Scaffold(
       backgroundColor: AppColors.black,
@@ -145,27 +62,27 @@ class _MyListPageState extends ConsumerState<MyListPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _MyListHeader(
-                    choosing: _isChoosing,
-                    canEdit: _selectedTab == MyListTab.collection,
-                    onEdit: _toggleChoosing,
-                    onCancel: _cancelChoosing,
+                    choosing: state.isCollectionEditing,
+                    canEdit: state.canEditCollection,
+                    onEdit: controller.enterCollectionEdit,
+                    onCancel: controller.cancelCollectionEdit,
                   ),
                   _MyListTabs(
-                    selectedTab: _selectedTab,
-                    onSelected: _selectTab,
+                    selectedTab: state.selectedTab,
+                    onSelected: controller.selectTab,
                   ),
-                  Expanded(child: _buildBody(l10n)),
+                  Expanded(child: _buildBody(l10n, state, controller)),
                 ],
               ),
             ),
-            if (_isChoosing)
+            if (state.isCollectionEditing)
               Positioned(
                 left: 0,
                 right: 0,
                 bottom: 0,
                 child: _DeleteBar(
-                  count: _selectedIds.length,
-                  onDelete: _deleteSelected,
+                  count: state.selectedCount,
+                  onDelete: controller.deleteSelected,
                 ),
               ),
           ],
@@ -174,8 +91,12 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     );
   }
 
-  Widget _buildBody(AppLocalizations l10n) {
-    if (_isLoading) {
+  Widget _buildBody(
+    AppLocalizations l10n,
+    MyListState state,
+    MyListController controller,
+  ) {
+    if (state.isLoading) {
       return const Center(
         child: SizedBox.square(
           dimension: 22,
@@ -187,18 +108,21 @@ class _MyListPageState extends ConsumerState<MyListPage> {
       );
     }
 
-    if (_loadError != null) {
+    if (state.error != null) {
       return Center(
-        child: Text(
-          l10n.feedLoadFailed,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+        child: TextButton(
+          onPressed: controller.retry,
+          child: Text(
+            l10n.feedLoadFailed,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+          ),
         ),
       );
     }
 
-    if (_items.isEmpty) {
+    if (state.isEmpty) {
       return _EmptyMyList(
         title: l10n.myListEmptyTitle,
         description: l10n.myListEmptyDescription,
@@ -210,21 +134,28 @@ class _MyListPageState extends ConsumerState<MyListPage> {
         16,
         15,
         36,
-        _isChoosing ? 108 + MediaQuery.viewPaddingOf(context).bottom : 24,
+        state.isCollectionEditing
+            ? 108 + MediaQuery.viewPaddingOf(context).bottom
+            : 24,
       ),
-      itemCount: _items.length,
+      itemCount: state.items.length,
       separatorBuilder: (context, index) => const SizedBox(height: 16),
       itemBuilder: (context, index) {
-        final item = _items[index];
+        final item = state.items[index];
         return _MyListRowSwipeAction(
-          enabled: !_isChoosing && _selectedTab == MyListTab.play,
+          enabled:
+              !state.isCollectionEditing && state.selectedTab == MyListTab.play,
           item: item,
-          onDelete: () => _deleteItem(item.id),
+          onDelete: () => controller.deleteItem(item.id),
+          onOpened: () => controller.openPlayItem(item.id),
+          onClosed: () => controller.closeOpenPlayItem(item.id),
           child: _MyListRow(
             item: item,
-            choosing: _isChoosing,
-            selected: _selectedIds.contains(item.id),
-            onTap: _isChoosing ? () => _toggleItem(item.id) : null,
+            choosing: state.isCollectionEditing,
+            selected: state.selectedIds.contains(item.id),
+            onTap: state.isCollectionEditing
+                ? () => controller.toggleSelection(item.id)
+                : controller.closeAnyOpenPlayItem,
           ),
         );
       },
@@ -292,7 +223,7 @@ class _MyListHeader extends StatelessWidget {
                   ? TextButton(
                       onPressed: onCancel,
                       style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFF909090),
+                        foregroundColor: AppColors.textDisabled,
                         padding: EdgeInsets.zero,
                         minimumSize: const Size(58, 36),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -328,7 +259,7 @@ class _HeaderMoreMenu extends StatelessWidget {
             onEdit();
         }
       },
-      color: const Color(0xFF2A2230),
+      color: AppColors.surfacePanel,
       elevation: 0,
       offset: const Offset(-4, 34),
       padding: EdgeInsets.zero,
@@ -443,7 +374,7 @@ class _TabLabel extends StatelessWidget {
         child: Text(
           text,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: active ? AppColors.textPrimary : const Color(0xFF909090),
+            color: active ? AppColors.textPrimary : AppColors.textDisabled,
             fontSize: 14,
             fontWeight: FontWeight.w500,
             height: 1.18,
@@ -459,12 +390,16 @@ class _MyListRowSwipeAction extends StatelessWidget {
     required this.enabled,
     required this.item,
     required this.onDelete,
+    required this.onOpened,
+    required this.onClosed,
     required this.child,
   });
 
   final bool enabled;
   final MyListItem item;
   final VoidCallback onDelete;
+  final VoidCallback onOpened;
+  final VoidCallback onClosed;
   final Widget child;
 
   @override
@@ -473,45 +408,105 @@ class _MyListRowSwipeAction extends StatelessWidget {
       return child;
     }
 
-    return Slidable(
-      key: ValueKey(item.id),
-      groupTag: 'my-list-play',
-      closeOnScroll: true,
-      endActionPane: ActionPane(
-        motion: const ScrollMotion(),
-        extentRatio: 0.18,
-        dragDismissible: false,
-        children: [
-          CustomSlidableAction(
-            onPressed: (_) => onDelete(),
-            autoClose: true,
-            backgroundColor: const Color(0xFFFF2E46),
-            padding: EdgeInsets.zero,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.delete_rounded,
-                  color: AppColors.textPrimary,
-                  size: 22,
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  context.l10n.myListDelete,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+    return _SlidableOpenTracker(
+      onOpened: onOpened,
+      onClosed: onClosed,
+      builder: (context, controller) => Slidable(
+        key: ValueKey(item.id),
+        controller: controller,
+        groupTag: 'my-list-play',
+        closeOnScroll: true,
+        endActionPane: ActionPane(
+          motion: const ScrollMotion(),
+          extentRatio: 0.18,
+          dragDismissible: false,
+          children: [
+            CustomSlidableAction(
+              onPressed: (_) => onDelete(),
+              autoClose: true,
+              backgroundColor: AppColors.danger,
+              padding: EdgeInsets.zero,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.delete_rounded,
                     color: AppColors.textPrimary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    height: 1.1,
+                    size: 22,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 3),
+                  Text(
+                    context.l10n.myListDelete,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      height: 1.1,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
+        child: child,
       ),
-      child: child,
     );
+  }
+}
+
+class _SlidableOpenTracker extends StatefulWidget {
+  const _SlidableOpenTracker({
+    required this.onOpened,
+    required this.onClosed,
+    required this.builder,
+  });
+
+  final VoidCallback onOpened;
+  final VoidCallback onClosed;
+  final Widget Function(BuildContext context, SlidableController controller)
+  builder;
+
+  @override
+  State<_SlidableOpenTracker> createState() => _SlidableOpenTrackerState();
+}
+
+class _SlidableOpenTrackerState extends State<_SlidableOpenTracker>
+    with SingleTickerProviderStateMixin {
+  late final SlidableController _controller;
+  ActionPaneType _lastPaneType = ActionPaneType.none;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = SlidableController(this)
+      ..actionPaneType.addListener(_handleActionPaneChanged);
+  }
+
+  @override
+  void dispose() {
+    _controller.actionPaneType.removeListener(_handleActionPaneChanged);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleActionPaneChanged() {
+    final paneType = _controller.actionPaneType.value;
+    if (paneType == _lastPaneType) {
+      return;
+    }
+
+    _lastPaneType = paneType;
+    if (paneType == ActionPaneType.none) {
+      widget.onClosed();
+    } else {
+      widget.onOpened();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.builder(context, _controller);
   }
 }
 
@@ -568,7 +563,7 @@ class _CoverImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(AppRadii.xs),
       child: Stack(
         children: [
           Image.asset(
@@ -642,7 +637,7 @@ class _RowCopy extends StatelessWidget {
                 ),
                 TextSpan(
                   text: ' / ${item.episodeCount}',
-                  style: const TextStyle(color: Color(0xFFAEAEAE)),
+                  style: const TextStyle(color: AppColors.textTertiary),
                 ),
               ],
             ),
@@ -690,7 +685,7 @@ class _DeleteBar extends StatelessWidget {
     final enabled = count > 0;
 
     return ColoredBox(
-      color: const Color(0xFF2A2230),
+      color: AppColors.surfacePanel,
       child: SizedBox(
         height: 84 + MediaQuery.viewPaddingOf(context).bottom,
         child: Padding(

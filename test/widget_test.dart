@@ -26,7 +26,7 @@ void main() {
 
     await tester.tap(find.text('My list'));
     await tester.pumpAndSettle();
-    expect(find.text('Collection list list'), findsOneWidget);
+    expect(find.text('Collection list'), findsOneWidget);
     expect(find.text('Raja Iblis Hidup Kembali'), findsOneWidget);
 
     await tester.tap(find.text('Profile'));

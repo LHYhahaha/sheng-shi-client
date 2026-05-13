@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../application/player_ui_controller.dart';
 import '../../data/player_content_repository_provider.dart';
 import '../../domain/player_content.dart';
 import '../widgets/player_action_sheets.dart';
@@ -29,29 +30,33 @@ class PlayerPage extends ConsumerStatefulWidget {
 }
 
 class _PlayerPageState extends ConsumerState<PlayerPage> {
-  late int _episodeNumber = int.tryParse(widget.episodeId) ?? 1;
-  bool _isPlaying = false;
-  bool _showsPaywall = false;
-  bool _memberPaywall = false;
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(() {
+      ref
+          .read(playerUiControllerProvider.notifier)
+          .startSession(widget.episodeId);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final contentState = ref.watch(_playerContentProvider(widget.dramaId));
+    final uiState = ref.watch(playerUiControllerProvider);
+    final uiController = ref.read(playerUiControllerProvider.notifier);
 
     return Scaffold(
       backgroundColor: Colors.black,
       extendBody: true,
       body: PopScope(
-        canPop: !_showsPaywall,
+        canPop: !uiState.showsPaywall,
         onPopInvokedWithResult: (didPop, result) {
-          if (didPop || !_showsPaywall) {
+          if (didPop || !uiState.showsPaywall) {
             return;
           }
 
-          setState(() {
-            _showsPaywall = false;
-            _memberPaywall = false;
-          });
+          uiController.hidePaywall();
         },
         child: contentState.when(
           data: (content) => Stack(
@@ -59,11 +64,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               Positioned.fill(
                 child: PlayerChrome(
                   content: content,
-                  episodeNumber: _episodeNumber,
-                  isPlaying: _isPlaying,
-                  onTogglePlay: () {
-                    setState(() => _isPlaying = !_isPlaying);
-                  },
+                  episodeNumber: uiState.episodeNumber,
+                  isPlaying: uiState.isPlaying,
+                  onTogglePlay: uiController.togglePlay,
                   onEpisodesTap: () {
                     _showDetailSheet(
                       content,
@@ -77,26 +80,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                       initialTab: PlayerDetailTab.synopsis,
                     );
                   },
-                  onUnlockTap: () {
-                    setState(() {
-                      _showsPaywall = true;
-                      _memberPaywall = true;
-                    });
-                  },
+                  onUnlockTap: uiController.showMemberPaywall,
                 ),
               ),
-              if (_showsPaywall)
+              if (uiState.showsPaywall)
                 PlayerPaywallOverlay(
-                  label: _memberPaywall
+                  label: uiState.paywall == PlayerPaywallState.memberUnlock
                       ? context.l10n.playerMemberUnlock
                       : context.l10n.playerUnlockNow,
                   onTap: _showUnlockSheet,
-                  onDismiss: () {
-                    setState(() {
-                      _showsPaywall = false;
-                      _memberPaywall = false;
-                    });
-                  },
+                  onDismiss: uiController.hidePaywall,
                 ),
             ],
           ),
@@ -120,24 +113,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     );
   }
 
-  void _showPaywallForEpisode(PlayerEpisode episode) {
-    setState(() {
-      _episodeNumber = episode.number;
-      _showsPaywall = true;
-      _memberPaywall = false;
-      _isPlaying = false;
-    });
-  }
-
-  void _playEpisode(PlayerEpisode episode) {
-    setState(() {
-      _episodeNumber = episode.number;
-      _showsPaywall = false;
-      _memberPaywall = false;
-      _isPlaying = true;
-    });
-  }
-
   void _closeSheetAndSelectEpisode(
     BuildContext sheetContext,
     PlayerEpisode episode,
@@ -147,12 +122,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       return;
     }
 
-    if (episode.isLocked) {
-      _showPaywallForEpisode(episode);
-      return;
-    }
-
-    _playEpisode(episode);
+    ref.read(playerUiControllerProvider.notifier).selectEpisode(episode);
   }
 
   Future<void> _showDetailSheet(
@@ -171,7 +141,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         return PlayerDetailSheet(
           content: content,
           initialTab: initialTab,
-          currentEpisode: _episodeNumber,
+          currentEpisode: ref.read(playerUiControllerProvider).episodeNumber,
           onEpisodeSelected: (episode) {
             _closeSheetAndSelectEpisode(sheetContext, episode);
           },
@@ -205,10 +175,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       return;
     }
 
-    setState(() {
-      _showsPaywall = false;
-      _memberPaywall = false;
-      _isPlaying = true;
-    });
+    ref.read(playerUiControllerProvider.notifier).unlockPaywallAndPlay();
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
+import '../../theme/app_colors.dart';
 
 class AppBottomNavigation extends StatelessWidget {
   const AppBottomNavigation({
@@ -52,7 +53,7 @@ class AppBottomNavigation extends StatelessWidget {
     final bottomInset = isIos ? 0.0 : mediaQuery.viewPadding.bottom;
 
     return ColoredBox(
-      color: const Color(0xFF272727),
+      color: AppColors.navigationBar,
       child: SizedBox(
         height: contentHeight + bottomInset,
         child: Stack(
@@ -128,7 +129,7 @@ class _AppBottomNavigationItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? Colors.white : const Color(0xFF807F7F);
+    final color = selected ? Colors.white : AppColors.navigationInactive;
 
     return SizedBox(
       width: AppBottomNavigation._itemWidth,

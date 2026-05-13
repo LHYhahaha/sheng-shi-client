@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -7,11 +6,11 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
-import '../../../../features/drama/data/drama_repository_provider.dart';
 import '../../../../features/drama/domain/drama.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
+import '../../application/home_feed_controller.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -22,22 +21,14 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage> {
   final _scrollController = ScrollController();
-  final List<DramaCategory> _categories = [];
-  final List<Drama> _items = [];
-
-  int _selectedTab = 0;
-  int _loadGeneration = 0;
-  String? _nextPageToken;
-  Object? _initialError;
-  Object? _loadMoreError;
-  bool _isInitialLoading = true;
-  bool _isLoadingMore = false;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    unawaited(_loadInitialFeed());
+    Future<void>.microtask(() {
+      ref.read(homeFeedControllerProvider.notifier).loadInitial();
+    });
   }
 
   @override
@@ -49,144 +40,23 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   void _onScroll() {
-    if (_nextPageToken == null ||
-        _isLoadingMore ||
-        !_scrollController.hasClients) {
+    final feedState = ref.read(homeFeedControllerProvider);
+    if (!feedState.canLoadMore || !_scrollController.hasClients) {
       return;
     }
 
     final position = _scrollController.position;
     if (position.extentAfter < 500) {
-      unawaited(_loadMore());
-    }
-  }
-
-  Future<void> _loadInitialFeed({String? preferredCategoryId}) async {
-    final generation = ++_loadGeneration;
-    setState(() {
-      _isInitialLoading = true;
-      _isLoadingMore = false;
-      _initialError = null;
-      _loadMoreError = null;
-      _nextPageToken = null;
-      _items.clear();
-    });
-
-    try {
-      final repository = ref.read(dramaRepositoryProvider);
-      final categories = await repository.listHomeCategories();
-
-      if (!mounted || generation != _loadGeneration) {
-        return;
-      }
-
-      if (categories.isEmpty) {
-        setState(() {
-          _categories.clear();
-          _selectedTab = 0;
-          _isInitialLoading = false;
-        });
-        return;
-      }
-
-      final selectedIndex = _resolveSelectedIndex(
-        categories,
-        preferredCategoryId,
-      );
-      final selectedCategory = categories[selectedIndex];
-      final page = await repository.listHomeFeed(
-        categoryId: selectedCategory.id,
-      );
-
-      if (!mounted || generation != _loadGeneration) {
-        return;
-      }
-
-      setState(() {
-        _categories
-          ..clear()
-          ..addAll(categories);
-        _selectedTab = selectedIndex;
-        _items.addAll(page.items);
-        _nextPageToken = page.nextPageToken;
-        _isInitialLoading = false;
-      });
-    } catch (error) {
-      if (!mounted || generation != _loadGeneration) {
-        return;
-      }
-
-      setState(() {
-        _initialError = error;
-        _isInitialLoading = false;
-      });
-    }
-  }
-
-  int _resolveSelectedIndex(
-    List<DramaCategory> categories,
-    String? preferredCategoryId,
-  ) {
-    final index = categories.indexWhere(
-      (category) => category.id == preferredCategoryId,
-    );
-    return index == -1 ? 0 : index;
-  }
-
-  Future<void> _loadMore() async {
-    final pageToken = _nextPageToken;
-    if (pageToken == null || _categories.isEmpty) {
-      return;
-    }
-
-    setState(() {
-      _isLoadingMore = true;
-      _loadMoreError = null;
-    });
-
-    try {
-      final repository = ref.read(dramaRepositoryProvider);
-      final page = await repository.listHomeFeed(
-        categoryId: _categories[_selectedTab].id,
-        pageToken: pageToken,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _items.addAll(page.items);
-        _nextPageToken = page.nextPageToken;
-        _isLoadingMore = false;
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _loadMoreError = error;
-        _isLoadingMore = false;
-      });
+      ref.read(homeFeedControllerProvider.notifier).loadMore();
     }
   }
 
   void _selectTab(int index) {
-    if (_selectedTab == index || index >= _categories.length) {
+    final feedState = ref.read(homeFeedControllerProvider);
+    if (feedState.selectedIndex == index ||
+        index >= feedState.categories.length) {
       return;
     }
-
-    final categoryId = _categories[index].id;
-    setState(() {
-      _selectedTab = index;
-      _items.clear();
-      _nextPageToken = null;
-      _isInitialLoading = true;
-      _isLoadingMore = false;
-      _initialError = null;
-      _loadMoreError = null;
-    });
 
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
@@ -196,11 +66,13 @@ class _HomePageState extends ConsumerState<HomePage> {
       );
     }
 
-    unawaited(_loadInitialFeed(preferredCategoryId: categoryId));
+    ref.read(homeFeedControllerProvider.notifier).selectCategory(index);
   }
 
   @override
   Widget build(BuildContext context) {
+    final feedState = ref.watch(homeFeedControllerProvider);
+
     return Scaffold(
       backgroundColor: AppColors.black,
       body: SafeArea(
@@ -219,12 +91,12 @@ class _HomePageState extends ConsumerState<HomePage> {
             SliverPersistentHeader(
               pinned: true,
               delegate: _HomeTabsHeaderDelegate(
-                selectedTab: _selectedTab,
-                tabs: List<DramaCategory>.unmodifiable(_categories),
+                selectedTab: feedState.selectedIndex,
+                tabs: feedState.categories,
                 onTabChanged: _selectTab,
               ),
             ),
-            if (_isInitialLoading)
+            if (feedState.isInitialLoading)
               const SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(
@@ -234,12 +106,16 @@ class _HomePageState extends ConsumerState<HomePage> {
                   ),
                 ),
               )
-            else if (_initialError != null)
+            else if (feedState.initialError != null)
               SliverFillRemaining(
                 hasScrollBody: false,
-                child: _HomeErrorState(onRetry: _loadInitialFeed),
+                child: _HomeErrorState(
+                  onRetry: () {
+                    ref.read(homeFeedControllerProvider.notifier).loadInitial();
+                  },
+                ),
               )
-            else if (_items.isEmpty)
+            else if (feedState.items.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(
@@ -276,9 +152,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                       crossAxisCount: crossAxisCount,
                       mainAxisSpacing: 8,
                       crossAxisSpacing: crossAxisSpacing,
-                      childCount: _items.length,
+                      childCount: feedState.items.length,
                       itemBuilder: (context, index) {
-                        final item = _items[index];
+                        final item = feedState.items[index];
 
                         return _HomeDramaCard(
                           data: item,
@@ -299,10 +175,12 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
             SliverToBoxAdapter(
               child: _HomeFeedFooter(
-                isLoading: _isLoadingMore,
-                hasMore: _nextPageToken != null,
-                error: _loadMoreError,
-                onRetry: _loadMore,
+                isLoading: feedState.isLoadingMore,
+                hasMore: feedState.nextPageToken != null,
+                error: feedState.loadMoreError,
+                onRetry: () {
+                  ref.read(homeFeedControllerProvider.notifier).loadMore();
+                },
               ),
             ),
           ],
@@ -466,7 +344,7 @@ class _HomeDramaCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFF2A2230),
+      color: AppColors.surfacePanel,
       borderRadius: BorderRadius.circular(AppRadii.sm),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -524,7 +402,7 @@ class _HomeDramaCard extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFFE0E0E0),
+                      color: AppColors.textOnCard,
                       fontSize: 12,
                       height: 1.3,
                     ),

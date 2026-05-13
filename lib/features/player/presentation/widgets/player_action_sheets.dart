@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_sheet_handle.dart';
 import '../../../../shared/widgets/app_primary_button.dart';
 
 class PlayerShareSheet extends StatelessWidget {
@@ -243,7 +244,7 @@ class _CompactPlayerSheet extends StatelessWidget {
           child: Column(
             children: [
               const SizedBox(height: 8),
-              const _SheetHandle(),
+              const AppSheetHandle(),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
@@ -329,22 +330,6 @@ class _CloseButton extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _SheetHandle extends StatelessWidget {
-  const _SheetHandle();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 42,
-      height: 4,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.22),
-        borderRadius: BorderRadius.circular(99),
       ),
     );
   }

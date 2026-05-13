@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_round_icon_button.dart';
+import '../../../../shared/widgets/app_sheet_handle.dart';
 import '../../domain/player_content.dart';
 
 enum PlayerDetailTab { synopsis, episodes }
@@ -96,12 +98,12 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
                 left: 0,
                 right: 0,
                 top: 8,
-                child: _SheetHandle(),
+                child: AppSheetHandle(),
               ),
               Positioned(
                 left: 16,
                 top: 22,
-                child: _RoundIconButton(
+                child: AppRoundIconButton(
                   icon: Icons.open_in_full_rounded,
                   onTap: () {},
                 ),
@@ -109,7 +111,7 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
               Positioned(
                 right: 16,
                 top: 22,
-                child: _RoundIconButton(
+                child: AppRoundIconButton(
                   icon: Icons.close_rounded,
                   onTap: () => Navigator.of(context).pop(),
                 ),
@@ -551,49 +553,6 @@ class _GiftBadge extends StatelessWidget {
         Icons.local_fire_department,
         color: Colors.white,
         size: 12,
-      ),
-    );
-  }
-}
-
-class _SheetHandle extends StatelessWidget {
-  const _SheetHandle();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: 42,
-        height: 4,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.22),
-          borderRadius: BorderRadius.circular(99),
-        ),
-      ),
-    );
-  }
-}
-
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({required this.icon, required this.onTap});
-
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.08),
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        ),
-        child: Icon(icon, color: Colors.white, size: 20),
       ),
     );
   }
