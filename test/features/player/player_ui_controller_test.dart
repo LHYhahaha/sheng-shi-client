@@ -32,4 +32,28 @@ void main() {
     expect(singleState.paywall, PlayerPaywallState.hidden);
     expect(singleState.isPlaying, isTrue);
   });
+
+  test('unavailable episode does not open paywall or start playback', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final provider = playerUiControllerProvider('single:drama-a:3');
+
+    container
+        .read(provider.notifier)
+        .selectEpisode(
+          const PlayerEpisode(
+            id: 'ep-3',
+            number: 3,
+            isLocked: false,
+            isAvailable: false,
+          ),
+        );
+
+    final state = container.read(provider);
+
+    expect(state.episodeNumber, 3);
+    expect(state.paywall, PlayerPaywallState.hidden);
+    expect(state.isPlaying, isFalse);
+  });
 }

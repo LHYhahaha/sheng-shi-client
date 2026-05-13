@@ -4,9 +4,14 @@ import 'package:drama_client/features/auth/data/auth_repository_provider.dart';
 import 'package:drama_client/features/auth/domain/auth_repository.dart';
 import 'package:drama_client/features/auth/domain/auth_session.dart';
 import 'package:drama_client/features/auth/presentation/pages/account_page.dart';
+import 'package:drama_client/features/my_list/data/my_list_repository_provider.dart';
+import 'package:drama_client/features/my_list/domain/my_list_item.dart';
+import 'package:drama_client/features/my_list/domain/my_list_repository.dart';
 import 'package:drama_client/features/profile/presentation/pages/language_page.dart';
 import 'package:drama_client/features/store/presentation/pages/store_page.dart';
 import 'package:drama_client/features/wallet/domain/wallet_record.dart';
+import 'package:drama_client/features/wallet/domain/wallet_repository.dart';
+import 'package:drama_client/features/wallet/data/wallet_repository_provider.dart';
 import 'package:drama_client/features/wallet/presentation/pages/wallet_history_page.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
@@ -533,6 +538,118 @@ void main() {
     },
   );
 
+  testWidgets('transaction history shows empty state', (tester) async {
+    final router = GoRouter(
+      initialLocation: RoutePaths.transactionHistory,
+      routes: [
+        GoRoute(
+          path: RoutePaths.transactionHistory,
+          builder: (context, state) =>
+              const WalletHistoryPage(type: WalletRecordType.transaction),
+        ),
+        GoRoute(
+          path: RoutePaths.wallet,
+          builder: (context, state) =>
+              const Scaffold(body: Text('Wallet fallback')),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          walletRepositoryProvider.overrideWithValue(
+            const _EmptyWalletRepository(),
+          ),
+        ],
+        child: _TestRouterApp(router: router),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Transaction history'), findsOneWidget);
+    expect(find.text('There are no records yet.'), findsOneWidget);
+  });
+
+  testWidgets('consumption history keeps segmented control when empty', (
+    tester,
+  ) async {
+    final router = GoRouter(
+      initialLocation: RoutePaths.consumptionHistory,
+      routes: [
+        GoRoute(
+          path: RoutePaths.consumptionHistory,
+          builder: (context, state) =>
+              const WalletHistoryPage(type: WalletRecordType.consumption),
+        ),
+        GoRoute(
+          path: RoutePaths.wallet,
+          builder: (context, state) =>
+              const Scaffold(body: Text('Wallet fallback')),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          walletRepositoryProvider.overrideWithValue(
+            const _EmptyWalletRepository(),
+          ),
+        ],
+        child: _TestRouterApp(router: router),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Consumption history'), findsOneWidget);
+    expect(find.text('Spent'), findsOneWidget);
+    expect(find.text('Expired'), findsOneWidget);
+    expect(find.text('There are no records yet.'), findsOneWidget);
+
+    await tester.tap(find.text('Expired'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Expired'), findsOneWidget);
+    expect(find.text('There are no records yet.'), findsOneWidget);
+  });
+
+  testWidgets('record coins shows empty state', (tester) async {
+    final router = GoRouter(
+      initialLocation: RoutePaths.recordCoins,
+      routes: [
+        GoRoute(
+          path: RoutePaths.recordCoins,
+          builder: (context, state) =>
+              const WalletHistoryPage(type: WalletRecordType.coins),
+        ),
+        GoRoute(
+          path: RoutePaths.wallet,
+          builder: (context, state) =>
+              const Scaffold(body: Text('Wallet fallback')),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          walletRepositoryProvider.overrideWithValue(
+            const _EmptyWalletRepository(),
+          ),
+        ],
+        child: _TestRouterApp(router: router),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Record Coins'), findsOneWidget);
+    expect(find.text('There are no records yet.'), findsOneWidget);
+  });
+
   testWidgets('enters collection edit mode from the header menu', (
     tester,
   ) async {
@@ -555,6 +672,33 @@ void main() {
     await tester.tap(find.text('Raja Iblis Hidup Kembali'));
     await tester.pumpAndSettle();
     expect(find.text('Delete (1)'), findsOneWidget);
+  });
+
+  testWidgets('my list empty CTA returns home', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          myListRepositoryProvider.overrideWithValue(
+            const _EmptyMyListRepository(),
+          ),
+        ],
+        child: const DramaClientApp(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('My list'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('There is no content for now~'), findsOneWidget);
+    expect(find.text('Watch popular dramas'), findsOneWidget);
+
+    await tester.tap(find.text('Watch popular dramas'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('KillgBox'), findsOneWidget);
+    expect(find.text('Popular'), findsOneWidget);
   });
 
   testWidgets('reveals play list delete action before deleting', (
@@ -710,4 +854,29 @@ class _SignedInAuthRepository implements AuthRepository {
 
   @override
   Future<AuthSession> deleteAccount() async => const AuthSession.guest();
+}
+
+class _EmptyMyListRepository implements MyListRepository {
+  const _EmptyMyListRepository();
+
+  @override
+  Future<List<MyListItem>> fetchItems({required MyListTab tab}) async {
+    return const [];
+  }
+}
+
+class _EmptyWalletRepository implements WalletRepository {
+  const _EmptyWalletRepository();
+
+  @override
+  Future<WalletData> fetchWallet() async {
+    return const WalletData(
+      coins: 0,
+      bonus: 0,
+      autoUnlockNextEpisode: false,
+      transactionRecords: [],
+      consumptionRecords: [],
+      coinRecords: [],
+    );
+  }
 }

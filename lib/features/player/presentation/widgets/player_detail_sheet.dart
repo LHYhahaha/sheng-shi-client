@@ -506,7 +506,7 @@ class _EpisodeTile extends StatelessWidget {
                   : Text(
                       episode.number.toString(),
                       style: TextStyle(
-                        color: episode.isLocked
+                        color: episode.isLocked || episode.isUnavailable
                             ? Colors.white.withValues(alpha: 0.3)
                             : Colors.white,
                         fontSize: 16,
@@ -522,6 +522,16 @@ class _EpisodeTile extends StatelessWidget {
               top: 3,
               child: Icon(
                 Icons.lock_rounded,
+                color: Colors.white.withValues(alpha: 0.28),
+                size: 12,
+              ),
+            ),
+          if (episode.isUnavailable)
+            Positioned(
+              right: 4,
+              top: 3,
+              child: Icon(
+                Icons.block_rounded,
                 color: Colors.white.withValues(alpha: 0.28),
                 size: 12,
               ),

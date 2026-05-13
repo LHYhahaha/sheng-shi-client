@@ -167,18 +167,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     }
 
     if (feedState.error != null) {
-      return Center(
-        child: IconButton(
-          color: AppColors.textPrimary,
-          icon: const Icon(Icons.refresh_rounded),
-          onPressed: feedController.retry,
-        ),
+      return _PlayerStateMessage(
+        icon: Icons.refresh_rounded,
+        message: context.l10n.playerFeedLoadFailed,
+        actionLabel: context.l10n.retry,
+        onAction: feedController.retry,
       );
     }
 
     if (feedState.items.isEmpty) {
-      return const Center(
-        child: Icon(Icons.movie_filter_rounded, color: AppColors.textPrimary),
+      return _PlayerStateMessage(
+        icon: Icons.movie_filter_rounded,
+        message: context.l10n.playerFeedEmpty,
       );
     }
 
@@ -191,27 +191,42 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           onPageChanged: feedController.setCurrentIndex,
           itemBuilder: (context, index) {
             final item = feedState.items[index];
-            return PlayerChrome(
-              content: item.content,
-              episodeNumber: item.episode.number,
-              isPlaying: uiState.isPlaying && index == feedState.currentIndex,
-              onTogglePlay: uiController.togglePlay,
-              onEpisodesTap: () {
-                _showDetailSheet(
-                  item.content,
-                  initialTab: PlayerDetailTab.episodes,
-                );
-              },
-              onShareTap: _showShareSheet,
-              onMoreTap: () {
-                _showDetailSheet(
-                  item.content,
-                  initialTab: PlayerDetailTab.synopsis,
-                );
-              },
-              onUnlockTap: uiController.showMemberPaywall,
-              onBackTap: widget.hideShellNavigation ? _exitForYouFeed : null,
-              forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
+            return Stack(
+              children: [
+                PlayerChrome(
+                  content: item.content,
+                  episodeNumber: item.episode.number,
+                  isPlaying:
+                      uiState.isPlaying &&
+                      index == feedState.currentIndex &&
+                      !item.episode.isUnavailable,
+                  onTogglePlay: item.episode.isUnavailable
+                      ? () {}
+                      : uiController.togglePlay,
+                  onEpisodesTap: () {
+                    _showDetailSheet(
+                      item.content,
+                      initialTab: PlayerDetailTab.episodes,
+                    );
+                  },
+                  onShareTap: _showShareSheet,
+                  onMoreTap: () {
+                    _showDetailSheet(
+                      item.content,
+                      initialTab: PlayerDetailTab.synopsis,
+                    );
+                  },
+                  onUnlockTap: uiController.showMemberPaywall,
+                  onBackTap: widget.hideShellNavigation
+                      ? _exitForYouFeed
+                      : null,
+                  forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
+                ),
+                if (item.episode.isUnavailable)
+                  _UnavailableEpisodeOverlay(
+                    message: context.l10n.playerEpisodeUnavailable,
+                  ),
+              ],
             );
           },
         ),
@@ -315,5 +330,99 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     ref
         .read(playerUiControllerProvider(_sessionKey).notifier)
         .unlockPaywallAndPlay();
+  }
+}
+
+class _PlayerStateMessage extends StatelessWidget {
+  const _PlayerStateMessage({
+    required this.icon,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: AppColors.textPrimary, size: 32),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textPrimary.withValues(alpha: 0.82),
+                fontSize: 14,
+                height: 18 / 14,
+              ),
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 16),
+              TextButton(onPressed: onAction, child: Text(actionLabel!)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UnavailableEpisodeOverlay extends StatelessWidget {
+  const _UnavailableEpisodeOverlay({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: ColoredBox(
+          color: Colors.black.withValues(alpha: 0.32),
+          child: Center(
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 42),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.58),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.block_rounded,
+                    color: AppColors.textPrimary,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        height: 18 / 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

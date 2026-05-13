@@ -82,12 +82,54 @@ void main() {
     expect(singleState.currentItem?.mode, PlayerFeedMode.singleDrama);
     expect(singleState.currentItem?.episode.number, 3);
   });
+
+  test('keeps empty feed retryable', () async {
+    final repository = _FakeFeedRepo(singleItems: const []);
+    final container = _createContainer(repository);
+    final provider = playerFeedControllerProvider('single-empty');
+    final controller = container.read(provider.notifier);
+
+    await controller.load(
+      const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: '1'),
+    );
+    final state = container.read(provider);
+
+    expect(state.isLoading, isFalse);
+    expect(state.error, isNull);
+    expect(state.items, isEmpty);
+    expect(state.currentItem, isNull);
+  });
+
+  test('keeps feed error retryable', () async {
+    final repository = _FakeFeedRepo()..shouldThrow = true;
+    final container = _createContainer(repository);
+    final provider = playerFeedControllerProvider('single-error');
+    final controller = container.read(provider.notifier);
+
+    await controller.load(
+      const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: '1'),
+    );
+    var state = container.read(provider);
+    expect(state.isLoading, isFalse);
+    expect(state.error, isA<StateError>());
+    expect(state.items, isEmpty);
+
+    repository.shouldThrow = false;
+    await controller.retry();
+    state = container.read(provider);
+
+    expect(state.error, isNull);
+    expect(state.items, isNotEmpty);
+    expect(state.currentItem?.episode.number, 1);
+  });
 }
 
-ProviderContainer _createContainer() {
+ProviderContainer _createContainer([PlayerFeedRepository? repository]) {
   final container = ProviderContainer(
     overrides: [
-      playerFeedRepositoryProvider.overrideWithValue(_FakeFeedRepo()),
+      playerFeedRepositoryProvider.overrideWithValue(
+        repository ?? _FakeFeedRepo(),
+      ),
     ],
   );
   addTearDown(container.dispose);
@@ -95,11 +137,23 @@ ProviderContainer _createContainer() {
 }
 
 class _FakeFeedRepo implements PlayerFeedRepository {
+  _FakeFeedRepo({this.singleItems});
+
+  final List<PlayerFeedItem>? singleItems;
+  bool shouldThrow = false;
+
   @override
   Future<List<PlayerFeedItem>> listSingleDramaFeed({
     required String dramaId,
     required String episodeId,
   }) async {
+    if (shouldThrow) {
+      throw StateError('failed');
+    }
+    if (singleItems != null) {
+      return singleItems!;
+    }
+
     final content = _content(dramaId);
     final items = content.episodes
         .map((episode) {
@@ -119,6 +173,10 @@ class _FakeFeedRepo implements PlayerFeedRepository {
 
   @override
   Future<List<PlayerFeedItem>> listForYouFeed() async {
+    if (shouldThrow) {
+      throw StateError('failed');
+    }
+
     return [
       PlayerFeedItem(
         id: 'a-1',

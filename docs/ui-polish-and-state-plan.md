@@ -100,3 +100,11 @@ flutter test
 - No Figma-missing pages are added.
 - `flutter analyze` passes.
 - `flutter test` passes.
+
+## Implementation Status
+
+- Phase 2 batch 1: Home, My list, and Wallet history lightweight
+  loading/empty/error/retry coverage completed.
+- Phase 2 batch 2: Player / For You lightweight empty/error/retry,
+  unavailable episode, locked paywall, sheet/back behavior, and session
+  isolation coverage completed for review.

@@ -26,6 +26,7 @@ class MockPlayerContentRepository implements PlayerContentRepository {
             id: 'ep-$number',
             number: number,
             isLocked: number >= 11,
+            isAvailable: number != 9,
           );
         }),
         recommendations: const [

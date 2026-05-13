@@ -74,6 +74,15 @@ class PlayerUiController extends Notifier<PlayerUiState> {
   }
 
   void selectEpisode(PlayerEpisode episode) {
+    if (episode.isUnavailable) {
+      state = state.copyWith(
+        episodeNumber: episode.number,
+        isPlaying: false,
+        paywall: PlayerPaywallState.hidden,
+      );
+      return;
+    }
+
     if (episode.isLocked) {
       state = state.copyWith(
         episodeNumber: episode.number,

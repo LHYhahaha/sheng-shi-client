@@ -42,10 +42,8 @@ class AppLocalizations {
   String get myListEdit => _text(en: 'Edit', zh: '编辑');
   String get myListDelete => _text(en: 'Delete', zh: '删除');
   String get myListEmptyTitle => _text(en: 'Nothing here yet', zh: '暂无内容');
-  String get myListEmptyDescription => _text(
-    en: 'Saved dramas and watch history will appear here.',
-    zh: '收藏的短剧和播放记录会展示在这里。',
-  );
+  String get myListEmptyDescription =>
+      _text(en: 'There is no content for now~', zh: '暂无内容');
   String get myListWatchPopular =>
       _text(en: 'Watch popular dramas', zh: '观看热门短剧');
   String get profileLogin => _text(en: 'Log in >', zh: '登录 >');
@@ -151,6 +149,12 @@ class AppLocalizations {
       _text(en: 'Play the next episode automatically', zh: '自动播放下一集');
   String get playerPrice => _text(en: 'Price:', zh: '价格:');
   String get playerBalance => _text(en: 'Balance:', zh: '余额:');
+  String get playerFeedEmpty =>
+      _text(en: 'No episodes available yet.', zh: '暂无可播放剧集');
+  String get playerFeedLoadFailed =>
+      _text(en: 'Player failed to load.', zh: '播放内容加载失败');
+  String get playerEpisodeUnavailable =>
+      _text(en: 'This episode is unavailable.', zh: '本集暂不可播放');
   String get playerFacebook => _text(en: 'Facebook', zh: 'Facebook');
   String get playerWhatsApp => _text(en: 'WhatsApp', zh: 'WhatsApp');
   String get playerMessenger =>

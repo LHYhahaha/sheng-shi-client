@@ -53,6 +53,25 @@ void main() {
     expect(state.isCollectionEditing, isFalse);
   });
 
+  test('deleting all selected collection items enters empty state', () async {
+    final repository = _FakeMyListRepository(
+      collectionItems: const [_collectionItem, _collectionItemB],
+    );
+    final container = _createContainer(repository);
+    final controller = container.read(myListControllerProvider.notifier);
+
+    await controller.load();
+    controller.enterCollectionEdit();
+    controller.toggleSelection('collection-1');
+    controller.toggleSelection('collection-2');
+    controller.deleteSelected();
+    final state = container.read(myListControllerProvider);
+
+    expect(state.items, isEmpty);
+    expect(state.isEmpty, isTrue);
+    expect(state.isCollectionEditing, isFalse);
+  });
+
   test('deletes one play item and clears open state', () async {
     final repository = _FakeMyListRepository();
     final container = _createContainer(repository);
@@ -65,6 +84,20 @@ void main() {
 
     expect(state.openPlayItemId, isNull);
     expect(state.items.map((item) => item.id), ['play-2']);
+  });
+
+  test('deleting last play item enters empty state', () async {
+    final repository = _FakeMyListRepository(playItems: const [_playItemA]);
+    final container = _createContainer(repository);
+    final controller = container.read(myListControllerProvider.notifier);
+
+    await controller.selectTab(MyListTab.play);
+    controller.deleteItem('play-1');
+    final state = container.read(myListControllerProvider);
+
+    expect(state.selectedTab, MyListTab.play);
+    expect(state.items, isEmpty);
+    expect(state.isEmpty, isTrue);
   });
 
   test('keeps error state retryable', () async {
@@ -96,7 +129,14 @@ ProviderContainer _createContainer(MyListRepository repository) {
 }
 
 class _FakeMyListRepository implements MyListRepository {
+  _FakeMyListRepository({
+    this.collectionItems = const [_collectionItem],
+    this.playItems = const [_playItemA, _playItemB],
+  });
+
   bool shouldThrow = false;
+  final List<MyListItem> collectionItems;
+  final List<MyListItem> playItems;
 
   @override
   Future<List<MyListItem>> fetchItems({required MyListTab tab}) async {
@@ -105,8 +145,8 @@ class _FakeMyListRepository implements MyListRepository {
     }
 
     return switch (tab) {
-      MyListTab.collection => const [_collectionItem],
-      MyListTab.play => const [_playItemA, _playItemB],
+      MyListTab.collection => collectionItems,
+      MyListTab.play => playItems,
     };
   }
 }
@@ -126,6 +166,15 @@ const _playItemA = MyListItem(
   introduction: 'Intro',
   coverAssetPath: 'assets/images/my_list/cover_1.png',
   currentEpisode: 1,
+  episodeCount: 10,
+);
+
+const _collectionItemB = MyListItem(
+  id: 'collection-2',
+  title: 'Collection 2',
+  introduction: 'Intro',
+  coverAssetPath: 'assets/images/my_list/cover_2.png',
+  currentEpisode: 2,
   episodeCount: 10,
 );
 

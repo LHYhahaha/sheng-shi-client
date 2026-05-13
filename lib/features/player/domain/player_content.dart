@@ -29,11 +29,15 @@ class PlayerEpisode {
     required this.id,
     required this.number,
     required this.isLocked,
+    this.isAvailable = true,
   });
 
   final String id;
   final int number;
   final bool isLocked;
+  final bool isAvailable;
+
+  bool get isUnavailable => !isAvailable;
 }
 
 class PlayerRecommendation {
