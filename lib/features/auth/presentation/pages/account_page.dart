@@ -28,6 +28,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
     final controller = ref.read(authControllerProvider.notifier);
     final user = state.user;
     final isBusy = state.isLoading;
+    final errorLabel = _accountErrorLabel(context, state.failedAction);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0014),
@@ -74,7 +75,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                   const SizedBox(height: 40),
                   if (state.error != null) ...[
                     Text(
-                      context.l10n.authLoadFailed,
+                      errorLabel,
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.primary,
@@ -110,6 +111,15 @@ class _AccountPageState extends ConsumerState<AccountPage> {
         ),
       ),
     );
+  }
+
+  String _accountErrorLabel(BuildContext context, AuthFailureAction? action) {
+    final l10n = context.l10n;
+    return switch (action) {
+      AuthFailureAction.logout => l10n.authLogoutFailed,
+      AuthFailureAction.deleteAccount => l10n.authDeleteAccountFailed,
+      _ => l10n.authLoadFailed,
+    };
   }
 
   Future<void> _showDeleteAccountDialog(

@@ -76,6 +76,10 @@ class AppLocalizations {
   );
   String get authLoadFailed =>
       _text(en: 'Login failed. Please try again.', zh: '登录失败，请重试。');
+  String get authLogoutFailed =>
+      _text(en: 'Logout failed. Please try again.', zh: '退出登录失败，请重试。');
+  String get authDeleteAccountFailed =>
+      _text(en: 'Delete account failed. Please try again.', zh: '注销账号失败，请重试。');
   String get authAccountActions => _text(en: 'Account actions', zh: '账号操作');
   String get authAccountTitle => _text(en: 'Account', zh: '账号');
   String get authLogout => _text(en: 'Log out', zh: '退出登录');
@@ -165,53 +169,6 @@ class AppLocalizations {
   String myListDeleteCount(int count) {
     return _text(en: 'Delete ($count)', zh: '删除 ($count)');
   }
-
-  String get forYouPlaceholderTitle => navForYou;
-  String get forYouPlaceholderDescription =>
-      _text(en: 'Short drama playback feed comes in M3.', zh: '短剧播放流将在 M3 接入。');
-  String get myListPlaceholderTitle => navMyList;
-  String get myListPlaceholderDescription => _text(
-    en: 'Collection list and play list come in M4.',
-    zh: '收藏列表和播放列表将在 M4 接入。',
-  );
-  String get profilePlaceholderTitle => navProfile;
-  String get profilePlaceholderDescription => _text(
-    en: 'Guest/login state, wallet, and membership entries come in M4.',
-    zh: '游客/登录态、钱包和会员入口将在 M4 接入。',
-  );
-  String get storePlaceholderTitle => _text(en: 'Store', zh: '充值');
-  String get storePlaceholderDescription => _text(
-    en: 'Coin and VIP recharge packages come in M5.',
-    zh: '金币和 VIP 充值套餐将在 M5 接入。',
-  );
-  String get walletPlaceholderTitle => _text(en: 'My Wallet', zh: '钱包');
-  String get walletPlaceholderDescription => _text(
-    en: 'Balance and wallet actions come in M5.',
-    zh: '余额和钱包操作将在 M5 接入。',
-  );
-  String get membershipPlaceholderTitle => _text(en: 'Membership', zh: '会员');
-  String get membershipPlaceholderDescription =>
-      _text(en: 'VIP plans and benefits come in M5.', zh: 'VIP 套餐和权益将在 M5 接入。');
-  String get languagePlaceholderTitle => _text(en: 'Language', zh: '语言');
-  String get languagePlaceholderDescription => _text(
-    en: 'Language settings are deferred until after MVP localization.',
-    zh: '语言设置将在 MVP 多语言基础完成后接入。',
-  );
-  String get transactionHistoryPlaceholderTitle => transactionHistoryTitle;
-  String get transactionHistoryPlaceholderDescription => _text(
-    en: 'Wallet transaction records come in M5.',
-    zh: '钱包交易记录将在 M5 接入。',
-  );
-  String get consumptionHistoryPlaceholderTitle => consumptionHistoryTitle;
-  String get consumptionHistoryPlaceholderDescription => _text(
-    en: 'Episode unlock and coin consumption records come in M5.',
-    zh: '剧集解锁和金币消费记录将在 M5 接入。',
-  );
-  String get recordCoinsPlaceholderTitle => recordCoinsTitle;
-  String get recordCoinsPlaceholderDescription => _text(
-    en: 'Check-in and reward coins come in M5.',
-    zh: '签到和奖励金币将在 M5 接入。',
-  );
 
   String _text({required String en, required String zh}) {
     return locale.languageCode == 'zh' ? zh : en;

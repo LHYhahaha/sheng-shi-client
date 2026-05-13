@@ -12,6 +12,7 @@ class AuthState {
     required this.isLoading,
     required this.session,
     this.pendingProvider,
+    this.failedAction,
     this.error,
   });
 
@@ -19,11 +20,13 @@ class AuthState {
     : isLoading = true,
       session = const AuthSession.guest(),
       pendingProvider = null,
+      failedAction = null,
       error = null;
 
   final bool isLoading;
   final AuthSession session;
   final AuthProviderType? pendingProvider;
+  final AuthFailureAction? failedAction;
   final Object? error;
 
   bool get isLoggedIn => session.isLoggedIn;
@@ -34,8 +37,10 @@ class AuthState {
     bool? isLoading,
     AuthSession? session,
     AuthProviderType? pendingProvider,
+    AuthFailureAction? failedAction,
     Object? error,
     bool clearPendingProvider = false,
+    bool clearFailedAction = false,
     bool clearError = false,
   }) {
     return AuthState(
@@ -44,10 +49,15 @@ class AuthState {
       pendingProvider: clearPendingProvider
           ? null
           : pendingProvider ?? this.pendingProvider,
+      failedAction: clearFailedAction
+          ? null
+          : failedAction ?? this.failedAction,
       error: clearError ? null : error ?? this.error,
     );
   }
 }
+
+enum AuthFailureAction { load, login, logout, deleteAccount }
 
 class AuthController extends Notifier<AuthState> {
   int _generation = 0;
@@ -57,7 +67,11 @@ class AuthController extends Notifier<AuthState> {
 
   Future<void> load() async {
     final generation = ++_generation;
-    state = state.copyWith(isLoading: true, clearError: true);
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      clearFailedAction: true,
+    );
 
     try {
       final session = await ref.read(authRepositoryProvider).fetchSession();
@@ -69,12 +83,17 @@ class AuthController extends Notifier<AuthState> {
         session: session,
         clearError: true,
         clearPendingProvider: true,
+        clearFailedAction: true,
       );
     } catch (error) {
       if (!_isCurrent(generation)) {
         return;
       }
-      state = state.copyWith(isLoading: false, error: error);
+      state = state.copyWith(
+        isLoading: false,
+        error: error,
+        failedAction: AuthFailureAction.load,
+      );
     }
   }
 
@@ -83,7 +102,11 @@ class AuthController extends Notifier<AuthState> {
       return;
     }
 
-    state = state.copyWith(pendingProvider: provider, clearError: true);
+    state = state.copyWith(
+      pendingProvider: provider,
+      clearError: true,
+      clearFailedAction: true,
+    );
 
     try {
       final session = await ref.read(authRepositoryProvider).login(provider);
@@ -92,11 +115,13 @@ class AuthController extends Notifier<AuthState> {
         session: session,
         clearPendingProvider: true,
         clearError: true,
+        clearFailedAction: true,
       );
     } catch (error) {
       state = state.copyWith(
         isLoading: false,
         error: error,
+        failedAction: AuthFailureAction.login,
         clearPendingProvider: true,
       );
     }
@@ -107,7 +132,11 @@ class AuthController extends Notifier<AuthState> {
       return;
     }
 
-    state = state.copyWith(isLoading: true, clearError: true);
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      clearFailedAction: true,
+    );
     try {
       final session = await ref.read(authRepositoryProvider).logout();
       state = state.copyWith(
@@ -115,11 +144,13 @@ class AuthController extends Notifier<AuthState> {
         session: session,
         clearError: true,
         clearPendingProvider: true,
+        clearFailedAction: true,
       );
     } catch (error) {
       state = state.copyWith(
         isLoading: false,
         error: error,
+        failedAction: AuthFailureAction.logout,
         clearPendingProvider: true,
       );
     }
@@ -130,7 +161,11 @@ class AuthController extends Notifier<AuthState> {
       return;
     }
 
-    state = state.copyWith(isLoading: true, clearError: true);
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      clearFailedAction: true,
+    );
     try {
       final session = await ref.read(authRepositoryProvider).deleteAccount();
       state = state.copyWith(
@@ -138,11 +173,13 @@ class AuthController extends Notifier<AuthState> {
         session: session,
         clearError: true,
         clearPendingProvider: true,
+        clearFailedAction: true,
       );
     } catch (error) {
       state = state.copyWith(
         isLoading: false,
         error: error,
+        failedAction: AuthFailureAction.deleteAccount,
         clearPendingProvider: true,
       );
     }

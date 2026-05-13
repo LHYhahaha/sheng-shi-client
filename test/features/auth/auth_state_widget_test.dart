@@ -119,7 +119,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Account'), findsOneWidget);
-    expect(find.text('Login failed. Please try again.'), findsOneWidget);
+    expect(find.text('Logout failed. Please try again.'), findsOneWidget);
     expect(find.text('Google User'), findsOneWidget);
 
     repository.failLogout = false;
@@ -151,7 +151,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Account'), findsOneWidget);
-    expect(find.text('Login failed. Please try again.'), findsOneWidget);
+    expect(
+      find.text('Delete account failed. Please try again.'),
+      findsOneWidget,
+    );
     expect(find.text('Google User'), findsOneWidget);
 
     repository.failDelete = false;

@@ -102,6 +102,7 @@ void main() {
 
     expect(state.isLoading, isFalse);
     expect(state.isLoggedIn, isFalse);
+    expect(state.failedAction, AuthFailureAction.load);
     expect(state.error, isA<StateError>());
 
     repository.failFetch = false;
@@ -126,6 +127,7 @@ void main() {
     var state = container.read(authControllerProvider);
 
     expect(state.isLoggedIn, isTrue);
+    expect(state.failedAction, AuthFailureAction.logout);
     expect(state.error, isA<StateError>());
 
     repository.failLogout = false;
@@ -140,6 +142,7 @@ void main() {
     state = container.read(authControllerProvider);
 
     expect(state.isLoggedIn, isTrue);
+    expect(state.failedAction, AuthFailureAction.deleteAccount);
     expect(state.error, isA<StateError>());
 
     repository.failDelete = false;
