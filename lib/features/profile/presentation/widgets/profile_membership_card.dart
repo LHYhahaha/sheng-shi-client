@@ -17,6 +17,7 @@ class ProfileMembershipCard extends StatelessWidget {
     return SizedBox(
       height: 143,
       child: GestureDetector(
+        key: const ValueKey('profile_membership_entry'),
         behavior: HitTestBehavior.opaque,
         onTap: membership.entryEnabled ? onTap : null,
         child: Image.asset(

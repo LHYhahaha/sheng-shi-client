@@ -106,6 +106,7 @@ class PlayerChrome extends StatelessWidget {
               child: Row(
                 children: [
                   _IconTapTarget(
+                    key: const ValueKey('player_back_button'),
                     icon: Icons.chevron_left,
                     iconSize: 28,
                     onTap:
@@ -478,6 +479,7 @@ class _IconTapTarget extends StatelessWidget {
     required this.icon,
     required this.onTap,
     this.iconSize = 24,
+    super.key,
   });
 
   final IconData icon;

@@ -71,6 +71,7 @@ class AppBottomNavigation extends StatelessWidget {
                     children: [
                       for (final item in _items.indexed)
                         _AppBottomNavigationItem(
+                          key: ValueKey('bottom_nav_${item.$2.label.name}'),
                           label: item.$2.label.resolve(context.l10n),
                           selectedAssetPath: item.$2.selectedAssetPath,
                           unselectedAssetPath: item.$2.unselectedAssetPath,
@@ -117,6 +118,7 @@ class _AppBottomNavigationItem extends StatelessWidget {
     required this.selected,
     required this.height,
     required this.onTap,
+    super.key,
   });
 
   final String label;

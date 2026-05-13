@@ -219,7 +219,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                   onUnlockTap: uiController.showMemberPaywall,
                   onBackTap: widget.hideShellNavigation
                       ? _exitForYouFeed
-                      : null,
+                      : _goBackFromPlayer,
                   forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
                 ),
                 if (item.episode.isUnavailable)
@@ -245,6 +245,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   void _exitForYouFeed() {
     _shellChrome?.show();
     context.go(RoutePaths.home);
+  }
+
+  void _goBackFromPlayer() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(RoutePaths.home);
+    }
   }
 
   void _closeSheetAndSelectEpisode(

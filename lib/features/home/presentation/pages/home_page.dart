@@ -157,6 +157,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                         final item = feedState.items[index];
 
                         return _HomeDramaCard(
+                          key: ValueKey('home_drama_card_$index'),
                           data: item,
                           coverCacheWidth: coverCacheWidth,
                           onTap: () {
@@ -336,6 +337,7 @@ class _HomeDramaCard extends StatelessWidget {
     required this.data,
     required this.coverCacheWidth,
     required this.onTap,
+    super.key,
   });
 
   final Drama data;

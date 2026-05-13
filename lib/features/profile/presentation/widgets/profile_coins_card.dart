@@ -45,6 +45,7 @@ class ProfileCoinsCard extends StatelessWidget {
                 ),
               ),
               GestureDetector(
+                key: const ValueKey('profile_wallet_entry'),
                 behavior: HitTestBehavior.opaque,
                 onTap: coins.walletEnabled ? onWalletTap : null,
                 child: Padding(
@@ -85,6 +86,7 @@ class ProfileCoinsCard extends StatelessWidget {
                 ),
               ),
               GestureDetector(
+                key: const ValueKey('profile_top_up_entry'),
                 behavior: HitTestBehavior.opaque,
                 onTap: coins.topUpEnabled ? onTopUpTap : null,
                 child: Container(
