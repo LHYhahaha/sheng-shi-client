@@ -90,11 +90,16 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
             ),
             Positioned(
               top: topInset + 4,
-              left: 0,
+              left: 6,
               child: IconButton(
                 onPressed: _goBack,
-                icon: const Icon(Icons.chevron_left_rounded, size: 30),
+                icon: const Icon(Icons.chevron_left_rounded, size: 20),
                 color: AppColors.textPrimary,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(
+                  width: 40,
+                  height: 40,
+                ),
               ),
             ),
           ],

@@ -64,6 +64,17 @@ class AppLocalizations {
   String get profileTopUp => _text(en: 'Top Up', zh: '充值');
   String get profileWallet => _text(en: 'Wallet >', zh: '钱包 >');
   String get profileLanguage => _text(en: 'Language', zh: '语言');
+  String get walletTitle => _text(en: 'My Wallet', zh: '钱包');
+  String get walletCoins => _text(en: 'Coins', zh: '金币');
+  String get walletBonus => _text(en: 'Bonus', zh: '赠币');
+  String get walletTopUp => _text(en: 'Top Up', zh: '充值');
+  String get walletAutoUnlockNextEpisode =>
+      _text(en: 'Anto-unlock the next episode', zh: '自动解锁下一集');
+  String get transactionHistoryTitle =>
+      _text(en: 'Transaction history', zh: '交易记录');
+  String get consumptionHistoryTitle =>
+      _text(en: 'Consumption history', zh: '消费记录');
+  String get recordCoinsTitle => _text(en: 'Record Coins', zh: '金币记录');
   String get storeTitle => _text(en: 'Store', zh: '商店');
   String get storeRestore => _text(en: 'Restore', zh: '恢复购买');
   String get storeTips => _text(en: 'Tips', zh: '提示');
@@ -142,20 +153,17 @@ class AppLocalizations {
     en: 'Language settings are deferred until after MVP localization.',
     zh: '语言设置将在 MVP 多语言基础完成后接入。',
   );
-  String get transactionHistoryPlaceholderTitle =>
-      _text(en: 'Transaction history', zh: '交易记录');
+  String get transactionHistoryPlaceholderTitle => transactionHistoryTitle;
   String get transactionHistoryPlaceholderDescription => _text(
     en: 'Wallet transaction records come in M5.',
     zh: '钱包交易记录将在 M5 接入。',
   );
-  String get consumptionHistoryPlaceholderTitle =>
-      _text(en: 'Consumption history', zh: '消费记录');
+  String get consumptionHistoryPlaceholderTitle => consumptionHistoryTitle;
   String get consumptionHistoryPlaceholderDescription => _text(
     en: 'Episode unlock and coin consumption records come in M5.',
     zh: '剧集解锁和金币消费记录将在 M5 接入。',
   );
-  String get recordCoinsPlaceholderTitle =>
-      _text(en: 'Record Coins', zh: '金币记录');
+  String get recordCoinsPlaceholderTitle => recordCoinsTitle;
   String get recordCoinsPlaceholderDescription => _text(
     en: 'Check-in and reward coins come in M5.',
     zh: '签到和奖励金币将在 M5 接入。',

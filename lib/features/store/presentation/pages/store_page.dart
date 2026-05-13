@@ -143,12 +143,12 @@ class _StoreHeader extends StatelessWidget {
     return SizedBox(
       height: 56,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
         child: Row(
           children: [
             IconButton(
               onPressed: onBack,
-              icon: const Icon(Icons.chevron_left_rounded, size: 28),
+              icon: const Icon(Icons.chevron_left_rounded, size: 20),
               color: AppColors.textPrimary,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints.tightFor(width: 40, height: 40),

@@ -60,10 +60,11 @@ class _LanguageHeader extends StatelessWidget {
               padding: EdgeInsets.zero,
               splashColor: Colors.transparent,
               highlightColor: Colors.transparent,
+              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
               icon: const Icon(
                 Icons.chevron_left_rounded,
                 color: AppColors.textPrimary,
-                size: 26,
+                size: 20,
               ),
             ),
           ),

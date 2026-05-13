@@ -50,7 +50,32 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('My Wallet'), findsWidgets);
-    expect(find.text('Balance and wallet actions come in M5.'), findsOneWidget);
+    expect(find.text('4000'), findsWidgets);
+    expect(find.text('Top Up'), findsOneWidget);
+    expect(find.text('Transaction history'), findsOneWidget);
+    expect(find.text('Consumption history'), findsOneWidget);
+    expect(find.text('Record Coins'), findsOneWidget);
+  });
+
+  testWidgets('opens wallet transaction history from wallet page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Wallet >'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Transaction history'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Transaction history'), findsOneWidget);
+    expect(find.text('Membership (Weekly)'), findsOneWidget);
+    expect(find.text('3000 Coins + 300bonus'), findsOneWidget);
   });
 
   testWidgets('opens membership from profile and confirms mock purchase', (

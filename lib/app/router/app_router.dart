@@ -9,8 +9,9 @@ import '../../features/player/presentation/pages/player_page.dart';
 import '../../features/profile/presentation/pages/language_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/store/presentation/pages/store_page.dart';
-import '../../l10n/app_localizations.dart';
-import '../../shared/widgets/feature_placeholder_page.dart';
+import '../../features/wallet/domain/wallet_record.dart';
+import '../../features/wallet/presentation/pages/wallet_history_page.dart';
+import '../../features/wallet/presentation/pages/wallet_page.dart';
 import 'route_names.dart';
 import 'route_paths.dart';
 
@@ -79,10 +80,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RoutePaths.wallet,
         name: RouteNames.wallet,
-        builder: (context, state) => FeaturePlaceholderPage(
-          title: context.l10n.walletPlaceholderTitle,
-          description: context.l10n.walletPlaceholderDescription,
-        ),
+        builder: (context, state) => const WalletPage(),
       ),
       GoRoute(
         path: RoutePaths.membership,
@@ -97,26 +95,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RoutePaths.transactionHistory,
         name: RouteNames.transactionHistory,
-        builder: (context, state) => FeaturePlaceholderPage(
-          title: context.l10n.transactionHistoryPlaceholderTitle,
-          description: context.l10n.transactionHistoryPlaceholderDescription,
-        ),
+        builder: (context, state) =>
+            const WalletHistoryPage(type: WalletRecordType.transaction),
       ),
       GoRoute(
         path: RoutePaths.consumptionHistory,
         name: RouteNames.consumptionHistory,
-        builder: (context, state) => FeaturePlaceholderPage(
-          title: context.l10n.consumptionHistoryPlaceholderTitle,
-          description: context.l10n.consumptionHistoryPlaceholderDescription,
-        ),
+        builder: (context, state) =>
+            const WalletHistoryPage(type: WalletRecordType.consumption),
       ),
       GoRoute(
         path: RoutePaths.recordCoins,
         name: RouteNames.recordCoins,
-        builder: (context, state) => FeaturePlaceholderPage(
-          title: context.l10n.recordCoinsPlaceholderTitle,
-          description: context.l10n.recordCoinsPlaceholderDescription,
-        ),
+        builder: (context, state) =>
+            const WalletHistoryPage(type: WalletRecordType.coins),
       ),
     ],
   );
