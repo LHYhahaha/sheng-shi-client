@@ -108,13 +108,21 @@ class AuthController extends Notifier<AuthState> {
     }
 
     state = state.copyWith(isLoading: true, clearError: true);
-    final session = await ref.read(authRepositoryProvider).logout();
-    state = state.copyWith(
-      isLoading: false,
-      session: session,
-      clearError: true,
-      clearPendingProvider: true,
-    );
+    try {
+      final session = await ref.read(authRepositoryProvider).logout();
+      state = state.copyWith(
+        isLoading: false,
+        session: session,
+        clearError: true,
+        clearPendingProvider: true,
+      );
+    } catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        error: error,
+        clearPendingProvider: true,
+      );
+    }
   }
 
   Future<void> deleteAccount() async {
@@ -123,13 +131,21 @@ class AuthController extends Notifier<AuthState> {
     }
 
     state = state.copyWith(isLoading: true, clearError: true);
-    final session = await ref.read(authRepositoryProvider).deleteAccount();
-    state = state.copyWith(
-      isLoading: false,
-      session: session,
-      clearError: true,
-      clearPendingProvider: true,
-    );
+    try {
+      final session = await ref.read(authRepositoryProvider).deleteAccount();
+      state = state.copyWith(
+        isLoading: false,
+        session: session,
+        clearError: true,
+        clearPendingProvider: true,
+      );
+    } catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        error: error,
+        clearPendingProvider: true,
+      );
+    }
   }
 
   bool _isCurrent(int generation) => generation == _generation;

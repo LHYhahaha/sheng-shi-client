@@ -111,3 +111,6 @@ flutter test
 - Phase 2 batch 3: Store / Recharge and Membership mock purchase edge
   states, disabled processing actions, close/reset behavior, package switch
   reset, and restore mock feedback coverage completed for review.
+- Phase 2 batch 4: Auth / Account / Profile login edge states, login/load
+  failure recovery, logout/delete failure retry, busy action disabling, and
+  Profile/Auth state consistency coverage completed for review.

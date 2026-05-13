@@ -64,6 +64,90 @@ void main() {
     expect(state.user?.provider, AuthProviderType.google);
     expect(state.pendingProvider, isNull);
   });
+
+  test('login failure clears pending provider and remains retryable', () async {
+    final repository = _FailingAuthRepository(failLogin: true);
+    final container = ProviderContainer(
+      overrides: [authRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(authControllerProvider.notifier);
+
+    await controller.login(AuthProviderType.google);
+    var state = container.read(authControllerProvider);
+
+    expect(state.isLoggedIn, isFalse);
+    expect(state.pendingProvider, isNull);
+    expect(state.error, isA<StateError>());
+
+    repository.failLogin = false;
+    await controller.login(AuthProviderType.google);
+    state = container.read(authControllerProvider);
+
+    expect(state.isLoggedIn, isTrue);
+    expect(state.user?.nickname, 'Google User');
+    expect(state.error, isNull);
+  });
+
+  test('load failure keeps guest state and can retry', () async {
+    final repository = _FailingAuthRepository(failFetch: true);
+    final container = ProviderContainer(
+      overrides: [authRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(authControllerProvider.notifier);
+
+    await controller.load();
+    var state = container.read(authControllerProvider);
+
+    expect(state.isLoading, isFalse);
+    expect(state.isLoggedIn, isFalse);
+    expect(state.error, isA<StateError>());
+
+    repository.failFetch = false;
+    await controller.load();
+    state = container.read(authControllerProvider);
+
+    expect(state.error, isNull);
+    expect(state.isLoggedIn, isFalse);
+  });
+
+  test('logout and delete failures keep user and are retryable', () async {
+    final repository = _FailingAuthRepository();
+    final container = ProviderContainer(
+      overrides: [authRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(authControllerProvider.notifier);
+
+    await controller.login(AuthProviderType.device);
+    repository.failLogout = true;
+    await controller.logout();
+    var state = container.read(authControllerProvider);
+
+    expect(state.isLoggedIn, isTrue);
+    expect(state.error, isA<StateError>());
+
+    repository.failLogout = false;
+    await controller.logout();
+    state = container.read(authControllerProvider);
+    expect(state.isLoggedIn, isFalse);
+    expect(state.error, isNull);
+
+    await controller.login(AuthProviderType.facebook);
+    repository.failDelete = true;
+    await controller.deleteAccount();
+    state = container.read(authControllerProvider);
+
+    expect(state.isLoggedIn, isTrue);
+    expect(state.error, isA<StateError>());
+
+    repository.failDelete = false;
+    await controller.deleteAccount();
+    state = container.read(authControllerProvider);
+    expect(state.isLoggedIn, isFalse);
+    expect(state.error, isNull);
+  });
 }
 
 class _BlockingAuthRepository implements AuthRepository {
@@ -102,4 +186,60 @@ class _BlockingAuthRepository implements AuthRepository {
 
   @override
   Future<AuthSession> deleteAccount() async => const AuthSession.guest();
+}
+
+class _FailingAuthRepository implements AuthRepository {
+  _FailingAuthRepository({this.failFetch = false, this.failLogin = false});
+
+  bool failFetch;
+  bool failLogin;
+  bool failLogout = false;
+  bool failDelete = false;
+  AuthSession _session = const AuthSession.guest();
+
+  @override
+  Future<AuthSession> fetchSession() async {
+    if (failFetch) {
+      throw StateError('fetch failed');
+    }
+    return _session;
+  }
+
+  @override
+  Future<AuthSession> login(AuthProviderType provider) async {
+    if (failLogin) {
+      throw StateError('login failed');
+    }
+    _session = AuthSession(
+      user: AuthUser(
+        id: '15589299',
+        nickname: switch (provider) {
+          AuthProviderType.device => 'Device User',
+          AuthProviderType.google => 'Google User',
+          AuthProviderType.facebook => 'Facebook User',
+        },
+        avatarAssetPath: authDefaultAvatarAssetPath,
+        provider: provider,
+      ),
+    );
+    return _session;
+  }
+
+  @override
+  Future<AuthSession> logout() async {
+    if (failLogout) {
+      throw StateError('logout failed');
+    }
+    _session = const AuthSession.guest();
+    return _session;
+  }
+
+  @override
+  Future<AuthSession> deleteAccount() async {
+    if (failDelete) {
+      throw StateError('delete failed');
+    }
+    _session = const AuthSession.guest();
+    return _session;
+  }
 }

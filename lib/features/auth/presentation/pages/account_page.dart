@@ -72,12 +72,26 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                     ),
                   ),
                   const SizedBox(height: 40),
+                  if (state.error != null) ...[
+                    Text(
+                      context.l10n.authLoadFailed,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.primary,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                  ],
                   _AccountActionRow(
                     label: context.l10n.authLogout,
                     isLoading: isBusy,
                     onTap: () async {
                       await controller.logout();
-                      if (context.mounted) {
+                      final nextState = ref.read(authControllerProvider);
+                      if (context.mounted &&
+                          nextState.error == null &&
+                          !nextState.isLoggedIn) {
                         context.go(RoutePaths.profile);
                       }
                     },
@@ -135,7 +149,8 @@ class _AccountPageState extends ConsumerState<AccountPage> {
     }
 
     await controller.deleteAccount();
-    if (context.mounted) {
+    final nextState = ref.read(authControllerProvider);
+    if (context.mounted && nextState.error == null && !nextState.isLoggedIn) {
       context.go(RoutePaths.profile);
     }
   }
