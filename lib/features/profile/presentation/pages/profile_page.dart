@@ -35,7 +35,8 @@ class ProfilePage extends ConsumerWidget {
             const SizedBox(height: 12),
             ProfileCoinsCard(
               coins: state.coins,
-              onTap: () => context.push(RoutePaths.store),
+              onTopUpTap: () => context.push(RoutePaths.store),
+              onWalletTap: () => context.push(RoutePaths.wallet),
             ),
             const SizedBox(height: 12),
             ProfileMenuRow(

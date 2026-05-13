@@ -35,7 +35,22 @@ void main() {
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
     expect(find.text('Log in >'), findsOneWidget);
+    expect(find.text('Wallet >'), findsOneWidget);
     expect(find.text('Language'), findsOneWidget);
+  });
+
+  testWidgets('opens wallet from profile coins card', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Wallet >'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('My Wallet'), findsWidgets);
+    expect(find.text('Balance and wallet actions come in M5.'), findsOneWidget);
   });
 
   testWidgets('opens for you player feed and swipes to next item', (

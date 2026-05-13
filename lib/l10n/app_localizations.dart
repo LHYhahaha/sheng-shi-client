@@ -62,6 +62,7 @@ class AppLocalizations {
   String get profileFullHd => _text(en: '1080p', zh: '1080p');
   String get profileCoins => _text(en: 'Coins', zh: '金币');
   String get profileTopUp => _text(en: 'Top Up', zh: '充值');
+  String get profileWallet => _text(en: 'Wallet >', zh: '钱包 >');
   String get profileLanguage => _text(en: 'Language', zh: '语言');
   String get storeTitle => _text(en: 'Store', zh: '商店');
   String get storeRestore => _text(en: 'Restore', zh: '恢复购买');

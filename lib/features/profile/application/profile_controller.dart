@@ -56,12 +56,20 @@ class ProfileMembershipState {
 }
 
 class ProfileCoinsState {
-  const ProfileCoinsState({required this.balance, required this.topUpEnabled});
+  const ProfileCoinsState({
+    required this.balance,
+    required this.topUpEnabled,
+    required this.walletEnabled,
+  });
 
-  const ProfileCoinsState.mock() : balance = 2000, topUpEnabled = true;
+  const ProfileCoinsState.mock()
+    : balance = 2000,
+      topUpEnabled = true,
+      walletEnabled = true;
 
   final int balance;
   final bool topUpEnabled;
+  final bool walletEnabled;
 }
 
 class ProfileLanguageState {

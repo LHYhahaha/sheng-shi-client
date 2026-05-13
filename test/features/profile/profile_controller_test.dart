@@ -18,6 +18,7 @@ void main() {
     expect(state.membership.entryEnabled, isTrue);
     expect(state.coins.balance, 2000);
     expect(state.coins.topUpEnabled, isTrue);
+    expect(state.coins.walletEnabled, isTrue);
     expect(state.language.entryEnabled, isTrue);
   });
 }
