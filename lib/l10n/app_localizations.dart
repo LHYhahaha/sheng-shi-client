@@ -63,6 +63,18 @@ class AppLocalizations {
   String get profileCoins => _text(en: 'Coins', zh: '金币');
   String get profileTopUp => _text(en: 'Top Up', zh: '充值');
   String get profileLanguage => _text(en: 'Language', zh: '语言');
+  String get storeTitle => _text(en: 'Store', zh: '商店');
+  String get storeRestore => _text(en: 'Restore', zh: '恢复购买');
+  String get storeTips => _text(en: 'Tips', zh: '提示');
+  String get storeBuyNow => _text(en: 'Buy Now', zh: '立即购买');
+  String get storeSelected => _text(en: 'Selected', zh: '已选择');
+  String get storeConfirmPurchase => _text(en: 'Confirm purchase', zh: '确认购买');
+  String get storeConfirm => _text(en: 'Confirm', zh: '确认');
+  String get storeCancel => _text(en: 'Cancel', zh: '取消');
+  String get storeMockPaymentNote => _text(
+    en: 'This is a mock confirmation for MVP testing.',
+    zh: '当前为 MVP 测试用模拟确认弹窗。',
+  );
   String get playerEpisodes => _text(en: 'Episodes', zh: '选集');
   String get playerShare => _text(en: 'Share', zh: '分享');
   String get playerMore => _text(en: 'More', zh: '更多');

@@ -7,6 +7,7 @@ import '../../features/my_list/presentation/pages/my_list_page.dart';
 import '../../features/player/presentation/pages/player_page.dart';
 import '../../features/profile/presentation/pages/language_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
+import '../../features/store/presentation/pages/store_page.dart';
 import '../../l10n/app_localizations.dart';
 import '../../shared/widgets/feature_placeholder_page.dart';
 import 'route_names.dart';
@@ -72,10 +73,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RoutePaths.store,
         name: RouteNames.store,
-        builder: (context, state) => FeaturePlaceholderPage(
-          title: context.l10n.storePlaceholderTitle,
-          description: context.l10n.storePlaceholderDescription,
-        ),
+        builder: (context, state) => const StorePage(),
       ),
       GoRoute(
         path: RoutePaths.wallet,

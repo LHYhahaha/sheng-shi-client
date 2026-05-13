@@ -1,5 +1,8 @@
 import 'package:drama_client/app/app.dart';
+import 'package:drama_client/features/store/presentation/pages/store_page.dart';
+import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -182,5 +185,41 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Delete'), findsNothing);
     expect(find.text('Raja Iblis Hidup Kembali'), findsOneWidget);
+  });
+
+  testWidgets('store page shows packages and confirmation sheet', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: StorePage(),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Store'), findsOneWidget);
+    expect(find.text('2000'), findsOneWidget);
+    expect(find.text('Weekly VIP'), findsWidgets);
+
+    await tester.tap(find.text(r'$ 29.99').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Buy Now'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirm purchase'), findsOneWidget);
+    expect(
+      find.text('This is a mock confirmation for MVP testing.'),
+      findsOneWidget,
+    );
   });
 }
