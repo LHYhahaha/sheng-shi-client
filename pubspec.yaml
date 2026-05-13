@@ -50,5 +50,6 @@ flutter:
   assets:
     - assets/images/home/
     - assets/images/my_list/
+    - assets/images/player/
     - assets/images/profile/
     - assets/navigation/

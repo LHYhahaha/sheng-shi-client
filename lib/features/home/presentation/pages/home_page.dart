@@ -284,10 +284,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                           data: item,
                           coverCacheWidth: coverCacheWidth,
                           onTap: () {
-                            context.go(
+                            context.push(
                               RoutePaths.playerLocation(
                                 dramaId: item.id,
-                                episodeId: 'episode-1',
+                                episodeId: '1',
                               ),
                             );
                           },

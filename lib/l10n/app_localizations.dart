@@ -64,6 +64,27 @@ class AppLocalizations {
   String get profileCoins => _text(en: 'Coins', zh: '金币');
   String get profileTopUp => _text(en: 'Top Up', zh: '充值');
   String get profileLanguage => _text(en: 'Language', zh: '语言');
+  String get playerEpisodes => _text(en: 'Episodes', zh: '选集');
+  String get playerShare => _text(en: 'Share', zh: '分享');
+  String get playerMore => _text(en: 'More', zh: '更多');
+  String get playerDownload => _text(en: 'Download', zh: '下载');
+  String get playerSpeed => _text(en: 'Speed', zh: '倍速');
+  String get playerSynopsis => _text(en: 'Synopsis', zh: '简介');
+  String get playerMoreLikeThis => _text(en: 'More Like This', zh: '猜你喜欢');
+  String get playerUnlockNow => _text(en: 'Unlock Now', zh: '立即解锁');
+  String get playerMemberUnlock => _text(en: 'Member unlock', zh: '会员解锁');
+  String get playerBecomeMember => _text(en: 'Become a member >', zh: '开通会员 >');
+  String get playerPlay => _text(en: 'Play', zh: '播放');
+  String get playerAutoNext =>
+      _text(en: 'Play the next episode automatically', zh: '自动播放下一集');
+  String get playerPrice => _text(en: 'Price:', zh: '价格:');
+  String get playerBalance => _text(en: 'Balance:', zh: '余额:');
+  String get playerFacebook => _text(en: 'Facebook', zh: 'Facebook');
+  String get playerWhatsApp => _text(en: 'WhatsApp', zh: 'WhatsApp');
+  String get playerMessenger =>
+      _text(en: 'Facebook\nMessenger', zh: 'Facebook\nMessenger');
+  String get playerInstagram => _text(en: 'Instagram', zh: 'Instagram');
+  String get playerSnapchat => _text(en: 'Snapchat', zh: 'Snapchat');
 
   String myListDeleteCount(int count) {
     return _text(en: 'Delete ($count)', zh: '删除 ($count)');
