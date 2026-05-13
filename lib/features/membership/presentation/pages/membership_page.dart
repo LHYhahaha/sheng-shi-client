@@ -48,10 +48,20 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
           context: context,
           isScrollControlled: true,
           builder: (context) {
-            return MembershipConfirmationSheet(
-              plan: next,
-              onConfirm: () => Navigator.of(context).pop(),
-              onCancel: () => Navigator.of(context).pop(),
+            return Consumer(
+              builder: (context, ref, child) {
+                final sheetState = ref.watch(membershipControllerProvider);
+                final sheetController = ref.read(
+                  membershipControllerProvider.notifier,
+                );
+                return MembershipConfirmationSheet(
+                  plan: next,
+                  status: sheetState.purchaseStatus,
+                  onConfirm: sheetController.confirmMockPurchase,
+                  onCancel: sheetController.cancelMockPurchase,
+                  onClose: () => Navigator.of(context).pop(),
+                );
+              },
             );
           },
         ).whenComplete(() {
@@ -172,7 +182,9 @@ class _MembershipBody extends StatelessWidget {
     return Positioned.fill(
       top: topInset + 169,
       child: ListView(
-        padding: EdgeInsets.zero,
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.paddingOf(context).bottom + 92,
+        ),
         children: [
           DecoratedBox(
             decoration: const BoxDecoration(color: Color(0xFF0F0F10)),

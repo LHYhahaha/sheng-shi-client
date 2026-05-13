@@ -12,6 +12,8 @@ class WalletState {
     required this.coins,
     required this.bonus,
     required this.autoUnlockNextEpisode,
+    required this.autoUnlockTouched,
+    required this.consumptionFilter,
     required this.transactionRecords,
     required this.consumptionRecords,
     required this.coinRecords,
@@ -23,6 +25,8 @@ class WalletState {
       coins = 0,
       bonus = 0,
       autoUnlockNextEpisode = false,
+      autoUnlockTouched = false,
+      consumptionFilter = WalletConsumptionStatus.spent,
       transactionRecords = const [],
       consumptionRecords = const [],
       coinRecords = const [],
@@ -32,6 +36,8 @@ class WalletState {
   final int coins;
   final int bonus;
   final bool autoUnlockNextEpisode;
+  final bool autoUnlockTouched;
+  final WalletConsumptionStatus consumptionFilter;
   final List<WalletRecord> transactionRecords;
   final List<WalletRecord> consumptionRecords;
   final List<WalletRecord> coinRecords;
@@ -52,6 +58,8 @@ class WalletState {
     int? coins,
     int? bonus,
     bool? autoUnlockNextEpisode,
+    bool? autoUnlockTouched,
+    WalletConsumptionStatus? consumptionFilter,
     List<WalletRecord>? transactionRecords,
     List<WalletRecord>? consumptionRecords,
     List<WalletRecord>? coinRecords,
@@ -64,6 +72,8 @@ class WalletState {
       bonus: bonus ?? this.bonus,
       autoUnlockNextEpisode:
           autoUnlockNextEpisode ?? this.autoUnlockNextEpisode,
+      autoUnlockTouched: autoUnlockTouched ?? this.autoUnlockTouched,
+      consumptionFilter: consumptionFilter ?? this.consumptionFilter,
       transactionRecords: transactionRecords ?? this.transactionRecords,
       consumptionRecords: consumptionRecords ?? this.consumptionRecords,
       coinRecords: coinRecords ?? this.coinRecords,
@@ -92,7 +102,9 @@ class WalletController extends Notifier<WalletState> {
         isLoading: false,
         coins: data.coins,
         bonus: data.bonus,
-        autoUnlockNextEpisode: data.autoUnlockNextEpisode,
+        autoUnlockNextEpisode: state.autoUnlockTouched
+            ? state.autoUnlockNextEpisode
+            : data.autoUnlockNextEpisode,
         transactionRecords: List<WalletRecord>.unmodifiable(
           data.transactionRecords,
         ),
@@ -114,7 +126,27 @@ class WalletController extends Notifier<WalletState> {
   Future<void> retry() => load();
 
   void setAutoUnlockNextEpisode(bool value) {
-    state = state.copyWith(autoUnlockNextEpisode: value);
+    state = state.copyWith(
+      autoUnlockNextEpisode: value,
+      autoUnlockTouched: true,
+    );
+  }
+
+  void setConsumptionFilter(WalletConsumptionStatus value) {
+    state = state.copyWith(consumptionFilter: value);
+  }
+
+  void claimReward(String id) {
+    state = state.copyWith(
+      coinRecords: List<WalletRecord>.unmodifiable(
+        state.coinRecords.map((record) {
+          if (record.id != id || !record.rewardEnabled) {
+            return record;
+          }
+          return record.copyWith(rewardEnabled: false, rewardClaimed: true);
+        }),
+      ),
+    );
   }
 
   bool _isCurrent(int generation) => generation == _generation;

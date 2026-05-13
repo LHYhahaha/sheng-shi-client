@@ -33,4 +33,34 @@ void main() {
     controller.hideConfirmation();
     expect(container.read(storeControllerProvider).confirmationPackage, isNull);
   });
+
+  test('tracks mock purchase processing, success, and cancel states', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final controller = container.read(storeControllerProvider.notifier);
+
+    await controller.load();
+    controller.showConfirmation();
+
+    final purchase = controller.confirmMockPurchase();
+    expect(
+      container.read(storeControllerProvider).purchaseStatus,
+      StorePurchaseStatus.processing,
+    );
+
+    await purchase;
+    expect(
+      container.read(storeControllerProvider).purchaseStatus,
+      StorePurchaseStatus.success,
+    );
+
+    controller.hideConfirmation();
+    controller.showConfirmation();
+    controller.cancelMockPurchase();
+
+    expect(
+      container.read(storeControllerProvider).purchaseStatus,
+      StorePurchaseStatus.cancelled,
+    );
+  });
 }

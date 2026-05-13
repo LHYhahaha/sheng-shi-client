@@ -100,12 +100,23 @@ class AppLocalizations {
   String get recordCoinsTitle => _text(en: 'Record Coins', zh: '金币记录');
   String get storeTitle => _text(en: 'Store', zh: '商店');
   String get storeRestore => _text(en: 'Restore', zh: '恢复购买');
+  String get storeRestoreUnavailable => _text(
+    en: 'Restore is unavailable in mock mode.',
+    zh: '当前为模拟模式，暂不支持恢复购买。',
+  );
   String get storeTips => _text(en: 'Tips', zh: '提示');
   String get storeBuyNow => _text(en: 'Buy Now', zh: '立即购买');
   String get storeSelected => _text(en: 'Selected', zh: '已选择');
   String get storeConfirmPurchase => _text(en: 'Confirm purchase', zh: '确认购买');
   String get storeConfirm => _text(en: 'Confirm', zh: '确认');
   String get storeCancel => _text(en: 'Cancel', zh: '取消');
+  String get storeClose => _text(en: 'Done', zh: '完成');
+  String get storePurchaseProcessing =>
+      _text(en: 'Processing mock purchase...', zh: '正在模拟购买...');
+  String get storePurchaseSuccess =>
+      _text(en: 'Mock purchase completed.', zh: '模拟购买已完成。');
+  String get storePurchaseCancelled =>
+      _text(en: 'Mock purchase cancelled.', zh: '模拟购买已取消。');
   String get storeMockPaymentNote => _text(
     en: 'This is a mock confirmation for MVP testing.',
     zh: '当前为 MVP 测试用模拟确认弹窗。',
@@ -118,6 +129,12 @@ class AppLocalizations {
     en: 'This is a mock membership confirmation for MVP testing.',
     zh: '当前为 MVP 测试用会员模拟确认弹窗。',
   );
+  String get walletHistoryEmpty =>
+      _text(en: 'There are no records yet.', zh: '暂无记录');
+  String get walletSpent => _text(en: 'Spent', zh: '已使用');
+  String get walletExpired => _text(en: 'Expired', zh: '已过期');
+  String get walletCheckIn => _text(en: 'Check in', zh: '签到');
+  String get walletCoinsUnit => _text(en: 'Coins', zh: '金币');
   String get playerEpisodes => _text(en: 'Episodes', zh: '选集');
   String get playerShare => _text(en: 'Share', zh: '分享');
   String get playerMore => _text(en: 'More', zh: '更多');

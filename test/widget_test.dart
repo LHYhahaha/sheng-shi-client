@@ -6,6 +6,8 @@ import 'package:drama_client/features/auth/domain/auth_session.dart';
 import 'package:drama_client/features/auth/presentation/pages/account_page.dart';
 import 'package:drama_client/features/profile/presentation/pages/language_page.dart';
 import 'package:drama_client/features/store/presentation/pages/store_page.dart';
+import 'package:drama_client/features/wallet/domain/wallet_record.dart';
+import 'package:drama_client/features/wallet/presentation/pages/wallet_history_page.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -83,6 +85,78 @@ void main() {
     expect(find.text('Transaction history'), findsOneWidget);
     expect(find.text('Membership (Weekly)'), findsOneWidget);
     expect(find.text('3000 Coins + 300bonus'), findsOneWidget);
+  });
+
+  testWidgets('wallet keeps auto unlock toggle after opening history', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Wallet >'));
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
+
+    await tester.tap(find.text('Transaction history'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
+  });
+
+  testWidgets('consumption history shows segmented poster rows', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Wallet >'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Consumption history'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Spent'), findsOneWidget);
+    expect(find.text('Expired'), findsOneWidget);
+    expect(find.text('EP. 11'), findsWidgets);
+    expect(find.text('Raja Iblis Hidup Kembali'), findsWidgets);
+    expect(find.text('-30'), findsOneWidget);
+    expect(find.text('AD'), findsOneWidget);
+
+    await tester.tap(find.text('Expired'));
+    await tester.pumpAndSettle();
+    expect(find.text('EP. 10'), findsOneWidget);
+    expect(find.text('Pulang Malam Mengejutkan'), findsOneWidget);
+  });
+
+  testWidgets('record coins shows check in buttons and disabled state', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Wallet >'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Record Coins'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('10 Reward Coins'), findsWidgets);
+    expect(find.text('20 Reward Coins'), findsOneWidget);
+    expect(find.text('Check in'), findsWidgets);
   });
 
   testWidgets('opens auth from profile and logs in with mock provider', (
@@ -195,6 +269,12 @@ void main() {
       find.text('This is a mock membership confirmation for MVP testing.'),
       findsOneWidget,
     );
+
+    await tester.tap(find.text('Confirm'));
+    await tester.pump();
+    expect(find.text('Processing mock purchase...'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.text('Mock purchase completed.'), findsOneWidget);
   });
 
   testWidgets('returns from membership to profile with top back button', (
@@ -419,6 +499,40 @@ void main() {
     expect(find.text('Profile fallback'), findsOneWidget);
   });
 
+  testWidgets(
+    'wallet history back falls back to wallet without navigation stack',
+    (tester) async {
+      final router = GoRouter(
+        initialLocation: RoutePaths.transactionHistory,
+        routes: [
+          GoRoute(
+            path: RoutePaths.transactionHistory,
+            builder: (context, state) =>
+                const WalletHistoryPage(type: WalletRecordType.transaction),
+          ),
+          GoRoute(
+            path: RoutePaths.wallet,
+            builder: (context, state) =>
+                const Scaffold(body: Text('Wallet fallback')),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(child: _TestRouterApp(router: router)),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Transaction history'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Wallet fallback'), findsOneWidget);
+    },
+  );
+
   testWidgets('enters collection edit mode from the header menu', (
     tester,
   ) async {
@@ -530,6 +644,20 @@ void main() {
       find.text('This is a mock confirmation for MVP testing.'),
       findsOneWidget,
     );
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mock purchase cancelled.'), findsOneWidget);
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Buy Now'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirm'));
+    await tester.pump();
+    expect(find.text('Processing mock purchase...'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.text('Mock purchase completed.'), findsOneWidget);
   });
 }
 

@@ -7,6 +7,8 @@ final storeControllerProvider = NotifierProvider<StoreController, StoreState>(
   StoreController.new,
 );
 
+enum StorePurchaseStatus { idle, processing, success, cancelled }
+
 class StoreState {
   const StoreState({
     required this.isLoading,
@@ -16,6 +18,7 @@ class StoreState {
     required this.tips,
     required this.selectedPackageId,
     required this.confirmationPackageId,
+    required this.purchaseStatus,
     this.error,
   });
 
@@ -27,6 +30,7 @@ class StoreState {
       tips = null,
       selectedPackageId = null,
       confirmationPackageId = null,
+      purchaseStatus = StorePurchaseStatus.idle,
       error = null;
 
   final bool isLoading;
@@ -36,6 +40,7 @@ class StoreState {
   final StoreTips? tips;
   final String? selectedPackageId;
   final String? confirmationPackageId;
+  final StorePurchaseStatus purchaseStatus;
   final Object? error;
 
   List<StorePackage> get packages => [...coinPackages, ...vipPackages];
@@ -67,6 +72,7 @@ class StoreState {
     StoreTips? tips,
     String? selectedPackageId,
     String? confirmationPackageId,
+    StorePurchaseStatus? purchaseStatus,
     Object? error,
     bool clearError = false,
     bool clearConfirmation = false,
@@ -81,6 +87,7 @@ class StoreState {
       confirmationPackageId: clearConfirmation
           ? null
           : confirmationPackageId ?? this.confirmationPackageId,
+      purchaseStatus: purchaseStatus ?? this.purchaseStatus,
       error: clearError ? null : error ?? this.error,
     );
   }
@@ -145,11 +152,36 @@ class StoreController extends Notifier<StoreState> {
       return;
     }
 
-    state = state.copyWith(confirmationPackageId: selectedPackage.id);
+    state = state.copyWith(
+      confirmationPackageId: selectedPackage.id,
+      purchaseStatus: StorePurchaseStatus.idle,
+    );
   }
 
   void hideConfirmation() {
-    state = state.copyWith(clearConfirmation: true);
+    state = state.copyWith(
+      purchaseStatus: StorePurchaseStatus.idle,
+      clearConfirmation: true,
+    );
+  }
+
+  Future<void> confirmMockPurchase() async {
+    if (state.confirmationPackage == null ||
+        state.purchaseStatus == StorePurchaseStatus.processing) {
+      return;
+    }
+
+    state = state.copyWith(purchaseStatus: StorePurchaseStatus.processing);
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    state = state.copyWith(purchaseStatus: StorePurchaseStatus.success);
+  }
+
+  void cancelMockPurchase() {
+    if (state.purchaseStatus == StorePurchaseStatus.processing) {
+      return;
+    }
+
+    state = state.copyWith(purchaseStatus: StorePurchaseStatus.cancelled);
   }
 
   bool _isCurrent(int generation) => generation == _generation;

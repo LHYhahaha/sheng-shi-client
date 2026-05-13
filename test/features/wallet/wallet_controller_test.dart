@@ -37,4 +37,38 @@ void main() {
       isFalse,
     );
   });
+
+  test('keeps local auto unlock choice when wallet reloads', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final controller = container.read(walletControllerProvider.notifier);
+    await controller.load();
+    controller.setAutoUnlockNextEpisode(false);
+    await controller.load();
+
+    expect(
+      container.read(walletControllerProvider).autoUnlockNextEpisode,
+      isFalse,
+    );
+  });
+
+  test('filters consumption records and claims reward coins locally', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final controller = container.read(walletControllerProvider.notifier);
+    await controller.load();
+    controller.setConsumptionFilter(WalletConsumptionStatus.expired);
+
+    expect(
+      container.read(walletControllerProvider).consumptionFilter,
+      WalletConsumptionStatus.expired,
+    );
+
+    controller.claimReward('daily_bonus');
+    final reward = container.read(walletControllerProvider).coinRecords.first;
+    expect(reward.rewardClaimed, isTrue);
+    expect(reward.rewardEnabled, isFalse);
+  });
 }

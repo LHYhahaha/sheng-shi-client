@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../app/router/route_paths.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_spacing.dart';
@@ -46,10 +47,20 @@ class _StorePageState extends ConsumerState<StorePage> {
           context: context,
           isScrollControlled: true,
           builder: (context) {
-            return StoreConfirmationSheet(
-              package: next,
-              onConfirm: () => Navigator.of(context).pop(),
-              onCancel: () => Navigator.of(context).pop(),
+            return Consumer(
+              builder: (context, ref, child) {
+                final sheetState = ref.watch(storeControllerProvider);
+                final sheetController = ref.read(
+                  storeControllerProvider.notifier,
+                );
+                return StoreConfirmationSheet(
+                  package: next,
+                  status: sheetState.purchaseStatus,
+                  onConfirm: sheetController.confirmMockPurchase,
+                  onCancel: sheetController.cancelMockPurchase,
+                  onClose: () => Navigator.of(context).pop(),
+                );
+              },
             );
           },
         ).whenComplete(() {
@@ -93,7 +104,14 @@ class _StorePageState extends ConsumerState<StorePage> {
                   onBack: () {
                     if (context.canPop()) {
                       context.pop();
+                    } else {
+                      context.go(RoutePaths.profile);
                     }
+                  },
+                  onRestore: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(l10n.storeRestoreUnavailable)),
+                    );
                   },
                 ),
                 Expanded(
@@ -132,11 +150,13 @@ class _StoreHeader extends StatelessWidget {
     required this.title,
     required this.restoreLabel,
     required this.onBack,
+    required this.onRestore,
   });
 
   final String title;
   final String restoreLabel;
   final VoidCallback onBack;
+  final VoidCallback onRestore;
 
   @override
   Widget build(BuildContext context) {
@@ -166,14 +186,23 @@ class _StoreHeader extends StatelessWidget {
             ),
             SizedBox(
               width: 58,
-              child: Text(
-                restoreLabel,
-                textAlign: TextAlign.right,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: const Color(0x99F2F2F2),
-                  height: 1.5,
+              child: TextButton(
+                onPressed: onRestore,
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  foregroundColor: const Color(0x99F2F2F2),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  minimumSize: const Size(58, 40),
+                ),
+                child: Text(
+                  restoreLabel,
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: const Color(0x99F2F2F2),
+                    height: 1.5,
+                  ),
                 ),
               ),
             ),

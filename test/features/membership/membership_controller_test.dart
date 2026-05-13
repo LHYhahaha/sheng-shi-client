@@ -36,4 +36,37 @@ void main() {
       isNull,
     );
   });
+
+  test(
+    'tracks mock membership purchase processing, success, and cancel states',
+    () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final controller = container.read(membershipControllerProvider.notifier);
+
+      await controller.load();
+      controller.showConfirmation();
+
+      final purchase = controller.confirmMockPurchase();
+      expect(
+        container.read(membershipControllerProvider).purchaseStatus,
+        MembershipPurchaseStatus.processing,
+      );
+
+      await purchase;
+      expect(
+        container.read(membershipControllerProvider).purchaseStatus,
+        MembershipPurchaseStatus.success,
+      );
+
+      controller.hideConfirmation();
+      controller.showConfirmation();
+      controller.cancelMockPurchase();
+
+      expect(
+        container.read(membershipControllerProvider).purchaseStatus,
+        MembershipPurchaseStatus.cancelled,
+      );
+    },
+  );
 }
