@@ -53,6 +53,77 @@ void main() {
     expect(find.text('Balance and wallet actions come in M5.'), findsOneWidget);
   });
 
+  testWidgets('opens membership from profile and confirms mock purchase', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(180, 186));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Join Membership'), findsOneWidget);
+    expect(find.text('Weekly VIP'), findsOneWidget);
+    expect(find.text('VIP Benefits'), findsOneWidget);
+
+    await tester.tap(find.text('Monthly VIP'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Join Now'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirm membership'), findsOneWidget);
+    expect(
+      find.text('This is a mock membership confirmation for MVP testing.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('returns from membership to profile with top back button', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(180, 186));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Join Membership'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Log in >'), findsOneWidget);
+    expect(find.text('Language'), findsOneWidget);
+  });
+
+  testWidgets('returns from home VIP membership entry back to home', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('home_vip_entry')));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Join Membership'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('KillgBox'), findsOneWidget);
+    expect(find.text('Popular'), findsOneWidget);
+  });
+
   testWidgets('opens for you player feed and swipes to next item', (
     tester,
   ) async {
@@ -66,6 +137,9 @@ void main() {
 
     expect(find.text('My Secret Deal With The Playboy'), findsOneWidget);
     expect(find.text('Watch Now'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('My list'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
 
     await tester.drag(find.byType(PageView), const Offset(0, -500));
     await tester.pumpAndSettle();

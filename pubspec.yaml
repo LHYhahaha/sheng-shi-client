@@ -52,4 +52,5 @@ flutter:
     - assets/images/my_list/
     - assets/images/player/
     - assets/images/profile/
+    - assets/images/membership/
     - assets/navigation/

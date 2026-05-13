@@ -76,6 +76,14 @@ class AppLocalizations {
     en: 'This is a mock confirmation for MVP testing.',
     zh: '当前为 MVP 测试用模拟确认弹窗。',
   );
+  String get membershipBenefits => _text(en: 'VIP Benefits', zh: '会员权益');
+  String get membershipBuyNow => _text(en: 'Join Now', zh: '立即开通');
+  String get membershipConfirmPurchase =>
+      _text(en: 'Confirm membership', zh: '确认开通会员');
+  String get membershipMockPaymentNote => _text(
+    en: 'This is a mock membership confirmation for MVP testing.',
+    zh: '当前为 MVP 测试用会员模拟确认弹窗。',
+  );
   String get playerEpisodes => _text(en: 'Episodes', zh: '选集');
   String get playerShare => _text(en: 'Share', zh: '分享');
   String get playerMore => _text(en: 'More', zh: '更多');

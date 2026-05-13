@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../shell/app_shell.dart';
 import '../../features/home/presentation/pages/home_page.dart';
+import '../../features/membership/presentation/pages/membership_page.dart';
 import '../../features/my_list/presentation/pages/my_list_page.dart';
 import '../../features/player/presentation/pages/player_page.dart';
 import '../../features/profile/presentation/pages/language_page.dart';
@@ -86,10 +87,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RoutePaths.membership,
         name: RouteNames.membership,
-        builder: (context, state) => FeaturePlaceholderPage(
-          title: context.l10n.membershipPlaceholderTitle,
-          description: context.l10n.membershipPlaceholderDescription,
-        ),
+        builder: (context, state) => const MembershipPage(),
       ),
       GoRoute(
         path: RoutePaths.language,

@@ -27,7 +27,7 @@ class PlayerPage extends ConsumerStatefulWidget {
     : dramaId = null,
       episodeId = null,
       feedMode = PlayerFeedMode.forYou,
-      hideShellNavigation = true;
+      hideShellNavigation = false;
 
   final String? dramaId;
   final String? episodeId;

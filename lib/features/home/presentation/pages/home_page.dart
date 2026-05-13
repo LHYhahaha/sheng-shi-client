@@ -84,7 +84,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
                 child: _HomeTitleBar(
-                  onMembershipTap: () => context.go(RoutePaths.membership),
+                  onMembershipTap: () => context.push(RoutePaths.membership),
                 ),
               ),
             ),
@@ -211,6 +211,7 @@ class _HomeTitleBar extends StatelessWidget {
           ),
         ),
         GestureDetector(
+          key: const ValueKey('home_vip_entry'),
           onTap: onMembershipTap,
           child: const Padding(
             padding: EdgeInsets.only(right: 1),
