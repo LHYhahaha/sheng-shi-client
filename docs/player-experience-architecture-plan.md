@@ -267,6 +267,52 @@ Required logs:
   next, single-drama previous, and auto-next.
 - Do not change playback strategy until timing identifies the slow boundary.
 
+Device pass on Android `R58WC02B69R` with release build and
+`PLAYER_TIMING_LOGS=true`:
+
+| Scenario | Preload/window result | Source resolve | Media open | User action to first frame | User action to position advanced | Audio background | Conclusion |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Home cold entry, pass 1, `mux-fast` | startup hit, first item window miss | 41ms | 23ms | 2673ms | 3442ms | No | Cold-start delay is after open, in HLS/media first-frame path. |
+| Home cold entry, pass 2, `mux-fast` | startup hit, first item window miss | 41ms | 17ms | 2869ms | 3715ms | No | Repeated pass confirms source resolve/open are not the slow boundary. |
+| Single drama next swipe EP01 -> EP02 | prepared next hit, firstFrameReady=true | 0ms repeated resolve | 0ms repeated open | Already prepared | 58ms | No | Session window works; no fallback open. |
+| Single drama previous swipe EP02 -> EP01 | retained previous hit | 0ms repeated resolve | 0ms repeated open | Already retained | session play at 50ms | No | Swipe-back reuses previous session and preserves position. |
+| For You first entry | window miss first item | 43ms | 25ms | 3768ms | 4612ms | No | First For You item has the same cold-start behavior as Home. |
+| For You next swipe 1 | prepared next hit, `mux-tears-stable` | 0ms repeated resolve | 0ms repeated open | Already prepared | 64ms | No | Prepared session makes feed swipe fast. |
+| For You next swipe 2 | prepared next hit, `apple-bipbop-low-stable` | 0ms repeated resolve | 0ms repeated open | Already prepared | 83ms | No | Session window remains effective across multiple feed items. |
+| Auto-next | Not measured in this pass | N/A | N/A | N/A | N/A | No | The long mock HLS sources did not emit completed during manual timing; use a short fixture or forced completed event for future device auto-next timing. |
+
+Additional observations:
+
+- Startup preload completed before Home entry and included playlist plus first
+  two segment preheat, but first frame still took about 2.7-2.9s on `mux-fast`.
+- `mux-tears-stable` warm-up may need up to about 3.1s before first frame in
+  some passes, but once prepared is ready, takeover is fast.
+- HLS preheat can spend multiple seconds on the second segment for some sources
+  (`mux-tears-stable` showed a multi-MB second segment and hit max bytes). This
+  is useful CDN/source evidence, but it does not block current playback.
+- Switching away from For You logged `playingStream false`, `reason=hidden`,
+  and session window release. Android audio policy logs also showed player
+  release. No background audio was observed.
+
+Attribution:
+
+- Not a source resolve problem: stable around 41-43ms.
+- Not a Dart `media_kit open()` call problem: stable around 17-25ms.
+- Not a session-window miss problem for next/previous after preparation:
+  prepared and retained hits are working.
+- Remaining cold-start slowness is most likely HLS first segment / CDN /
+  decoder / media_kit first-frame pipeline.
+- Auto-next timing still needs a short controlled fixture. Current production
+  mock sources are too long for efficient manual completed-event timing.
+
+Next decision:
+
+- Do not keep adding UI-layer loading patches for cold start.
+- If cold start remains unacceptable, move to Phase 5.15 local HLS cache/proxy
+  spike or Phase 5.16 server/CDN playback source specification.
+- For auto-next device timing, add a short test-only HLS fixture or a dedicated
+  debug trigger before trying to infer behavior from long public streams.
+
 ### Phase 5.15: Local HLS Cache/Proxy Spike
 
 - If first-frame delays remain after session window hits, evaluate a local HLS
