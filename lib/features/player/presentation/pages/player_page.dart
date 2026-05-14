@@ -45,6 +45,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     with WidgetsBindingObserver {
   static const _autoAdvanceDuration = Duration(milliseconds: 300);
   static const _pageTransitionDuration = Duration(milliseconds: 260);
+  static const _topBarHorizontal = 16.0;
+  static const _topBarTop = 8.0;
+  static const _topBarHeight = 40.0;
+  static const _topBarBackIconSize = 28.0;
+  static const _topBarMoreIconSize = 24.0;
 
   late final PageController _pageController;
   late final String _sessionKey;
@@ -301,14 +306,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               children: [
                 PlayerChrome(
                   content: item.content,
-                  episodeNumber: item.episode.number,
                   videoController: canRenderVideo
                       ? playbackState.videoController
                       : null,
                   showVideo: showVideo,
                   showLoading: showLoading,
                   playbackError: showPlaybackError,
-                  playbackRate: playbackState.playbackRate,
                   position: playbackState.position,
                   duration: playbackState.duration,
                   bufferedPosition: playbackState.bufferedPosition,
@@ -343,7 +346,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   onRetry: () {
                     unawaited(playbackController.playItem(item));
                   },
-                  onSpeedTap: _showSpeedSheet,
                   onDownloadTap: widget.feedMode == PlayerFeedMode.singleDrama
                       ? () {}
                       : null,
@@ -379,9 +381,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                     );
                   },
                   onUnlockTap: uiController.showMemberPaywall,
-                  onBackTap: widget.hideShellNavigation
-                      ? _exitForYouFeed
-                      : _goBackFromPlayer,
                   forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
                 ),
                 if (item.episode.isUnavailable)
@@ -399,6 +398,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                 : context.l10n.playerUnlockNow,
             onTap: _showUnlockSheet,
             onDismiss: uiController.hidePaywall,
+          ),
+        if (widget.feedMode == PlayerFeedMode.singleDrama)
+          _PlayerTopBar(
+            episodeNumber: feedState.currentItem?.episode.number ?? 1,
+            playbackRate: playbackState.playbackRate,
+            onBackTap: _goBackFromPlayer,
+            onSpeedTap: _showSpeedSheet,
           ),
       ],
     );
@@ -572,6 +578,103 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             ref.read(playerFeedControllerProvider(_sessionKey)).currentItem,
           ),
     );
+  }
+}
+
+class _PlayerTopBar extends StatelessWidget {
+  const _PlayerTopBar({
+    required this.episodeNumber,
+    required this.playbackRate,
+    required this.onBackTap,
+    required this.onSpeedTap,
+  });
+
+  final int episodeNumber;
+  final double playbackRate;
+  final VoidCallback onBackTap;
+  final VoidCallback onSpeedTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          _PlayerPageState._topBarHorizontal,
+          _PlayerPageState._topBarTop,
+          _PlayerPageState._topBarHorizontal,
+          0,
+        ),
+        child: SizedBox(
+          key: const ValueKey('player_single_top_bar'),
+          height: _PlayerPageState._topBarHeight,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              GestureDetector(
+                key: const ValueKey('player_back_button'),
+                behavior: HitTestBehavior.opaque,
+                onTap: onBackTap,
+                child: const SizedBox.square(
+                  dimension: _PlayerPageState._topBarHeight,
+                  child: Center(
+                    child: Icon(
+                      Icons.chevron_left,
+                      color: Colors.white,
+                      size: _PlayerPageState._topBarBackIconSize,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                key: const ValueKey('player_episode_label'),
+                'EP.${episodeNumber.toString().padLeft(2, '0')}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  height: 18 / 14,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                key: const ValueKey('player_speed_button'),
+                behavior: HitTestBehavior.opaque,
+                onTap: onSpeedTap,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 6,
+                  ),
+                  child: Text(
+                    _formatRate(context, playbackRate),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      height: 18 / 14,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              const Icon(
+                key: ValueKey('player_more_button'),
+                Icons.more_horiz,
+                color: Colors.white,
+                size: _PlayerPageState._topBarMoreIconSize,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatRate(BuildContext context, double rate) {
+    if ((rate - 1.0).abs() < 0.01) {
+      return context.l10n.playerSpeed;
+    }
+    return '${rate.toStringAsFixed(1)}x';
   }
 }
 

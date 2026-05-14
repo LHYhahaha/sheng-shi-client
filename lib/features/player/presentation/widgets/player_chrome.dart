@@ -1,10 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
-import '../../../../app/router/route_paths.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../domain/player_content.dart';
@@ -15,17 +13,11 @@ abstract final class _PlayerLayoutMetrics {
   static const forYouWatchNowBottom = 24.0;
   static const forYouMetaGap = 58.0;
   static const singleBottomActionBottom = 41.0;
-  static const singleTopBarHorizontal = 16.0;
-  static const singleTopBarTop = 8.0;
-  static const singleTopBarHeight = 40.0;
-  static const singleTopIconSize = 28.0;
-  static const singleTopMoreSize = 24.0;
 }
 
 class PlayerChrome extends StatefulWidget {
   const PlayerChrome({
     required this.content,
-    required this.episodeNumber,
     required this.isPlaying,
     required this.showCenterPlayButton,
     required this.onTogglePlay,
@@ -34,7 +26,6 @@ class PlayerChrome extends StatefulWidget {
     required this.onShareTap,
     required this.onMoreTap,
     required this.onUnlockTap,
-    required this.playbackRate,
     this.showVideo = true,
     this.showLoading = false,
     this.playbackError = false,
@@ -50,16 +41,13 @@ class PlayerChrome extends StatefulWidget {
     this.onSeekEnd,
     this.onSeekCancel,
     this.onRetry,
-    this.onSpeedTap,
     this.onDownloadTap,
     this.videoController,
-    this.onBackTap,
     this.forYouLayout = false,
     super.key,
   });
 
   final PlayerContent content;
-  final int episodeNumber;
   final bool isPlaying;
   final bool showCenterPlayButton;
   final VoidCallback onTogglePlay;
@@ -68,7 +56,6 @@ class PlayerChrome extends StatefulWidget {
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
   final VoidCallback onUnlockTap;
-  final double playbackRate;
   final bool showVideo;
   final bool showLoading;
   final bool playbackError;
@@ -84,10 +71,8 @@ class PlayerChrome extends StatefulWidget {
   final VoidCallback? onSeekEnd;
   final VoidCallback? onSeekCancel;
   final VoidCallback? onRetry;
-  final VoidCallback? onSpeedTap;
   final VoidCallback? onDownloadTap;
   final VideoController? videoController;
-  final VoidCallback? onBackTap;
   final bool forYouLayout;
 
   @override
@@ -99,7 +84,6 @@ class _PlayerChromeState extends State<PlayerChrome> {
   Timer? _feedbackTimer;
 
   PlayerContent get content => widget.content;
-  int get episodeNumber => widget.episodeNumber;
   bool get isPlaying => widget.isPlaying;
   bool get showCenterPlayButton => widget.showCenterPlayButton;
   VoidCallback get onTogglePlay => widget.onTogglePlay;
@@ -108,7 +92,6 @@ class _PlayerChromeState extends State<PlayerChrome> {
   VoidCallback get onShareTap => widget.onShareTap;
   VoidCallback get onMoreTap => widget.onMoreTap;
   VoidCallback get onUnlockTap => widget.onUnlockTap;
-  double get playbackRate => widget.playbackRate;
   bool get showVideo => widget.showVideo;
   bool get showLoading => widget.showLoading;
   bool get playbackError => widget.playbackError;
@@ -124,10 +107,8 @@ class _PlayerChromeState extends State<PlayerChrome> {
   VoidCallback? get onSeekEnd => widget.onSeekEnd;
   VoidCallback? get onSeekCancel => widget.onSeekCancel;
   VoidCallback? get onRetry => widget.onRetry;
-  VoidCallback? get onSpeedTap => widget.onSpeedTap;
   VoidCallback? get onDownloadTap => widget.onDownloadTap;
   VideoController? get videoController => widget.videoController;
-  VoidCallback? get onBackTap => widget.onBackTap;
   bool get forYouLayout => widget.forYouLayout;
 
   @override
@@ -221,77 +202,6 @@ class _PlayerChromeState extends State<PlayerChrome> {
             bottom: 0,
             height: 79 + bottomInset,
             child: const ColoredBox(color: Color(0xFF141414)),
-          ),
-          SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                _PlayerLayoutMetrics.singleTopBarHorizontal,
-                _PlayerLayoutMetrics.singleTopBarTop,
-                _PlayerLayoutMetrics.singleTopBarHorizontal,
-                0,
-              ),
-              child: SizedBox(
-                key: const ValueKey('player_single_top_bar'),
-                height: _PlayerLayoutMetrics.singleTopBarHeight,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _IconTapTarget(
-                      key: const ValueKey('player_back_button'),
-                      icon: Icons.chevron_left,
-                      iconSize: _PlayerLayoutMetrics.singleTopIconSize,
-                      onTap:
-                          onBackTap ??
-                          () {
-                            if (context.canPop()) {
-                              context.pop();
-                            } else {
-                              context.go(RoutePaths.home);
-                            }
-                          },
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      key: const ValueKey('player_episode_label'),
-                      'EP.${episodeNumber.toString().padLeft(2, '0')}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        height: 18 / 14,
-                      ),
-                    ),
-                    const Spacer(),
-                    GestureDetector(
-                      key: const ValueKey('player_speed_button'),
-                      behavior: HitTestBehavior.opaque,
-                      onTap: onSpeedTap,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 6,
-                        ),
-                        child: Text(
-                          _formatRate(playbackRate),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            height: 18 / 14,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    const Icon(
-                      key: ValueKey('player_more_button'),
-                      Icons.more_horiz,
-                      color: Colors.white,
-                      size: _PlayerLayoutMetrics.singleTopMoreSize,
-                    ),
-                  ],
-                ),
-              ),
-            ),
           ),
         ],
         if (showCenterPlayButton) _CenterPlayButton(onTap: onTogglePlay),
@@ -423,13 +333,6 @@ class _PlayerChromeState extends State<PlayerChrome> {
   void dispose() {
     _feedbackTimer?.cancel();
     super.dispose();
-  }
-
-  String _formatRate(double rate) {
-    if ((rate - 1.0).abs() < 0.01) {
-      return context.l10n.playerSpeed;
-    }
-    return '${rate.toStringAsFixed(1)}x';
   }
 }
 
@@ -994,33 +897,6 @@ class _ActionItem extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _IconTapTarget extends StatelessWidget {
-  const _IconTapTarget({
-    required this.icon,
-    required this.onTap,
-    this.iconSize = 24,
-    super.key,
-  });
-
-  final IconData icon;
-  final VoidCallback onTap;
-  final double iconSize;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: SizedBox.square(
-        dimension: 28,
-        child: Center(
-          child: Icon(icon, color: Colors.white, size: iconSize),
         ),
       ),
     );

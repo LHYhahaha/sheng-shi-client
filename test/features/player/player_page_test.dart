@@ -280,6 +280,20 @@ void main() {
     expect(find.text('Home'), findsOneWidget);
   });
 
+  testWidgets('for you does not show single drama top bar', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: '/for-you',
+        repository: _FakePlayerFeedRepository.unlocked(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('player_single_top_bar')), findsNothing);
+    expect(find.byKey(const ValueKey('player_back_button')), findsNothing);
+  });
+
   testWidgets('single drama seek bar shows progress and seeks on drag', (
     tester,
   ) async {
@@ -463,6 +477,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 120));
 
+      expect(
+        find.byKey(const ValueKey('player_single_top_bar')),
+        findsOneWidget,
+      );
       expect(find.text('EP.01'), findsOneWidget);
 
       await tester.pumpAndSettle();
@@ -616,6 +634,25 @@ void main() {
 
     expect(find.text('EP.02'), findsOneWidget);
   });
+
+  testWidgets('manual swipe updates fixed top bar episode label', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('player_single_top_bar')), findsOneWidget);
+    expect(find.text('EP.01'), findsOneWidget);
+
+    await tester.drag(find.byType(PageView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('player_single_top_bar')), findsOneWidget);
+    expect(find.text('EP.02'), findsOneWidget);
+  });
 }
 
 const _mockVideoUrl =
@@ -641,6 +678,10 @@ Widget _buildPlayerApp({
             episodeId: state.pathParameters['episodeId']!,
           );
         },
+      ),
+      GoRoute(
+        path: '/for-you',
+        builder: (context, state) => const PlayerPage.forYou(),
       ),
     ],
   );
