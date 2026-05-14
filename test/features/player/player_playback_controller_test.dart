@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
+import 'package:drama_client/features/player/application/player_playback_prepare_manager.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/data/mock_playback_progress_repository.dart';
 import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
@@ -865,6 +866,196 @@ void main() {
     expect(forYouSession.openedSources, isEmpty);
     expect(singleSession.openedSources, isEmpty);
   });
+
+  test('next item prepare opens a separate session without playing', () async {
+    final currentSession = _FakePlaybackSession();
+    final preparedSession = _FakePlaybackSession();
+    var index = 0;
+    final sessions = [currentSession, preparedSession];
+    PlayerPlaybackSession sessionFactory() => sessions[index++];
+    final container = _createPrepareContainer(sessionFactory);
+    addTearDown(container.dispose);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.preloadAround([_item(1), _item(2)], 0);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    expect(currentSession.openedSources, [_videoUrl]);
+    expect(preparedSession.openedSources, [_secondVideoUrl]);
+    expect(preparedSession.openPlayFlags, [false]);
+    expect(preparedSession.playCount, 0);
+    expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+  });
+
+  test(
+    'prepared item takeover avoids duplicate open on current session',
+    () async {
+      final currentSession = _FakePlaybackSession();
+      final preparedSession = _FakePlaybackSession();
+      var index = 0;
+      final sessions = [currentSession, preparedSession];
+      PlayerPlaybackSession sessionFactory() => sessions[index++];
+      final container = _createPrepareContainer(sessionFactory);
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      await controller.preloadAround([_item(1), _item(2)], 0);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await controller.playItem(_item(2));
+
+      expect(currentSession.isDisposed, isTrue);
+      expect(currentSession.openedSources, [_videoUrl]);
+      expect(preparedSession.openedSources, [_secondVideoUrl]);
+      expect(preparedSession.openPlayFlags, [false]);
+      expect(preparedSession.playCount, 1);
+      expect(container.read(provider).currentItemId, 'drama-a-ep-2');
+      expect(container.read(provider).currentSource, _secondVideoUrl);
+    },
+  );
+
+  test('hidden and dispose release prepared sessions', () async {
+    final currentSession = _FakePlaybackSession();
+    final preparedSession = _FakePlaybackSession();
+    var index = 0;
+    final sessions = [currentSession, preparedSession];
+    PlayerPlaybackSession sessionFactory() => sessions[index++];
+    final container = _createPrepareContainer(sessionFactory);
+    final provider = playerPlaybackControllerProvider('for-you-tab');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.preloadAround([_item(1), _item(2)], 0);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    await controller.pauseForVisibility();
+
+    expect(preparedSession.isDisposed, isTrue);
+    expect(currentSession.isDisposed, isFalse);
+    container.dispose();
+  });
+
+  test('locked unavailable and null source items are not prepared', () async {
+    final currentSession = _FakePlaybackSession();
+    var createCount = 0;
+    PlayerPlaybackSession sessionFactory() {
+      createCount += 1;
+      return currentSession;
+    }
+
+    final container = _createPrepareContainer(sessionFactory);
+    addTearDown(container.dispose);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.preloadAround([
+      _item(1),
+      _item(2, isLocked: true),
+      _item(3, isAvailable: false),
+      _item(4, hasSource: false),
+    ], 0);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    expect(createCount, 1);
+    expect(currentSession.openedSources, [_videoUrl]);
+  });
+
+  test('prepare failure does not affect current playback', () async {
+    final currentSession = _FakePlaybackSession();
+    final failingPreparedSession = _FakePlaybackSession(
+      shouldThrowOnOpen: true,
+    );
+    var index = 0;
+    final sessions = [currentSession, failingPreparedSession];
+    PlayerPlaybackSession sessionFactory() => sessions[index++];
+    final container = _createPrepareContainer(sessionFactory);
+    addTearDown(container.dispose);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.preloadAround([_item(1), _item(2)], 0);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+    expect(currentSession.isDisposed, isFalse);
+    expect(failingPreparedSession.isDisposed, isTrue);
+  });
+
+  test(
+    'fast swipe stale prepared session is released and not taken over',
+    () async {
+      final currentSession = _FakePlaybackSession();
+      final stalePrepareCompleter = Completer<void>();
+      final stalePreparedSession = _FakePlaybackSession(
+        openCompleter: stalePrepareCompleter,
+      );
+      final freshPreparedSession = _FakePlaybackSession();
+      var index = 0;
+      final sessions = [
+        currentSession,
+        stalePreparedSession,
+        freshPreparedSession,
+      ];
+      PlayerPlaybackSession sessionFactory() => sessions[index++];
+      final container = _createPrepareContainer(sessionFactory);
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      unawaited(controller.preloadAround([_item(1), _item(2)], 0));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await controller.preloadAround([
+        _item(3, videoUrl: 'https://cdn.example.test/ep3.m3u8'),
+        _item(4, videoUrl: 'https://cdn.example.test/ep4.m3u8'),
+      ], 0);
+      stalePrepareCompleter.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await controller.playItem(_item(2));
+
+      expect(stalePreparedSession.isDisposed, isTrue);
+      expect(currentSession.openedSources, [_videoUrl, _secondVideoUrl]);
+      expect(freshPreparedSession.openedSources, [
+        'https://cdn.example.test/ep4.m3u8',
+      ]);
+    },
+  );
+
+  test('for you and single drama prepared sessions stay isolated', () async {
+    final sessions = [
+      _FakePlaybackSession(),
+      _FakePlaybackSession(),
+      _FakePlaybackSession(),
+      _FakePlaybackSession(),
+    ];
+    var index = 0;
+    PlayerPlaybackSession sessionFactory() => sessions[index++];
+    final container = _createPrepareContainer(sessionFactory);
+    addTearDown(container.dispose);
+    final forYouProvider = playerPlaybackControllerProvider('for-you-tab');
+    final singleProvider = playerPlaybackControllerProvider('single:drama-a:1');
+
+    await container.read(forYouProvider.notifier).playItem(_item(1));
+    await container.read(singleProvider.notifier).playItem(_item(2));
+    await container.read(forYouProvider.notifier).preloadAround([
+      _item(1),
+      _item(2),
+    ], 0);
+    await container.read(singleProvider.notifier).preloadAround([
+      _item(2),
+      _item(3, videoUrl: 'https://cdn.example.test/ep3.m3u8'),
+    ], 0);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    expect(sessions[2].openedSources, [_secondVideoUrl]);
+    expect(sessions[3].openedSources, ['https://cdn.example.test/ep3.m3u8']);
+    expect(container.read(forYouProvider).currentItemId, 'drama-a-ep-1');
+    expect(container.read(singleProvider).currentItemId, 'drama-a-ep-2');
+  });
 }
 
 ProviderContainer _createContainer(
@@ -882,6 +1073,9 @@ ProviderContainer _createContainer(
       playerPlaybackPreloadManagerProvider.overrideWithValue(
         playbackCacheManager,
       ),
+      playerPlaybackPrepareManagerFactoryProvider.overrideWithValue(
+        NoopPlayerPlaybackPrepareManager.new,
+      ),
       if (progressRepository != null)
         playbackProgressRepositoryProvider.overrideWithValue(
           progressRepository,
@@ -891,6 +1085,23 @@ ProviderContainer _createContainer(
   if (addDisposeTearDown) {
     addTearDown(container.dispose);
   }
+  return container;
+}
+
+ProviderContainer _createPrepareContainer(
+  PlayerPlaybackSession Function() sessionFactory,
+) {
+  final container = ProviderContainer(
+    overrides: [
+      playerPlaybackSessionFactoryProvider.overrideWithValue(sessionFactory),
+      playerPlaybackPrepareManagerFactoryProvider.overrideWithValue(
+        () => PlayerPlaybackPrepareManager(sessionFactory: sessionFactory),
+      ),
+      playerPlaybackPreloadManagerProvider.overrideWithValue(
+        MockPlayerPlaybackPreloadManager(preloadDelay: Duration.zero),
+      ),
+    ],
+  );
   return container;
 }
 
@@ -954,6 +1165,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   final _widthController = StreamController<int?>.broadcast();
   final _errorController = StreamController<String>.broadcast();
   final openedSources = <String>[];
+  final openPlayFlags = <bool>[];
   final seekedPositions = <Duration>[];
   final rates = <double>[];
   int pauseCount = 0;
@@ -994,6 +1206,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   @override
   Future<void> open(String source, {bool play = true}) async {
     openedSources.add(source);
+    openPlayFlags.add(play);
     _bufferingController.add(true);
     await (openCompleter?.future ?? Future<void>.value());
     if (shouldThrowOnOpen) {

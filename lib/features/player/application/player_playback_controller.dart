@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../data/playback_progress_repository_provider.dart';
@@ -9,11 +10,18 @@ import '../domain/player_feed.dart';
 import '../domain/player_playback_progress.dart';
 import '../domain/player_playback_source.dart';
 import '../domain/player_preload_state.dart';
+import 'player_playback_prepare_manager.dart';
 import 'player_session_controller.dart';
 
 final playerPlaybackSessionFactoryProvider =
     Provider<PlayerPlaybackSession Function()>((ref) {
       return MediaKitPlayerSession.new;
+    });
+
+final playerPlaybackPrepareManagerFactoryProvider =
+    Provider<PlayerPlaybackPrepareManager Function()>((ref) {
+      final sessionFactory = ref.watch(playerPlaybackSessionFactoryProvider);
+      return () => PlayerPlaybackPrepareManager(sessionFactory: sessionFactory);
     });
 
 final playerPlaybackControllerProvider =
@@ -46,6 +54,26 @@ enum PlayerPlaybackStatus {
   blocked,
   unavailable,
   error,
+}
+
+class PlayerPlaybackTimingEvent {
+  const PlayerPlaybackTimingEvent({
+    required this.name,
+    required this.at,
+    this.itemId,
+    this.source,
+    this.elapsed,
+    this.error,
+    this.details,
+  });
+
+  final String name;
+  final DateTime at;
+  final String? itemId;
+  final String? source;
+  final Duration? elapsed;
+  final Object? error;
+  final String? details;
 }
 
 class PlayerPlaybackState {
@@ -134,6 +162,7 @@ class PlayerPlaybackState {
     bool? isSeeking,
     bool? hasEnded,
     double? playbackRate,
+    VideoController? videoController,
     String? currentItemId,
     String? currentSource,
     Duration? seekPreviewPosition,
@@ -143,7 +172,7 @@ class PlayerPlaybackState {
     bool clearSeekPreview = false,
   }) {
     return PlayerPlaybackState(
-      videoController: videoController,
+      videoController: videoController ?? this.videoController,
       status: status ?? this.status,
       hasFirstFrame: clearSource ? false : hasFirstFrame ?? this.hasFirstFrame,
       isBuffering: clearSource ? false : isBuffering ?? this.isBuffering,
@@ -180,9 +209,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   static const _maxPreloadedSources = 2;
 
   final String sessionKey;
-  late final PlayerPlaybackSession _session;
+  late PlayerPlaybackSession _session;
   late final PlayerPlaybackPreloadManager _preloadManager;
+  late final PlayerPlaybackPrepareManager _prepareManager;
   late final PlaybackProgressRepository _progressRepository;
+  var _subscriptions = <StreamSubscription<dynamic>>[];
   final _preloadedItemIds = <String>{};
   final _preloadStates = <String, PlaybackPreloadState>{};
   int _generation = 0;
@@ -192,28 +223,22 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   bool _wasPlayingBeforeSeek = false;
   bool _ignoreNextCompleted = false;
   Duration? _lastPositionUpdate;
+  final _timingEvents = <PlayerPlaybackTimingEvent>[];
+
+  List<PlayerPlaybackTimingEvent> get debugTimingEvents =>
+      List<PlayerPlaybackTimingEvent>.unmodifiable(_timingEvents);
 
   @override
   PlayerPlaybackState build() {
     _session = ref.read(playerPlaybackSessionFactoryProvider).call();
     _preloadManager = ref.read(playerPlaybackPreloadManagerProvider);
+    _prepareManager = ref.read(playerPlaybackPrepareManagerFactoryProvider)();
     _progressRepository = ref.read(playbackProgressRepositoryProvider);
-    final subscriptions = <StreamSubscription<dynamic>>[
-      _session.bufferingStream.listen(_handleBuffering),
-      _session.playingStream.listen(_handlePlaying),
-      _session.completedStream.listen(_handleCompleted),
-      _session.positionStream.listen(_handlePosition),
-      _session.durationStream.listen(_handleDuration),
-      _session.bufferedPositionStream.listen(_handleBufferedPosition),
-      _session.rateStream.listen(_handleRate),
-      _session.widthStream.listen(_handleWidth),
-      _session.errorStream.listen(_handleError),
-    ];
+    _attachSessionStreams(_session);
     ref.onDispose(() {
-      for (final subscription in subscriptions) {
-        unawaited(subscription.cancel());
-      }
+      unawaited(_cancelSessionStreams());
       unawaited(_disposePreloads(syncState: false));
+      unawaited(_prepareManager.release());
       unawaited(_disposeSessionOnly());
     });
     return PlayerPlaybackState.initial(
@@ -297,9 +322,58 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
 
     try {
+      final prepared = _prepareManager.takeIfMatches(item.id);
+      if (prepared != null) {
+        _logTiming(
+          'prepared hit',
+          itemId: item.id,
+          source: prepared.source.playableSource,
+        );
+        await _replaceCurrentSession(prepared.session);
+        if (!ref.mounted || !_isCurrent(generation)) {
+          await _session.pause();
+          return;
+        }
+        state = state.copyWith(
+          videoController: _session.videoController,
+          currentSource: prepared.source.playableSource,
+          hasFirstFrame: prepared.hasFirstFrame,
+        );
+        await _restoreProgressIfNeeded(resumeProgress, generation);
+        if (!ref.mounted || !_isCurrent(generation)) {
+          return;
+        }
+        if (_pauseWhenOpenCompletes) {
+          await _session.pause();
+          state = state.copyWith(
+            status: PlayerPlaybackStatus.paused,
+            isBuffering: false,
+          );
+          return;
+        }
+        await _session.play();
+        if (!ref.mounted || !_isCurrent(generation)) {
+          return;
+        }
+        state = state.copyWith(
+          status: PlayerPlaybackStatus.playing,
+          isBuffering: !prepared.hasFirstFrame,
+          hasEnded: false,
+        );
+        return;
+      }
+
+      final resolveStartedAt = DateTime.now();
+      _logTiming('source resolve start', itemId: item.id, source: sourceHint);
       final playbackSource = await ref
           .read(playerPlaybackSourceRepositoryProvider)
           .resolve(item);
+      _logTiming(
+        'source resolve end',
+        itemId: item.id,
+        source: playbackSource.playableSource,
+        elapsed: DateTime.now().difference(resolveStartedAt),
+      );
       if (!ref.mounted) {
         return;
       }
@@ -307,7 +381,19 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         return;
       }
       state = state.copyWith(currentSource: playbackSource.playableSource);
+      final openStartedAt = DateTime.now();
+      _logTiming(
+        'media open start',
+        itemId: item.id,
+        source: playbackSource.playableSource,
+      );
       await _session.open(playbackSource.playableSource, play: true);
+      _logTiming(
+        'media open end',
+        itemId: item.id,
+        source: playbackSource.playableSource,
+        elapsed: DateTime.now().difference(openStartedAt),
+      );
       if (!ref.mounted) {
         return;
       }
@@ -336,6 +422,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         hasEnded: false,
       );
     } catch (error) {
+      _logTiming('error', itemId: item.id, source: sourceHint, error: error);
       if (!_isCurrent(generation)) {
         return;
       }
@@ -392,6 +479,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
     _syncPreloadState();
 
+    if (state.currentItemId != null && state.currentSource != null) {
+      final nextItem = candidates.isEmpty ? null : candidates.first;
+      if (nextItem != null) {
+        unawaited(_prepareNextItem(nextItem, preloadGeneration));
+      }
+    }
+
     for (final item in candidates.take(_maxPreloadedSources)) {
       final currentPreload = _preloadStates[item.id];
       if (_preloadedItemIds.contains(item.id) ||
@@ -407,9 +501,22 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         ),
       );
       try {
+        final preloadStartedAt = DateTime.now();
+        _logTiming(
+          'preload start',
+          itemId: item.id,
+          source: item.episode.videoSource,
+        );
         final result = await ref
             .read(playerPlaybackSourceRepositoryProvider)
             .preload(item);
+        _logTiming(
+          'preload end',
+          itemId: item.id,
+          source: item.episode.videoSource,
+          elapsed: DateTime.now().difference(preloadStartedAt),
+          details: result.status.name,
+        );
         if (!ref.mounted ||
             _isSessionDisposed ||
             preloadGeneration != _preloadGeneration) {
@@ -423,6 +530,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         }
         _syncPreloadState();
       } catch (error) {
+        _logTiming(
+          'preload error',
+          itemId: item.id,
+          source: item.episode.videoSource,
+          error: error,
+        );
         if (!ref.mounted ||
             _isSessionDisposed ||
             preloadGeneration != _preloadGeneration) {
@@ -574,6 +687,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _pauseWhenOpenCompletes = true;
     ++_generation;
     await _session.pause();
+    await _prepareManager.release();
     await _disposePreloads(syncState: syncState);
     if (!syncState || !ref.mounted) {
       return;
@@ -594,6 +708,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   Future<void> disposeSession({bool syncState = true}) async {
     _pauseWhenOpenCompletes = true;
     ++_generation;
+    await _prepareManager.release();
     await _disposePreloads(syncState: syncState);
     _preloadStates.clear();
     _preloadedItemIds.clear();
@@ -611,16 +726,23 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   void _handleBuffering(bool isBuffering) {
+    if (!ref.mounted) {
+      return;
+    }
     if (state.currentSource == null ||
         state.status == PlayerPlaybackStatus.error ||
         state.status == PlayerPlaybackStatus.blocked ||
         state.status == PlayerPlaybackStatus.unavailable) {
       return;
     }
+    _logTiming(isBuffering ? 'buffering start' : 'buffering end');
     state = state.copyWith(isBuffering: isBuffering);
   }
 
   void _handlePlaying(bool isPlaying) {
+    if (!ref.mounted) {
+      return;
+    }
     if (_pauseWhenOpenCompletes && isPlaying) {
       return;
     }
@@ -640,6 +762,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   void _handleCompleted(bool completed) {
+    if (!ref.mounted) {
+      return;
+    }
     if (completed && _ignoreNextCompleted) {
       _ignoreNextCompleted = false;
       return;
@@ -662,6 +787,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   void _handlePosition(Duration position) {
+    if (!ref.mounted) {
+      return;
+    }
     if (state.currentSource == null || state.isSeeking) {
       return;
     }
@@ -677,6 +805,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   void _handleDuration(Duration duration) {
+    if (!ref.mounted) {
+      return;
+    }
     if (state.currentSource == null) {
       return;
     }
@@ -686,6 +817,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   void _handleBufferedPosition(Duration position) {
+    if (!ref.mounted) {
+      return;
+    }
     if (state.currentSource == null) {
       return;
     }
@@ -693,6 +827,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   void _handleRate(double rate) {
+    if (!ref.mounted) {
+      return;
+    }
     if (rate <= 0) {
       return;
     }
@@ -700,8 +837,19 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   void _handleWidth(int? width) {
+    if (!ref.mounted) {
+      return;
+    }
     if (width == null || width <= 0 || state.currentSource == null) {
       return;
+    }
+    if (!state.hasFirstFrame) {
+      _logTiming(
+        'first frame received',
+        itemId: state.currentItemId,
+        source: state.currentSource,
+        details: 'width=$width',
+      );
     }
     state = state.copyWith(
       status: state.status == PlayerPlaybackStatus.opening
@@ -713,9 +861,18 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   void _handleError(String error) {
+    if (!ref.mounted) {
+      return;
+    }
     if (state.currentSource == null) {
       return;
     }
+    _logTiming(
+      'error',
+      itemId: state.currentItemId,
+      source: state.currentSource,
+      error: error,
+    );
     state = state.copyWith(
       status: PlayerPlaybackStatus.error,
       hasFirstFrame: false,
@@ -746,6 +903,70 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   bool _isCurrent(int generation) => generation == _generation;
 
   bool get _shouldPersistProgress => sessionKey.startsWith('single:');
+
+  void _attachSessionStreams(PlayerPlaybackSession session) {
+    _subscriptions = <StreamSubscription<dynamic>>[
+      session.bufferingStream.listen(_handleBuffering),
+      session.playingStream.listen(_handlePlaying),
+      session.completedStream.listen(_handleCompleted),
+      session.positionStream.listen(_handlePosition),
+      session.durationStream.listen(_handleDuration),
+      session.bufferedPositionStream.listen(_handleBufferedPosition),
+      session.rateStream.listen(_handleRate),
+      session.widthStream.listen(_handleWidth),
+      session.errorStream.listen(_handleError),
+    ];
+  }
+
+  Future<void> _cancelSessionStreams() async {
+    final subscriptions = _subscriptions;
+    _subscriptions = <StreamSubscription<dynamic>>[];
+    for (final subscription in subscriptions) {
+      await subscription.cancel();
+    }
+  }
+
+  Future<void> _replaceCurrentSession(PlayerPlaybackSession nextSession) async {
+    final previousSession = _session;
+    await _cancelSessionStreams();
+    _session = nextSession;
+    _attachSessionStreams(_session);
+    await previousSession.pause();
+    await previousSession.dispose();
+  }
+
+  Future<void> _prepareNextItem(
+    PlayerFeedItem item,
+    int preloadGeneration,
+  ) async {
+    if (!ref.mounted || _isSessionDisposed) {
+      return;
+    }
+    final startedAt = DateTime.now();
+    _logTiming(
+      'prepare start',
+      itemId: item.id,
+      source: item.episode.videoSource,
+    );
+    final prepared = await _prepareManager.prepare(
+      item: item,
+      sourceRepository: ref.read(playerPlaybackSourceRepositoryProvider),
+    );
+    if (!ref.mounted ||
+        _isSessionDisposed ||
+        preloadGeneration != _preloadGeneration) {
+      if (prepared != null) {
+        await _prepareManager.release();
+      }
+      return;
+    }
+    _logTiming(
+      prepared == null ? 'prepare failed' : 'prepare end',
+      itemId: item.id,
+      source: item.episode.videoSource,
+      elapsed: DateTime.now().difference(startedAt),
+    );
+  }
 
   Future<void> _restoreProgressIfNeeded(
     PlaybackProgress? progress,
@@ -859,6 +1080,41 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _preloadGeneration += 1;
     _cancelPendingPreloads(syncState: syncState);
     await _preloadManager.releasePending();
+  }
+
+  void _logTiming(
+    String event, {
+    String? itemId,
+    String? source,
+    Duration? elapsed,
+    Object? error,
+    String? details,
+  }) {
+    final eventEntry = PlayerPlaybackTimingEvent(
+      name: event,
+      at: DateTime.now(),
+      itemId: itemId,
+      source: source,
+      elapsed: elapsed,
+      error: error,
+      details: details,
+    );
+    _timingEvents.add(eventEntry);
+    if (_timingEvents.length > 48) {
+      _timingEvents.removeRange(0, _timingEvents.length - 48);
+    }
+    const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');
+    if (!kDebugMode || !shouldPrint) return;
+    final parts = <String>[
+      '[PlayerPlayback][$sessionKey]',
+      event,
+      if (itemId != null) 'item=$itemId',
+      if (source != null) 'source=$source',
+      if (elapsed != null) 'elapsed=${elapsed.inMilliseconds}ms',
+      ?details,
+      if (error != null) 'error=$error',
+    ];
+    debugPrint(parts.join(' '));
   }
 
   Future<void> _disposeSessionOnly() async {

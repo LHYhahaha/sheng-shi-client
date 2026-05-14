@@ -534,12 +534,50 @@ Expected tests:
 - Locked, unavailable, and null-source items do not prefetch.
 - For You and single drama preload states remain isolated.
 
+### Phase 5.3: Vertical Switch First-Frame Latency MVP
+
+Implemented. Playlist prefetch only warms the m3u8 text response; it does not
+guarantee that `media_kit` has opened the playlist, requested segments, decoded
+frames, or produced the first video frame. This phase targets the first-frame
+wait after vertical PageView switches in For You and single-drama playback.
+
+- Add lightweight playback timing diagnostics in `PlayerPlaybackController`.
+  Timing covers source resolve start/end, preload start/end/status, media open
+  start/end, first frame from `widthStream`, buffering start/end, and errors.
+- Keep timing in an internal bounded list and optionally print it in debug builds
+  with `--dart-define=PLAYER_TIMING_LOGS=true`.
+- Add `PlayerPlaybackPrepareManager` for a single next prepared session.
+- Prepare only the nearest next candidate selected by `preloadAround()`.
+- Prepare resolves the playback source and opens an independent
+  `PlayerPlaybackSession` with `play: false`.
+- Prepared sessions do not create UI, do not call `play()`, and must not produce
+  audio.
+- On matching `playItem()`, the prepared session is taken over, stream listeners
+  are rebound, the old current session is paused/disposed, and playback resumes
+  without repeating a normal `open()` on the old session.
+- Locked, unavailable, and null-source items are not prepared.
+- Prepare failures are logged/degraded and never affect the current playback
+  state.
+- `pauseForVisibility()`, `disposeSession()`, provider dispose, and fast
+  generation switches release stale prepared sessions.
+- For You and single-drama controllers each own their own prepare manager, so
+  prepared state does not cross sessions.
+
+Phase 5.3 limits:
+
+- At most one prepared next session.
+- No multi-player pool.
+- No HLS segment cache.
+- No offline download.
+- No CDN-specific optimization or real backend coordination yet.
+
 Phase 5 defer:
 
 - Real playback source API and signed URL refresh.
 - Real CDN header parsing and expiry reconciliation.
 - HLS playlist and segment cache.
 - Segment preheat.
+- Multi-session prepared player pool.
 - Offline download.
 - Wi-Fi/cellular preload policy.
 - Disk quota, LRU eviction, and cache size UI/debug tooling if local HLS cache is
