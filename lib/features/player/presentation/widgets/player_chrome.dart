@@ -30,6 +30,16 @@ class PlayerChrome extends StatelessWidget {
     this.showVideo = true,
     this.showLoading = false,
     this.playbackError = false,
+    this.position = Duration.zero,
+    this.duration = Duration.zero,
+    this.bufferedPosition = Duration.zero,
+    this.seekPreviewPosition,
+    this.isSeeking = false,
+    this.canSeek = false,
+    this.onSeekStart,
+    this.onSeekUpdate,
+    this.onSeekEnd,
+    this.onSeekCancel,
     this.onRetry,
     this.videoController,
     this.onBackTap,
@@ -50,6 +60,16 @@ class PlayerChrome extends StatelessWidget {
   final bool showVideo;
   final bool showLoading;
   final bool playbackError;
+  final Duration position;
+  final Duration duration;
+  final Duration bufferedPosition;
+  final Duration? seekPreviewPosition;
+  final bool isSeeking;
+  final bool canSeek;
+  final VoidCallback? onSeekStart;
+  final ValueChanged<Duration>? onSeekUpdate;
+  final VoidCallback? onSeekEnd;
+  final VoidCallback? onSeekCancel;
   final VoidCallback? onRetry;
   final VideoController? videoController;
   final VoidCallback? onBackTap;
@@ -225,7 +245,20 @@ class PlayerChrome extends StatelessWidget {
             left: 16,
             right: 16,
             bottom: bottomInset + 78,
-            child: const PlayerProgress(value: 0.2),
+            child: canSeek || duration > Duration.zero
+                ? PlayerSeekBar(
+                    position: position,
+                    duration: duration,
+                    bufferedPosition: bufferedPosition,
+                    previewPosition: seekPreviewPosition,
+                    isDragging: isSeeking,
+                    enabled: canSeek,
+                    onDragStart: onSeekStart,
+                    onDragUpdate: onSeekUpdate,
+                    onDragEnd: onSeekEnd,
+                    onDragCancel: onSeekCancel,
+                  )
+                : const SizedBox.shrink(),
           ),
           Positioned(
             left: 16,
@@ -512,27 +545,189 @@ class PlayerBottomMeta extends StatelessWidget {
   }
 }
 
-class PlayerProgress extends StatelessWidget {
-  const PlayerProgress({required this.value, super.key});
+class PlayerSeekBar extends StatefulWidget {
+  const PlayerSeekBar({
+    required this.position,
+    required this.duration,
+    required this.bufferedPosition,
+    required this.enabled,
+    required this.isDragging,
+    this.previewPosition,
+    this.onDragStart,
+    this.onDragUpdate,
+    this.onDragEnd,
+    this.onDragCancel,
+    super.key,
+  });
 
-  final double value;
+  final Duration position;
+  final Duration duration;
+  final Duration bufferedPosition;
+  final Duration? previewPosition;
+  final bool enabled;
+  final bool isDragging;
+  final VoidCallback? onDragStart;
+  final ValueChanged<Duration>? onDragUpdate;
+  final VoidCallback? onDragEnd;
+  final VoidCallback? onDragCancel;
+
+  @override
+  State<PlayerSeekBar> createState() => _PlayerSeekBarState();
+}
+
+class _PlayerSeekBarState extends State<PlayerSeekBar> {
+  @override
+  Widget build(BuildContext context) {
+    final progress = _ratio(widget.previewPosition ?? widget.position);
+    final buffered = _ratio(widget.bufferedPosition);
+    final barHeight = widget.isDragging ? 4.0 : 2.0;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final bubbleWidth = 116.0;
+        final bubbleLeft = (progress * width - bubbleWidth / 2).clamp(
+          0.0,
+          (width - bubbleWidth).clamp(0.0, width),
+        );
+
+        return GestureDetector(
+          key: const ValueKey('player_seek_bar'),
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: widget.enabled
+              ? (details) {
+                  widget.onDragStart?.call();
+                  _emitPosition(details.localPosition.dx, width);
+                }
+              : null,
+          onHorizontalDragUpdate: widget.enabled
+              ? (details) {
+                  _emitPosition(details.localPosition.dx, width);
+                }
+              : null,
+          onHorizontalDragEnd: widget.enabled
+              ? (_) {
+                  widget.onDragEnd?.call();
+                }
+              : null,
+          onHorizontalDragCancel: widget.enabled
+              ? () {
+                  widget.onDragCancel?.call();
+                }
+              : null,
+          child: SizedBox(
+            height: widget.isDragging ? 36 : 20,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                if (widget.isDragging)
+                  Positioned(
+                    left: bubbleLeft,
+                    bottom: 14,
+                    width: bubbleWidth,
+                    child: _SeekTimeBubble(
+                      position: widget.previewPosition ?? widget.position,
+                      duration: widget.duration,
+                    ),
+                  ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 6,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      height: barHeight,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          ColoredBox(
+                            color: Colors.white.withValues(alpha: 0.25),
+                          ),
+                          FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: buffered,
+                            child: ColoredBox(
+                              color: Colors.white.withValues(alpha: 0.28),
+                            ),
+                          ),
+                          FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: progress,
+                            child: ColoredBox(
+                              color: Colors.white.withValues(alpha: 0.78),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _emitPosition(double localDx, double width) {
+    if (width <= 0 || widget.duration <= Duration.zero) {
+      return;
+    }
+    final ratio = (localDx / width).clamp(0.0, 1.0);
+    final target = Duration(
+      milliseconds: (widget.duration.inMilliseconds * ratio).round(),
+    );
+    widget.onDragUpdate?.call(target);
+  }
+
+  double _ratio(Duration value) {
+    if (widget.duration <= Duration.zero) {
+      return 0;
+    }
+    return (value.inMilliseconds / widget.duration.inMilliseconds).clamp(
+      0.0,
+      1.0,
+    );
+  }
+}
+
+class _SeekTimeBubble extends StatelessWidget {
+  const _SeekTimeBubble({required this.position, required this.duration});
+
+  final Duration position;
+  final Duration duration;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: SizedBox(
-        height: 2,
-        child: LinearProgressIndicator(
-          value: value,
-          minHeight: 2,
-          backgroundColor: Colors.white.withValues(alpha: 0.25),
-          valueColor: AlwaysStoppedAnimation<Color>(
-            Colors.white.withValues(alpha: 0.55),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.62),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        child: Text(
+          '${_format(position)} / ${_format(duration)}',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            height: 14 / 12,
           ),
         ),
       ),
     );
+  }
+
+  String _format(Duration value) {
+    final totalSeconds = value.inSeconds;
+    final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
   }
 }
 

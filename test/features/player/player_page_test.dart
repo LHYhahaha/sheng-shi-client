@@ -155,6 +155,74 @@ void main() {
     );
   });
 
+  testWidgets('single drama seek bar shows progress and seeks on drag', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    playbackSession.emitDuration(const Duration(seconds: 100));
+    await tester.pump();
+    playbackSession.emitPosition(const Duration(seconds: 25));
+    await tester.pump();
+    playbackSession.emitBufferedPosition(const Duration(seconds: 60));
+    await tester.pump();
+    await tester.pump();
+
+    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
+    expect(chrome.position, const Duration(seconds: 25));
+    expect(chrome.duration, const Duration(seconds: 100));
+    expect(chrome.bufferedPosition, const Duration(seconds: 60));
+
+    final seekBar = find.byKey(const ValueKey('player_seek_bar'));
+    final gesture = await tester.startGesture(tester.getCenter(seekBar));
+    await gesture.moveBy(const Offset(240, 0));
+    await tester.pump();
+
+    expect(find.textContaining(' / 01:40'), findsOneWidget);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(playbackSession.seekedPositions, isNotEmpty);
+  });
+
+  testWidgets('dragging seek bar does not switch PageView item', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    playbackSession.emitDuration(const Duration(seconds: 100));
+    await tester.pumpAndSettle();
+
+    final seekBar = find.byKey(const ValueKey('player_seek_bar'));
+    final gesture = await tester.startGesture(tester.getCenter(seekBar));
+    await gesture.moveBy(const Offset(180, -420));
+    await tester.pump();
+
+    expect(find.text('EP.01'), findsOneWidget);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('EP.01'), findsOneWidget);
+  });
+
   testWidgets('locked and unavailable episodes do not expose video toggle', (
     tester,
   ) async {
@@ -175,6 +243,7 @@ void main() {
 
     expect(find.text('Unlock Now'), findsOneWidget);
     expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
+    expect(find.byKey(const ValueKey('player_seek_bar')), findsNothing);
     expect(lockedSession.playCount, 0);
 
     final unavailableSession = _FakePlaybackSession();
@@ -193,6 +262,7 @@ void main() {
 
     expect(find.text('This episode is unavailable.'), findsOneWidget);
     expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
+    expect(find.byKey(const ValueKey('player_seek_bar')), findsNothing);
     expect(unavailableSession.playCount, 0);
   });
 
@@ -438,8 +508,13 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   final Completer<void>? openCompleter;
   bool shouldThrowOnOpen;
   final _bufferingController = StreamController<bool>.broadcast();
+  final _playingController = StreamController<bool>.broadcast();
+  final _positionController = StreamController<Duration>.broadcast();
+  final _durationController = StreamController<Duration>.broadcast();
+  final _bufferedPositionController = StreamController<Duration>.broadcast();
   final _widthController = StreamController<int?>.broadcast();
   final _errorController = StreamController<String>.broadcast();
+  final seekedPositions = <Duration>[];
   int pauseCount = 0;
   int playCount = 0;
 
@@ -448,6 +523,19 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
 
   @override
   Stream<bool> get bufferingStream => _bufferingController.stream;
+
+  @override
+  Stream<bool> get playingStream => _playingController.stream;
+
+  @override
+  Stream<Duration> get positionStream => _positionController.stream;
+
+  @override
+  Stream<Duration> get durationStream => _durationController.stream;
+
+  @override
+  Stream<Duration> get bufferedPositionStream =>
+      _bufferedPositionController.stream;
 
   @override
   Stream<int?> get widthStream => _widthController.stream;
@@ -459,6 +547,18 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     _bufferingController.add(isBuffering);
   }
 
+  void emitPosition(Duration position) {
+    _positionController.add(position);
+  }
+
+  void emitDuration(Duration duration) {
+    _durationController.add(duration);
+  }
+
+  void emitBufferedPosition(Duration position) {
+    _bufferedPositionController.add(position);
+  }
+
   @override
   Future<void> open(String source, {bool play = true}) async {
     _bufferingController.add(true);
@@ -467,22 +567,34 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
       throw StateError('open failed');
     }
     _widthController.add(1280);
+    _playingController.add(play);
     _bufferingController.add(false);
   }
 
   @override
   Future<void> pause() async {
     pauseCount += 1;
+    _playingController.add(false);
   }
 
   @override
   Future<void> play() async {
     playCount += 1;
+    _playingController.add(true);
+  }
+
+  @override
+  Future<void> seek(Duration position) async {
+    seekedPositions.add(position);
   }
 
   @override
   Future<void> dispose() async {
     await _bufferingController.close();
+    await _playingController.close();
+    await _positionController.close();
+    await _durationController.close();
+    await _bufferedPositionController.close();
     await _widthController.close();
     await _errorController.close();
   }

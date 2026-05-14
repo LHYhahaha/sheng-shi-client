@@ -50,8 +50,13 @@ class PlayerPlaybackState {
     required this.hasFirstFrame,
     required this.isBuffering,
     required this.preloadedItemIds,
+    required this.position,
+    required this.duration,
+    required this.bufferedPosition,
+    required this.isSeeking,
     this.currentItemId,
     this.currentSource,
+    this.seekPreviewPosition,
     this.error,
   });
 
@@ -62,6 +67,10 @@ class PlayerPlaybackState {
         hasFirstFrame: false,
         isBuffering: false,
         preloadedItemIds: const [],
+        position: Duration.zero,
+        duration: Duration.zero,
+        bufferedPosition: Duration.zero,
+        isSeeking: false,
       );
 
   final VideoController? videoController;
@@ -69,8 +78,13 @@ class PlayerPlaybackState {
   final bool hasFirstFrame;
   final bool isBuffering;
   final List<String> preloadedItemIds;
+  final Duration position;
+  final Duration duration;
+  final Duration bufferedPosition;
+  final bool isSeeking;
   final String? currentItemId;
   final String? currentSource;
+  final Duration? seekPreviewPosition;
   final Object? error;
 
   bool get isPlaying => status == PlayerPlaybackStatus.playing;
@@ -85,17 +99,31 @@ class PlayerPlaybackState {
       currentSource != null &&
       !isError &&
       (isOpening || isBuffering || !hasFirstFrame);
+  bool get isSeekAllowed =>
+      currentSource != null &&
+      duration > Duration.zero &&
+      (status == PlayerPlaybackStatus.playing ||
+          status == PlayerPlaybackStatus.paused);
+  Duration get displayedPosition => seekPreviewPosition ?? position;
+  double get progressValue => _durationRatio(displayedPosition);
+  double get bufferedValue => _durationRatio(bufferedPosition);
 
   PlayerPlaybackState copyWith({
     PlayerPlaybackStatus? status,
     bool? hasFirstFrame,
     bool? isBuffering,
     List<String>? preloadedItemIds,
+    Duration? position,
+    Duration? duration,
+    Duration? bufferedPosition,
+    bool? isSeeking,
     String? currentItemId,
     String? currentSource,
+    Duration? seekPreviewPosition,
     Object? error,
     bool clearError = false,
     bool clearSource = false,
+    bool clearSeekPreview = false,
   }) {
     return PlayerPlaybackState(
       videoController: videoController,
@@ -103,10 +131,26 @@ class PlayerPlaybackState {
       hasFirstFrame: clearSource ? false : hasFirstFrame ?? this.hasFirstFrame,
       isBuffering: clearSource ? false : isBuffering ?? this.isBuffering,
       preloadedItemIds: preloadedItemIds ?? this.preloadedItemIds,
+      position: clearSource ? Duration.zero : position ?? this.position,
+      duration: clearSource ? Duration.zero : duration ?? this.duration,
+      bufferedPosition: clearSource
+          ? Duration.zero
+          : bufferedPosition ?? this.bufferedPosition,
+      isSeeking: clearSource ? false : isSeeking ?? this.isSeeking,
       currentItemId: clearSource ? null : currentItemId ?? this.currentItemId,
       currentSource: clearSource ? null : currentSource ?? this.currentSource,
+      seekPreviewPosition: clearSource || clearSeekPreview
+          ? null
+          : seekPreviewPosition ?? this.seekPreviewPosition,
       error: clearError ? null : error ?? this.error,
     );
+  }
+
+  double _durationRatio(Duration value) {
+    if (duration <= Duration.zero) {
+      return 0;
+    }
+    return (value.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
   }
 }
 
@@ -121,12 +165,18 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   int _generation = 0;
   bool _pauseWhenOpenCompletes = false;
   bool _isSessionDisposed = false;
+  bool _wasPlayingBeforeSeek = false;
+  Duration? _lastPositionUpdate;
 
   @override
   PlayerPlaybackState build() {
     _session = ref.read(playerPlaybackSessionFactoryProvider).call();
     final subscriptions = <StreamSubscription<dynamic>>[
       _session.bufferingStream.listen(_handleBuffering),
+      _session.playingStream.listen(_handlePlaying),
+      _session.positionStream.listen(_handlePosition),
+      _session.durationStream.listen(_handleDuration),
+      _session.bufferedPositionStream.listen(_handleBufferedPosition),
       _session.widthStream.listen(_handleWidth),
       _session.errorStream.listen(_handleError),
     ];
@@ -201,9 +251,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       status: PlayerPlaybackStatus.opening,
       hasFirstFrame: false,
       isBuffering: true,
+      position: Duration.zero,
+      duration: Duration.zero,
+      bufferedPosition: Duration.zero,
+      isSeeking: false,
       currentItemId: item.id,
       currentSource: source,
       clearError: true,
+      clearSeekPreview: true,
     );
 
     try {
@@ -336,6 +391,57 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     state = state.copyWith(status: PlayerPlaybackStatus.paused);
   }
 
+  void beginSeek() {
+    if (!state.isSeekAllowed || _isSessionDisposed) {
+      return;
+    }
+    _wasPlayingBeforeSeek = state.status == PlayerPlaybackStatus.playing;
+    state = state.copyWith(
+      isSeeking: true,
+      seekPreviewPosition: state.position,
+    );
+  }
+
+  void updateSeekPreview(Duration position) {
+    if (!state.isSeeking || !state.isSeekAllowed) {
+      return;
+    }
+    state = state.copyWith(seekPreviewPosition: _clampToDuration(position));
+  }
+
+  Future<void> endSeek() async {
+    if (!state.isSeeking || !state.isSeekAllowed || _isSessionDisposed) {
+      state = state.copyWith(isSeeking: false, clearSeekPreview: true);
+      return;
+    }
+    final target = _clampToDuration(
+      state.seekPreviewPosition ?? state.position,
+    );
+    state = state.copyWith(position: target, isSeeking: false);
+    await _session.seek(target);
+    if (_wasPlayingBeforeSeek) {
+      await _session.play();
+      if (ref.mounted) {
+        state = state.copyWith(
+          status: PlayerPlaybackStatus.playing,
+          clearSeekPreview: true,
+        );
+      }
+    } else if (ref.mounted) {
+      state = state.copyWith(
+        status: PlayerPlaybackStatus.paused,
+        clearSeekPreview: true,
+      );
+    }
+  }
+
+  void cancelSeek() {
+    if (!state.isSeeking) {
+      return;
+    }
+    state = state.copyWith(isSeeking: false, clearSeekPreview: true);
+  }
+
   Future<void> pauseForVisibility() async {
     if (_isSessionDisposed) {
       return;
@@ -385,6 +491,53 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     state = state.copyWith(isBuffering: isBuffering);
   }
 
+  void _handlePlaying(bool isPlaying) {
+    if (_pauseWhenOpenCompletes && isPlaying) {
+      return;
+    }
+    if (state.currentSource == null ||
+        state.status == PlayerPlaybackStatus.error ||
+        state.status == PlayerPlaybackStatus.blocked ||
+        state.status == PlayerPlaybackStatus.unavailable ||
+        state.status == PlayerPlaybackStatus.opening) {
+      return;
+    }
+    state = state.copyWith(
+      status: isPlaying
+          ? PlayerPlaybackStatus.playing
+          : PlayerPlaybackStatus.paused,
+    );
+  }
+
+  void _handlePosition(Duration position) {
+    if (state.currentSource == null || state.isSeeking) {
+      return;
+    }
+    final clamped = _clampToDuration(position);
+    final last = _lastPositionUpdate;
+    if (last != null &&
+        (clamped - last).abs() < const Duration(milliseconds: 250)) {
+      return;
+    }
+    _lastPositionUpdate = clamped;
+    state = state.copyWith(position: clamped);
+  }
+
+  void _handleDuration(Duration duration) {
+    if (state.currentSource == null) {
+      return;
+    }
+    final normalized = duration < Duration.zero ? Duration.zero : duration;
+    state = state.copyWith(duration: normalized);
+  }
+
+  void _handleBufferedPosition(Duration position) {
+    if (state.currentSource == null) {
+      return;
+    }
+    state = state.copyWith(bufferedPosition: _clampToDuration(position));
+  }
+
   void _handleWidth(int? width) {
     if (width == null || width <= 0 || state.currentSource == null) {
       return;
@@ -408,6 +561,17 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       isBuffering: false,
       error: error,
     );
+  }
+
+  Duration _clampToDuration(Duration position) {
+    if (position < Duration.zero) {
+      return Duration.zero;
+    }
+    final duration = state.duration;
+    if (duration > Duration.zero && position > duration) {
+      return duration;
+    }
+    return position;
   }
 
   Future<bool> _pauseIfCurrent(int generation) async {

@@ -127,6 +127,106 @@ void main() {
     expect(container.read(provider).status, PlayerPlaybackStatus.playing);
   });
 
+  test(
+    'updates progress state from media streams with throttled position',
+    () async {
+      final session = _FakePlaybackSession();
+      final container = _createContainer(session);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      session.emitDuration(const Duration(seconds: 100));
+      session.emitBufferedPosition(const Duration(seconds: 40));
+      session.emitPosition(const Duration(milliseconds: 100));
+      session.emitPosition(const Duration(milliseconds: 200));
+      session.emitPosition(const Duration(milliseconds: 400));
+      await Future<void>.delayed(Duration.zero);
+
+      final state = container.read(provider);
+      expect(state.duration, const Duration(seconds: 100));
+      expect(state.bufferedPosition, const Duration(seconds: 40));
+      expect(state.position, const Duration(milliseconds: 400));
+    },
+  );
+
+  test('seek updates preview and calls seek only on end', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    session.emitDuration(const Duration(seconds: 100));
+    session.emitPosition(const Duration(seconds: 10));
+    await Future<void>.delayed(Duration.zero);
+
+    controller.beginSeek();
+    controller.updateSeekPreview(const Duration(seconds: 30));
+    expect(container.read(provider).isSeeking, isTrue);
+    expect(
+      container.read(provider).seekPreviewPosition,
+      const Duration(seconds: 30),
+    );
+    expect(session.seekedPositions, isEmpty);
+
+    await controller.endSeek();
+
+    expect(session.seekedPositions, [const Duration(seconds: 30)]);
+    expect(session.playCount, 1);
+    expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+  });
+
+  test(
+    'seek keeps paused state when playback was paused before dragging',
+    () async {
+      final session = _FakePlaybackSession();
+      final container = _createContainer(session);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      session.emitDuration(const Duration(seconds: 100));
+      await controller.togglePlay();
+
+      controller.beginSeek();
+      controller.updateSeekPreview(const Duration(seconds: 45));
+      await controller.endSeek();
+
+      expect(session.seekedPositions, [const Duration(seconds: 45)]);
+      expect(session.playCount, 0);
+      expect(container.read(provider).status, PlayerPlaybackStatus.paused);
+    },
+  );
+
+  test('seek is ignored in invalid states', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    controller.beginSeek();
+    controller.updateSeekPreview(const Duration(seconds: 10));
+    await controller.endSeek();
+    expect(session.seekedPositions, isEmpty);
+
+    await controller.playItem(_item(2, isLocked: true));
+    controller.beginSeek();
+    await controller.endSeek();
+    expect(session.seekedPositions, isEmpty);
+
+    await controller.playItem(_item(3, isAvailable: false));
+    controller.beginSeek();
+    await controller.endSeek();
+    expect(session.seekedPositions, isEmpty);
+
+    session.shouldThrowOnOpen = true;
+    await controller.playItem(_item(1));
+    controller.beginSeek();
+    await controller.endSeek();
+    expect(session.seekedPositions, isEmpty);
+  });
+
   test('togglePlay ignores non paused playable states', () async {
     final session = _FakePlaybackSession();
     final container = _createContainer(session);
@@ -284,6 +384,38 @@ void main() {
     expect(container.read(singleProvider).status, PlayerPlaybackStatus.playing);
   });
 
+  test('keeps for you and single drama progress isolated', () async {
+    final forYouSession = _FakePlaybackSession();
+    final singleSession = _FakePlaybackSession();
+    var index = 0;
+    final sessions = [forYouSession, singleSession];
+    final container = ProviderContainer(
+      overrides: [
+        playerPlaybackSessionFactoryProvider.overrideWithValue(
+          () => sessions[index++],
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final forYouProvider = playerPlaybackControllerProvider('for-you-tab');
+    final singleProvider = playerPlaybackControllerProvider('single:drama-a:1');
+
+    await container.read(forYouProvider.notifier).playItem(_item(1));
+    await container.read(singleProvider.notifier).playItem(_item(2));
+    forYouSession.emitDuration(const Duration(seconds: 80));
+    forYouSession.emitPosition(const Duration(seconds: 8));
+    singleSession.emitDuration(const Duration(seconds: 120));
+    singleSession.emitPosition(const Duration(seconds: 30));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(container.read(forYouProvider).position, const Duration(seconds: 8));
+    expect(
+      container.read(singleProvider).position,
+      const Duration(seconds: 30),
+    );
+  });
+
   test(
     'preload keeps at most two sessions and skips locked unavailable items',
     () async {
@@ -380,9 +512,14 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   final Completer<void>? openCompleter;
   bool shouldThrowOnOpen;
   final _bufferingController = StreamController<bool>.broadcast();
+  final _playingController = StreamController<bool>.broadcast();
+  final _positionController = StreamController<Duration>.broadcast();
+  final _durationController = StreamController<Duration>.broadcast();
+  final _bufferedPositionController = StreamController<Duration>.broadcast();
   final _widthController = StreamController<int?>.broadcast();
   final _errorController = StreamController<String>.broadcast();
   final openedSources = <String>[];
+  final seekedPositions = <Duration>[];
   int pauseCount = 0;
   int playCount = 0;
   bool isDisposed = false;
@@ -392,6 +529,19 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
 
   @override
   Stream<bool> get bufferingStream => _bufferingController.stream;
+
+  @override
+  Stream<bool> get playingStream => _playingController.stream;
+
+  @override
+  Stream<Duration> get positionStream => _positionController.stream;
+
+  @override
+  Stream<Duration> get durationStream => _durationController.stream;
+
+  @override
+  Stream<Duration> get bufferedPositionStream =>
+      _bufferedPositionController.stream;
 
   @override
   Stream<int?> get widthStream => _widthController.stream;
@@ -408,17 +558,37 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
       throw StateError('open failed');
     }
     _widthController.add(1280);
+    _playingController.add(play);
     _bufferingController.add(false);
+  }
+
+  void emitPosition(Duration position) {
+    _positionController.add(position);
+  }
+
+  void emitDuration(Duration duration) {
+    _durationController.add(duration);
+  }
+
+  void emitBufferedPosition(Duration position) {
+    _bufferedPositionController.add(position);
   }
 
   @override
   Future<void> pause() async {
     pauseCount += 1;
+    _playingController.add(false);
   }
 
   @override
   Future<void> play() async {
     playCount += 1;
+    _playingController.add(true);
+  }
+
+  @override
+  Future<void> seek(Duration position) async {
+    seekedPositions.add(position);
   }
 
   @override
@@ -428,6 +598,10 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     }
     isDisposed = true;
     await _bufferingController.close();
+    await _playingController.close();
+    await _positionController.close();
+    await _durationController.close();
+    await _bufferedPositionController.close();
     await _widthController.close();
     await _errorController.close();
   }

@@ -1000,8 +1000,13 @@ Widget _buildAppWithFakePlayback({List<_FakePlaybackSession>? sessions}) {
 
 class _FakePlaybackSession implements PlayerPlaybackSession {
   final _bufferingController = StreamController<bool>.broadcast();
+  final _playingController = StreamController<bool>.broadcast();
+  final _positionController = StreamController<Duration>.broadcast();
+  final _durationController = StreamController<Duration>.broadcast();
+  final _bufferedPositionController = StreamController<Duration>.broadcast();
   final _widthController = StreamController<int?>.broadcast();
   final _errorController = StreamController<String>.broadcast();
+  final seekedPositions = <Duration>[];
   int pauseCount = 0;
   int playCount = 0;
   bool isDisposed = false;
@@ -1013,6 +1018,19 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   Stream<bool> get bufferingStream => _bufferingController.stream;
 
   @override
+  Stream<bool> get playingStream => _playingController.stream;
+
+  @override
+  Stream<Duration> get positionStream => _positionController.stream;
+
+  @override
+  Stream<Duration> get durationStream => _durationController.stream;
+
+  @override
+  Stream<Duration> get bufferedPositionStream =>
+      _bufferedPositionController.stream;
+
+  @override
   Stream<int?> get widthStream => _widthController.stream;
 
   @override
@@ -1021,17 +1039,26 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   @override
   Future<void> open(String source, {bool play = true}) async {
     _bufferingController.add(false);
+    _playingController.add(play);
+    _durationController.add(const Duration(seconds: 100));
     _widthController.add(1280);
   }
 
   @override
   Future<void> pause() async {
     pauseCount += 1;
+    _playingController.add(false);
   }
 
   @override
   Future<void> play() async {
     playCount += 1;
+    _playingController.add(true);
+  }
+
+  @override
+  Future<void> seek(Duration position) async {
+    seekedPositions.add(position);
   }
 
   @override
@@ -1041,6 +1068,10 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     }
     isDisposed = true;
     await _bufferingController.close();
+    await _playingController.close();
+    await _positionController.close();
+    await _durationController.close();
+    await _bufferedPositionController.close();
     await _widthController.close();
     await _errorController.close();
   }

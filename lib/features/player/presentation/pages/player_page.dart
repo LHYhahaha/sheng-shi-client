@@ -47,6 +47,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   late final String _sessionKey;
   late final PlayerPlaybackController _playbackController;
   AppShellBottomNavigationVisible? _shellChrome;
+  bool _isSeekDragging = false;
 
   String _createSessionKey() {
     return switch (widget.feedMode) {
@@ -240,6 +241,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       children: [
         PageView.builder(
           controller: _pageController,
+          physics: _isSeekDragging
+              ? const NeverScrollableScrollPhysics()
+              : const PageScrollPhysics(),
           scrollDirection: Axis.vertical,
           itemCount: feedState.items.length,
           onPageChanged: feedController.setCurrentIndex,
@@ -278,6 +282,36 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   showVideo: showVideo,
                   showLoading: showLoading,
                   playbackError: showPlaybackError,
+                  position: playbackState.position,
+                  duration: playbackState.duration,
+                  bufferedPosition: playbackState.bufferedPosition,
+                  seekPreviewPosition: playbackState.seekPreviewPosition,
+                  isSeeking: playbackState.isSeeking,
+                  canSeek:
+                      playbackState.isSeekAllowed &&
+                      !showLoading &&
+                      !showPlaybackError &&
+                      !item.episode.isUnavailable &&
+                      !item.episode.isLocked,
+                  onSeekStart: () {
+                    setState(() {
+                      _isSeekDragging = true;
+                    });
+                    playbackController.beginSeek();
+                  },
+                  onSeekUpdate: playbackController.updateSeekPreview,
+                  onSeekEnd: () {
+                    setState(() {
+                      _isSeekDragging = false;
+                    });
+                    unawaited(playbackController.endSeek());
+                  },
+                  onSeekCancel: () {
+                    setState(() {
+                      _isSeekDragging = false;
+                    });
+                    playbackController.cancelSeek();
+                  },
                   onRetry: () {
                     unawaited(playbackController.playItem(item));
                   },

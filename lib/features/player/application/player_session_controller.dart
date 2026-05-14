@@ -6,6 +6,14 @@ abstract interface class PlayerPlaybackSession {
 
   Stream<bool> get bufferingStream;
 
+  Stream<bool> get playingStream;
+
+  Stream<Duration> get positionStream;
+
+  Stream<Duration> get durationStream;
+
+  Stream<Duration> get bufferedPositionStream;
+
   Stream<int?> get widthStream;
 
   Stream<String> get errorStream;
@@ -15,6 +23,8 @@ abstract interface class PlayerPlaybackSession {
   Future<void> play();
 
   Future<void> pause();
+
+  Future<void> seek(Duration position);
 
   Future<void> dispose();
 }
@@ -30,6 +40,18 @@ class MediaKitPlayerSession implements PlayerPlaybackSession {
 
   @override
   Stream<bool> get bufferingStream => player.stream.buffering;
+
+  @override
+  Stream<bool> get playingStream => player.stream.playing;
+
+  @override
+  Stream<Duration> get positionStream => player.stream.position;
+
+  @override
+  Stream<Duration> get durationStream => player.stream.duration;
+
+  @override
+  Stream<Duration> get bufferedPositionStream => player.stream.buffer;
 
   @override
   Stream<int?> get widthStream => player.stream.width;
@@ -50,6 +72,11 @@ class MediaKitPlayerSession implements PlayerPlaybackSession {
   @override
   Future<void> pause() {
     return player.pause();
+  }
+
+  @override
+  Future<void> seek(Duration position) {
+    return player.seek(position);
   }
 
   @override
