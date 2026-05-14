@@ -76,11 +76,19 @@ void main() {
 
     expect(find.byType(Image), findsWidgets);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_seek_track_loading')),
+      findsOneWidget,
+    );
 
     openCompleter.complete();
     await tester.pumpAndSettle();
 
     expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_seek_track_loading')),
+      findsNothing,
+    );
     expect(find.text('A Life That Shines Again >'), findsOneWidget);
   });
 
@@ -97,6 +105,10 @@ void main() {
 
     expect(find.text('Player failed to load.'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_seek_track_loading')),
+      findsNothing,
+    );
   });
 
   testWidgets('keeps video visible while buffering after first frame', (
@@ -120,6 +132,10 @@ void main() {
     final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
     expect(chrome.showVideo, isTrue);
     expect(chrome.showLoading, isTrue);
+    expect(
+      find.byKey(const ValueKey('player_seek_track_loading')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('single drama taps video to pause and center play resumes', (
@@ -135,6 +151,11 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('player_seek_track_loading')),
+      findsNothing,
+    );
 
     await tester.tap(find.byKey(const ValueKey('player_video_tap_layer')));
     await tester.pumpAndSettle();
@@ -296,6 +317,10 @@ void main() {
       find.byKey(const ValueKey('player_seek_thumbnail_preview')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('player_seek_track_loading')),
+      findsNothing,
+    );
 
     await gesture.up();
     await tester.pumpAndSettle();
@@ -352,6 +377,10 @@ void main() {
     expect(find.text('Unlock Now'), findsOneWidget);
     expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
     expect(find.byKey(const ValueKey('player_seek_bar')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_seek_track_loading')),
+      findsNothing,
+    );
     expect(lockedSession.playCount, 0);
 
     final unavailableSession = _FakePlaybackSession();
@@ -371,6 +400,10 @@ void main() {
     expect(find.text('This episode is unavailable.'), findsOneWidget);
     expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
     expect(find.byKey(const ValueKey('player_seek_bar')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_seek_track_loading')),
+      findsNothing,
+    );
     expect(unavailableSession.playCount, 0);
   });
 

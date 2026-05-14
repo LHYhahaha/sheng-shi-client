@@ -314,6 +314,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   bufferedPosition: playbackState.bufferedPosition,
                   seekPreviewPosition: playbackState.seekPreviewPosition,
                   isSeeking: playbackState.isSeeking,
+                  showTrackLoading: showLoading && !playbackState.isSeeking,
                   canSeek:
                       playbackState.isSeekAllowed &&
                       !showLoading &&

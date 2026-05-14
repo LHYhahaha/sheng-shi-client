@@ -43,6 +43,7 @@ class PlayerChrome extends StatefulWidget {
     this.bufferedPosition = Duration.zero,
     this.seekPreviewPosition,
     this.isSeeking = false,
+    this.showTrackLoading = false,
     this.canSeek = false,
     this.onSeekStart,
     this.onSeekUpdate,
@@ -76,6 +77,7 @@ class PlayerChrome extends StatefulWidget {
   final Duration bufferedPosition;
   final Duration? seekPreviewPosition;
   final bool isSeeking;
+  final bool showTrackLoading;
   final bool canSeek;
   final VoidCallback? onSeekStart;
   final ValueChanged<Duration>? onSeekUpdate;
@@ -115,6 +117,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
   Duration get bufferedPosition => widget.bufferedPosition;
   Duration? get seekPreviewPosition => widget.seekPreviewPosition;
   bool get isSeeking => widget.isSeeking;
+  bool get showTrackLoading => widget.showTrackLoading;
   bool get canSeek => widget.canSeek;
   VoidCallback? get onSeekStart => widget.onSeekStart;
   ValueChanged<Duration>? get onSeekUpdate => widget.onSeekUpdate;
@@ -325,7 +328,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
             left: 16,
             right: 16,
             bottom: bottomInset + 78,
-            child: canSeek || duration > Duration.zero
+            child: canSeek || duration > Duration.zero || showTrackLoading
                 ? PlayerSeekBar(
                     position: position,
                     duration: duration,
@@ -333,6 +336,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
                     previewPosition: seekPreviewPosition,
                     thumbnailAssetPath: content.posterAssetPath,
                     isDragging: isSeeking,
+                    showTrackLoading: showTrackLoading,
                     enabled: canSeek,
                     onDragStart: onSeekStart,
                     onDragUpdate: onSeekUpdate,
@@ -698,6 +702,7 @@ class PlayerSeekBar extends StatefulWidget {
     required this.bufferedPosition,
     required this.enabled,
     required this.isDragging,
+    required this.showTrackLoading,
     required this.thumbnailAssetPath,
     this.previewPosition,
     this.onDragStart,
@@ -714,6 +719,7 @@ class PlayerSeekBar extends StatefulWidget {
   final Duration? previewPosition;
   final bool enabled;
   final bool isDragging;
+  final bool showTrackLoading;
   final VoidCallback? onDragStart;
   final ValueChanged<Duration>? onDragUpdate;
   final VoidCallback? onDragEnd;
@@ -820,6 +826,8 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
                               color: Colors.white.withValues(alpha: 0.78),
                             ),
                           ),
+                          if (widget.showTrackLoading && !widget.isDragging)
+                            const _SeekTrackLoadingAnimation(),
                         ],
                       ),
                     ),
@@ -851,6 +859,22 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
     return (value.inMilliseconds / widget.duration.inMilliseconds).clamp(
       0.0,
       1.0,
+    );
+  }
+}
+
+class _SeekTrackLoadingAnimation extends StatelessWidget {
+  const _SeekTrackLoadingAnimation();
+
+  @override
+  Widget build(BuildContext context) {
+    return LinearProgressIndicator(
+      key: const ValueKey('player_seek_track_loading'),
+      minHeight: 2,
+      backgroundColor: Colors.transparent,
+      valueColor: AlwaysStoppedAnimation<Color>(
+        Colors.white.withValues(alpha: 0.68),
+      ),
     );
   }
 }
