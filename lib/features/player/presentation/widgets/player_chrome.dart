@@ -15,6 +15,11 @@ abstract final class _PlayerLayoutMetrics {
   static const forYouWatchNowBottom = 24.0;
   static const forYouMetaGap = 58.0;
   static const singleBottomActionBottom = 41.0;
+  static const singleTopBarHorizontal = 8.0;
+  static const singleTopBarTop = 10.0;
+  static const singleTopBarHeight = 40.0;
+  static const singleTopIconSize = 28.0;
+  static const singleTopMoreSize = 24.0;
 }
 
 class PlayerChrome extends StatefulWidget {
@@ -45,7 +50,7 @@ class PlayerChrome extends StatefulWidget {
     this.onSeekCancel,
     this.onRetry,
     this.onSpeedTap,
-    this.onNextTap,
+    this.onDownloadTap,
     this.videoController,
     this.onBackTap,
     this.forYouLayout = false,
@@ -78,7 +83,7 @@ class PlayerChrome extends StatefulWidget {
   final VoidCallback? onSeekCancel;
   final VoidCallback? onRetry;
   final VoidCallback? onSpeedTap;
-  final VoidCallback? onNextTap;
+  final VoidCallback? onDownloadTap;
   final VideoController? videoController;
   final VoidCallback? onBackTap;
   final bool forYouLayout;
@@ -117,7 +122,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
   VoidCallback? get onSeekCancel => widget.onSeekCancel;
   VoidCallback? get onRetry => widget.onRetry;
   VoidCallback? get onSpeedTap => widget.onSpeedTap;
-  VoidCallback? get onNextTap => widget.onNextTap;
+  VoidCallback? get onDownloadTap => widget.onDownloadTap;
   VideoController? get videoController => widget.videoController;
   VoidCallback? get onBackTap => widget.onBackTap;
   bool get forYouLayout => widget.forYouLayout;
@@ -217,55 +222,68 @@ class _PlayerChromeState extends State<PlayerChrome> {
           SafeArea(
             bottom: false,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: Row(
-                children: [
-                  _IconTapTarget(
-                    key: const ValueKey('player_back_button'),
-                    icon: Icons.chevron_left,
-                    iconSize: 28,
-                    onTap:
-                        onBackTap ??
-                        () {
-                          if (context.canPop()) {
-                            context.pop();
-                          } else {
-                            context.go(RoutePaths.home);
-                          }
-                        },
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'EP.${episodeNumber.toString().padLeft(2, '0')}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      height: 18 / 14,
+              padding: const EdgeInsets.fromLTRB(
+                _PlayerLayoutMetrics.singleTopBarHorizontal,
+                _PlayerLayoutMetrics.singleTopBarTop,
+                _PlayerLayoutMetrics.singleTopBarHorizontal,
+                0,
+              ),
+              child: SizedBox(
+                height: _PlayerLayoutMetrics.singleTopBarHeight,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _IconTapTarget(
+                      key: const ValueKey('player_back_button'),
+                      icon: Icons.chevron_left,
+                      iconSize: _PlayerLayoutMetrics.singleTopIconSize,
+                      onTap:
+                          onBackTap ??
+                          () {
+                            if (context.canPop()) {
+                              context.pop();
+                            } else {
+                              context.go(RoutePaths.home);
+                            }
+                          },
                     ),
-                  ),
-                  const Spacer(),
-                  GestureDetector(
-                    key: const ValueKey('player_speed_button'),
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onSpeedTap,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 6,
+                    const SizedBox(width: 4),
+                    Text(
+                      'EP.${episodeNumber.toString().padLeft(2, '0')}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        height: 18 / 14,
                       ),
-                      child: Text(
-                        _formatRate(playbackRate),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          height: 18 / 14,
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      key: const ValueKey('player_speed_button'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onSpeedTap,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 6,
+                        ),
+                        child: Text(
+                          _formatRate(playbackRate),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            height: 18 / 14,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  const Icon(Icons.more_horiz, color: Colors.white, size: 24),
-                ],
+                    const SizedBox(width: 14),
+                    const Icon(
+                      Icons.more_horiz,
+                      color: Colors.white,
+                      size: _PlayerLayoutMetrics.singleTopMoreSize,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -310,6 +328,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
                     duration: duration,
                     bufferedPosition: bufferedPosition,
                     previewPosition: seekPreviewPosition,
+                    thumbnailAssetPath: content.posterAssetPath,
                     isDragging: isSeeking,
                     enabled: canSeek,
                     onDragStart: onSeekStart,
@@ -351,31 +370,29 @@ class _PlayerChromeState extends State<PlayerChrome> {
           Positioned(
             right: 31,
             bottom: bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
-            child: onNextTap == null
-                ? const SizedBox.shrink()
-                : GestureDetector(
-                    key: const ValueKey('player_next_button'),
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onNextTap,
-                    child: Row(
-                      children: [
-                        Text(
-                          context.l10n.playerNext,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            height: 14 / 12,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(
-                          Icons.skip_next_rounded,
-                          color: Colors.white,
-                          size: 22,
-                        ),
-                      ],
+            child: GestureDetector(
+              key: const ValueKey('player_download_button'),
+              behavior: HitTestBehavior.opaque,
+              onTap: onDownloadTap,
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.download_rounded,
+                    color: Colors.white,
+                    size: 17,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    context.l10n.playerDownload,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      height: 14 / 12,
                     ),
                   ),
+                ],
+              ),
+            ),
           ),
         ],
       ],
@@ -678,6 +695,7 @@ class PlayerSeekBar extends StatefulWidget {
     required this.bufferedPosition,
     required this.enabled,
     required this.isDragging,
+    required this.thumbnailAssetPath,
     this.previewPosition,
     this.onDragStart,
     this.onDragUpdate,
@@ -689,6 +707,7 @@ class PlayerSeekBar extends StatefulWidget {
   final Duration position;
   final Duration duration;
   final Duration bufferedPosition;
+  final String thumbnailAssetPath;
   final Duration? previewPosition;
   final bool enabled;
   final bool isDragging;
@@ -712,9 +731,14 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         final bubbleWidth = 116.0;
+        final thumbnailWidth = 82.0;
         final bubbleLeft = (progress * width - bubbleWidth / 2).clamp(
           0.0,
           (width - bubbleWidth).clamp(0.0, width),
+        );
+        final thumbnailLeft = (progress * width - thumbnailWidth / 2).clamp(
+          0.0,
+          (width - thumbnailWidth).clamp(0.0, width),
         );
 
         return GestureDetector(
@@ -742,10 +766,19 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
                 }
               : null,
           child: SizedBox(
-            height: widget.isDragging ? 36 : 20,
+            height: widget.isDragging ? 98 : 20,
             child: Stack(
               clipBehavior: Clip.none,
               children: [
+                if (widget.isDragging)
+                  Positioned(
+                    left: thumbnailLeft,
+                    bottom: 45,
+                    width: thumbnailWidth,
+                    child: _SeekThumbnailPreview(
+                      assetPath: widget.thumbnailAssetPath,
+                    ),
+                  ),
                 if (widget.isDragging)
                   Positioned(
                     left: bubbleLeft,
@@ -854,6 +887,34 @@ class _SeekTimeBubble extends StatelessWidget {
     final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
     final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
+  }
+}
+
+class _SeekThumbnailPreview extends StatelessWidget {
+  const _SeekThumbnailPreview({required this.assetPath});
+
+  final String assetPath;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('player_seek_thumbnail_preview'),
+      height: 52,
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.58),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Image.asset(assetPath, fit: BoxFit.cover),
+    );
   }
 }
 

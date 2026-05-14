@@ -204,21 +204,29 @@ void main() {
     expect(find.text('1.5x'), findsOneWidget);
   });
 
-  testWidgets('single drama Next moves to the next episode', (tester) async {
+  testWidgets('single drama shows Download placeholder instead of Next', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
     );
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    expect(find.text('Next'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('player_next_button')));
+    expect(find.text('Next'), findsNothing);
+    expect(find.text('Download'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_download_button')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('player_download_button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('EP.02'), findsOneWidget);
+    expect(find.text('EP.01'), findsOneWidget);
   });
 
-  testWidgets('last episode hides Next', (tester) async {
+  testWidgets('last episode still shows Download placeholder', (tester) async {
     await tester.pumpWidget(
       _buildPlayerApp(
         repository: _FakePlayerFeedRepository._(items: [_items().last]),
@@ -229,6 +237,22 @@ void main() {
 
     expect(find.text('EP.03'), findsOneWidget);
     expect(find.text('Next'), findsNothing);
+    expect(find.text('Download'), findsOneWidget);
+  });
+
+  testWidgets('single drama back button returns home', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('player_back_button')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('player_back_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Home'), findsOneWidget);
   });
 
   testWidgets('single drama seek bar shows progress and seeks on drag', (
@@ -264,6 +288,10 @@ void main() {
     await tester.pump();
 
     expect(find.textContaining(' / 01:40'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_seek_thumbnail_preview')),
+      findsOneWidget,
+    );
 
     await gesture.up();
     await tester.pumpAndSettle();

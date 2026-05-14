@@ -337,10 +337,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                     unawaited(playbackController.playItem(item));
                   },
                   onSpeedTap: _showSpeedSheet,
-                  onNextTap:
-                      widget.feedMode == PlayerFeedMode.singleDrama &&
-                          feedState.canGoNext
-                      ? feedController.goNext
+                  onDownloadTap: widget.feedMode == PlayerFeedMode.singleDrama
+                      ? () {}
                       : null,
                   isPlaying:
                       playbackState.isPlaying &&
