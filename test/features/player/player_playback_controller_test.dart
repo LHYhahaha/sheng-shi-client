@@ -648,6 +648,33 @@ void main() {
     container.dispose();
   });
 
+  test(
+    'pauseForVisibility releases pending preload without disposing playback',
+    () async {
+      final session = _FakePlaybackSession();
+      final cacheManager = MockPlayerPlaybackCacheManager(
+        downloadDelay: const Duration(milliseconds: 80),
+      );
+      final container = _createContainer(
+        session,
+        cacheManager: cacheManager,
+        addDisposeTearDown: false,
+      );
+      final provider = playerPlaybackControllerProvider('for-you-tab');
+      final controller = container.read(provider.notifier);
+
+      final preloadFuture = controller.preloadAround([_item(1), _item(2)], 0);
+      await Future<void>.delayed(Duration.zero);
+      await controller.pauseForVisibility();
+      await preloadFuture;
+
+      expect(cacheManager.releasePendingCount, greaterThan(0));
+      expect(container.read(provider).preloadedItemIds, isEmpty);
+      expect(session.isDisposed, isFalse);
+      container.dispose();
+    },
+  );
+
   test('keeps for you and single drama preload state isolated', () async {
     final forYouSession = _FakePlaybackSession();
     final singleSession = _FakePlaybackSession();

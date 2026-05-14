@@ -369,6 +369,8 @@ Client strategy:
   creates media player sessions and cannot play audio.
 - Release pending preload work when For You is hidden, a single drama player is
   disposed, or the provider is disposed.
+- `pauseForVisibility()` releases pending preload work when the player becomes
+  hidden without disposing the active playback session.
 - Keep preload scoped to each playback session key, so For You and single drama
   states do not bleed into each other.
 

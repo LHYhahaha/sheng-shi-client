@@ -382,6 +382,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         if (!ref.mounted ||
             _isSessionDisposed ||
             preloadGeneration != _preloadGeneration) {
+          _preloadedItemIds.remove(item.id);
+          if (ref.mounted && !_isSessionDisposed) {
+            _setPreloadedItemIds(_preloadedItemIds.toList(growable: false));
+          }
           return;
         }
       } catch (_) {
@@ -525,6 +529,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _pauseWhenOpenCompletes = true;
     ++_generation;
     await _session.pause();
+    await _disposePreloads();
     if (!ref.mounted) {
       return;
     }
