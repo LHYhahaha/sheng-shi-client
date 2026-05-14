@@ -250,8 +250,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _session = ref.read(playerPlaybackSessionFactoryProvider).call();
     _preloadManager = ref.read(playerPlaybackPreloadManagerProvider);
     _prepareManager = ref.read(playerPlaybackPrepareManagerFactoryProvider)();
+    _prepareManager.timingLogger = _logTiming;
     _progressRepository = ref.read(playbackProgressRepositoryProvider);
     _attachSessionStreams(_session);
+    _logTiming('create current session', details: 'reason=build');
     ref.onDispose(() {
       unawaited(_cancelSessionStreams());
       unawaited(_disposePreloads(syncState: false));
@@ -267,6 +269,21 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (_isSessionDisposed) {
       return;
     }
+
+    _logTiming(
+      'play item request',
+      itemId: item?.id,
+      source: item?.episode.videoSource,
+      details: _timingDetails([
+        'requestedItemId=${item?.id ?? 'null'}',
+        'currentItemId=${state.currentItemId ?? 'null'}',
+        'requestedSource=${item?.episode.videoSource ?? 'null'}',
+        'currentSource=${state.currentSource ?? 'null'}',
+        'status=${state.status.name}',
+        'hasCurrentSessionSnapshot=${_currentPlaybackSource != null}',
+        'windowItems=${_windowItemsText()}',
+      ]),
+    );
 
     if (item == null) {
       final generation = ++_generation;
@@ -348,7 +365,23 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
 
     try {
+      final windowItemsBeforeTake = _windowItemsText();
       final prepared = _prepareManager.takeIfMatches(item.id);
+      _logTiming(
+        'take window session',
+        itemId: item.id,
+        source: prepared?.source.playableSource ?? sourceHint,
+        details: _timingDetails([
+          'requestedItemId=${item.id}',
+          'hit=${prepared != null}',
+          if (prepared != null) 'kind=${prepared.kind.name}',
+          if (prepared != null) 'firstFrameReady=${prepared.hasFirstFrame}',
+          if (prepared != null)
+            'positionMs=${prepared.position.inMilliseconds}',
+          'windowItemsBefore=$windowItemsBeforeTake',
+          'windowItemsAfter=${_windowItemsText()}',
+        ]),
+      );
       if (prepared != null) {
         final hitEvent = prepared.kind == PreparedPlaybackSessionKind.retained
             ? 'retained hit previous'
@@ -505,17 +538,23 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
 
     final candidates = <PlayerFeedItem>[];
+    final skipped = <String>[];
     for (final index in [currentIndex + 1, currentIndex - 1]) {
       if (index < 0 || index >= items.length) {
+        skipped.add('index:$index:out_of_range');
         continue;
       }
       final item = items[index];
       final source = item.episode.videoSource;
-      if (item.episode.isLocked ||
-          item.episode.isUnavailable ||
-          source == null ||
-          item.id == state.currentItemId ||
-          source == state.currentSource) {
+      final skipReasons = <String>[
+        if (item.episode.isLocked) 'locked',
+        if (item.episode.isUnavailable) 'unavailable',
+        if (source == null) 'null_source',
+        if (item.id == state.currentItemId) 'current_item',
+        if (source == state.currentSource) 'current_source',
+      ];
+      if (skipReasons.isNotEmpty) {
+        skipped.add('${item.id}:${skipReasons.join('+')}');
         continue;
       }
       candidates.add(item);
@@ -528,6 +567,18 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (state.currentItemId != null) {
       allowedIds.add(state.currentItemId!);
     }
+    final previousActivePreloadAllowedIds = _activePreloadAllowedIds.toSet();
+    _logTiming(
+      'preload candidates',
+      itemId: state.currentItemId,
+      details: _timingDetails([
+        'currentIndex=$currentIndex',
+        'candidates=${candidates.map((candidate) => candidate.id).join(',')}',
+        'skipped=${skipped.join(',')}',
+        'allowedIds=${allowedIds.join(',')}',
+        'activePreloadAllowedIds=${previousActivePreloadAllowedIds.join(',')}',
+      ]),
+    );
     final preloadGeneration = setEquals(_activePreloadAllowedIds, allowedIds)
         ? _preloadGeneration
         : ++_preloadGeneration;
@@ -1025,6 +1076,20 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _attachSessionStreams(_session);
     await previousSession.pause();
     if (previousSource != null && previousItemId != null) {
+      _logTiming(
+        'retain current before normal open',
+        itemId: previousItemId,
+        source: previousSource.playableSource,
+        details: _timingDetails([
+          'previousItemId=$previousItemId',
+          'previousSource=${previousSource.playableSource}',
+          'firstFrameReady=$previousHasFirstFrame',
+          'positionMs=${previousPosition.inMilliseconds}',
+          'durationMs=${previousDuration.inMilliseconds}',
+          'bufferedMs=${previousBufferedPosition.inMilliseconds}',
+          'windowItems=${_windowItemsText()}',
+        ]),
+      );
       await _prepareManager.retainPaused(
         PreparedPlaybackSession(
           itemId: previousItemId,
@@ -1038,6 +1103,15 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         ),
       );
       _logTiming(
+        'retain current done',
+        itemId: previousItemId,
+        source: previousSource.playableSource,
+        details: _timingDetails([
+          'retainedItemId=$previousItemId',
+          'windowItems=${_windowItemsText()}',
+        ]),
+      );
+      _logTiming(
         'previous retained',
         itemId: previousItemId,
         source: previousSource.playableSource,
@@ -1048,7 +1122,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       );
     } else {
       await previousSession.dispose();
-      _logTiming('old session disposed', details: 'reason=replace no source');
+      _logTiming(
+        'dispose current session',
+        details: 'reason=replace no source',
+      );
     }
   }
 
@@ -1082,7 +1159,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           _isSessionDisposed ||
           preloadGeneration != _preloadGeneration) {
         if (prepared != null) {
-          await _prepareManager.releaseItem(prepared.itemId);
+          await _prepareManager.releaseItem(
+            prepared.itemId,
+            reason: 'stale generation',
+          );
           _logTiming(
             'session window release',
             itemId: prepared.itemId,
@@ -1248,7 +1328,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     final disposedIds = before.difference(after);
     for (final itemId in disposedIds) {
       _logTiming(
-        'old session disposed',
+        'dispose window session',
         itemId: itemId,
         details: 'reason=$reason',
       );
@@ -1258,6 +1338,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   Future<void> _releaseSessionWindowFor(String reason) async {
     final itemIds = _prepareManager.windowItemIds;
     await _prepareManager.release();
+    for (final itemId in itemIds) {
+      _logTiming(
+        'dispose window session',
+        itemId: itemId,
+        details: 'reason=$reason',
+      );
+    }
     _logTiming(
       'session window release',
       details: _timingDetails([
@@ -1285,8 +1372,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       details: details,
     );
     _timingEvents.add(eventEntry);
-    if (_timingEvents.length > 48) {
-      _timingEvents.removeRange(0, _timingEvents.length - 48);
+    if (_timingEvents.length > 160) {
+      _timingEvents.removeRange(0, _timingEvents.length - 160);
     }
     const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');
     if (!shouldPrint) return;
@@ -1304,6 +1391,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   String _timingDetails(List<String> parts) {
     return parts.where((part) => part.isNotEmpty).join(' ');
+  }
+
+  String _windowItemsText() {
+    return _prepareManager.windowItemIds.join(',');
   }
 
   String _formatTimingEvent(PlayerPlaybackTimingEvent event) {
@@ -1327,5 +1418,6 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _isSessionDisposed = true;
     await _session.pause();
     await _session.dispose();
+    _logTiming('dispose current session', details: 'reason=dispose session');
   }
 }

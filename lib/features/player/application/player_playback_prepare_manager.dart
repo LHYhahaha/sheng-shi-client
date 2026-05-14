@@ -6,6 +6,14 @@ import 'player_session_controller.dart';
 
 enum PreparedPlaybackSessionKind { prepared, retained }
 
+typedef PlayerPrepareTimingLogger =
+    void Function(
+      String event, {
+      String? itemId,
+      String? source,
+      String? details,
+    });
+
 class PreparedPlaybackSession {
   PreparedPlaybackSession({
     required this.itemId,
@@ -45,10 +53,12 @@ class PlayerPlaybackPrepareManager {
   PlayerPlaybackPrepareManager({
     required PlayerPlaybackSession Function() sessionFactory,
     this.maxWindowSessions = 2,
+    this.timingLogger,
   }) : _sessionFactory = sessionFactory;
 
   final PlayerPlaybackSession Function() _sessionFactory;
   final int maxWindowSessions;
+  PlayerPrepareTimingLogger? timingLogger;
   final _window = <String, PreparedPlaybackSession>{};
   int _generation = 0;
 
@@ -115,7 +125,20 @@ class PlayerPlaybackPrepareManager {
   }
 
   PreparedPlaybackSession? takeIfMatches(String itemId) {
-    return _window.remove(itemId);
+    final before = _windowItemsText;
+    final session = _window.remove(itemId);
+    _log(
+      'prepare manager take',
+      itemId: itemId,
+      source: session?.source.playableSource,
+      details: _details([
+        'hit=${session != null}',
+        if (session != null) 'kind=${session.kind.name}',
+        'windowItemsBefore=$before',
+        'windowItemsAfter=$_windowItemsText',
+      ]),
+    );
+    return session;
   }
 
   Future<void> retainPaused(PreparedPlaybackSession session) async {
@@ -123,30 +146,65 @@ class PlayerPlaybackPrepareManager {
     await _put(session);
   }
 
-  Future<void> releaseItem(String itemId) async {
+  Future<void> releaseItem(
+    String itemId, {
+    String reason = 'release item',
+  }) async {
+    final before = _windowItemsText;
     final session = _window.remove(itemId);
     if (session != null) {
       await session.dispose();
     }
+    _log(
+      'prepare manager release item',
+      itemId: itemId,
+      source: session?.source.playableSource,
+      details: _details([
+        'kind=${session?.kind.name ?? 'none'}',
+        'reason=$reason',
+        'windowItemsBefore=$before',
+        'windowItemsAfter=$_windowItemsText',
+      ]),
+    );
   }
 
   Future<void> retainOnly(Set<String> itemIds) async {
+    final before = _windowItemsText;
     for (final key in List<String>.from(_window.keys)) {
       if (!itemIds.contains(key)) {
-        await releaseItem(key);
+        await releaseItem(key, reason: 'retain only');
       }
     }
+    _log(
+      'prepare manager retain only',
+      details: _details([
+        'reason=retain only',
+        'allowed=${itemIds.join(',')}',
+        'windowItemsBefore=$before',
+        'windowItemsAfter=$_windowItemsText',
+      ]),
+    );
   }
 
   Future<void> release() async {
     _generation += 1;
+    final before = _windowItemsText;
     for (final session in List<PreparedPlaybackSession>.from(_window.values)) {
       await session.dispose();
     }
     _window.clear();
+    _log(
+      'prepare manager release all',
+      details: _details([
+        'reason=release all',
+        'windowItemsBefore=$before',
+        'windowItemsAfter=$_windowItemsText',
+      ]),
+    );
   }
 
   Future<void> _put(PreparedPlaybackSession session) async {
+    final before = _windowItemsText;
     final replaced = _window.remove(session.itemId);
     if (replaced != null && replaced.session != session.session) {
       await replaced.dispose();
@@ -154,8 +212,29 @@ class PlayerPlaybackPrepareManager {
     _window[session.itemId] = session;
     while (_window.length > maxWindowSessions) {
       final oldestKey = _window.keys.first;
-      await releaseItem(oldestKey);
+      await releaseItem(oldestKey, reason: 'window overflow');
     }
+    _log(
+      'prepare manager put',
+      itemId: session.itemId,
+      source: session.source.playableSource,
+      details: _details([
+        'kind=${session.kind.name}',
+        'reason=put',
+        'windowItemsBefore=$before',
+        'windowItemsAfter=$_windowItemsText',
+      ]),
+    );
+  }
+
+  void _log(String event, {String? itemId, String? source, String? details}) {
+    timingLogger?.call(event, itemId: itemId, source: source, details: details);
+  }
+
+  String get _windowItemsText => _window.keys.join(',');
+
+  String _details(List<String> parts) {
+    return parts.where((part) => part.isNotEmpty).join(' ');
   }
 }
 
@@ -180,7 +259,10 @@ class NoopPlayerPlaybackPrepareManager extends PlayerPlaybackPrepareManager {
   }
 
   @override
-  Future<void> releaseItem(String itemId) async {}
+  Future<void> releaseItem(
+    String itemId, {
+    String reason = 'release item',
+  }) async {}
 
   @override
   Future<void> retainOnly(Set<String> itemIds) async {}

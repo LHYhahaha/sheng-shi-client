@@ -1018,12 +1018,14 @@ void main() {
       controller.timingEvents.map((event) => event.name),
       containsAll([
         'window miss fallback open',
+        'play item request',
         'list entry normal open',
         'source resolve start',
         'source resolve end',
         'media open start',
         'media open end',
         'first frame received',
+        'preload candidates',
         'preload start',
         'preload end',
       ]),
@@ -1034,6 +1036,8 @@ void main() {
       contains('session=single:drama-a:1'),
     );
     expect(controller.exportTimingReport(), contains('elapsed='));
+    expect(controller.exportTimingReport(), contains('windowItems='));
+    expect(controller.exportTimingReport(), contains('requestedItemId='));
   });
 
   test('prepared first frame can arrive after prepare open returns', () async {
@@ -1058,6 +1062,8 @@ void main() {
     expect(preparedSession.playCount, 1);
     expect(container.read(provider).hasFirstFrame, isTrue);
     expect(controller.exportTimingReport(), contains('prepared hit next'));
+    expect(controller.exportTimingReport(), contains('take window session'));
+    expect(controller.exportTimingReport(), contains('prepare manager take'));
     expect(controller.exportTimingReport(), contains('firstFrameReady=true'));
   });
 
