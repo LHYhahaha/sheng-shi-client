@@ -1,11 +1,69 @@
 import '../domain/player_content.dart';
 
-const mockPlayerVideoUrls = [
-  'https://samplefile.com/samples/download/video/mp4/mp4_portrait_h264_aac_sample.mp4/',
-  'https://samplefile.com/samples/download/video/mp4/mp4_h264_aac_720p_sample.mp4/',
-  'https://disk.sample.cat/samples/mp4/1416529-hd_1280_720_30fps.mp4',
-  'https://mp4.to/static/samples/mp4/sample-1280x720.mp4',
-  'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
+const mockPlayerVideoAssets = [
+  MockPlayerVideoAsset(
+    title: 'H.264 AAC 360p sample',
+    sourceName: 'SampleFile.com',
+    sourcePage: 'https://samplefile.com/samples/video/mp4/',
+    licenseNote:
+        'SampleFile.com MP4 fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://samplefile.com/samples/download/video/mp4/mp4_h264_aac_360p_sample.mp4/',
+  ),
+  MockPlayerVideoAsset(
+    title: 'H.264 AAC 720p sample',
+    sourceName: 'SampleFile.com',
+    sourcePage: 'https://samplefile.com/samples/video/mp4/',
+    licenseNote:
+        'SampleFile.com MP4 fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://samplefile.com/samples/download/video/mp4/mp4_h264_aac_720p_sample.mp4/',
+  ),
+  MockPlayerVideoAsset(
+    title: 'H.264 AAC 1080p sample',
+    sourceName: 'SampleFile.com',
+    sourcePage: 'https://samplefile.com/samples/video/mp4/',
+    licenseNote:
+        'SampleFile.com MP4 fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://samplefile.com/samples/download/video/mp4/mp4_h264_aac_1080p_sample.mp4/',
+  ),
+  MockPlayerVideoAsset(
+    title: 'Portrait H.264 AAC sample',
+    sourceName: 'SampleFile.com',
+    sourcePage: 'https://samplefile.com/samples/video/mp4/',
+    licenseNote:
+        'SampleFile.com MP4 fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://samplefile.com/samples/download/video/mp4/mp4_portrait_h264_aac_sample.mp4/',
+  ),
+  MockPlayerVideoAsset(
+    title: 'Square H.264 AAC sample',
+    sourceName: 'SampleFile.com',
+    sourcePage: 'https://samplefile.com/samples/video/mp4/',
+    licenseNote:
+        'SampleFile.com MP4 fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://samplefile.com/samples/download/video/mp4/mp4_square_h264_aac_sample.mp4/',
+  ),
+  MockPlayerVideoAsset(
+    title: 'H.264 AAC 12s sample',
+    sourceName: 'SampleFile.com',
+    sourcePage: 'https://samplefile.com/samples/video/mp4/',
+    licenseNote:
+        'SampleFile.com MP4 fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://samplefile.com/samples/download/video/mp4/mp4_h264_aac_12s_sample.mp4/',
+  ),
+  MockPlayerVideoAsset(
+    title: 'H.264 AAC subtitle-track sample',
+    sourceName: 'SampleFile.com',
+    sourcePage: 'https://samplefile.com/samples/video/mp4/',
+    licenseNote:
+        'SampleFile.com MP4 fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://samplefile.com/samples/download/video/mp4/mp4_h264_aac_subtitle_track_sample.mp4/',
+  ),
 ];
 
 class MockPlayerContentRepository implements PlayerContentRepository {
@@ -30,11 +88,13 @@ class MockPlayerContentRepository implements PlayerContentRepository {
         posterAssetPath: profile.posterAssetPath,
         episodes: List<PlayerEpisode>.generate(50, (index) {
           final number = index + 1;
+          final videoAsset =
+              mockPlayerVideoAssets[index % mockPlayerVideoAssets.length];
           return PlayerEpisode(
             id: 'ep-$number',
             number: number,
             isLocked: number >= 11,
-            videoUrl: mockPlayerVideoUrls[index % mockPlayerVideoUrls.length],
+            videoUrl: videoAsset.videoUrl,
             isAvailable: number != 9,
           );
         }),
@@ -84,6 +144,22 @@ class MockPlayerContentRepository implements PlayerContentRepository {
     final normalizedId = dramaId.replaceFirst(RegExp(r'-\d+$'), '');
     return _profiles[normalizedId] ?? _profiles['found-you']!;
   }
+}
+
+class MockPlayerVideoAsset {
+  const MockPlayerVideoAsset({
+    required this.title,
+    required this.sourceName,
+    required this.sourcePage,
+    required this.licenseNote,
+    required this.videoUrl,
+  });
+
+  final String title;
+  final String sourceName;
+  final String sourcePage;
+  final String licenseNote;
+  final String videoUrl;
 }
 
 const _profiles = {
