@@ -450,6 +450,29 @@ Phase 4.5 defer:
 - For You seek preview UI.
 - Full control overlay auto-hide.
 - Playback progress persistence.
+- Loading animation on the progress track.
+
+### Phase 4.6: Player Loading Polish
+
+This phase is a small follow-up after Phase 4.5. It should focus only on the
+loading feel of the progress track.
+
+Progress track loading animation:
+
+- When the player is opening, waiting for the first frame, or buffering, show a
+  lightweight loading animation on the progress track.
+- Use an indeterminate short segment or subtle shimmer on the track.
+- Before the first frame, the animation should help communicate that playback is
+  loading.
+- After the first frame, keep the current video frame visible and show the
+  loading animation only on the progress track.
+- During normal playback, show real progress and buffered progress without the
+  loading animation.
+- During seek dragging, prioritize the seek preview, time bubble, and thumbnail;
+  do not show the loading animation at the same time.
+- Do not show the loading animation for error, locked, or unavailable states.
+- Keep this visual local to `PlayerSeekBar` or nearby player UI widgets. Do not
+  add playback source-of-truth state for a purely visual animation.
 
 ## Out Of Scope
 
