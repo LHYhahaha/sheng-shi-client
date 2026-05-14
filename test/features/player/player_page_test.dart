@@ -716,7 +716,11 @@ double _topBarOpacity(WidgetTester tester) {
   return opacity.opacity;
 }
 
-const _mockVideoUrl = 'https://v.gsuus.com/play/e5y8AAxe/index.m3u8';
+const _mockVideoUrl =
+    'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8';
+const _mockSecondVideoUrl =
+    'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8';
+const _mockThirdVideoUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
 
 Widget _buildPlayerApp({
   required PlayerFeedRepository repository,
@@ -853,13 +857,13 @@ List<PlayerFeedItem> _items({bool lockedEpisode2 = false}) {
       id: 'ep-2',
       number: 2,
       isLocked: lockedEpisode2,
-      videoUrl: _mockVideoUrl,
+      videoUrl: _mockSecondVideoUrl,
     ),
     const PlayerEpisode(
       id: 'ep-3',
       number: 3,
       isLocked: false,
-      videoUrl: _mockVideoUrl,
+      videoUrl: _mockThirdVideoUrl,
       isAvailable: false,
     ),
   ]);

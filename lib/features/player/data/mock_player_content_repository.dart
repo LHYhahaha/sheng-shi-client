@@ -2,44 +2,31 @@ import '../domain/player_content.dart';
 
 const mockPlayerVideoAssets = [
   MockPlayerVideoAsset(
-    title: 'HLS drama stream A',
-    sourceName: 'lz15uu.com',
-    sourcePage: 'https://v.lz15uu.com/',
+    title: 'Tears of Steel HLS',
+    sourceName: 'Unified Streaming',
+    sourcePage:
+        'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/',
     licenseNote:
-        'Remote HLS fixture for testing and development; remote URL only.',
-    videoUrl: 'https://v.lz15uu.com/20260416/12043_9d952763/index.m3u8',
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
   ),
   MockPlayerVideoAsset(
-    title: 'HLS drama stream B',
-    sourceName: 'lz15uu.com',
-    sourcePage: 'https://v.lz15uu.com/',
+    title: 'BipBop Advanced TS HLS',
+    sourceName: 'Apple Developer',
+    sourcePage: 'https://developer.apple.com/streaming/examples/',
     licenseNote:
-        'Remote HLS fixture for testing and development; remote URL only.',
-    videoUrl: 'https://v.lz15uu.com/20260416/12043_9d952763/index.m3u8',
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
   ),
   MockPlayerVideoAsset(
-    title: 'HLS drama stream C',
-    sourceName: 'bfvvs.com',
-    sourcePage: 'https://hn.bfvvs.com/',
+    title: 'Mux x36xhzz HLS',
+    sourceName: 'Mux Test Streams',
+    sourcePage: 'https://test-streams.mux.dev/',
     licenseNote:
-        'Remote HLS fixture for testing and development; remote URL only.',
-    videoUrl: 'https://hn.bfvvs.com/play/bW6Om3Qa/index.m3u8',
-  ),
-  MockPlayerVideoAsset(
-    title: 'HLS drama stream D',
-    sourceName: 'bfvvs.com',
-    sourcePage: 'https://hn.bfvvs.com/',
-    licenseNote:
-        'Remote HLS fixture for testing and development; remote URL only.',
-    videoUrl: 'https://hn.bfvvs.com/play/bW6Om3Qa/index.m3u8',
-  ),
-  MockPlayerVideoAsset(
-    title: 'HLS drama stream E',
-    sourceName: 'gsuus.com',
-    sourcePage: 'https://v.gsuus.com/',
-    licenseNote:
-        'Remote HLS fixture for testing and development; remote URL only.',
-    videoUrl: 'https://v.gsuus.com/play/e5y8AAxe/index.m3u8',
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
   ),
 ];
 

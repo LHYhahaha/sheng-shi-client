@@ -235,6 +235,12 @@ PlayerEpisode _episode(int number) {
     id: 'ep-$number',
     number: number,
     isLocked: false,
-    videoUrl: 'https://v.gsuus.com/play/e5y8AAxe/index.m3u8',
+    videoUrl: switch (number) {
+      1 =>
+        'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+      2 =>
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
+      _ => 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+    },
   );
 }

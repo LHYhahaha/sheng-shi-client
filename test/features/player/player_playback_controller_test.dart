@@ -14,11 +14,18 @@ import 'package:drama_client/features/player/domain/player_preload_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _videoUrl = 'https://v.gsuus.com/play/e5y8AAxe/index.m3u8';
-const _secondVideoUrl = 'https://v.gsuus.com/play/9avRqa6a/index.m3u8';
+const _videoUrl =
+    'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8';
+const _secondVideoUrl =
+    'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8';
+const _thirdVideoUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
 
 String _playableSource(int episodeNumber) {
-  return episodeNumber == 1 ? _videoUrl : _secondVideoUrl;
+  return switch (episodeNumber) {
+    1 => _videoUrl,
+    2 => _secondVideoUrl,
+    _ => _thirdVideoUrl,
+  };
 }
 
 void main() {

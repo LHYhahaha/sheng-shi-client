@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('MockPlayerContentRepository', () {
     test('keeps remote HLS video metadata for mock playback', () {
-      expect(mockPlayerVideoAssets.length, 5);
+      expect(mockPlayerVideoAssets.length, 3);
 
       for (final asset in mockPlayerVideoAssets) {
         expect(asset.title, isNotEmpty);
@@ -12,8 +12,21 @@ void main() {
         expect(asset.sourcePage, startsWith('https://'));
         expect(asset.licenseNote, contains('testing and development'));
         expect(asset.videoUrl, startsWith('https://'));
-        expect(asset.videoUrl, endsWith('/index.m3u8'));
+        expect(asset.videoUrl, contains('.m3u8'));
       }
+
+      expect(
+        mockPlayerVideoAssets.map((asset) => asset.videoUrl).toSet(),
+        hasLength(mockPlayerVideoAssets.length),
+      );
+      expect(
+        mockPlayerVideoAssets.map((asset) => asset.videoUrl),
+        containsAllInOrder(const [
+          'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+          'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
+          'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+        ]),
+      );
     });
 
     test('uses HLS mock videos across generated episodes', () async {
