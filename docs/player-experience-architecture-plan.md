@@ -468,6 +468,53 @@ Phase 5.18 implementation:
 - Prepared media-session behavior remains capped at previous/current/next. HLS
   preload count changes do not increase prepared player instances.
 
+### Phase 5.19: Device Regression And Playback Stabilization Review
+
+Android release regression was run on `R58WC02B69R` with
+`PLAYER_TIMING_LOGS=true` after the configurable preload policy landed.
+
+Validation build:
+
+```bash
+flutter build apk --release --dart-define=PLAYER_TIMING_LOGS=true
+flutter install -d R58WC02B69R --release
+```
+
+Manual regression matrix:
+
+| Scenario | Result | Timing / log notes | Conclusion |
+| --- | --- | --- | --- |
+| Home -> single drama player | Passed | Startup preload hit for `found-you-0-ep-1`; source resolve 41ms, media open 38ms, first frame 2212ms after tap, position advanced 3374ms after tap. | Cold entry still depends on HLS/media first frame, not Dart source/open. |
+| Single drama EP01 -> EP02 | Passed | `prepared hit next` for `mux-tears-stable`; no repeated source resolve/open; position advanced 52ms after swipe. | Next prepared session window is effective. |
+| Single drama EP02 -> EP03 | Passed | `prepared hit next` for `apple-bipbop-low-stable`; position advanced 79ms after swipe. | Consecutive prepared next remains stable. |
+| Single drama EP03 -> EP02 | Passed | `retained hit previous`; position retained around 39.5s; no repeated source resolve/open. | Swipe-back reuse works and preserves playback position. |
+| For You first entry | Passed | `hideShellNavigation=false`; first item window miss as expected; source resolve 44ms, media open 25ms, first frame 4705ms after tab action, position advanced 5636ms. | First For You item has cold-entry behavior; bottom navigation remains visible. |
+| For You next swipe | Passed | `prepared hit next` for `mux-tears-stable`; position advanced 54ms after swipe. | Feed switching benefits from prepared next. |
+| For You hidden by switching Home | Passed | `playingStream false`, `reason=hidden`, and session window release logs emitted. | Tab switch stops playback and releases hidden prepared/retained sessions. |
+| Playback controls | Passed | Tap play/pause, seek drag, Speed sheet, Episodes sheet, Share sheet, and Download placeholder were exercised manually. | Controls stayed scoped to the current playback session; Download remains a placeholder. |
+| App/background lifecycle | Passed | Back from single drama emitted `reason=dispose`; For You tab switch emitted `reason=hidden`; no background audio was observed. | Audio lifecycle guard remains intact. |
+| Auto-next | Covered by tests / not manually timed | Public mock HLS streams are too long for practical manual completion timing. Existing tests continue to cover completed -> PageView animation and locked/unavailable/last-item guards. | Use a short test fixture for future release-device auto-next timing if needed. |
+
+Issue classification after Phase 5.19:
+
+- P0: none.
+- P1: none blocking client playback mainline closure.
+- P2:
+  - cold first frame for Home and first For You item remains source/CDN/media
+    pipeline dependent;
+  - auto-next should get a short fixture if release-device timing is needed;
+  - real-content acceptance should wait for the server/CDN playback source
+    specification to be implemented.
+
+Current decision:
+
+- The client-side player mainline can be considered stabilized for the mock HLS
+  MVP.
+- Do not add more UI-layer patches, expand the session window, or revisit local
+  HLS proxy/cache before real playback sources are integrated.
+- Future large player work should reopen after real source/CDN timing proves a
+  specific bottleneck.
+
 ## 6. Explicit Prohibitions
 
 - Do not create a player or `VideoController` in Home.
