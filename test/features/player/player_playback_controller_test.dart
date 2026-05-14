@@ -874,28 +874,32 @@ void main() {
     expect(singleSession.openedSources, isEmpty);
   });
 
-  test('next item prepare opens a separate session without playing', () async {
-    final currentSession = _FakePlaybackSession();
-    final preparedSession = _FakePlaybackSession();
-    var index = 0;
-    final sessions = [currentSession, preparedSession];
-    PlayerPlaybackSession sessionFactory() => sessions[index++];
-    final container = _createPrepareContainer(sessionFactory);
-    addTearDown(container.dispose);
-    final provider = playerPlaybackControllerProvider('single:drama-a:1');
-    final controller = container.read(provider.notifier);
+  test(
+    'next item prepare warms a muted separate session without audio',
+    () async {
+      final currentSession = _FakePlaybackSession();
+      final preparedSession = _FakePlaybackSession();
+      var index = 0;
+      final sessions = [currentSession, preparedSession];
+      PlayerPlaybackSession sessionFactory() => sessions[index++];
+      final container = _createPrepareContainer(sessionFactory);
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
 
-    await controller.playItem(_item(1));
-    await controller.preloadAround([_item(1), _item(2)], 0);
-    await Future<void>.delayed(const Duration(milliseconds: 80));
+      await controller.playItem(_item(1));
+      await controller.preloadAround([_item(1), _item(2)], 0);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
 
-    expect(currentSession.openedSources, [_videoUrl]);
-    expect(preparedSession.openedSources, [_secondVideoUrl]);
-    expect(preparedSession.openPlayFlags, [false]);
-    expect(preparedSession.pauseCount, 1);
-    expect(preparedSession.playCount, 0);
-    expect(container.read(provider).status, PlayerPlaybackStatus.playing);
-  });
+      expect(currentSession.openedSources, [_videoUrl]);
+      expect(preparedSession.openedSources, [_secondVideoUrl]);
+      expect(preparedSession.openPlayFlags, [true]);
+      expect(preparedSession.volumes, [0, 100]);
+      expect(preparedSession.pauseCount, 1);
+      expect(preparedSession.playCount, 0);
+      expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+    },
+  );
 
   test(
     'prepared item takeover avoids duplicate open on current session',
@@ -919,7 +923,8 @@ void main() {
       expect(currentSession.pauseCount, greaterThanOrEqualTo(1));
       expect(currentSession.openedSources, [_videoUrl]);
       expect(preparedSession.openedSources, [_secondVideoUrl]);
-      expect(preparedSession.openPlayFlags, [false]);
+      expect(preparedSession.openPlayFlags, [true]);
+      expect(preparedSession.volumes, [0, 100, 100]);
       expect(preparedSession.pauseCount, 1);
       expect(preparedSession.playCount, 1);
       expect(container.read(provider).currentItemId, 'drama-a-ep-2');
@@ -1186,6 +1191,40 @@ void main() {
     expect(controller.exportTimingReport(), contains('firstFrameReady=true'));
   });
 
+  test(
+    'prepared takeover cancels warm-up pause before current playback',
+    () async {
+      final currentSession = _FakePlaybackSession();
+      final preparedSession = _FakePlaybackSession(emitWidthOnOpen: false);
+      var index = 0;
+      final sessions = [currentSession, preparedSession];
+      PlayerPlaybackSession sessionFactory() => sessions[index++];
+      final container = _createPrepareContainer(
+        sessionFactory,
+        warmUpTimeout: const Duration(milliseconds: 120),
+      );
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      await controller.preloadAround([_item(1), _item(2)], 0);
+      await controller.playItem(_item(2));
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+
+      expect(preparedSession.openPlayFlags, [true]);
+      expect(preparedSession.volumes, [0, 100]);
+      expect(preparedSession.pauseCount, 0);
+      expect(preparedSession.playCount, 1);
+      expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+      expect(controller.exportTimingReport(), contains('prepared hit next'));
+      expect(
+        controller.exportTimingReport(),
+        contains('prepare warm-up cancelled'),
+      );
+    },
+  );
+
   test('duplicate prepare requests for same item are ignored', () async {
     final currentSession = _FakePlaybackSession();
     final prepareCompleter = Completer<void>();
@@ -1398,13 +1437,17 @@ ProviderContainer _createContainer(
 }
 
 ProviderContainer _createPrepareContainer(
-  PlayerPlaybackSession Function() sessionFactory,
-) {
+  PlayerPlaybackSession Function() sessionFactory, {
+  Duration warmUpTimeout = const Duration(milliseconds: 1500),
+}) {
   final container = ProviderContainer(
     overrides: [
       playerPlaybackSessionFactoryProvider.overrideWithValue(sessionFactory),
       playerPlaybackPrepareManagerFactoryProvider.overrideWithValue(
-        () => PlayerPlaybackPrepareManager(sessionFactory: sessionFactory),
+        () => PlayerPlaybackPrepareManager(
+          sessionFactory: sessionFactory,
+          warmUpTimeout: warmUpTimeout,
+        ),
       ),
       playerPlaybackPreloadManagerProvider.overrideWithValue(
         MockPlayerPlaybackPreloadManager(preloadDelay: Duration.zero),
@@ -1482,6 +1525,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   final openPlayFlags = <bool>[];
   final seekedPositions = <Duration>[];
   final rates = <double>[];
+  final volumes = <double>[];
   int pauseCount = 0;
   int playCount = 0;
   bool isDisposed = false;
@@ -1576,6 +1620,11 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   Future<void> setRate(double rate) async {
     rates.add(rate);
     _rateController.add(rate);
+  }
+
+  @override
+  Future<void> setVolume(double volume) async {
+    volumes.add(volume);
   }
 
   @override

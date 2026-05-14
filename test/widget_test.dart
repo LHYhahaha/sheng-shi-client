@@ -1120,6 +1120,9 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   }
 
   @override
+  Future<void> setVolume(double volume) async {}
+
+  @override
   Future<void> dispose() async {
     if (isDisposed) {
       return;

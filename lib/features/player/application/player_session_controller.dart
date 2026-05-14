@@ -32,6 +32,8 @@ abstract interface class PlayerPlaybackSession {
 
   Future<void> setRate(double rate);
 
+  Future<void> setVolume(double volume);
+
   Future<void> dispose();
 }
 
@@ -94,6 +96,11 @@ class MediaKitPlayerSession implements PlayerPlaybackSession {
   @override
   Future<void> setRate(double rate) {
     return player.setRate(rate);
+  }
+
+  @override
+  Future<void> setVolume(double volume) {
+    return player.setVolume(volume);
   }
 
   @override

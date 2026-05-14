@@ -424,6 +424,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           );
           return;
         }
+        await _session.setVolume(100);
         await _session.play();
         if (!ref.mounted || !_isCurrent(generation)) {
           return;

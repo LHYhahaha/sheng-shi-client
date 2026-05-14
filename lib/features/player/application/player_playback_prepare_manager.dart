@@ -6,6 +6,8 @@ import 'player_session_controller.dart';
 
 enum PreparedPlaybackSessionKind { prepared, retained }
 
+enum _WarmUpResult { firstFrame, timeout, cancelled }
+
 typedef PlayerPrepareTimingLogger =
     void Function(
       String event, {
@@ -53,13 +55,17 @@ class PlayerPlaybackPrepareManager {
   PlayerPlaybackPrepareManager({
     required PlayerPlaybackSession Function() sessionFactory,
     this.maxWindowSessions = 2,
+    this.warmUpTimeout = const Duration(milliseconds: 1500),
     this.timingLogger,
   }) : _sessionFactory = sessionFactory;
 
   final PlayerPlaybackSession Function() _sessionFactory;
   final int maxWindowSessions;
+  final Duration warmUpTimeout;
   PlayerPrepareTimingLogger? timingLogger;
   final _window = <String, PreparedPlaybackSession>{};
+  final _pendingSessions = <String, PlayerPlaybackSession>{};
+  final _warmUpCancels = <String, Completer<void>>{};
   int _generation = 0;
 
   String? get preparedItemId => _window.keys.lastOrNull;
@@ -90,17 +96,35 @@ class PlayerPlaybackPrepareManager {
         return null;
       }
       session = _sessionFactory();
+      _pendingSessions[item.id] = session;
       var hasFirstFrame = false;
+      final firstFrameCompleter = Completer<void>();
       PreparedPlaybackSession? prepared;
       widthSubscription = session.widthStream.listen((width) {
         if (width != null && width > 0) {
           hasFirstFrame = true;
           prepared?.hasFirstFrame = true;
+          if (!firstFrameCompleter.isCompleted) {
+            firstFrameCompleter.complete();
+          }
         }
       });
-      await session.open(source.playableSource, play: false);
-      await session.pause();
+      final warmUpCancel = Completer<void>();
+      _warmUpCancels[item.id] = warmUpCancel;
+      _log(
+        'prepare warm-up start',
+        itemId: item.id,
+        source: source.playableSource,
+        details: _details([
+          'playMuted=true',
+          'timeoutMs=${warmUpTimeout.inMilliseconds}',
+        ]),
+      );
+      await session.setVolume(0);
+      await session.open(source.playableSource, play: true);
       if (generation != _generation) {
+        _pendingSessions.remove(item.id);
+        _completeWarmUpCancel(item.id);
         await widthSubscription.cancel();
         await session.dispose();
         return null;
@@ -113,9 +137,21 @@ class PlayerPlaybackPrepareManager {
         firstFrameSubscription: widthSubscription,
       );
       widthSubscription = null;
+      _pendingSessions.remove(item.id);
       await _put(prepared);
+      unawaited(
+        _finishWarmUp(
+          itemId: item.id,
+          generation: generation,
+          firstFrame: firstFrameCompleter.future,
+          cancel: warmUpCancel.future,
+          session: session,
+        ),
+      );
       return prepared;
     } catch (_) {
+      _pendingSessions.remove(item.id);
+      _completeWarmUpCancel(item.id);
       await widthSubscription?.cancel();
       if (session != null) {
         await session.dispose();
@@ -126,6 +162,7 @@ class PlayerPlaybackPrepareManager {
 
   PreparedPlaybackSession? takeIfMatches(String itemId) {
     final before = _windowItemsText;
+    _completeWarmUpCancel(itemId);
     final session = _window.remove(itemId);
     _log(
       'prepare manager take',
@@ -151,6 +188,11 @@ class PlayerPlaybackPrepareManager {
     String reason = 'release item',
   }) async {
     final before = _windowItemsText;
+    _completeWarmUpCancel(itemId);
+    final pending = _pendingSessions.remove(itemId);
+    if (pending != null) {
+      await pending.dispose();
+    }
     final session = _window.remove(itemId);
     if (session != null) {
       await session.dispose();
@@ -189,6 +231,15 @@ class PlayerPlaybackPrepareManager {
   Future<void> release() async {
     _generation += 1;
     final before = _windowItemsText;
+    for (final itemId in List<String>.from(_warmUpCancels.keys)) {
+      _completeWarmUpCancel(itemId);
+    }
+    for (final session in List<PlayerPlaybackSession>.from(
+      _pendingSessions.values,
+    )) {
+      await session.dispose();
+    }
+    _pendingSessions.clear();
     for (final session in List<PreparedPlaybackSession>.from(_window.values)) {
       await session.dispose();
     }
@@ -201,6 +252,68 @@ class PlayerPlaybackPrepareManager {
         'windowItemsAfter=$_windowItemsText',
       ]),
     );
+  }
+
+  Future<void> _finishWarmUp({
+    required String itemId,
+    required int generation,
+    required Future<void> firstFrame,
+    required Future<void> cancel,
+    required PlayerPlaybackSession session,
+  }) async {
+    _WarmUpResult result;
+    try {
+      result = await Future.any<_WarmUpResult>([
+        firstFrame.then((_) => _WarmUpResult.firstFrame),
+        Future<void>.delayed(warmUpTimeout).then((_) => _WarmUpResult.timeout),
+        cancel.then((_) => _WarmUpResult.cancelled),
+      ]);
+    } catch (_) {
+      result = _WarmUpResult.timeout;
+    }
+
+    final prepared = _window[itemId];
+    if (result == _WarmUpResult.cancelled ||
+        generation != _generation ||
+        prepared?.session != session) {
+      _log(
+        'prepare warm-up cancelled',
+        itemId: itemId,
+        source: prepared?.source.playableSource,
+        details: _details(['reason=cancelled_or_stale']),
+      );
+      return;
+    }
+
+    try {
+      await session.pause();
+      await session.setVolume(100);
+      _log(
+        'prepare warm-up end',
+        itemId: itemId,
+        source: prepared?.source.playableSource,
+        details: _details([
+          'result=${result.name}',
+          'firstFrameReady=${prepared?.hasFirstFrame ?? false}',
+        ]),
+      );
+    } catch (error) {
+      _log(
+        'prepare warm-up failed',
+        itemId: itemId,
+        source: prepared?.source.playableSource,
+        details: 'error=$error',
+      );
+    } finally {
+      _warmUpCancels.remove(itemId);
+    }
+  }
+
+  void _completeWarmUpCancel(String itemId) {
+    final cancel = _warmUpCancels.remove(itemId);
+    if (cancel != null && !cancel.isCompleted) {
+      cancel.complete();
+    }
   }
 
   Future<void> _put(PreparedPlaybackSession session) async {
@@ -316,6 +429,9 @@ class _NoopPlaybackSession implements PlayerPlaybackSession {
 
   @override
   Future<void> setRate(double rate) async {}
+
+  @override
+  Future<void> setVolume(double volume) async {}
 
   @override
   Future<void> dispose() async {}

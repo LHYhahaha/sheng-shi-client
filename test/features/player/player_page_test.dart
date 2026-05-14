@@ -1004,6 +1004,9 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   }
 
   @override
+  Future<void> setVolume(double volume) async {}
+
+  @override
   Future<void> dispose() async {
     await _bufferingController.close();
     await _playingController.close();

@@ -823,6 +823,41 @@ Phase 5.7 limits:
 - No service integration.
 - No window size expansion beyond previous/current/next.
 
+### Phase 5.8: Prepared First-Frame Warm-Up
+
+Implemented. Release logs after Phase 5.7 showed session-window hits such as
+`prepared hit next`, but `firstFrameReady=false` on takeover. That suggests
+`media_kit` can open an HLS source with `play: false` without decoding a video
+frame on Android, so the prepared session still needs to wait for the first HLS
+segment and decoder frame after takeover.
+
+This phase changes only the prepared-session strategy:
+
+- Prepared sessions now warm up muted: set volume to `0`, open the source with
+  `play: true`, then pause after the first width/first-frame signal or a short
+  timeout.
+- After warm-up pauses the prepared session, volume is restored to `100` so a
+  later takeover can play normally.
+- If takeover happens while warm-up is still pending, the warm-up pause is
+  cancelled so it cannot pause the new current session after takeover. The
+  controller also restores volume before calling `play()`.
+- Hidden tab, player dispose, provider dispose, stale generation, and explicit
+  release paths cancel pending warm-up and dispose prepared sessions.
+- Timing logs now include `prepare warm-up start`, `prepare warm-up end`,
+  `prepare warm-up cancelled`, and `prepare warm-up failed` so device logs can
+  distinguish prepared-window hit from first-frame readiness.
+- Tests cover muted warm-up, no-audio prepare, takeover before warm-up timeout,
+  late first-frame updates, hidden/dispose release, and prepared-session
+  isolation.
+
+Phase 5.8 limits:
+
+- No UI changes.
+- No segment cache or local HLS proxy.
+- No service/CDN integration.
+- No guarantee that every CDN/HLS source decodes a frame during muted warm-up;
+  device timing remains the source of truth.
+
 Phase 5 defer:
 
 - Real playback source API and signed URL refresh.
