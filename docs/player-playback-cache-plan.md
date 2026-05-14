@@ -500,10 +500,42 @@ Progress track loading animation:
 - Preload failures must not affect the current playback status or trigger the
   player error UI.
 
+### Phase 5.2: HLS Playlist Prefetch MVP
+
+This is the current implementation target for playback smoothness. The goal is
+to warm the next HLS playlist before the user swipes to it, while keeping the
+current playback stable.
+
+- Add a small `HlsPlaylistPreloader` behind `PlayerPlaybackPreloadManager`.
+- Perform a real HTTP GET for the m3u8 playlist only.
+- Use a short timeout, about 3-5 seconds.
+- Support cancellation through the existing preload release path.
+- Treat prefetch failure as a preload failure only. It must not affect the
+  current playing item or show the player retry UI.
+- Keep `PlayerPlaybackController.preloadAround()` as the scheduler. It should
+  not contain HTTP details.
+- Keep `PlaybackPreloadState` as the state surface for pending, success, failed,
+  and cancelled preload work.
+- Do not create a media player session during preload.
+- Do not play, prepare audio, or produce sound during preload.
+- Do not download segments or store HLS files locally in this phase.
+- If the playlist is a master playlist, detect it and safely mark playlist
+  prefetch as complete without segment handling. Variant selection is deferred.
+- If the playlist has relative segment URLs, parsing/resolving may be tested,
+  but segment preheat remains deferred.
+
+Expected tests:
+
+- Playlist GET success marks preload success.
+- Timeout marks preload failed without touching current playback.
+- Cancelled pending preload does not late-write success.
+- Fast generation changes do not late-write stale preload state.
+- Locked, unavailable, and null-source items do not prefetch.
+- For You and single drama preload states remain isolated.
+
 Phase 5 defer:
 
 - Real playback source API and signed URL refresh.
-- Real `HlsPlaylistPreloader` m3u8 GET.
 - Real CDN header parsing and expiry reconciliation.
 - HLS playlist and segment cache.
 - Segment preheat.

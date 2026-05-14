@@ -15,8 +15,39 @@ Home -> For you playback -> Episode/Unlock/Share sheets -> Recharge/Membership -
 - Flutter project scaffold exists.
 - Flutter version is locked to `3.41.9`.
 - Core dependencies are installed: `go_router`, Riverpod, `media_kit`, `dio`, `in_app_purchase`, Firebase, Sentry, local storage, and code generation.
-- Android debug build has passed.
-- Current screens are placeholders only.
+- The main mock UI screens are implemented: Home, For You, Player, My list,
+  Profile, Login/Account, Store/Recharge, Membership, Wallet, and record pages.
+- Player playback has moved beyond MVP into HLS/m3u8 experience polishing:
+  tap play/pause, progress/seek, speed, completion auto advance, lifecycle
+  pause, loading polish, mock progress restore, and HLS preload state are in
+  place.
+- MP4 whole-file cache/offline-cache compatibility is deprecated for the current
+  product direction. Playback now targets remote HLS/m3u8 sources.
+- Android release builds have been installed on the connected test device for
+  manual playback checks.
+
+## 2.1 Current Focus: Player HLS Playback Experience
+
+This cycle prioritizes playback smoothness before broad backend integration or
+new page work.
+
+| Priority | Task | Estimate | Notes |
+|---|---:|---:|---|
+| P0 | Review current HLS preload state machine | 0.5 day | Confirm pending/success/failed/cancelled, cancellation, and session isolation. |
+| P1 | HLS playlist prefetch MVP | 1-1.5 days | Real HTTP GET for m3u8 playlist with timeout/cancel; no segment preheat yet. |
+| P1 | Android device playback verification | 0.5-1 day | Check first-frame time, vertical swipes, auto advance, tab pause, retry. |
+| P1 | Playback source API contract | 1 day | Define future server fields for m3u8 URL, expiry, access, duration, poster, progress. |
+| P2 | Mock-to-real API preparation | 2-3 days | Start after playback source contract is stable. |
+| P2 | IAP/payment integration | 3-5 days | Keep separate from player playback work. |
+| P2 | QA/release readiness | 3-5 days | Run continuously, not only at the end. |
+
+Near-term rule:
+
+- Do not add new Figma-missing pages.
+- Do not reintroduce MP4 whole-file cache.
+- Do not implement offline download in the playback-preload path.
+- Do not start full backend integration before the playback source contract is
+  reviewed.
 
 ## 3. Milestone Plan
 
@@ -25,9 +56,10 @@ Home -> For you playback -> Episode/Unlock/Share sheets -> Recharge/Membership -
 | M0: 基础工程架构 | 1 天 | 整理当前 Flutter 脚手架，补齐路由、状态、mock 数据和工程约定。 |
 | M1: 基础产品架构 + 底部导航 | 2-3 天 | 建立产品主结构、四大 Tab、全局视觉规范和公共组件。 |
 | M2: 首页 + 短剧数据 | 3-4 天 | 完成首页分类、剧集卡片、mock 数据和进入播放链路。 |
-| M3: 播放器 MVP | 5-6 天 | 完成 `media_kit` 播放、播放器主 UI、弹窗和生命周期处理。 |
+| M3: 播放器 MVP | Done | `media_kit` 播放、播放器主 UI、弹窗、生命周期、滑动 feed、进度/seek 已完成。 |
+| M3.5: HLS 播放体验专项 | 2-3 天 | 完成 HLS playlist prefetch、真机验证、播放源接口契约，为流畅滑动播放打基础。 |
 | M4: My list + Profile | 3-4 天 | 完成收藏/播放列表、用户页、会员/金币入口。 |
-| M5: 钱包/充值/会员/支付 UI | 4-5 天 | 完成商业化相关页面、支付弹窗 UI 和 mock 权益流。 |
+| M5: 钱包/充值/会员/支付 UI | Done | 商业化相关页面和 mock 购买/权益流已完成。 |
 | M6: 内购集成 | 3-4 天 | 接入 `in_app_purchase` 状态机、商品查询、恢复购买和验单占位。 |
 | M7: QA/打磨/发布准备 | 4-5 天 | 真机/模拟器验证、视觉修整、构建、埋点和问题收敛。 |
 
