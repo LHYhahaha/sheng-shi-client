@@ -18,6 +18,21 @@ final playerPlaybackControllerProvider =
       String
     >(PlayerPlaybackController.new);
 
+class PlayerPlaybackSessionKeys {
+  const PlayerPlaybackSessionKeys._();
+
+  static const forYouTab = 'for-you-tab';
+
+  static String singleDrama({
+    required String? dramaId,
+    required String? episodeId,
+    Object? instanceId,
+  }) {
+    final suffix = instanceId == null ? '' : ':$instanceId';
+    return 'single:$dramaId:$episodeId$suffix';
+  }
+}
+
 enum PlayerPlaybackStatus {
   idle,
   opening,
@@ -104,6 +119,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   late final PlayerPlaybackSession _session;
   final _preloadedSessions = <String, PlayerPlaybackSession>{};
   int _generation = 0;
+  bool _pauseWhenOpenCompletes = false;
+  bool _isSessionDisposed = false;
 
   @override
   PlayerPlaybackState build() {
@@ -118,7 +135,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         unawaited(subscription.cancel());
       }
       unawaited(_disposePreloads());
-      unawaited(_session.dispose());
+      unawaited(_disposeSessionOnly());
     });
     return PlayerPlaybackState.initial(
       videoController: _session.videoController,
@@ -126,6 +143,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   Future<void> playItem(PlayerFeedItem? item) async {
+    if (_isSessionDisposed) {
+      return;
+    }
+
     if (item == null) {
       final generation = ++_generation;
       if (!await _pauseIfCurrent(generation)) {
@@ -175,6 +196,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
 
     final generation = ++_generation;
+    _pauseWhenOpenCompletes = false;
     state = state.copyWith(
       status: PlayerPlaybackStatus.opening,
       hasFirstFrame: false,
@@ -186,7 +208,21 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
     try {
       await _session.open(source, play: true);
+      if (!ref.mounted) {
+        return;
+      }
       if (!_isCurrent(generation)) {
+        if (_pauseWhenOpenCompletes && state.currentSource == source) {
+          await _session.pause();
+        }
+        return;
+      }
+      if (_pauseWhenOpenCompletes) {
+        await _session.pause();
+        state = state.copyWith(
+          status: PlayerPlaybackStatus.paused,
+          isBuffering: false,
+        );
         return;
       }
       state = state.copyWith(
@@ -210,6 +246,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     List<PlayerFeedItem> items,
     int currentIndex,
   ) async {
+    if (_isSessionDisposed) {
+      return;
+    }
+
     if (items.isEmpty) {
       await _disposePreloads();
       _setPreloadedItemIds(const []);
@@ -268,6 +308,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   Future<void> togglePlay() async {
+    if (_isSessionDisposed) {
+      return;
+    }
+
     if (state.status == PlayerPlaybackStatus.playing) {
       await _session.pause();
       state = state.copyWith(status: PlayerPlaybackStatus.paused);
@@ -278,13 +322,56 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
 
+    _pauseWhenOpenCompletes = false;
     await _session.play();
     state = state.copyWith(status: PlayerPlaybackStatus.playing);
   }
 
   Future<void> pause() async {
+    if (_isSessionDisposed) {
+      return;
+    }
     await _session.pause();
     state = state.copyWith(status: PlayerPlaybackStatus.paused);
+  }
+
+  Future<void> pauseForVisibility() async {
+    if (_isSessionDisposed) {
+      return;
+    }
+    _pauseWhenOpenCompletes = true;
+    ++_generation;
+    await _session.pause();
+    if (!ref.mounted) {
+      return;
+    }
+    if (state.currentSource == null ||
+        state.status == PlayerPlaybackStatus.blocked ||
+        state.status == PlayerPlaybackStatus.unavailable ||
+        state.status == PlayerPlaybackStatus.error ||
+        state.status == PlayerPlaybackStatus.idle) {
+      return;
+    }
+    state = state.copyWith(
+      status: PlayerPlaybackStatus.paused,
+      isBuffering: false,
+    );
+  }
+
+  Future<void> disposeSession() async {
+    _pauseWhenOpenCompletes = true;
+    ++_generation;
+    await _disposePreloads();
+    await _disposeSessionOnly();
+    if (!ref.mounted) {
+      return;
+    }
+    state = state.copyWith(
+      status: PlayerPlaybackStatus.idle,
+      clearSource: true,
+      clearError: true,
+      preloadedItemIds: const [],
+    );
   }
 
   void _handleBuffering(bool isBuffering) {
@@ -340,5 +427,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     final sessions = _preloadedSessions.values.toList(growable: false);
     _preloadedSessions.clear();
     await Future.wait<void>(sessions.map((session) => session.dispose()));
+  }
+
+  Future<void> _disposeSessionOnly() async {
+    if (_isSessionDisposed) {
+      return;
+    }
+    _isSessionDisposed = true;
+    await _session.pause();
+    await _session.dispose();
   }
 }

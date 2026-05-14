@@ -351,6 +351,28 @@ void main() {
     expect(find.text('Found You, Heart Thief'), findsOneWidget);
   });
 
+  testWidgets('pauses for you playback when switching bottom tabs', (
+    tester,
+  ) async {
+    final sessions = <_FakePlaybackSession>[];
+    await tester.pumpWidget(_buildAppWithFakePlayback(sessions: sessions));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('For you'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(sessions, isNotEmpty);
+    final forYouSession = sessions.first;
+
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+
+    expect(forYouSession.pauseCount, greaterThan(0));
+    expect(forYouSession.isDisposed, isFalse);
+  });
+
   testWidgets('opens home drama as single drama feed and swipes episodes', (
     tester,
   ) async {
@@ -368,6 +390,28 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('EP.02'), findsOneWidget);
+  });
+
+  testWidgets('disposes single drama playback when returning from player', (
+    tester,
+  ) async {
+    final sessions = <_FakePlaybackSession>[];
+    await tester.pumpWidget(_buildAppWithFakePlayback(sessions: sessions));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tapAt(const Offset(110, 260));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(sessions, isNotEmpty);
+    final singleDramaSession = sessions.first;
+
+    await tester.tap(find.byIcon(Icons.chevron_left).first);
+    await tester.pumpAndSettle();
+
+    expect(singleDramaSession.pauseCount, greaterThan(0));
+    expect(singleDramaSession.isDisposed, isTrue);
   });
 
   testWidgets('for you feed does not inherit single drama player state', (
@@ -829,12 +873,14 @@ class _TestRouterApp extends StatelessWidget {
   }
 }
 
-Widget _buildAppWithFakePlayback() {
+Widget _buildAppWithFakePlayback({List<_FakePlaybackSession>? sessions}) {
   return ProviderScope(
     overrides: [
-      playerPlaybackSessionFactoryProvider.overrideWithValue(
-        () => _FakePlaybackSession(),
-      ),
+      playerPlaybackSessionFactoryProvider.overrideWithValue(() {
+        final session = _FakePlaybackSession();
+        sessions?.add(session);
+        return session;
+      }),
     ],
     child: const DramaClientApp(),
   );
@@ -844,6 +890,8 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   final _bufferingController = StreamController<bool>.broadcast();
   final _widthController = StreamController<int?>.broadcast();
   final _errorController = StreamController<String>.broadcast();
+  int pauseCount = 0;
+  bool isDisposed = false;
 
   @override
   Null get videoController => null;
@@ -864,13 +912,19 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   }
 
   @override
-  Future<void> pause() async {}
+  Future<void> pause() async {
+    pauseCount += 1;
+  }
 
   @override
   Future<void> play() async {}
 
   @override
   Future<void> dispose() async {
+    if (isDisposed) {
+      return;
+    }
+    isDisposed = true;
     await _bufferingController.close();
     await _widthController.close();
     await _errorController.close();

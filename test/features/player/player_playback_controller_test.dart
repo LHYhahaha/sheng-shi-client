@@ -127,6 +127,58 @@ void main() {
     expect(container.read(provider).status, PlayerPlaybackStatus.playing);
   });
 
+  test(
+    'pauseForVisibility pauses current session and marks state paused',
+    () async {
+      final session = _FakePlaybackSession();
+      final container = _createContainer(session);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      await controller.pauseForVisibility();
+
+      expect(session.pauseCount, 1);
+      expect(container.read(provider).status, PlayerPlaybackStatus.paused);
+    },
+  );
+
+  test(
+    'pauseForVisibility prevents opening source from continuing audio',
+    () async {
+      final openCompleter = Completer<void>();
+      final session = _FakePlaybackSession(openCompleter: openCompleter);
+      final container = _createContainer(session);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      final playFuture = controller.playItem(_item(1));
+      await Future<void>.delayed(Duration.zero);
+      await controller.pauseForVisibility();
+
+      openCompleter.complete();
+      await playFuture;
+
+      expect(session.pauseCount, 2);
+      expect(container.read(provider).status, PlayerPlaybackStatus.paused);
+    },
+  );
+
+  test('disposeSession pauses and disposes current playback session', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.disposeSession();
+
+    expect(session.pauseCount, 1);
+    expect(session.isDisposed, isTrue);
+    expect(container.read(provider).status, PlayerPlaybackStatus.idle);
+    expect(container.read(provider).currentSource, isNull);
+  });
+
   test('disposes media session with provider container', () async {
     final session = _FakePlaybackSession();
     final container = _createContainer(session, addDisposeTearDown: false);
@@ -303,6 +355,9 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
 
   @override
   Future<void> dispose() async {
+    if (isDisposed) {
+      return;
+    }
     isDisposed = true;
     await _bufferingController.close();
     await _widthController.close();

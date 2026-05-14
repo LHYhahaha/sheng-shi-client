@@ -41,22 +41,33 @@ class PlayerPage extends ConsumerStatefulWidget {
   ConsumerState<PlayerPage> createState() => _PlayerPageState();
 }
 
-class _PlayerPageState extends ConsumerState<PlayerPage> {
+class _PlayerPageState extends ConsumerState<PlayerPage>
+    with WidgetsBindingObserver {
   late final PageController _pageController;
+  late final String _sessionKey;
+  late final PlayerPlaybackController _playbackController;
   AppShellBottomNavigationVisible? _shellChrome;
 
-  String get _sessionKey {
+  String _createSessionKey() {
     return switch (widget.feedMode) {
-      PlayerFeedMode.forYou => 'for-you-tab',
-      PlayerFeedMode.singleDrama =>
-        'single:${widget.dramaId}:${widget.episodeId}',
+      PlayerFeedMode.forYou => PlayerPlaybackSessionKeys.forYouTab,
+      PlayerFeedMode.singleDrama => PlayerPlaybackSessionKeys.singleDrama(
+        dramaId: widget.dramaId,
+        episodeId: widget.episodeId,
+        instanceId: identityHashCode(this),
+      ),
     };
   }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _pageController = PageController();
+    _sessionKey = _createSessionKey();
+    _playbackController = ref.read(
+      playerPlaybackControllerProvider(_sessionKey).notifier,
+    );
     if (widget.hideShellNavigation) {
       final shellChrome = ref.read(
         appShellBottomNavigationVisibleProvider.notifier,
@@ -76,9 +87,23 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    if (widget.feedMode == PlayerFeedMode.singleDrama) {
+      unawaited(_playbackController.disposeSession());
+    } else {
+      unawaited(_playbackController.pauseForVisibility());
+    }
     _shellChrome?.show();
     _pageController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      return;
+    }
+    unawaited(_playbackController.pauseForVisibility());
   }
 
   PlayerFeedConfig get _feedConfig {
