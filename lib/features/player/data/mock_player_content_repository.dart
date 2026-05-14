@@ -1,7 +1,12 @@
 import '../domain/player_content.dart';
 
-const mockPlayerVideoUrl =
-    'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4';
+const mockPlayerVideoUrls = [
+  'https://samplefile.com/samples/download/video/mp4/mp4_portrait_h264_aac_sample.mp4/',
+  'https://samplefile.com/samples/download/video/mp4/mp4_h264_aac_720p_sample.mp4/',
+  'https://disk.sample.cat/samples/mp4/1416529-hd_1280_720_30fps.mp4',
+  'https://mp4.to/static/samples/mp4/sample-1280x720.mp4',
+  'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
+];
 
 class MockPlayerContentRepository implements PlayerContentRepository {
   const MockPlayerContentRepository();
@@ -29,7 +34,7 @@ class MockPlayerContentRepository implements PlayerContentRepository {
             id: 'ep-$number',
             number: number,
             isLocked: number >= 11,
-            videoUrl: mockPlayerVideoUrl,
+            videoUrl: mockPlayerVideoUrls[index % mockPlayerVideoUrls.length],
             isAvailable: number != 9,
           );
         }),

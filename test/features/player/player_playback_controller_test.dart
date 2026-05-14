@@ -9,6 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 const _videoUrl =
     'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4';
+const _secondVideoUrl =
+    'https://samplefile.com/samples/download/video/mp4/mp4_h264_aac_720p_sample.mp4/';
 
 void main() {
   test('opens and switches playable episode sources', () async {
@@ -21,7 +23,7 @@ void main() {
     await controller.playItem(_item(2));
 
     final state = container.read(provider);
-    expect(session.openedSources, [_videoUrl, _videoUrl]);
+    expect(session.openedSources, [_videoUrl, _secondVideoUrl]);
     expect(state.status, PlayerPlaybackStatus.playing);
     expect(state.currentItemId, 'drama-a-ep-2');
   });
@@ -139,7 +141,7 @@ void main() {
     await container.read(forYouProvider.notifier).togglePlay();
 
     expect(forYouSession.openedSources, [_videoUrl]);
-    expect(singleSession.openedSources, [_videoUrl]);
+    expect(singleSession.openedSources, [_secondVideoUrl]);
     expect(container.read(forYouProvider).status, PlayerPlaybackStatus.paused);
     expect(container.read(singleProvider).status, PlayerPlaybackStatus.playing);
   });
@@ -169,7 +171,7 @@ PlayerFeedItem _item(
     id: 'ep-$episodeNumber',
     number: episodeNumber,
     isLocked: isLocked,
-    videoUrl: _videoUrl,
+    videoUrl: episodeNumber == 1 ? _videoUrl : _secondVideoUrl,
     isAvailable: isAvailable,
   );
   final content = PlayerContent(
