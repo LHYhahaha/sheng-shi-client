@@ -235,7 +235,6 @@ PlayerEpisode _episode(int number) {
     id: 'ep-$number',
     number: number,
     isLocked: false,
-    videoUrl:
-        'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
+    videoUrl: 'https://v.gsuus.com/play/e5y8AAxe/index.m3u8',
   );
 }

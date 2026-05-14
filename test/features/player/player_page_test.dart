@@ -715,8 +715,7 @@ double _topBarOpacity(WidgetTester tester) {
   return opacity.opacity;
 }
 
-const _mockVideoUrl =
-    'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4';
+const _mockVideoUrl = 'https://v.gsuus.com/play/e5y8AAxe/index.m3u8';
 
 Widget _buildPlayerApp({
   required PlayerFeedRepository repository,
@@ -752,8 +751,8 @@ Widget _buildPlayerApp({
       playerPlaybackSessionFactoryProvider.overrideWithValue(
         playbackSessionFactory ?? () => _FakePlaybackSession(),
       ),
-      playerPlaybackCacheManagerProvider.overrideWithValue(
-        MockPlayerPlaybackCacheManager(downloadDelay: Duration.zero),
+      playerPlaybackPreloadManagerProvider.overrideWithValue(
+        MockPlayerPlaybackPreloadManager(preloadDelay: Duration.zero),
       ),
     ],
     child: MaterialApp.router(

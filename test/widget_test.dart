@@ -1023,8 +1023,8 @@ Widget _buildAppWithFakePlayback({List<_FakePlaybackSession>? sessions}) {
         sessions?.add(session);
         return session;
       }),
-      playerPlaybackCacheManagerProvider.overrideWithValue(
-        MockPlayerPlaybackCacheManager(downloadDelay: Duration.zero),
+      playerPlaybackPreloadManagerProvider.overrideWithValue(
+        MockPlayerPlaybackPreloadManager(preloadDelay: Duration.zero),
       ),
     ],
     child: const DramaClientApp(),

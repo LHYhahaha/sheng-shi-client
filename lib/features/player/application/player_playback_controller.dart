@@ -175,7 +175,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   final String sessionKey;
   late final PlayerPlaybackSession _session;
-  late final PlayerPlaybackCacheManager _cacheManager;
+  late final PlayerPlaybackPreloadManager _preloadManager;
   late final PlaybackProgressRepository _progressRepository;
   final _preloadedItemIds = <String>{};
   int _generation = 0;
@@ -189,7 +189,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   @override
   PlayerPlaybackState build() {
     _session = ref.read(playerPlaybackSessionFactoryProvider).call();
-    _cacheManager = ref.read(playerPlaybackCacheManagerProvider);
+    _preloadManager = ref.read(playerPlaybackPreloadManagerProvider);
     _progressRepository = ref.read(playbackProgressRepositoryProvider);
     final subscriptions = <StreamSubscription<dynamic>>[
       _session.bufferingStream.listen(_handleBuffering),
@@ -761,7 +761,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   Future<void> _disposePreloads() async {
     _preloadGeneration += 1;
     _preloadedItemIds.clear();
-    await _cacheManager.releasePending();
+    await _preloadManager.releasePending();
   }
 
   Future<void> _disposeSessionOnly() async {

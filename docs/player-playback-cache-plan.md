@@ -70,7 +70,7 @@ Suggested source fields:
 
 - `id`
 - `url`
-- `format`: `hls` or `mp4`
+- `format`: `hls`
 - `codecHint`
 - `duration`
 - `width`
@@ -105,13 +105,12 @@ Required states:
 
 Locked and unavailable episodes must not open or preload video sources.
 
-### VideoCachePolicy
+### HLS Preload Policy
 
 Suggested fields:
 
 - `allowPreload`
 - `allowHttpCache`
-- `allowDiskCache`
 - `preloadStrategy`: `none`, `metadata`, `firstSegment`, `nextItem`
 - `maxPreloadBytes`
 - `maxCacheAge`
@@ -119,26 +118,23 @@ Suggested fields:
 - `onlyWifi`
 - `expiresAt`
 
-### LocalPlaybackCacheManager
+### HLSPlaybackPreloadManager
 
 Responsibilities:
 
-- `lookup(item, policy, remoteUrl)`
-- `download(item, policy, remoteUrl)`
+- `preload(item, source)`
 - `releasePending()`
-- Return cache states for hit, miss, expired, downloading, and failed.
+- Simulate lightweight HLS source/playlist warmup for the current mock phase.
+- Cancel pending preload work when the player becomes hidden or is disposed.
 
 MVP implementation:
 
-- Provides both an in-memory mock cache for tests and a
-  `FilePlayerPlaybackCacheManager` MVP for runtime.
-- The file cache writes downloaded playable MP4 sources into the app temp/cache
-  directory and stores lightweight JSON metadata beside the media file.
-- Pending downloads use a real format-aware temp file path such as
-  `source.mp4.download`; `releasePending()` must remove that exact temp file and
-  prevent late completion from writing media or metadata.
-- Unsupported sources such as local assets skip disk caching and continue using
-  the original playable source.
+- Uses `MockPlayerPlaybackPreloadManager`.
+- Does not write full media files to disk.
+- Does not download MP4 files.
+- Keeps the playable source as the remote HLS/m3u8 URL.
+- Keeps preload source-only: it must not create a media player session and must
+  not produce audio.
 
 ## Playback State
 
@@ -282,9 +278,8 @@ MVP preload:
 - Release preload sessions when leaving the player.
 - Keep For You and single drama sessions isolated.
 
-Do not download complete videos aggressively for feed scrolling. Phase 5 may
-write a single resolved MP4 source into the app cache directory as an MVP cache
-boundary, but production HLS/range caching remains deferred.
+Do not download complete videos for feed scrolling. The player strategy is HLS
+remote playback with lightweight source/playlist preload only.
 
 ## HTTP/CDN Cache Strategy
 
@@ -306,20 +301,12 @@ Client strategy:
 - Respect `maxPreloadBytes`.
 - Refresh expired source URLs through `VideoSourceRepository`.
 
-### MP4 Fallback
+### MP4 Whole-File Cache
 
-Server/CDN must support:
-
-- Faststart MP4 with moov atom at the beginning.
-- HTTP Range requests.
-- CDN Range caching.
-- H.264 + AAC for broad mobile compatibility.
-
-Client strategy:
-
-- Do not download the full MP4.
-- Let the player and HTTP stack request ranges.
-- Optionally check `Accept-Ranges` and `Content-Length`.
+- Deprecated for this project.
+- Do not implement MP4 whole-file download/cache compatibility.
+- Historical `FilePlayerPlaybackCacheManager` and `.mp4.download` temp-file
+  handling have been removed.
 
 ## Phases
 
@@ -369,23 +356,21 @@ Client strategy:
 - Do not add progress persistence, CDN/cache, or full For You controls in this
   phase.
 
-### Phase 4: VideoSource And Cache Policy
+### Phase 4: VideoSource And Preload Policy
 
 - Add playback source and cache boundaries:
-  `PlayerPlaybackSourceRepository`, `PlaybackCachePolicy`,
-  `PlaybackSource`, and `PlayerPlaybackCacheManager`.
+  `PlayerPlaybackSourceRepository`, `PlaybackSource`, and
+  `PlayerPlaybackPreloadManager`.
 - Add a mock playback source repository that resolves a playable URL, cache key,
-  expiry, format, and codec hint from the feed item.
-- Add an in-memory mock cache manager with hit, miss, expired, downloading, and
-  failed behavior.
+  expiry, and codec hint from the feed item.
+- Add a mock preload manager for lightweight HLS source/playlist warmup.
 - Route `PlayerPlaybackController.playItem()` through source resolution before
   opening media.
-- On cache hit, open the cached source directly.
-- On cache miss or expired cache, simulate a download and then open the cached
-  source.
-- On resolve/download failure, keep the existing playback error and retry path.
-- Keep locked, unavailable, and null-source episodes outside resolve/cache/open.
-- Rework `preloadAround()` to prepare source/cache only. Preload no longer
+- Open the remote HLS/m3u8 source directly.
+- On source resolve/open failure, keep the existing playback error and retry
+  path.
+- Keep locked, unavailable, and null-source episodes outside resolve/preload/open.
+- Rework `preloadAround()` to prepare source metadata only. Preload no longer
   creates media player sessions and cannot play audio.
 - Release pending preload work when For You is hidden, a single drama player is
   disposed, or the provider is disposed.
@@ -398,7 +383,8 @@ Phase 4 defer:
 
 - Real backend video source API.
 - Real CDN response headers and signed URL refresh.
-- Production file download policy and cache quota management.
+- HLS playlist/segment cache.
+- Offline download.
 - Playback progress server reporting.
 - Android smoke verification unless a playback lifecycle issue requires it.
 
@@ -436,7 +422,7 @@ Seek thumbnail preview MVP:
   bounds.
 - Reuse `seekPreviewPosition`; do not seek the real player during preview
   updates.
-- Do not extract frames from MP4 on the client.
+- Do not extract preview frames from the video stream on the client.
 - Do not request a new image for every drag position.
 - Do not enable this UI for For You until design confirms the layout.
 
@@ -479,24 +465,14 @@ Progress track loading animation:
 - Keep this visual local to `PlayerSeekBar` or nearby player UI widgets. Do not
   add playback source-of-truth state for a purely visual animation.
 
-### Phase 5: Cache And Weak-Network MVP
+### Phase 5: HLS Source Preload And Weak-Network MVP
 
-- Add `FilePlayerPlaybackCacheManager` as the first local file cache
-  implementation.
-- Store downloaded playable MP4 sources under the app temp/cache directory using
-  a stable cache-key filename.
-- Persist lightweight cache metadata next to the media file:
-  remote URL and expiry time.
-- Resolve cache hit, miss, expired, and failed states through the existing
-  `PlayerPlaybackCacheManager` boundary.
-- On cache hit, prefer the local file path as `PlaybackSource.playableSource`.
-- On cache miss or expired cache, download through an injectable
-  `PlaybackFileDownloader`, then open the local file.
-- On unsupported sources such as assets, keep the remote/source URL path and skip
-  local disk caching.
-- On cache or resolve failure, keep the existing playback error and retry path;
-  retry re-runs source resolve/cache/open.
-- Keep `preloadAround()` source/cache-only. It does not create media player
+- Retire the historical MP4 whole-file cache experiment.
+- Remove `FilePlayerPlaybackCacheManager`, `PlaybackFileDownloader`, and local
+  `.mp4.download` temp-file handling.
+- Keep playback source resolution as the stable server replacement boundary.
+- Open remote HLS/m3u8 URLs directly.
+- Keep `preloadAround()` source/preload-only. It does not create media player
   sessions and cannot produce audio.
 - Keep preload cancellation wired to hidden tab, single drama dispose, and
   provider dispose through `releasePending()`.
@@ -510,8 +486,10 @@ Phase 5 defer:
 
 - Real playback source API and signed URL refresh.
 - Real CDN header parsing and expiry reconciliation.
-- HLS segment-aware caching and HTTP Range-aware MP4 caching.
-- Disk quota, LRU eviction, and cache size UI/debug tooling.
+- HLS playlist and segment cache.
+- Offline download.
+- Disk quota, LRU eviction, and cache size UI/debug tooling if local HLS cache is
+  later introduced.
 - Server progress reporting and cross-device resume.
 - Android smoke verification unless playback behavior changes require it.
 
