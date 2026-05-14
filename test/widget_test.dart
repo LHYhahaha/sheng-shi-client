@@ -351,6 +351,86 @@ void main() {
     expect(find.text('Found You, Heart Thief'), findsOneWidget);
   });
 
+  testWidgets(
+    'for you taps video to pause and resume with bottom tab visible',
+    (tester) async {
+      final sessions = <_FakePlaybackSession>[];
+      await tester.pumpWidget(_buildAppWithFakePlayback(sessions: sessions));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('For you'));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      final forYouSession = sessions.first;
+
+      await tester.tap(
+        find.byKey(const ValueKey('player_video_tap_layer')).first,
+      );
+      await tester.pumpAndSettle();
+
+      expect(forYouSession.pauseCount, 1);
+      expect(
+        find.byKey(const ValueKey('player_center_play_button')),
+        findsOneWidget,
+      );
+      expect(find.text('Home'), findsOneWidget);
+      expect(find.text('My list'), findsOneWidget);
+      expect(find.text('Profile'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('player_center_play_button')));
+      await tester.pumpAndSettle();
+
+      expect(forYouSession.playCount, 1);
+      expect(
+        find.byKey(const ValueKey('player_center_play_button')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('for you Watch Now is not covered and does not pause playing', (
+    tester,
+  ) async {
+    final sessions = <_FakePlaybackSession>[];
+    await tester.pumpWidget(_buildAppWithFakePlayback(sessions: sessions));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('For you'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final forYouSession = sessions.first;
+
+    await tester.tap(find.text('Watch Now'));
+    await tester.pumpAndSettle();
+
+    expect(forYouSession.pauseCount, 0);
+    expect(find.text('Watch Now'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('player_video_tap_layer')).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(forYouSession.pauseCount, 1);
+    expect(
+      find.byKey(const ValueKey('player_center_play_button')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Watch Now'));
+    await tester.pumpAndSettle();
+
+    expect(forYouSession.playCount, 1);
+    expect(
+      find.byKey(const ValueKey('player_center_play_button')),
+      findsNothing,
+    );
+  });
+
   for (final destination in ['Home', 'My list', 'Profile']) {
     testWidgets('pauses for you playback when switching to $destination', (
       tester,
@@ -923,6 +1003,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   final _widthController = StreamController<int?>.broadcast();
   final _errorController = StreamController<String>.broadcast();
   int pauseCount = 0;
+  int playCount = 0;
   bool isDisposed = false;
 
   @override
@@ -949,7 +1030,9 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   }
 
   @override
-  Future<void> play() async {}
+  Future<void> play() async {
+    playCount += 1;
+  }
 
   @override
   Future<void> dispose() async {

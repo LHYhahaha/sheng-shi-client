@@ -20,7 +20,9 @@ class PlayerChrome extends StatelessWidget {
     required this.content,
     required this.episodeNumber,
     required this.isPlaying,
+    required this.showCenterPlayButton,
     required this.onTogglePlay,
+    required this.onWatchNowTap,
     required this.onEpisodesTap,
     required this.onShareTap,
     required this.onMoreTap,
@@ -38,7 +40,9 @@ class PlayerChrome extends StatelessWidget {
   final PlayerContent content;
   final int episodeNumber;
   final bool isPlaying;
+  final bool showCenterPlayButton;
   final VoidCallback onTogglePlay;
+  final VoidCallback onWatchNowTap;
   final VoidCallback onEpisodesTap;
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
@@ -62,6 +66,7 @@ class PlayerChrome extends StatelessWidget {
         forYouWatchNowBottom + _PlayerLayoutMetrics.forYouMetaGap;
 
     return Stack(
+      fit: StackFit.expand,
       children: [
         const Positioned.fill(child: ColoredBox(color: AppColors.black)),
         Positioned(
@@ -122,6 +127,18 @@ class PlayerChrome extends StatelessWidget {
             ),
           ),
         ),
+        if (isPlaying || showCenterPlayButton)
+          Positioned(
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: bottomFrameHeight,
+            child: GestureDetector(
+              key: const ValueKey('player_video_tap_layer'),
+              behavior: HitTestBehavior.translucent,
+              onTap: onTogglePlay,
+            ),
+          ),
         if (!forYouLayout) ...[
           Positioned(
             left: 0,
@@ -174,30 +191,8 @@ class PlayerChrome extends StatelessWidget {
               ),
             ),
           ),
-          Center(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onTogglePlay,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 160),
-                opacity: isPlaying ? 0 : 1,
-                child: Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.48),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.play_arrow_rounded,
-                    color: Colors.white,
-                    size: 46,
-                  ),
-                ),
-              ),
-            ),
-          ),
         ],
+        if (showCenterPlayButton) _CenterPlayButton(onTap: onTogglePlay),
         Positioned(
           right: 17,
           bottom:
@@ -223,7 +218,7 @@ class PlayerChrome extends StatelessWidget {
             left: 16,
             right: 98,
             bottom: forYouWatchNowBottom,
-            child: _WatchNowButton(onTap: onTogglePlay),
+            child: _WatchNowButton(onTap: onWatchNowTap),
           )
         else ...[
           Positioned(
@@ -344,6 +339,36 @@ class _PlaybackRetryOverlay extends StatelessWidget {
             const SizedBox(height: 8),
             TextButton(onPressed: onRetry, child: Text(context.l10n.retry)),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CenterPlayButton extends StatelessWidget {
+  const _CenterPlayButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: GestureDetector(
+        key: const ValueKey('player_center_play_button'),
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          width: 70,
+          height: 70,
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.48),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.play_arrow_rounded,
+            color: Colors.white,
+            size: 46,
+          ),
         ),
       ),
     );

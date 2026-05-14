@@ -122,6 +122,80 @@ void main() {
     expect(chrome.showLoading, isTrue);
   });
 
+  testWidgets('single drama taps video to pause and center play resumes', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('player_video_tap_layer')));
+    await tester.pumpAndSettle();
+
+    expect(playbackSession.pauseCount, 1);
+    expect(
+      find.byKey(const ValueKey('player_center_play_button')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('player_center_play_button')));
+    await tester.pumpAndSettle();
+
+    expect(playbackSession.playCount, 1);
+    expect(
+      find.byKey(const ValueKey('player_center_play_button')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('locked and unavailable episodes do not expose video toggle', (
+    tester,
+  ) async {
+    final lockedSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
+        ),
+        repository: _FakePlayerFeedRepository.normal(),
+        playbackSessionFactory: () => lockedSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unlock Now'), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
+    expect(lockedSession.playCount, 0);
+
+    final unavailableSession = _FakePlaybackSession();
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '3',
+        ),
+        repository: _FakePlayerFeedRepository.normal(),
+        playbackSessionFactory: () => unavailableSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('This episode is unavailable.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
+    expect(unavailableSession.playCount, 0);
+  });
+
   testWidgets('episodes sheet can select locked episode and show paywall', (
     tester,
   ) async {
@@ -366,6 +440,8 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   final _bufferingController = StreamController<bool>.broadcast();
   final _widthController = StreamController<int?>.broadcast();
   final _errorController = StreamController<String>.broadcast();
+  int pauseCount = 0;
+  int playCount = 0;
 
   @override
   Null get videoController => null;
@@ -395,10 +471,14 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   }
 
   @override
-  Future<void> pause() async {}
+  Future<void> pause() async {
+    pauseCount += 1;
+  }
 
   @override
-  Future<void> play() async {}
+  Future<void> play() async {
+    playCount += 1;
+  }
 
   @override
   Future<void> dispose() async {

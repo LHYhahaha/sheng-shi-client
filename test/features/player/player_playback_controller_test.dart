@@ -127,6 +127,51 @@ void main() {
     expect(container.read(provider).status, PlayerPlaybackStatus.playing);
   });
 
+  test('togglePlay ignores non paused playable states', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.togglePlay();
+    expect(session.playCount, 0);
+    expect(container.read(provider).status, PlayerPlaybackStatus.idle);
+
+    await controller.playItem(_item(2, isLocked: true));
+    await controller.togglePlay();
+    expect(session.playCount, 0);
+    expect(container.read(provider).status, PlayerPlaybackStatus.blocked);
+
+    await controller.playItem(_item(3, isAvailable: false));
+    await controller.togglePlay();
+    expect(session.playCount, 0);
+    expect(container.read(provider).status, PlayerPlaybackStatus.unavailable);
+
+    session.shouldThrowOnOpen = true;
+    await controller.playItem(_item(1));
+    await controller.togglePlay();
+    expect(session.playCount, 0);
+    expect(container.read(provider).status, PlayerPlaybackStatus.error);
+  });
+
+  test('togglePlay ignores opening state', () async {
+    final openCompleter = Completer<void>();
+    final session = _FakePlaybackSession(openCompleter: openCompleter);
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    final playFuture = controller.playItem(_item(1));
+    await Future<void>.delayed(Duration.zero);
+
+    await controller.togglePlay();
+    expect(session.playCount, 0);
+    expect(container.read(provider).status, PlayerPlaybackStatus.opening);
+
+    openCompleter.complete();
+    await playFuture;
+  });
+
   test(
     'pauseForVisibility pauses current session and marks state paused',
     () async {

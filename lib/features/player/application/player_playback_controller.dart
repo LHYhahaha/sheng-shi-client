@@ -318,7 +318,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
 
-    if (state.currentSource == null) {
+    if (state.status != PlayerPlaybackStatus.paused ||
+        state.currentSource == null) {
       return;
     }
 

@@ -258,6 +258,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                 !playbackState.isError;
             final showLoading = canRenderVideo && playbackState.isLoading;
             final showPlaybackError = isCurrentItem && playbackState.isError;
+            final canTogglePlayback =
+                canRenderVideo &&
+                (playbackState.status == PlayerPlaybackStatus.playing ||
+                    playbackState.status == PlayerPlaybackStatus.paused);
+            final showCenterPlayButton =
+                canTogglePlayback &&
+                playbackState.status == PlayerPlaybackStatus.paused &&
+                playbackState.hasFirstFrame &&
+                !playbackState.isBuffering;
             return Stack(
               children: [
                 PlayerChrome(
@@ -277,13 +286,19 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                       isCurrentItem &&
                       !item.episode.isUnavailable &&
                       !item.episode.isLocked,
-                  onTogglePlay:
-                      item.episode.isUnavailable || item.episode.isLocked
-                      ? () {}
-                      : () {
+                  showCenterPlayButton: showCenterPlayButton,
+                  onTogglePlay: canTogglePlayback
+                      ? () {
                           unawaited(playbackController.togglePlay());
-                          uiController.togglePlay();
-                        },
+                        }
+                      : () {},
+                  onWatchNowTap:
+                      canTogglePlayback &&
+                          playbackState.status == PlayerPlaybackStatus.paused
+                      ? () {
+                          unawaited(playbackController.togglePlay());
+                        }
+                      : () {},
                   onEpisodesTap: () {
                     _showDetailSheet(
                       item.content,
