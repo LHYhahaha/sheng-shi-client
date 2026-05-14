@@ -22,27 +22,37 @@ class PreparedPlaybackSession {
     required this.source,
     required this.session,
     this.kind = PreparedPlaybackSessionKind.prepared,
+    this.isOpened = false,
     this.hasFirstFrame = false,
+    this.hasPlaybackAdvanced = false,
     this.position = Duration.zero,
     this.duration = Duration.zero,
     this.bufferedPosition = Duration.zero,
     StreamSubscription<int?>? firstFrameSubscription,
-  }) : _firstFrameSubscription = firstFrameSubscription;
+    StreamSubscription<Duration>? positionSubscription,
+  }) : _firstFrameSubscription = firstFrameSubscription,
+       _positionSubscription = positionSubscription;
 
   final String itemId;
   final PlaybackSource source;
   final PlayerPlaybackSession session;
   final PreparedPlaybackSessionKind kind;
+  bool isOpened;
   bool hasFirstFrame;
+  bool hasPlaybackAdvanced;
   final Duration position;
   final Duration duration;
   final Duration bufferedPosition;
   StreamSubscription<int?>? _firstFrameSubscription;
+  StreamSubscription<Duration>? _positionSubscription;
 
   Future<void> detachFirstFrameListener() async {
     final subscription = _firstFrameSubscription;
     _firstFrameSubscription = null;
     await subscription?.cancel();
+    final positionSubscription = _positionSubscription;
+    _positionSubscription = null;
+    await positionSubscription?.cancel();
   }
 
   Future<void> dispose() async {
@@ -90,6 +100,9 @@ class PlayerPlaybackPrepareManager {
     final generation = ++_generation;
     PlayerPlaybackSession? session;
     StreamSubscription<int?>? widthSubscription;
+    StreamSubscription<Duration>? positionSubscription;
+    StreamSubscription<bool>? playingSubscription;
+    StreamSubscription<bool>? bufferingSubscription;
     try {
       final source = await sourceRepository.resolve(item);
       if (generation != _generation) {
@@ -98,16 +111,51 @@ class PlayerPlaybackPrepareManager {
       session = _sessionFactory();
       _pendingSessions[item.id] = session;
       var hasFirstFrame = false;
+      var hasPlaybackAdvanced = false;
       final firstFrameCompleter = Completer<void>();
       PreparedPlaybackSession? prepared;
       widthSubscription = session.widthStream.listen((width) {
         if (width != null && width > 0) {
           hasFirstFrame = true;
           prepared?.hasFirstFrame = true;
+          _log(
+            'prepare widthStream received',
+            itemId: item.id,
+            source: source.playableSource,
+            details: 'width=$width',
+          );
           if (!firstFrameCompleter.isCompleted) {
             firstFrameCompleter.complete();
           }
         }
+      });
+      positionSubscription = session.positionStream.listen((position) {
+        if (position > Duration.zero) {
+          hasPlaybackAdvanced = true;
+          prepared?.hasPlaybackAdvanced = true;
+          _log(
+            'prepare position advanced',
+            itemId: item.id,
+            source: source.playableSource,
+            details: 'positionMs=${position.inMilliseconds}',
+          );
+        }
+      });
+      playingSubscription = session.playingStream.listen((isPlaying) {
+        _log(
+          isPlaying
+              ? 'prepare playingStream true'
+              : 'prepare playingStream false',
+          itemId: item.id,
+          source: source.playableSource,
+        );
+      });
+      bufferingSubscription = session.bufferingStream.listen((isBuffering) {
+        _log(
+          isBuffering ? 'prepare buffering start' : 'prepare buffering end',
+          itemId: item.id,
+          source: source.playableSource,
+        );
       });
       final warmUpCancel = Completer<void>();
       _warmUpCancels[item.id] = warmUpCancel;
@@ -121,11 +169,24 @@ class PlayerPlaybackPrepareManager {
         ]),
       );
       await session.setVolume(0);
+      _log(
+        'prepare open start',
+        itemId: item.id,
+        source: source.playableSource,
+      );
       await session.open(source.playableSource, play: true);
+      _log(
+        'prepare open completed',
+        itemId: item.id,
+        source: source.playableSource,
+      );
       if (generation != _generation) {
         _pendingSessions.remove(item.id);
         _completeWarmUpCancel(item.id);
         await widthSubscription.cancel();
+        await positionSubscription.cancel();
+        await playingSubscription.cancel();
+        await bufferingSubscription.cancel();
         await session.dispose();
         return null;
       }
@@ -133,12 +194,20 @@ class PlayerPlaybackPrepareManager {
         itemId: item.id,
         source: source,
         session: session,
+        isOpened: true,
         hasFirstFrame: hasFirstFrame,
+        hasPlaybackAdvanced: hasPlaybackAdvanced,
         firstFrameSubscription: widthSubscription,
+        positionSubscription: positionSubscription,
       );
       widthSubscription = null;
+      positionSubscription = null;
       _pendingSessions.remove(item.id);
       await _put(prepared);
+      await playingSubscription.cancel();
+      await bufferingSubscription.cancel();
+      playingSubscription = null;
+      bufferingSubscription = null;
       unawaited(
         _finishWarmUp(
           itemId: item.id,
@@ -153,6 +222,9 @@ class PlayerPlaybackPrepareManager {
       _pendingSessions.remove(item.id);
       _completeWarmUpCancel(item.id);
       await widthSubscription?.cancel();
+      await positionSubscription?.cancel();
+      await playingSubscription?.cancel();
+      await bufferingSubscription?.cancel();
       if (session != null) {
         await session.dispose();
       }
@@ -286,6 +358,19 @@ class PlayerPlaybackPrepareManager {
     }
 
     try {
+      if (result == _WarmUpResult.timeout) {
+        _log(
+          'prepare warm-up timeout',
+          itemId: itemId,
+          source: prepared?.source.playableSource,
+          details: 'timeoutMs=${warmUpTimeout.inMilliseconds}',
+        );
+      }
+      _log(
+        'prepare pause called',
+        itemId: itemId,
+        source: prepared?.source.playableSource,
+      );
       await session.pause();
       await session.setVolume(100);
       _log(

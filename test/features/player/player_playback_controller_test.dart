@@ -1251,6 +1251,40 @@ void main() {
   });
 
   test(
+    'prepared playback advanced without width is reused without fallback open',
+    () async {
+      final currentSession = _FakePlaybackSession();
+      final preparedSession = _FakePlaybackSession(emitWidthOnOpen: false);
+      final fallbackSession = _FakePlaybackSession();
+      var index = 0;
+      final sessions = [currentSession, preparedSession, fallbackSession];
+      PlayerPlaybackSession sessionFactory() => sessions[index++];
+      final container = _createPrepareContainer(sessionFactory);
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      await controller.preloadAround([_item(1), _item(2)], 0);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      preparedSession.emitPosition(const Duration(milliseconds: 400));
+      await Future<void>.delayed(Duration.zero);
+      await controller.playItem(_item(2));
+
+      expect(preparedSession.openedSources, [_secondVideoUrl]);
+      expect(preparedSession.playCount, 1);
+      expect(fallbackSession.openedSources, isEmpty);
+      expect(container.read(provider).hasFirstFrame, isFalse);
+      expect(container.read(provider).isBuffering, isTrue);
+      expect(controller.exportTimingReport(), contains('prepared hit next'));
+      expect(
+        controller.exportTimingReport(),
+        contains('playbackAdvanced=true'),
+      );
+    },
+  );
+
+  test(
     'prepared takeover cancels warm-up pause before current playback',
     () async {
       final currentSession = _FakePlaybackSession();

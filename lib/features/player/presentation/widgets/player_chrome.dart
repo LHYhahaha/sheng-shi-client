@@ -12,6 +12,7 @@ abstract final class _PlayerLayoutMetrics {
   static const singleActionRailBottom = 161.0;
   static const forYouWatchNowBottom = 24.0;
   static const forYouMetaGap = 58.0;
+  static const singleBottomFrameHeight = 79.0;
   static const singleBottomActionBottom = 41.0;
 }
 
@@ -79,6 +80,17 @@ class PlayerChrome extends StatefulWidget {
   final BoxFit videoFit;
   final bool forYouLayout;
 
+  @visibleForTesting
+  static double videoViewportBottomInset({
+    required bool forYouLayout,
+    required double bottomInset,
+  }) {
+    if (forYouLayout) {
+      return bottomInset;
+    }
+    return _PlayerLayoutMetrics.singleBottomFrameHeight + bottomInset;
+  }
+
   @override
   State<PlayerChrome> createState() => _PlayerChromeState();
 }
@@ -121,7 +133,10 @@ class _PlayerChromeState extends State<PlayerChrome> {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final bottomInset = mediaQuery.padding.bottom;
-    final bottomFrameHeight = forYouLayout ? bottomInset : 0.0;
+    final bottomFrameHeight = PlayerChrome.videoViewportBottomInset(
+      forYouLayout: forYouLayout,
+      bottomInset: bottomInset,
+    );
     final forYouWatchNowBottom =
         bottomInset + _PlayerLayoutMetrics.forYouWatchNowBottom;
     final forYouMetaBottom =
@@ -132,6 +147,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
       children: [
         const Positioned.fill(child: ColoredBox(color: AppColors.black)),
         Positioned(
+          key: const ValueKey('player_video_viewport'),
           left: 0,
           top: 0,
           right: 0,
@@ -206,7 +222,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
             left: 0,
             right: 0,
             bottom: 0,
-            height: 79 + bottomInset,
+            height: bottomFrameHeight,
             child: const ColoredBox(color: Color(0xFF141414)),
           ),
         ],

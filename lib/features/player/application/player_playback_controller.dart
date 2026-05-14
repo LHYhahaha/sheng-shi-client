@@ -420,7 +420,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           'requestedItemId=${item.id}',
           'hit=${prepared != null}',
           if (prepared != null) 'kind=${prepared.kind.name}',
+          if (prepared != null) 'isOpened=${prepared.isOpened}',
           if (prepared != null) 'firstFrameReady=${prepared.hasFirstFrame}',
+          if (prepared != null)
+            'playbackAdvanced=${prepared.hasPlaybackAdvanced}',
           if (prepared != null)
             'positionMs=${prepared.position.inMilliseconds}',
           'windowItemsBefore=$windowItemsBeforeTake',
@@ -437,7 +440,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           source: prepared.source.playableSource,
           details: _timingDetails([
             'window=hit',
+            'isOpened=${prepared.isOpened}',
             'firstFrameReady=${prepared.hasFirstFrame}',
+            'playbackAdvanced=${prepared.hasPlaybackAdvanced}',
           ]),
         );
         await _replaceCurrentSession(prepared);
@@ -653,11 +658,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
     _preloadedItemIds.removeWhere((id) => !allowedIds.contains(id));
     _cancelPreloadsNotIn(allowedIds);
-    unawaited(
-      _retainSessionWindowOnly(
-        allowedIds,
-        reason: 'stale generation/window trim',
-      ),
+    await _retainSessionWindowOnly(
+      allowedIds,
+      reason: 'stale generation/window trim',
     );
 
     _syncPreloadState();

@@ -209,6 +209,43 @@ void main() {
     expect(chrome.videoFit, BoxFit.contain);
   });
 
+  testWidgets('single drama viewport excludes bottom controls', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final viewportRect = tester.getRect(
+      find.byKey(const ValueKey('player_video_viewport')).first,
+    );
+    final pageRect = tester.getRect(find.byType(PlayerPage));
+
+    expect(viewportRect.top, pageRect.top);
+    expect(viewportRect.bottom, pageRect.bottom - 79);
+  });
+
+  testWidgets('for you viewport keeps bottom safe-area-only policy', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: '/for-you',
+        repository: _FakePlayerFeedRepository.unlocked(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final viewportRect = tester.getRect(
+      find.byKey(const ValueKey('player_video_viewport')).first,
+    );
+    final pageRect = tester.getRect(find.byType(PlayerPage));
+
+    expect(viewportRect.top, pageRect.top);
+    expect(viewportRect.bottom, pageRect.bottom);
+  });
+
   testWidgets('error state does not expose playable video surface', (
     tester,
   ) async {

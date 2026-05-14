@@ -1061,6 +1061,48 @@ Validation rule:
   investigation should target HLS first segment, bitrate, CDN behavior, and the
   media_kit first-frame pipeline rather than papering over the delay in UI.
 
+### Phase 5.10: Android Safe Area And Prepared First Frame Tuning
+
+Implemented as a focused player-only pass after Android release timing showed
+stable retained/prepared session hits but two remaining polish issues:
+
+- 16:9 `contain` playback could look vertically off-center on Android three-key
+  navigation because the video fit container still included the player bottom
+  control frame.
+- `mux-tears-stable` could hit a prepared session with `firstFrameReady=false`,
+  so takeover reused the prepared session but still needed clearer diagnostics
+  around whether the prepared player had actually opened or advanced playback.
+
+Completed:
+
+- Single-drama playback now computes an explicit video viewport that excludes
+  the bottom player controls and system bottom inset before applying video fit.
+  This keeps 16:9 and 4:3 `contain` sources centered in the visible playback
+  area without changing the immersive 9:16 `cover` policy.
+- For You keeps its safe-area-only viewport policy, so bottom-tab feed playback
+  is not coupled to the single-drama membership/download frame.
+- Viewport behavior is covered by widget tests for single drama and For You.
+- Prepared warm-up logs now include open start/completion, playing stream,
+  buffering stream, width stream, position advance, timeout, and pause events.
+- Prepared sessions track `isOpened`, `hasFirstFrame`, and
+  `hasPlaybackAdvanced`. If width/first-frame reporting is late but playback has
+  opened or advanced, takeover still reuses the prepared session instead of
+  falling back to a normal source resolve/open path.
+- Session window trimming during `preloadAround()` is awaited so stale retained
+  sessions are released deterministically and the window remains bounded to the
+  intended previous/current/next set.
+
+Current conclusion:
+
+- A prepared hit with `firstFrameReady=false` can still be a useful warm session
+  if the media session opened and playback advanced. The UI should keep the
+  loading overlay until first frame, but the playback path should not duplicate
+  source resolve/media open.
+- If a stable source still has slow first frame after this tuning, the next
+  investigation should stay in the HLS first segment, bitrate, CDN behavior, or
+  media_kit first-frame pipeline. It should not be treated as a layout/safe-area
+  issue unless screenshots show a new visual regression.
+
 ### Player Visual Fit Backlog: Video Crop And Aspect Ratio
 
 Observed during device playback review. Some videos may not appear fully inside
