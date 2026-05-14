@@ -2,67 +2,44 @@ import '../domain/player_content.dart';
 
 const mockPlayerVideoAssets = [
   MockPlayerVideoAsset(
-    title: 'H.264 AAC 360p sample',
-    sourceName: 'SampleFile.com',
-    sourcePage: 'https://samplefile.com/samples/video/mp4/',
+    title: 'HLS drama stream A',
+    sourceName: 'lz15uu.com',
+    sourcePage: 'https://v.lz15uu.com/',
     licenseNote:
-        'SampleFile.com MP4 fixture for testing and development; remote URL only.',
-    videoUrl:
-        'https://samplefile.com/samples/download/video/mp4/mp4_h264_aac_360p_sample.mp4/',
+        'Remote HLS fixture for testing and development; remote URL only.',
+    videoUrl: 'https://v.lz15uu.com/20260416/12043_9d952763/index.m3u8',
   ),
   MockPlayerVideoAsset(
-    title: 'H.264 AAC 720p sample',
-    sourceName: 'SampleFile.com',
-    sourcePage: 'https://samplefile.com/samples/video/mp4/',
+    title: 'HLS drama stream B',
+    sourceName: 'lz15uu.com',
+    sourcePage: 'https://v.lz15uu.com/',
     licenseNote:
-        'SampleFile.com MP4 fixture for testing and development; remote URL only.',
-    videoUrl:
-        'https://samplefile.com/samples/download/video/mp4/mp4_h264_aac_720p_sample.mp4/',
+        'Remote HLS fixture for testing and development; remote URL only.',
+    videoUrl: 'https://v.lz15uu.com/20260416/12043_9d952763/index.m3u8',
   ),
   MockPlayerVideoAsset(
-    title: 'H.264 AAC 1080p sample',
-    sourceName: 'SampleFile.com',
-    sourcePage: 'https://samplefile.com/samples/video/mp4/',
+    title: 'HLS drama stream C',
+    sourceName: 'bfvvs.com',
+    sourcePage: 'https://hn.bfvvs.com/',
     licenseNote:
-        'SampleFile.com MP4 fixture for testing and development; remote URL only.',
-    videoUrl:
-        'https://samplefile.com/samples/download/video/mp4/mp4_h264_aac_1080p_sample.mp4/',
+        'Remote HLS fixture for testing and development; remote URL only.',
+    videoUrl: 'https://hn.bfvvs.com/play/bW6Om3Qa/index.m3u8',
   ),
   MockPlayerVideoAsset(
-    title: 'Portrait H.264 AAC sample',
-    sourceName: 'SampleFile.com',
-    sourcePage: 'https://samplefile.com/samples/video/mp4/',
+    title: 'HLS drama stream D',
+    sourceName: 'bfvvs.com',
+    sourcePage: 'https://hn.bfvvs.com/',
     licenseNote:
-        'SampleFile.com MP4 fixture for testing and development; remote URL only.',
-    videoUrl:
-        'https://samplefile.com/samples/download/video/mp4/mp4_portrait_h264_aac_sample.mp4/',
+        'Remote HLS fixture for testing and development; remote URL only.',
+    videoUrl: 'https://hn.bfvvs.com/play/bW6Om3Qa/index.m3u8',
   ),
   MockPlayerVideoAsset(
-    title: 'Square H.264 AAC sample',
-    sourceName: 'SampleFile.com',
-    sourcePage: 'https://samplefile.com/samples/video/mp4/',
+    title: 'HLS drama stream E',
+    sourceName: 'gsuus.com',
+    sourcePage: 'https://v.gsuus.com/',
     licenseNote:
-        'SampleFile.com MP4 fixture for testing and development; remote URL only.',
-    videoUrl:
-        'https://samplefile.com/samples/download/video/mp4/mp4_square_h264_aac_sample.mp4/',
-  ),
-  MockPlayerVideoAsset(
-    title: 'H.264 AAC 12s sample',
-    sourceName: 'SampleFile.com',
-    sourcePage: 'https://samplefile.com/samples/video/mp4/',
-    licenseNote:
-        'SampleFile.com MP4 fixture for testing and development; remote URL only.',
-    videoUrl:
-        'https://samplefile.com/samples/download/video/mp4/mp4_h264_aac_12s_sample.mp4/',
-  ),
-  MockPlayerVideoAsset(
-    title: 'H.264 AAC subtitle-track sample',
-    sourceName: 'SampleFile.com',
-    sourcePage: 'https://samplefile.com/samples/video/mp4/',
-    licenseNote:
-        'SampleFile.com MP4 fixture for testing and development; remote URL only.',
-    videoUrl:
-        'https://samplefile.com/samples/download/video/mp4/mp4_h264_aac_subtitle_track_sample.mp4/',
+        'Remote HLS fixture for testing and development; remote URL only.',
+    videoUrl: 'https://v.gsuus.com/play/e5y8AAxe/index.m3u8',
   ),
 ];
 

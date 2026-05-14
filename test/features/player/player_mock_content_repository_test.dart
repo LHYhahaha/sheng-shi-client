@@ -3,20 +3,20 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('MockPlayerContentRepository', () {
-    test('keeps audio-capable remote video metadata for mock playback', () {
-      expect(mockPlayerVideoAssets.length, inInclusiveRange(6, 8));
+    test('keeps remote HLS video metadata for mock playback', () {
+      expect(mockPlayerVideoAssets.length, 5);
 
       for (final asset in mockPlayerVideoAssets) {
         expect(asset.title, isNotEmpty);
         expect(asset.sourceName, isNotEmpty);
-        expect(asset.sourcePage, startsWith('https://samplefile.com/'));
+        expect(asset.sourcePage, startsWith('https://'));
         expect(asset.licenseNote, contains('testing and development'));
-        expect(asset.videoUrl, startsWith('https://samplefile.com/'));
-        expect(asset.videoUrl, contains('h264_aac'));
+        expect(asset.videoUrl, startsWith('https://'));
+        expect(asset.videoUrl, endsWith('/index.m3u8'));
       }
     });
 
-    test('uses audio-capable mock videos across generated episodes', () async {
+    test('uses HLS mock videos across generated episodes', () async {
       final content = await const MockPlayerContentRepository()
           .getPlayerContent(dramaId: 'found-you');
 

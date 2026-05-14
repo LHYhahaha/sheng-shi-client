@@ -19,6 +19,7 @@ const _videoUrl =
     'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4';
 const _secondVideoUrl =
     'https://samplefile.com/samples/download/video/mp4/mp4_h264_aac_720p_sample.mp4/';
+const _hlsVideoUrl = 'https://v.gsuus.com/play/e5y8AAxe/index.m3u8';
 
 String _playableSource(int episodeNumber) {
   return episodeNumber == 1 ? _videoUrl : _secondVideoUrl;
@@ -69,6 +70,20 @@ void main() {
 
     expect(cacheManager.downloadCount, 1);
     expect(session.openedSources, [_playableSource(1)]);
+  });
+
+  test('hls source opens remote url without file cache download', () async {
+    final session = _FakePlaybackSession();
+    final cacheManager = MockPlayerPlaybackCacheManager();
+    final container = _createContainer(session, cacheManager: cacheManager);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1, videoUrl: _hlsVideoUrl));
+
+    expect(cacheManager.lookupCount, 1);
+    expect(cacheManager.downloadCount, 0);
+    expect(session.openedSources, [_hlsVideoUrl]);
   });
 
   test('expired cache downloads a fresh source', () async {
@@ -935,14 +950,15 @@ PlayerFeedItem _item(
   bool isLocked = false,
   bool isAvailable = true,
   bool hasSource = true,
+  String? videoUrl,
 }) {
   final episode = PlayerEpisode(
     id: 'ep-$episodeNumber',
     number: episodeNumber,
     isLocked: isLocked,
-    videoUrl: hasSource
-        ? (episodeNumber == 1 ? _videoUrl : _secondVideoUrl)
-        : null,
+    videoUrl:
+        videoUrl ??
+        (hasSource ? (episodeNumber == 1 ? _videoUrl : _secondVideoUrl) : null),
     isAvailable: isAvailable,
   );
   final content = PlayerContent(

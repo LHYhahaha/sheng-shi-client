@@ -34,11 +34,15 @@ class MockPlayerPlaybackSourceRepository
       throw StateError('Mock playback source resolve failed.');
     }
 
+    final isHls = remoteUrl.toLowerCase().contains('.m3u8');
     final policy = PlaybackCachePolicy(
       allowCache:
-          remoteUrl.startsWith('http://') || remoteUrl.startsWith('https://'),
+          !isHls &&
+          (remoteUrl.startsWith('http://') || remoteUrl.startsWith('https://')),
       expiresAt: DateTime.now().add(const Duration(minutes: 30)),
       cacheKey: 'player:${item.content.id}:${item.episode.id}',
+      format: isHls ? 'm3u8' : 'mp4',
+      codecHint: isHls ? 'hls' : 'h264/aac',
     );
     final cached = await cacheManager.lookup(
       item: item,
