@@ -219,6 +219,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   var _subscriptions = <StreamSubscription<dynamic>>[];
   final _preloadedItemIds = <String>{};
   final _preloadStates = <String, PlaybackPreloadState>{};
+  final _preparingItemIds = <String>{};
+  var _activePreloadAllowedIds = <String>{};
   int _generation = 0;
   int _preloadGeneration = 0;
   bool _pauseWhenOpenCompletes = false;
@@ -229,6 +231,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   final _timingEvents = <PlayerPlaybackTimingEvent>[];
   String? _currentPlaybackItemId;
   PlaybackSource? _currentPlaybackSource;
+  bool _currentPlaybackHasFirstFrame = false;
+  Duration _currentPlaybackPosition = Duration.zero;
+  Duration _currentPlaybackDuration = Duration.zero;
+  Duration _currentPlaybackBufferedPosition = Duration.zero;
 
   List<PlayerPlaybackTimingEvent> get timingEvents =>
       List<PlayerPlaybackTimingEvent>.unmodifiable(_timingEvents);
@@ -249,7 +255,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     ref.onDispose(() {
       unawaited(_cancelSessionStreams());
       unawaited(_disposePreloads(syncState: false));
-      unawaited(_prepareManager.release());
+      unawaited(_releaseSessionWindowFor('provider dispose'));
       unawaited(_disposeSessionOnly());
     });
     return PlayerPlaybackState.initial(
@@ -274,6 +280,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       );
       _currentPlaybackItemId = null;
       _currentPlaybackSource = null;
+      _clearCurrentPlaybackSnapshot();
       return;
     }
 
@@ -290,6 +297,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       );
       _currentPlaybackItemId = null;
       _currentPlaybackSource = null;
+      _clearCurrentPlaybackSnapshot();
       return;
     }
 
@@ -307,6 +315,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       );
       _currentPlaybackItemId = null;
       _currentPlaybackSource = null;
+      _clearCurrentPlaybackSnapshot();
       return;
     }
 
@@ -341,10 +350,17 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     try {
       final prepared = _prepareManager.takeIfMatches(item.id);
       if (prepared != null) {
+        final hitEvent = prepared.kind == PreparedPlaybackSessionKind.retained
+            ? 'retained hit previous'
+            : 'prepared hit next';
         _logTiming(
-          'prepared hit',
+          hitEvent,
           itemId: item.id,
           source: prepared.source.playableSource,
+          details: _timingDetails([
+            'window=hit',
+            'firstFrameReady=${prepared.hasFirstFrame}',
+          ]),
         );
         await _replaceCurrentSession(prepared);
         if (!ref.mounted || !_isCurrent(generation)) {
@@ -355,7 +371,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           videoController: _session.videoController,
           currentSource: prepared.source.playableSource,
           hasFirstFrame: prepared.hasFirstFrame,
+          position: prepared.position,
+          duration: prepared.duration,
+          bufferedPosition: prepared.bufferedPosition,
         );
+        _currentPlaybackHasFirstFrame = prepared.hasFirstFrame;
+        _currentPlaybackPosition = prepared.position;
+        _currentPlaybackDuration = prepared.duration;
+        _currentPlaybackBufferedPosition = prepared.bufferedPosition;
         await _restoreProgressIfNeeded(resumeProgress, generation);
         if (!ref.mounted || !_isCurrent(generation)) {
           return;
@@ -380,6 +403,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         return;
       }
 
+      _logTiming(
+        'window miss fallback open',
+        itemId: item.id,
+        source: sourceHint,
+        details: _timingDetails(['window=miss', 'firstFrameReady=false']),
+      );
+      _logTiming('list entry normal open', itemId: item.id, source: sourceHint);
       final resolveStartedAt = DateTime.now();
       _logTiming('source resolve start', itemId: item.id, source: sourceHint);
       final playbackSource = await ref
@@ -399,6 +429,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       }
       _currentPlaybackSource = playbackSource;
       _currentPlaybackItemId = item.id;
+      _clearCurrentPlaybackSnapshot();
       state = state.copyWith(currentSource: playbackSource.playableSource);
       final openStartedAt = DateTime.now();
       _logTiming(
@@ -447,6 +478,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       }
       _currentPlaybackItemId = null;
       _currentPlaybackSource = null;
+      _clearCurrentPlaybackSnapshot();
       state = state.copyWith(
         status: PlayerPlaybackStatus.error,
         hasFirstFrame: false,
@@ -489,7 +521,6 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       candidates.add(item);
     }
 
-    final preloadGeneration = ++_preloadGeneration;
     final allowedIds = candidates
         .take(_maxPreloadedSources)
         .map((item) => item.id)
@@ -497,10 +528,19 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (state.currentItemId != null) {
       allowedIds.add(state.currentItemId!);
     }
+    final preloadGeneration = setEquals(_activePreloadAllowedIds, allowedIds)
+        ? _preloadGeneration
+        : ++_preloadGeneration;
+    _activePreloadAllowedIds = allowedIds;
 
     _preloadedItemIds.removeWhere((id) => !allowedIds.contains(id));
     _cancelPreloadsNotIn(allowedIds);
-    unawaited(_prepareManager.retainOnly(allowedIds));
+    unawaited(
+      _retainSessionWindowOnly(
+        allowedIds,
+        reason: 'stale generation/window trim',
+      ),
+    );
 
     _syncPreloadState();
 
@@ -601,6 +641,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (state.hasEnded) {
       await _session.seek(Duration.zero);
       _ignoreNextCompleted = false;
+      _currentPlaybackPosition = Duration.zero;
       state = state.copyWith(position: Duration.zero, hasEnded: false);
     }
     await _session.play();
@@ -617,6 +658,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _pauseWhenOpenCompletes = false;
     await _session.seek(Duration.zero);
     _ignoreNextCompleted = false;
+    _currentPlaybackPosition = Duration.zero;
     await _session.play();
     if (!ref.mounted) {
       return;
@@ -674,6 +716,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     final target = _clampToDuration(
       state.seekPreviewPosition ?? state.position,
     );
+    _currentPlaybackPosition = target;
     state = state.copyWith(position: target, isSeeking: false);
     _saveProgressIfNeeded(position: target);
     _ignoreNextCompleted =
@@ -712,7 +755,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _pauseWhenOpenCompletes = true;
     ++_generation;
     await _session.pause();
-    await _prepareManager.release();
+    await _releaseSessionWindowFor('hidden');
     await _disposePreloads(syncState: syncState);
     if (!syncState || !ref.mounted) {
       return;
@@ -733,13 +776,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   Future<void> disposeSession({bool syncState = true}) async {
     _pauseWhenOpenCompletes = true;
     ++_generation;
-    await _prepareManager.release();
+    await _releaseSessionWindowFor('dispose');
     await _disposePreloads(syncState: syncState);
     _preloadStates.clear();
     _preloadedItemIds.clear();
     await _disposeSessionOnly();
     _currentPlaybackItemId = null;
     _currentPlaybackSource = null;
+    _clearCurrentPlaybackSnapshot();
     if (!syncState || !ref.mounted) {
       return;
     }
@@ -754,7 +798,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   Future<void> releaseSessionWindow() {
-    return _prepareManager.release();
+    return _releaseSessionWindowFor('memory pressure');
   }
 
   void _handleBuffering(bool isBuffering) {
@@ -832,6 +876,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
     _lastPositionUpdate = clamped;
+    _currentPlaybackPosition = clamped;
     state = state.copyWith(position: clamped);
     _saveProgressIfNeeded(position: clamped);
   }
@@ -844,6 +889,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
     final normalized = duration < Duration.zero ? Duration.zero : duration;
+    _currentPlaybackDuration = normalized;
     state = state.copyWith(duration: normalized);
     _saveProgressIfNeeded(duration: normalized);
   }
@@ -855,7 +901,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (state.currentSource == null) {
       return;
     }
-    state = state.copyWith(bufferedPosition: _clampToDuration(position));
+    final clamped = _clampToDuration(position);
+    _currentPlaybackBufferedPosition = clamped;
+    state = state.copyWith(bufferedPosition: clamped);
   }
 
   void _handleRate(double rate) {
@@ -890,6 +938,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       hasFirstFrame: true,
       isBuffering: false,
     );
+    _currentPlaybackHasFirstFrame = true;
   }
 
   void _handleError(String error) {
@@ -962,8 +1011,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     final previousSession = _session;
     final previousSource = _currentPlaybackSource;
     final previousItemId = _currentPlaybackItemId;
-    final previousHasFirstFrame = state.hasFirstFrame;
+    final previousHasFirstFrame = _currentPlaybackHasFirstFrame;
+    final previousPosition = _currentPlaybackPosition;
+    final previousDuration = _currentPlaybackDuration;
+    final previousBufferedPosition = _currentPlaybackBufferedPosition;
     await _cancelSessionStreams();
+    await prepared.detachFirstFrameListener();
     _session = prepared.session;
     _currentPlaybackSource = prepared.source;
     _currentPlaybackItemId = prepared.itemId;
@@ -975,11 +1028,25 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           itemId: previousItemId,
           source: previousSource,
           session: previousSession,
+          kind: PreparedPlaybackSessionKind.retained,
           hasFirstFrame: previousHasFirstFrame,
+          position: previousPosition,
+          duration: previousDuration,
+          bufferedPosition: previousBufferedPosition,
         ),
+      );
+      _logTiming(
+        'previous retained',
+        itemId: previousItemId,
+        source: previousSource.playableSource,
+        details: _timingDetails([
+          'firstFrameReady=$previousHasFirstFrame',
+          'positionMs=${previousPosition.inMilliseconds}',
+        ]),
       );
     } else {
       await previousSession.dispose();
+      _logTiming('old session disposed', details: 'reason=replace no source');
     }
   }
 
@@ -990,30 +1057,54 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (!ref.mounted || _isSessionDisposed) {
       return;
     }
-    final startedAt = DateTime.now();
-    _logTiming(
-      'prepare start',
-      itemId: item.id,
-      source: item.episode.videoSource,
-    );
-    final prepared = await _prepareManager.prepare(
-      item: item,
-      sourceRepository: ref.read(playerPlaybackSourceRepositoryProvider),
-    );
-    if (!ref.mounted ||
-        _isSessionDisposed ||
-        preloadGeneration != _preloadGeneration) {
-      if (prepared != null) {
-        await _prepareManager.release();
-      }
+    if (!_preparingItemIds.add(item.id)) {
+      _logTiming(
+        'prepare skipped duplicate',
+        itemId: item.id,
+        source: item.episode.videoSource,
+      );
       return;
     }
-    _logTiming(
-      prepared == null ? 'prepare failed' : 'prepare end',
-      itemId: item.id,
-      source: item.episode.videoSource,
-      elapsed: DateTime.now().difference(startedAt),
-    );
+    final startedAt = DateTime.now();
+    try {
+      _logTiming(
+        'prepare start',
+        itemId: item.id,
+        source: item.episode.videoSource,
+      );
+      final prepared = await _prepareManager.prepare(
+        item: item,
+        sourceRepository: ref.read(playerPlaybackSourceRepositoryProvider),
+      );
+      if (!ref.mounted ||
+          _isSessionDisposed ||
+          preloadGeneration != _preloadGeneration) {
+        if (prepared != null) {
+          await _prepareManager.releaseItem(prepared.itemId);
+          _logTiming(
+            'session window release',
+            itemId: prepared.itemId,
+            source: prepared.source.playableSource,
+            details: 'reason=stale generation',
+          );
+        }
+        return;
+      }
+      _logTiming(
+        prepared == null ? 'prepare failed' : 'prepare end',
+        itemId: item.id,
+        source: item.episode.videoSource,
+        elapsed: DateTime.now().difference(startedAt),
+        details: prepared == null
+            ? null
+            : _timingDetails([
+                'next prepared',
+                'firstFrameReady=${prepared.hasFirstFrame}',
+              ]),
+      );
+    } finally {
+      _preparingItemIds.remove(item.id);
+    }
   }
 
   Future<void> _restoreProgressIfNeeded(
@@ -1036,6 +1127,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           ? progress.position
           : state.bufferedPosition,
     );
+    _currentPlaybackPosition = progress.position;
+    if (progress.duration > Duration.zero) {
+      _currentPlaybackDuration = progress.duration;
+    }
+    if (_currentPlaybackBufferedPosition < progress.position) {
+      _currentPlaybackBufferedPosition = progress.position;
+    }
   }
 
   void _saveProgressIfNeeded({Duration? position, Duration? duration}) {
@@ -1126,8 +1224,45 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   Future<void> _disposePreloads({bool syncState = true}) async {
     _preloadGeneration += 1;
+    _activePreloadAllowedIds = <String>{};
     _cancelPendingPreloads(syncState: syncState);
     await _preloadManager.releasePending();
+  }
+
+  void _clearCurrentPlaybackSnapshot() {
+    _currentPlaybackHasFirstFrame = false;
+    _currentPlaybackPosition = Duration.zero;
+    _currentPlaybackDuration = Duration.zero;
+    _currentPlaybackBufferedPosition = Duration.zero;
+  }
+
+  Future<void> _retainSessionWindowOnly(
+    Set<String> allowedIds, {
+    required String reason,
+  }) async {
+    final before = _prepareManager.windowItemIds.toSet();
+    await _prepareManager.retainOnly(allowedIds);
+    final after = _prepareManager.windowItemIds.toSet();
+    final disposedIds = before.difference(after);
+    for (final itemId in disposedIds) {
+      _logTiming(
+        'old session disposed',
+        itemId: itemId,
+        details: 'reason=$reason',
+      );
+    }
+  }
+
+  Future<void> _releaseSessionWindowFor(String reason) async {
+    final itemIds = _prepareManager.windowItemIds;
+    await _prepareManager.release();
+    _logTiming(
+      'session window release',
+      details: _timingDetails([
+        'reason=$reason',
+        'released=${itemIds.join(',')}',
+      ]),
+    );
   }
 
   void _logTiming(
@@ -1152,7 +1287,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       _timingEvents.removeRange(0, _timingEvents.length - 48);
     }
     const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');
-    if (!kDebugMode || !shouldPrint) return;
+    if (!shouldPrint) return;
     final parts = <String>[
       '[PlayerPlayback][$sessionKey]',
       event,
@@ -1165,9 +1300,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     debugPrint(parts.join(' '));
   }
 
+  String _timingDetails(List<String> parts) {
+    return parts.where((part) => part.isNotEmpty).join(' ');
+  }
+
   String _formatTimingEvent(PlayerPlaybackTimingEvent event) {
     final parts = <String>[
       event.at.toIso8601String(),
+      'session=$sessionKey',
       event.name,
       if (event.itemId != null) 'item=${event.itemId}',
       if (event.source != null) 'source=${event.source}',

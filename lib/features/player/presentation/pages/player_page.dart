@@ -158,15 +158,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       }
 
       ref.read(uiProvider.notifier).selectEpisode(next.episode);
-      unawaited(ref.read(playbackProvider.notifier).playItem(next));
-      unawaited(
-        ref
-            .read(playbackProvider.notifier)
-            .preloadAround(
-              ref.read(feedProvider).items,
-              ref.read(feedProvider).currentIndex,
-            ),
-      );
+      unawaited(() async {
+        final playbackNotifier = ref.read(playbackProvider.notifier);
+        await playbackNotifier.playItem(next);
+        if (!mounted) {
+          return;
+        }
+        await playbackNotifier.preloadAround(
+          ref.read(feedProvider).items,
+          ref.read(feedProvider).currentIndex,
+        );
+      }());
     });
 
     ref.listen(feedProvider.select((state) => state.currentIndex), (
@@ -187,11 +189,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           curve: Curves.easeOutCubic,
         );
       }
-      unawaited(
-        ref
-            .read(playbackProvider.notifier)
-            .preloadAround(ref.read(feedProvider).items, next),
-      );
     });
 
     ref.listen(playbackProvider, (previous, next) {

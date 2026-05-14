@@ -4,18 +4,41 @@ import '../domain/player_feed.dart';
 import '../domain/player_playback_source.dart';
 import 'player_session_controller.dart';
 
+enum PreparedPlaybackSessionKind { prepared, retained }
+
 class PreparedPlaybackSession {
-  const PreparedPlaybackSession({
+  PreparedPlaybackSession({
     required this.itemId,
     required this.source,
     required this.session,
-    required this.hasFirstFrame,
-  });
+    this.kind = PreparedPlaybackSessionKind.prepared,
+    this.hasFirstFrame = false,
+    this.position = Duration.zero,
+    this.duration = Duration.zero,
+    this.bufferedPosition = Duration.zero,
+    StreamSubscription<int?>? firstFrameSubscription,
+  }) : _firstFrameSubscription = firstFrameSubscription;
 
   final String itemId;
   final PlaybackSource source;
   final PlayerPlaybackSession session;
-  final bool hasFirstFrame;
+  final PreparedPlaybackSessionKind kind;
+  bool hasFirstFrame;
+  final Duration position;
+  final Duration duration;
+  final Duration bufferedPosition;
+  StreamSubscription<int?>? _firstFrameSubscription;
+
+  Future<void> detachFirstFrameListener() async {
+    final subscription = _firstFrameSubscription;
+    _firstFrameSubscription = null;
+    await subscription?.cancel();
+  }
+
+  Future<void> dispose() async {
+    await detachFirstFrameListener();
+    await session.dispose();
+  }
 }
 
 class PlayerPlaybackPrepareManager {
@@ -50,6 +73,7 @@ class PlayerPlaybackPrepareManager {
 
     final generation = ++_generation;
     PlayerPlaybackSession? session;
+    StreamSubscription<int?>? widthSubscription;
     try {
       final source = await sourceRepository.resolve(item);
       if (generation != _generation) {
@@ -57,27 +81,32 @@ class PlayerPlaybackPrepareManager {
       }
       session = _sessionFactory();
       var hasFirstFrame = false;
-      final widthSubscription = session.widthStream.listen((width) {
+      PreparedPlaybackSession? prepared;
+      widthSubscription = session.widthStream.listen((width) {
         if (width != null && width > 0) {
           hasFirstFrame = true;
+          prepared?.hasFirstFrame = true;
         }
       });
       await session.open(source.playableSource, play: false);
       await session.pause();
-      await widthSubscription.cancel();
       if (generation != _generation) {
+        await widthSubscription.cancel();
         await session.dispose();
         return null;
       }
-      final prepared = PreparedPlaybackSession(
+      prepared = PreparedPlaybackSession(
         itemId: item.id,
         source: source,
         session: session,
         hasFirstFrame: hasFirstFrame,
+        firstFrameSubscription: widthSubscription,
       );
+      widthSubscription = null;
       await _put(prepared);
       return prepared;
     } catch (_) {
+      await widthSubscription?.cancel();
       if (session != null) {
         await session.dispose();
       }
@@ -97,7 +126,7 @@ class PlayerPlaybackPrepareManager {
   Future<void> releaseItem(String itemId) async {
     final session = _window.remove(itemId);
     if (session != null) {
-      await session.session.dispose();
+      await session.dispose();
     }
   }
 
@@ -112,7 +141,7 @@ class PlayerPlaybackPrepareManager {
   Future<void> release() async {
     _generation += 1;
     for (final session in List<PreparedPlaybackSession>.from(_window.values)) {
-      await session.session.dispose();
+      await session.dispose();
     }
     _window.clear();
   }
@@ -120,7 +149,7 @@ class PlayerPlaybackPrepareManager {
   Future<void> _put(PreparedPlaybackSession session) async {
     final replaced = _window.remove(session.itemId);
     if (replaced != null && replaced.session != session.session) {
-      await replaced.session.dispose();
+      await replaced.dispose();
     }
     _window[session.itemId] = session;
     while (_window.length > maxWindowSessions) {

@@ -59,6 +59,39 @@ preload strategy, and future HTTP/CDN cache boundaries.
   cache policy.
 - Keep mock data out of widgets and pages.
 
+## Short-Term Playback Smoothness Route
+
+The short-term client work should stay focused on one primary goal: make video
+playback feel smooth in list entry, vertical feed switching, and swipe-back
+scenarios.
+
+Execution order:
+
+1. Stabilize the playback session window.
+   - Keep previous/current/next session reuse reliable.
+   - Fix window misses, stale takeover, background audio, and repeated open
+     before adding heavier cache work.
+2. Use device timing to identify the actual slow boundary.
+   - Compare source resolve, playlist preload, media open, first frame,
+     buffering, next hit, previous hit, and fallback miss.
+3. Add HLS first-segment preheat only if timing proves the window is hitting but
+   first frame is still slow.
+4. Add lightweight HLS segment cache only if segment preheat is proven useful
+   and repeated network fetches remain a real bottleneck.
+5. Coordinate server/CDN once client timing shows the remaining bottleneck is
+   outside the app.
+
+Decision rules:
+
+- If logs show frequent `window miss fallback open`, continue fixing session
+  window reuse.
+- If logs show `prepared hit next` or `retained hit previous` but first frame is
+  still slow, evaluate HLS first-segment preheat next.
+- If first-segment preheat helps but repeated requests still hurt smoothness,
+  evaluate a quota-limited HLS segment cache.
+- Offline download remains outside the playback-smoothness path and should be a
+  separate product feature.
+
 ## Server-Mock Boundaries
 
 All future server-backed playback capabilities must be represented by domain
@@ -659,38 +692,61 @@ Phase 5.4 limits:
 
 ### Phase 5.5: Device Timing Review And Window Tuning
 
-Current next client-side focus. This phase uses real device behavior to tune the
-session window before adding heavier HLS segment preheat or cache strategies.
+Implemented. This phase keeps the client-only scope and tunes the session
+window using the diagnostics added in Phase 5.4.
 
-- Build and install a release APK on the Android test device.
-- Compare timing for these paths:
-  - list card -> single drama first frame
-  - manual swipe down -> next item
-  - manual swipe up -> previous retained item
-  - auto advance -> next item
-  - window miss -> normal HLS open fallback
-- Confirm previous/current/next reuse avoids reopening sources when the item is
-  still inside the window.
-- Confirm previous and next retained sessions are paused and silent.
-- Confirm hidden tab, page exit, app background, provider dispose, and fast
-  swipe release stale sessions.
-- If timing shows window misses, fix the session takeover/release boundary
-  before considering segment preheat.
-- If timing shows prepared sessions exist but first frame is still late, review
-  whether firstFrameReady is tracked early enough and whether the UI should keep
-  poster/loading until the prepared session can render.
-- Keep the scope client-only. Do not add backend API integration, local HLS
-  segment cache, or offline download in this phase.
+- `--dart-define=PLAYER_TIMING_LOGS=true` now prints timing in release builds
+  too. Timing output is no longer gated by debug mode.
+- Timing report lines include `session=<sessionKey>`, item id, event name,
+  elapsed ms, source, window hit/miss information, first-frame readiness, and
+  release/dispose reasons where applicable.
+- Add explicit session-window events:
+  - `list entry normal open`
+  - `window miss fallback open`
+  - `prepared hit next`
+  - `retained hit previous`
+  - `previous retained`
+  - `prepare end` with `next prepared`
+  - `old session disposed`
+  - `session window release` with `hidden`, `dispose`, `memory pressure`,
+    `provider dispose`, or stale-generation reasons.
+- Prepared sessions keep listening for `widthStream` until takeover or release,
+  so `firstFrameReady` can become true even if the first frame arrives after
+  `open(play: false)` returns.
+- Taking over a prepared session cancels its lightweight first-frame listener
+  before binding the real playback listeners.
+- Retained previous sessions snapshot position, duration, buffered position, and
+  first-frame state. Swiping back to a retained item restores that state and
+  avoids a repeat source resolve/open while the item remains in the window.
+- Duplicate prepare requests for the same item are ignored while one prepare is
+  pending, preventing a second prepare from invalidating the first session and
+  causing an avoidable window miss.
+- `PlayerPage` now sequences current-item playback before neighbor preload, so
+  initial entry and swipes have a stable current item/source before preparing
+  adjacent items.
+- Stale prepared completion releases only the stale prepared item instead of
+  clearing the entire window. Hidden tab, player dispose, provider dispose, and
+  memory pressure still release the full non-current session window.
 
-Expected tests or manual checks:
+Device timing conclusion:
 
-- Swipe down to a prepared next item does not repeat a normal `open()` when the
-  prepared session is still valid.
-- Swipe back to the previous item reuses the retained session and keeps the
-  old position.
-- More than three sessions are not retained for a single player context.
-- Locked, unavailable, and null-source items do not enter the session window.
-- For You and single drama windows remain isolated.
+- Release APK timing logs confirmed the diagnostic path works on device. The
+  first sampled list-entry path showed source resolve around 40-60 ms and media
+  open around 20-100 ms, while first frame could still take multiple seconds
+  under the sampled network/CDN path.
+- The first device timing pass also exposed duplicate prepare calls and frequent
+  `window miss fallback open` during fast swipes; this phase adds same-item
+  prepare dedupe and play-before-preload sequencing to reduce those misses.
+- Unit tests confirm the intended client behavior: next prepared hits do not
+  repeat normal open, previous retained hits keep progress, stale prepared
+  sessions cannot take over, duplicate prepare is ignored, and previous/next
+  sessions are paused.
+- If real-device logs still show long waits after a `prepared hit next`, the
+  likely bottleneck is media first-frame/segment fetch rather than source
+  resolve. If logs still show frequent `window miss fallback open`, the problem
+  is session window coverage/release timing.
+- Remaining first-frame slowness after a successful prepared hit will likely
+  require CDN/HLS cooperation or a future segment-preheat phase.
 
 Phase 5 defer:
 

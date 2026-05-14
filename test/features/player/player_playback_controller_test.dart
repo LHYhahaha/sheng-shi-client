@@ -920,33 +920,51 @@ void main() {
     },
   );
 
-  test('previous played session is reused when swiping back', () async {
-    final firstSession = _FakePlaybackSession();
-    final secondSession = _FakePlaybackSession();
-    final nextSession = _FakePlaybackSession();
-    var index = 0;
-    final sessions = [firstSession, secondSession, nextSession];
-    PlayerPlaybackSession sessionFactory() => sessions[index++];
-    final container = _createPrepareContainer(sessionFactory);
-    addTearDown(container.dispose);
-    final provider = playerPlaybackControllerProvider('single:drama-a:1');
-    final controller = container.read(provider.notifier);
+  test(
+    'previous played session is reused with progress when swiping back',
+    () async {
+      final firstSession = _FakePlaybackSession();
+      final secondSession = _FakePlaybackSession();
+      final nextSession = _FakePlaybackSession();
+      var index = 0;
+      final sessions = [firstSession, secondSession, nextSession];
+      PlayerPlaybackSession sessionFactory() => sessions[index++];
+      final container = _createPrepareContainer(sessionFactory);
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
 
-    await controller.playItem(_item(1));
-    await controller.preloadAround([_item(1), _item(2)], 0);
-    await Future<void>.delayed(const Duration(milliseconds: 80));
-    await controller.playItem(_item(2));
-    await controller.preloadAround([_item(1), _item(2)], 1);
-    await Future<void>.delayed(const Duration(milliseconds: 80));
-    await controller.playItem(_item(1));
+      await controller.playItem(_item(1));
+      firstSession.emitDuration(const Duration(seconds: 120));
+      firstSession.emitPosition(const Duration(seconds: 42));
+      firstSession.emitBufferedPosition(const Duration(seconds: 50));
+      await Future<void>.delayed(Duration.zero);
+      await controller.preloadAround([_item(1), _item(2)], 0);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await controller.playItem(_item(2));
+      await controller.preloadAround([_item(1), _item(2)], 1);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await controller.playItem(_item(1));
 
-    expect(firstSession.openedSources, [_videoUrl]);
-    expect(secondSession.openedSources, [_secondVideoUrl]);
-    expect(nextSession.openedSources, isEmpty);
-    expect(firstSession.playCount, 1);
-    expect(secondSession.isDisposed, isFalse);
-    expect(container.read(provider).currentItemId, 'drama-a-ep-1');
-  });
+      expect(firstSession.openedSources, [_videoUrl]);
+      expect(secondSession.openedSources, [_secondVideoUrl]);
+      expect(nextSession.openedSources, isEmpty);
+      expect(firstSession.playCount, 1);
+      expect(firstSession.pauseCount, greaterThanOrEqualTo(1));
+      expect(secondSession.isDisposed, isFalse);
+      expect(container.read(provider).currentItemId, 'drama-a-ep-1');
+      expect(container.read(provider).position, const Duration(seconds: 42));
+      expect(container.read(provider).duration, const Duration(seconds: 120));
+      expect(
+        container.read(provider).bufferedPosition,
+        const Duration(seconds: 50),
+      );
+      expect(
+        controller.timingEvents.map((event) => event.name),
+        contains('retained hit previous'),
+      );
+    },
+  );
 
   test('session window keeps at most previous and next sessions', () async {
     final sessions = [
@@ -999,6 +1017,8 @@ void main() {
     expect(
       controller.timingEvents.map((event) => event.name),
       containsAll([
+        'window miss fallback open',
+        'list entry normal open',
         'source resolve start',
         'source resolve end',
         'media open start',
@@ -1009,7 +1029,73 @@ void main() {
       ]),
     );
     expect(controller.exportTimingReport(), contains('media open end'));
+    expect(
+      controller.exportTimingReport(),
+      contains('session=single:drama-a:1'),
+    );
     expect(controller.exportTimingReport(), contains('elapsed='));
+  });
+
+  test('prepared first frame can arrive after prepare open returns', () async {
+    final currentSession = _FakePlaybackSession();
+    final preparedSession = _FakePlaybackSession(emitWidthOnOpen: false);
+    var index = 0;
+    final sessions = [currentSession, preparedSession];
+    PlayerPlaybackSession sessionFactory() => sessions[index++];
+    final container = _createPrepareContainer(sessionFactory);
+    addTearDown(container.dispose);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.preloadAround([_item(1), _item(2)], 0);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    preparedSession.emitWidth(1280);
+    await Future<void>.delayed(Duration.zero);
+    await controller.playItem(_item(2));
+
+    expect(preparedSession.openedSources, [_secondVideoUrl]);
+    expect(preparedSession.playCount, 1);
+    expect(container.read(provider).hasFirstFrame, isTrue);
+    expect(controller.exportTimingReport(), contains('prepared hit next'));
+    expect(controller.exportTimingReport(), contains('firstFrameReady=true'));
+  });
+
+  test('duplicate prepare requests for same item are ignored', () async {
+    final currentSession = _FakePlaybackSession();
+    final prepareCompleter = Completer<void>();
+    final preparedSession = _FakePlaybackSession(
+      openCompleter: prepareCompleter,
+    );
+    final extraSession = _FakePlaybackSession();
+    var index = 0;
+    final sessions = [currentSession, preparedSession, extraSession];
+    PlayerPlaybackSession sessionFactory() => sessions[index++];
+    final container = _createPrepareContainer(sessionFactory);
+    addTearDown(container.dispose);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    final firstPrepare = controller.preloadAround([_item(1), _item(2)], 0);
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+    final duplicatePrepare = controller.preloadAround([_item(1), _item(2)], 0);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(preparedSession.openedSources, [_secondVideoUrl]);
+    expect(extraSession.openedSources, isEmpty);
+
+    prepareCompleter.complete();
+    await firstPrepare;
+    await duplicatePrepare;
+    await controller.playItem(_item(2));
+
+    expect(preparedSession.playCount, 1);
+    expect(extraSession.openedSources, isEmpty);
+    expect(
+      controller.timingEvents.map((event) => event.name),
+      contains('prepare skipped duplicate'),
+    );
   });
 
   test('hidden and dispose release prepared sessions', () async {
@@ -1246,9 +1332,14 @@ Map<String, PlaybackPreloadStatus> _preloadStatusById(
 }
 
 class _FakePlaybackSession implements PlayerPlaybackSession {
-  _FakePlaybackSession({this.openCompleter, this.shouldThrowOnOpen = false});
+  _FakePlaybackSession({
+    this.openCompleter,
+    this.shouldThrowOnOpen = false,
+    this.emitWidthOnOpen = true,
+  });
 
   final Completer<void>? openCompleter;
+  final bool emitWidthOnOpen;
   bool shouldThrowOnOpen;
   final _bufferingController = StreamController<bool>.broadcast();
   final _playingController = StreamController<bool>.broadcast();
@@ -1307,7 +1398,9 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     if (shouldThrowOnOpen) {
       throw StateError('open failed');
     }
-    _widthController.add(1280);
+    if (emitWidthOnOpen) {
+      _widthController.add(1280);
+    }
     _completedController.add(false);
     _playingController.add(play);
     _bufferingController.add(false);
@@ -1327,6 +1420,10 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
 
   void emitBufferedPosition(Duration position) {
     _bufferedPositionController.add(position);
+  }
+
+  void emitWidth(int width) {
+    _widthController.add(width);
   }
 
   @override
