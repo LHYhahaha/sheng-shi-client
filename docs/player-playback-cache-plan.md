@@ -1245,6 +1245,57 @@ Deferred:
 - Real backend source API and signed URL refresh.
 - Local HLS cache, segment cache, and offline download.
 
+### Phase 5.13: Preload Scope Isolation
+
+Implemented a scope split between Home startup preload and in-player playback
+preload. Both scopes continue to use the same HLS source/preload abstractions,
+but they no longer share pending request, generation, or `releasePending()`
+state.
+
+Architecture:
+
+- Playback preload remains owned by `PlayerPlaybackController` through
+  `playerPlaybackPreloadManagerProvider` and
+  `playerPlaybackSourceRepositoryProvider`.
+- Startup preload now uses independent provider instances:
+  `startupHlsPlaylistPreloaderProvider`,
+  `playerStartupPreloadManagerProvider`, and
+  `playerStartupPlaybackSourceRepositoryProvider`.
+- Home category switch, retry, and disposal only cancel the startup preload
+  scope. They must not release Player next/previous preload or the playback
+  session window.
+- Player hidden, dispose, provider disposal, and memory pressure only release
+  the playback preload scope plus the playback session window. They must not
+  cancel Home startup preload work.
+- Late completion and generation guards stay per scope, so startup and playback
+  preload can independently finish as success, failed, or cancelled without
+  writing into each other's state.
+
+Tests added/updated:
+
+- Startup cancel does not cancel playback preload.
+- Player pause/visibility release does not cancel startup preload.
+- Startup and playback preload can run at the same time and resolve to
+  independent success/failed/cancelled states.
+- Startup hit/miss timing remains visible on `playItem`.
+- Existing previous/current/next session window behavior remains covered by the
+  player playback controller suite.
+
+Device conclusion carried from Phase 5.12:
+
+- A startup preload hit is useful timing evidence, but it does not reliably
+  reduce media_kit first-frame latency because Dart HTTP prefetch is not
+  guaranteed to share the player pipeline cache. If cold start remains slow, the
+  next investigation should focus on HLS/CDN, media_kit first-frame behavior,
+  or a deliberate local HLS cache/proxy design rather than UI-layer patches.
+
+Deferred:
+
+- Home media session warm-up.
+- Local HLS segment cache or proxy.
+- Signed URL refresh and real backend source API.
+- Network-aware startup preload policy.
+
 ### Player Visual Fit Backlog: Video Crop And Aspect Ratio
 
 Observed during device playback review. Some videos may not appear fully inside

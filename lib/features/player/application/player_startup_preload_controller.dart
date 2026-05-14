@@ -63,7 +63,7 @@ class PlayerStartupPreloadController
   @override
   PlayerStartupPreloadState build() {
     _timingTrace = PlayerPlaybackTimingTrace(sessionKey: 'startup-preload');
-    final preloadManager = ref.read(playerPlaybackPreloadManagerProvider);
+    final preloadManager = ref.read(playerStartupPreloadManagerProvider);
     ref.onDispose(() {
       _generation += 1;
       unawaited(preloadManager.releasePending());
@@ -89,7 +89,7 @@ class PlayerStartupPreloadController
       itemId: drama.id,
       details: 'dramaId=${drama.id}',
     );
-    final preloadManager = ref.read(playerPlaybackPreloadManagerProvider);
+    final preloadManager = ref.read(playerStartupPreloadManagerProvider);
     await preloadManager.releasePending();
     if (!_isCurrent(generation)) {
       return;
@@ -134,7 +134,7 @@ class PlayerStartupPreloadController
       );
 
       final preloadState = await ref
-          .read(playerPlaybackSourceRepositoryProvider)
+          .read(playerStartupPlaybackSourceRepositoryProvider)
           .preload(item);
       if (!_isCurrent(generation)) {
         return;
@@ -186,7 +186,7 @@ class PlayerStartupPreloadController
 
   Future<void> cancel({String reason = 'cancel', bool syncState = true}) async {
     final previous = state;
-    final preloadManager = ref.read(playerPlaybackPreloadManagerProvider);
+    final preloadManager = ref.read(playerStartupPreloadManagerProvider);
     _generation += 1;
     await preloadManager.releasePending();
     if (!ref.mounted) {

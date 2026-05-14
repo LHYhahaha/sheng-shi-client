@@ -17,9 +17,31 @@ final playerPlaybackPreloadManagerProvider =
       );
     });
 
+final startupHlsPlaylistPreloaderProvider = Provider<HlsPlaylistPreloader>((
+  ref,
+) {
+  final preloader = HlsPlaylistPreloader();
+  ref.onDispose(preloader.releasePending);
+  return preloader;
+});
+
+final playerStartupPreloadManagerProvider =
+    Provider<PlayerPlaybackPreloadManager>((ref) {
+      return HlsPlayerPlaybackPreloadManager(
+        preloader: ref.watch(startupHlsPlaylistPreloaderProvider),
+      );
+    });
+
 final playerPlaybackSourceRepositoryProvider =
     Provider<PlayerPlaybackSourceRepository>((ref) {
       return MockPlayerPlaybackSourceRepository(
         preloadManager: ref.watch(playerPlaybackPreloadManagerProvider),
+      );
+    });
+
+final playerStartupPlaybackSourceRepositoryProvider =
+    Provider<PlayerPlaybackSourceRepository>((ref) {
+      return MockPlayerPlaybackSourceRepository(
+        preloadManager: ref.watch(playerStartupPreloadManagerProvider),
       );
     });

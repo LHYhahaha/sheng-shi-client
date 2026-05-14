@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _videoUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+const _secondVideoUrl = 'https://test-streams.mux.dev/tos_ismc/main.m3u8';
 
 void main() {
   test('startup preload success records success state', () async {
@@ -98,6 +99,130 @@ void main() {
     );
   });
 
+  test('startup cancel does not cancel playback preload', () async {
+    final startupCompleter = Completer<PlaybackPreloadState>();
+    final playbackCompleter = Completer<PlaybackPreloadState>();
+    final startupManager = _FakePreloadManager();
+    final playbackManager = _FakePreloadManager();
+    final container = _createContainer(
+      sourceRepository: _FakePlaybackSourceRepository(
+        preloadCompleter: startupCompleter,
+      ),
+      preloadManager: startupManager,
+      playbackSourceRepository: _FakePlaybackSourceRepository(
+        preloadCompleter: playbackCompleter,
+      ),
+      playbackPreloadManager: playbackManager,
+    );
+    addTearDown(container.dispose);
+
+    final startup = container.read(
+      playerStartupPreloadControllerProvider.notifier,
+    );
+    final playback = container.read(
+      playerPlaybackControllerProvider('single:drama-a:1').notifier,
+    );
+
+    final startupFuture = startup.preloadFirstPlayableDrama(_drama);
+    await Future<void>.delayed(Duration.zero);
+    final playbackFuture = playback.preloadAround([_item, _item2], 0);
+    await Future<void>.delayed(Duration.zero);
+
+    await startup.cancel(reason: 'category switch');
+    expect(startupManager.releasePendingCount, greaterThanOrEqualTo(1));
+    expect(playbackManager.releasePendingCount, 0);
+
+    startupCompleter.complete(_successPreloadStateFor(_item));
+    playbackCompleter.complete(_successPreloadStateFor(_item2));
+    await startupFuture;
+    await playbackFuture;
+
+    final playbackState = container.read(
+      playerPlaybackControllerProvider('single:drama-a:1'),
+    );
+    expect(playbackState.preloadedItemIds, contains(_item2.id));
+    expect(
+      container.read(playerStartupPreloadControllerProvider).status,
+      PlayerStartupPreloadStatus.cancelled,
+    );
+  });
+
+  test('player pause does not cancel startup preload', () async {
+    final startupCompleter = Completer<PlaybackPreloadState>();
+    final startupManager = _FakePreloadManager();
+    final playbackManager = _FakePreloadManager();
+    final container = _createContainer(
+      sourceRepository: _FakePlaybackSourceRepository(
+        preloadCompleter: startupCompleter,
+      ),
+      preloadManager: startupManager,
+      playbackPreloadManager: playbackManager,
+    );
+    addTearDown(container.dispose);
+
+    final startup = container.read(
+      playerStartupPreloadControllerProvider.notifier,
+    );
+    final playback = container.read(
+      playerPlaybackControllerProvider('single:drama-a:1').notifier,
+    );
+
+    final startupFuture = startup.preloadFirstPlayableDrama(_drama);
+    await Future<void>.delayed(Duration.zero);
+    final startupReleaseCountBeforePause = startupManager.releasePendingCount;
+    await playback.pauseForVisibility(syncState: false);
+
+    expect(startupManager.releasePendingCount, startupReleaseCountBeforePause);
+    expect(playbackManager.releasePendingCount, greaterThanOrEqualTo(1));
+
+    startupCompleter.complete(_successPreloadStateFor(_item));
+    await startupFuture;
+    expect(
+      container.read(playerStartupPreloadControllerProvider).status,
+      PlayerStartupPreloadStatus.success,
+    );
+  });
+
+  test('startup and playback preload outcomes stay scope isolated', () async {
+    final startupCompleter = Completer<PlaybackPreloadState>();
+    final playbackRepository = _FakePlaybackSourceRepository()
+      ..failNextPreload = true;
+    final container = _createContainer(
+      sourceRepository: _FakePlaybackSourceRepository(
+        preloadCompleter: startupCompleter,
+      ),
+      playbackSourceRepository: playbackRepository,
+    );
+    addTearDown(container.dispose);
+
+    final startup = container.read(
+      playerStartupPreloadControllerProvider.notifier,
+    );
+    final playback = container.read(
+      playerPlaybackControllerProvider('single:drama-a:1').notifier,
+    );
+
+    final startupFuture = startup.preloadFirstPlayableDrama(_drama);
+    await Future<void>.delayed(Duration.zero);
+    await playback.preloadAround([_item, _item2], 0);
+
+    startupCompleter.complete(_successPreloadStateFor(_item));
+    await startupFuture;
+
+    expect(
+      container.read(playerStartupPreloadControllerProvider).status,
+      PlayerStartupPreloadStatus.success,
+    );
+    final playbackState = container.read(
+      playerPlaybackControllerProvider('single:drama-a:1'),
+    );
+    expect(playbackState.preloadedItemIds, isEmpty);
+    expect(
+      playbackState.preloadStates.single.status,
+      PlaybackPreloadStatus.failed,
+    );
+  });
+
   test('startup preload generation switch ignores stale completion', () async {
     final firstCompleter = Completer<PlaybackPreloadState>();
     final secondCompleter = Completer<PlaybackPreloadState>();
@@ -157,6 +282,8 @@ ProviderContainer _createContainer({
   _FakePlaybackSourceRepository? sourceRepository,
   _FakePreloadManager? preloadManager,
   _FakePlaybackSession? playbackSession,
+  _FakePlaybackSourceRepository? playbackSourceRepository,
+  _FakePreloadManager? playbackPreloadManager,
 }) {
   final manager = preloadManager ?? _FakePreloadManager();
   return ProviderContainer(
@@ -164,9 +291,15 @@ ProviderContainer _createContainer({
       playerFeedRepositoryProvider.overrideWithValue(
         _FakePlayerFeedRepository(),
       ),
-      playerPlaybackPreloadManagerProvider.overrideWithValue(manager),
-      playerPlaybackSourceRepositoryProvider.overrideWithValue(
+      playerStartupPreloadManagerProvider.overrideWithValue(manager),
+      playerStartupPlaybackSourceRepositoryProvider.overrideWithValue(
         sourceRepository ?? _FakePlaybackSourceRepository(),
+      ),
+      playerPlaybackPreloadManagerProvider.overrideWithValue(
+        playbackPreloadManager ?? _FakePreloadManager(),
+      ),
+      playerPlaybackSourceRepositoryProvider.overrideWithValue(
+        playbackSourceRepository ?? _FakePlaybackSourceRepository(),
       ),
       playerPlaybackSessionFactoryProvider.overrideWithValue(
         () => playbackSession ?? _FakePlaybackSession(),
@@ -197,6 +330,12 @@ final _content = PlayerContent(
   posterAssetPath: 'assets/images/player/recommend_1.png',
   episodes: const [
     PlayerEpisode(id: 'ep-1', number: 1, isLocked: false, videoUrl: _videoUrl),
+    PlayerEpisode(
+      id: 'ep-2',
+      number: 2,
+      isLocked: false,
+      videoUrl: _secondVideoUrl,
+    ),
   ],
   recommendations: const [],
 );
@@ -208,10 +347,21 @@ final _item = PlayerFeedItem(
   episode: _content.episodes.first,
 );
 
+final _item2 = PlayerFeedItem(
+  id: 'drama-a-ep-2',
+  mode: PlayerFeedMode.singleDrama,
+  content: _content,
+  episode: _content.episodes[1],
+);
+
 PlaybackPreloadState _successPreloadState() {
+  return _successPreloadStateFor(_item);
+}
+
+PlaybackPreloadState _successPreloadStateFor(PlayerFeedItem item) {
   return PlaybackPreloadState(
-    itemId: _item.id,
-    sourceUrl: _videoUrl,
+    itemId: item.id,
+    sourceUrl: item.episode.videoSource!,
     status: PlaybackPreloadStatus.success,
     startedAt: DateTime.now(),
     completedAt: DateTime.now(),
@@ -275,7 +425,7 @@ class _FakePlaybackSourceRepository implements PlayerPlaybackSourceRepository {
         error: StateError('preload failed'),
       );
     }
-    return _successPreloadState();
+    return _successPreloadStateFor(item);
   }
 }
 

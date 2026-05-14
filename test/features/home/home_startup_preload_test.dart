@@ -98,8 +98,8 @@ Widget _buildHomeApp({
       playerFeedRepositoryProvider.overrideWithValue(
         _FakePlayerFeedRepository(),
       ),
-      playerPlaybackPreloadManagerProvider.overrideWithValue(manager),
-      playerPlaybackSourceRepositoryProvider.overrideWithValue(
+      playerStartupPreloadManagerProvider.overrideWithValue(manager),
+      playerStartupPlaybackSourceRepositoryProvider.overrideWithValue(
         sourceRepository ?? _FakePlaybackSourceRepository(),
       ),
     ],
