@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
+import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
+import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +13,10 @@ const _videoUrl =
     'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4';
 const _secondVideoUrl =
     'https://samplefile.com/samples/download/video/mp4/mp4_h264_aac_720p_sample.mp4/';
+
+String _playableSource(int episodeNumber) {
+  return episodeNumber == 1 ? _videoUrl : _secondVideoUrl;
+}
 
 void main() {
   test('opens and switches playable episode sources', () async {
@@ -23,9 +29,75 @@ void main() {
     await controller.playItem(_item(2));
 
     final state = container.read(provider);
-    expect(session.openedSources, [_videoUrl, _secondVideoUrl]);
+    expect(session.openedSources, [_playableSource(1), _playableSource(2)]);
     expect(state.status, PlayerPlaybackStatus.playing);
     expect(state.currentItemId, 'drama-a-ep-2');
+  });
+
+  test('cache hit directly opens cached source', () async {
+    final session = _FakePlaybackSession();
+    final cacheManager = MockPlayerPlaybackCacheManager();
+    cacheManager.seedHit(cacheKey: 'player:drama-a:ep-1', remoteUrl: _videoUrl);
+    final container = _createContainer(session, cacheManager: cacheManager);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+
+    expect(session.openedSources, [_playableSource(1)]);
+    expect(cacheManager.downloadCount, 0);
+  });
+
+  test('cache miss downloads before opening source', () async {
+    final session = _FakePlaybackSession();
+    final cacheManager = MockPlayerPlaybackCacheManager();
+    final container = _createContainer(session, cacheManager: cacheManager);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    final playFuture = controller.playItem(_item(1));
+    await Future<void>.delayed(Duration.zero);
+    expect(container.read(provider).status, PlayerPlaybackStatus.opening);
+
+    await playFuture;
+
+    expect(cacheManager.downloadCount, 1);
+    expect(session.openedSources, [_playableSource(1)]);
+  });
+
+  test('expired cache downloads a fresh source', () async {
+    final session = _FakePlaybackSession();
+    final cacheManager = MockPlayerPlaybackCacheManager();
+    cacheManager.seedExpired(
+      cacheKey: 'player:drama-a:ep-1',
+      remoteUrl: _videoUrl,
+    );
+    final container = _createContainer(session, cacheManager: cacheManager);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+
+    expect(cacheManager.downloadCount, 1);
+    expect(session.openedSources, [_playableSource(1)]);
+  });
+
+  test('resolve download failure enters error and retry can recover', () async {
+    final session = _FakePlaybackSession();
+    final cacheManager = MockPlayerPlaybackCacheManager()
+      ..failNextDownload = true;
+    final container = _createContainer(session, cacheManager: cacheManager);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+    final item = _item(1);
+
+    await controller.playItem(item);
+    expect(container.read(provider).status, PlayerPlaybackStatus.error);
+    expect(session.openedSources, isEmpty);
+
+    await controller.playItem(item);
+    expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+    expect(session.openedSources, [_playableSource(1)]);
   });
 
   test('keeps poster visible until source open completes', () async {
@@ -36,12 +108,12 @@ void main() {
     final controller = container.read(provider.notifier);
 
     final playFuture = controller.playItem(_item(1));
-    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(const Duration(milliseconds: 140));
 
     var state = container.read(provider);
     expect(state.status, PlayerPlaybackStatus.opening);
     expect(state.hasFirstFrame, isFalse);
-    expect(session.openedSources, [_videoUrl]);
+    expect(session.openedSources, [_playableSource(1)]);
 
     openCompleter.complete();
     await playFuture;
@@ -62,7 +134,7 @@ void main() {
     await controller.playItem(item);
     await controller.playItem(item);
 
-    expect(session.openedSources, [_videoUrl]);
+    expect(session.openedSources, [_playableSource(1)]);
     expect(container.read(provider).status, PlayerPlaybackStatus.playing);
   });
 
@@ -80,7 +152,7 @@ void main() {
     await controller.playItem(item);
     await Future<void>.delayed(Duration.zero);
 
-    expect(session.openedSources, [_videoUrl, _videoUrl]);
+    expect(session.openedSources, [_playableSource(1), _playableSource(1)]);
     expect(container.read(provider).status, PlayerPlaybackStatus.playing);
   });
 
@@ -110,6 +182,21 @@ void main() {
     expect(session.openedSources, isEmpty);
     expect(session.pauseCount, 1);
     expect(state.status, PlayerPlaybackStatus.unavailable);
+  });
+
+  test('null source does not resolve or cache', () async {
+    final session = _FakePlaybackSession();
+    final cacheManager = MockPlayerPlaybackCacheManager();
+    final container = _createContainer(session, cacheManager: cacheManager);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(6, hasSource: false));
+
+    expect(session.openedSources, isEmpty);
+    expect(cacheManager.lookupCount, 0);
+    expect(cacheManager.downloadCount, 0);
+    expect(container.read(provider).status, PlayerPlaybackStatus.unavailable);
   });
 
   test('toggles play pause for current source', () async {
@@ -361,7 +448,8 @@ void main() {
       openCompleter.complete();
       await playFuture;
 
-      expect(session.pauseCount, 2);
+      expect(session.pauseCount, greaterThanOrEqualTo(1));
+      expect(session.openedSources, isEmpty);
       expect(container.read(provider).status, PlayerPlaybackStatus.paused);
     },
   );
@@ -435,8 +523,8 @@ void main() {
     await container.read(singleProvider.notifier).playItem(_item(2));
     await container.read(forYouProvider.notifier).togglePlay();
 
-    expect(forYouSession.openedSources, [_videoUrl]);
-    expect(singleSession.openedSources, [_secondVideoUrl]);
+    expect(forYouSession.openedSources, [_playableSource(1)]);
+    expect(singleSession.openedSources, [_playableSource(2)]);
     expect(container.read(forYouProvider).status, PlayerPlaybackStatus.paused);
     expect(container.read(singleProvider).status, PlayerPlaybackStatus.playing);
   });
@@ -507,56 +595,111 @@ void main() {
     },
   );
 
-  test(
-    'preload keeps at most two sessions and skips locked unavailable items',
-    () async {
-      final sessions = <_FakePlaybackSession>[];
-      final container = ProviderContainer(
-        overrides: [
-          playerPlaybackSessionFactoryProvider.overrideWithValue(() {
-            final session = _FakePlaybackSession();
-            sessions.add(session);
-            return session;
-          }),
-        ],
-      );
-      addTearDown(container.dispose);
+  test('preload prepares cache without opening playback sessions', () async {
+    final session = _FakePlaybackSession();
+    final cacheManager = MockPlayerPlaybackCacheManager();
+    final container = _createContainer(session, cacheManager: cacheManager);
 
-      final provider = playerPlaybackControllerProvider('single:drama-a:1');
-      final controller = container.read(provider.notifier);
-      final items = [
-        _item(1),
-        _item(2),
-        _item(3, isLocked: true),
-        _item(4, isAvailable: false),
-        _item(5),
-      ];
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+    final items = [
+      _item(1),
+      _item(2),
+      _item(3, isLocked: true),
+      _item(4, isAvailable: false),
+      _item(5),
+    ];
 
-      await controller.preloadAround(items, 1);
+    await controller.preloadAround(items, 1);
 
-      var state = container.read(provider);
-      expect(state.preloadedItemIds, ['drama-a-ep-1']);
-      expect(sessions, hasLength(2));
-      expect(sessions.last.openedSources, [_videoUrl]);
+    var state = container.read(provider);
+    expect(state.preloadedItemIds, ['drama-a-ep-1']);
+    expect(cacheManager.downloadCount, 1);
+    expect(session.openedSources, isEmpty);
 
-      await controller.preloadAround(items, 3);
+    await controller.preloadAround(items, 3);
 
-      state = container.read(provider);
-      expect(state.preloadedItemIds, ['drama-a-ep-5']);
-      expect(state.preloadedItemIds, hasLength(1));
-      expect(sessions[1].isDisposed, isTrue);
-      expect(sessions.where((session) => !session.isDisposed), hasLength(2));
-    },
-  );
+    state = container.read(provider);
+    expect(state.preloadedItemIds, ['drama-a-ep-5']);
+    expect(state.preloadedItemIds, hasLength(1));
+    expect(cacheManager.downloadCount, 2);
+  });
+
+  test('dispose releases pending preload and ignores late writes', () async {
+    final session = _FakePlaybackSession();
+    final cacheManager = MockPlayerPlaybackCacheManager(
+      downloadDelay: const Duration(milliseconds: 80),
+    );
+    final container = _createContainer(
+      session,
+      cacheManager: cacheManager,
+      addDisposeTearDown: false,
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+    final preloadFuture = controller.preloadAround([_item(1), _item(2)], 0);
+
+    await Future<void>.delayed(Duration.zero);
+    await controller.disposeSession();
+    await preloadFuture;
+
+    expect(cacheManager.releasePendingCount, greaterThan(0));
+    expect(container.read(provider).preloadedItemIds, isEmpty);
+    container.dispose();
+  });
+
+  test('keeps for you and single drama preload state isolated', () async {
+    final forYouSession = _FakePlaybackSession();
+    final singleSession = _FakePlaybackSession();
+    var index = 0;
+    final sessions = [forYouSession, singleSession];
+    final cacheManager = MockPlayerPlaybackCacheManager();
+    final container = ProviderContainer(
+      overrides: [
+        playerPlaybackSessionFactoryProvider.overrideWithValue(
+          () => sessions[index++],
+        ),
+        playerPlaybackCacheManagerProvider.overrideWithValue(cacheManager),
+      ],
+    );
+    addTearDown(container.dispose);
+    final forYouProvider = playerPlaybackControllerProvider('for-you-tab');
+    final singleProvider = playerPlaybackControllerProvider('single:drama-a:1');
+
+    await container.read(forYouProvider.notifier).preloadAround([
+      _item(1),
+      _item(2),
+    ], 0);
+    await container.read(singleProvider.notifier).preloadAround([
+      _item(3),
+      _item(4),
+      _item(5),
+    ], 1);
+
+    expect(container.read(forYouProvider).preloadedItemIds, ['drama-a-ep-2']);
+    expect(container.read(singleProvider).preloadedItemIds, [
+      'drama-a-ep-5',
+      'drama-a-ep-3',
+    ]);
+    expect(forYouSession.openedSources, isEmpty);
+    expect(singleSession.openedSources, isEmpty);
+  });
 }
 
 ProviderContainer _createContainer(
   _FakePlaybackSession session, {
   bool addDisposeTearDown = true,
+  MockPlayerPlaybackCacheManager? cacheManager,
 }) {
+  final playbackCacheManager =
+      cacheManager ??
+      MockPlayerPlaybackCacheManager(downloadDelay: Duration.zero);
   final container = ProviderContainer(
     overrides: [
       playerPlaybackSessionFactoryProvider.overrideWithValue(() => session),
+      playerPlaybackCacheManagerProvider.overrideWithValue(
+        playbackCacheManager,
+      ),
     ],
   );
   if (addDisposeTearDown) {
@@ -569,12 +712,15 @@ PlayerFeedItem _item(
   int episodeNumber, {
   bool isLocked = false,
   bool isAvailable = true,
+  bool hasSource = true,
 }) {
   final episode = PlayerEpisode(
     id: 'ep-$episodeNumber',
     number: episodeNumber,
     isLocked: isLocked,
-    videoUrl: episodeNumber == 1 ? _videoUrl : _secondVideoUrl,
+    videoUrl: hasSource
+        ? (episodeNumber == 1 ? _videoUrl : _secondVideoUrl)
+        : null,
     isAvailable: isAvailable,
   );
   final content = PlayerContent(

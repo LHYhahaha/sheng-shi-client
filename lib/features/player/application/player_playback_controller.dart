@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../data/player_playback_source_repository_provider.dart';
 import '../domain/player_feed.dart';
+import '../domain/player_playback_source.dart';
 import 'player_session_controller.dart';
 
 final playerPlaybackSessionFactoryProvider =
@@ -171,8 +173,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   final String sessionKey;
   late final PlayerPlaybackSession _session;
-  final _preloadedSessions = <String, PlayerPlaybackSession>{};
+  late final PlayerPlaybackCacheManager _cacheManager;
+  final _preloadedItemIds = <String>{};
   int _generation = 0;
+  int _preloadGeneration = 0;
   bool _pauseWhenOpenCompletes = false;
   bool _isSessionDisposed = false;
   bool _wasPlayingBeforeSeek = false;
@@ -182,6 +186,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   @override
   PlayerPlaybackState build() {
     _session = ref.read(playerPlaybackSessionFactoryProvider).call();
+    _cacheManager = ref.read(playerPlaybackCacheManagerProvider);
     final subscriptions = <StreamSubscription<dynamic>>[
       _session.bufferingStream.listen(_handleBuffering),
       _session.playingStream.listen(_handlePlaying),
@@ -237,8 +242,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
 
-    final source = item.episode.videoSource;
-    if (item.episode.isUnavailable || source == null) {
+    final sourceHint = item.episode.videoSource;
+    if (item.episode.isUnavailable || sourceHint == null) {
       final generation = ++_generation;
       if (!await _pauseIfCurrent(generation)) {
         return;
@@ -253,8 +258,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
 
     final isSameSource =
-        state.currentItemId == item.id && state.currentSource == source;
-    if (isSameSource && state.status != PlayerPlaybackStatus.error) {
+        state.currentItemId == item.id &&
+        state.currentSource != null &&
+        state.status != PlayerPlaybackStatus.error;
+    if (isSameSource && !state.hasEnded) {
       return;
     }
 
@@ -270,18 +277,29 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       isSeeking: false,
       hasEnded: false,
       currentItemId: item.id,
-      currentSource: source,
+      currentSource: sourceHint,
       clearError: true,
       clearSeekPreview: true,
     );
 
     try {
-      await _session.open(source, play: true);
+      final playbackSource = await ref
+          .read(playerPlaybackSourceRepositoryProvider)
+          .resolve(item);
       if (!ref.mounted) {
         return;
       }
       if (!_isCurrent(generation)) {
-        if (_pauseWhenOpenCompletes && state.currentSource == source) {
+        return;
+      }
+      state = state.copyWith(currentSource: playbackSource.playableSource);
+      await _session.open(playbackSource.playableSource, play: true);
+      if (!ref.mounted) {
+        return;
+      }
+      if (!_isCurrent(generation)) {
+        if (_pauseWhenOpenCompletes &&
+            state.currentSource == playbackSource.playableSource) {
           await _session.pause();
         }
         return;
@@ -336,43 +354,43 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       if (item.episode.isLocked ||
           item.episode.isUnavailable ||
           source == null ||
+          item.id == state.currentItemId ||
           source == state.currentSource) {
         continue;
       }
       candidates.add(item);
     }
 
+    final preloadGeneration = _preloadGeneration;
     final allowedIds = candidates
         .take(_maxPreloadedSources)
         .map((item) => item.id)
         .toSet();
 
-    for (final entry in [..._preloadedSessions.entries]) {
-      if (!allowedIds.contains(entry.key)) {
-        _preloadedSessions.remove(entry.key);
-        unawaited(entry.value.dispose());
-      }
-    }
+    _preloadedItemIds.removeWhere((id) => !allowedIds.contains(id));
 
-    _setPreloadedItemIds(_preloadedSessions.keys.toList(growable: false));
+    _setPreloadedItemIds(_preloadedItemIds.toList(growable: false));
 
     for (final item in candidates.take(_maxPreloadedSources)) {
-      if (_preloadedSessions.containsKey(item.id)) {
+      if (_preloadedItemIds.contains(item.id)) {
         continue;
       }
-      final source = item.episode.videoSource;
-      if (source == null) {
-        continue;
-      }
-      final session = ref.read(playerPlaybackSessionFactoryProvider).call();
-      _preloadedSessions[item.id] = session;
-      _setPreloadedItemIds(_preloadedSessions.keys.toList(growable: false));
+      _preloadedItemIds.add(item.id);
+      _setPreloadedItemIds(_preloadedItemIds.toList(growable: false));
       try {
-        await session.open(source, play: false);
+        await ref.read(playerPlaybackSourceRepositoryProvider).preload(item);
+        if (!ref.mounted ||
+            _isSessionDisposed ||
+            preloadGeneration != _preloadGeneration) {
+          return;
+        }
       } catch (_) {
-        final failed = _preloadedSessions.remove(item.id);
-        unawaited(failed?.dispose());
-        _setPreloadedItemIds(_preloadedSessions.keys.toList(growable: false));
+        _preloadedItemIds.remove(item.id);
+        if (ref.mounted &&
+            !_isSessionDisposed &&
+            preloadGeneration == _preloadGeneration) {
+          _setPreloadedItemIds(_preloadedItemIds.toList(growable: false));
+        }
       }
     }
   }
@@ -677,9 +695,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   Future<void> _disposePreloads() async {
-    final sessions = _preloadedSessions.values.toList(growable: false);
-    _preloadedSessions.clear();
-    await Future.wait<void>(sessions.map((session) => session.dispose()));
+    _preloadGeneration += 1;
+    _preloadedItemIds.clear();
+    await _cacheManager.releasePending();
   }
 
   Future<void> _disposeSessionOnly() async {

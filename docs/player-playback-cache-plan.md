@@ -18,6 +18,9 @@ preload strategy, and future HTTP/CDN cache boundaries.
 - Reference short-drama players also include lightweight tap feedback, playback
   speed selection, a next-episode entry, and automatic next episode after
   completion.
+- The single drama player back button still needs final Figma alignment.
+- Reference short-drama players show a thumbnail preview while dragging the
+  progress bar. The current seek UI only shows the time bubble.
 - Future video source, access, cache policy, signed URL refresh, and playback
   progress all require server APIs. For now, these must be represented by
   repository/service boundaries with mock implementations.
@@ -34,6 +37,7 @@ preload strategy, and future HTTP/CDN cache boundaries.
 - Support completed playback handling and automatic next episode.
 - Support manual next episode in single drama playback.
 - Support playback speed selection through a lightweight sheet.
+- Support a mock seek thumbnail preview while dragging in single drama playback.
 - Keep tap feedback lightweight instead of building a full long-video control
   overlay.
 - Preload the next playable item lightly.
@@ -53,6 +57,9 @@ Responsibilities:
 - `getVideoSource(episodeId)`
 - `refreshVideoSource(episodeId)`
 - Return play URL, format, expiry, poster URL, and cache policy.
+- MVP implementation lives behind `PlayerPlaybackSourceRepository`.
+- Mock implementation resolves from `PlayerFeedItem.episode.videoSource`,
+  attaches cache metadata, and delegates local cache behavior to a cache manager.
 
 Suggested source fields:
 
@@ -106,6 +113,23 @@ Suggested fields:
 - `requiresAuth`
 - `onlyWifi`
 - `expiresAt`
+
+### LocalPlaybackCacheManager
+
+Responsibilities:
+
+- `lookup(item, policy, remoteUrl)`
+- `download(item, policy, remoteUrl)`
+- `releasePending()`
+- Return cache states for hit, miss, expired, downloading, and failed.
+
+MVP implementation:
+
+- Uses an in-memory mock cache.
+- Simulates download completion with a short async delay.
+- Keeps the playable source as the original remote URL until real local files
+  exist, so `media_kit` remains able to play videos on device.
+- Does not write large video files to disk.
 
 ## Playback State
 
@@ -219,6 +243,7 @@ Dragging state:
 
 - Show the Figma-style stronger progress bar.
 - Show a time bubble such as `00:00 / 01:45`.
+- Show a small thumbnail preview above the time bubble.
 - Update `seekPreviewPosition` while dragging.
 - Disable vertical page swiping while the user is dragging the progress bar.
 
@@ -326,12 +351,77 @@ Client strategy:
 
 ### Phase 4: VideoSource And Cache Policy
 
-- Add or finalize `VideoSourceRepository`.
-- Add or finalize `PlaybackProgressRepository`.
-- Add `VideoCachePolicy`.
-- Mock signed URL expiry and refresh.
-- Mock preload policy.
-- Prepare for HLS, CDN cache, and HTTP Range integration.
+- Add playback source and cache boundaries:
+  `PlayerPlaybackSourceRepository`, `PlaybackCachePolicy`,
+  `PlaybackSource`, and `PlayerPlaybackCacheManager`.
+- Add a mock playback source repository that resolves a playable URL, cache key,
+  expiry, format, and codec hint from the feed item.
+- Add an in-memory mock cache manager with hit, miss, expired, downloading, and
+  failed behavior.
+- Route `PlayerPlaybackController.playItem()` through source resolution before
+  opening media.
+- On cache hit, open the cached source directly.
+- On cache miss or expired cache, simulate a download and then open the cached
+  source.
+- On resolve/download failure, keep the existing playback error and retry path.
+- Keep locked, unavailable, and null-source episodes outside resolve/cache/open.
+- Rework `preloadAround()` to prepare source/cache only. Preload no longer
+  creates media player sessions and cannot play audio.
+- Release pending preload work when For You is hidden, a single drama player is
+  disposed, or the provider is disposed.
+- Keep preload scoped to each playback session key, so For You and single drama
+  states do not bleed into each other.
+
+Phase 4 defer:
+
+- Real backend video source API.
+- Real CDN response headers and signed URL refresh.
+- Real file download and disk write.
+- Disk eviction policy and cache quota management.
+- Playback progress save/reporting.
+- Android smoke verification unless a playback lifecycle issue requires it.
+
+### Phase 4.5: Player UI Polish After Cache Foundation
+
+This phase should run after Phase 4 review passes. Keep it small and focused on
+player interaction polish.
+
+Back button alignment:
+
+- Re-align the single drama top-left back button to Figma/reference video.
+- Keep the change scoped to `PlayerChrome` single drama top bar.
+- Do not add a For You back button.
+- Keep the tap target at least 40x40 while preserving the visual icon size.
+- Keep `EP.01`, `Speed`, and `More` vertically aligned with the back button.
+
+Seek thumbnail preview MVP:
+
+- While dragging the single drama seek bar, show a small preview thumbnail above
+  the existing time bubble.
+- Use the current episode poster/background image as the MVP thumbnail.
+- Follow the drag position horizontally and clamp the thumbnail to screen
+  bounds.
+- Reuse `seekPreviewPosition`; do not seek the real player during preview
+  updates.
+- Do not extract frames from MP4 on the client.
+- Do not request a new image for every drag position.
+- Do not enable this UI for For You until design confirms the layout.
+
+Future seek thumbnail service boundary:
+
+- The playback source API may later return `previewSpriteUrl`,
+  `thumbnailIntervalSeconds`, `columns`, `rows`, and `duration`.
+- The client should map `seekPreviewPosition` to the correct sprite cell.
+- Sprite/VTT image metadata should integrate with the video source and CDN cache
+  model, not with widget-only state.
+
+Phase 4.5 defer:
+
+- Real thumbnail sprite generation.
+- Client-side video frame extraction.
+- For You seek preview UI.
+- Full control overlay auto-hide.
+- Playback progress persistence.
 
 ## Out Of Scope
 
