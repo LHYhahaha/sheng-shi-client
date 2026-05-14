@@ -248,6 +248,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('player_back_button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_single_top_bar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_episode_label')), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_speed_button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_more_button')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('player_back_button')));
     await tester.pumpAndSettle();
@@ -408,6 +412,32 @@ void main() {
     expect(find.text('EP.02'), findsOneWidget);
   });
 
+  testWidgets(
+    'completed playback waits for page animation before state switch',
+    (tester) async {
+      final playbackSession = _FakePlaybackSession();
+
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          repository: _FakePlayerFeedRepository.unlocked(),
+          playbackSessionFactory: () => playbackSession,
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      playbackSession.emitCompleted(true);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+
+      expect(find.text('EP.01'), findsOneWidget);
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('EP.02'), findsOneWidget);
+    },
+  );
+
   testWidgets('completed playback to locked episode shows paywall', (
     tester,
   ) async {
@@ -427,6 +457,31 @@ void main() {
 
     expect(find.text('EP.02'), findsOneWidget);
     expect(find.text('Unlock Now'), findsOneWidget);
+  });
+
+  testWidgets('completed playback on last episode does not loop', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '3',
+        ),
+        repository: _FakePlayerFeedRepository._(items: [_items().last]),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    playbackSession.emitCompleted(true);
+    await tester.pumpAndSettle();
+
+    expect(find.text('EP.03'), findsOneWidget);
+    expect(find.text('EP.01'), findsNothing);
   });
 
   testWidgets('completed playback is ignored while a sheet is open', (
@@ -450,6 +505,33 @@ void main() {
 
     expect(find.text('Facebook'), findsOneWidget);
     expect(find.text('EP.01'), findsOneWidget);
+  });
+
+  testWidgets('completed playback is ignored while seeking', (tester) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    playbackSession.emitDuration(const Duration(seconds: 100));
+    await tester.pumpAndSettle();
+
+    final seekBar = find.byKey(const ValueKey('player_seek_bar'));
+    final gesture = await tester.startGesture(tester.getCenter(seekBar));
+    await tester.pump();
+    playbackSession.emitCompleted(true);
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(find.text('EP.01'), findsOneWidget);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('back closes paywall before leaving player', (tester) async {

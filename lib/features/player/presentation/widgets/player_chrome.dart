@@ -15,8 +15,8 @@ abstract final class _PlayerLayoutMetrics {
   static const forYouWatchNowBottom = 24.0;
   static const forYouMetaGap = 58.0;
   static const singleBottomActionBottom = 41.0;
-  static const singleTopBarHorizontal = 8.0;
-  static const singleTopBarTop = 10.0;
+  static const singleTopBarHorizontal = 16.0;
+  static const singleTopBarTop = 8.0;
   static const singleTopBarHeight = 40.0;
   static const singleTopIconSize = 28.0;
   static const singleTopMoreSize = 24.0;
@@ -229,6 +229,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
                 0,
               ),
               child: SizedBox(
+                key: const ValueKey('player_single_top_bar'),
                 height: _PlayerLayoutMetrics.singleTopBarHeight,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -249,6 +250,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
                     ),
                     const SizedBox(width: 4),
                     Text(
+                      key: const ValueKey('player_episode_label'),
                       'EP.${episodeNumber.toString().padLeft(2, '0')}',
                       style: const TextStyle(
                         color: Colors.white,
@@ -278,6 +280,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
                     ),
                     const SizedBox(width: 14),
                     const Icon(
+                      key: ValueKey('player_more_button'),
                       Icons.more_horiz,
                       color: Colors.white,
                       size: _PlayerLayoutMetrics.singleTopMoreSize,

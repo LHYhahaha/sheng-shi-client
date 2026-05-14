@@ -43,12 +43,16 @@ class PlayerPage extends ConsumerStatefulWidget {
 
 class _PlayerPageState extends ConsumerState<PlayerPage>
     with WidgetsBindingObserver {
+  static const _autoAdvanceDuration = Duration(milliseconds: 300);
+  static const _pageTransitionDuration = Duration(milliseconds: 260);
+
   late final PageController _pageController;
   late final String _sessionKey;
   late final PlayerPlaybackController _playbackController;
   AppShellBottomNavigationVisible? _shellChrome;
   bool _isSeekDragging = false;
   bool _isModalOpen = false;
+  bool _isAutoAdvancing = false;
   String? _handledEndedItemId;
 
   String _createSessionKey() {
@@ -164,7 +168,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (currentPage != next) {
         _pageController.animateToPage(
           next,
-          duration: const Duration(milliseconds: 220),
+          duration: _isAutoAdvancing
+              ? _autoAdvanceDuration
+              : _pageTransitionDuration,
           curve: Curves.easeOutCubic,
         );
       }
@@ -189,7 +195,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
       _handledEndedItemId = next.currentItemId;
       if (feedState.canGoNext) {
-        feedController.goNext();
+        unawaited(_advanceToNextFromCompletion());
       }
     });
 
@@ -400,6 +406,41 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   void _exitForYouFeed() {
     _shellChrome?.show();
     context.go(RoutePaths.home);
+  }
+
+  Future<void> _advanceToNextFromCompletion() async {
+    if (_isAutoAdvancing || !mounted) {
+      return;
+    }
+
+    final feedProvider = playerFeedControllerProvider(_sessionKey);
+    final feedState = ref.read(feedProvider);
+    if (!feedState.canGoNext) {
+      return;
+    }
+
+    final nextIndex = feedState.currentIndex + 1;
+    _isAutoAdvancing = true;
+    try {
+      if (_pageController.hasClients) {
+        await _pageController.animateToPage(
+          nextIndex,
+          duration: _autoAdvanceDuration,
+          curve: Curves.easeOutCubic,
+        );
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      final latestFeedState = ref.read(feedProvider);
+      if (latestFeedState.currentIndex != nextIndex) {
+        ref.read(feedProvider.notifier).setCurrentIndex(nextIndex);
+      }
+    } finally {
+      _isAutoAdvancing = false;
+    }
   }
 
   void _goBackFromPlayer() {
