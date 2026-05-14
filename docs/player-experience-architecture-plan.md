@@ -1,0 +1,316 @@
+# Player Experience System Architecture Plan
+
+This document defines the architecture direction for the short-drama player
+experience across Home, For You, and single-drama playback. It is a planning
+document only: no UI, playback logic, local HLS cache, or backend integration is
+changed by this phase.
+
+## 1. System Goals
+
+- Home card entry should feel close to instant. The first playable frame should
+  appear as early as the network, CDN, HLS source, and media pipeline allow.
+- For You vertical feed switching should avoid unnecessary loading by preparing
+  nearby playable items and preserving session isolation.
+- Single-drama previous/next episode switching and swipe-back should reuse
+  retained or prepared sessions whenever possible, instead of reopening sources.
+- Switching bottom tabs, returning from Player, or moving the app to the
+  background must stop audio.
+- Every slow path must be diagnosable in release builds through timing logs,
+  especially source resolve, HLS preload, media open, first frame, buffering,
+  window hit/miss, and lifecycle release.
+
+## 2. Current Conclusions
+
+- Dart-side source resolve and `media_kit` open calls are already fast in device
+  timing, usually tens of milliseconds.
+- Startup preload can hit after Home feed load, but real device tests still show
+  first-frame delays. Normal Dart HLS prefetch does not guarantee that
+  `media_kit` can reuse enough work to improve first-frame latency.
+- The previous/current/next playback session window is currently the most
+  effective client-side experience optimization:
+  - prepared next can make downward switching fast when first frame is ready;
+  - retained previous can make swipe-back nearly instant;
+  - window misses are easy to identify and should be fixed before heavier cache
+    work.
+- Startup preload and playback preload now have separate scopes. Future work
+  must not merge their pending requests, generation state, or `releasePending()`
+  behavior.
+- If stable mock sources still show multi-second cold start, the likely
+  bottleneck is HLS first segment, CDN behavior, startup bitrate, decode, or the
+  player pipeline rather than Flutter UI layout.
+
+## 3. Layered Design
+
+### Home And For You Entry Layers
+
+Home and For You only express intent:
+
+- user wants to play a drama or feed item;
+- first visible item is worth startup preloading;
+- current feed index changed and nearby items may be preloaded.
+
+They must not create `media_kit` players, hold `VideoController`, perform HLS
+HTTP work directly, or own playback truth.
+
+### PlayerPlaybackController
+
+`PlayerPlaybackController` is the only source of truth for actual playback
+state:
+
+- current playable item and source;
+- open/play/pause/dispose;
+- position, duration, buffered position, seek;
+- speed, ended state, retry;
+- recoverable/fatal media errors;
+- visibility and app lifecycle pause.
+
+UI controllers may manage sheets, paywalls, and presentation-only states, but
+they must not duplicate real playback truth.
+
+### StartupPreloadController
+
+`PlayerStartupPreloadController` owns Home startup preload only:
+
+- receives a Home first-screen candidate;
+- resolves a playable item through Player repository boundaries;
+- invokes the startup-scoped HLS preload manager;
+- records idle/pending/success/failed/cancelled;
+- supports cancellation on Home category switch, refresh, or dispose;
+- never creates a media session and never produces audio.
+
+Startup preload failure must not affect Player playback error state.
+
+### Playback Preload
+
+Playback preload is internal to active player experiences:
+
+- resolves/preloads next and optionally previous HLS sources;
+- uses playback-scoped pending/release state;
+- skips locked, unavailable, or null-source items;
+- never creates a playback session or produces audio;
+- is released when Player is hidden, disposed, or memory pressure occurs.
+
+### PrepareManager And Session Window
+
+`PlayerPlaybackPrepareManager` manages session reuse:
+
+- previous retained paused session;
+- current playing session;
+- next prepared muted/paused session;
+- maximum previous/current/next window;
+- release on hidden, dispose, memory pressure, or stale generation.
+
+Only the current session may play. Previous and next sessions must be paused or
+muted and must not produce sound.
+
+### HLS And CDN Layer
+
+The HLS/CDN layer owns source and cache-policy concepts:
+
+- playlist fetch and first-segment preheat;
+- source expiry and signed URL refresh boundaries;
+- segment duration and first segment size assumptions;
+- future cache-control and network-policy handling.
+
+Current implementation remains remote HLS playback plus lightweight preload.
+Local HLS cache/proxy is a later decision, not an implicit dependency.
+
+### Metrics And Timing
+
+Timing must remain available in release builds through
+`--dart-define=PLAYER_TIMING_LOGS=true`.
+
+Required log dimensions:
+
+- session key and trace id;
+- item id, source label, source profile;
+- user trigger and from/to item;
+- source resolve, HLS preload, media open, play, first position, first frame,
+  buffering, error/retry;
+- session window result: prepared next hit, retained previous hit, or fallback
+  miss;
+- release reason: hidden, dispose, memory pressure, stale generation.
+
+## 4. Playback Chains
+
+### Home Card To Single-Drama Player
+
+Preload:
+
+- Home feed load may request startup preload for the first playable visible
+  drama only.
+- Home category switch, retry, refresh, or disposal cancels startup preload.
+- Home does not create a media session.
+
+Prepare:
+
+- No media-session prepare happens in Home.
+- After Player opens, playback preload and PrepareManager can prepare next
+  episode from inside the Player scope.
+
+Media session creation:
+
+- Created only by `PlayerPlaybackController` after the single-drama Player page
+  requests playback.
+
+Release:
+
+- Back navigation, route pop, app hidden, or player disposal pauses/disposes
+  playback scope and session window.
+- Startup scope release is independent and should not affect active Player
+  preload/session work.
+
+No-audio scenarios:
+
+- Home startup preload must never create audio.
+- Returning from single-drama Player must pause and dispose active playback.
+- App inactive/paused/hidden must pause playback.
+
+Required logs:
+
+- Home feed loaded and startup preload request/start/end.
+- Home card tap and route push timing.
+- Startup preload hit/miss on `playItem`.
+- Source resolve, media open, first frame, first position.
+- Session window setup after entry.
+
+### For You Tab To Feed Player
+
+Preload:
+
+- For You feed may preload next item from active Player scope after current
+  index is known.
+- Startup preload is not responsible for For You feed continuity.
+
+Prepare:
+
+- PrepareManager may keep current and next feed item sessions inside the
+  For You session key.
+- Previous retained session may be reused on upward swipe if still in window.
+
+Media session creation:
+
+- Created by `PlayerPlaybackController` for the For You session key.
+- Session state must be isolated from single-drama playback.
+
+Release:
+
+- Switching to Home, My list, or Profile pauses current playback and releases
+  pending playback preload/session window work according to current lifecycle
+  rules.
+- Feed index should be retained unless the feature intentionally resets it.
+
+No-audio scenarios:
+
+- Bottom-tab switch away from For You must stop audio.
+- App background/inactive must stop audio.
+- Prepared/retained non-current sessions must stay paused or muted.
+
+Required logs:
+
+- For You tab visibility changes.
+- PageView scroll start/end and index changes.
+- Preload candidates and skipped reasons.
+- Window hit/miss and release reason.
+- First frame and buffering timing per source label.
+
+### Single-Drama Vertical PageView
+
+Preload:
+
+- Current episode should trigger next episode HLS preload when playable.
+- Previous may be retained through session window rather than repeatedly
+  preloaded.
+- Locked, unavailable, or null-source episodes must be skipped.
+
+Prepare:
+
+- Next playable episode can be prepared as a muted/paused session.
+- Current session becomes previous retained session when moving to a different
+  episode if still inside the allowed window.
+
+Media session creation:
+
+- Normal open creates a current session only when no suitable prepared/retained
+  session is available.
+- Prepared hit and retained previous hit must avoid duplicate normal open.
+
+Release:
+
+- Leaving Player releases current session and window.
+- Hidden/app lifecycle pause must stop audio.
+- Stale generation must not take over current playback.
+
+No-audio scenarios:
+
+- Previous/next sessions are never allowed to play audibly.
+- Locked/unavailable episodes must not open, prepare, or preload media.
+- Paywall/sheet open should not dispose playback, but actual page leave should.
+
+Required logs:
+
+- Manual swipe direction and page changed.
+- Auto-next animation start/end.
+- Preload candidates, allowed ids, skipped reasons.
+- Prepared hit next, retained hit previous, window miss fallback open.
+- Retain current before normal open and retain current done.
+- Dispose/release reason for sessions leaving window.
+
+## 5. Recommended Next Phases
+
+### Phase 5.14: Device Timing Re-Review
+
+- Run several release-device passes with `PLAYER_TIMING_LOGS=true`.
+- Confirm startup hit/miss, prepared hit, retained hit, window miss, first frame,
+  and buffering timing for stable mock sources.
+- Produce a short timing matrix for Home entry, For You switching, single-drama
+  next, single-drama previous, and auto-next.
+- Do not change playback strategy until timing identifies the slow boundary.
+
+### Phase 5.15: Local HLS Cache/Proxy Spike
+
+- If first-frame delays remain after session window hits, evaluate a local HLS
+  cache/proxy spike.
+- Scope should be explicit: cache playlist/segments with quota, expiry, and
+  cancellation.
+- Validate whether `media_kit` can benefit from the local proxy before product
+  implementation.
+
+### Phase 5.16: Server/CDN Playback Source Specification
+
+Define a backend/CDN contract for:
+
+- HLS URL and signed URL refresh;
+- source expiry;
+- duration and dimensions;
+- poster and preview sprite/VTT;
+- segment duration and keyframe alignment;
+- first segment byte size;
+- startup bitrate/variant;
+- playlist and segment `Cache-Control`;
+- subtitles and localized audio/text tracks;
+- max preload bytes and network policy.
+
+### Phase 5.17: Data-Driven Cache Decision
+
+- Use Phase 5.14 timing and Phase 5.15 spike results to decide whether to build
+  local HLS cache/proxy.
+- If CDN/source tuning solves startup and switching, do not add cache
+  complexity.
+- If cache helps materially, implement with explicit quota, LRU, expiry, and
+  cancellation rules.
+
+## 6. Explicit Prohibitions
+
+- Do not create a player or `VideoController` in Home.
+- Do not let startup preload and playback preload share pending request,
+  generation, or `releasePending()` state.
+- Do not expand the session window beyond previous/current/next to hide root
+  cause.
+- Do not use offline download as a fix for online playback smoothness.
+- Do not put playback truth into UI widgets or presentation-only controllers.
+- Do not let locked, unavailable, or null-source items open, preload, or prepare
+  media.
+- Do not treat startup preload failure as playback failure.
+- Do not remove release-build timing logs while playback performance is still
+  being tuned.
