@@ -160,6 +160,52 @@ void main() {
     expect(result, isNull);
   });
 
+  test(
+    'file cache releasePending deletes temp file and ignores late write',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'player-cache-test-',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      final downloader = _BlockingFileDownloader();
+      final cacheManager = FilePlayerPlaybackCacheManager(
+        cacheDirectory: tempDir,
+        downloader: downloader,
+      );
+      final item = _item(1);
+      final policy = PlaybackCachePolicy(
+        allowCache: true,
+        expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+        cacheKey: 'player:drama-a:ep-1',
+      );
+
+      final downloadFuture = cacheManager.download(
+        item: item,
+        policy: policy,
+        remoteUrl: _videoUrl,
+      );
+      await downloader.started.future;
+
+      expect(await _cacheFiles(tempDir, suffix: '.mp4.download'), hasLength(1));
+
+      await cacheManager.releasePending();
+
+      expect(await _cacheFiles(tempDir, suffix: '.mp4.download'), isEmpty);
+
+      downloader.complete();
+      final source = await downloadFuture;
+
+      expect(source.playableSource, _videoUrl);
+      expect(await _cacheFiles(tempDir, suffix: '.mp4.download'), isEmpty);
+      expect(await _cacheFiles(tempDir, suffix: '.mp4'), isEmpty);
+      expect(await _cacheFiles(tempDir, suffix: '.json'), isEmpty);
+    },
+  );
+
   test('resolve download failure enters error and retry can recover', () async {
     final session = _FakePlaybackSession();
     final cacheManager = MockPlayerPlaybackCacheManager()
@@ -1043,6 +1089,19 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   }
 }
 
+Future<List<FileSystemEntity>> _cacheFiles(
+  Directory directory, {
+  required String suffix,
+}) async {
+  if (!await directory.exists()) {
+    return const [];
+  }
+  return directory
+      .list()
+      .where((entity) => entity.path.endsWith(suffix))
+      .toList();
+}
+
 class _FakeFileDownloader implements PlaybackFileDownloader {
   @override
   Future<void> download({
@@ -1051,5 +1110,28 @@ class _FakeFileDownloader implements PlaybackFileDownloader {
   }) async {
     await destination.parent.create(recursive: true);
     await destination.writeAsBytes([1, 2, 3, 4]);
+  }
+}
+
+class _BlockingFileDownloader implements PlaybackFileDownloader {
+  final started = Completer<void>();
+  final _finish = Completer<void>();
+
+  @override
+  Future<void> download({
+    required Uri remoteUri,
+    required File destination,
+  }) async {
+    await destination.parent.create(recursive: true);
+    await destination.writeAsBytes([9, 9, 9]);
+    started.complete();
+    await _finish.future;
+    await destination.writeAsBytes([1, 2, 3, 4]);
+  }
+
+  void complete() {
+    if (!_finish.isCompleted) {
+      _finish.complete();
+    }
   }
 }

@@ -49,7 +49,7 @@ class FilePlayerPlaybackCacheManager implements PlayerPlaybackCacheManager {
 
   final Directory _cacheDirectory;
   final PlaybackFileDownloader _downloader;
-  final _pendingKeys = <String>{};
+  final _pendingTempFilePaths = <String>{};
   int _generation = 0;
 
   @override
@@ -103,10 +103,12 @@ class FilePlayerPlaybackCacheManager implements PlayerPlaybackCacheManager {
     final key = policy.cacheKey;
     final mediaFile = _mediaFile(key, policy.format);
     final tempFile = File('${mediaFile.path}.download');
-    _pendingKeys.add(key);
+    final tempFilePath = tempFile.path;
+    _pendingTempFilePaths.add(tempFilePath);
     try {
       await _downloader.download(remoteUri: uri, destination: tempFile);
-      if (generation != _generation || !_pendingKeys.contains(key)) {
+      if (generation != _generation ||
+          !_pendingTempFilePaths.contains(tempFilePath)) {
         await _deleteIfExists(tempFile);
         return _remoteSource(item: item, policy: policy, remoteUrl: remoteUrl);
       }
@@ -126,19 +128,17 @@ class FilePlayerPlaybackCacheManager implements PlayerPlaybackCacheManager {
       await _deleteIfExists(tempFile);
       rethrow;
     } finally {
-      _pendingKeys.remove(key);
+      _pendingTempFilePaths.remove(tempFilePath);
     }
   }
 
   @override
   Future<void> releasePending() async {
     _generation += 1;
-    final pendingKeys = List<String>.from(_pendingKeys);
-    _pendingKeys.clear();
+    final pendingTempFilePaths = List<String>.from(_pendingTempFilePaths);
+    _pendingTempFilePaths.clear();
     await Future.wait(
-      pendingKeys.map(
-        (key) => _deleteIfExists(File('${_mediaPath(key)}.download')),
-      ),
+      pendingTempFilePaths.map((path) => _deleteIfExists(File(path))),
     );
   }
 

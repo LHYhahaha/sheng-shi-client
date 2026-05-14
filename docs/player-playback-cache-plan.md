@@ -130,11 +130,15 @@ Responsibilities:
 
 MVP implementation:
 
-- Uses an in-memory mock cache.
-- Simulates download completion with a short async delay.
-- Keeps the playable source as the original remote URL until real local files
-  exist, so `media_kit` remains able to play videos on device.
-- Does not write large video files to disk.
+- Provides both an in-memory mock cache for tests and a
+  `FilePlayerPlaybackCacheManager` MVP for runtime.
+- The file cache writes downloaded playable MP4 sources into the app temp/cache
+  directory and stores lightweight JSON metadata beside the media file.
+- Pending downloads use a real format-aware temp file path such as
+  `source.mp4.download`; `releasePending()` must remove that exact temp file and
+  prevent late completion from writing media or metadata.
+- Unsupported sources such as local assets skip disk caching and continue using
+  the original playable source.
 
 ## Playback State
 
