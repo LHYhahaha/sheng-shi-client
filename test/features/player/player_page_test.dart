@@ -24,7 +24,7 @@ void main() {
       _buildPlayerApp(repository: _FakePlayerFeedRepository.empty()),
     );
     await tester.pump(const Duration(seconds: 1));
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.text('No episodes available yet.'), findsOneWidget);
   });
@@ -139,6 +139,60 @@ void main() {
       find.byKey(const ValueKey('player_seek_track_loading')),
       findsOneWidget,
     );
+  });
+
+  testWidgets(
+    'shows video surface with loading when playing before first frame',
+    (tester) async {
+      final playbackSession = _FakePlaybackSession(emitWidthOnOpen: false);
+
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          repository: _FakePlayerFeedRepository.unlocked(),
+          playbackSessionFactory: () => playbackSession,
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+
+      var chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
+      expect(chrome.showVideo, isTrue);
+      expect(chrome.showLoading, isTrue);
+      expect(
+        find.byKey(const ValueKey('player_seek_track_loading')),
+        findsOneWidget,
+      );
+
+      playbackSession.emitWidth(1280);
+      await tester.pump();
+      await tester.pump();
+
+      chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
+      expect(chrome.showVideo, isTrue);
+      expect(chrome.showLoading, isFalse);
+      expect(
+        find.byKey(const ValueKey('player_seek_track_loading')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('error state does not expose playable video surface', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () =>
+            _FakePlaybackSession(shouldThrowOnOpen: true),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
+    expect(chrome.showVideo, isFalse);
+    expect(chrome.showLoading, isFalse);
   });
 
   testWidgets('single drama taps video to pause and center play resumes', (
@@ -897,9 +951,14 @@ PlayerContent _content(List<PlayerEpisode> episodes) {
 }
 
 class _FakePlaybackSession implements PlayerPlaybackSession {
-  _FakePlaybackSession({this.openCompleter, this.shouldThrowOnOpen = false});
+  _FakePlaybackSession({
+    this.openCompleter,
+    this.shouldThrowOnOpen = false,
+    this.emitWidthOnOpen = true,
+  });
 
   final Completer<void>? openCompleter;
+  final bool emitWidthOnOpen;
   bool shouldThrowOnOpen;
   final _bufferingController = StreamController<bool>.broadcast();
   final _playingController = StreamController<bool>.broadcast();
@@ -962,6 +1021,10 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     _bufferedPositionController.add(position);
   }
 
+  void emitWidth(int width) {
+    _widthController.add(width);
+  }
+
   @override
   Future<void> open(String source, {bool play = true}) async {
     _bufferingController.add(true);
@@ -969,7 +1032,9 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     if (shouldThrowOnOpen) {
       throw StateError('open failed');
     }
-    _widthController.add(1280);
+    if (emitWidthOnOpen) {
+      _widthController.add(1280);
+    }
     _completedController.add(false);
     _playingController.add(play);
     _bufferingController.add(false);

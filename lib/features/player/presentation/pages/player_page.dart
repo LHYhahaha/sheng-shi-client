@@ -299,11 +299,25 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                     !item.episode.isLocked &&
                     playbackState.currentItemId == item.id &&
                     playbackState.currentSource != null;
+                final canShowVideoSurface =
+                    canRenderVideo && !playbackState.isError;
+                final showVideoBeforeFirstFrame =
+                    canShowVideoSurface &&
+                    !playbackState.hasFirstFrame &&
+                    (playbackState.status == PlayerPlaybackStatus.playing ||
+                        playbackState.position > Duration.zero);
                 final showVideo =
+                    canShowVideoSurface &&
+                    (playbackState.hasFirstFrame || showVideoBeforeFirstFrame);
+                if (showVideoBeforeFirstFrame) {
+                  playbackController.recordVideoSurfaceShownBeforeFirstFrame(
+                    itemId: item.id,
+                    source: playbackState.currentSource,
+                  );
+                }
+                final showLoading =
                     canRenderVideo &&
-                    playbackState.hasFirstFrame &&
-                    !playbackState.isError;
-                final showLoading = canRenderVideo && playbackState.isLoading;
+                    (playbackState.isLoading || showVideoBeforeFirstFrame);
                 final showPlaybackError =
                     isCurrentItem && playbackState.isError;
                 final canTogglePlayback =

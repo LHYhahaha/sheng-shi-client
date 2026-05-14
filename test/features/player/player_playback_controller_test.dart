@@ -1225,6 +1225,28 @@ void main() {
     },
   );
 
+  test('logs playback advancing before first frame diagnostics', () async {
+    final session = _FakePlaybackSession(emitWidthOnOpen: false);
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    session.emitPlaying(true);
+    await Future<void>.delayed(Duration.zero);
+    session.emitPosition(const Duration(seconds: 1));
+    await Future<void>.delayed(Duration.zero);
+    controller.recordVideoSurfaceShownBeforeFirstFrame(
+      itemId: 'drama-a-ep-1',
+      source: _videoUrl,
+    );
+
+    final report = controller.exportTimingReport();
+    expect(report, contains('playing event while hasFirstFrame=false'));
+    expect(report, contains('position advancing while hasFirstFrame=false'));
+    expect(report, contains('video surface shown before firstFrame'));
+  });
+
   test('duplicate prepare requests for same item are ignored', () async {
     final currentSession = _FakePlaybackSession();
     final prepareCompleter = Completer<void>();
@@ -1438,7 +1460,7 @@ ProviderContainer _createContainer(
 
 ProviderContainer _createPrepareContainer(
   PlayerPlaybackSession Function() sessionFactory, {
-  Duration warmUpTimeout = const Duration(milliseconds: 1500),
+  Duration warmUpTimeout = const Duration(milliseconds: 4000),
 }) {
   final container = ProviderContainer(
     overrides: [
@@ -1580,6 +1602,10 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
 
   void emitCompleted(bool completed) {
     _completedController.add(completed);
+  }
+
+  void emitPlaying(bool isPlaying) {
+    _playingController.add(isPlaying);
   }
 
   void emitPosition(Duration position) {

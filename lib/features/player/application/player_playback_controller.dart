@@ -229,6 +229,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   bool _ignoreNextCompleted = false;
   Duration? _lastPositionUpdate;
   final _timingEvents = <PlayerPlaybackTimingEvent>[];
+  final _playingBeforeFirstFrameLoggedItemIds = <String>{};
+  final _positionBeforeFirstFrameLoggedItemIds = <String>{};
+  final _surfaceBeforeFirstFrameLoggedItemIds = <String>{};
   String? _currentPlaybackItemId;
   PlaybackSource? _currentPlaybackSource;
   bool _currentPlaybackHasFirstFrame = false;
@@ -243,6 +246,24 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   String exportTimingReport() {
     return _timingEvents.map(_formatTimingEvent).join('\n');
+  }
+
+  void recordVideoSurfaceShownBeforeFirstFrame({
+    required String itemId,
+    String? source,
+  }) {
+    if (!_surfaceBeforeFirstFrameLoggedItemIds.add(itemId)) {
+      return;
+    }
+    _logTiming(
+      'video surface shown before firstFrame',
+      itemId: itemId,
+      source: source,
+      details: _timingDetails([
+        'status=${state.status.name}',
+        'positionMs=${state.position.inMilliseconds}',
+      ]),
+    );
   }
 
   @override
@@ -886,6 +907,20 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         state.status == PlayerPlaybackStatus.opening) {
       return;
     }
+    if (isPlaying &&
+        !state.hasFirstFrame &&
+        state.currentItemId != null &&
+        _playingBeforeFirstFrameLoggedItemIds.add(state.currentItemId!)) {
+      _logTiming(
+        'playing event while hasFirstFrame=false',
+        itemId: state.currentItemId,
+        source: state.currentSource,
+        details: _timingDetails([
+          'positionMs=${state.position.inMilliseconds}',
+          'status=${state.status.name}',
+        ]),
+      );
+    }
     state = state.copyWith(
       status: isPlaying
           ? PlayerPlaybackStatus.playing
@@ -934,6 +969,17 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
     _lastPositionUpdate = clamped;
     _currentPlaybackPosition = clamped;
+    if (!state.hasFirstFrame &&
+        clamped > Duration.zero &&
+        state.currentItemId != null &&
+        _positionBeforeFirstFrameLoggedItemIds.add(state.currentItemId!)) {
+      _logTiming(
+        'position advancing while hasFirstFrame=false',
+        itemId: state.currentItemId,
+        source: state.currentSource,
+        details: _timingDetails(['positionMs=${clamped.inMilliseconds}']),
+      );
+    }
     state = state.copyWith(position: clamped);
     _saveProgressIfNeeded(position: clamped);
   }

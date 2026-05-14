@@ -858,6 +858,39 @@ Phase 5.8 limits:
 - No guarantee that every CDN/HLS source decodes a frame during muted warm-up;
   device timing remains the source of truth.
 
+### Phase 5.8.1: Audio Playing But Poster Still Visible
+
+Implemented. Device testing showed a second first-frame edge case: audio could
+start and position could advance while `widthStream` had not emitted yet, so
+`hasFirstFrame=false` kept the video opacity at zero and left the poster visible
+over an already-playing session.
+
+This phase separates video-surface visibility from first-frame readiness:
+
+- `PlayerPage` now treats playable/current/non-error media as a mountable video
+  surface independently from `hasFirstFrame`.
+- Before the first frame, the poster remains for opening/loading. Once playback
+  is `playing` or position advances, the video surface is shown with loading
+  overlay instead of leaving the poster permanently on top.
+- `hasFirstFrame` still controls when loading fades and when pause/play center
+  affordances are shown.
+- Error, locked, and unavailable states continue to hide the playable video
+  surface.
+- Timing now records `playing event while hasFirstFrame=false`,
+  `position advancing while hasFirstFrame=false`, and
+  `video surface shown before firstFrame` so release logs can identify this
+  mismatch.
+- Prepared warm-up timeout is raised to 4000 ms to give HLS sources more time to
+  decode a first frame before takeover.
+- EP.01/EP.02 mock HLS sources remain distinct public stable fixtures for A/B
+  testing prepared-next and retained-previous timing.
+
+Phase 5.8.1 limits:
+
+- No UI redesign.
+- No segment cache.
+- No media_kit pipeline changes beyond prepared warm-up and surface visibility.
+
 Phase 5 defer:
 
 - Real playback source API and signed URL refresh.
