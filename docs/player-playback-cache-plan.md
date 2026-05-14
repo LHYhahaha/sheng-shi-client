@@ -1409,6 +1409,18 @@ than guesswork.
 
 Phase 5 defer:
 
+- Phase 5.18 configurable preload policy is implemented.
+  - `PlayerPreloadConfig` holds local defaults for Home startup preload,
+    single-drama and For You HLS preload counts, max concurrent HLS preloads,
+    max preload bytes, timeout, and media-session prepare/retain caps.
+  - `playerPreloadConfigProvider` currently returns local defaults and is the
+    future remote-config/server-policy boundary.
+  - `preloadAround()` now uses configured forward/backward HLS counts and skips
+    locked, unavailable, and null-source items without consuming preload slots.
+  - HLS preloader timeout and byte budget are injected from the config for both
+    playback and startup scopes without sharing pending/release state.
+  - Prepared media-session window remains previous/current/next; increasing HLS
+    preload counts does not expand prepared sessions.
 - Phase 5.16 server/CDN playback source specification is captured in
   `docs/player-source-and-cdn-spec.md`.
   - The spec defines future playback source fields such as `hlsUrl`,

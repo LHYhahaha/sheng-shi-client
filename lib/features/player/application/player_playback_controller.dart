@@ -6,6 +6,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../data/playback_progress_repository_provider.dart';
 import '../data/player_playback_source_repository_provider.dart';
+import '../data/player_preload_config_provider.dart';
 import '../domain/player_feed.dart';
 import '../domain/player_playback_progress.dart';
 import '../domain/player_playback_source.dart';
@@ -201,8 +202,6 @@ class PlayerPlaybackState {
 
 class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   PlayerPlaybackController(this.sessionKey);
-
-  static const _maxPreloadedSources = 2;
 
   final String sessionKey;
   late PlayerPlaybackSession _session;
@@ -649,32 +648,34 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
 
-    final candidates = <PlayerFeedItem>[];
     final skipped = <String>[];
-    for (final index in [currentIndex + 1, currentIndex - 1]) {
-      if (index < 0 || index >= items.length) {
-        skipped.add('index:$index:out_of_range');
-        continue;
-      }
-      final item = items[index];
-      final source = item.episode.videoSource;
-      final skipReasons = <String>[
-        if (item.episode.isLocked) 'locked',
-        if (item.episode.isUnavailable) 'unavailable',
-        if (source == null) 'null_source',
-        if (item.id == state.currentItemId) 'current_item',
-      ];
-      if (skipReasons.isNotEmpty) {
-        skipped.add('${item.id}:${skipReasons.join('+')}');
-        continue;
-      }
-      candidates.add(item);
-    }
+    final config = ref.read(playerPreloadConfigProvider);
+    final isForYou = items[currentIndex].mode == PlayerFeedMode.forYou;
+    final forwardPreloadCount = config.forwardHlsPreloadCountFor(isForYou);
+    final backwardPreloadCount = config.backwardHlsPreloadCountFor(isForYou);
+    final forwardCandidates = _preloadCandidatesInDirection(
+      items,
+      currentIndex,
+      direction: 1,
+      count: forwardPreloadCount,
+      skipped: skipped,
+    );
+    final candidates = <PlayerFeedItem>[
+      ...forwardCandidates,
+      ..._preloadCandidatesInDirection(
+        items,
+        currentIndex,
+        direction: -1,
+        count: backwardPreloadCount,
+        skipped: skipped,
+      ),
+    ];
 
-    final allowedIds = candidates
-        .take(_maxPreloadedSources)
-        .map((item) => item.id)
-        .toSet();
+    final maxPreloadedSources = forwardPreloadCount + backwardPreloadCount;
+    final selectedCandidates = candidates
+        .take(maxPreloadedSources)
+        .toList(growable: false);
+    final allowedIds = selectedCandidates.map((item) => item.id).toSet();
     if (state.currentItemId != null) {
       allowedIds.add(state.currentItemId!);
     }
@@ -688,6 +689,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         'skipped=${skipped.join(',')}',
         'allowedIds=${allowedIds.join(',')}',
         'activePreloadAllowedIds=${previousActivePreloadAllowedIds.join(',')}',
+        'forwardHlsPreloadCount=$forwardPreloadCount',
+        'backwardHlsPreloadCount=$backwardPreloadCount',
+        'maxConcurrentHlsPreloads=${config.effectiveMaxConcurrentHlsPreloads}',
       ]),
     );
     final preloadGeneration = setEquals(_activePreloadAllowedIds, allowedIds)
@@ -705,13 +709,15 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _syncPreloadState();
 
     if (state.currentItemId != null && state.currentSource != null) {
-      final nextItem = candidates.isEmpty ? null : candidates.first;
+      final nextItem = forwardCandidates.isEmpty
+          ? null
+          : forwardCandidates.first;
       if (nextItem != null) {
         unawaited(_prepareNextItem(nextItem, preloadGeneration));
       }
     }
 
-    for (final item in candidates.take(_maxPreloadedSources)) {
+    for (final item in selectedCandidates) {
       final currentPreload = _preloadStates[item.id];
       if (_preloadedItemIds.contains(item.id) ||
           currentPreload?.status == PlaybackPreloadStatus.pending) {
@@ -781,6 +787,42 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         );
       }
     }
+  }
+
+  List<PlayerFeedItem> _preloadCandidatesInDirection(
+    List<PlayerFeedItem> items,
+    int currentIndex, {
+    required int direction,
+    required int count,
+    required List<String> skipped,
+  }) {
+    if (count <= 0) {
+      return const [];
+    }
+
+    final candidates = <PlayerFeedItem>[];
+    var index = currentIndex + direction;
+    while (index >= 0 && index < items.length && candidates.length < count) {
+      final item = items[index];
+      final source = item.episode.videoSource;
+      final skipReasons = <String>[
+        if (item.episode.isLocked) 'locked',
+        if (item.episode.isUnavailable) 'unavailable',
+        if (source == null) 'null_source',
+        if (item.id == state.currentItemId) 'current_item',
+      ];
+      if (skipReasons.isEmpty) {
+        candidates.add(item);
+      } else {
+        skipped.add('${item.id}:${skipReasons.join('+')}');
+      }
+      index += direction;
+    }
+
+    if (candidates.length < count && (index < 0 || index >= items.length)) {
+      skipped.add('index:$index:out_of_range');
+    }
+    return candidates;
   }
 
   Future<void> togglePlay() async {

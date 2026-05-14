@@ -451,6 +451,23 @@ Phase 5.16 deliverable:
 - Do not connect remote config in this phase; only preserve the boundary for a
   future server-delivered policy.
 
+Phase 5.18 implementation:
+
+- `PlayerPreloadConfig` now defines local defaults for Home startup preload,
+  single-drama forward/backward HLS preload, For You forward/backward HLS
+  preload, HLS timeout, max preload bytes, concurrency, and prepared/retained
+  media-session caps.
+- `playerPreloadConfigProvider` is the replacement boundary for future remote
+  config or server-delivered policy.
+- `PlayerPlaybackController.preloadAround()` now scans forward/backward
+  candidates according to the config. Locked, unavailable, and null-source
+  items are skipped without consuming an effective preload slot.
+- HLS preloader instances now receive `preloadTimeout` and `maxPreloadBytes`
+  from the typed config while keeping startup and playback preload scopes
+  separate.
+- Prepared media-session behavior remains capped at previous/current/next. HLS
+  preload count changes do not increase prepared player instances.
+
 ## 6. Explicit Prohibitions
 
 - Do not create a player or `VideoController` in Home.

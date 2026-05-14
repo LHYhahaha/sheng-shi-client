@@ -7,10 +7,12 @@ import 'package:drama_client/features/player/data/mock_playback_progress_reposit
 import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
 import 'package:drama_client/features/player/data/playback_progress_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
+import 'package:drama_client/features/player/data/player_preload_config_provider.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/domain/player_playback_progress.dart';
 import 'package:drama_client/features/player/domain/player_playback_source.dart';
+import 'package:drama_client/features/player/domain/player_preload_config.dart';
 import 'package:drama_client/features/player/domain/player_preload_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -701,27 +703,216 @@ void main() {
       await controller.preloadAround(items, 1);
 
       var state = container.read(provider);
-      expect(state.preloadedItemIds, ['drama-a-ep-1']);
+      expect(state.preloadedItemIds, ['drama-a-ep-5', 'drama-a-ep-1']);
       expect(
         _preloadStatusById(state)['drama-a-ep-1'],
         PlaybackPreloadStatus.success,
       );
-      expect(preloadManager.preloadCount, 1);
-      expect(preloadManager.preloadedItemIds, ['drama-a-ep-1']);
-      expect(session.openedSources, isEmpty);
-
-      await controller.preloadAround(items, 3);
-
-      state = container.read(provider);
-      expect(state.preloadedItemIds, ['drama-a-ep-5']);
-      expect(state.preloadedItemIds, hasLength(1));
       expect(
         _preloadStatusById(state)['drama-a-ep-5'],
         PlaybackPreloadStatus.success,
       );
       expect(preloadManager.preloadCount, 2);
+      expect(preloadManager.preloadedItemIds, ['drama-a-ep-5', 'drama-a-ep-1']);
+      expect(session.openedSources, isEmpty);
+
+      await controller.preloadAround(items, 3);
+
+      state = container.read(provider);
+      expect(state.preloadedItemIds, ['drama-a-ep-5', 'drama-a-ep-2']);
+      expect(state.preloadedItemIds, hasLength(2));
+      expect(
+        _preloadStatusById(state)['drama-a-ep-5'],
+        PlaybackPreloadStatus.success,
+      );
+      expect(
+        _preloadStatusById(state)['drama-a-ep-2'],
+        PlaybackPreloadStatus.success,
+      );
+      expect(preloadManager.preloadCount, 3);
     },
   );
+
+  test('forward HLS preload count can preload two playable items', () async {
+    final session = _FakePlaybackSession();
+    final preloadManager = MockPlayerPlaybackPreloadManager();
+    final container = _createContainer(
+      session,
+      preloadManager: preloadManager,
+      preloadConfig: const PlayerPreloadConfig(
+        singleDramaForwardHlsPreloadCount: 2,
+        singleDramaBackwardHlsPreloadCount: 0,
+      ),
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.preloadAround([_item(1), _item(2), _item(3)], 0);
+
+    final state = container.read(provider);
+    expect(state.preloadedItemIds, ['drama-a-ep-2', 'drama-a-ep-3']);
+    expect(preloadManager.preloadCount, 2);
+    expect(session.openedSources, isEmpty);
+  });
+
+  test('skipped items do not consume effective HLS preload slots', () async {
+    final session = _FakePlaybackSession();
+    final preloadManager = MockPlayerPlaybackPreloadManager();
+    final container = _createContainer(
+      session,
+      preloadManager: preloadManager,
+      preloadConfig: const PlayerPreloadConfig(
+        singleDramaForwardHlsPreloadCount: 2,
+        singleDramaBackwardHlsPreloadCount: 0,
+      ),
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.preloadAround([
+      _item(1),
+      _item(2, isLocked: true),
+      _item(3, isAvailable: false),
+      _item(4, hasSource: false),
+      _item(5),
+      _item(6),
+    ], 0);
+
+    final state = container.read(provider);
+    expect(state.preloadedItemIds, ['drama-a-ep-5', 'drama-a-ep-6']);
+    expect(preloadManager.preloadCount, 2);
+  });
+
+  test(
+    'backward HLS preload count can preload previous playable item',
+    () async {
+      final session = _FakePlaybackSession();
+      final preloadManager = MockPlayerPlaybackPreloadManager();
+      final container = _createContainer(
+        session,
+        preloadManager: preloadManager,
+        preloadConfig: const PlayerPreloadConfig(
+          singleDramaForwardHlsPreloadCount: 0,
+          singleDramaBackwardHlsPreloadCount: 1,
+        ),
+      );
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.preloadAround([_item(1), _item(2), _item(3)], 2);
+
+      final state = container.read(provider);
+      expect(state.preloadedItemIds, ['drama-a-ep-2']);
+      expect(preloadManager.preloadCount, 1);
+    },
+  );
+
+  test(
+    'for you and single drama can use different HLS preload counts',
+    () async {
+      final session = _FakePlaybackSession();
+      final preloadManager = MockPlayerPlaybackPreloadManager();
+      final container = _createContainer(
+        session,
+        preloadManager: preloadManager,
+        preloadConfig: const PlayerPreloadConfig(
+          singleDramaForwardHlsPreloadCount: 2,
+          singleDramaBackwardHlsPreloadCount: 0,
+          forYouForwardHlsPreloadCount: 1,
+          forYouBackwardHlsPreloadCount: 0,
+        ),
+      );
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.preloadAround([_item(1), _item(2), _item(3)], 0);
+      expect(container.read(provider).preloadedItemIds, [
+        'drama-a-ep-2',
+        'drama-a-ep-3',
+      ]);
+
+      await controller.preloadAround([
+        _item(1, mode: PlayerFeedMode.forYou),
+        _item(2, mode: PlayerFeedMode.forYou),
+        _item(3, mode: PlayerFeedMode.forYou),
+      ], 0);
+      expect(container.read(provider).preloadedItemIds, ['drama-a-ep-2']);
+    },
+  );
+
+  test(
+    'increasing HLS preload count does not expand prepared session window',
+    () async {
+      var index = 0;
+      final sessions = List.generate(4, (_) => _FakePlaybackSession());
+      PlayerPlaybackSession sessionFactory() => sessions[index++];
+      final container = _createPrepareContainer(
+        sessionFactory,
+        preloadConfig: const PlayerPreloadConfig(
+          singleDramaForwardHlsPreloadCount: 3,
+          singleDramaBackwardHlsPreloadCount: 0,
+          preparedForwardSessionCount: 1,
+        ),
+      );
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      await controller.preloadAround([
+        _item(1),
+        _item(2),
+        _item(3),
+        _item(4),
+      ], 0);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+
+      expect(container.read(provider).preloadedItemIds, [
+        'drama-a-ep-2',
+        'drama-a-ep-3',
+        'drama-a-ep-4',
+      ]);
+      expect(sessions[1].openedSources, [_playableSource(2)]);
+      expect(sessions[2].openedSources, isEmpty);
+      expect(sessions[3].openedSources, isEmpty);
+    },
+  );
+
+  test('max concurrent HLS preload remains sequential', () async {
+    final session = _FakePlaybackSession();
+    final preloadManager = _SequentialPreloadManager();
+    final container = _createContainer(
+      session,
+      preloadManager: preloadManager,
+      preloadConfig: const PlayerPreloadConfig(
+        singleDramaForwardHlsPreloadCount: 2,
+        singleDramaBackwardHlsPreloadCount: 0,
+        maxConcurrentHlsPreloads: 1,
+      ),
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    final preloadFuture = controller.preloadAround([
+      _item(1),
+      _item(2),
+      _item(3),
+    ], 0);
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+
+    expect(preloadManager.startedItemIds, ['drama-a-ep-2']);
+    preloadManager.completeNext();
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+
+    expect(preloadManager.startedItemIds, ['drama-a-ep-2', 'drama-a-ep-3']);
+    preloadManager.completeNext();
+    await preloadFuture;
+
+    expect(container.read(provider).preloadedItemIds, [
+      'drama-a-ep-2',
+      'drama-a-ep-3',
+    ]);
+  });
 
   test('preload pending is not counted as preloaded until success', () async {
     final session = _FakePlaybackSession();
@@ -1593,9 +1784,10 @@ void main() {
 ProviderContainer _createContainer(
   _FakePlaybackSession session, {
   bool addDisposeTearDown = true,
-  MockPlayerPlaybackPreloadManager? preloadManager,
+  PlayerPlaybackPreloadManager? preloadManager,
   PlaybackProgressRepository? progressRepository,
   PlayerPlaybackSourceRepository? sourceRepository,
+  PlayerPreloadConfig? preloadConfig,
 }) {
   final playbackCacheManager =
       preloadManager ??
@@ -1613,6 +1805,8 @@ ProviderContainer _createContainer(
         playerPlaybackSourceRepositoryProvider.overrideWithValue(
           sourceRepository,
         ),
+      if (preloadConfig != null)
+        playerPreloadConfigProvider.overrideWithValue(preloadConfig),
       if (progressRepository != null)
         playbackProgressRepositoryProvider.overrideWithValue(
           progressRepository,
@@ -1628,6 +1822,7 @@ ProviderContainer _createContainer(
 ProviderContainer _createPrepareContainer(
   PlayerPlaybackSession Function() sessionFactory, {
   Duration warmUpTimeout = const Duration(milliseconds: 4000),
+  PlayerPreloadConfig? preloadConfig,
 }) {
   final container = ProviderContainer(
     overrides: [
@@ -1641,6 +1836,8 @@ ProviderContainer _createPrepareContainer(
       playerPlaybackPreloadManagerProvider.overrideWithValue(
         MockPlayerPlaybackPreloadManager(preloadDelay: Duration.zero),
       ),
+      if (preloadConfig != null)
+        playerPreloadConfigProvider.overrideWithValue(preloadConfig),
     ],
   );
   return container;
@@ -1652,6 +1849,7 @@ PlayerFeedItem _item(
   bool isAvailable = true,
   bool hasSource = true,
   String? videoUrl,
+  PlayerFeedMode mode = PlayerFeedMode.singleDrama,
 }) {
   final episode = PlayerEpisode(
     id: 'ep-$episodeNumber',
@@ -1676,7 +1874,7 @@ PlayerFeedItem _item(
   );
   return PlayerFeedItem(
     id: '${content.id}-${episode.id}',
-    mode: PlayerFeedMode.singleDrama,
+    mode: mode,
     content: content,
     episode: episode,
   );
@@ -1722,6 +1920,61 @@ class _CountingPlaybackSourceRepository
       completedAt: DateTime.now(),
     );
   }
+}
+
+class _SequentialPreloadManager implements PlayerPlaybackPreloadManager {
+  final startedItemIds = <String>[];
+  final _pending = <_PendingPreload>[];
+
+  @override
+  Future<PlaybackPreloadState> preload({
+    required PlayerFeedItem item,
+    required PlaybackSource source,
+  }) {
+    startedItemIds.add(item.id);
+    final completer = Completer<PlaybackPreloadState>();
+    _pending.add(_PendingPreload(item, source, completer));
+    return completer.future;
+  }
+
+  void completeNext() {
+    final pending = _pending.removeAt(0);
+    pending.completer.complete(
+      PlaybackPreloadState(
+        itemId: pending.item.id,
+        sourceUrl: pending.source.playableSource,
+        status: PlaybackPreloadStatus.success,
+        startedAt: DateTime.now(),
+        completedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  @override
+  Future<void> releasePending() async {
+    for (final pending in _pending) {
+      if (!pending.completer.isCompleted) {
+        pending.completer.complete(
+          PlaybackPreloadState(
+            itemId: pending.item.id,
+            sourceUrl: pending.source.playableSource,
+            status: PlaybackPreloadStatus.cancelled,
+            startedAt: DateTime.now(),
+            completedAt: DateTime.now(),
+          ),
+        );
+      }
+    }
+    _pending.clear();
+  }
+}
+
+class _PendingPreload {
+  const _PendingPreload(this.item, this.source, this.completer);
+
+  final PlayerFeedItem item;
+  final PlaybackSource source;
+  final Completer<PlaybackPreloadState> completer;
 }
 
 class _FakePlaybackSession implements PlayerPlaybackSession {

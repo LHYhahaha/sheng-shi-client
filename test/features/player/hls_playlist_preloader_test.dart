@@ -1,13 +1,36 @@
 import 'dart:async';
 
 import 'package:drama_client/features/player/data/hls_playlist_preloader.dart';
+import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
+import 'package:drama_client/features/player/data/player_preload_config_provider.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/domain/player_playback_source.dart';
+import 'package:drama_client/features/player/domain/player_preload_config.dart';
 import 'package:drama_client/features/player/domain/player_preload_state.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('preloader provider uses typed timeout and max byte config', () {
+    final container = ProviderContainer(
+      overrides: [
+        playerPreloadConfigProvider.overrideWithValue(
+          const PlayerPreloadConfig(
+            preloadTimeout: Duration(milliseconds: 900),
+            maxPreloadBytes: 1234,
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final preloader = container.read(hlsPlaylistPreloaderProvider);
+
+    expect(preloader.timeout, const Duration(milliseconds: 900));
+    expect(preloader.maxPreheatBytes, 1234);
+  });
+
   test('playlist GET success returns preload success', () async {
     final client = _FakeHlsPlaylistHttpClient(
       response: const HlsPlaylistHttpResponse(

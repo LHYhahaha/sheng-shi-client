@@ -6,9 +6,14 @@ import '../domain/player_playback_source.dart';
 import 'hls_playlist_preloader.dart';
 import 'hls_local_proxy_server.dart';
 import 'mock_player_playback_source_repository.dart';
+import 'player_preload_config_provider.dart';
 
 final hlsPlaylistPreloaderProvider = Provider<HlsPlaylistPreloader>((ref) {
-  final preloader = HlsPlaylistPreloader();
+  final config = ref.watch(playerPreloadConfigProvider);
+  final preloader = HlsPlaylistPreloader(
+    timeout: config.effectivePreloadTimeout,
+    maxPreheatBytes: config.effectiveMaxPreloadBytes,
+  );
   ref.onDispose(preloader.releasePending);
   return preloader;
 });
@@ -45,7 +50,11 @@ final hlsProxyPlaybackSourceResolverProvider =
 final startupHlsPlaylistPreloaderProvider = Provider<HlsPlaylistPreloader>((
   ref,
 ) {
-  final preloader = HlsPlaylistPreloader();
+  final config = ref.watch(playerPreloadConfigProvider);
+  final preloader = HlsPlaylistPreloader(
+    timeout: config.effectivePreloadTimeout,
+    maxPreheatBytes: config.effectiveMaxPreloadBytes,
+  );
   ref.onDispose(preloader.releasePending);
   return preloader;
 });

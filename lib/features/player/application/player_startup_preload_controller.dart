@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../drama/domain/drama.dart';
 import '../data/player_feed_repository_provider.dart';
 import '../data/player_playback_source_repository_provider.dart';
+import '../data/player_preload_config_provider.dart';
 import '../domain/player_feed.dart';
 import '../domain/player_preload_state.dart';
 import 'player_playback_timing_trace.dart';
@@ -78,6 +79,12 @@ class PlayerStartupPreloadController
   }
 
   Future<void> preloadFirstPlayableDrama(Drama? drama) async {
+    final config = ref.read(playerPreloadConfigProvider);
+    if (config.effectiveHomeStartupPreloadCount <= 0) {
+      await cancel(reason: 'startup_preload_disabled');
+      return;
+    }
+
     if (drama == null) {
       await cancel(reason: 'no candidate');
       return;

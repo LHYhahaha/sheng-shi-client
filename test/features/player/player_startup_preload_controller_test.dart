@@ -6,9 +6,11 @@ import 'package:drama_client/features/player/application/player_session_controll
 import 'package:drama_client/features/player/application/player_startup_preload_controller.dart';
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
+import 'package:drama_client/features/player/data/player_preload_config_provider.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/domain/player_playback_source.dart';
+import 'package:drama_client/features/player/domain/player_preload_config.dart';
 import 'package:drama_client/features/player/domain/player_preload_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -34,6 +36,28 @@ void main() {
     expect(
       controller.exportTimingReport(),
       contains('startup preload success'),
+    );
+  });
+
+  test('startup preload can be disabled by config', () async {
+    final sourceRepository = _FakePlaybackSourceRepository();
+    final preloadManager = _FakePreloadManager();
+    final container = _createContainer(
+      sourceRepository: sourceRepository,
+      preloadManager: preloadManager,
+      preloadConfig: const PlayerPreloadConfig(homeStartupPreloadCount: 0),
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(playerStartupPreloadControllerProvider.notifier)
+        .preloadFirstPlayableDrama(_drama);
+
+    expect(sourceRepository.preloadCount, 0);
+    expect(preloadManager.releasePendingCount, greaterThanOrEqualTo(1));
+    expect(
+      container.read(playerStartupPreloadControllerProvider).status,
+      PlayerStartupPreloadStatus.idle,
     );
   });
 
@@ -284,6 +308,7 @@ ProviderContainer _createContainer({
   _FakePlaybackSession? playbackSession,
   _FakePlaybackSourceRepository? playbackSourceRepository,
   _FakePreloadManager? playbackPreloadManager,
+  PlayerPreloadConfig? preloadConfig,
 }) {
   final manager = preloadManager ?? _FakePreloadManager();
   return ProviderContainer(
@@ -304,6 +329,8 @@ ProviderContainer _createContainer({
       playerPlaybackSessionFactoryProvider.overrideWithValue(
         () => playbackSession ?? _FakePlaybackSession(),
       ),
+      if (preloadConfig != null)
+        playerPreloadConfigProvider.overrideWithValue(preloadConfig),
     ],
   );
 }
