@@ -411,6 +411,23 @@ Define a backend/CDN contract for:
 - subtitles and localized audio/text tracks;
 - max preload bytes and network policy.
 
+Phase 5.16 deliverable:
+
+- `docs/player-source-and-cdn-spec.md` defines the playback-source API fields,
+  HLS encoding recommendations, CDN/HTTP header requirements, subtitles and
+  localization fields, client strategy mapping, and real-source acceptance
+  checklist.
+- The spec records the current client evidence:
+  - source resolve and `media_kit` open are already fast;
+  - prepared/retained session window works for next/previous switching;
+  - cold first frame still depends heavily on HLS first segment, CDN/source
+    behavior, encoding, and media pipeline;
+  - the Phase 5.15 local proxy spike is not recommended for production.
+- Client-side next work can proceed to `PlayerPreloadConfig` typing and real
+  source integration against this contract. Further cold-start optimization
+  should involve backend/CDN/encoding changes before adding heavier client
+  cache complexity.
+
 ### Phase 5.17: Data-Driven Cache Decision
 
 - Use Phase 5.14 timing and Phase 5.15 spike results to decide whether to build

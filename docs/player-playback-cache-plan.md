@@ -1409,6 +1409,22 @@ than guesswork.
 
 Phase 5 defer:
 
+- Phase 5.16 server/CDN playback source specification is captured in
+  `docs/player-source-and-cdn-spec.md`.
+  - The spec defines future playback source fields such as `hlsUrl`,
+    `backupHlsUrls`, `expiresAt`, refresh info, duration, dimensions,
+    aspect ratio, bitrate ladder, poster, preview sprite/VTT, subtitles,
+    cache policy, preload policy, and access/DRM placeholders.
+  - It documents HLS startup recommendations: small first segment, short segment
+    duration, keyframe/GOP alignment, low-bitrate startup variant, compatible
+    H.264/AAC encodes, and accurate aspect-ratio metadata.
+  - It documents CDN requirements: cache headers, ETag/Last-Modified, Range
+    support, short redirect chains, signed URL expiry semantics, edge cache
+    expectations, and clear retry/error status meanings.
+  - It connects server fields to client behavior for fit policy, seek preview,
+    preload limits, source refresh, subtitles, cache eligibility, and retry.
+  - It confirms the local HLS proxy spike should remain default-off and should
+    not be productionized without a stronger design and timing proof.
 - Phase 5.15 local HLS proxy/cache spike has an experimental implementation
   guarded by `PLAYER_HLS_LOCAL_PROXY_SPIKE=false` by default.
   - The spike starts a localhost proxy only when the feature flag is enabled.
