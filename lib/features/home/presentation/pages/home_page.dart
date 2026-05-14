@@ -161,10 +161,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                           data: item,
                           coverCacheWidth: coverCacheWidth,
                           onTap: () {
+                            final tappedAt = DateTime.now();
                             context.push(
                               RoutePaths.playerLocation(
                                 dramaId: item.id,
                                 episodeId: '1',
+                                trigger: 'home_card_tap',
+                                userActionAtMs: tappedAt.millisecondsSinceEpoch,
                               ),
                             );
                           },

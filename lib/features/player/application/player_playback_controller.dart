@@ -60,18 +60,26 @@ class PlayerPlaybackTimingEvent {
   const PlayerPlaybackTimingEvent({
     required this.name,
     required this.at,
+    this.traceId,
     this.itemId,
     this.source,
+    this.sourceLabel,
     this.elapsed,
+    this.sinceTraceStart,
+    this.sinceUserAction,
     this.error,
     this.details,
   });
 
   final String name;
   final DateTime at;
+  final String? traceId;
   final String? itemId;
   final String? source;
+  final String? sourceLabel;
   final Duration? elapsed;
+  final Duration? sinceTraceStart;
+  final Duration? sinceUserAction;
   final Object? error;
   final String? details;
 }
@@ -232,6 +240,16 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   final _playingBeforeFirstFrameLoggedItemIds = <String>{};
   final _positionBeforeFirstFrameLoggedItemIds = <String>{};
   final _surfaceBeforeFirstFrameLoggedItemIds = <String>{};
+  int _traceCounter = 0;
+  String? _playbackTraceId;
+  DateTime? _traceStartedAt;
+  DateTime? _traceUserActionAt;
+  String? _pendingTraceTrigger;
+  String? _pendingTraceFromItemId;
+  String? _pendingTraceToItemId;
+  DateTime? _pendingTraceUserActionAt;
+  DateTime? _playingBeforeFirstFrameAt;
+  DateTime? _positionBeforeFirstFrameAt;
   String? _currentPlaybackItemId;
   PlaybackSource? _currentPlaybackSource;
   bool _currentPlaybackHasFirstFrame = false;
@@ -266,6 +284,35 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
   }
 
+  void recordPlaybackUserAction(
+    String event, {
+    String? trigger,
+    String? fromItemId,
+    String? toItemId,
+    String? direction,
+    int? fromIndex,
+    int? toIndex,
+    DateTime? occurredAt,
+  }) {
+    final at = occurredAt ?? DateTime.now();
+    _pendingTraceTrigger = trigger ?? event;
+    _pendingTraceFromItemId = fromItemId;
+    _pendingTraceToItemId = toItemId;
+    _pendingTraceUserActionAt = at;
+    _logTiming(
+      event,
+      itemId: toItemId,
+      details: _timingDetails([
+        'trigger=${trigger ?? event}',
+        'fromItemId=${fromItemId ?? 'null'}',
+        'toItemId=${toItemId ?? 'null'}',
+        if (direction != null) 'direction=$direction',
+        if (fromIndex != null) 'fromIndex=$fromIndex',
+        if (toIndex != null) 'toIndex=$toIndex',
+      ]),
+    );
+  }
+
   @override
   PlayerPlaybackState build() {
     _session = ref.read(playerPlaybackSessionFactoryProvider).call();
@@ -290,6 +337,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (_isSessionDisposed) {
       return;
     }
+
+    _startPlaybackTrace(item);
 
     _logTiming(
       'play item request',
@@ -366,6 +415,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
 
     final generation = ++_generation;
+    _logTiming(
+      'trace generation assigned',
+      itemId: item.id,
+      source: sourceHint,
+      details: 'generation=$generation',
+    );
     _pauseWhenOpenCompletes = false;
     final resumeProgress = _shouldPersistProgress
         ? await _progressRepository.getProgress(item.id)
@@ -446,6 +501,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           return;
         }
         await _session.setVolume(100);
+        _logTiming('session play called', itemId: item.id, source: sourceHint);
         await _session.play();
         if (!ref.mounted || !_isCurrent(generation)) {
           return;
@@ -495,6 +551,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         'media open start',
         itemId: item.id,
         source: playbackSource.playableSource,
+      );
+      _logTiming(
+        'session play called',
+        itemId: item.id,
+        source: playbackSource.playableSource,
+        details: 'reason=media open play=true',
       );
       await _session.open(playbackSource.playableSource, play: true);
       _logTiming(
@@ -911,6 +973,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         !state.hasFirstFrame &&
         state.currentItemId != null &&
         _playingBeforeFirstFrameLoggedItemIds.add(state.currentItemId!)) {
+      _playingBeforeFirstFrameAt = DateTime.now();
       _logTiming(
         'playing event while hasFirstFrame=false',
         itemId: state.currentItemId,
@@ -921,6 +984,15 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         ]),
       );
     }
+    _logTiming(
+      isPlaying ? 'playingStream true' : 'playingStream false',
+      itemId: state.currentItemId,
+      source: state.currentSource,
+      details: _timingDetails([
+        'hasFirstFrame=${state.hasFirstFrame}',
+        'positionMs=${state.position.inMilliseconds}',
+      ]),
+    );
     state = state.copyWith(
       status: isPlaying
           ? PlayerPlaybackStatus.playing
@@ -973,6 +1045,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         clamped > Duration.zero &&
         state.currentItemId != null &&
         _positionBeforeFirstFrameLoggedItemIds.add(state.currentItemId!)) {
+      _positionBeforeFirstFrameAt = DateTime.now();
       _logTiming(
         'position advancing while hasFirstFrame=false',
         itemId: state.currentItemId,
@@ -1027,13 +1100,25 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
     if (!state.hasFirstFrame) {
+      final now = DateTime.now();
       _logTiming(
         'first frame received',
         itemId: state.currentItemId,
         source: state.currentSource,
-        details: 'width=$width',
+        details: _timingDetails([
+          'width=$width',
+          if (_playingBeforeFirstFrameAt != null)
+            'firstFrameDelayAfterPlayingMs=${now.difference(_playingBeforeFirstFrameAt!).inMilliseconds}',
+          if (_positionBeforeFirstFrameAt != null)
+            'firstFrameDelayAfterPositionMs=${now.difference(_positionBeforeFirstFrameAt!).inMilliseconds}',
+          if (_playingBeforeFirstFrameAt != null ||
+              _positionBeforeFirstFrameAt != null)
+            'audioPlayingBeforeFirstFrameMs=${now.difference((_playingBeforeFirstFrameAt ?? _positionBeforeFirstFrameAt)!).inMilliseconds}',
+        ]),
       );
     }
+    _playingBeforeFirstFrameAt = null;
+    _positionBeforeFirstFrameAt = null;
     state = state.copyWith(
       status: state.status == PlayerPlaybackStatus.opening
           ? PlayerPlaybackStatus.playing
@@ -1480,12 +1565,21 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     Object? error,
     String? details,
   }) {
+    final now = DateTime.now();
     final eventEntry = PlayerPlaybackTimingEvent(
       name: event,
-      at: DateTime.now(),
+      at: now,
+      traceId: _playbackTraceId,
       itemId: itemId,
       source: source,
+      sourceLabel: _sourceLabel(source),
       elapsed: elapsed,
+      sinceTraceStart: _traceStartedAt == null
+          ? null
+          : now.difference(_traceStartedAt!),
+      sinceUserAction: _traceUserActionAt == null
+          ? null
+          : now.difference(_traceUserActionAt!),
       error: error,
       details: details,
     );
@@ -1498,9 +1592,15 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     final parts = <String>[
       '[PlayerPlayback][$sessionKey]',
       event,
+      if (_playbackTraceId != null) 'trace=$_playbackTraceId',
       if (itemId != null) 'item=$itemId',
+      if (source != null) 'sourceLabel=${_sourceLabel(source)}',
       if (source != null) 'source=$source',
       if (elapsed != null) 'elapsed=${elapsed.inMilliseconds}ms',
+      if (eventEntry.sinceTraceStart != null)
+        'sinceTraceStartMs=${eventEntry.sinceTraceStart!.inMilliseconds}',
+      if (eventEntry.sinceUserAction != null)
+        'sinceUserActionMs=${eventEntry.sinceUserAction!.inMilliseconds}',
       ?details,
       if (error != null) 'error=$error',
     ];
@@ -1511,6 +1611,70 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     return parts.where((part) => part.isNotEmpty).join(' ');
   }
 
+  void _startPlaybackTrace(PlayerFeedItem? item) {
+    final now = DateTime.now();
+    final trigger = _pendingTraceTrigger ?? _inferTraceTrigger(item);
+    final fromItemId = _pendingTraceFromItemId ?? state.currentItemId;
+    final toItemId = item?.id ?? _pendingTraceToItemId;
+    _traceCounter += 1;
+    _playbackTraceId =
+        '${sessionKey.replaceAll(':', '-')}-${_traceCounter.toString().padLeft(3, '0')}';
+    _traceStartedAt = now;
+    _traceUserActionAt = _pendingTraceUserActionAt ?? now;
+    _playingBeforeFirstFrameAt = null;
+    _positionBeforeFirstFrameAt = null;
+    _pendingTraceTrigger = null;
+    _pendingTraceFromItemId = null;
+    _pendingTraceToItemId = null;
+    _pendingTraceUserActionAt = null;
+    _logTiming(
+      'trace start',
+      itemId: item?.id,
+      source: item?.episode.videoSource,
+      details: _timingDetails([
+        'trigger=$trigger',
+        'fromItemId=${fromItemId ?? 'null'}',
+        'toItemId=${toItemId ?? 'null'}',
+        'generation=${_generation + 1}',
+      ]),
+    );
+  }
+
+  String _inferTraceTrigger(PlayerFeedItem? item) {
+    if (item == null) {
+      return 'clear';
+    }
+    if (state.status == PlayerPlaybackStatus.error &&
+        state.currentItemId == item.id) {
+      return 'retry';
+    }
+    if (state.currentItemId == null) {
+      return 'list_entry';
+    }
+    return 'programmatic';
+  }
+
+  String _sourceLabel(String? source) {
+    if (source == null) {
+      return 'none';
+    }
+    if (source.contains('devstreaming-cdn.apple.com') ||
+        source.contains('bipbop')) {
+      return 'apple-bipbop';
+    }
+    if (source.contains('test-streams.mux.dev') || source.contains('x36xhzz')) {
+      return 'mux-x36';
+    }
+    if (source.contains('demo.unified-streaming.com') ||
+        source.contains('tears-of-steel')) {
+      return 'unified-tears-slow';
+    }
+    if (source.contains('lz15')) {
+      return 'business-lz15';
+    }
+    return 'unknown-hls';
+  }
+
   String _windowItemsText() {
     return _prepareManager.windowItemIds.join(',');
   }
@@ -1519,10 +1683,16 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     final parts = <String>[
       event.at.toIso8601String(),
       'session=$sessionKey',
+      if (event.traceId != null) 'trace=${event.traceId}',
       event.name,
       if (event.itemId != null) 'item=${event.itemId}',
+      if (event.sourceLabel != null) 'sourceLabel=${event.sourceLabel}',
       if (event.source != null) 'source=${event.source}',
       if (event.elapsed != null) 'elapsed=${event.elapsed!.inMilliseconds}ms',
+      if (event.sinceTraceStart != null)
+        'sinceTraceStartMs=${event.sinceTraceStart!.inMilliseconds}',
+      if (event.sinceUserAction != null)
+        'sinceUserActionMs=${event.sinceUserAction!.inMilliseconds}',
       if (event.details != null) event.details!,
       if (event.error != null) 'error=${event.error}',
     ];

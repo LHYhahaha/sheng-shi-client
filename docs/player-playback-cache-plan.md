@@ -891,6 +891,98 @@ Phase 5.8.1 limits:
 - No segment cache.
 - No media_kit pipeline changes beyond prepared warm-up and surface visibility.
 
+### Phase 5.8.2: Playback Timing Trace Enhancement
+
+Implemented as a diagnostic-only phase. This phase does not change playback
+strategy, session-window size, preload strategy, or player UI. It makes release
+timing logs easier to read across repeated Android device runs.
+
+Trace fields:
+
+- Each `playItem()` request now starts a `playbackTraceId` scoped to the
+  `sessionKey`, for example `single-drama-a-1-001`.
+- Timing events include `trace`, `sourceLabel`, `sinceTraceStartMs`, and
+  `sinceUserActionMs` in both `exportTimingReport()` and release logs enabled
+  by `--dart-define=PLAYER_TIMING_LOGS=true`.
+- Source labels are derived from the mock HLS source URL:
+  `unified-tears-slow`, `apple-bipbop`, `mux-x36`, `business-lz15`, or
+  `unknown-hls`.
+- Home card entry passes a `home_card_tap` trigger and user-action time through
+  the player route query so first-entry traces can show time since tap.
+- Player page events record PageView scroll start, PageView page changed,
+  auto-next animation start/end, and retry taps. The next `playItem()` trace
+  consumes that trigger.
+
+Trace timeline coverage:
+
+- `trace start`
+- `play item request`
+- `trace generation assigned`
+- window take/result events, including prepared-next, retained-previous, and
+  miss fallback open
+- source resolve start/end
+- HLS preload start/end with playlist/segment diagnostics from the preload
+  result
+- media open start/end
+- `session play called`
+- `playingStream true/false`
+- position advancing before first frame
+- first frame received
+- video surface shown before first frame
+- error
+
+Audio/video mismatch diagnostics:
+
+- `playing event while hasFirstFrame=false`
+- `position advancing while hasFirstFrame=false`
+- `video surface shown before firstFrame`
+- `firstFrameDelayAfterPlayingMs`
+- `firstFrameDelayAfterPositionMs`
+- `audioPlayingBeforeFirstFrameMs`
+
+Device test method:
+
+1. Build with `flutter build apk --release --dart-define=PLAYER_TIMING_LOGS=true`.
+2. Install the release APK on the Android test device.
+3. Run 3-5 passes for Home card entry, single-drama swipe next, single-drama
+   swipe previous, For You vertical swipes, auto-next, and retry.
+4. Compare `sinceUserActionMs`, source label, window result, media open, first
+   frame, and audio-before-first-frame fields per trace.
+
+Phase 5.8.2 limits:
+
+- No performance conclusion is recorded here; review agent should add that
+  after device log review.
+- No UI change.
+- No HLS segment cache or local proxy.
+- No service integration.
+
+### Player Visual Fit Backlog: Video Crop And Aspect Ratio
+
+Observed during device playback review. Some videos may not appear fully inside
+the player frame because the current video surface is optimized for immersive
+full-screen playback and uses cover-style fitting. This is a product/visual
+policy issue, not part of the current playback-latency work.
+
+Track this after the HLS timing and first-frame work is stable:
+
+- Decide the product rule for non-9:16 sources:
+  - immersive full-screen first, allowing crop;
+  - complete content first, allowing black bars;
+  - or adaptive fit based on source aspect ratio.
+- Record source video dimensions and container dimensions in timing/debug logs
+  when available.
+- Prefer service-provided `aspectRatio`, `width`, and `height` once real source
+  APIs exist; fall back to media stream dimensions from the player.
+- Keep For You and single-drama strategies configurable separately because the
+  feed may prioritize immersion while detail playback may prioritize complete
+  content.
+- Validate with real-device screenshots before changing the default fit.
+
+Do not change the default video fit as part of Phase 5.8.x unless the product
+decision is confirmed. Switching everything to contain too early may make the
+short-drama experience feel less immersive.
+
 Phase 5 defer:
 
 - Real playback source API and signed URL refresh.

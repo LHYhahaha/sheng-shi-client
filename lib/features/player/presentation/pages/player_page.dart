@@ -23,6 +23,8 @@ class PlayerPage extends ConsumerStatefulWidget {
     required this.episodeId,
     this.feedMode = PlayerFeedMode.singleDrama,
     this.hideShellNavigation = false,
+    this.initialPlaybackTrigger,
+    this.initialUserActionAt,
     super.key,
   });
 
@@ -30,12 +32,16 @@ class PlayerPage extends ConsumerStatefulWidget {
     : dramaId = null,
       episodeId = null,
       feedMode = PlayerFeedMode.forYou,
-      hideShellNavigation = false;
+      hideShellNavigation = false,
+      initialPlaybackTrigger = 'for_you_tab',
+      initialUserActionAt = null;
 
   final String? dramaId;
   final String? episodeId;
   final PlayerFeedMode feedMode;
   final bool hideShellNavigation;
+  final String? initialPlaybackTrigger;
+  final DateTime? initialUserActionAt;
 
   @override
   ConsumerState<PlayerPage> createState() => _PlayerPageState();
@@ -94,6 +100,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       ref
           .read(playerUiControllerProvider(_sessionKey).notifier)
           .startSession(widget.episodeId ?? '1');
+      _playbackController.recordPlaybackUserAction(
+        widget.initialPlaybackTrigger ?? 'player_route_enter',
+        trigger: widget.initialPlaybackTrigger ?? 'player_route_enter',
+        toItemId: widget.episodeId == null ? null : 'ep-${widget.episodeId}',
+        occurredAt: widget.initialUserActionAt,
+      );
       ref
           .read(playerFeedControllerProvider(_sessionKey).notifier)
           .load(_feedConfig);
@@ -158,6 +170,34 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       }
 
       ref.read(uiProvider.notifier).selectEpisode(next.episode);
+      if (previous != null) {
+        final previousIndex = ref
+            .read(feedProvider)
+            .items
+            .indexWhere((item) => item.id == previous.id);
+        final nextIndex = ref
+            .read(feedProvider)
+            .items
+            .indexWhere((item) => item.id == next.id);
+        final direction = previousIndex == -1
+            ? null
+            : nextIndex > previousIndex
+            ? 'next'
+            : 'previous';
+        playbackController.recordPlaybackUserAction(
+          'PageView page changed',
+          trigger: _isAutoAdvancing
+              ? 'auto_next'
+              : direction == 'previous'
+              ? 'swipe_previous'
+              : 'swipe_next',
+          fromItemId: previous.id,
+          toItemId: next.id,
+          direction: direction,
+          fromIndex: previousIndex,
+          toIndex: nextIndex,
+        );
+      }
       unawaited(() async {
         final playbackNotifier = ref.read(playbackProvider.notifier);
         await playbackNotifier.playItem(next);
@@ -372,6 +412,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                         playbackController.cancelSeek();
                       },
                       onRetry: () {
+                        playbackController.recordPlaybackUserAction(
+                          'retry tap',
+                          trigger: 'retry',
+                          fromItemId: playbackState.currentItemId,
+                          toItemId: item.id,
+                        );
                         unawaited(playbackController.playItem(item));
                       },
                       onDownloadTap:
@@ -450,6 +496,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _handlePageScrollNotification(ScrollNotification notification) {
     if (notification is ScrollStartNotification ||
         notification is ScrollUpdateNotification) {
+      if (notification is ScrollStartNotification) {
+        final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+        _playbackController.recordPlaybackUserAction(
+          'PageView scroll start',
+          trigger: 'page_scroll_start',
+          fromItemId: feedState.currentItem?.id,
+          fromIndex: feedState.currentIndex,
+        );
+      }
       _setPageScrolling(true);
       return false;
     }
@@ -497,6 +552,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final nextIndex = feedState.currentIndex + 1;
     _isAutoAdvancing = true;
     try {
+      _playbackController.recordPlaybackUserAction(
+        'auto next animation start',
+        trigger: 'auto_next',
+        fromItemId: feedState.currentItem?.id,
+        toItemId: feedState.items[nextIndex].id,
+        direction: 'next',
+        fromIndex: feedState.currentIndex,
+        toIndex: nextIndex,
+      );
       if (_pageController.hasClients) {
         await _pageController.animateToPage(
           nextIndex,
@@ -513,6 +577,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (latestFeedState.currentIndex != nextIndex) {
         ref.read(feedProvider.notifier).setCurrentIndex(nextIndex);
       }
+      _playbackController.recordPlaybackUserAction(
+        'auto next animation end',
+        trigger: 'auto_next',
+        fromItemId: feedState.currentItem?.id,
+        toItemId: feedState.items[nextIndex].id,
+        direction: 'next',
+        fromIndex: feedState.currentIndex,
+        toIndex: nextIndex,
+      );
     } finally {
       _isAutoAdvancing = false;
     }

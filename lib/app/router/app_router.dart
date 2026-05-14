@@ -70,8 +70,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final dramaId = state.pathParameters['dramaId']!;
           final episodeId = state.pathParameters['episodeId']!;
+          final userActionAtMs = int.tryParse(
+            state.uri.queryParameters['userActionAtMs'] ?? '',
+          );
 
-          return PlayerPage(dramaId: dramaId, episodeId: episodeId);
+          return PlayerPage(
+            dramaId: dramaId,
+            episodeId: episodeId,
+            initialPlaybackTrigger: state.uri.queryParameters['trigger'],
+            initialUserActionAt: userActionAtMs == null
+                ? null
+                : DateTime.fromMillisecondsSinceEpoch(userActionAtMs),
+          );
         },
       ),
       GoRoute(

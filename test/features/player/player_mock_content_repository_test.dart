@@ -7,6 +7,7 @@ void main() {
       expect(mockPlayerVideoAssets.length, 3);
 
       for (final asset in mockPlayerVideoAssets) {
+        expect(asset.sourceLabel, isNotEmpty);
         expect(asset.title, isNotEmpty);
         expect(asset.sourceName, isNotEmpty);
         expect(asset.sourcePage, startsWith('https://'));
@@ -25,6 +26,14 @@ void main() {
           'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
           'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
           'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+        ]),
+      );
+      expect(
+        mockPlayerVideoAssets.map((asset) => asset.sourceLabel),
+        containsAllInOrder(const [
+          'unified-tears-slow',
+          'apple-bipbop',
+          'mux-x36',
         ]),
       );
     });

@@ -17,7 +17,19 @@ abstract final class RoutePaths {
   static String playerLocation({
     required String dramaId,
     required String episodeId,
+    String? trigger,
+    int? userActionAtMs,
   }) {
-    return '/player/$dramaId/$episodeId';
+    final location = '/player/$dramaId/$episodeId';
+    final triggerKey = trigger == null ? null : 'trigger';
+    final userActionKey = userActionAtMs == null ? null : 'userActionAtMs';
+    final queryParameters = <String, String>{
+      ?triggerKey: '$trigger',
+      ?userActionKey: '$userActionAtMs',
+    };
+    if (queryParameters.isEmpty) {
+      return location;
+    }
+    return Uri(path: location, queryParameters: queryParameters).toString();
   }
 }

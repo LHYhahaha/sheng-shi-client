@@ -1147,6 +1147,7 @@ void main() {
         'source resolve start',
         'source resolve end',
         'media open start',
+        'session play called',
         'media open end',
         'first frame received',
         'preload candidates',
@@ -1160,8 +1161,40 @@ void main() {
       contains('session=single:drama-a:1'),
     );
     expect(controller.exportTimingReport(), contains('elapsed='));
+    expect(controller.exportTimingReport(), contains('trace='));
+    expect(
+      controller.exportTimingReport(),
+      contains('sourceLabel=unified-tears-slow'),
+    );
+    expect(controller.exportTimingReport(), contains('sinceTraceStartMs='));
+    expect(controller.exportTimingReport(), contains('sinceUserActionMs='));
     expect(controller.exportTimingReport(), contains('windowItems='));
     expect(controller.exportTimingReport(), contains('requestedItemId='));
+  });
+
+  test('user action trigger is attached to next playback trace', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    controller.recordPlaybackUserAction(
+      'PageView page changed',
+      trigger: 'swipe_next',
+      fromItemId: 'drama-a-ep-1',
+      toItemId: 'drama-a-ep-2',
+      direction: 'next',
+      fromIndex: 0,
+      toIndex: 1,
+      occurredAt: DateTime.now().subtract(const Duration(milliseconds: 30)),
+    );
+    await controller.playItem(_item(2));
+
+    final report = controller.exportTimingReport();
+    expect(report, contains('trigger=swipe_next'));
+    expect(report, contains('fromItemId=drama-a-ep-1'));
+    expect(report, contains('toItemId=drama-a-ep-2'));
+    expect(report, contains('sinceUserActionMs='));
   });
 
   test('prepared first frame can arrive after prepare open returns', () async {

@@ -2,6 +2,7 @@ import '../domain/player_content.dart';
 
 const mockPlayerVideoAssets = [
   MockPlayerVideoAsset(
+    sourceLabel: 'unified-tears-slow',
     title: 'Tears of Steel HLS',
     sourceName: 'Unified Streaming',
     sourcePage:
@@ -12,6 +13,7 @@ const mockPlayerVideoAssets = [
         'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
   ),
   MockPlayerVideoAsset(
+    sourceLabel: 'apple-bipbop',
     title: 'BipBop Advanced TS HLS',
     sourceName: 'Apple Developer',
     sourcePage: 'https://developer.apple.com/streaming/examples/',
@@ -21,6 +23,7 @@ const mockPlayerVideoAssets = [
         'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
   ),
   MockPlayerVideoAsset(
+    sourceLabel: 'mux-x36',
     title: 'Mux x36xhzz HLS',
     sourceName: 'Mux Test Streams',
     sourcePage: 'https://test-streams.mux.dev/',
@@ -112,6 +115,7 @@ class MockPlayerContentRepository implements PlayerContentRepository {
 
 class MockPlayerVideoAsset {
   const MockPlayerVideoAsset({
+    required this.sourceLabel,
     required this.title,
     required this.sourceName,
     required this.sourcePage,
@@ -119,6 +123,7 @@ class MockPlayerVideoAsset {
     required this.videoUrl,
   });
 
+  final String sourceLabel;
   final String title;
   final String sourceName;
   final String sourcePage;
