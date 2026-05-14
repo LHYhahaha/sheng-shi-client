@@ -67,6 +67,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isAutoAdvancing = false;
   bool _isPressingPlaybackSurface = false;
   bool _isPageScrolling = false;
+  bool _didRecordFirstBuild = false;
   String? _handledEndedItemId;
 
   String _createSessionKey() {
@@ -89,6 +90,21 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _playbackController = ref.read(
       playerPlaybackControllerProvider(_sessionKey).notifier,
     );
+    _playbackController.recordPlaybackTiming(
+      'player page init',
+      details: [
+        'feedMode=${widget.feedMode.name}',
+        'hideShellNavigation=${widget.hideShellNavigation}',
+        'dramaId=${widget.dramaId ?? 'null'}',
+        'episodeId=${widget.episodeId ?? 'null'}',
+      ].join(' '),
+    );
+    _playbackController.recordPlaybackUserAction(
+      widget.initialPlaybackTrigger ?? 'player_route_enter',
+      trigger: widget.initialPlaybackTrigger ?? 'player_route_enter',
+      toItemId: widget.episodeId == null ? null : 'ep-${widget.episodeId}',
+      occurredAt: widget.initialUserActionAt,
+    );
     if (widget.hideShellNavigation) {
       final shellChrome = ref.read(
         appShellBottomNavigationVisibleProvider.notifier,
@@ -100,15 +116,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       ref
           .read(playerUiControllerProvider(_sessionKey).notifier)
           .startSession(widget.episodeId ?? '1');
-      _playbackController.recordPlaybackUserAction(
-        widget.initialPlaybackTrigger ?? 'player_route_enter',
-        trigger: widget.initialPlaybackTrigger ?? 'player_route_enter',
-        toItemId: widget.episodeId == null ? null : 'ep-${widget.episodeId}',
-        occurredAt: widget.initialUserActionAt,
-      );
-      ref
-          .read(playerFeedControllerProvider(_sessionKey).notifier)
-          .load(_feedConfig);
+      unawaited(_loadFeedForTiming());
     });
   }
 
@@ -148,6 +156,39 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     };
   }
 
+  Future<void> _loadFeedForTiming() async {
+    final feedProvider = playerFeedControllerProvider(_sessionKey);
+    final feedController = ref.read(feedProvider.notifier);
+    final config = _feedConfig;
+    final stopwatch = Stopwatch()..start();
+    _playbackController.recordPlaybackTiming(
+      'feed load start',
+      details: [
+        'mode=${config.mode.name}',
+        'dramaId=${config.dramaId ?? 'null'}',
+        'episodeId=${config.episodeId ?? 'null'}',
+      ].join(' '),
+    );
+    await feedController.load(config);
+    stopwatch.stop();
+    if (!mounted) {
+      return;
+    }
+    final feedState = ref.read(feedProvider);
+    _playbackController.recordPlaybackTiming(
+      'feed load end',
+      itemId: feedState.currentItem?.id,
+      elapsed: stopwatch.elapsed,
+      error: feedState.error,
+      details: [
+        'mode=${config.mode.name}',
+        'itemCount=${feedState.items.length}',
+        'currentIndex=${feedState.currentIndex}',
+        'error=${feedState.error != null}',
+      ].join(' '),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final sessionKey = _sessionKey;
@@ -160,6 +201,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final playbackProvider = playerPlaybackControllerProvider(sessionKey);
     final playbackState = ref.watch(playbackProvider);
     final playbackController = ref.read(playbackProvider.notifier);
+    if (!_didRecordFirstBuild) {
+      _didRecordFirstBuild = true;
+      playbackController.recordPlaybackTiming(
+        'player page first build',
+        details: [
+          'feedMode=${widget.feedMode.name}',
+          'feedLoading=${feedState.isLoading}',
+          'itemCount=${feedState.items.length}',
+        ].join(' '),
+      );
+    }
 
     ref.listen(feedProvider.select((state) => state.currentItem), (
       previous,

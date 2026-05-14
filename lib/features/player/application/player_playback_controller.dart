@@ -223,6 +223,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   late final _timingTrace = PlayerPlaybackTimingTrace(sessionKey: sessionKey);
   final _playingBeforeFirstFrameLoggedItemIds = <String>{};
   final _positionBeforeFirstFrameLoggedItemIds = <String>{};
+  final _firstPositionLoggedItemIds = <String>{};
   final _surfaceBeforeFirstFrameLoggedItemIds = <String>{};
   DateTime? _playingBeforeFirstFrameAt;
   DateTime? _positionBeforeFirstFrameAt;
@@ -278,6 +279,24 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       fromIndex: fromIndex,
       toIndex: toIndex,
       occurredAt: occurredAt,
+    );
+  }
+
+  void recordPlaybackTiming(
+    String event, {
+    String? itemId,
+    String? source,
+    Duration? elapsed,
+    Object? error,
+    String? details,
+  }) {
+    _logTiming(
+      event,
+      itemId: itemId,
+      source: source,
+      elapsed: elapsed,
+      error: error,
+      details: details,
     );
   }
 
@@ -1024,6 +1043,16 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
     _lastPositionUpdate = clamped;
     _currentPlaybackPosition = clamped;
+    if (clamped > Duration.zero &&
+        state.currentItemId != null &&
+        _firstPositionLoggedItemIds.add(state.currentItemId!)) {
+      _logTiming(
+        'position first advanced',
+        itemId: state.currentItemId,
+        source: state.currentSource,
+        details: _timingDetails(['positionMs=${clamped.inMilliseconds}']),
+      );
+    }
     if (!state.hasFirstFrame &&
         clamped > Duration.zero &&
         state.currentItemId != null &&

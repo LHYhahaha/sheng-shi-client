@@ -1103,6 +1103,81 @@ Current conclusion:
   media_kit first-frame pipeline. It should not be treated as a layout/safe-area
   issue unless screenshots show a new visual regression.
 
+### Phase 5.11: Cold Start First Frame Optimization Review
+
+Review status after Phase 5.10 Android validation:
+
+- EP.01 cold start still takes roughly 3 seconds to first frame even though
+  source resolve and media open are both tens of milliseconds.
+- Prepared next and retained previous paths are healthy, so the remaining
+  visible wait is concentrated in the first playback of the first item.
+- The likely slow section is HLS startup outside the Dart source resolver:
+  playlist/variant selection, first segment request, keyframe/decode pipeline,
+  CDN latency, or media_kit's first-frame reporting behavior.
+
+Timing coverage added:
+
+- Player page lifecycle now records `player page init` and
+  `player page first build`.
+- Feed loading now records `feed load start` and `feed load end`, including
+  mode, item count, current index, elapsed time, and error state.
+- Playback position now records `position first advanced` independently from
+  the existing `position advancing while hasFirstFrame=false` diagnostic.
+- Existing timing remains in place for home card tap/user action correlation,
+  `play item request`, source resolve start/end, HLS prefetch diagnostics, media
+  open start/end, `session play called`, buffering start/end, first frame, and
+  video surface display before first frame.
+
+Cold-start assessment:
+
+- The current player route already passes the Home tap timestamp into the
+  playback trace. With the new page/feed timing nodes, release logs can separate
+  route/build/feed overhead from media startup.
+- Current playback open is already triggered as soon as the first feed item is
+  available. Moving it much earlier inside `PlayerPage` is unlikely to recover a
+  multi-second first-frame delay unless feed loading itself shows unexpected
+  latency in device logs.
+- Creating a media player on Home is not recommended for this MVP because it
+  complicates lifecycle/audio safety and duplicates the session-window concerns
+  outside the player feature.
+- A lightweight Home playlist prefetch is the most reasonable client-side next
+  step if timing confirms feed/route overhead is small: after Home feed load,
+  prefetch only the first visible card's m3u8/first segment through the existing
+  HLS preload boundary, cancel on category switch/refresh/leave, and do not
+  create a media session or play audio.
+
+Mock source notes:
+
+- Default stable fixtures remain:
+  - `mux-fast` for EP.01.
+  - `mux-tears-stable` for EP.02.
+  - `apple-bipbop-low-stable` for EP.03.
+- `mux-fast` is still useful as the first default because it is stable and
+  publicly reachable, but device logs should continue comparing its cold-start
+  first-frame time against `mux-tears-stable` and
+  `apple-bipbop-low-stable`. If one fixture is consistently faster without
+  other regressions, default ordering can be changed in a later mock-only pass.
+- Slow, aspect-ratio, and unstable fixtures must stay opt-in test profiles.
+
+Client-side next options:
+
+- Home playlist prefetch for one visible/default card only.
+- Feed/route timing review using `PLAYER_TIMING_LOGS=true` before changing
+  playback strategy.
+- Minor loading/poster timing polish only if logs show UI overlay hides the
+  video surface after playback has already advanced.
+- Mock source ordering adjustment if repeated device timing shows one stable
+  fixture is a better cold-start default.
+
+Server/CDN/HLS items that remain outside this client pass:
+
+- HLS segment duration and first segment byte size.
+- Keyframe alignment and startup GOP.
+- Startup variant/bitrate selection.
+- Playlist and segment `Cache-Control`.
+- Signed URL refresh and redirect latency.
+- CDN edge behavior for first playlist and first media segment.
+
 ### Player Visual Fit Backlog: Video Crop And Aspect Ratio
 
 Observed during device playback review. Some videos may not appear fully inside
