@@ -7,6 +7,7 @@ import 'package:drama_client/features/player/application/player_session_controll
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/presentation/pages/player_page.dart';
+import 'package:drama_client/features/player/presentation/widgets/player_chrome.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -96,6 +97,29 @@ void main() {
 
     expect(find.text('Player failed to load.'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
+  });
+
+  testWidgets('keeps video visible while buffering after first frame', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    playbackSession.emitBuffering(true);
+    await tester.pump();
+    await tester.pump();
+
+    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
+    expect(chrome.showVideo, isTrue);
+    expect(chrome.showLoading, isTrue);
   });
 
   testWidgets('episodes sheet can select locked episode and show paywall', (
@@ -354,6 +378,10 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
 
   @override
   Stream<String> get errorStream => _errorController.stream;
+
+  void emitBuffering(bool isBuffering) {
+    _bufferingController.add(isBuffering);
+  }
 
   @override
   Future<void> open(String source, {bool play = true}) async {

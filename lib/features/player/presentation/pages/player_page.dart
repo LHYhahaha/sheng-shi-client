@@ -252,7 +252,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                 !item.episode.isLocked &&
                 playbackState.currentItemId == item.id &&
                 playbackState.currentSource != null;
-            final showVideo = canRenderVideo && playbackState.isReady;
+            final showVideo =
+                canRenderVideo &&
+                playbackState.hasFirstFrame &&
+                !playbackState.isError;
             final showLoading = canRenderVideo && playbackState.isLoading;
             final showPlaybackError = isCurrentItem && playbackState.isError;
             return Stack(

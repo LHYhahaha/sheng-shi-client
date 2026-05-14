@@ -351,7 +351,39 @@ void main() {
     expect(find.text('Found You, Heart Thief'), findsOneWidget);
   });
 
-  testWidgets('pauses for you playback when switching bottom tabs', (
+  for (final destination in ['Home', 'My list', 'Profile']) {
+    testWidgets('pauses for you playback when switching to $destination', (
+      tester,
+    ) async {
+      final sessions = <_FakePlaybackSession>[];
+      await tester.pumpWidget(_buildAppWithFakePlayback(sessions: sessions));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('For you'));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(PageView), const Offset(0, -500));
+      await tester.pumpAndSettle();
+
+      expect(sessions, isNotEmpty);
+      final forYouSession = sessions.first;
+      expect(find.text('Found You, Heart Thief'), findsOneWidget);
+
+      await tester.tap(find.text(destination));
+      await tester.pumpAndSettle();
+
+      expect(forYouSession.pauseCount, greaterThan(0));
+      expect(forYouSession.isDisposed, isFalse);
+
+      await tester.tap(find.text('For you'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Found You, Heart Thief'), findsOneWidget);
+    });
+  }
+
+  testWidgets('pauses player playback on app lifecycle inactive and paused', (
     tester,
   ) async {
     final sessions = <_FakePlaybackSession>[];
@@ -363,14 +395,14 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    expect(sessions, isNotEmpty);
     final forYouSession = sessions.first;
 
-    await tester.tap(find.text('Home'));
-    await tester.pumpAndSettle();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
 
-    expect(forYouSession.pauseCount, greaterThan(0));
-    expect(forYouSession.isDisposed, isFalse);
+    expect(forYouSession.pauseCount, greaterThanOrEqualTo(2));
   });
 
   testWidgets('opens home drama as single drama feed and swipes episodes', (

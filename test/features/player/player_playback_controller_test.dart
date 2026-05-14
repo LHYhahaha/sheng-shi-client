@@ -179,6 +179,28 @@ void main() {
     expect(container.read(provider).currentSource, isNull);
   });
 
+  test(
+    'disposeSession during pending open disposes and does not restore playing',
+    () async {
+      final openCompleter = Completer<void>();
+      final session = _FakePlaybackSession(openCompleter: openCompleter);
+      final container = _createContainer(session);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      final playFuture = controller.playItem(_item(1));
+      await Future<void>.delayed(Duration.zero);
+      await controller.disposeSession();
+
+      openCompleter.complete();
+      await playFuture;
+
+      expect(session.isDisposed, isTrue);
+      expect(container.read(provider).status, PlayerPlaybackStatus.idle);
+      expect(session.playCount, 0);
+    },
+  );
+
   test('disposes media session with provider container', () async {
     final session = _FakePlaybackSession();
     final container = _createContainer(session, addDisposeTearDown: false);
@@ -254,6 +276,7 @@ void main() {
       state = container.read(provider);
       expect(state.preloadedItemIds, ['drama-a-ep-5']);
       expect(state.preloadedItemIds, hasLength(1));
+      expect(sessions[1].isDisposed, isTrue);
       expect(sessions.where((session) => !session.isDisposed), hasLength(2));
     },
   );
