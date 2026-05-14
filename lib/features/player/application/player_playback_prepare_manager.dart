@@ -21,13 +21,16 @@ class PreparedPlaybackSession {
 class PlayerPlaybackPrepareManager {
   PlayerPlaybackPrepareManager({
     required PlayerPlaybackSession Function() sessionFactory,
+    this.maxWindowSessions = 2,
   }) : _sessionFactory = sessionFactory;
 
   final PlayerPlaybackSession Function() _sessionFactory;
-  PreparedPlaybackSession? _prepared;
+  final int maxWindowSessions;
+  final _window = <String, PreparedPlaybackSession>{};
   int _generation = 0;
 
-  String? get preparedItemId => _prepared?.itemId;
+  String? get preparedItemId => _window.keys.lastOrNull;
+  List<String> get windowItemIds => List<String>.unmodifiable(_window.keys);
 
   Future<PreparedPlaybackSession?> prepare({
     required PlayerFeedItem item,
@@ -36,15 +39,15 @@ class PlayerPlaybackPrepareManager {
     if (item.episode.isLocked ||
         item.episode.isUnavailable ||
         item.episode.videoSource == null) {
-      await release();
       return null;
     }
 
-    if (_prepared?.itemId == item.id) {
-      return _prepared;
+    final existing = _window.remove(item.id);
+    if (existing != null) {
+      _window[item.id] = existing;
+      return existing;
     }
 
-    await release();
     final generation = ++_generation;
     PlayerPlaybackSession? session;
     try {
@@ -72,7 +75,7 @@ class PlayerPlaybackPrepareManager {
         session: session,
         hasFirstFrame: hasFirstFrame,
       );
-      _prepared = prepared;
+      await _put(prepared);
       return prepared;
     } catch (_) {
       if (session != null) {
@@ -83,20 +86,46 @@ class PlayerPlaybackPrepareManager {
   }
 
   PreparedPlaybackSession? takeIfMatches(String itemId) {
-    final prepared = _prepared;
-    if (prepared == null || prepared.itemId != itemId) {
-      return null;
+    return _window.remove(itemId);
+  }
+
+  Future<void> retainPaused(PreparedPlaybackSession session) async {
+    await session.session.pause();
+    await _put(session);
+  }
+
+  Future<void> releaseItem(String itemId) async {
+    final session = _window.remove(itemId);
+    if (session != null) {
+      await session.session.dispose();
     }
-    _prepared = null;
-    return prepared;
+  }
+
+  Future<void> retainOnly(Set<String> itemIds) async {
+    for (final key in List<String>.from(_window.keys)) {
+      if (!itemIds.contains(key)) {
+        await releaseItem(key);
+      }
+    }
   }
 
   Future<void> release() async {
     _generation += 1;
-    final prepared = _prepared;
-    _prepared = null;
-    if (prepared != null) {
-      await prepared.session.dispose();
+    for (final session in List<PreparedPlaybackSession>.from(_window.values)) {
+      await session.session.dispose();
+    }
+    _window.clear();
+  }
+
+  Future<void> _put(PreparedPlaybackSession session) async {
+    final replaced = _window.remove(session.itemId);
+    if (replaced != null && replaced.session != session.session) {
+      await replaced.session.dispose();
+    }
+    _window[session.itemId] = session;
+    while (_window.length > maxWindowSessions) {
+      final oldestKey = _window.keys.first;
+      await releaseItem(oldestKey);
     }
   }
 }
@@ -115,6 +144,17 @@ class NoopPlayerPlaybackPrepareManager extends PlayerPlaybackPrepareManager {
 
   @override
   PreparedPlaybackSession? takeIfMatches(String itemId) => null;
+
+  @override
+  Future<void> retainPaused(PreparedPlaybackSession session) async {
+    await session.session.pause();
+  }
+
+  @override
+  Future<void> releaseItem(String itemId) async {}
+
+  @override
+  Future<void> retainOnly(Set<String> itemIds) async {}
 
   @override
   Future<void> release() async {}

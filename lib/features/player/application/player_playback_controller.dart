@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../data/playback_progress_repository_provider.dart';
@@ -169,10 +169,13 @@ class PlayerPlaybackState {
     Object? error,
     bool clearError = false,
     bool clearSource = false,
+    bool clearVideoController = false,
     bool clearSeekPreview = false,
   }) {
     return PlayerPlaybackState(
-      videoController: videoController ?? this.videoController,
+      videoController: clearVideoController
+          ? null
+          : videoController ?? this.videoController,
       status: status ?? this.status,
       hasFirstFrame: clearSource ? false : hasFirstFrame ?? this.hasFirstFrame,
       isBuffering: clearSource ? false : isBuffering ?? this.isBuffering,
@@ -224,9 +227,17 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   bool _ignoreNextCompleted = false;
   Duration? _lastPositionUpdate;
   final _timingEvents = <PlayerPlaybackTimingEvent>[];
+  String? _currentPlaybackItemId;
+  PlaybackSource? _currentPlaybackSource;
 
-  List<PlayerPlaybackTimingEvent> get debugTimingEvents =>
+  List<PlayerPlaybackTimingEvent> get timingEvents =>
       List<PlayerPlaybackTimingEvent>.unmodifiable(_timingEvents);
+
+  List<PlayerPlaybackTimingEvent> get debugTimingEvents => timingEvents;
+
+  String exportTimingReport() {
+    return _timingEvents.map(_formatTimingEvent).join('\n');
+  }
 
   @override
   PlayerPlaybackState build() {
@@ -261,6 +272,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         clearSource: true,
         clearError: true,
       );
+      _currentPlaybackItemId = null;
+      _currentPlaybackSource = null;
       return;
     }
 
@@ -275,6 +288,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         clearSource: true,
         clearError: true,
       );
+      _currentPlaybackItemId = null;
+      _currentPlaybackSource = null;
       return;
     }
 
@@ -290,6 +305,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         clearSource: true,
         clearError: true,
       );
+      _currentPlaybackItemId = null;
+      _currentPlaybackSource = null;
       return;
     }
 
@@ -329,7 +346,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           itemId: item.id,
           source: prepared.source.playableSource,
         );
-        await _replaceCurrentSession(prepared.session);
+        await _replaceCurrentSession(prepared);
         if (!ref.mounted || !_isCurrent(generation)) {
           await _session.pause();
           return;
@@ -380,6 +397,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       if (!_isCurrent(generation)) {
         return;
       }
+      _currentPlaybackSource = playbackSource;
+      _currentPlaybackItemId = item.id;
       state = state.copyWith(currentSource: playbackSource.playableSource);
       final openStartedAt = DateTime.now();
       _logTiming(
@@ -426,6 +445,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       if (!_isCurrent(generation)) {
         return;
       }
+      _currentPlaybackItemId = null;
+      _currentPlaybackSource = null;
       state = state.copyWith(
         status: PlayerPlaybackStatus.error,
         hasFirstFrame: false,
@@ -473,9 +494,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         .take(_maxPreloadedSources)
         .map((item) => item.id)
         .toSet();
+    if (state.currentItemId != null) {
+      allowedIds.add(state.currentItemId!);
+    }
 
     _preloadedItemIds.removeWhere((id) => !allowedIds.contains(id));
     _cancelPreloadsNotIn(allowedIds);
+    unawaited(_prepareManager.retainOnly(allowedIds));
 
     _syncPreloadState();
 
@@ -713,6 +738,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _preloadStates.clear();
     _preloadedItemIds.clear();
     await _disposeSessionOnly();
+    _currentPlaybackItemId = null;
+    _currentPlaybackSource = null;
     if (!syncState || !ref.mounted) {
       return;
     }
@@ -722,7 +749,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       clearError: true,
       preloadedItemIds: const [],
       preloadStates: const [],
+      clearVideoController: true,
     );
+  }
+
+  Future<void> releaseSessionWindow() {
+    return _prepareManager.release();
   }
 
   void _handleBuffering(bool isBuffering) {
@@ -926,13 +958,29 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
   }
 
-  Future<void> _replaceCurrentSession(PlayerPlaybackSession nextSession) async {
+  Future<void> _replaceCurrentSession(PreparedPlaybackSession prepared) async {
     final previousSession = _session;
+    final previousSource = _currentPlaybackSource;
+    final previousItemId = _currentPlaybackItemId;
+    final previousHasFirstFrame = state.hasFirstFrame;
     await _cancelSessionStreams();
-    _session = nextSession;
+    _session = prepared.session;
+    _currentPlaybackSource = prepared.source;
+    _currentPlaybackItemId = prepared.itemId;
     _attachSessionStreams(_session);
     await previousSession.pause();
-    await previousSession.dispose();
+    if (previousSource != null && previousItemId != null) {
+      await _prepareManager.retainPaused(
+        PreparedPlaybackSession(
+          itemId: previousItemId,
+          source: previousSource,
+          session: previousSession,
+          hasFirstFrame: previousHasFirstFrame,
+        ),
+      );
+    } else {
+      await previousSession.dispose();
+    }
   }
 
   Future<void> _prepareNextItem(
@@ -1115,6 +1163,19 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       if (error != null) 'error=$error',
     ];
     debugPrint(parts.join(' '));
+  }
+
+  String _formatTimingEvent(PlayerPlaybackTimingEvent event) {
+    final parts = <String>[
+      event.at.toIso8601String(),
+      event.name,
+      if (event.itemId != null) 'item=${event.itemId}',
+      if (event.source != null) 'source=${event.source}',
+      if (event.elapsed != null) 'elapsed=${event.elapsed!.inMilliseconds}ms',
+      if (event.details != null) event.details!,
+      if (event.error != null) 'error=${event.error}',
+    ];
+    return parts.join(' ');
   }
 
   Future<void> _disposeSessionOnly() async {

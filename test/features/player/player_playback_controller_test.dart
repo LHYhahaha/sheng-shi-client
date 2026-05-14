@@ -908,7 +908,8 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 80));
       await controller.playItem(_item(2));
 
-      expect(currentSession.isDisposed, isTrue);
+      expect(currentSession.isDisposed, isFalse);
+      expect(currentSession.pauseCount, greaterThanOrEqualTo(1));
       expect(currentSession.openedSources, [_videoUrl]);
       expect(preparedSession.openedSources, [_secondVideoUrl]);
       expect(preparedSession.openPlayFlags, [false]);
@@ -918,6 +919,98 @@ void main() {
       expect(container.read(provider).currentSource, _secondVideoUrl);
     },
   );
+
+  test('previous played session is reused when swiping back', () async {
+    final firstSession = _FakePlaybackSession();
+    final secondSession = _FakePlaybackSession();
+    final nextSession = _FakePlaybackSession();
+    var index = 0;
+    final sessions = [firstSession, secondSession, nextSession];
+    PlayerPlaybackSession sessionFactory() => sessions[index++];
+    final container = _createPrepareContainer(sessionFactory);
+    addTearDown(container.dispose);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.preloadAround([_item(1), _item(2)], 0);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    await controller.playItem(_item(2));
+    await controller.preloadAround([_item(1), _item(2)], 1);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    await controller.playItem(_item(1));
+
+    expect(firstSession.openedSources, [_videoUrl]);
+    expect(secondSession.openedSources, [_secondVideoUrl]);
+    expect(nextSession.openedSources, isEmpty);
+    expect(firstSession.playCount, 1);
+    expect(secondSession.isDisposed, isFalse);
+    expect(container.read(provider).currentItemId, 'drama-a-ep-1');
+  });
+
+  test('session window keeps at most previous and next sessions', () async {
+    final sessions = [
+      _FakePlaybackSession(),
+      _FakePlaybackSession(),
+      _FakePlaybackSession(),
+      _FakePlaybackSession(),
+    ];
+    var index = 0;
+    PlayerPlaybackSession sessionFactory() => sessions[index++];
+    final container = _createPrepareContainer(sessionFactory);
+    addTearDown(container.dispose);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.preloadAround([_item(1), _item(2), _item(3)], 0);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    await controller.playItem(_item(2));
+    await controller.preloadAround([
+      _item(1),
+      _item(2),
+      _item(3, videoUrl: 'https://cdn.example.test/ep3.m3u8'),
+    ], 1);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    await controller.playItem(
+      _item(3, videoUrl: 'https://cdn.example.test/ep3.m3u8'),
+    );
+    await controller.preloadAround([
+      _item(1),
+      _item(2),
+      _item(3, videoUrl: 'https://cdn.example.test/ep3.m3u8'),
+    ], 2);
+
+    expect(sessions[0].isDisposed, isTrue);
+    expect(sessions[1].isDisposed, isFalse);
+    expect(sessions[2].isDisposed, isFalse);
+    expect(container.read(provider).currentItemId, 'drama-a-ep-3');
+  });
+
+  test('exports bounded playback timing report', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.preloadAround([_item(1), _item(2)], 0);
+
+    expect(
+      controller.timingEvents.map((event) => event.name),
+      containsAll([
+        'source resolve start',
+        'source resolve end',
+        'media open start',
+        'media open end',
+        'first frame received',
+        'preload start',
+        'preload end',
+      ]),
+    );
+    expect(controller.exportTimingReport(), contains('media open end'));
+    expect(controller.exportTimingReport(), contains('elapsed='));
+  });
 
   test('hidden and dispose release prepared sessions', () async {
     final currentSession = _FakePlaybackSession();

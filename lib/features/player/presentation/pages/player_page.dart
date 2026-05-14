@@ -121,6 +121,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     unawaited(_playbackController.pauseForVisibility());
   }
 
+  @override
+  void didHaveMemoryPressure() {
+    unawaited(_playbackController.releaseSessionWindow());
+  }
+
   PlayerFeedConfig get _feedConfig {
     return switch (widget.feedMode) {
       PlayerFeedMode.singleDrama => PlayerFeedConfig.singleDrama(

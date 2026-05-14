@@ -301,6 +301,28 @@ Client strategy:
 - Respect `maxPreloadBytes`.
 - Refresh expired source URLs through `VideoSourceRepository`.
 
+### CDN/HLS Configuration Checklist
+
+Backend and CDN configuration should be reviewed against this checklist before
+real traffic ramps up:
+
+- Segment duration: target short segments, generally 2-4 seconds, so startup and
+  seeks do not wait on oversized chunks.
+- Keyframe alignment: align keyframes with segment boundaries across renditions
+  to keep ABR switches and seeks predictable.
+- Playlist cache-control: keep master playlists cacheable for longer, but keep
+  media playlist TTL aligned with signing and rollout needs.
+- Segment cache-control: make `.ts`/`.m4s` segments highly cacheable and
+  immutable when URLs are content-addressed or versioned.
+- Signed URL expiry: source URLs must live long enough for a viewing session,
+  and the backend must define refresh behavior before expiry.
+- Redirects: avoid multi-hop redirects on playlists and first segments; if
+  redirects are unavoidable, keep them cache-friendly and signed consistently.
+- First segment size: keep the first segment small enough for quick first frame
+  on cellular networks.
+- Master playlist bitrate ladder: include a low initial rendition for weak
+  networks and avoid forcing the highest bitrate before ABR has data.
+
 ### MP4 Whole-File Cache
 
 - Deprecated for this project.
@@ -570,6 +592,39 @@ Phase 5.3 limits:
 - No HLS segment cache.
 - No offline download.
 - No CDN-specific optimization or real backend coordination yet.
+
+### Phase 5.4: Playback Timing Export And Session Window MVP
+
+Implemented. This phase keeps Phase 5.3's prepared-session idea, but makes it
+more useful for vertical swiping by retaining a tiny playback session window.
+
+- Keep playback timing diagnostics in a bounded in-memory list that is available
+  in release builds through `PlayerPlaybackController.timingEvents` and
+  `exportTimingReport()`.
+- Timing still covers source resolve, playlist preload, media open, first frame,
+  buffering, and error/retry boundaries. Debug printing remains optional with
+  `--dart-define=PLAYER_TIMING_LOGS=true`.
+- Upgrade the single next prepared session into a small session window:
+  previous paused session, current playing session, and next prepared session.
+- Keep at most two non-current window sessions, so total player sessions should
+  stay around 2-3.
+- When swiping to a prepared item, take over that session and retain the old
+  current session in a paused state for quick swipe-back.
+- Only the current session may play. Previous and next sessions are explicitly
+  paused after prepare/retain and must not produce audio.
+- Locked, unavailable, and null-source items do not enter the window.
+- Fast swipes, stale generations, hidden tabs, player disposal, provider
+  disposal, and memory pressure release prepared/retained sessions.
+- Session-window failures degrade to the normal remote HLS open path and do not
+  affect current playback.
+
+Phase 5.4 limits:
+
+- No segment preheat.
+- No persistent HLS cache.
+- No multi-session pool beyond the small previous/current/next window.
+- No user-facing timing export UI yet; export is a controller API for debugging
+  and QA builds.
 
 Phase 5 defer:
 
