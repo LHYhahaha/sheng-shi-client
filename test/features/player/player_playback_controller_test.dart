@@ -5,6 +5,9 @@ import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+const _videoUrl =
+    'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4';
+
 void main() {
   test('opens and switches playable episode sources', () async {
     final session = _FakePlaybackSession();
@@ -16,10 +19,7 @@ void main() {
     await controller.playItem(_item(2));
 
     final state = container.read(provider);
-    expect(session.openedSources, [
-      'asset:///assets/videos/mock_episode_1.mp4',
-      'asset:///assets/videos/mock_episode_2.mp4',
-    ]);
+    expect(session.openedSources, [_videoUrl, _videoUrl]);
     expect(state.status, PlayerPlaybackStatus.playing);
     expect(state.currentItemId, 'drama-a-ep-2');
   });
@@ -99,12 +99,8 @@ void main() {
     await container.read(singleProvider.notifier).playItem(_item(2));
     await container.read(forYouProvider.notifier).togglePlay();
 
-    expect(forYouSession.openedSources, [
-      'asset:///assets/videos/mock_episode_1.mp4',
-    ]);
-    expect(singleSession.openedSources, [
-      'asset:///assets/videos/mock_episode_2.mp4',
-    ]);
+    expect(forYouSession.openedSources, [_videoUrl]);
+    expect(singleSession.openedSources, [_videoUrl]);
     expect(container.read(forYouProvider).status, PlayerPlaybackStatus.paused);
     expect(container.read(singleProvider).status, PlayerPlaybackStatus.playing);
   });
@@ -134,7 +130,7 @@ PlayerFeedItem _item(
     id: 'ep-$episodeNumber',
     number: episodeNumber,
     isLocked: isLocked,
-    videoAssetPath: 'assets/videos/mock_episode_$episodeNumber.mp4',
+    videoUrl: _videoUrl,
     isAvailable: isAvailable,
   );
   final content = PlayerContent(

@@ -214,6 +214,7 @@ PlayerEpisode _episode(int number) {
     id: 'ep-$number',
     number: number,
     isLocked: false,
-    videoAssetPath: 'assets/videos/mock_episode.mp4',
+    videoUrl:
+        'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
   );
 }

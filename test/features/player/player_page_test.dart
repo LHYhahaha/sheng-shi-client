@@ -128,6 +128,9 @@ void main() {
   });
 }
 
+const _mockVideoUrl =
+    'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4';
+
 Widget _buildPlayerApp({
   required PlayerFeedRepository repository,
   String initialLocation = '/player/drama-a/1',
@@ -246,19 +249,19 @@ List<PlayerFeedItem> _items({bool lockedEpisode2 = false}) {
       id: 'ep-1',
       number: 1,
       isLocked: false,
-      videoAssetPath: 'assets/videos/mock_episode.mp4',
+      videoUrl: _mockVideoUrl,
     ),
     PlayerEpisode(
       id: 'ep-2',
       number: 2,
       isLocked: lockedEpisode2,
-      videoAssetPath: 'assets/videos/mock_episode.mp4',
+      videoUrl: _mockVideoUrl,
     ),
     const PlayerEpisode(
       id: 'ep-3',
       number: 3,
       isLocked: false,
-      videoAssetPath: 'assets/videos/mock_episode.mp4',
+      videoUrl: _mockVideoUrl,
       isAvailable: false,
     ),
   ]);
