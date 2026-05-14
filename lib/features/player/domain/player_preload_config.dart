@@ -12,83 +12,70 @@ class PlayerPreloadConfig {
     this.retainedBackwardSessionCount = 1,
   });
 
-  /// Controls Home startup HLS HTTP preload count.
+  /// 控制首页启动阶段的 HLS HTTP 预加载数量。
   ///
-  /// The default is one first-screen candidate because Home must stay light and
-  /// must not compete with list rendering. Increasing this consumes more
-  /// network before the user explicitly plays anything. This is safe to move to
-  /// remote config later if the server can account for network policy.
+  /// 默认只预加载首屏 1 个候选，因为首页需要保持轻量，不能和列表渲染抢资源。
+  /// 调大后会在用户明确点击播放前消耗更多网络。未来如果服务端能结合网络策略控制，
+  /// 这个字段可以作为远程配置下发。
   final int homeStartupPreloadCount;
 
-  /// Controls single-drama forward HLS HTTP preload count.
+  /// 控制单剧播放页向后预加载的 HLS HTTP 数量。
   ///
-  /// The default is one next episode, matching the current vertical playback
-  /// behavior. Increasing this can reduce future loading, but costs extra
-  /// playlist/segment requests while the current episode is playing. This is a
-  /// good future server/remote-config knob.
+  /// 默认预加载下一集 1 个，和当前上下滑播放行为一致。调大后可能减少后续加载等待，
+  /// 但会在当前剧集播放时增加 playlist/segment 请求。这个字段适合未来作为服务端
+  /// 或远程配置的调优项。
   final int singleDramaForwardHlsPreloadCount;
 
-  /// Controls single-drama backward HLS HTTP preload count.
+  /// 控制单剧播放页向前预加载的 HLS HTTP 数量。
   ///
-  /// The default is one previous episode to preserve existing swipe-back
-  /// behavior. Increasing this is usually low value because retained media
-  /// sessions already handle recent back-swipes, while extra HLS requests still
-  /// cost bandwidth. This can be remote-configured conservatively.
+  /// 默认预加载上一集 1 个，用来保持现有回滑体验。继续调大通常收益不高，因为最近
+  /// 回滑主要由 retained media session 处理，而额外 HLS 请求仍然会消耗带宽。
+  /// 如果未来远程配置这个字段，也应该保持保守。
   final int singleDramaBackwardHlsPreloadCount;
 
-  /// Controls For You forward HLS HTTP preload count.
+  /// 控制 For You 信息流向后预加载的 HLS HTTP 数量。
   ///
-  /// The default is one next feed item because feed users mostly scroll
-  /// forward. Increasing this may help fast swipes, but can quickly compete with
-  /// current playback on weak networks. This is suitable for remote config only
-  /// after device timing proves a benefit.
+  /// 默认预加载下一个 feed item 1 个，因为信息流用户大多向下滑。调大后可能改善
+  /// 快速连续滑动，但在弱网下也更容易和当前播放抢带宽。只有真机 timing 证明有收益后，
+  /// 才适合作为远程配置逐步放开。
   final int forYouForwardHlsPreloadCount;
 
-  /// Controls For You backward HLS HTTP preload count.
+  /// 控制 For You 信息流向前预加载的 HLS HTTP 数量。
   ///
-  /// The default is one to keep current adjacent-item behavior. Raising it is
-  /// risky for feeds because users rarely scroll backward several items and the
-  /// extra HTTP work may waste bandwidth. This should remain conservative in
-  /// any future server-driven policy.
+  /// 默认保留 1 个，用来维持当前相邻 item 行为。信息流用户很少连续向上回看多个 item，
+  /// 所以调大容易浪费带宽。未来即使由服务端策略驱动，也应保持保守。
   final int forYouBackwardHlsPreloadCount;
 
-  /// Controls concurrent HLS HTTP preload work, not media-session preparation.
+  /// 控制并发 HLS HTTP 预加载任务数，不控制 media-session prepare。
   ///
-  /// The default is one so preload cannot fan out and starve current playback.
-  /// Increasing this raises bandwidth, radio, and CDN pressure. This is a
-  /// remote-config candidate only with careful rollout and timing logs.
+  /// 默认锁定为 1，避免预加载并发扩散后抢占当前播放。调大会增加带宽、无线网络和 CDN
+  /// 压力。未来如果要远程配置，必须配合灰度和 timing 日志。
   final int maxConcurrentHlsPreloads;
 
-  /// Controls the byte budget for HLS first-segment preheat.
+  /// 控制 HLS 首段预热的字节预算。
   ///
-  /// The default matches the existing preheater budget of 2 MiB. Increasing this
-  /// can improve warm-up for large first segments, but may waste data on feeds
-  /// that users skip. This should eventually be reconciled with server
-  /// `preloadPolicy.maxPreloadBytes`.
+  /// 默认沿用现有预热预算 2 MiB。调大可能改善大首段视频的预热效果，但在用户快速滑走
+  /// 的信息流里也可能浪费流量。后续应和服务端 `preloadPolicy.maxPreloadBytes` 对齐。
   final int maxPreloadBytes;
 
-  /// Controls HLS playlist and segment preload timeout.
+  /// 控制 HLS playlist 和 segment 预加载超时时间。
   ///
-  /// The default is four seconds, matching the existing preheater behavior.
-  /// Increasing this may let slow sources finish preloading, but stale pending
-  /// work can compete with active playback. This can be remotely tuned later.
+  /// 默认 4 秒，和现有 HLS preheater 行为一致。调大可能让慢源完成预加载，但过期的
+  /// pending 任务也会更久地占用网络资源。后续可以远程调优。
   final Duration preloadTimeout;
 
-  /// Controls forward media-session preparation count.
+  /// 控制向后 media-session prepare 数量。
   ///
-  /// The current client caps this at one prepared next session because prepared
-  /// sessions hold player/decoder resources and audio-lifecycle risk. Do not
-  /// increase this together with HLS preload counts without a separate device
-  /// review. Remote config may expose this later, but the current effective cap
-  /// remains one.
+  /// 当前客户端有效上限为 1 个 next prepared session，因为 prepared session 会持有播放器、
+  /// 解码资源，并带来音频生命周期风险。不要因为 HLS preload 数量变大就同步调大这个字段。
+  /// 未来可以暴露给远程配置，但当前有效 cap 仍然是 1。
   final int preparedForwardSessionCount;
 
-  /// Controls retained backward media-session count.
+  /// 控制向前 retained media-session 数量。
   ///
-  /// The current client caps this at one retained previous session because it
-  /// preserves the main swipe-back use case without building a player pool.
-  /// Increasing this costs memory and decoder resources. Remote config should
-  /// keep this capped until there is strong evidence.
+  /// 当前客户端有效上限为 1 个 previous retained session，用来覆盖主要回滑场景，同时
+  /// 避免形成播放器实例池。调大会增加内存和解码资源占用。除非有强真机证据，远程配置
+  /// 也应保持这个 cap。
   final int retainedBackwardSessionCount;
 
   int get effectiveHomeStartupPreloadCount =>
