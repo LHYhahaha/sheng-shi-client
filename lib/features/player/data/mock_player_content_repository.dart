@@ -26,6 +26,7 @@ class MockPlayerContentRepository implements PlayerContentRepository {
             id: 'ep-$number',
             number: number,
             isLocked: number >= 11,
+            videoAssetPath: 'assets/videos/mock_episode.mp4',
             isAvailable: number != 9,
           );
         }),

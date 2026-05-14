@@ -1,5 +1,7 @@
 import 'package:drama_client/app/router/route_paths.dart';
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
+import 'package:drama_client/features/player/application/player_playback_controller.dart';
+import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/presentation/pages/player_page.dart';
@@ -150,7 +152,12 @@ Widget _buildPlayerApp({
   );
 
   return ProviderScope(
-    overrides: [playerFeedRepositoryProvider.overrideWithValue(repository)],
+    overrides: [
+      playerFeedRepositoryProvider.overrideWithValue(repository),
+      playerPlaybackSessionFactoryProvider.overrideWithValue(
+        () => _FakePlaybackSession(),
+      ),
+    ],
     child: MaterialApp.router(
       localizationsDelegates: const [
         AppLocalizations.delegate,
@@ -235,12 +242,23 @@ class _FakePlayerFeedRepository implements PlayerFeedRepository {
 
 List<PlayerFeedItem> _items({bool lockedEpisode2 = false}) {
   final content = _content([
-    const PlayerEpisode(id: 'ep-1', number: 1, isLocked: false),
-    PlayerEpisode(id: 'ep-2', number: 2, isLocked: lockedEpisode2),
+    const PlayerEpisode(
+      id: 'ep-1',
+      number: 1,
+      isLocked: false,
+      videoAssetPath: 'assets/videos/mock_episode.mp4',
+    ),
+    PlayerEpisode(
+      id: 'ep-2',
+      number: 2,
+      isLocked: lockedEpisode2,
+      videoAssetPath: 'assets/videos/mock_episode.mp4',
+    ),
     const PlayerEpisode(
       id: 'ep-3',
       number: 3,
       isLocked: false,
+      videoAssetPath: 'assets/videos/mock_episode.mp4',
       isAvailable: false,
     ),
   ]);
@@ -271,4 +289,21 @@ PlayerContent _content(List<PlayerEpisode> episodes) {
     episodes: episodes,
     recommendations: const [],
   );
+}
+
+class _FakePlaybackSession implements PlayerPlaybackSession {
+  @override
+  Null get videoController => null;
+
+  @override
+  Future<void> open(String source, {bool play = true}) async {}
+
+  @override
+  Future<void> pause() async {}
+
+  @override
+  Future<void> play() async {}
+
+  @override
+  Future<void> dispose() async {}
 }

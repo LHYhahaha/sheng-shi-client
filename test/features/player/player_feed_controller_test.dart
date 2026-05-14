@@ -210,5 +210,10 @@ PlayerContent _content(String id) {
 }
 
 PlayerEpisode _episode(int number) {
-  return PlayerEpisode(id: 'ep-$number', number: number, isLocked: false);
+  return PlayerEpisode(
+    id: 'ep-$number',
+    number: number,
+    isLocked: false,
+    videoAssetPath: 'assets/videos/mock_episode.mp4',
+  );
 }

@@ -29,15 +29,29 @@ class PlayerEpisode {
     required this.id,
     required this.number,
     required this.isLocked,
+    this.videoAssetPath,
+    this.videoUrl,
     this.isAvailable = true,
   });
 
   final String id;
   final int number;
   final bool isLocked;
+  final String? videoAssetPath;
+  final String? videoUrl;
   final bool isAvailable;
 
   bool get isUnavailable => !isAvailable;
+
+  String? get videoSource {
+    if (videoUrl != null && videoUrl!.isNotEmpty) {
+      return videoUrl;
+    }
+    if (videoAssetPath != null && videoAssetPath!.isNotEmpty) {
+      return 'asset:///$videoAssetPath';
+    }
+    return null;
+  }
 }
 
 class PlayerRecommendation {

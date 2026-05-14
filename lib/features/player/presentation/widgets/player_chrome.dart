@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -24,6 +25,7 @@ class PlayerChrome extends StatelessWidget {
     required this.onShareTap,
     required this.onMoreTap,
     required this.onUnlockTap,
+    this.videoController,
     this.onBackTap,
     this.forYouLayout = false,
     super.key,
@@ -37,6 +39,7 @@ class PlayerChrome extends StatelessWidget {
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
   final VoidCallback onUnlockTap;
+  final VideoController? videoController;
   final VoidCallback? onBackTap;
   final bool forYouLayout;
 
@@ -62,7 +65,13 @@ class PlayerChrome extends StatelessWidget {
             borderRadius: forYouLayout
                 ? const BorderRadius.vertical(bottom: Radius.circular(10))
                 : BorderRadius.zero,
-            child: Image.asset(content.backgroundAssetPath, fit: BoxFit.cover),
+            child: videoController == null
+                ? Image.asset(content.backgroundAssetPath, fit: BoxFit.cover)
+                : Video(
+                    controller: videoController!,
+                    controls: NoVideoControls,
+                    fit: BoxFit.cover,
+                  ),
           ),
         ),
         Positioned(

@@ -7,6 +7,8 @@ import 'package:drama_client/features/auth/presentation/pages/account_page.dart'
 import 'package:drama_client/features/my_list/data/my_list_repository_provider.dart';
 import 'package:drama_client/features/my_list/domain/my_list_item.dart';
 import 'package:drama_client/features/my_list/domain/my_list_repository.dart';
+import 'package:drama_client/features/player/application/player_playback_controller.dart';
+import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/profile/presentation/pages/language_page.dart';
 import 'package:drama_client/features/store/presentation/pages/store_page.dart';
 import 'package:drama_client/features/wallet/domain/wallet_record.dart';
@@ -327,7 +329,7 @@ void main() {
   testWidgets('opens for you player feed and swipes to next item', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(_buildAppWithFakePlayback());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -350,7 +352,7 @@ void main() {
   testWidgets('opens home drama as single drama feed and swipes episodes', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(_buildAppWithFakePlayback());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -369,7 +371,7 @@ void main() {
   testWidgets('for you feed does not inherit single drama player state', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(_buildAppWithFakePlayback());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -823,6 +825,34 @@ class _TestRouterApp extends StatelessWidget {
       routerConfig: router,
     );
   }
+}
+
+Widget _buildAppWithFakePlayback() {
+  return ProviderScope(
+    overrides: [
+      playerPlaybackSessionFactoryProvider.overrideWithValue(
+        () => _FakePlaybackSession(),
+      ),
+    ],
+    child: const DramaClientApp(),
+  );
+}
+
+class _FakePlaybackSession implements PlayerPlaybackSession {
+  @override
+  Null get videoController => null;
+
+  @override
+  Future<void> open(String source, {bool play = true}) async {}
+
+  @override
+  Future<void> pause() async {}
+
+  @override
+  Future<void> play() async {}
+
+  @override
+  Future<void> dispose() async {}
 }
 
 class _SignedInAuthRepository implements AuthRepository {

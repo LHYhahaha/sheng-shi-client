@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +9,7 @@ import '../../../../app/shell/app_shell_chrome.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/player_feed_controller.dart';
+import '../../application/player_playback_controller.dart';
 import '../../application/player_ui_controller.dart';
 import '../../domain/player_feed.dart';
 import '../../domain/player_content.dart';
@@ -97,6 +100,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     final feedController = ref.read(feedProvider.notifier);
     final uiState = ref.watch(uiProvider);
     final uiController = ref.read(uiProvider.notifier);
+    final playbackProvider = playerPlaybackControllerProvider(sessionKey);
+    final playbackState = ref.watch(playbackProvider);
+    final playbackController = ref.read(playbackProvider.notifier);
 
     ref.listen(feedProvider.select((state) => state.currentItem), (
       previous,
@@ -107,6 +113,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       }
 
       ref.read(uiProvider.notifier).selectEpisode(next.episode);
+      unawaited(ref.read(playbackProvider.notifier).playItem(next));
     });
 
     ref.listen(feedProvider.select((state) => state.currentIndex), (
@@ -146,7 +153,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             _exitForYouFeed();
           }
         },
-        child: _buildBody(feedState, feedController, uiState, uiController),
+        child: _buildBody(
+          feedState,
+          feedController,
+          uiState,
+          uiController,
+          playbackState,
+          playbackController,
+        ),
       ),
     );
   }
@@ -156,6 +170,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     PlayerFeedController feedController,
     PlayerUiState uiState,
     PlayerUiController uiController,
+    PlayerPlaybackState playbackState,
+    PlayerPlaybackController playbackController,
   ) {
     if (feedState.isLoading) {
       return const Center(
@@ -191,18 +207,33 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           onPageChanged: feedController.setCurrentIndex,
           itemBuilder: (context, index) {
             final item = feedState.items[index];
+            final isCurrentItem = index == feedState.currentIndex;
+            final canRenderVideo =
+                isCurrentItem &&
+                !item.episode.isUnavailable &&
+                !item.episode.isLocked &&
+                playbackState.currentItemId == item.id &&
+                playbackState.currentSource != null;
             return Stack(
               children: [
                 PlayerChrome(
                   content: item.content,
                   episodeNumber: item.episode.number,
+                  videoController: canRenderVideo
+                      ? playbackState.videoController
+                      : null,
                   isPlaying:
-                      uiState.isPlaying &&
-                      index == feedState.currentIndex &&
-                      !item.episode.isUnavailable,
-                  onTogglePlay: item.episode.isUnavailable
+                      playbackState.isPlaying &&
+                      isCurrentItem &&
+                      !item.episode.isUnavailable &&
+                      !item.episode.isLocked,
+                  onTogglePlay:
+                      item.episode.isUnavailable || item.episode.isLocked
                       ? () {}
-                      : uiController.togglePlay,
+                      : () {
+                          unawaited(playbackController.togglePlay());
+                          uiController.togglePlay();
+                        },
                   onEpisodesTap: () {
                     _showDetailSheet(
                       item.content,
@@ -338,6 +369,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     ref
         .read(playerUiControllerProvider(_sessionKey).notifier)
         .unlockPaywallAndPlay();
+    unawaited(
+      ref
+          .read(playerPlaybackControllerProvider(_sessionKey).notifier)
+          .playItem(
+            ref.read(playerFeedControllerProvider(_sessionKey)).currentItem,
+          ),
+    );
   }
 }
 
