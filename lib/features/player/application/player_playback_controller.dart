@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../data/playback_progress_repository_provider.dart';
 import '../data/player_playback_source_repository_provider.dart';
 import '../domain/player_feed.dart';
+import '../domain/player_playback_progress.dart';
 import '../domain/player_playback_source.dart';
 import 'player_session_controller.dart';
 
@@ -174,6 +176,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   final String sessionKey;
   late final PlayerPlaybackSession _session;
   late final PlayerPlaybackCacheManager _cacheManager;
+  late final PlaybackProgressRepository _progressRepository;
   final _preloadedItemIds = <String>{};
   int _generation = 0;
   int _preloadGeneration = 0;
@@ -187,6 +190,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   PlayerPlaybackState build() {
     _session = ref.read(playerPlaybackSessionFactoryProvider).call();
     _cacheManager = ref.read(playerPlaybackCacheManagerProvider);
+    _progressRepository = ref.read(playbackProgressRepositoryProvider);
     final subscriptions = <StreamSubscription<dynamic>>[
       _session.bufferingStream.listen(_handleBuffering),
       _session.playingStream.listen(_handlePlaying),
@@ -267,6 +271,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
     final generation = ++_generation;
     _pauseWhenOpenCompletes = false;
+    final resumeProgress = _shouldPersistProgress
+        ? await _progressRepository.getProgress(item.id)
+        : null;
     state = state.copyWith(
       status: PlayerPlaybackStatus.opening,
       hasFirstFrame: false,
@@ -302,6 +309,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
             state.currentSource == playbackSource.playableSource) {
           await _session.pause();
         }
+        return;
+      }
+      await _restoreProgressIfNeeded(resumeProgress, generation);
+      if (!ref.mounted || !_isCurrent(generation)) {
         return;
       }
       if (_pauseWhenOpenCompletes) {
@@ -493,6 +504,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       state.seekPreviewPosition ?? state.position,
     );
     state = state.copyWith(position: target, isSeeking: false);
+    _saveProgressIfNeeded(position: target);
     _ignoreNextCompleted =
         state.duration > Duration.zero &&
         target >= state.duration - const Duration(milliseconds: 500);
@@ -625,6 +637,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
     _lastPositionUpdate = clamped;
     state = state.copyWith(position: clamped);
+    _saveProgressIfNeeded(position: clamped);
   }
 
   void _handleDuration(Duration duration) {
@@ -633,6 +646,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
     final normalized = duration < Duration.zero ? Duration.zero : duration;
     state = state.copyWith(duration: normalized);
+    _saveProgressIfNeeded(duration: normalized);
   }
 
   void _handleBufferedPosition(Duration position) {
@@ -694,6 +708,51 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   bool _isCurrent(int generation) => generation == _generation;
+
+  bool get _shouldPersistProgress => sessionKey.startsWith('single:');
+
+  Future<void> _restoreProgressIfNeeded(
+    PlaybackProgress? progress,
+    int generation,
+  ) async {
+    if (progress == null || !progress.canResume || !_shouldPersistProgress) {
+      return;
+    }
+    await _session.seek(progress.position);
+    if (!ref.mounted || !_isCurrent(generation)) {
+      return;
+    }
+    state = state.copyWith(
+      position: progress.position,
+      duration: progress.duration > Duration.zero
+          ? progress.duration
+          : state.duration,
+      bufferedPosition: state.bufferedPosition < progress.position
+          ? progress.position
+          : state.bufferedPosition,
+    );
+  }
+
+  void _saveProgressIfNeeded({Duration? position, Duration? duration}) {
+    if (!_shouldPersistProgress || state.currentItemId == null) {
+      return;
+    }
+    final nextPosition = position ?? state.position;
+    final nextDuration = duration ?? state.duration;
+    if (nextPosition <= Duration.zero || nextDuration <= Duration.zero) {
+      return;
+    }
+    unawaited(
+      _progressRepository.saveProgress(
+        PlaybackProgress(
+          itemId: state.currentItemId!,
+          position: nextPosition,
+          duration: nextDuration,
+          updatedAt: DateTime.now(),
+        ),
+      ),
+    );
+  }
 
   void _setPreloadedItemIds(List<String> ids) {
     state = state.copyWith(preloadedItemIds: List<String>.unmodifiable(ids));

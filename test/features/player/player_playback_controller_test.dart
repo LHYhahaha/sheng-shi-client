@@ -1,11 +1,17 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
+import 'package:drama_client/features/player/data/file_player_playback_cache_manager.dart';
+import 'package:drama_client/features/player/data/mock_playback_progress_repository.dart';
 import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
+import 'package:drama_client/features/player/data/playback_progress_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
+import 'package:drama_client/features/player/domain/player_playback_progress.dart';
+import 'package:drama_client/features/player/domain/player_playback_source.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -80,6 +86,78 @@ void main() {
 
     expect(cacheManager.downloadCount, 1);
     expect(session.openedSources, [_playableSource(1)]);
+  });
+
+  test(
+    'file cache stores downloaded source and reuses local file hit',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'player-cache-test-',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      final cacheManager = FilePlayerPlaybackCacheManager(
+        cacheDirectory: tempDir,
+        downloader: _FakeFileDownloader(),
+      );
+      final item = _item(1);
+      final policy = PlaybackCachePolicy(
+        allowCache: true,
+        expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+        cacheKey: 'player:drama-a:ep-1',
+      );
+
+      final first = await cacheManager.download(
+        item: item,
+        policy: policy,
+        remoteUrl: _videoUrl,
+      );
+      final second = await cacheManager.lookup(
+        item: item,
+        policy: policy,
+        remoteUrl: _videoUrl,
+      );
+
+      expect(first.playableSource, isNot(_videoUrl));
+      expect(await File(first.playableSource).exists(), isTrue);
+      expect(second?.cacheStatus, PlaybackCacheStatus.hit);
+      expect(second?.playableSource, first.playableSource);
+    },
+  );
+
+  test('file cache expired entry is treated as miss', () async {
+    final tempDir = await Directory.systemTemp.createTemp('player-cache-test-');
+    addTearDown(() async {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    });
+    final cacheManager = FilePlayerPlaybackCacheManager(
+      cacheDirectory: tempDir,
+      downloader: _FakeFileDownloader(),
+    );
+    final item = _item(1);
+    final expiredPolicy = PlaybackCachePolicy(
+      allowCache: true,
+      expiresAt: DateTime.now().subtract(const Duration(minutes: 1)),
+      cacheKey: 'player:drama-a:ep-1',
+    );
+
+    await cacheManager.download(
+      item: item,
+      policy: expiredPolicy,
+      remoteUrl: _videoUrl,
+    );
+    final result = await cacheManager.lookup(
+      item: item,
+      policy: expiredPolicy,
+      remoteUrl: _videoUrl,
+    );
+
+    expect(result, isNull);
   });
 
   test('resolve download failure enters error and retry can recover', () async {
@@ -512,6 +590,9 @@ void main() {
         playerPlaybackSessionFactoryProvider.overrideWithValue(
           () => sessions[index++],
         ),
+        playerPlaybackCacheManagerProvider.overrideWithValue(
+          MockPlayerPlaybackCacheManager(downloadDelay: Duration.zero),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -539,6 +620,9 @@ void main() {
         playerPlaybackSessionFactoryProvider.overrideWithValue(
           () => sessions[index++],
         ),
+        playerPlaybackCacheManagerProvider.overrideWithValue(
+          MockPlayerPlaybackCacheManager(downloadDelay: Duration.zero),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -561,6 +645,63 @@ void main() {
     );
   });
 
+  test('single drama saves and restores mock playback progress', () async {
+    final progressRepository = InMemoryPlaybackProgressRepository();
+    final firstSession = _FakePlaybackSession();
+    final firstContainer = _createContainer(
+      firstSession,
+      progressRepository: progressRepository,
+      addDisposeTearDown: false,
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final firstController = firstContainer.read(provider.notifier);
+
+    await firstController.playItem(_item(1));
+    firstSession.emitDuration(const Duration(seconds: 120));
+    firstSession.emitPosition(const Duration(seconds: 35));
+    await Future<void>.delayed(Duration.zero);
+    firstContainer.dispose();
+
+    final secondSession = _FakePlaybackSession();
+    final secondContainer = _createContainer(
+      secondSession,
+      progressRepository: progressRepository,
+      addDisposeTearDown: false,
+    );
+    final secondController = secondContainer.read(provider.notifier);
+
+    await secondController.playItem(_item(1));
+
+    expect(secondSession.seekedPositions, [const Duration(seconds: 35)]);
+    expect(
+      secondContainer.read(provider).position,
+      const Duration(seconds: 35),
+    );
+    secondContainer.dispose();
+  });
+
+  test('for you does not restore cross-session progress', () async {
+    final progressRepository = InMemoryPlaybackProgressRepository();
+    await progressRepository.saveProgress(
+      PlaybackProgress(
+        itemId: 'drama-a-ep-1',
+        position: const Duration(seconds: 30),
+        duration: const Duration(seconds: 100),
+        updatedAt: DateTime.now(),
+      ),
+    );
+    final session = _FakePlaybackSession();
+    final container = _createContainer(
+      session,
+      progressRepository: progressRepository,
+    );
+    final provider = playerPlaybackControllerProvider('for-you-tab');
+
+    await container.read(provider.notifier).playItem(_item(1));
+
+    expect(session.seekedPositions, isEmpty);
+  });
+
   test(
     'keeps for you and single drama rate and ended state isolated',
     () async {
@@ -572,6 +713,9 @@ void main() {
         overrides: [
           playerPlaybackSessionFactoryProvider.overrideWithValue(
             () => sessions[index++],
+          ),
+          playerPlaybackCacheManagerProvider.overrideWithValue(
+            MockPlayerPlaybackCacheManager(downloadDelay: Duration.zero),
           ),
         ],
       );
@@ -717,6 +861,7 @@ ProviderContainer _createContainer(
   _FakePlaybackSession session, {
   bool addDisposeTearDown = true,
   MockPlayerPlaybackCacheManager? cacheManager,
+  PlaybackProgressRepository? progressRepository,
 }) {
   final playbackCacheManager =
       cacheManager ??
@@ -727,6 +872,10 @@ ProviderContainer _createContainer(
       playerPlaybackCacheManagerProvider.overrideWithValue(
         playbackCacheManager,
       ),
+      if (progressRepository != null)
+        playbackProgressRepositoryProvider.overrideWithValue(
+          progressRepository,
+        ),
     ],
   );
   if (addDisposeTearDown) {
@@ -891,5 +1040,16 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     await _rateController.close();
     await _widthController.close();
     await _errorController.close();
+  }
+}
+
+class _FakeFileDownloader implements PlaybackFileDownloader {
+  @override
+  Future<void> download({
+    required Uri remoteUri,
+    required File destination,
+  }) async {
+    await destination.parent.create(recursive: true);
+    await destination.writeAsBytes([1, 2, 3, 4]);
   }
 }

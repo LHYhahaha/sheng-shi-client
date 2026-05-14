@@ -35,7 +35,8 @@ class MockPlayerPlaybackSourceRepository
     }
 
     final policy = PlaybackCachePolicy(
-      allowCache: true,
+      allowCache:
+          remoteUrl.startsWith('http://') || remoteUrl.startsWith('https://'),
       expiresAt: DateTime.now().add(const Duration(minutes: 30)),
       cacheKey: 'player:${item.content.id}:${item.episode.id}',
     );
@@ -79,11 +80,12 @@ class MockPlayerPlaybackCacheManager implements PlayerPlaybackCacheManager {
   void seedHit({
     required String cacheKey,
     required String remoteUrl,
+    String? localSource,
     DateTime? expiresAt,
   }) {
     _entries[cacheKey] = _MockCacheEntry(
       remoteUrl: remoteUrl,
-      localSource: remoteUrl,
+      localSource: localSource ?? remoteUrl,
       expiresAt: expiresAt ?? DateTime.now().add(const Duration(minutes: 30)),
     );
   }

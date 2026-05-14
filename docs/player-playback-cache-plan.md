@@ -263,8 +263,8 @@ Drag end:
 - Seek to the target position.
 - If playback was playing before dragging, continue playing.
 - If playback was paused before dragging, remain paused.
-- Playback progress persistence is deferred. Drag seek should not save or report
-  progress in the current MVP.
+- Playback progress persistence starts as a local mock boundary in Phase 5.
+  Drag seek should not report progress to a real server.
 
 ## Preload Strategy
 
@@ -278,7 +278,9 @@ MVP preload:
 - Release preload sessions when leaving the player.
 - Keep For You and single drama sessions isolated.
 
-Do not download complete videos for feed scrolling.
+Do not download complete videos aggressively for feed scrolling. Phase 5 may
+write a single resolved MP4 source into the app cache directory as an MVP cache
+boundary, but production HLS/range caching remains deferred.
 
 ## HTTP/CDN Cache Strategy
 
@@ -392,9 +394,8 @@ Phase 4 defer:
 
 - Real backend video source API.
 - Real CDN response headers and signed URL refresh.
-- Real file download and disk write.
-- Disk eviction policy and cache quota management.
-- Playback progress save/reporting.
+- Production file download policy and cache quota management.
+- Playback progress server reporting.
 - Android smoke verification unless a playback lifecycle issue requires it.
 
 ### Phase 4.5: Player UI Polish After Cache Foundation
@@ -474,10 +475,46 @@ Progress track loading animation:
 - Keep this visual local to `PlayerSeekBar` or nearby player UI widgets. Do not
   add playback source-of-truth state for a purely visual animation.
 
+### Phase 5: Cache And Weak-Network MVP
+
+- Add `FilePlayerPlaybackCacheManager` as the first local file cache
+  implementation.
+- Store downloaded playable MP4 sources under the app temp/cache directory using
+  a stable cache-key filename.
+- Persist lightweight cache metadata next to the media file:
+  remote URL and expiry time.
+- Resolve cache hit, miss, expired, and failed states through the existing
+  `PlayerPlaybackCacheManager` boundary.
+- On cache hit, prefer the local file path as `PlaybackSource.playableSource`.
+- On cache miss or expired cache, download through an injectable
+  `PlaybackFileDownloader`, then open the local file.
+- On unsupported sources such as assets, keep the remote/source URL path and skip
+  local disk caching.
+- On cache or resolve failure, keep the existing playback error and retry path;
+  retry re-runs source resolve/cache/open.
+- Keep `preloadAround()` source/cache-only. It does not create media player
+  sessions and cannot produce audio.
+- Keep preload cancellation wired to hidden tab, single drama dispose, and
+  provider dispose through `releasePending()`.
+- Add `PlaybackProgressRepository` and an in-memory MVP implementation.
+- Single drama sessions save local position/duration and restore the same
+  episode on re-entry when the saved position is resumable.
+- For You does not restore progress across sessions yet; it only keeps the
+  current playback session state.
+
+Phase 5 defer:
+
+- Real playback source API and signed URL refresh.
+- Real CDN header parsing and expiry reconciliation.
+- HLS segment-aware caching and HTTP Range-aware MP4 caching.
+- Disk quota, LRU eviction, and cache size UI/debug tooling.
+- Server progress reporting and cross-device resume.
+- Android smoke verification unless playback behavior changes require it.
+
 ## Out Of Scope
 
 - No real backend integration.
-- No full video download cache for feed scrolling.
+- No production-grade full video download cache for feed scrolling.
 - No offline download feature.
 - No DRM.
 - No real payment, receipt validation, or entitlement issuing.

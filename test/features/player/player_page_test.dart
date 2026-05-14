@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:drama_client/app/router/route_paths.dart';
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
+import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
+import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
@@ -749,6 +751,9 @@ Widget _buildPlayerApp({
       playerFeedRepositoryProvider.overrideWithValue(repository),
       playerPlaybackSessionFactoryProvider.overrideWithValue(
         playbackSessionFactory ?? () => _FakePlaybackSession(),
+      ),
+      playerPlaybackCacheManagerProvider.overrideWithValue(
+        MockPlayerPlaybackCacheManager(downloadDelay: Duration.zero),
       ),
     ],
     child: MaterialApp.router(

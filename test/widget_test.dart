@@ -11,6 +11,8 @@ import 'package:drama_client/features/my_list/domain/my_list_item.dart';
 import 'package:drama_client/features/my_list/domain/my_list_repository.dart';
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
+import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
+import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
 import 'package:drama_client/features/profile/presentation/pages/language_page.dart';
 import 'package:drama_client/features/store/presentation/pages/store_page.dart';
 import 'package:drama_client/features/wallet/domain/wallet_record.dart';
@@ -1021,6 +1023,9 @@ Widget _buildAppWithFakePlayback({List<_FakePlaybackSession>? sessions}) {
         sessions?.add(session);
         return session;
       }),
+      playerPlaybackCacheManagerProvider.overrideWithValue(
+        MockPlayerPlaybackCacheManager(downloadDelay: Duration.zero),
+      ),
     ],
     child: const DramaClientApp(),
   );
