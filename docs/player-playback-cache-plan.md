@@ -11,13 +11,16 @@ preload strategy, and future HTTP/CDN cache boundaries.
 - App inactive, paused, or detached states must pause playback.
 - Switching videos can show a black screen while the next source is loading.
 - Larger video files can delay the first frame.
-- Playback controls are not complete: tap video to play/pause, control overlay,
-  real progress, and seek are still pending.
+- Playback controls now cover tap video to play/pause, real progress, seek,
+  speed selection, and completion handling. Remaining polish is focused on
+  alignment, visible transitions, and seek thumbnail preview.
 - The Figma player design includes a drag-to-seek state with a stronger progress
-  bar and time bubble.
-- Reference short-drama players also include lightweight tap feedback, playback
-  speed selection, a next-episode entry, and automatic next episode after
-  completion.
+  bar, time bubble, and thumbnail preview.
+- Reference short-drama players include lightweight tap feedback, playback speed
+  selection, automatic next episode after completion, and a visible swipe-like
+  transition when moving to the next episode.
+- The single drama bottom-right action should stay as a `Download` placeholder,
+  not a visible `Next` button.
 - The single drama player back button still needs final Figma alignment.
 - Reference short-drama players show a thumbnail preview while dragging the
   progress bar. The current seek UI only shows the time bubble.
@@ -35,7 +38,9 @@ preload strategy, and future HTTP/CDN cache boundaries.
 - Support real position, duration, buffered progress, and seek.
 - Support drag seek with a time bubble matching the Figma interaction.
 - Support completed playback handling and automatic next episode.
-- Support manual next episode in single drama playback.
+- Keep internal next-episode controller support for automatic playback
+  completion, but do not expose a visible `Next` button in the single drama
+  bottom action area.
 - Support playback speed selection through a lightweight sheet.
 - Support a mock seek thumbnail preview while dragging in single drama playback.
 - Keep tap feedback lightweight instead of building a full long-video control
@@ -201,12 +206,16 @@ Fields:
   sessions remain isolated by default.
 - Rate persistence is out of scope for MVP.
 
-### Next Episode
+### Next Episode And Download Placeholder
 
-- Single drama playback should expose a lightweight `Next` entry.
-- `Next` moves to the next feed item and lets the feed/playback pipeline start
-  that item.
-- If there is no next item, the entry should be hidden or disabled.
+- Single drama playback should keep the original bottom-right `Download`
+  position as a placeholder.
+- Do not expose a visible `Next` button in the bottom action area.
+- `Download` is a UI placeholder in this phase. It may be a no-op or show a
+  lightweight mock/disabled feedback, but it must not start a real download.
+- Internal next episode capability can stay in `PlayerFeedController` for
+  automatic completion flows, but the single drama UI must not replace
+  `Download` with `Next`.
 - For You should not gain the single-drama `Next` entry.
 
 ### Playback Completion
@@ -217,6 +226,8 @@ Fields:
   `PlayerPlaybackSession.completedStream`.
 - When the current item completes and the player is visible, the page may
   automatically move to the next item.
+- Automatic next should use the vertical PageView animation so the user sees the
+  same swipe-like transition as manual episode switching.
 - Completion handling must guard against stale items, hidden pages, seeking,
   sheets/paywall, and disposed sessions.
 - If the next item is locked, move to it and show the paywall.
@@ -252,7 +263,8 @@ Drag end:
 - Seek to the target position.
 - If playback was playing before dragging, continue playing.
 - If playback was paused before dragging, remain paused.
-- Save progress to the mock progress repository only.
+- Playback progress persistence is deferred. Drag seek should not save or report
+  progress in the current MVP.
 
 ## Preload Strategy
 
@@ -322,7 +334,7 @@ Client strategy:
 - Tap video to play/pause.
 - Sync play/pause with `media_kit` state.
 - Show central play button while paused.
-- Add control overlay display and auto-hide behavior.
+- Keep full control overlay display and auto-hide behavior deferred.
 - Support For You and single drama player.
 
 ### Phase 3: Real Progress And Drag Seek
@@ -332,7 +344,7 @@ Client strategy:
 - Support drag seek.
 - Show Figma-style time bubble while dragging.
 - Disable vertical page swiping while dragging the progress bar.
-- Save progress to mock progress repository.
+- Do not save or report playback progress in this phase.
 
 ### Phase 3.5: Completion, Speed, And Lightweight Playback Polish
 
@@ -342,7 +354,9 @@ Client strategy:
 - Add `setPlaybackRate(double rate)`.
 - Add replay behavior for ended current source.
 - Add `canGoNext` and `goNext()` to `PlayerFeedController`.
-- Add single drama `Next` entry.
+- Initially added a visible single drama `Next` entry, but the latest product
+  decision is to restore the `Download` placeholder and keep next episode as an
+  internal/automatic flow.
 - Auto advance to the next item on completed playback when safe.
 - Add speed selection sheet.
 - Add short pause/play tap feedback without building a full control overlay.
@@ -395,6 +409,18 @@ Back button alignment:
 - Do not add a For You back button.
 - Keep the tap target at least 40x40 while preserving the visual icon size.
 - Keep `EP.01`, `Speed`, and `More` vertically aligned with the back button.
+
+Completion and bottom action polish:
+
+- When playback completes and auto-advances, animate the vertical PageView to the
+  next episode instead of jumping without visible motion.
+- Restore the single drama bottom-right `Download` placeholder in the UI.
+- Remove the visible single drama `Next` button from `PlayerChrome`.
+- Keep `PlayerFeedController.goNext()` available for auto-next/internal flows.
+- For the last episode, keep the current ended/replay state and do not show a
+  manual `Next` action.
+- `Download` remains a placeholder only. Do not implement real downloads in this
+  phase.
 
 Seek thumbnail preview MVP:
 
