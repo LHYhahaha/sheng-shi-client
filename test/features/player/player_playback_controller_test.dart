@@ -14,11 +14,10 @@ import 'package:drama_client/features/player/domain/player_preload_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _videoUrl =
-    'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8';
-const _secondVideoUrl =
-    'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8';
-const _thirdVideoUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+const _videoUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+const _secondVideoUrl = 'https://test-streams.mux.dev/tos_ismc/main.m3u8';
+const _thirdVideoUrl =
+    'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear1/prog_index.m3u8';
 
 String _playableSource(int episodeNumber) {
   return switch (episodeNumber) {
@@ -1162,10 +1161,7 @@ void main() {
     );
     expect(controller.exportTimingReport(), contains('elapsed='));
     expect(controller.exportTimingReport(), contains('trace='));
-    expect(
-      controller.exportTimingReport(),
-      contains('sourceLabel=unified-tears-slow'),
-    );
+    expect(controller.exportTimingReport(), contains('sourceLabel=mux-x36'));
     expect(controller.exportTimingReport(), contains('sinceTraceStartMs='));
     expect(controller.exportTimingReport(), contains('sinceUserActionMs='));
     expect(controller.exportTimingReport(), contains('windowItems='));

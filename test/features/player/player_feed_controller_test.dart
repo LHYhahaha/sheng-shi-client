@@ -236,11 +236,10 @@ PlayerEpisode _episode(int number) {
     number: number,
     isLocked: false,
     videoUrl: switch (number) {
-      1 =>
-        'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
-      2 =>
-        'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
-      _ => 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+      1 => 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+      2 => 'https://test-streams.mux.dev/tos_ismc/main.m3u8',
+      _ =>
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear1/prog_index.m3u8',
     },
   );
 }

@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('MockPlayerContentRepository', () {
     test('keeps remote HLS video metadata for mock playback', () {
-      expect(mockPlayerVideoAssets.length, 3);
+      expect(mockPlayerVideoAssets.length, 7);
 
       for (final asset in mockPlayerVideoAssets) {
         expect(asset.sourceLabel, isNotEmpty);
@@ -23,18 +23,41 @@ void main() {
       expect(
         mockPlayerVideoAssets.map((asset) => asset.videoUrl),
         containsAllInOrder(const [
-          'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
-          'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
           'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+          'https://test-streams.mux.dev/tos_ismc/main.m3u8',
+          'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear1/prog_index.m3u8',
+          'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8',
+          'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8',
+          'https://content.jwplatform.com/manifests/vM7nH0Kl.m3u8',
+          'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
         ]),
       );
       expect(
         mockPlayerVideoAssets.map((asset) => asset.sourceLabel),
         containsAllInOrder(const [
-          'unified-tears-slow',
-          'apple-bipbop',
           'mux-x36',
+          'mux-tears',
+          'apple-bipbop-low',
+          'apple-bipbop-16x9',
+          'apple-bipbop-4x3',
+          'jw-vod',
+          'slow-source-test',
         ]),
+      );
+    });
+
+    test('uses stable public HLS fixtures for the first three episodes', () async {
+      final content = await const MockPlayerContentRepository()
+          .getPlayerContent(dramaId: 'found-you');
+
+      expect(content.episodes.take(3).map((episode) => episode.videoUrl), const [
+        'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+        'https://test-streams.mux.dev/tos_ismc/main.m3u8',
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear1/prog_index.m3u8',
+      ]);
+      expect(
+        content.episodes.take(3).map((episode) => episode.videoUrl).toSet(),
+        hasLength(3),
       );
     });
 

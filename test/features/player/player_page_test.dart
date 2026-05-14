@@ -770,11 +770,10 @@ double _topBarOpacity(WidgetTester tester) {
   return opacity.opacity;
 }
 
-const _mockVideoUrl =
-    'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8';
-const _mockSecondVideoUrl =
-    'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8';
-const _mockThirdVideoUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+const _mockVideoUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+const _mockSecondVideoUrl = 'https://test-streams.mux.dev/tos_ismc/main.m3u8';
+const _mockThirdVideoUrl =
+    'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear1/prog_index.m3u8';
 
 Widget _buildPlayerApp({
   required PlayerFeedRepository repository,

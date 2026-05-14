@@ -2,27 +2,6 @@ import '../domain/player_content.dart';
 
 const mockPlayerVideoAssets = [
   MockPlayerVideoAsset(
-    sourceLabel: 'unified-tears-slow',
-    title: 'Tears of Steel HLS',
-    sourceName: 'Unified Streaming',
-    sourcePage:
-        'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/',
-    licenseNote:
-        'Public HLS fixture for testing and development; remote URL only.',
-    videoUrl:
-        'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
-  ),
-  MockPlayerVideoAsset(
-    sourceLabel: 'apple-bipbop',
-    title: 'BipBop Advanced TS HLS',
-    sourceName: 'Apple Developer',
-    sourcePage: 'https://developer.apple.com/streaming/examples/',
-    licenseNote:
-        'Public HLS fixture for testing and development; remote URL only.',
-    videoUrl:
-        'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
-  ),
-  MockPlayerVideoAsset(
     sourceLabel: 'mux-x36',
     title: 'Mux x36xhzz HLS',
     sourceName: 'Mux Test Streams',
@@ -30,6 +9,65 @@ const mockPlayerVideoAssets = [
     licenseNote:
         'Public HLS fixture for testing and development; remote URL only.',
     videoUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'mux-tears',
+    title: 'Mux Tears of Steel HLS',
+    sourceName: 'Mux Test Streams',
+    sourcePage: 'https://test-streams.mux.dev/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl: 'https://test-streams.mux.dev/tos_ismc/main.m3u8',
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'apple-bipbop-low',
+    title: 'Apple BipBop Low HLS',
+    sourceName: 'Apple Developer',
+    sourcePage: 'https://developer.apple.com/streaming/examples/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear1/prog_index.m3u8',
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'apple-bipbop-16x9',
+    title: 'Apple BipBop 16x9 HLS',
+    sourceName: 'Apple Developer',
+    sourcePage: 'https://developer.apple.com/streaming/examples/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8',
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'apple-bipbop-4x3',
+    title: 'Apple BipBop 4x3 HLS',
+    sourceName: 'Apple Developer',
+    sourcePage: 'https://developer.apple.com/streaming/examples/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8',
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'jw-vod',
+    title: 'JW Platform VOD HLS',
+    sourceName: 'JW Player',
+    sourcePage: 'https://developer.jwplayer.com/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl: 'https://content.jwplatform.com/manifests/vM7nH0Kl.m3u8',
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'slow-source-test',
+    title: 'Unified Streaming Tears Slow HLS',
+    sourceName: 'Unified Streaming',
+    sourcePage:
+        'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/',
+    licenseNote:
+        'Public HLS fixture for slow-source/bad-network testing and development; remote URL only.',
+    videoUrl:
+        'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
   ),
 ];
 

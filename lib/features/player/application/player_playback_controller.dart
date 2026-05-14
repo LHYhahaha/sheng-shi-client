@@ -1658,16 +1658,28 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (source == null) {
       return 'none';
     }
-    if (source.contains('devstreaming-cdn.apple.com') ||
-        source.contains('bipbop')) {
-      return 'apple-bipbop';
-    }
-    if (source.contains('test-streams.mux.dev') || source.contains('x36xhzz')) {
+    if (source.contains('x36xhzz')) {
       return 'mux-x36';
+    }
+    if (source.contains('tos_ismc')) {
+      return 'mux-tears';
+    }
+    if (source.contains('bipbop_16x9/gear1/prog_index')) {
+      return 'apple-bipbop-low';
+    }
+    if (source.contains('bipbop_16x9')) {
+      return 'apple-bipbop-16x9';
+    }
+    if (source.contains('bipbop_4x3')) {
+      return 'apple-bipbop-4x3';
+    }
+    if (source.contains('content.jwplatform.com') ||
+        source.contains('vM7nH0Kl')) {
+      return 'jw-vod';
     }
     if (source.contains('demo.unified-streaming.com') ||
         source.contains('tears-of-steel')) {
-      return 'unified-tears-slow';
+      return 'slow-source-test';
     }
     if (source.contains('lz15')) {
       return 'business-lz15';
