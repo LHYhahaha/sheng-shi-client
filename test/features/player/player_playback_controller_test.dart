@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
@@ -22,6 +24,43 @@ void main() {
     expect(session.openedSources, [_videoUrl, _videoUrl]);
     expect(state.status, PlayerPlaybackStatus.playing);
     expect(state.currentItemId, 'drama-a-ep-2');
+  });
+
+  test('keeps poster visible until source open completes', () async {
+    final openCompleter = Completer<void>();
+    final session = _FakePlaybackSession(openCompleter: openCompleter);
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    final playFuture = controller.playItem(_item(1));
+    await Future<void>.delayed(Duration.zero);
+
+    var state = container.read(provider);
+    expect(state.status, PlayerPlaybackStatus.opening);
+    expect(state.hasFirstFrame, isFalse);
+    expect(session.openedSources, [_videoUrl]);
+
+    openCompleter.complete();
+    await playFuture;
+
+    state = container.read(provider);
+    expect(state.status, PlayerPlaybackStatus.playing);
+    expect(state.hasFirstFrame, isTrue);
+  });
+
+  test('does not reopen unchanged source', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+    final item = _item(1);
+
+    await controller.playItem(item);
+    await controller.playItem(item);
+
+    expect(session.openedSources, [_videoUrl]);
+    expect(container.read(provider).status, PlayerPlaybackStatus.playing);
   });
 
   test('pauses and blocks locked episodes without opening source', () async {
@@ -154,6 +193,9 @@ PlayerFeedItem _item(
 }
 
 class _FakePlaybackSession implements PlayerPlaybackSession {
+  _FakePlaybackSession({this.openCompleter});
+
+  final Completer<void>? openCompleter;
   final openedSources = <String>[];
   int pauseCount = 0;
   int playCount = 0;
@@ -165,6 +207,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   @override
   Future<void> open(String source, {bool play = true}) async {
     openedSources.add(source);
+    await (openCompleter?.future ?? Future<void>.value());
   }
 
   @override

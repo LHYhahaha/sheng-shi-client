@@ -25,6 +25,7 @@ class PlayerChrome extends StatelessWidget {
     required this.onShareTap,
     required this.onMoreTap,
     required this.onUnlockTap,
+    this.showVideo = true,
     this.videoController,
     this.onBackTap,
     this.forYouLayout = false,
@@ -39,6 +40,7 @@ class PlayerChrome extends StatelessWidget {
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
   final VoidCallback onUnlockTap;
+  final bool showVideo;
   final VideoController? videoController;
   final VoidCallback? onBackTap;
   final bool forYouLayout;
@@ -65,13 +67,25 @@ class PlayerChrome extends StatelessWidget {
             borderRadius: forYouLayout
                 ? const BorderRadius.vertical(bottom: Radius.circular(10))
                 : BorderRadius.zero,
-            child: videoController == null
-                ? Image.asset(content.backgroundAssetPath, fit: BoxFit.cover)
-                : Video(
-                    controller: videoController!,
-                    controls: NoVideoControls,
-                    fit: BoxFit.cover,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.asset(content.backgroundAssetPath, fit: BoxFit.cover),
+                if (videoController != null)
+                  IgnorePointer(
+                    child: AnimatedOpacity(
+                      opacity: showVideo ? 1 : 0,
+                      duration: const Duration(milliseconds: 120),
+                      curve: Curves.easeOut,
+                      child: Video(
+                        controller: videoController!,
+                        controls: NoVideoControls,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
                   ),
+              ],
+            ),
           ),
         ),
         Positioned(

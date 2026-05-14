@@ -214,6 +214,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                 !item.episode.isLocked &&
                 playbackState.currentItemId == item.id &&
                 playbackState.currentSource != null;
+            final showVideo = canRenderVideo && playbackState.hasFirstFrame;
             return Stack(
               children: [
                 PlayerChrome(
@@ -222,6 +223,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                   videoController: canRenderVideo
                       ? playbackState.videoController
                       : null,
+                  showVideo: showVideo,
                   isPlaying:
                       playbackState.isPlaying &&
                       isCurrentItem &&

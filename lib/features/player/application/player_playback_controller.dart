@@ -32,24 +32,32 @@ class PlayerPlaybackState {
   const PlayerPlaybackState({
     required this.videoController,
     required this.status,
+    required this.hasFirstFrame,
     this.currentItemId,
     this.currentSource,
     this.error,
   });
 
   const PlayerPlaybackState.initial({VideoController? videoController})
-    : this(videoController: videoController, status: PlayerPlaybackStatus.idle);
+    : this(
+        videoController: videoController,
+        status: PlayerPlaybackStatus.idle,
+        hasFirstFrame: false,
+      );
 
   final VideoController? videoController;
   final PlayerPlaybackStatus status;
+  final bool hasFirstFrame;
   final String? currentItemId;
   final String? currentSource;
   final Object? error;
 
   bool get isPlaying => status == PlayerPlaybackStatus.playing;
+  bool get isOpening => status == PlayerPlaybackStatus.opening;
 
   PlayerPlaybackState copyWith({
     PlayerPlaybackStatus? status,
+    bool? hasFirstFrame,
     String? currentItemId,
     String? currentSource,
     Object? error,
@@ -59,6 +67,7 @@ class PlayerPlaybackState {
     return PlayerPlaybackState(
       videoController: videoController,
       status: status ?? this.status,
+      hasFirstFrame: clearSource ? false : hasFirstFrame ?? this.hasFirstFrame,
       currentItemId: clearSource ? null : currentItemId ?? this.currentItemId,
       currentSource: clearSource ? null : currentSource ?? this.currentSource,
       error: clearError ? null : error ?? this.error,
@@ -85,9 +94,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   Future<void> playItem(PlayerFeedItem? item) async {
-    final generation = ++_generation;
-
     if (item == null) {
+      final generation = ++_generation;
       if (!await _pauseIfCurrent(generation)) {
         return;
       }
@@ -100,6 +108,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
 
     if (item.episode.isLocked) {
+      final generation = ++_generation;
       if (!await _pauseIfCurrent(generation)) {
         return;
       }
@@ -114,6 +123,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
     final source = item.episode.videoSource;
     if (item.episode.isUnavailable || source == null) {
+      final generation = ++_generation;
       if (!await _pauseIfCurrent(generation)) {
         return;
       }
@@ -126,14 +136,16 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
 
-    if (state.currentItemId == item.id &&
-        state.currentSource == source &&
-        state.status == PlayerPlaybackStatus.playing) {
+    final isSameSource =
+        state.currentItemId == item.id && state.currentSource == source;
+    if (isSameSource && state.status != PlayerPlaybackStatus.error) {
       return;
     }
 
+    final generation = ++_generation;
     state = state.copyWith(
       status: PlayerPlaybackStatus.opening,
+      hasFirstFrame: false,
       currentItemId: item.id,
       currentSource: source,
       clearError: true,
@@ -144,12 +156,19 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       if (!_isCurrent(generation)) {
         return;
       }
-      state = state.copyWith(status: PlayerPlaybackStatus.playing);
+      state = state.copyWith(
+        status: PlayerPlaybackStatus.playing,
+        hasFirstFrame: true,
+      );
     } catch (error) {
       if (!_isCurrent(generation)) {
         return;
       }
-      state = state.copyWith(status: PlayerPlaybackStatus.error, error: error);
+      state = state.copyWith(
+        status: PlayerPlaybackStatus.error,
+        hasFirstFrame: false,
+        error: error,
+      );
     }
   }
 
