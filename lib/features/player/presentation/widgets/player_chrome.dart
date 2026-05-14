@@ -26,6 +26,7 @@ class PlayerChrome extends StatefulWidget {
     required this.onShareTap,
     required this.onMoreTap,
     required this.onUnlockTap,
+    this.overlayOpacity = 1.0,
     this.showVideo = true,
     this.showLoading = false,
     this.playbackError = false,
@@ -56,6 +57,7 @@ class PlayerChrome extends StatefulWidget {
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
   final VoidCallback onUnlockTap;
+  final double overlayOpacity;
   final bool showVideo;
   final bool showLoading;
   final bool playbackError;
@@ -92,6 +94,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
   VoidCallback get onShareTap => widget.onShareTap;
   VoidCallback get onMoreTap => widget.onMoreTap;
   VoidCallback get onUnlockTap => widget.onUnlockTap;
+  double get overlayOpacity => widget.overlayOpacity;
   bool get showVideo => widget.showVideo;
   bool get showLoading => widget.showLoading;
   bool get playbackError => widget.playbackError;
@@ -213,25 +216,37 @@ class _PlayerChromeState extends State<PlayerChrome> {
               (forYouLayout
                   ? _PlayerLayoutMetrics.forYouActionRailBottom
                   : _PlayerLayoutMetrics.singleActionRailBottom),
-          child: PlayerActionRail(
-            likeCountLabel: content.likeCountLabel,
-            onEpisodesTap: onEpisodesTap,
-            onShareTap: onShareTap,
-            onMoreTap: onMoreTap,
+          child: _OverlayOpacity(
+            opacity: overlayOpacity,
+            child: PlayerActionRail(
+              likeCountLabel: content.likeCountLabel,
+              onEpisodesTap: onEpisodesTap,
+              onShareTap: onShareTap,
+              onMoreTap: onMoreTap,
+            ),
           ),
         ),
         Positioned(
           left: 16,
           right: 91,
           bottom: forYouLayout ? forYouMetaBottom : bottomInset + 91,
-          child: PlayerBottomMeta(content: content, showChevron: !forYouLayout),
+          child: _OverlayOpacity(
+            opacity: overlayOpacity,
+            child: PlayerBottomMeta(
+              content: content,
+              showChevron: !forYouLayout,
+            ),
+          ),
         ),
         if (forYouLayout)
           Positioned(
             left: 16,
             right: 98,
             bottom: forYouWatchNowBottom,
-            child: _WatchNowButton(onTap: onWatchNowTap),
+            child: _OverlayOpacity(
+              opacity: overlayOpacity,
+              child: _WatchNowButton(onTap: onWatchNowTap),
+            ),
           )
         else ...[
           Positioned(
@@ -258,27 +273,30 @@ class _PlayerChromeState extends State<PlayerChrome> {
           Positioned(
             left: 16,
             bottom: bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onUnlockTap,
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 168),
-                height: 24,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.gold.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(3),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  context.l10n.playerBecomeMember,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF4B2C0D),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    height: 16 / 12,
+            child: _OverlayOpacity(
+              opacity: overlayOpacity,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onUnlockTap,
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 168),
+                  height: 24,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.gold.withValues(alpha: 0.8),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    context.l10n.playerBecomeMember,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF4B2C0D),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      height: 16 / 12,
+                    ),
                   ),
                 ),
               ),
@@ -287,27 +305,30 @@ class _PlayerChromeState extends State<PlayerChrome> {
           Positioned(
             right: 31,
             bottom: bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
-            child: GestureDetector(
-              key: const ValueKey('player_download_button'),
-              behavior: HitTestBehavior.opaque,
-              onTap: onDownloadTap,
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.download_rounded,
-                    color: Colors.white,
-                    size: 17,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    context.l10n.playerDownload,
-                    style: const TextStyle(
+            child: _OverlayOpacity(
+              opacity: overlayOpacity,
+              child: GestureDetector(
+                key: const ValueKey('player_download_button'),
+                behavior: HitTestBehavior.opaque,
+                onTap: onDownloadTap,
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.download_rounded,
                       color: Colors.white,
-                      fontSize: 12,
-                      height: 14 / 12,
+                      size: 17,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 4),
+                    Text(
+                      context.l10n.playerDownload,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        height: 14 / 12,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -333,6 +354,24 @@ class _PlayerChromeState extends State<PlayerChrome> {
   void dispose() {
     _feedbackTimer?.cancel();
     super.dispose();
+  }
+}
+
+class _OverlayOpacity extends StatelessWidget {
+  const _OverlayOpacity({required this.opacity, required this.child});
+
+  final double opacity;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      key: const ValueKey('player_overlay_opacity'),
+      opacity: opacity,
+      duration: const Duration(milliseconds: 140),
+      curve: Curves.easeOut,
+      child: child,
+    );
   }
 }
 

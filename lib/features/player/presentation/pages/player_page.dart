@@ -50,6 +50,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   static const _topBarHeight = 40.0;
   static const _topBarBackIconSize = 28.0;
   static const _topBarMoreIconSize = 24.0;
+  static const _dimmedOverlayOpacity = 0.64;
 
   late final PageController _pageController;
   late final String _sessionKey;
@@ -58,6 +59,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isSeekDragging = false;
   bool _isModalOpen = false;
   bool _isAutoAdvancing = false;
+  bool _isPressingPlaybackSurface = false;
+  bool _isPageScrolling = false;
   String? _handledEndedItemId;
 
   String _createSessionKey() {
@@ -270,126 +273,147 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
     return Stack(
       children: [
-        PageView.builder(
-          controller: _pageController,
-          physics: _isSeekDragging
-              ? const NeverScrollableScrollPhysics()
-              : const PageScrollPhysics(),
-          scrollDirection: Axis.vertical,
-          itemCount: feedState.items.length,
-          onPageChanged: feedController.setCurrentIndex,
-          itemBuilder: (context, index) {
-            final item = feedState.items[index];
-            final isCurrentItem = index == feedState.currentIndex;
-            final canRenderVideo =
-                isCurrentItem &&
-                !item.episode.isUnavailable &&
-                !item.episode.isLocked &&
-                playbackState.currentItemId == item.id &&
-                playbackState.currentSource != null;
-            final showVideo =
-                canRenderVideo &&
-                playbackState.hasFirstFrame &&
-                !playbackState.isError;
-            final showLoading = canRenderVideo && playbackState.isLoading;
-            final showPlaybackError = isCurrentItem && playbackState.isError;
-            final canTogglePlayback =
-                canRenderVideo &&
-                (playbackState.status == PlayerPlaybackStatus.playing ||
-                    playbackState.status == PlayerPlaybackStatus.paused);
-            final showCenterPlayButton =
-                canTogglePlayback &&
-                playbackState.status == PlayerPlaybackStatus.paused &&
-                playbackState.hasFirstFrame &&
-                !playbackState.isBuffering;
-            return Stack(
-              children: [
-                PlayerChrome(
-                  content: item.content,
-                  videoController: canRenderVideo
-                      ? playbackState.videoController
-                      : null,
-                  showVideo: showVideo,
-                  showLoading: showLoading,
-                  playbackError: showPlaybackError,
-                  position: playbackState.position,
-                  duration: playbackState.duration,
-                  bufferedPosition: playbackState.bufferedPosition,
-                  seekPreviewPosition: playbackState.seekPreviewPosition,
-                  isSeeking: playbackState.isSeeking,
-                  showTrackLoading: showLoading && !playbackState.isSeeking,
-                  canSeek:
-                      playbackState.isSeekAllowed &&
-                      !showLoading &&
-                      !showPlaybackError &&
-                      !item.episode.isUnavailable &&
-                      !item.episode.isLocked,
-                  onSeekStart: () {
-                    setState(() {
-                      _isSeekDragging = true;
-                    });
-                    playbackController.beginSeek();
-                  },
-                  onSeekUpdate: playbackController.updateSeekPreview,
-                  onSeekEnd: () {
-                    setState(() {
-                      _isSeekDragging = false;
-                    });
-                    unawaited(playbackController.endSeek());
-                  },
-                  onSeekCancel: () {
-                    setState(() {
-                      _isSeekDragging = false;
-                    });
-                    playbackController.cancelSeek();
-                  },
-                  onRetry: () {
-                    unawaited(playbackController.playItem(item));
-                  },
-                  onDownloadTap: widget.feedMode == PlayerFeedMode.singleDrama
-                      ? () {}
-                      : null,
-                  isPlaying:
-                      playbackState.isPlaying &&
-                      isCurrentItem &&
-                      !item.episode.isUnavailable &&
-                      !item.episode.isLocked,
-                  showCenterPlayButton: showCenterPlayButton,
-                  onTogglePlay: canTogglePlayback
-                      ? () {
-                          unawaited(playbackController.togglePlay());
-                        }
-                      : () {},
-                  onWatchNowTap:
-                      canTogglePlayback &&
-                          playbackState.status == PlayerPlaybackStatus.paused
-                      ? () {
-                          unawaited(playbackController.togglePlay());
-                        }
-                      : () {},
-                  onEpisodesTap: () {
-                    _showDetailSheet(
-                      item.content,
-                      initialTab: PlayerDetailTab.episodes,
-                    );
-                  },
-                  onShareTap: _showShareSheet,
-                  onMoreTap: () {
-                    _showDetailSheet(
-                      item.content,
-                      initialTab: PlayerDetailTab.synopsis,
-                    );
-                  },
-                  onUnlockTap: uiController.showMemberPaywall,
-                  forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
-                ),
-                if (item.episode.isUnavailable)
-                  _UnavailableEpisodeOverlay(
-                    message: context.l10n.playerEpisodeUnavailable,
-                  ),
-              ],
-            );
-          },
+        Listener(
+          key: const ValueKey('player_page_view_surface'),
+          onPointerDown: (_) => _setPlaybackSurfacePressed(true),
+          onPointerUp: (_) => _setPlaybackSurfacePressed(false),
+          onPointerCancel: (_) => _setPlaybackSurfacePressed(false),
+          child: NotificationListener<ScrollNotification>(
+            onNotification: _handlePageScrollNotification,
+            child: PageView.builder(
+              controller: _pageController,
+              physics: _isSeekDragging
+                  ? const NeverScrollableScrollPhysics()
+                  : const PageScrollPhysics(),
+              scrollDirection: Axis.vertical,
+              itemCount: feedState.items.length,
+              onPageChanged: feedController.setCurrentIndex,
+              itemBuilder: (context, index) {
+                final item = feedState.items[index];
+                final isCurrentItem = index == feedState.currentIndex;
+                final canRenderVideo =
+                    isCurrentItem &&
+                    !item.episode.isUnavailable &&
+                    !item.episode.isLocked &&
+                    playbackState.currentItemId == item.id &&
+                    playbackState.currentSource != null;
+                final showVideo =
+                    canRenderVideo &&
+                    playbackState.hasFirstFrame &&
+                    !playbackState.isError;
+                final showLoading = canRenderVideo && playbackState.isLoading;
+                final showPlaybackError =
+                    isCurrentItem && playbackState.isError;
+                final canTogglePlayback =
+                    canRenderVideo &&
+                    (playbackState.status == PlayerPlaybackStatus.playing ||
+                        playbackState.status == PlayerPlaybackStatus.paused);
+                final showCenterPlayButton =
+                    canTogglePlayback &&
+                    playbackState.status == PlayerPlaybackStatus.paused &&
+                    playbackState.hasFirstFrame &&
+                    !playbackState.isBuffering;
+                return Stack(
+                  children: [
+                    PlayerChrome(
+                      content: item.content,
+                      overlayOpacity: _overlayOpacity,
+                      videoController: canRenderVideo
+                          ? playbackState.videoController
+                          : null,
+                      showVideo: showVideo,
+                      showLoading: showLoading,
+                      playbackError: showPlaybackError,
+                      position: playbackState.position,
+                      duration: playbackState.duration,
+                      bufferedPosition: playbackState.bufferedPosition,
+                      seekPreviewPosition: playbackState.seekPreviewPosition,
+                      isSeeking: playbackState.isSeeking,
+                      showTrackLoading: showLoading && !playbackState.isSeeking,
+                      canSeek:
+                          playbackState.isSeekAllowed &&
+                          !showLoading &&
+                          !showPlaybackError &&
+                          !item.episode.isUnavailable &&
+                          !item.episode.isLocked,
+                      onSeekStart: () {
+                        setState(() {
+                          _isSeekDragging = true;
+                        });
+                        playbackController.beginSeek();
+                      },
+                      onSeekUpdate: playbackController.updateSeekPreview,
+                      onSeekEnd: () {
+                        setState(() {
+                          _isSeekDragging = false;
+                        });
+                        unawaited(playbackController.endSeek());
+                      },
+                      onSeekCancel: () {
+                        setState(() {
+                          _isSeekDragging = false;
+                        });
+                        playbackController.cancelSeek();
+                      },
+                      onRetry: () {
+                        unawaited(playbackController.playItem(item));
+                      },
+                      onDownloadTap:
+                          widget.feedMode == PlayerFeedMode.singleDrama
+                          ? () {}
+                          : null,
+                      isPlaying:
+                          playbackState.isPlaying &&
+                          isCurrentItem &&
+                          !item.episode.isUnavailable &&
+                          !item.episode.isLocked,
+                      showCenterPlayButton: showCenterPlayButton,
+                      onTogglePlay: canTogglePlayback
+                          ? () {
+                              unawaited(playbackController.togglePlay());
+                            }
+                          : () {},
+                      onWatchNowTap:
+                          canTogglePlayback &&
+                              playbackState.status ==
+                                  PlayerPlaybackStatus.paused
+                          ? () {
+                              unawaited(playbackController.togglePlay());
+                            }
+                          : () {},
+                      onEpisodesTap: () {
+                        _showDetailSheet(
+                          item.content,
+                          initialTab: PlayerDetailTab.episodes,
+                        );
+                      },
+                      onShareTap: _showShareSheet,
+                      onMoreTap: () {
+                        _showDetailSheet(
+                          item.content,
+                          initialTab: PlayerDetailTab.synopsis,
+                        );
+                      },
+                      onUnlockTap: uiController.showMemberPaywall,
+                      forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
+                    ),
+                    if (item.episode.isUnavailable)
+                      _UnavailableEpisodeOverlay(
+                        message: context.l10n.playerEpisodeUnavailable,
+                      ),
+                    if (widget.feedMode == PlayerFeedMode.singleDrama)
+                      _PlayerTopBar(
+                        episodeNumber: item.episode.number,
+                        playbackRate: playbackState.playbackRate,
+                        overlayOpacity: _overlayOpacity,
+                        onBackTap: _goBackFromPlayer,
+                        onSpeedTap: _showSpeedSheet,
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
         ),
         if (uiState.showsPaywall)
           PlayerPaywallOverlay(
@@ -399,15 +423,43 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             onTap: _showUnlockSheet,
             onDismiss: uiController.hidePaywall,
           ),
-        if (widget.feedMode == PlayerFeedMode.singleDrama)
-          _PlayerTopBar(
-            episodeNumber: feedState.currentItem?.episode.number ?? 1,
-            playbackRate: playbackState.playbackRate,
-            onBackTap: _goBackFromPlayer,
-            onSpeedTap: _showSpeedSheet,
-          ),
       ],
     );
+  }
+
+  double get _overlayOpacity => _isPressingPlaybackSurface || _isPageScrolling
+      ? _dimmedOverlayOpacity
+      : 1.0;
+
+  bool _handlePageScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification ||
+        notification is ScrollUpdateNotification) {
+      _setPageScrolling(true);
+      return false;
+    }
+
+    if (notification is ScrollEndNotification) {
+      _setPageScrolling(false);
+    }
+    return false;
+  }
+
+  void _setPlaybackSurfacePressed(bool isPressed) {
+    if (_isPressingPlaybackSurface == isPressed || !mounted) {
+      return;
+    }
+    setState(() {
+      _isPressingPlaybackSurface = isPressed;
+    });
+  }
+
+  void _setPageScrolling(bool isScrolling) {
+    if (_isPageScrolling == isScrolling || !mounted) {
+      return;
+    }
+    setState(() {
+      _isPageScrolling = isScrolling;
+    });
   }
 
   void _exitForYouFeed() {
@@ -585,85 +637,93 @@ class _PlayerTopBar extends StatelessWidget {
   const _PlayerTopBar({
     required this.episodeNumber,
     required this.playbackRate,
+    required this.overlayOpacity,
     required this.onBackTap,
     required this.onSpeedTap,
   });
 
   final int episodeNumber;
   final double playbackRate;
+  final double overlayOpacity;
   final VoidCallback onBackTap;
   final VoidCallback onSpeedTap;
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          _PlayerPageState._topBarHorizontal,
-          _PlayerPageState._topBarTop,
-          _PlayerPageState._topBarHorizontal,
-          0,
-        ),
-        child: SizedBox(
-          key: const ValueKey('player_single_top_bar'),
-          height: _PlayerPageState._topBarHeight,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              GestureDetector(
-                key: const ValueKey('player_back_button'),
-                behavior: HitTestBehavior.opaque,
-                onTap: onBackTap,
-                child: const SizedBox.square(
-                  dimension: _PlayerPageState._topBarHeight,
-                  child: Center(
-                    child: Icon(
-                      Icons.chevron_left,
-                      color: Colors.white,
-                      size: _PlayerPageState._topBarBackIconSize,
+    return AnimatedOpacity(
+      key: const ValueKey('player_top_bar_opacity'),
+      opacity: overlayOpacity,
+      duration: const Duration(milliseconds: 140),
+      curve: Curves.easeOut,
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            _PlayerPageState._topBarHorizontal,
+            _PlayerPageState._topBarTop,
+            _PlayerPageState._topBarHorizontal,
+            0,
+          ),
+          child: SizedBox(
+            key: const ValueKey('player_single_top_bar'),
+            height: _PlayerPageState._topBarHeight,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                GestureDetector(
+                  key: const ValueKey('player_back_button'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onBackTap,
+                  child: const SizedBox.square(
+                    dimension: _PlayerPageState._topBarHeight,
+                    child: Center(
+                      child: Icon(
+                        Icons.chevron_left,
+                        color: Colors.white,
+                        size: _PlayerPageState._topBarBackIconSize,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                key: const ValueKey('player_episode_label'),
-                'EP.${episodeNumber.toString().padLeft(2, '0')}',
-                style: const TextStyle(
+                const SizedBox(width: 4),
+                Text(
+                  key: const ValueKey('player_episode_label'),
+                  'EP.${episodeNumber.toString().padLeft(2, '0')}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    height: 18 / 14,
+                  ),
+                ),
+                const Spacer(),
+                GestureDetector(
+                  key: const ValueKey('player_speed_button'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onSpeedTap,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 6,
+                    ),
+                    child: Text(
+                      _formatRate(context, playbackRate),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        height: 18 / 14,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                const Icon(
+                  key: ValueKey('player_more_button'),
+                  Icons.more_horiz,
                   color: Colors.white,
-                  fontSize: 14,
-                  height: 18 / 14,
+                  size: _PlayerPageState._topBarMoreIconSize,
                 ),
-              ),
-              const Spacer(),
-              GestureDetector(
-                key: const ValueKey('player_speed_button'),
-                behavior: HitTestBehavior.opaque,
-                onTap: onSpeedTap,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 6,
-                  ),
-                  child: Text(
-                    _formatRate(context, playbackRate),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      height: 18 / 14,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              const Icon(
-                key: ValueKey('player_more_button'),
-                Icons.more_horiz,
-                color: Colors.white,
-                size: _PlayerPageState._topBarMoreIconSize,
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -273,6 +273,13 @@ void main() {
     expect(find.byKey(const ValueKey('player_episode_label')), findsOneWidget);
     expect(find.byKey(const ValueKey('player_speed_button')), findsOneWidget);
     expect(find.byKey(const ValueKey('player_more_button')), findsOneWidget);
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey('player_single_top_bar')),
+        matching: find.byType(PageView),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey('player_back_button')));
     await tester.pumpAndSettle();
@@ -292,6 +299,53 @@ void main() {
 
     expect(find.byKey(const ValueKey('player_single_top_bar')), findsNothing);
     expect(find.byKey(const ValueKey('player_back_button')), findsNothing);
+  });
+
+  testWidgets('pressing playback surface dims non-video overlay', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(_topBarOpacity(tester), 1.0);
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('player_page_view_surface'))),
+    );
+    await tester.pump();
+
+    expect(_topBarOpacity(tester), lessThan(1.0));
+
+    await gesture.up();
+    await tester.pump();
+
+    expect(_topBarOpacity(tester), 1.0);
+  });
+
+  testWidgets('page scroll dims overlay and restores on scroll end', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('player_page_view_surface'))),
+    );
+    await gesture.moveBy(const Offset(0, -160));
+    await tester.pump();
+
+    expect(_topBarOpacity(tester), lessThan(1.0));
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(_topBarOpacity(tester), 1.0);
   });
 
   testWidgets('single drama seek bar shows progress and seeks on drag', (
@@ -477,10 +531,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 120));
 
-      expect(
-        find.byKey(const ValueKey('player_single_top_bar')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey('player_single_top_bar')), findsWidgets);
       expect(find.text('EP.01'), findsOneWidget);
 
       await tester.pumpAndSettle();
@@ -635,7 +686,7 @@ void main() {
     expect(find.text('EP.02'), findsOneWidget);
   });
 
-  testWidgets('manual swipe updates fixed top bar episode label', (
+  testWidgets('manual swipe updates per-item top bar episode label', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -653,6 +704,13 @@ void main() {
     expect(find.byKey(const ValueKey('player_single_top_bar')), findsOneWidget);
     expect(find.text('EP.02'), findsOneWidget);
   });
+}
+
+double _topBarOpacity(WidgetTester tester) {
+  final opacity = tester.widget<AnimatedOpacity>(
+    find.byKey(const ValueKey('player_top_bar_opacity')).first,
+  );
+  return opacity.opacity;
 }
 
 const _mockVideoUrl =
