@@ -784,6 +784,45 @@ Phase 5.6 limits:
 - No Wi-Fi/cellular policy.
 - No multi-variant intelligence beyond choosing the lowest declared bandwidth.
 
+### Phase 5.7: Fix Session Window Miss On Normal Open
+
+Implemented. Device logs from the Phase 5.6 release showed that slow vertical
+switches were not only a first-frame/CDN problem. The session window was also
+missing:
+
+- `preload candidates` skipped the next episode with `current_source` because
+  EP.01 and EP.02 used the same mock HLS URL.
+- `window miss fallback open` reused the current media session for normal open,
+  so the previous episode was never retained in the window.
+- Swiping back therefore repeated source resolve/open instead of producing
+  `retained hit previous`.
+
+This phase fixes the client-side window miss before adding any heavier cache:
+
+- `preloadAround()` no longer skips a different item just because it shares the
+  current HLS URL. It only skips current item, locked, unavailable, and null
+  source candidates.
+- Before a normal fallback open for a different item, the current session is
+  paused, its stream listeners are detached, its first-frame/progress snapshot
+  is retained as `PreparedPlaybackSessionKind.retained`, and a fresh current
+  session is created for the new normal open.
+- If the new normal open fails, the retained previous session stays in the
+  window so a user can swipe back and hit the previous session.
+- Only the current session is allowed to play. Retained previous sessions are
+  paused before entering the window.
+- Tests cover same-source different-item candidates, normal-open retain,
+  previous hit on swipe back, no repeat source resolve/open on retained hit,
+  retained pause/no-audio behavior, normal-open failure retaining previous, and
+  the previous/current/next window limit.
+
+Phase 5.7 limits:
+
+- No HLS segment cache.
+- No offline download.
+- No UI changes.
+- No service integration.
+- No window size expansion beyond previous/current/next.
+
 Phase 5 defer:
 
 - Real playback source API and signed URL refresh.

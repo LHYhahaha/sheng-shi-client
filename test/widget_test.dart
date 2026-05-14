@@ -10,6 +10,7 @@ import 'package:drama_client/features/my_list/data/my_list_repository_provider.d
 import 'package:drama_client/features/my_list/domain/my_list_item.dart';
 import 'package:drama_client/features/my_list/domain/my_list_repository.dart';
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
+import 'package:drama_client/features/player/application/player_playback_prepare_manager.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
@@ -1025,6 +1026,9 @@ Widget _buildAppWithFakePlayback({List<_FakePlaybackSession>? sessions}) {
       }),
       playerPlaybackPreloadManagerProvider.overrideWithValue(
         MockPlayerPlaybackPreloadManager(preloadDelay: Duration.zero),
+      ),
+      playerPlaybackPrepareManagerFactoryProvider.overrideWithValue(
+        NoopPlayerPlaybackPrepareManager.new,
       ),
     ],
     child: const DramaClientApp(),

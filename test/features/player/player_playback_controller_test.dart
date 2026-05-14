@@ -920,6 +920,118 @@ void main() {
     },
   );
 
+  test('same source different item is still prepared as candidate', () async {
+    final currentSession = _FakePlaybackSession();
+    final preparedSession = _FakePlaybackSession();
+    var index = 0;
+    final sessions = [currentSession, preparedSession];
+    PlayerPlaybackSession sessionFactory() => sessions[index++];
+    final container = _createPrepareContainer(sessionFactory);
+    addTearDown(container.dispose);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.preloadAround([
+      _item(1),
+      _item(2, videoUrl: _videoUrl),
+    ], 0);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    expect(preparedSession.openedSources, [_videoUrl]);
+    expect(
+      controller.exportTimingReport(),
+      contains('candidates=drama-a-ep-2'),
+    );
+    expect(controller.exportTimingReport(), isNot(contains('current_source')));
+  });
+
+  test(
+    'normal fallback open retains old current for previous swipe hit',
+    () async {
+      final firstSession = _FakePlaybackSession();
+      final secondSession = _FakePlaybackSession();
+      var index = 0;
+      final sessions = [firstSession, secondSession];
+      PlayerPlaybackSession sessionFactory() => sessions[index++];
+      final container = _createPrepareContainer(sessionFactory);
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      firstSession.emitDuration(const Duration(seconds: 120));
+      firstSession.emitPosition(const Duration(seconds: 37));
+      firstSession.emitBufferedPosition(const Duration(seconds: 52));
+      await Future<void>.delayed(Duration.zero);
+      await controller.playItem(_item(2));
+      await controller.playItem(_item(1));
+
+      expect(firstSession.openedSources, [_videoUrl]);
+      expect(secondSession.openedSources, [_secondVideoUrl]);
+      expect(firstSession.pauseCount, greaterThanOrEqualTo(1));
+      expect(firstSession.playCount, 1);
+      expect(secondSession.pauseCount, greaterThanOrEqualTo(1));
+      expect(container.read(provider).currentItemId, 'drama-a-ep-1');
+      expect(container.read(provider).position, const Duration(seconds: 37));
+      expect(
+        controller.exportTimingReport(),
+        contains('retain current before normal open'),
+      );
+      expect(controller.exportTimingReport(), contains('retain current done'));
+      expect(
+        controller.exportTimingReport(),
+        contains('retained hit previous'),
+      );
+      final ep1ResolveCount = controller.timingEvents
+          .where(
+            (event) =>
+                event.name == 'source resolve start' &&
+                event.itemId == 'drama-a-ep-1',
+          )
+          .length;
+      final ep1OpenCount = controller.timingEvents
+          .where(
+            (event) =>
+                event.name == 'media open start' &&
+                event.itemId == 'drama-a-ep-1',
+          )
+          .length;
+      expect(ep1ResolveCount, 1);
+      expect(ep1OpenCount, 1);
+    },
+  );
+
+  test(
+    'normal open failure keeps retained previous session reusable',
+    () async {
+      final firstSession = _FakePlaybackSession();
+      final failingSession = _FakePlaybackSession(shouldThrowOnOpen: true);
+      var index = 0;
+      final sessions = [firstSession, failingSession];
+      PlayerPlaybackSession sessionFactory() => sessions[index++];
+      final container = _createPrepareContainer(sessionFactory);
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      await controller.playItem(_item(2));
+      expect(container.read(provider).status, PlayerPlaybackStatus.error);
+
+      await controller.playItem(_item(1));
+
+      expect(firstSession.openedSources, [_videoUrl]);
+      expect(failingSession.openedSources, [_secondVideoUrl]);
+      expect(failingSession.isDisposed, isTrue);
+      expect(container.read(provider).currentItemId, 'drama-a-ep-1');
+      expect(
+        controller.exportTimingReport(),
+        contains('retained hit previous'),
+      );
+    },
+  );
+
   test(
     'previous played session is reused with progress when swiping back',
     () async {
@@ -1181,11 +1293,13 @@ void main() {
         openCompleter: stalePrepareCompleter,
       );
       final freshPreparedSession = _FakePlaybackSession();
+      final normalFallbackSession = _FakePlaybackSession();
       var index = 0;
       final sessions = [
         currentSession,
         stalePreparedSession,
         freshPreparedSession,
+        normalFallbackSession,
       ];
       PlayerPlaybackSession sessionFactory() => sessions[index++];
       final container = _createPrepareContainer(sessionFactory);
@@ -1205,7 +1319,8 @@ void main() {
       await controller.playItem(_item(2));
 
       expect(stalePreparedSession.isDisposed, isTrue);
-      expect(currentSession.openedSources, [_videoUrl, _secondVideoUrl]);
+      expect(currentSession.openedSources, [_videoUrl]);
+      expect(normalFallbackSession.openedSources, [_secondVideoUrl]);
       expect(freshPreparedSession.openedSources, [
         'https://cdn.example.test/ep4.m3u8',
       ]);

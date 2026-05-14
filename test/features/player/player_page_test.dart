@@ -5,6 +5,7 @@ import 'package:drama_client/features/player/data/player_feed_repository_provide
 import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
+import 'package:drama_client/features/player/application/player_playback_prepare_manager.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
@@ -753,6 +754,9 @@ Widget _buildPlayerApp({
       ),
       playerPlaybackPreloadManagerProvider.overrideWithValue(
         MockPlayerPlaybackPreloadManager(preloadDelay: Duration.zero),
+      ),
+      playerPlaybackPrepareManagerFactoryProvider.overrideWithValue(
+        NoopPlayerPlaybackPrepareManager.new,
       ),
     ],
     child: MaterialApp.router(

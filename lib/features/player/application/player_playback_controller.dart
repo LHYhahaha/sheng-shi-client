@@ -442,6 +442,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         source: sourceHint,
         details: _timingDetails(['window=miss', 'firstFrameReady=false']),
       );
+      await _retainCurrentBeforeNormalOpen(item.id);
+      if (!ref.mounted || !_isCurrent(generation)) {
+        return;
+      }
       _logTiming('list entry normal open', itemId: item.id, source: sourceHint);
       final resolveStartedAt = DateTime.now();
       _logTiming('source resolve start', itemId: item.id, source: sourceHint);
@@ -551,7 +555,6 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         if (item.episode.isUnavailable) 'unavailable',
         if (source == null) 'null_source',
         if (item.id == state.currentItemId) 'current_item',
-        if (source == state.currentSource) 'current_source',
       ];
       if (skipReasons.isNotEmpty) {
         skipped.add('${item.id}:${skipReasons.join('+')}');
@@ -1127,6 +1130,74 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         details: 'reason=replace no source',
       );
     }
+  }
+
+  Future<bool> _retainCurrentBeforeNormalOpen(String nextItemId) async {
+    if (_prepareManager is NoopPlayerPlaybackPrepareManager) {
+      return false;
+    }
+    final previousSession = _session;
+    final previousSource = _currentPlaybackSource;
+    final previousItemId = _currentPlaybackItemId;
+    if (previousSource == null ||
+        previousItemId == null ||
+        previousItemId == nextItemId) {
+      return false;
+    }
+
+    final previousHasFirstFrame = _currentPlaybackHasFirstFrame;
+    final previousPosition = _currentPlaybackPosition;
+    final previousDuration = _currentPlaybackDuration;
+    final previousBufferedPosition = _currentPlaybackBufferedPosition;
+    _logTiming(
+      'retain current before normal open',
+      itemId: previousItemId,
+      source: previousSource.playableSource,
+      details: _timingDetails([
+        'previousItemId=$previousItemId',
+        'previousSource=${previousSource.playableSource}',
+        'firstFrameReady=$previousHasFirstFrame',
+        'positionMs=${previousPosition.inMilliseconds}',
+        'durationMs=${previousDuration.inMilliseconds}',
+        'bufferedMs=${previousBufferedPosition.inMilliseconds}',
+        'windowItems=${_windowItemsText()}',
+      ]),
+    );
+    await previousSession.pause();
+    await _cancelSessionStreams();
+    await _prepareManager.retainPaused(
+      PreparedPlaybackSession(
+        itemId: previousItemId,
+        source: previousSource,
+        session: previousSession,
+        kind: PreparedPlaybackSessionKind.retained,
+        hasFirstFrame: previousHasFirstFrame,
+        position: previousPosition,
+        duration: previousDuration,
+        bufferedPosition: previousBufferedPosition,
+      ),
+    );
+    _logTiming(
+      'retain current done',
+      itemId: previousItemId,
+      source: previousSource.playableSource,
+      details: _timingDetails([
+        'retainedItemId=$previousItemId',
+        'windowItems=${_windowItemsText()}',
+      ]),
+    );
+
+    _session = ref.read(playerPlaybackSessionFactoryProvider).call();
+    _currentPlaybackItemId = null;
+    _currentPlaybackSource = null;
+    _clearCurrentPlaybackSnapshot();
+    _attachSessionStreams(_session);
+    state = state.copyWith(videoController: _session.videoController);
+    _logTiming(
+      'create current session',
+      details: 'reason=normal fallback open',
+    );
+    return true;
   }
 
   Future<void> _prepareNextItem(
