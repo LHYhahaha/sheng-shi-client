@@ -39,6 +39,8 @@ class PlayerFeedState {
     return items[currentIndex];
   }
 
+  bool get canGoNext => currentIndex + 1 < items.length;
+
   PlayerFeedState copyWith({
     PlayerFeedConfig? config,
     List<PlayerFeedItem>? items,
@@ -127,6 +129,14 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
     }
 
     state = state.copyWith(currentIndex: index);
+  }
+
+  void goNext() {
+    if (!state.canGoNext) {
+      return;
+    }
+
+    state = state.copyWith(currentIndex: state.currentIndex + 1);
   }
 
   int selectEpisode(PlayerEpisode episode) {

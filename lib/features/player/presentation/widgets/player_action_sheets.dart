@@ -173,6 +173,100 @@ class _PlayerUnlockSheetState extends State<PlayerUnlockSheet> {
   }
 }
 
+class PlayerSpeedSheet extends StatelessWidget {
+  const PlayerSpeedSheet({
+    required this.selectedRate,
+    required this.onRateSelected,
+    super.key,
+  });
+
+  static const rates = [2.0, 1.5, 1.2, 1.0, 0.8];
+
+  final double selectedRate;
+  final ValueChanged<double> onRateSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CompactPlayerSheet(
+      height: 288,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                context.l10n.playerSpeed,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  height: 20 / 16,
+                ),
+              ),
+              const Spacer(),
+              _CloseButton(onTap: () => Navigator.of(context).pop()),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final rate in rates)
+            _SpeedOption(
+              rate: rate,
+              selected: (selectedRate - rate).abs() < 0.01,
+              onTap: () {
+                onRateSelected(rate);
+                Navigator.of(context).pop();
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpeedOption extends StatelessWidget {
+  const _SpeedOption({
+    required this.rate,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final double rate;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
+        height: 40,
+        child: Row(
+          children: [
+            Text(
+              '${rate.toStringAsFixed(1)}x',
+              style: TextStyle(
+                color: selected ? AppColors.primary : Colors.white,
+                fontSize: 15,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                height: 20 / 15,
+              ),
+            ),
+            const Spacer(),
+            if (selected)
+              const Icon(
+                Icons.check_rounded,
+                key: ValueKey('player_speed_selected_check'),
+                color: AppColors.primary,
+                size: 22,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class PlayerPaywallOverlay extends StatelessWidget {
   const PlayerPaywallOverlay({
     required this.label,

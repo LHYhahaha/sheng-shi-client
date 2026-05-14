@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -15,7 +17,7 @@ abstract final class _PlayerLayoutMetrics {
   static const singleBottomActionBottom = 41.0;
 }
 
-class PlayerChrome extends StatelessWidget {
+class PlayerChrome extends StatefulWidget {
   const PlayerChrome({
     required this.content,
     required this.episodeNumber,
@@ -27,6 +29,7 @@ class PlayerChrome extends StatelessWidget {
     required this.onShareTap,
     required this.onMoreTap,
     required this.onUnlockTap,
+    required this.playbackRate,
     this.showVideo = true,
     this.showLoading = false,
     this.playbackError = false,
@@ -41,6 +44,8 @@ class PlayerChrome extends StatelessWidget {
     this.onSeekEnd,
     this.onSeekCancel,
     this.onRetry,
+    this.onSpeedTap,
+    this.onNextTap,
     this.videoController,
     this.onBackTap,
     this.forYouLayout = false,
@@ -57,6 +62,7 @@ class PlayerChrome extends StatelessWidget {
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
   final VoidCallback onUnlockTap;
+  final double playbackRate;
   final bool showVideo;
   final bool showLoading;
   final bool playbackError;
@@ -71,9 +77,50 @@ class PlayerChrome extends StatelessWidget {
   final VoidCallback? onSeekEnd;
   final VoidCallback? onSeekCancel;
   final VoidCallback? onRetry;
+  final VoidCallback? onSpeedTap;
+  final VoidCallback? onNextTap;
   final VideoController? videoController;
   final VoidCallback? onBackTap;
   final bool forYouLayout;
+
+  @override
+  State<PlayerChrome> createState() => _PlayerChromeState();
+}
+
+class _PlayerChromeState extends State<PlayerChrome> {
+  bool _showPauseFeedback = false;
+  Timer? _feedbackTimer;
+
+  PlayerContent get content => widget.content;
+  int get episodeNumber => widget.episodeNumber;
+  bool get isPlaying => widget.isPlaying;
+  bool get showCenterPlayButton => widget.showCenterPlayButton;
+  VoidCallback get onTogglePlay => widget.onTogglePlay;
+  VoidCallback get onWatchNowTap => widget.onWatchNowTap;
+  VoidCallback get onEpisodesTap => widget.onEpisodesTap;
+  VoidCallback get onShareTap => widget.onShareTap;
+  VoidCallback get onMoreTap => widget.onMoreTap;
+  VoidCallback get onUnlockTap => widget.onUnlockTap;
+  double get playbackRate => widget.playbackRate;
+  bool get showVideo => widget.showVideo;
+  bool get showLoading => widget.showLoading;
+  bool get playbackError => widget.playbackError;
+  Duration get position => widget.position;
+  Duration get duration => widget.duration;
+  Duration get bufferedPosition => widget.bufferedPosition;
+  Duration? get seekPreviewPosition => widget.seekPreviewPosition;
+  bool get isSeeking => widget.isSeeking;
+  bool get canSeek => widget.canSeek;
+  VoidCallback? get onSeekStart => widget.onSeekStart;
+  ValueChanged<Duration>? get onSeekUpdate => widget.onSeekUpdate;
+  VoidCallback? get onSeekEnd => widget.onSeekEnd;
+  VoidCallback? get onSeekCancel => widget.onSeekCancel;
+  VoidCallback? get onRetry => widget.onRetry;
+  VoidCallback? get onSpeedTap => widget.onSpeedTap;
+  VoidCallback? get onNextTap => widget.onNextTap;
+  VideoController? get videoController => widget.videoController;
+  VoidCallback? get onBackTap => widget.onBackTap;
+  bool get forYouLayout => widget.forYouLayout;
 
   @override
   Widget build(BuildContext context) {
@@ -156,7 +203,7 @@ class PlayerChrome extends StatelessWidget {
             child: GestureDetector(
               key: const ValueKey('player_video_tap_layer'),
               behavior: HitTestBehavior.translucent,
-              onTap: onTogglePlay,
+              onTap: _handleVideoTap,
             ),
           ),
         if (!forYouLayout) ...[
@@ -197,12 +244,23 @@ class PlayerChrome extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  Text(
-                    context.l10n.playerSpeed,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      height: 18 / 14,
+                  GestureDetector(
+                    key: const ValueKey('player_speed_button'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onSpeedTap,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 6,
+                      ),
+                      child: Text(
+                        _formatRate(playbackRate),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          height: 18 / 14,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -213,6 +271,7 @@ class PlayerChrome extends StatelessWidget {
           ),
         ],
         if (showCenterPlayButton) _CenterPlayButton(onTap: onTogglePlay),
+        if (_showPauseFeedback) const _PauseFeedbackIcon(),
         Positioned(
           right: 17,
           bottom:
@@ -292,28 +351,61 @@ class PlayerChrome extends StatelessWidget {
           Positioned(
             right: 31,
             bottom: bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.file_download_outlined,
-                  color: Colors.white,
-                  size: 22,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  context.l10n.playerDownload,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    height: 14 / 12,
+            child: onNextTap == null
+                ? const SizedBox.shrink()
+                : GestureDetector(
+                    key: const ValueKey('player_next_button'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onNextTap,
+                    child: Row(
+                      children: [
+                        Text(
+                          context.l10n.playerNext,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            height: 14 / 12,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.skip_next_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
           ),
         ],
       ],
     );
+  }
+
+  void _handleVideoTap() {
+    if (isPlaying) {
+      _feedbackTimer?.cancel();
+      setState(() => _showPauseFeedback = true);
+      _feedbackTimer = Timer(const Duration(milliseconds: 420), () {
+        if (mounted) {
+          setState(() => _showPauseFeedback = false);
+        }
+      });
+    }
+    onTogglePlay();
+  }
+
+  @override
+  void dispose() {
+    _feedbackTimer?.cancel();
+    super.dispose();
+  }
+
+  String _formatRate(double rate) {
+    if ((rate - 1.0).abs() < 0.01) {
+      return context.l10n.playerSpeed;
+    }
+    return '${rate.toStringAsFixed(1)}x';
   }
 }
 
@@ -401,6 +493,40 @@ class _CenterPlayButton extends StatelessWidget {
             Icons.play_arrow_rounded,
             color: Colors.white,
             size: 46,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PauseFeedbackIcon extends StatelessWidget {
+  const _PauseFeedbackIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Center(
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.92, end: 1),
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          builder: (context, scale, child) {
+            return Transform.scale(scale: scale, child: child);
+          },
+          child: Container(
+            key: const ValueKey('player_pause_feedback'),
+            width: 70,
+            height: 70,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.48),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.pause_rounded,
+              color: Colors.white,
+              size: 42,
+            ),
           ),
         ),
       ),

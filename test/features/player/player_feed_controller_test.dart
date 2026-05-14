@@ -54,6 +54,27 @@ void main() {
     expect(state.currentItem?.episode.number, 2);
   });
 
+  test('goNext moves to next item and stops at the end', () async {
+    final container = _createContainer();
+    final provider = playerFeedControllerProvider('single');
+    final controller = container.read(provider.notifier);
+
+    await controller.load(
+      const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: '1'),
+    );
+
+    expect(container.read(provider).canGoNext, isTrue);
+    controller.goNext();
+    expect(container.read(provider).currentIndex, 1);
+
+    controller.goNext();
+    expect(container.read(provider).currentIndex, 2);
+    expect(container.read(provider).canGoNext, isFalse);
+
+    controller.goNext();
+    expect(container.read(provider).currentIndex, 2);
+  });
+
   test('keeps for you and single drama feed sessions isolated', () async {
     final container = _createContainer();
     final forYouProvider = playerFeedControllerProvider('for-you-tab');

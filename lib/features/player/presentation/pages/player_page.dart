@@ -48,6 +48,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   late final PlayerPlaybackController _playbackController;
   AppShellBottomNavigationVisible? _shellChrome;
   bool _isSeekDragging = false;
+  bool _isModalOpen = false;
+  String? _handledEndedItemId;
 
   String _createSessionKey() {
     return switch (widget.feedMode) {
@@ -173,6 +175,24 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       );
     });
 
+    ref.listen(playbackProvider, (previous, next) {
+      if (!next.hasEnded ||
+          previous?.hasEnded == true ||
+          next.currentItemId == null ||
+          _handledEndedItemId == next.currentItemId ||
+          _isSeekDragging ||
+          _isModalOpen ||
+          uiState.showsPaywall ||
+          feedState.currentItem?.id != next.currentItemId) {
+        return;
+      }
+
+      _handledEndedItemId = next.currentItemId;
+      if (feedState.canGoNext) {
+        feedController.goNext();
+      }
+    });
+
     return Scaffold(
       backgroundColor: Colors.black,
       extendBody: true,
@@ -282,6 +302,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   showVideo: showVideo,
                   showLoading: showLoading,
                   playbackError: showPlaybackError,
+                  playbackRate: playbackState.playbackRate,
                   position: playbackState.position,
                   duration: playbackState.duration,
                   bufferedPosition: playbackState.bufferedPosition,
@@ -315,6 +336,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   onRetry: () {
                     unawaited(playbackController.playItem(item));
                   },
+                  onSpeedTap: _showSpeedSheet,
+                  onNextTap:
+                      widget.feedMode == PlayerFeedMode.singleDrama &&
+                          feedState.canGoNext
+                      ? feedController.goNext
+                      : null,
                   isPlaying:
                       playbackState.isPlaying &&
                       isCurrentItem &&
@@ -413,6 +440,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     PlayerContent content, {
     required PlayerDetailTab initialTab,
   }) {
+    _isModalOpen = true;
     return showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -437,10 +465,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           },
         );
       },
-    );
+    ).whenComplete(() => _isModalOpen = false);
   }
 
   Future<void> _showShareSheet() {
+    _isModalOpen = true;
     return showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -448,10 +477,37 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       isDismissible: true,
       enableDrag: true,
       builder: (context) => const PlayerShareSheet(),
+    ).whenComplete(() => _isModalOpen = false);
+  }
+
+  Future<void> _showSpeedSheet() async {
+    _isModalOpen = true;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.7),
+      isDismissible: true,
+      enableDrag: true,
+      builder: (context) {
+        return PlayerSpeedSheet(
+          selectedRate: ref
+              .read(playerPlaybackControllerProvider(_sessionKey))
+              .playbackRate,
+          onRateSelected: (rate) {
+            unawaited(
+              ref
+                  .read(playerPlaybackControllerProvider(_sessionKey).notifier)
+                  .setPlaybackRate(rate),
+            );
+          },
+        );
+      },
     );
+    _isModalOpen = false;
   }
 
   Future<void> _showUnlockSheet() async {
+    _isModalOpen = true;
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -460,6 +516,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       enableDrag: true,
       builder: (context) => const PlayerUnlockSheet(),
     );
+    _isModalOpen = false;
 
     if (!mounted) {
       return;

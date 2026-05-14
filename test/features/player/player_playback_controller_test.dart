@@ -127,6 +127,63 @@ void main() {
     expect(container.read(provider).status, PlayerPlaybackStatus.playing);
   });
 
+  test('completed stream marks ended and replay clears ended', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    session.emitCompleted(true);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(container.read(provider).hasEnded, isTrue);
+    expect(container.read(provider).status, PlayerPlaybackStatus.paused);
+
+    await controller.togglePlay();
+
+    expect(session.seekedPositions, [Duration.zero]);
+    expect(session.playCount, 1);
+    expect(container.read(provider).hasEnded, isFalse);
+    expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+  });
+
+  test('playItem and seek clear ended state', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    session.emitCompleted(true);
+    await Future<void>.delayed(Duration.zero);
+    expect(container.read(provider).hasEnded, isTrue);
+
+    await controller.playItem(_item(2));
+    expect(container.read(provider).hasEnded, isFalse);
+
+    session.emitDuration(const Duration(seconds: 100));
+    session.emitCompleted(true);
+    await Future<void>.delayed(Duration.zero);
+    controller.beginSeek();
+    controller.updateSeekPreview(const Duration(seconds: 20));
+    await controller.endSeek();
+
+    expect(container.read(provider).hasEnded, isFalse);
+  });
+
+  test('setPlaybackRate updates state and media session', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.setPlaybackRate(1.5);
+
+    expect(session.rates, [1.5]);
+    expect(container.read(provider).playbackRate, 1.5);
+  });
+
   test(
     'updates progress state from media streams with throttled position',
     () async {
@@ -417,6 +474,40 @@ void main() {
   });
 
   test(
+    'keeps for you and single drama rate and ended state isolated',
+    () async {
+      final forYouSession = _FakePlaybackSession();
+      final singleSession = _FakePlaybackSession();
+      var index = 0;
+      final sessions = [forYouSession, singleSession];
+      final container = ProviderContainer(
+        overrides: [
+          playerPlaybackSessionFactoryProvider.overrideWithValue(
+            () => sessions[index++],
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final forYouProvider = playerPlaybackControllerProvider('for-you-tab');
+      final singleProvider = playerPlaybackControllerProvider(
+        'single:drama-a:1',
+      );
+
+      await container.read(forYouProvider.notifier).playItem(_item(1));
+      await container.read(singleProvider.notifier).playItem(_item(2));
+      await container.read(forYouProvider.notifier).setPlaybackRate(1.5);
+      forYouSession.emitCompleted(true);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(forYouProvider).playbackRate, 1.5);
+      expect(container.read(forYouProvider).hasEnded, isTrue);
+      expect(container.read(singleProvider).playbackRate, 1.0);
+      expect(container.read(singleProvider).hasEnded, isFalse);
+    },
+  );
+
+  test(
     'preload keeps at most two sessions and skips locked unavailable items',
     () async {
       final sessions = <_FakePlaybackSession>[];
@@ -513,13 +604,16 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   bool shouldThrowOnOpen;
   final _bufferingController = StreamController<bool>.broadcast();
   final _playingController = StreamController<bool>.broadcast();
+  final _completedController = StreamController<bool>.broadcast();
   final _positionController = StreamController<Duration>.broadcast();
   final _durationController = StreamController<Duration>.broadcast();
   final _bufferedPositionController = StreamController<Duration>.broadcast();
+  final _rateController = StreamController<double>.broadcast();
   final _widthController = StreamController<int?>.broadcast();
   final _errorController = StreamController<String>.broadcast();
   final openedSources = <String>[];
   final seekedPositions = <Duration>[];
+  final rates = <double>[];
   int pauseCount = 0;
   int playCount = 0;
   bool isDisposed = false;
@@ -534,6 +628,9 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   Stream<bool> get playingStream => _playingController.stream;
 
   @override
+  Stream<bool> get completedStream => _completedController.stream;
+
+  @override
   Stream<Duration> get positionStream => _positionController.stream;
 
   @override
@@ -542,6 +639,9 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   @override
   Stream<Duration> get bufferedPositionStream =>
       _bufferedPositionController.stream;
+
+  @override
+  Stream<double> get rateStream => _rateController.stream;
 
   @override
   Stream<int?> get widthStream => _widthController.stream;
@@ -558,8 +658,13 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
       throw StateError('open failed');
     }
     _widthController.add(1280);
+    _completedController.add(false);
     _playingController.add(play);
     _bufferingController.add(false);
+  }
+
+  void emitCompleted(bool completed) {
+    _completedController.add(completed);
   }
 
   void emitPosition(Duration position) {
@@ -589,6 +694,13 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   @override
   Future<void> seek(Duration position) async {
     seekedPositions.add(position);
+    _completedController.add(false);
+  }
+
+  @override
+  Future<void> setRate(double rate) async {
+    rates.add(rate);
+    _rateController.add(rate);
   }
 
   @override
@@ -599,9 +711,11 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     isDisposed = true;
     await _bufferingController.close();
     await _playingController.close();
+    await _completedController.close();
     await _positionController.close();
     await _durationController.close();
     await _bufferedPositionController.close();
+    await _rateController.close();
     await _widthController.close();
     await _errorController.close();
   }

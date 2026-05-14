@@ -463,6 +463,34 @@ void main() {
     });
   }
 
+  testWidgets('for you completed while hidden does not auto advance', (
+    tester,
+  ) async {
+    final sessions = <_FakePlaybackSession>[];
+    await tester.pumpWidget(_buildAppWithFakePlayback(sessions: sessions));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('For you'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('My Secret Deal With The Playboy'), findsOneWidget);
+    final forYouSession = sessions.first;
+
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    forYouSession.emitCompleted(true);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('For you'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('My Secret Deal With The Playboy'), findsOneWidget);
+    expect(find.text('Found You, Heart Thief'), findsNothing);
+    expect(forYouSession.pauseCount, greaterThan(0));
+  });
+
   testWidgets('pauses player playback on app lifecycle inactive and paused', (
     tester,
   ) async {
@@ -1001,12 +1029,15 @@ Widget _buildAppWithFakePlayback({List<_FakePlaybackSession>? sessions}) {
 class _FakePlaybackSession implements PlayerPlaybackSession {
   final _bufferingController = StreamController<bool>.broadcast();
   final _playingController = StreamController<bool>.broadcast();
+  final _completedController = StreamController<bool>.broadcast();
   final _positionController = StreamController<Duration>.broadcast();
   final _durationController = StreamController<Duration>.broadcast();
   final _bufferedPositionController = StreamController<Duration>.broadcast();
+  final _rateController = StreamController<double>.broadcast();
   final _widthController = StreamController<int?>.broadcast();
   final _errorController = StreamController<String>.broadcast();
   final seekedPositions = <Duration>[];
+  final rates = <double>[];
   int pauseCount = 0;
   int playCount = 0;
   bool isDisposed = false;
@@ -1021,6 +1052,9 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   Stream<bool> get playingStream => _playingController.stream;
 
   @override
+  Stream<bool> get completedStream => _completedController.stream;
+
+  @override
   Stream<Duration> get positionStream => _positionController.stream;
 
   @override
@@ -1031,6 +1065,9 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
       _bufferedPositionController.stream;
 
   @override
+  Stream<double> get rateStream => _rateController.stream;
+
+  @override
   Stream<int?> get widthStream => _widthController.stream;
 
   @override
@@ -1039,9 +1076,14 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   @override
   Future<void> open(String source, {bool play = true}) async {
     _bufferingController.add(false);
+    _completedController.add(false);
     _playingController.add(play);
     _durationController.add(const Duration(seconds: 100));
     _widthController.add(1280);
+  }
+
+  void emitCompleted(bool completed) {
+    _completedController.add(completed);
   }
 
   @override
@@ -1059,6 +1101,13 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   @override
   Future<void> seek(Duration position) async {
     seekedPositions.add(position);
+    _completedController.add(false);
+  }
+
+  @override
+  Future<void> setRate(double rate) async {
+    rates.add(rate);
+    _rateController.add(rate);
   }
 
   @override
@@ -1069,9 +1118,11 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     isDisposed = true;
     await _bufferingController.close();
     await _playingController.close();
+    await _completedController.close();
     await _positionController.close();
     await _durationController.close();
     await _bufferedPositionController.close();
+    await _rateController.close();
     await _widthController.close();
     await _errorController.close();
   }

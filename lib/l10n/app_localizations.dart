@@ -141,6 +141,7 @@ class AppLocalizations {
   String get playerShare => _text(en: 'Share', zh: '分享');
   String get playerMore => _text(en: 'More', zh: '更多');
   String get playerDownload => _text(en: 'Download', zh: '下载');
+  String get playerNext => _text(en: 'Next', zh: '下一集');
   String get playerWatchNow => _text(en: 'Watch Now', zh: '立即观看');
   String get playerSpeed => _text(en: 'Speed', zh: '倍速');
   String get playerSynopsis => _text(en: 'Synopsis', zh: '简介');

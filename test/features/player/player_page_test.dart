@@ -155,6 +155,82 @@ void main() {
     );
   });
 
+  testWidgets('playing tap shows transient pause feedback', (tester) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('player_video_tap_layer')));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('player_pause_feedback')), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byKey(const ValueKey('player_pause_feedback')), findsNothing);
+  });
+
+  testWidgets('speed sheet selects playback rate', (tester) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('player_speed_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Speed'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('player_speed_selected_check')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('1.5x'));
+    await tester.pumpAndSettle();
+
+    expect(playbackSession.rates, [1.5]);
+    expect(find.text('1.5x'), findsOneWidget);
+  });
+
+  testWidgets('single drama Next moves to the next episode', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Next'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('player_next_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('EP.02'), findsOneWidget);
+  });
+
+  testWidgets('last episode hides Next', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository._(items: [_items().last]),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('EP.03'), findsOneWidget);
+    expect(find.text('Next'), findsNothing);
+  });
+
   testWidgets('single drama seek bar shows progress and seeks on drag', (
     tester,
   ) async {
@@ -282,6 +358,70 @@ void main() {
 
     expect(find.text('Unlock Now'), findsOneWidget);
     expect(find.text('EP.02'), findsOneWidget);
+  });
+
+  testWidgets('completed playback auto advances to next episode', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    playbackSession.emitCompleted(true);
+    await tester.pumpAndSettle();
+
+    expect(find.text('EP.02'), findsOneWidget);
+  });
+
+  testWidgets('completed playback to locked episode shows paywall', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.normal(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    playbackSession.emitCompleted(true);
+    await tester.pumpAndSettle();
+
+    expect(find.text('EP.02'), findsOneWidget);
+    expect(find.text('Unlock Now'), findsOneWidget);
+  });
+
+  testWidgets('completed playback is ignored while a sheet is open', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Share').first);
+    await tester.pumpAndSettle();
+    playbackSession.emitCompleted(true);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Facebook'), findsOneWidget);
+    expect(find.text('EP.01'), findsOneWidget);
   });
 
   testWidgets('back closes paywall before leaving player', (tester) async {
@@ -509,12 +649,15 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   bool shouldThrowOnOpen;
   final _bufferingController = StreamController<bool>.broadcast();
   final _playingController = StreamController<bool>.broadcast();
+  final _completedController = StreamController<bool>.broadcast();
   final _positionController = StreamController<Duration>.broadcast();
   final _durationController = StreamController<Duration>.broadcast();
   final _bufferedPositionController = StreamController<Duration>.broadcast();
+  final _rateController = StreamController<double>.broadcast();
   final _widthController = StreamController<int?>.broadcast();
   final _errorController = StreamController<String>.broadcast();
   final seekedPositions = <Duration>[];
+  final rates = <double>[];
   int pauseCount = 0;
   int playCount = 0;
 
@@ -528,6 +671,9 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   Stream<bool> get playingStream => _playingController.stream;
 
   @override
+  Stream<bool> get completedStream => _completedController.stream;
+
+  @override
   Stream<Duration> get positionStream => _positionController.stream;
 
   @override
@@ -536,6 +682,9 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   @override
   Stream<Duration> get bufferedPositionStream =>
       _bufferedPositionController.stream;
+
+  @override
+  Stream<double> get rateStream => _rateController.stream;
 
   @override
   Stream<int?> get widthStream => _widthController.stream;
@@ -567,8 +716,13 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
       throw StateError('open failed');
     }
     _widthController.add(1280);
+    _completedController.add(false);
     _playingController.add(play);
     _bufferingController.add(false);
+  }
+
+  void emitCompleted(bool completed) {
+    _completedController.add(completed);
   }
 
   @override
@@ -586,15 +740,24 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   @override
   Future<void> seek(Duration position) async {
     seekedPositions.add(position);
+    _completedController.add(false);
+  }
+
+  @override
+  Future<void> setRate(double rate) async {
+    rates.add(rate);
+    _rateController.add(rate);
   }
 
   @override
   Future<void> dispose() async {
     await _bufferingController.close();
     await _playingController.close();
+    await _completedController.close();
     await _positionController.close();
     await _durationController.close();
     await _bufferedPositionController.close();
+    await _rateController.close();
     await _widthController.close();
     await _errorController.close();
   }

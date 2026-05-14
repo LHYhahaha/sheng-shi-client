@@ -15,6 +15,9 @@ preload strategy, and future HTTP/CDN cache boundaries.
   real progress, and seek are still pending.
 - The Figma player design includes a drag-to-seek state with a stronger progress
   bar and time bubble.
+- Reference short-drama players also include lightweight tap feedback, playback
+  speed selection, a next-episode entry, and automatic next episode after
+  completion.
 - Future video source, access, cache policy, signed URL refresh, and playback
   progress all require server APIs. For now, these must be represented by
   repository/service boundaries with mock implementations.
@@ -28,6 +31,11 @@ preload strategy, and future HTTP/CDN cache boundaries.
 - Support tap video to play/pause in both For You and single drama player.
 - Support real position, duration, buffered progress, and seek.
 - Support drag seek with a time bubble matching the Figma interaction.
+- Support completed playback handling and automatic next episode.
+- Support manual next episode in single drama playback.
+- Support playback speed selection through a lightweight sheet.
+- Keep tap feedback lightweight instead of building a full long-video control
+  overlay.
 - Preload the next playable item lightly.
 - Prepare clear boundaries for HLS, CDN cache, HTTP Range, signed URLs, and
   cache policy.
@@ -128,6 +136,8 @@ Fields:
 - `duration`
 - `bufferedPosition`
 - `seekPreviewPosition`
+- `hasEnded`
+- `playbackRate`
 - `error`
 - `preloadedItemIds`
 
@@ -148,6 +158,47 @@ Fields:
 - Controls auto-hide after 2-3 seconds while playing.
 - Controls stay visible while paused.
 - Opening sheets or paywall overlays must not dispose playback.
+
+### Lightweight Tap Feedback
+
+- When the user taps while the video is playing, show a short pause feedback
+  icon for about 350-500ms.
+- When the player is paused, keep the central play button visible.
+- Loading, error, locked, unavailable, and paywall states must not show normal
+  tap feedback.
+- This feedback is transient UI and should not become playback source of truth.
+
+### Playback Speed
+
+- The top `Speed` entry should open a dark bottom sheet.
+- Options: `2.0x`, `1.5x`, `1.2x`, `1.0x`, `0.8x`.
+- The selected option shows a pink check.
+- Playback rate belongs to the playback session, so For You and single drama
+  sessions remain isolated by default.
+- Rate persistence is out of scope for MVP.
+
+### Next Episode
+
+- Single drama playback should expose a lightweight `Next` entry.
+- `Next` moves to the next feed item and lets the feed/playback pipeline start
+  that item.
+- If there is no next item, the entry should be hidden or disabled.
+- For You should not gain the single-drama `Next` entry.
+
+### Playback Completion
+
+- Completion must use the media player's completed event, not
+  `position >= duration`.
+- `media_kit` exposes `player.stream.completed`; use that through
+  `PlayerPlaybackSession.completedStream`.
+- When the current item completes and the player is visible, the page may
+  automatically move to the next item.
+- Completion handling must guard against stale items, hidden pages, seeking,
+  sheets/paywall, and disposed sessions.
+- If the next item is locked, move to it and show the paywall.
+- If the next item is unavailable, move to it and show the unavailable state.
+- If the current item is the last item, stay on the current item and show a
+  replay/play state. Do not loop automatically.
 
 ## Progress And Seek
 
@@ -257,6 +308,21 @@ Client strategy:
 - Show Figma-style time bubble while dragging.
 - Disable vertical page swiping while dragging the progress bar.
 - Save progress to mock progress repository.
+
+### Phase 3.5: Completion, Speed, And Lightweight Playback Polish
+
+- Add `completedStream`, `rateStream`, and `setRate` to
+  `PlayerPlaybackSession`.
+- Track `hasEnded` and `playbackRate` in `PlayerPlaybackController`.
+- Add `setPlaybackRate(double rate)`.
+- Add replay behavior for ended current source.
+- Add `canGoNext` and `goNext()` to `PlayerFeedController`.
+- Add single drama `Next` entry.
+- Auto advance to the next item on completed playback when safe.
+- Add speed selection sheet.
+- Add short pause/play tap feedback without building a full control overlay.
+- Do not add progress persistence, CDN/cache, or full For You controls in this
+  phase.
 
 ### Phase 4: VideoSource And Cache Policy
 
