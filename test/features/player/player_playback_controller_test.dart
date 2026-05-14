@@ -885,6 +885,7 @@ void main() {
     expect(currentSession.openedSources, [_videoUrl]);
     expect(preparedSession.openedSources, [_secondVideoUrl]);
     expect(preparedSession.openPlayFlags, [false]);
+    expect(preparedSession.pauseCount, 1);
     expect(preparedSession.playCount, 0);
     expect(container.read(provider).status, PlayerPlaybackStatus.playing);
   });
@@ -911,6 +912,7 @@ void main() {
       expect(currentSession.openedSources, [_videoUrl]);
       expect(preparedSession.openedSources, [_secondVideoUrl]);
       expect(preparedSession.openPlayFlags, [false]);
+      expect(preparedSession.pauseCount, 1);
       expect(preparedSession.playCount, 1);
       expect(container.read(provider).currentItemId, 'drama-a-ep-2');
       expect(container.read(provider).currentSource, _secondVideoUrl);

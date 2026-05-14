@@ -60,6 +60,7 @@ class PlayerPlaybackPrepareManager {
         }
       });
       await session.open(source.playableSource, play: false);
+      await session.pause();
       await widthSubscription.cancel();
       if (generation != _generation) {
         await session.dispose();
