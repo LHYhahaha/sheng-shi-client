@@ -11,6 +11,12 @@ preload strategy, and future HTTP/CDN cache boundaries.
 - App inactive, paused, or detached states must pause playback.
 - Switching videos can show a black screen while the next source is loading.
 - Larger video files can delay the first frame.
+- Entering playback from a list can still feel slow when the first source is not
+  prepared.
+- Vertical swipe switching must reuse prepared sessions when possible instead of
+  reopening every source.
+- Swiping away from an unfinished video and then swiping back should reuse the
+  retained previous session whenever it is still inside the playback window.
 - Playback controls now cover tap video to play/pause, real progress, seek,
   speed selection, and completion handling. Remaining polish is focused on
   alignment, visible transitions, and seek thumbnail preview.
@@ -21,9 +27,10 @@ preload strategy, and future HTTP/CDN cache boundaries.
   transition when moving to the next episode.
 - The single drama bottom-right action should stay as a `Download` placeholder,
   not a visible `Next` button.
-- The single drama player back button still needs final Figma alignment.
+- The single drama player top controls should move with each PageView item while
+  swiping, not stay pinned outside the page transition.
 - Reference short-drama players show a thumbnail preview while dragging the
-  progress bar. The current seek UI only shows the time bubble.
+  progress bar. The MVP uses the current poster/background as the preview image.
 - Future video source, access, cache policy, signed URL refresh, and playback
   progress all require server APIs. For now, these must be represented by
   repository/service boundaries with mock implementations.
@@ -46,6 +53,8 @@ preload strategy, and future HTTP/CDN cache boundaries.
 - Keep tap feedback lightweight instead of building a full long-video control
   overlay.
 - Preload the next playable item lightly.
+- Keep a tiny playback session window for smoother vertical switching:
+  previous paused, current playing, and next prepared.
 - Prepare clear boundaries for HLS, CDN cache, HTTP Range, signed URLs, and
   cache policy.
 - Keep mock data out of widgets and pages.
@@ -135,6 +144,27 @@ MVP implementation:
 - Keeps the playable source as the remote HLS/m3u8 URL.
 - Keeps preload source-only: it must not create a media player session and must
   not produce audio.
+
+### Playback Session Window
+
+Responsibilities:
+
+- Keep only the nearby sessions needed for feed-style vertical playback.
+- Retain the previous playable item as a paused session for quick swipe-back.
+- Keep the current item as the only session allowed to play.
+- Prepare the next playable item as a paused session for faster downward swipes.
+- Release sessions outside the previous/current/next window.
+- Release all retained/prepared sessions when the player becomes hidden,
+  leaves the page, or the provider is disposed.
+
+MVP constraints:
+
+- At most three playback sessions should exist for one player context.
+- Previous and next sessions must be explicitly paused and must not produce
+  audio.
+- Locked, unavailable, and null-source items never enter the window.
+- A window miss must fall back to the normal HLS open path without affecting the
+  current playback state.
 
 ## Playback State
 
@@ -271,8 +301,9 @@ Drag end:
 MVP preload:
 
 - Preload `currentIndex + 1`.
-- Optionally keep `currentIndex - 1`.
-- Keep at most 2 preload sessions.
+- Keep `currentIndex - 1` as a retained paused session when it was recently
+  played.
+- Keep at most previous/current/next playback sessions.
 - Skip locked and unavailable episodes.
 - Release stale preload sessions after fast swipes.
 - Release preload sessions when leaving the player.
@@ -625,6 +656,41 @@ Phase 5.4 limits:
 - No multi-session pool beyond the small previous/current/next window.
 - No user-facing timing export UI yet; export is a controller API for debugging
   and QA builds.
+
+### Phase 5.5: Device Timing Review And Window Tuning
+
+Current next client-side focus. This phase uses real device behavior to tune the
+session window before adding heavier HLS segment preheat or cache strategies.
+
+- Build and install a release APK on the Android test device.
+- Compare timing for these paths:
+  - list card -> single drama first frame
+  - manual swipe down -> next item
+  - manual swipe up -> previous retained item
+  - auto advance -> next item
+  - window miss -> normal HLS open fallback
+- Confirm previous/current/next reuse avoids reopening sources when the item is
+  still inside the window.
+- Confirm previous and next retained sessions are paused and silent.
+- Confirm hidden tab, page exit, app background, provider dispose, and fast
+  swipe release stale sessions.
+- If timing shows window misses, fix the session takeover/release boundary
+  before considering segment preheat.
+- If timing shows prepared sessions exist but first frame is still late, review
+  whether firstFrameReady is tracked early enough and whether the UI should keep
+  poster/loading until the prepared session can render.
+- Keep the scope client-only. Do not add backend API integration, local HLS
+  segment cache, or offline download in this phase.
+
+Expected tests or manual checks:
+
+- Swipe down to a prepared next item does not repeat a normal `open()` when the
+  prepared session is still valid.
+- Swipe back to the previous item reuses the retained session and keeps the
+  old position.
+- More than three sessions are not retained for a single player context.
+- Locked, unavailable, and null-source items do not enter the session window.
+- For You and single drama windows remain isolated.
 
 Phase 5 defer:
 

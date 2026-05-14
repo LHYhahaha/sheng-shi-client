@@ -19,8 +19,9 @@ Home -> For you playback -> Episode/Unlock/Share sheets -> Recharge/Membership -
   Profile, Login/Account, Store/Recharge, Membership, Wallet, and record pages.
 - Player playback has moved beyond MVP into HLS/m3u8 experience polishing:
   tap play/pause, progress/seek, speed, completion auto advance, lifecycle
-  pause, loading polish, mock progress restore, and HLS preload state are in
-  place.
+  pause, loading polish, mock progress restore, HLS preload state, playlist
+  prefetch, next prepared playback, and a small previous/current/next playback
+  session window are in place.
 - MP4 whole-file cache/offline-cache compatibility is deprecated for the current
   product direction. Playback now targets remote HLS/m3u8 sources.
 - Android release builds have been installed on the connected test device for
@@ -33,11 +34,12 @@ new page work.
 
 | Priority | Task | Estimate | Notes |
 |---|---:|---:|---|
-| P0 | Review current HLS preload state machine | 0.5 day | Confirm pending/success/failed/cancelled, cancellation, and session isolation. |
-| P1 | HLS playlist prefetch MVP | 1-1.5 days | Real HTTP GET for m3u8 playlist with timeout/cancel; no segment preheat yet. |
-| P1 | Android device playback verification | 0.5-1 day | Check first-frame time, vertical swipes, auto advance, tab pause, retry. |
-| P1 | Playback source API contract | 1 day | Define future server fields for m3u8 URL, expiry, access, duration, poster, progress. |
-| P2 | Mock-to-real API preparation | 2-3 days | Start after playback source contract is stable. |
+| P0 | Playback session window verification | 0.5-1 day | Verify previous/current/next reuse, swipe-back without reload, max session count, and no background audio. |
+| P0 | First-frame timing review | 0.5 day | Use timing diagnostics to compare list entry, next swipe hit, previous swipe hit, and fallback miss paths. |
+| P1 | Session window tuning | 1-1.5 days | Fix any window miss, stale-session takeover, firstFrameReady, or release timing issue found on device. |
+| P1 | Android device playback verification | 0.5-1 day | Check first-frame time, vertical swipes, swipe-back, auto advance, tab pause, retry. |
+| P1 | Playback source API contract | 1 day | Define future server fields for m3u8 URL, expiry, access, duration, poster, progress, preview sprite, and preload policy. |
+| P2 | Mock-to-real API preparation | 2-3 days | Start after playback source contract and session window behavior are stable. |
 | P2 | IAP/payment integration | 3-5 days | Keep separate from player playback work. |
 | P2 | QA/release readiness | 3-5 days | Run continuously, not only at the end. |
 
@@ -46,6 +48,8 @@ Near-term rule:
 - Do not add new Figma-missing pages.
 - Do not reintroduce MP4 whole-file cache.
 - Do not implement offline download in the playback-preload path.
+- Do not expand HLS segment cache before session-window hit/miss timing is
+  understood on device.
 - Do not start full backend integration before the playback source contract is
   reviewed.
 
@@ -57,7 +61,7 @@ Near-term rule:
 | M1: 基础产品架构 + 底部导航 | 2-3 天 | 建立产品主结构、四大 Tab、全局视觉规范和公共组件。 |
 | M2: 首页 + 短剧数据 | 3-4 天 | 完成首页分类、剧集卡片、mock 数据和进入播放链路。 |
 | M3: 播放器 MVP | Done | `media_kit` 播放、播放器主 UI、弹窗、生命周期、滑动 feed、进度/seek 已完成。 |
-| M3.5: HLS 播放体验专项 | 2-3 天 | 完成 HLS playlist prefetch、真机验证、播放源接口契约，为流畅滑动播放打基础。 |
+| M3.5: HLS 播放体验专项 | 3-4 天 | 完成 HLS playlist prefetch、previous/current/next session window、真机验证、播放源接口契约，为流畅滑动播放打基础。 |
 | M4: My list + Profile | 3-4 天 | 完成收藏/播放列表、用户页、会员/金币入口。 |
 | M5: 钱包/充值/会员/支付 UI | Done | 商业化相关页面和 mock 购买/权益流已完成。 |
 | M6: 内购集成 | 3-4 天 | 接入 `in_app_purchase` 状态机、商品查询、恢复购买和验单占位。 |
