@@ -115,6 +115,51 @@ The HLS/CDN layer owns source and cache-policy concepts:
 Current implementation remains remote HLS playback plus lightweight preload.
 Local HLS cache/proxy is a later decision, not an implicit dependency.
 
+### Configurable Playback Policy
+
+Playback smoothness settings should be configurable through a typed policy
+object instead of scattered constants. The important distinction is cost:
+
+- HLS playlist/first-segment preload is relatively light and may be tuned by
+  scenario.
+- Prepared media sessions are expensive because they hold player instances,
+  decoder resources, memory, and audio-lifecycle risk.
+- Home startup preload is a separate scope and should not inherit active-player
+  feed settings by accident.
+
+Future implementation should introduce a `PlayerPreloadConfig` or equivalent
+typed policy with documented fields such as:
+
+- `homeStartupPreloadCount`: default `1`; controls Home first-screen startup
+  candidates only.
+- `singleDramaForwardHlsPreloadCount`: default `1`; controls HLS preload after
+  the current episode.
+- `singleDramaBackwardHlsPreloadCount`: default `0` or current behavior; controls
+  HLS preload behind the current episode when needed.
+- `forYouForwardHlsPreloadCount`: default `1`; may be tuned higher for feed
+  scrolling after device timing proves benefit.
+- `forYouBackwardHlsPreloadCount`: default `0` or `1`; should stay conservative
+  because feed users mostly scroll forward.
+- `maxConcurrentHlsPreloads`: default `1`; keep sequential until logs prove
+  parallel preloads help more than they compete with current playback.
+- `maxPreloadBytes`: keep bounded and source-policy aware.
+- `preloadTimeout`: keep short enough that stale preloads do not occupy network
+  work.
+- `preparedForwardSessionCount`: default and maximum `1` for now.
+- `retainedBackwardSessionCount`: default and maximum `1` for now.
+
+Code comments are required on this config because these values are operational
+tuning knobs, not styling constants. Comments should explain:
+
+- whether a field controls HLS HTTP preload or media-session preparation;
+- the default value and why it is conservative;
+- whether the value is safe to change remotely later;
+- what user experience or resource risk changes when the value increases.
+
+Until a real remote config or backend policy exists, the provider should return
+local defaults. Remote configuration can be added later behind the same typed
+interface.
+
 ### Metrics And Timing
 
 Timing must remain available in release builds through
@@ -346,6 +391,20 @@ Define a backend/CDN contract for:
 - If cache helps materially, implement with explicit quota, LRU, expiry, and
   cancellation rules.
 
+### Phase 5.18: Configurable Preload Policy
+
+- Add a typed `PlayerPreloadConfig` and provider with local defaults.
+- Use the config for lightweight HLS preload candidate selection in Home,
+  For You, and single-drama playback.
+- Keep prepared media-session window capped at previous/current/next even if HLS
+  preload counts are increased.
+- Keep max concurrency conservative until device timing proves parallel preload
+  helps.
+- Add code comments to every config field that explain cost, default, and tuning
+  risk.
+- Do not connect remote config in this phase; only preserve the boundary for a
+  future server-delivered policy.
+
 ## 6. Explicit Prohibitions
 
 - Do not create a player or `VideoController` in Home.
@@ -353,6 +412,8 @@ Define a backend/CDN contract for:
   generation, or `releasePending()` state.
 - Do not expand the session window beyond previous/current/next to hide root
   cause.
+- Do not increase prepared media-session counts just because HLS preload counts
+  become configurable.
 - Do not use offline download as a fix for online playback smoothness.
 - Do not put playback truth into UI widgets or presentation-only controllers.
 - Do not let locked, unavailable, or null-source items open, preload, or prepare

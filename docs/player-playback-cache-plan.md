@@ -1296,6 +1296,63 @@ Deferred:
 - Signed URL refresh and real backend source API.
 - Network-aware startup preload policy.
 
+### Phase 5.18 Backlog: Configurable Preload Policy
+
+The next preload tuning pass should make lightweight HLS preload counts
+configurable without expanding the heavy media-session window.
+
+Why:
+
+- Different surfaces have different preload needs. Home startup, For You feed,
+  and single-drama episode playback should not all share one hardcoded count.
+- HLS playlist/first-segment preload is cheaper than prepared media sessions and
+  can be tuned more safely.
+- Prepared media sessions are expensive and carry audio/memory risk, so they
+  should remain capped at previous/current/next until device evidence proves a
+  different policy is required.
+
+Planned config boundary:
+
+- Add a typed `PlayerPreloadConfig` and provider with local defaults.
+- Suggested fields:
+  - `homeStartupPreloadCount`, default `1`.
+  - `singleDramaForwardHlsPreloadCount`, default `1`.
+  - `singleDramaBackwardHlsPreloadCount`, default current behavior.
+  - `forYouForwardHlsPreloadCount`, default `1`, tunable to `2` after timing
+    review.
+  - `forYouBackwardHlsPreloadCount`, default conservative.
+  - `maxConcurrentHlsPreloads`, default `1`.
+  - `maxPreloadBytes`, default aligned with current HLS preheater.
+  - `preloadTimeout`, default aligned with current HLS preheater.
+  - `preparedForwardSessionCount`, default and capped at `1` for now.
+  - `retainedBackwardSessionCount`, default and capped at `1` for now.
+- Use this config only for candidate selection and HLS preload scheduling in the
+  first implementation.
+- Do not use it to increase prepared media-session counts in the same phase.
+- Keep the config local for now; preserve the provider boundary so a future
+  server or remote-config policy can supply it later.
+
+Code comment requirements:
+
+- Every config field should have a short doc comment explaining whether it
+  affects HLS HTTP preload or media-session preparation.
+- Comments must include the default intent and resource risk.
+- Comments should say whether the value is safe to tune remotely later.
+- Avoid comments on obvious implementation lines; document the policy knobs
+  where future developers will tune them.
+
+Testing requirements:
+
+- `forwardHlsPreloadCount=2` preloads the next two playable candidates.
+- backward preload count handles previous playable candidates without affecting
+  current playback.
+- locked, unavailable, and null-source items are skipped and do not consume an
+  effective preload slot.
+- increasing HLS preload counts does not increase the prepared media-session
+  window.
+- For You and single-drama configs can diverge without sharing state.
+- startup preload remains scoped and does not cancel playback preload.
+
 ### Player Visual Fit Backlog: Video Crop And Aspect Ratio
 
 Observed during device playback review. Some videos may not appear fully inside
