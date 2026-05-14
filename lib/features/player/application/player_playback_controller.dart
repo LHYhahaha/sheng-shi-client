@@ -580,7 +580,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           itemId: item.id,
           source: item.episode.videoSource,
           elapsed: DateTime.now().difference(preloadStartedAt),
-          details: result.status.name,
+          details: result.details == null
+              ? result.status.name
+              : '${result.status.name} | ${result.details}',
         );
         if (!ref.mounted ||
             _isSessionDisposed ||

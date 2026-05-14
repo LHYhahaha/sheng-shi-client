@@ -33,13 +33,40 @@ void main() {
   });
 
   test(
-    'master playlist is treated as a successful lightweight prefetch',
+    'master playlist resolves lowest variant and preheats first segments',
     () async {
       final client = _FakeHlsPlaylistHttpClient(
-        response: const HlsPlaylistHttpResponse(
-          statusCode: 200,
-          body: '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000\nlow/index.m3u8\n',
-        ),
+        responses: const {
+          'https://cdn.example.test/master.m3u8': HlsPlaylistHttpResponse(
+            statusCode: 200,
+            body:
+                '#EXTM3U\n'
+                '#EXT-X-STREAM-INF:BANDWIDTH=2000000\n'
+                'high/index.m3u8\n'
+                '#EXT-X-STREAM-INF:BANDWIDTH=800000\n'
+                'low/index.m3u8\n',
+          ),
+          'https://cdn.example.test/low/index.m3u8': HlsPlaylistHttpResponse(
+            statusCode: 200,
+            body:
+                '#EXTM3U\n'
+                '#EXT-X-TARGETDURATION:4\n'
+                '#EXTINF:4,\n'
+                'seg1.ts\n'
+                '#EXTINF:4,\n'
+                '../seg2.ts\n'
+                '#EXTINF:4,\n'
+                'seg3.ts\n',
+          ),
+          'https://cdn.example.test/low/seg1.ts': HlsPlaylistHttpResponse(
+            statusCode: 200,
+            body: 'aaaa',
+          ),
+          'https://cdn.example.test/seg2.ts': HlsPlaylistHttpResponse(
+            statusCode: 200,
+            body: 'bbbb',
+          ),
+        },
       );
       final preloader = HlsPlaylistPreloader(client: client);
 
@@ -48,9 +75,95 @@ void main() {
       );
 
       expect(result.isMasterPlaylist, isTrue);
+      expect(
+        result.mediaPlaylistUrl,
+        'https://cdn.example.test/low/index.m3u8',
+      );
+      expect(result.segmentUrls, [
+        'https://cdn.example.test/low/seg1.ts',
+        'https://cdn.example.test/seg2.ts',
+      ]);
+      expect(result.segmentBytesPreheated, 8);
       expect(result.contentLength, greaterThan(0));
+      expect(client.requestedUris.map((uri) => uri.toString()), [
+        'https://cdn.example.test/master.m3u8',
+        'https://cdn.example.test/low/index.m3u8',
+        'https://cdn.example.test/low/seg1.ts',
+        'https://cdn.example.test/seg2.ts',
+      ]);
     },
   );
+
+  test('media playlist directly preheats relative segments', () async {
+    final client = _FakeHlsPlaylistHttpClient(
+      responses: const {
+        'https://cdn.example.test/drama/ep1/index.m3u8':
+            HlsPlaylistHttpResponse(
+              statusCode: 200,
+              body:
+                  '#EXTM3U\n'
+                  '#EXTINF:4,\n'
+                  'segments/first.ts\n'
+                  '#EXTINF:4,\n'
+                  '/shared/second.ts\n',
+            ),
+        'https://cdn.example.test/drama/ep1/segments/first.ts':
+            HlsPlaylistHttpResponse(statusCode: 200, body: 'first'),
+        'https://cdn.example.test/shared/second.ts': HlsPlaylistHttpResponse(
+          statusCode: 200,
+          body: 'second',
+        ),
+      },
+    );
+    final preloader = HlsPlaylistPreloader(client: client);
+
+    final result = await preloader.prefetch(
+      'https://cdn.example.test/drama/ep1/index.m3u8',
+    );
+
+    expect(result.isMasterPlaylist, isFalse);
+    expect(result.segmentUrls, [
+      'https://cdn.example.test/drama/ep1/segments/first.ts',
+      'https://cdn.example.test/shared/second.ts',
+    ]);
+    expect(result.segmentBytesPreheated, 11);
+  });
+
+  test('max bytes stops additional segment preheat', () async {
+    final client = _FakeHlsPlaylistHttpClient(
+      responses: const {
+        'https://cdn.example.test/drama/ep1.m3u8': HlsPlaylistHttpResponse(
+          statusCode: 200,
+          body:
+              '#EXTM3U\n'
+              '#EXTINF:4,\n'
+              'first.ts\n'
+              '#EXTINF:4,\n'
+              'second.ts\n',
+        ),
+        'https://cdn.example.test/drama/first.ts': HlsPlaylistHttpResponse(
+          statusCode: 200,
+          body: '123456',
+        ),
+        'https://cdn.example.test/drama/second.ts': HlsPlaylistHttpResponse(
+          statusCode: 200,
+          body: '12',
+        ),
+      },
+    );
+    final preloader = HlsPlaylistPreloader(client: client, maxPreheatBytes: 4);
+
+    final result = await preloader.prefetch(
+      'https://cdn.example.test/drama/ep1.m3u8',
+    );
+
+    expect(result.segmentUrls, ['https://cdn.example.test/drama/first.ts']);
+    expect(result.segmentBytesPreheated, 6);
+    expect(
+      client.requestedUris.map((uri) => uri.toString()),
+      isNot(contains('https://cdn.example.test/drama/second.ts')),
+    );
+  });
 
   test('HTTP non-2xx returns preload failed', () async {
     final manager = HlsPlayerPlaybackPreloadManager(
@@ -90,6 +203,33 @@ void main() {
     expect(result.error, isA<TimeoutException>());
   });
 
+  test('segment GET failure returns preload failed', () async {
+    final manager = HlsPlayerPlaybackPreloadManager(
+      preloader: HlsPlaylistPreloader(
+        client: _FakeHlsPlaylistHttpClient(
+          responses: const {
+            'https://cdn.example.test/drama/ep1.m3u8': HlsPlaylistHttpResponse(
+              statusCode: 200,
+              body: '#EXTM3U\n#EXTINF:4,\nfirst.ts\n',
+            ),
+            'https://cdn.example.test/drama/first.ts': HlsPlaylistHttpResponse(
+              statusCode: 503,
+              body: 'bad edge',
+            ),
+          },
+        ),
+      ),
+    );
+
+    final result = await manager.preload(
+      item: _item(1),
+      source: _source('https://cdn.example.test/drama/ep1.m3u8'),
+    );
+
+    expect(result.status, PlaybackPreloadStatus.failed);
+    expect(result.error, isA<HlsPlaylistPrefetchException>());
+  });
+
   test('malformed URL returns preload failed without GET', () async {
     final client = _FakeHlsPlaylistHttpClient(
       response: const HlsPlaylistHttpResponse(statusCode: 200, body: '#EXTM3U'),
@@ -123,7 +263,44 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       await manager.releasePending();
       client.complete(
+        null,
         const HlsPlaylistHttpResponse(statusCode: 200, body: '#EXTM3U'),
+      );
+
+      final result = await preloadFuture;
+
+      expect(result.status, PlaybackPreloadStatus.cancelled);
+      expect(client.releasePendingCount, 1);
+    },
+  );
+
+  test(
+    'cancelled pending segment preheat returns cancelled without late success',
+    () async {
+      final segmentUrl = 'https://cdn.example.test/drama/first.ts';
+      final client = _FakeHlsPlaylistHttpClient(
+        pendingUrls: {segmentUrl},
+        responses: const {
+          'https://cdn.example.test/drama/ep1.m3u8': HlsPlaylistHttpResponse(
+            statusCode: 200,
+            body: '#EXTM3U\n#EXTINF:4,\nfirst.ts\n',
+          ),
+        },
+      );
+      final manager = HlsPlayerPlaybackPreloadManager(
+        preloader: HlsPlaylistPreloader(client: client),
+      );
+
+      final preloadFuture = manager.preload(
+        item: _item(1),
+        source: _source('https://cdn.example.test/drama/ep1.m3u8'),
+      );
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      await manager.releasePending();
+      client.complete(
+        segmentUrl,
+        const HlsPlaylistHttpResponse(statusCode: 200, body: 'segment'),
       );
 
       final result = await preloadFuture;
@@ -135,11 +312,20 @@ void main() {
 }
 
 class _FakeHlsPlaylistHttpClient implements HlsPlaylistHttpClient {
-  _FakeHlsPlaylistHttpClient({this.response, this.pending = false});
+  _FakeHlsPlaylistHttpClient({
+    this.response,
+    this.responses = const {},
+    this.pending = false,
+    this.pendingUrls = const {},
+  });
 
   final HlsPlaylistHttpResponse? response;
+  final Map<String, HlsPlaylistHttpResponse> responses;
   final bool pending;
-  final _completer = Completer<HlsPlaylistHttpResponse>();
+  final Set<String> pendingUrls;
+  final _globalCompleter = Completer<HlsPlaylistHttpResponse>();
+  final _pendingCompleters = <String, Completer<HlsPlaylistHttpResponse>>{};
+  final requestedUris = <Uri>[];
   var getCount = 0;
   var releasePendingCount = 0;
   Uri? lastUri;
@@ -151,10 +337,17 @@ class _FakeHlsPlaylistHttpClient implements HlsPlaylistHttpClient {
   }) async {
     getCount += 1;
     lastUri = uri;
-    if (pending) {
-      return _completer.future;
+    requestedUris.add(uri);
+    final uriText = uri.toString();
+    if (pendingUrls.contains(uriText)) {
+      return _pendingCompleters
+          .putIfAbsent(uriText, Completer<HlsPlaylistHttpResponse>.new)
+          .future;
     }
-    return response!;
+    if (pending) {
+      return _globalCompleter.future;
+    }
+    return responses[uriText] ?? response!;
   }
 
   @override
@@ -162,9 +355,16 @@ class _FakeHlsPlaylistHttpClient implements HlsPlaylistHttpClient {
     releasePendingCount += 1;
   }
 
-  void complete(HlsPlaylistHttpResponse response) {
-    if (!_completer.isCompleted) {
-      _completer.complete(response);
+  void complete(String? uri, HlsPlaylistHttpResponse response) {
+    if (uri == null) {
+      if (!_globalCompleter.isCompleted) {
+        _globalCompleter.complete(response);
+      }
+      return;
+    }
+    final completer = _pendingCompleters[uri];
+    if (completer != null && !completer.isCompleted) {
+      completer.complete(response);
     }
   }
 }

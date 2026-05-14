@@ -748,12 +748,48 @@ Device timing conclusion:
 - Remaining first-frame slowness after a successful prepared hit will likely
   require CDN/HLS cooperation or a future segment-preheat phase.
 
+### Phase 5.6: First Segment Preheat MVP
+
+Implemented. This phase keeps the existing previous/current/next session window
+and adds a narrow HLS first-segment preheat path to test whether startup
+latency is dominated by playlist/segment fetch and first-frame decode rather
+than source resolve or media open.
+
+- `HlsPlaylistPreloader` still starts from the resolved remote HLS/m3u8 URL.
+- If the playlist is a master playlist, the preloader selects the lowest
+  bandwidth variant it can read and fetches that media playlist.
+- If the playlist is already a media playlist, it parses segment lines directly.
+- Relative variant and segment URLs are resolved against the playlist URL.
+- The preloader GETs only the first one or two media segments. It does not
+  persist them to disk, rewrite playlists, or expose a local cache URL.
+- Preheated bytes are capped with `maxPreheatBytes` so this remains a bounded
+  startup experiment instead of background downloading.
+- Hidden tab, single-player disposal, provider disposal, fast-swipe generation
+  changes, and explicit preload release still cancel pending playlist/segment
+  work. Late completions return cancelled or are ignored by the controller.
+- Locked, unavailable, and null-source items remain outside resolve, preload,
+  and segment preheat.
+- Preload diagnostics now include master playlist fetch, media playlist fetch,
+  segment preheat start/end, segment bytes, and max-byte-stop markers. These
+  details flow into preload timing logs for release timing review.
+- Segment preheat failure marks only that preload item as failed. It does not
+  alter current playback state, auto-next behavior, or the session window.
+
+Phase 5.6 limits:
+
+- No local HLS segment cache.
+- No playlist rewriting or local proxy.
+- No offline download.
+- No signed URL refresh.
+- No Wi-Fi/cellular policy.
+- No multi-variant intelligence beyond choosing the lowest declared bandwidth.
+
 Phase 5 defer:
 
 - Real playback source API and signed URL refresh.
 - Real CDN header parsing and expiry reconciliation.
 - HLS playlist and segment cache.
-- Segment preheat.
+- Persistent HLS segment cache after segment preheat is proven useful.
 - Multi-session prepared player pool.
 - Offline download.
 - Wi-Fi/cellular preload policy.

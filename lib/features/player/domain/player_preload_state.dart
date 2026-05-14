@@ -8,6 +8,7 @@ class PlaybackPreloadState {
     required this.startedAt,
     this.completedAt,
     this.error,
+    this.details,
   });
 
   final String itemId;
@@ -16,12 +17,15 @@ class PlaybackPreloadState {
   final DateTime startedAt;
   final DateTime? completedAt;
   final Object? error;
+  final String? details;
 
   PlaybackPreloadState copyWith({
     PlaybackPreloadStatus? status,
     DateTime? completedAt,
     Object? error,
+    String? details,
     bool clearError = false,
+    bool clearDetails = false,
   }) {
     return PlaybackPreloadState(
       itemId: itemId,
@@ -30,6 +34,7 @@ class PlaybackPreloadState {
       startedAt: startedAt,
       completedAt: completedAt ?? this.completedAt,
       error: clearError ? null : error ?? this.error,
+      details: clearDetails ? null : details ?? this.details,
     );
   }
 }
