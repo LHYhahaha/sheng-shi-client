@@ -1,11 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/player_playback_source.dart';
+import 'hls_playlist_preloader.dart';
 import 'mock_player_playback_source_repository.dart';
+
+final hlsPlaylistPreloaderProvider = Provider<HlsPlaylistPreloader>((ref) {
+  final preloader = HlsPlaylistPreloader();
+  ref.onDispose(preloader.releasePending);
+  return preloader;
+});
 
 final playerPlaybackPreloadManagerProvider =
     Provider<PlayerPlaybackPreloadManager>((ref) {
-      return MockPlayerPlaybackPreloadManager();
+      return HlsPlayerPlaybackPreloadManager(
+        preloader: ref.watch(hlsPlaylistPreloaderProvider),
+      );
     });
 
 final playerPlaybackSourceRepositoryProvider =

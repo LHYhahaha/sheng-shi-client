@@ -502,13 +502,12 @@ Progress track loading animation:
 
 ### Phase 5.2: HLS Playlist Prefetch MVP
 
-This is the current implementation target for playback smoothness. The goal is
-to warm the next HLS playlist before the user swipes to it, while keeping the
-current playback stable.
+Implemented. This phase warms the next HLS playlist before the user swipes to
+it, while keeping the current playback stable.
 
 - Add a small `HlsPlaylistPreloader` behind `PlayerPlaybackPreloadManager`.
 - Perform a real HTTP GET for the m3u8 playlist only.
-- Use a short timeout, about 3-5 seconds.
+- Use a short timeout, defaulting to 4 seconds.
 - Support cancellation through the existing preload release path.
 - Treat prefetch failure as a preload failure only. It must not affect the
   current playing item or show the player retry UI.
@@ -523,6 +522,8 @@ current playback stable.
   prefetch as complete without segment handling. Variant selection is deferred.
 - If the playlist has relative segment URLs, parsing/resolving may be tested,
   but segment preheat remains deferred.
+- Keep tests isolated from the network by overriding the HTTP client/preload
+  manager with fakes.
 
 Expected tests:
 
