@@ -9,6 +9,7 @@ import 'package:drama_client/features/player/data/player_playback_source_reposit
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/domain/player_playback_progress.dart';
+import 'package:drama_client/features/player/domain/player_preload_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -636,6 +637,10 @@ void main() {
 
       var state = container.read(provider);
       expect(state.preloadedItemIds, ['drama-a-ep-1']);
+      expect(
+        _preloadStatusById(state)['drama-a-ep-1'],
+        PlaybackPreloadStatus.success,
+      );
       expect(preloadManager.preloadCount, 1);
       expect(preloadManager.preloadedItemIds, ['drama-a-ep-1']);
       expect(session.openedSources, isEmpty);
@@ -645,7 +650,92 @@ void main() {
       state = container.read(provider);
       expect(state.preloadedItemIds, ['drama-a-ep-5']);
       expect(state.preloadedItemIds, hasLength(1));
+      expect(
+        _preloadStatusById(state)['drama-a-ep-5'],
+        PlaybackPreloadStatus.success,
+      );
       expect(preloadManager.preloadCount, 2);
+    },
+  );
+
+  test('preload pending is not counted as preloaded until success', () async {
+    final session = _FakePlaybackSession();
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: const Duration(milliseconds: 80),
+    );
+    final container = _createContainer(session, preloadManager: preloadManager);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    final preloadFuture = controller.preloadAround([_item(1), _item(2)], 0);
+    await Future<void>.delayed(Duration.zero);
+
+    var state = container.read(provider);
+    expect(state.preloadedItemIds, isEmpty);
+    expect(
+      _preloadStatusById(state)['drama-a-ep-2'],
+      PlaybackPreloadStatus.pending,
+    );
+
+    await preloadFuture;
+
+    state = container.read(provider);
+    expect(state.preloadedItemIds, ['drama-a-ep-2']);
+    expect(
+      _preloadStatusById(state)['drama-a-ep-2'],
+      PlaybackPreloadStatus.success,
+    );
+  });
+
+  test(
+    'preload failure records failed state without touching playback',
+    () async {
+      final session = _FakePlaybackSession();
+      final preloadManager = MockPlayerPlaybackPreloadManager()
+        ..failNextPreload = true;
+      final container = _createContainer(
+        session,
+        preloadManager: preloadManager,
+      );
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      await controller.preloadAround([_item(1), _item(2)], 0);
+
+      final state = container.read(provider);
+      expect(state.status, PlayerPlaybackStatus.playing);
+      expect(state.preloadedItemIds, isEmpty);
+      expect(
+        _preloadStatusById(state)['drama-a-ep-2'],
+        PlaybackPreloadStatus.failed,
+      );
+    },
+  );
+
+  test(
+    'locked unavailable and null source items do not create preload state',
+    () async {
+      final session = _FakePlaybackSession();
+      final preloadManager = MockPlayerPlaybackPreloadManager();
+      final container = _createContainer(
+        session,
+        preloadManager: preloadManager,
+      );
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.preloadAround([
+        _item(1),
+        _item(2, isLocked: true),
+        _item(3, isAvailable: false),
+        _item(4, hasSource: false),
+      ], 0);
+
+      final state = container.read(provider);
+      expect(state.preloadedItemIds, isEmpty);
+      expect(state.preloadStates, isEmpty);
+      expect(preloadManager.preloadCount, 0);
     },
   );
 
@@ -669,6 +759,7 @@ void main() {
 
     expect(preloadManager.releasePendingCount, greaterThan(0));
     expect(container.read(provider).preloadedItemIds, isEmpty);
+    expect(container.read(provider).preloadStates, isEmpty);
     container.dispose();
   });
 
@@ -694,10 +785,49 @@ void main() {
 
       expect(preloadManager.releasePendingCount, greaterThan(0));
       expect(container.read(provider).preloadedItemIds, isEmpty);
+      expect(
+        _preloadStatusById(container.read(provider))['drama-a-ep-2'],
+        PlaybackPreloadStatus.cancelled,
+      );
       expect(session.isDisposed, isFalse);
       container.dispose();
     },
   );
+
+  test('fast preload generation switch prevents stale success write', () async {
+    final session = _FakePlaybackSession();
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: const Duration(milliseconds: 80),
+    );
+    final container = _createContainer(session, preloadManager: preloadManager);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+    final firstFuture = controller.preloadAround([_item(1), _item(2)], 0);
+
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      _preloadStatusById(container.read(provider))['drama-a-ep-2'],
+      PlaybackPreloadStatus.pending,
+    );
+
+    await controller.preloadAround([_item(3), _item(4), _item(5)], 1);
+    await firstFuture;
+
+    final state = container.read(provider);
+    expect(state.preloadedItemIds, ['drama-a-ep-5', 'drama-a-ep-3']);
+    expect(
+      _preloadStatusById(state)['drama-a-ep-2'],
+      PlaybackPreloadStatus.cancelled,
+    );
+    expect(
+      _preloadStatusById(state)['drama-a-ep-5'],
+      PlaybackPreloadStatus.success,
+    );
+    expect(
+      _preloadStatusById(state)['drama-a-ep-3'],
+      PlaybackPreloadStatus.success,
+    );
+  });
 
   test('keeps for you and single drama preload state isolated', () async {
     final forYouSession = _FakePlaybackSession();
@@ -798,6 +928,15 @@ PlayerFeedItem _item(
     content: content,
     episode: episode,
   );
+}
+
+Map<String, PlaybackPreloadStatus> _preloadStatusById(
+  PlayerPlaybackState state,
+) {
+  return {
+    for (final preloadState in state.preloadStates)
+      preloadState.itemId: preloadState.status,
+  };
 }
 
 class _FakePlaybackSession implements PlayerPlaybackSession {

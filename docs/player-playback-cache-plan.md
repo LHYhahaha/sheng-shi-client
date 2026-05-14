@@ -482,12 +482,33 @@ Progress track loading animation:
 - For You does not restore progress across sessions yet; it only keeps the
   current playback session state.
 
+### Phase 5.1: HLS Preload State Machine
+
+- Add `PlaybackPreloadStatus` with `pending`, `success`, `failed`, and
+  `cancelled`.
+- Add `PlaybackPreloadState` so controller state can distinguish active,
+  successful, failed, and cancelled preload work.
+- Keep `preloadedItemIds` as a convenience field for successful preload items
+  only.
+- Keep preload implementation mocked with a delay; do not perform real HTTP in
+  this phase.
+- `preloadAround()` remains the scheduler and generation guard. It chooses
+  candidates, writes pending state, records success or failure, and prevents late
+  completion from stale generations.
+- `pauseForVisibility()`, `disposeSession()`, fast swipes, and provider dispose
+  continue to release pending preload work.
+- Preload failures must not affect the current playback status or trigger the
+  player error UI.
+
 Phase 5 defer:
 
 - Real playback source API and signed URL refresh.
+- Real `HlsPlaylistPreloader` m3u8 GET.
 - Real CDN header parsing and expiry reconciliation.
 - HLS playlist and segment cache.
+- Segment preheat.
 - Offline download.
+- Wi-Fi/cellular preload policy.
 - Disk quota, LRU eviction, and cache size UI/debug tooling if local HLS cache is
   later introduced.
 - Server progress reporting and cross-device resume.

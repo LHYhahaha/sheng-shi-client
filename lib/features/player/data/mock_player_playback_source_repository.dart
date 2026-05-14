@@ -1,5 +1,6 @@
 import '../domain/player_feed.dart';
 import '../domain/player_playback_source.dart';
+import '../domain/player_preload_state.dart';
 
 class MockPlayerPlaybackSourceRepository
     implements PlayerPlaybackSourceRepository {
@@ -16,10 +17,9 @@ class MockPlayerPlaybackSourceRepository
   }
 
   @override
-  Future<PlaybackSource> preload(PlayerFeedItem item) async {
+  Future<PlaybackPreloadState> preload(PlayerFeedItem item) async {
     final source = await _resolve(item, status: PlaybackSourceStatus.preloaded);
-    await preloadManager.preload(item: item, source: source);
-    return source;
+    return preloadManager.preload(item: item, source: source);
   }
 
   Future<PlaybackSource> _resolve(
@@ -58,23 +58,50 @@ class MockPlayerPlaybackPreloadManager implements PlayerPlaybackPreloadManager {
   var failNextPreload = false;
   var preloadCount = 0;
   var releasePendingCount = 0;
+  var _generation = 0;
 
   @override
-  Future<void> preload({
+  Future<PlaybackPreloadState> preload({
     required PlayerFeedItem item,
     required PlaybackSource source,
   }) async {
     preloadCount += 1;
+    final generation = _generation;
+    final startedAt = DateTime.now();
     await Future<void>.delayed(preloadDelay);
+    if (generation != _generation) {
+      return PlaybackPreloadState(
+        itemId: item.id,
+        sourceUrl: source.playableSource,
+        status: PlaybackPreloadStatus.cancelled,
+        startedAt: startedAt,
+        completedAt: DateTime.now(),
+      );
+    }
     if (failNextPreload) {
       failNextPreload = false;
-      throw StateError('Mock playback source preload failed.');
+      return PlaybackPreloadState(
+        itemId: item.id,
+        sourceUrl: source.playableSource,
+        status: PlaybackPreloadStatus.failed,
+        startedAt: startedAt,
+        completedAt: DateTime.now(),
+        error: StateError('Mock playback source preload failed.'),
+      );
     }
     preloadedItemIds.add(item.id);
+    return PlaybackPreloadState(
+      itemId: item.id,
+      sourceUrl: source.playableSource,
+      status: PlaybackPreloadStatus.success,
+      startedAt: startedAt,
+      completedAt: DateTime.now(),
+    );
   }
 
   @override
   Future<void> releasePending() async {
+    _generation += 1;
     releasePendingCount += 1;
   }
 }

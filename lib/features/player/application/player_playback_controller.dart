@@ -8,6 +8,7 @@ import '../data/player_playback_source_repository_provider.dart';
 import '../domain/player_feed.dart';
 import '../domain/player_playback_progress.dart';
 import '../domain/player_playback_source.dart';
+import '../domain/player_preload_state.dart';
 import 'player_session_controller.dart';
 
 final playerPlaybackSessionFactoryProvider =
@@ -54,6 +55,7 @@ class PlayerPlaybackState {
     required this.hasFirstFrame,
     required this.isBuffering,
     required this.preloadedItemIds,
+    required this.preloadStates,
     required this.position,
     required this.duration,
     required this.bufferedPosition,
@@ -73,6 +75,7 @@ class PlayerPlaybackState {
         hasFirstFrame: false,
         isBuffering: false,
         preloadedItemIds: const [],
+        preloadStates: const [],
         position: Duration.zero,
         duration: Duration.zero,
         bufferedPosition: Duration.zero,
@@ -86,6 +89,7 @@ class PlayerPlaybackState {
   final bool hasFirstFrame;
   final bool isBuffering;
   final List<String> preloadedItemIds;
+  final List<PlaybackPreloadState> preloadStates;
   final Duration position;
   final Duration duration;
   final Duration bufferedPosition;
@@ -123,6 +127,7 @@ class PlayerPlaybackState {
     bool? hasFirstFrame,
     bool? isBuffering,
     List<String>? preloadedItemIds,
+    List<PlaybackPreloadState>? preloadStates,
     Duration? position,
     Duration? duration,
     Duration? bufferedPosition,
@@ -143,6 +148,7 @@ class PlayerPlaybackState {
       hasFirstFrame: clearSource ? false : hasFirstFrame ?? this.hasFirstFrame,
       isBuffering: clearSource ? false : isBuffering ?? this.isBuffering,
       preloadedItemIds: preloadedItemIds ?? this.preloadedItemIds,
+      preloadStates: preloadStates ?? this.preloadStates,
       position: clearSource ? Duration.zero : position ?? this.position,
       duration: clearSource ? Duration.zero : duration ?? this.duration,
       bufferedPosition: clearSource
@@ -178,6 +184,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   late final PlayerPlaybackPreloadManager _preloadManager;
   late final PlaybackProgressRepository _progressRepository;
   final _preloadedItemIds = <String>{};
+  final _preloadStates = <String, PlaybackPreloadState>{};
   int _generation = 0;
   int _preloadGeneration = 0;
   bool _pauseWhenOpenCompletes = false;
@@ -206,7 +213,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       for (final subscription in subscriptions) {
         unawaited(subscription.cancel());
       }
-      unawaited(_disposePreloads());
+      unawaited(_disposePreloads(syncState: false));
       unawaited(_disposeSessionOnly());
     });
     return PlayerPlaybackState.initial(
@@ -351,7 +358,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
     if (items.isEmpty) {
       await _disposePreloads();
-      _setPreloadedItemIds(const []);
+      _preloadStates.clear();
+      _preloadedItemIds.clear();
+      _syncPreloadState();
       return;
     }
 
@@ -372,40 +381,64 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       candidates.add(item);
     }
 
-    final preloadGeneration = _preloadGeneration;
+    final preloadGeneration = ++_preloadGeneration;
     final allowedIds = candidates
         .take(_maxPreloadedSources)
         .map((item) => item.id)
         .toSet();
 
     _preloadedItemIds.removeWhere((id) => !allowedIds.contains(id));
+    _cancelPreloadsNotIn(allowedIds);
 
-    _setPreloadedItemIds(_preloadedItemIds.toList(growable: false));
+    _syncPreloadState();
 
     for (final item in candidates.take(_maxPreloadedSources)) {
-      if (_preloadedItemIds.contains(item.id)) {
+      final currentPreload = _preloadStates[item.id];
+      if (_preloadedItemIds.contains(item.id) ||
+          currentPreload?.status == PlaybackPreloadStatus.pending) {
         continue;
       }
-      _preloadedItemIds.add(item.id);
-      _setPreloadedItemIds(_preloadedItemIds.toList(growable: false));
+      _setPreloadState(
+        PlaybackPreloadState(
+          itemId: item.id,
+          sourceUrl: item.episode.videoSource!,
+          status: PlaybackPreloadStatus.pending,
+          startedAt: DateTime.now(),
+        ),
+      );
       try {
-        await ref.read(playerPlaybackSourceRepositoryProvider).preload(item);
+        final result = await ref
+            .read(playerPlaybackSourceRepositoryProvider)
+            .preload(item);
         if (!ref.mounted ||
             _isSessionDisposed ||
             preloadGeneration != _preloadGeneration) {
-          _preloadedItemIds.remove(item.id);
-          if (ref.mounted && !_isSessionDisposed) {
-            _setPreloadedItemIds(_preloadedItemIds.toList(growable: false));
-          }
           return;
         }
-      } catch (_) {
-        _preloadedItemIds.remove(item.id);
-        if (ref.mounted &&
-            !_isSessionDisposed &&
-            preloadGeneration == _preloadGeneration) {
-          _setPreloadedItemIds(_preloadedItemIds.toList(growable: false));
+        _setPreloadState(result);
+        if (result.status == PlaybackPreloadStatus.success) {
+          _preloadedItemIds.add(item.id);
+        } else {
+          _preloadedItemIds.remove(item.id);
         }
+        _syncPreloadState();
+      } catch (error) {
+        if (!ref.mounted ||
+            _isSessionDisposed ||
+            preloadGeneration != _preloadGeneration) {
+          return;
+        }
+        _preloadedItemIds.remove(item.id);
+        _setPreloadState(
+          PlaybackPreloadState(
+            itemId: item.id,
+            sourceUrl: item.episode.videoSource!,
+            status: PlaybackPreloadStatus.failed,
+            startedAt: _preloadStates[item.id]?.startedAt ?? DateTime.now(),
+            completedAt: DateTime.now(),
+            error: error,
+          ),
+        );
       }
     }
   }
@@ -534,15 +567,15 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     state = state.copyWith(isSeeking: false, clearSeekPreview: true);
   }
 
-  Future<void> pauseForVisibility() async {
+  Future<void> pauseForVisibility({bool syncState = true}) async {
     if (_isSessionDisposed) {
       return;
     }
     _pauseWhenOpenCompletes = true;
     ++_generation;
     await _session.pause();
-    await _disposePreloads();
-    if (!ref.mounted) {
+    await _disposePreloads(syncState: syncState);
+    if (!syncState || !ref.mounted) {
       return;
     }
     if (state.currentSource == null ||
@@ -558,12 +591,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
   }
 
-  Future<void> disposeSession() async {
+  Future<void> disposeSession({bool syncState = true}) async {
     _pauseWhenOpenCompletes = true;
     ++_generation;
-    await _disposePreloads();
+    await _disposePreloads(syncState: syncState);
+    _preloadStates.clear();
+    _preloadedItemIds.clear();
     await _disposeSessionOnly();
-    if (!ref.mounted) {
+    if (!syncState || !ref.mounted) {
       return;
     }
     state = state.copyWith(
@@ -571,6 +606,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       clearSource: true,
       clearError: true,
       preloadedItemIds: const [],
+      preloadStates: const [],
     );
   }
 
@@ -754,13 +790,74 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
   }
 
-  void _setPreloadedItemIds(List<String> ids) {
-    state = state.copyWith(preloadedItemIds: List<String>.unmodifiable(ids));
+  void _setPreloadState(PlaybackPreloadState preloadState) {
+    _preloadStates[preloadState.itemId] = preloadState;
+    if (preloadState.status == PlaybackPreloadStatus.success) {
+      _preloadedItemIds.add(preloadState.itemId);
+    } else {
+      _preloadedItemIds.remove(preloadState.itemId);
+    }
+    _syncPreloadState();
   }
 
-  Future<void> _disposePreloads() async {
+  void _cancelPreloadsNotIn(Set<String> allowedIds) {
+    final now = DateTime.now();
+    for (final entry in List<MapEntry<String, PlaybackPreloadState>>.from(
+      _preloadStates.entries,
+    )) {
+      if (allowedIds.contains(entry.key) &&
+          entry.value.status != PlaybackPreloadStatus.pending) {
+        continue;
+      }
+      if (entry.value.status == PlaybackPreloadStatus.pending) {
+        _preloadStates[entry.key] = entry.value.copyWith(
+          status: PlaybackPreloadStatus.cancelled,
+          completedAt: now,
+        );
+      } else {
+        _preloadStates.remove(entry.key);
+      }
+      _preloadedItemIds.remove(entry.key);
+    }
+  }
+
+  void _cancelPendingPreloads({bool syncState = true}) {
+    final now = DateTime.now();
+    for (final entry in List<MapEntry<String, PlaybackPreloadState>>.from(
+      _preloadStates.entries,
+    )) {
+      if (entry.value.status == PlaybackPreloadStatus.pending) {
+        _preloadStates[entry.key] = entry.value.copyWith(
+          status: PlaybackPreloadStatus.cancelled,
+          completedAt: now,
+        );
+      }
+      _preloadedItemIds.remove(entry.key);
+    }
+    if (syncState) {
+      _syncPreloadState();
+    }
+  }
+
+  void _syncPreloadState() {
+    if (!ref.mounted) {
+      return;
+    }
+    final successfulIds = _preloadStates.values
+        .where((entry) => entry.status == PlaybackPreloadStatus.success)
+        .map((entry) => entry.itemId)
+        .toList(growable: false);
+    state = state.copyWith(
+      preloadedItemIds: List<String>.unmodifiable(successfulIds),
+      preloadStates: List<PlaybackPreloadState>.unmodifiable(
+        _preloadStates.values,
+      ),
+    );
+  }
+
+  Future<void> _disposePreloads({bool syncState = true}) async {
     _preloadGeneration += 1;
-    _preloadedItemIds.clear();
+    _cancelPendingPreloads(syncState: syncState);
     await _preloadManager.releasePending();
   }
 

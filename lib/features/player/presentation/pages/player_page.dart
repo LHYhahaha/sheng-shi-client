@@ -104,9 +104,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     if (widget.feedMode == PlayerFeedMode.singleDrama) {
-      unawaited(_playbackController.disposeSession());
+      unawaited(_playbackController.disposeSession(syncState: false));
     } else {
-      unawaited(_playbackController.pauseForVisibility());
+      unawaited(_playbackController.pauseForVisibility(syncState: false));
     }
     _shellChrome?.show();
     _pageController.dispose();

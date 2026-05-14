@@ -1,4 +1,5 @@
 import 'player_feed.dart';
+import 'player_preload_state.dart';
 
 enum PlaybackSourceStatus { resolved, preloaded }
 
@@ -25,11 +26,11 @@ class PlaybackSource {
 abstract interface class PlayerPlaybackSourceRepository {
   Future<PlaybackSource> resolve(PlayerFeedItem item);
 
-  Future<PlaybackSource> preload(PlayerFeedItem item);
+  Future<PlaybackPreloadState> preload(PlayerFeedItem item);
 }
 
 abstract interface class PlayerPlaybackPreloadManager {
-  Future<void> preload({
+  Future<PlaybackPreloadState> preload({
     required PlayerFeedItem item,
     required PlaybackSource source,
   });
