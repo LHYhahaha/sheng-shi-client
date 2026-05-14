@@ -114,6 +114,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
       ref.read(uiProvider.notifier).selectEpisode(next.episode);
       unawaited(ref.read(playbackProvider.notifier).playItem(next));
+      unawaited(
+        ref
+            .read(playbackProvider.notifier)
+            .preloadAround(
+              ref.read(feedProvider).items,
+              ref.read(feedProvider).currentIndex,
+            ),
+      );
     });
 
     ref.listen(feedProvider.select((state) => state.currentIndex), (
@@ -132,6 +140,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           curve: Curves.easeOutCubic,
         );
       }
+      unawaited(
+        ref
+            .read(playbackProvider.notifier)
+            .preloadAround(ref.read(feedProvider).items, next),
+      );
     });
 
     return Scaffold(
@@ -214,7 +227,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                 !item.episode.isLocked &&
                 playbackState.currentItemId == item.id &&
                 playbackState.currentSource != null;
-            final showVideo = canRenderVideo && playbackState.hasFirstFrame;
+            final showVideo = canRenderVideo && playbackState.isReady;
+            final showLoading = canRenderVideo && playbackState.isLoading;
+            final showPlaybackError = isCurrentItem && playbackState.isError;
             return Stack(
               children: [
                 PlayerChrome(
@@ -224,6 +239,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                       ? playbackState.videoController
                       : null,
                   showVideo: showVideo,
+                  showLoading: showLoading,
+                  playbackError: showPlaybackError,
+                  onRetry: () {
+                    unawaited(playbackController.playItem(item));
+                  },
                   isPlaying:
                       playbackState.isPlaying &&
                       isCurrentItem &&

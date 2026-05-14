@@ -4,6 +4,12 @@ import 'package:media_kit_video/media_kit_video.dart';
 abstract interface class PlayerPlaybackSession {
   VideoController? get videoController;
 
+  Stream<bool> get bufferingStream;
+
+  Stream<int?> get widthStream;
+
+  Stream<String> get errorStream;
+
   Future<void> open(String source, {bool play = true});
 
   Future<void> play();
@@ -21,6 +27,15 @@ class MediaKitPlayerSession implements PlayerPlaybackSession {
   final Player player;
   @override
   late final VideoController videoController;
+
+  @override
+  Stream<bool> get bufferingStream => player.stream.buffering;
+
+  @override
+  Stream<int?> get widthStream => player.stream.width;
+
+  @override
+  Stream<String> get errorStream => player.stream.error;
 
   @override
   Future<void> open(String source, {bool play = true}) {

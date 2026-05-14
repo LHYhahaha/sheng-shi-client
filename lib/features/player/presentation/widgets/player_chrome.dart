@@ -26,6 +26,9 @@ class PlayerChrome extends StatelessWidget {
     required this.onMoreTap,
     required this.onUnlockTap,
     this.showVideo = true,
+    this.showLoading = false,
+    this.playbackError = false,
+    this.onRetry,
     this.videoController,
     this.onBackTap,
     this.forYouLayout = false,
@@ -41,6 +44,9 @@ class PlayerChrome extends StatelessWidget {
   final VoidCallback onMoreTap;
   final VoidCallback onUnlockTap;
   final bool showVideo;
+  final bool showLoading;
+  final bool playbackError;
+  final VoidCallback? onRetry;
   final VideoController? videoController;
   final VoidCallback? onBackTap;
   final bool forYouLayout;
@@ -84,6 +90,8 @@ class PlayerChrome extends StatelessWidget {
                       ),
                     ),
                   ),
+                if (showLoading) const _PlaybackLoadingOverlay(),
+                if (playbackError) _PlaybackRetryOverlay(onRetry: onRetry),
               ],
             ),
           ),
@@ -277,6 +285,67 @@ class PlayerChrome extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _PlaybackLoadingOverlay extends StatelessWidget {
+  const _PlaybackLoadingOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.36),
+          shape: BoxShape.circle,
+        ),
+        padding: const EdgeInsets.all(10),
+        child: const CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlaybackRetryOverlay extends StatelessWidget {
+  const _PlaybackRetryOverlay({required this.onRetry});
+
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 38),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.56),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              context.l10n.playerFeedLoadFailed,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                height: 18 / 13,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton(onPressed: onRetry, child: Text(context.l10n.retry)),
+          ],
+        ),
+      ),
     );
   }
 }

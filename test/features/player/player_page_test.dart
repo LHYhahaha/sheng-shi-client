@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drama_client/app/router/route_paths.dart';
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
@@ -57,6 +59,43 @@ void main() {
     expect(find.text('EP.03'), findsOneWidget);
     expect(find.text('This episode is unavailable.'), findsOneWidget);
     expect(find.text('Unlock Now'), findsNothing);
+  });
+
+  testWidgets('shows poster loading before playback is ready', (tester) async {
+    final openCompleter = Completer<void>();
+    final playbackSession = _FakePlaybackSession(openCompleter: openCompleter);
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.byType(Image), findsWidgets);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    openCompleter.complete();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('A Life That Shines Again >'), findsOneWidget);
+  });
+
+  testWidgets('shows retry when playback open fails', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () =>
+            _FakePlaybackSession(shouldThrowOnOpen: true),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Player failed to load.'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
   });
 
   testWidgets('episodes sheet can select locked episode and show paywall', (
@@ -134,6 +173,7 @@ const _mockVideoUrl =
 Widget _buildPlayerApp({
   required PlayerFeedRepository repository,
   String initialLocation = '/player/drama-a/1',
+  PlayerPlaybackSession Function()? playbackSessionFactory,
 }) {
   final router = GoRouter(
     initialLocation: initialLocation,
@@ -158,7 +198,7 @@ Widget _buildPlayerApp({
     overrides: [
       playerFeedRepositoryProvider.overrideWithValue(repository),
       playerPlaybackSessionFactoryProvider.overrideWithValue(
-        () => _FakePlaybackSession(),
+        playbackSessionFactory ?? () => _FakePlaybackSession(),
       ),
     ],
     child: MaterialApp.router(
@@ -295,11 +335,36 @@ PlayerContent _content(List<PlayerEpisode> episodes) {
 }
 
 class _FakePlaybackSession implements PlayerPlaybackSession {
+  _FakePlaybackSession({this.openCompleter, this.shouldThrowOnOpen = false});
+
+  final Completer<void>? openCompleter;
+  bool shouldThrowOnOpen;
+  final _bufferingController = StreamController<bool>.broadcast();
+  final _widthController = StreamController<int?>.broadcast();
+  final _errorController = StreamController<String>.broadcast();
+
   @override
   Null get videoController => null;
 
   @override
-  Future<void> open(String source, {bool play = true}) async {}
+  Stream<bool> get bufferingStream => _bufferingController.stream;
+
+  @override
+  Stream<int?> get widthStream => _widthController.stream;
+
+  @override
+  Stream<String> get errorStream => _errorController.stream;
+
+  @override
+  Future<void> open(String source, {bool play = true}) async {
+    _bufferingController.add(true);
+    await (openCompleter?.future ?? Future<void>.value());
+    if (shouldThrowOnOpen) {
+      throw StateError('open failed');
+    }
+    _widthController.add(1280);
+    _bufferingController.add(false);
+  }
 
   @override
   Future<void> pause() async {}
@@ -308,5 +373,9 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   Future<void> play() async {}
 
   @override
-  Future<void> dispose() async {}
+  Future<void> dispose() async {
+    await _bufferingController.close();
+    await _widthController.close();
+    await _errorController.close();
+  }
 }

@@ -45,6 +45,7 @@ void main() {
 
     openCompleter.complete();
     await playFuture;
+    await Future<void>.delayed(Duration.zero);
 
     state = container.read(provider);
     expect(state.status, PlayerPlaybackStatus.playing);
@@ -62,6 +63,24 @@ void main() {
     await controller.playItem(item);
 
     expect(session.openedSources, [_videoUrl]);
+    expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+  });
+
+  test('open error can retry same source', () async {
+    final session = _FakePlaybackSession(shouldThrowOnOpen: true);
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+    final item = _item(1);
+
+    await controller.playItem(item);
+    expect(container.read(provider).status, PlayerPlaybackStatus.error);
+
+    session.shouldThrowOnOpen = false;
+    await controller.playItem(item);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(session.openedSources, [_videoUrl, _videoUrl]);
     expect(container.read(provider).status, PlayerPlaybackStatus.playing);
   });
 
@@ -145,6 +164,47 @@ void main() {
     expect(container.read(forYouProvider).status, PlayerPlaybackStatus.paused);
     expect(container.read(singleProvider).status, PlayerPlaybackStatus.playing);
   });
+
+  test(
+    'preload keeps at most two sessions and skips locked unavailable items',
+    () async {
+      final sessions = <_FakePlaybackSession>[];
+      final container = ProviderContainer(
+        overrides: [
+          playerPlaybackSessionFactoryProvider.overrideWithValue(() {
+            final session = _FakePlaybackSession();
+            sessions.add(session);
+            return session;
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+      final items = [
+        _item(1),
+        _item(2),
+        _item(3, isLocked: true),
+        _item(4, isAvailable: false),
+        _item(5),
+      ];
+
+      await controller.preloadAround(items, 1);
+
+      var state = container.read(provider);
+      expect(state.preloadedItemIds, ['drama-a-ep-1']);
+      expect(sessions, hasLength(2));
+      expect(sessions.last.openedSources, [_videoUrl]);
+
+      await controller.preloadAround(items, 3);
+
+      state = container.read(provider);
+      expect(state.preloadedItemIds, ['drama-a-ep-5']);
+      expect(state.preloadedItemIds, hasLength(1));
+      expect(sessions.where((session) => !session.isDisposed), hasLength(2));
+    },
+  );
 }
 
 ProviderContainer _createContainer(
@@ -195,9 +255,13 @@ PlayerFeedItem _item(
 }
 
 class _FakePlaybackSession implements PlayerPlaybackSession {
-  _FakePlaybackSession({this.openCompleter});
+  _FakePlaybackSession({this.openCompleter, this.shouldThrowOnOpen = false});
 
   final Completer<void>? openCompleter;
+  bool shouldThrowOnOpen;
+  final _bufferingController = StreamController<bool>.broadcast();
+  final _widthController = StreamController<int?>.broadcast();
+  final _errorController = StreamController<String>.broadcast();
   final openedSources = <String>[];
   int pauseCount = 0;
   int playCount = 0;
@@ -207,9 +271,24 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   Null get videoController => null;
 
   @override
+  Stream<bool> get bufferingStream => _bufferingController.stream;
+
+  @override
+  Stream<int?> get widthStream => _widthController.stream;
+
+  @override
+  Stream<String> get errorStream => _errorController.stream;
+
+  @override
   Future<void> open(String source, {bool play = true}) async {
     openedSources.add(source);
+    _bufferingController.add(true);
     await (openCompleter?.future ?? Future<void>.value());
+    if (shouldThrowOnOpen) {
+      throw StateError('open failed');
+    }
+    _widthController.add(1280);
+    _bufferingController.add(false);
   }
 
   @override
@@ -225,5 +304,8 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   @override
   Future<void> dispose() async {
     isDisposed = true;
+    await _bufferingController.close();
+    await _widthController.close();
+    await _errorController.close();
   }
 }

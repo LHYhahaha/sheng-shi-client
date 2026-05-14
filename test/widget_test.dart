@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drama_client/app/app.dart';
 import 'package:drama_client/app/router/route_paths.dart';
 import 'package:drama_client/features/auth/data/auth_repository_provider.dart';
@@ -839,11 +841,27 @@ Widget _buildAppWithFakePlayback() {
 }
 
 class _FakePlaybackSession implements PlayerPlaybackSession {
+  final _bufferingController = StreamController<bool>.broadcast();
+  final _widthController = StreamController<int?>.broadcast();
+  final _errorController = StreamController<String>.broadcast();
+
   @override
   Null get videoController => null;
 
   @override
-  Future<void> open(String source, {bool play = true}) async {}
+  Stream<bool> get bufferingStream => _bufferingController.stream;
+
+  @override
+  Stream<int?> get widthStream => _widthController.stream;
+
+  @override
+  Stream<String> get errorStream => _errorController.stream;
+
+  @override
+  Future<void> open(String source, {bool play = true}) async {
+    _bufferingController.add(false);
+    _widthController.add(1280);
+  }
 
   @override
   Future<void> pause() async {}
@@ -852,7 +870,11 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   Future<void> play() async {}
 
   @override
-  Future<void> dispose() async {}
+  Future<void> dispose() async {
+    await _bufferingController.close();
+    await _widthController.close();
+    await _errorController.close();
+  }
 }
 
 class _SignedInAuthRepository implements AuthRepository {
