@@ -14,6 +14,7 @@ void main() {
         expect(asset.licenseNote, contains('testing and development'));
         expect(asset.videoUrl, startsWith('https://'));
         expect(asset.videoUrl, contains('.m3u8'));
+        expect(asset.aspectRatio, greaterThan(0));
       }
 
       expect(
@@ -58,6 +59,10 @@ void main() {
       expect(
         content.episodes.take(3).map((episode) => episode.videoUrl).toSet(),
         hasLength(3),
+      );
+      expect(
+        content.episodes.take(3).map((episode) => episode.videoAspectRatio),
+        const [16 / 9, 16 / 9, 16 / 9],
       );
     });
 

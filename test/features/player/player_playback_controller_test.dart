@@ -10,6 +10,7 @@ import 'package:drama_client/features/player/data/player_playback_source_reposit
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/domain/player_playback_progress.dart';
+import 'package:drama_client/features/player/domain/player_playback_source.dart';
 import 'package:drama_client/features/player/domain/player_preload_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -107,6 +108,10 @@ void main() {
 
     await controller.playItem(item);
     expect(container.read(provider).status, PlayerPlaybackStatus.error);
+    expect(
+      container.read(provider).errorKind,
+      PlayerPlaybackErrorKind.mediaFatal,
+    );
 
     session.shouldThrowOnOpen = false;
     await controller.playItem(item);
@@ -114,6 +119,31 @@ void main() {
 
     expect(session.openedSources, [_playableSource(1), _playableSource(1)]);
     expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+  });
+
+  test('source resolve failure enters retryable source error state', () async {
+    final session = _FakePlaybackSession();
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: Duration.zero,
+    );
+    final sourceRepository = MockPlayerPlaybackSourceRepository(
+      preloadManager: preloadManager,
+    )..failNextResolve = true;
+    final container = _createContainer(
+      session,
+      preloadManager: preloadManager,
+      sourceRepository: sourceRepository,
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+
+    final state = container.read(provider);
+    expect(state.status, PlayerPlaybackStatus.error);
+    expect(state.errorKind, PlayerPlaybackErrorKind.sourceResolve);
+    expect(session.openedSources, isEmpty);
+    expect(controller.exportTimingReport(), contains('kind=sourceResolve'));
   });
 
   test('pauses and blocks locked episodes without opening source', () async {
@@ -1276,6 +1306,47 @@ void main() {
     expect(report, contains('video surface shown before firstFrame'));
   });
 
+  test('transient HLS error after first frame stays recoverable', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    session.emitPosition(const Duration(seconds: 2));
+    await Future<void>.delayed(Duration.zero);
+    session.emitError('tcp: ffurl_read returned segment 00001.ts');
+    await Future<void>.delayed(Duration.zero);
+
+    final state = container.read(provider);
+    expect(state.status, PlayerPlaybackStatus.playing);
+    expect(state.hasFirstFrame, isTrue);
+    expect(state.isBuffering, isTrue);
+    expect(state.errorKind, PlayerPlaybackErrorKind.recoverableNetwork);
+    expect(controller.exportTimingReport(), contains('recoverable error'));
+    expect(
+      controller.exportTimingReport(),
+      contains('kind=recoverableNetwork'),
+    );
+  });
+
+  test('fatal media error still enters retryable error state', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    session.emitError('fatal invalid media');
+    await Future<void>.delayed(Duration.zero);
+
+    final state = container.read(provider);
+    expect(state.status, PlayerPlaybackStatus.error);
+    expect(state.hasFirstFrame, isFalse);
+    expect(state.errorKind, PlayerPlaybackErrorKind.mediaFatal);
+    expect(controller.exportTimingReport(), contains('kind=mediaFatal'));
+  });
+
   test('duplicate prepare requests for same item are ignored', () async {
     final currentSession = _FakePlaybackSession();
     final prepareCompleter = Completer<void>();
@@ -1462,6 +1533,7 @@ ProviderContainer _createContainer(
   bool addDisposeTearDown = true,
   MockPlayerPlaybackPreloadManager? preloadManager,
   PlaybackProgressRepository? progressRepository,
+  PlayerPlaybackSourceRepository? sourceRepository,
 }) {
   final playbackCacheManager =
       preloadManager ??
@@ -1475,6 +1547,10 @@ ProviderContainer _createContainer(
       playerPlaybackPrepareManagerFactoryProvider.overrideWithValue(
         NoopPlayerPlaybackPrepareManager.new,
       ),
+      if (sourceRepository != null)
+        playerPlaybackSourceRepositoryProvider.overrideWithValue(
+          sourceRepository,
+        ),
       if (progressRepository != null)
         playbackProgressRepositoryProvider.overrideWithValue(
           progressRepository,
@@ -1651,6 +1727,10 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
 
   void emitWidth(int width) {
     _widthController.add(width);
+  }
+
+  void emitError(String error) {
+    _errorController.add(error);
   }
 
   @override

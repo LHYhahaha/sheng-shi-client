@@ -44,6 +44,7 @@ class PlayerChrome extends StatefulWidget {
     this.onRetry,
     this.onDownloadTap,
     this.videoController,
+    this.videoFit = BoxFit.cover,
     this.forYouLayout = false,
     super.key,
   });
@@ -75,6 +76,7 @@ class PlayerChrome extends StatefulWidget {
   final VoidCallback? onRetry;
   final VoidCallback? onDownloadTap;
   final VideoController? videoController;
+  final BoxFit videoFit;
   final bool forYouLayout;
 
   @override
@@ -112,6 +114,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
   VoidCallback? get onRetry => widget.onRetry;
   VoidCallback? get onDownloadTap => widget.onDownloadTap;
   VideoController? get videoController => widget.videoController;
+  BoxFit get videoFit => widget.videoFit;
   bool get forYouLayout => widget.forYouLayout;
 
   @override
@@ -150,7 +153,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
                       child: Video(
                         controller: videoController!,
                         controls: NoVideoControls,
-                        fit: BoxFit.cover,
+                        fit: videoFit,
                       ),
                     ),
                   ),

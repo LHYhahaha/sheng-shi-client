@@ -11,6 +11,7 @@ import '../domain/player_playback_progress.dart';
 import '../domain/player_playback_source.dart';
 import '../domain/player_preload_state.dart';
 import 'player_playback_prepare_manager.dart';
+import 'player_playback_timing_trace.dart';
 import 'player_session_controller.dart';
 
 final playerPlaybackSessionFactoryProvider =
@@ -56,32 +57,11 @@ enum PlayerPlaybackStatus {
   error,
 }
 
-class PlayerPlaybackTimingEvent {
-  const PlayerPlaybackTimingEvent({
-    required this.name,
-    required this.at,
-    this.traceId,
-    this.itemId,
-    this.source,
-    this.sourceLabel,
-    this.elapsed,
-    this.sinceTraceStart,
-    this.sinceUserAction,
-    this.error,
-    this.details,
-  });
-
-  final String name;
-  final DateTime at;
-  final String? traceId;
-  final String? itemId;
-  final String? source;
-  final String? sourceLabel;
-  final Duration? elapsed;
-  final Duration? sinceTraceStart;
-  final Duration? sinceUserAction;
-  final Object? error;
-  final String? details;
+enum PlayerPlaybackErrorKind {
+  recoverableNetwork,
+  sourceResolve,
+  mediaFatal,
+  unknown,
 }
 
 class PlayerPlaybackState {
@@ -102,6 +82,7 @@ class PlayerPlaybackState {
     this.currentSource,
     this.seekPreviewPosition,
     this.error,
+    this.errorKind,
   });
 
   const PlayerPlaybackState.initial({VideoController? videoController})
@@ -136,6 +117,7 @@ class PlayerPlaybackState {
   final String? currentSource;
   final Duration? seekPreviewPosition;
   final Object? error;
+  final PlayerPlaybackErrorKind? errorKind;
 
   bool get isPlaying => status == PlayerPlaybackStatus.playing;
   bool get isOpening => status == PlayerPlaybackStatus.opening;
@@ -175,6 +157,7 @@ class PlayerPlaybackState {
     String? currentSource,
     Duration? seekPreviewPosition,
     Object? error,
+    PlayerPlaybackErrorKind? errorKind,
     bool clearError = false,
     bool clearSource = false,
     bool clearVideoController = false,
@@ -203,6 +186,7 @@ class PlayerPlaybackState {
           ? null
           : seekPreviewPosition ?? this.seekPreviewPosition,
       error: clearError ? null : error ?? this.error,
+      errorKind: clearError ? null : errorKind ?? this.errorKind,
     );
   }
 
@@ -236,18 +220,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   bool _wasPlayingBeforeSeek = false;
   bool _ignoreNextCompleted = false;
   Duration? _lastPositionUpdate;
-  final _timingEvents = <PlayerPlaybackTimingEvent>[];
+  late final _timingTrace = PlayerPlaybackTimingTrace(sessionKey: sessionKey);
   final _playingBeforeFirstFrameLoggedItemIds = <String>{};
   final _positionBeforeFirstFrameLoggedItemIds = <String>{};
   final _surfaceBeforeFirstFrameLoggedItemIds = <String>{};
-  int _traceCounter = 0;
-  String? _playbackTraceId;
-  DateTime? _traceStartedAt;
-  DateTime? _traceUserActionAt;
-  String? _pendingTraceTrigger;
-  String? _pendingTraceFromItemId;
-  String? _pendingTraceToItemId;
-  DateTime? _pendingTraceUserActionAt;
   DateTime? _playingBeforeFirstFrameAt;
   DateTime? _positionBeforeFirstFrameAt;
   String? _currentPlaybackItemId;
@@ -257,13 +233,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   Duration _currentPlaybackDuration = Duration.zero;
   Duration _currentPlaybackBufferedPosition = Duration.zero;
 
-  List<PlayerPlaybackTimingEvent> get timingEvents =>
-      List<PlayerPlaybackTimingEvent>.unmodifiable(_timingEvents);
+  List<PlayerPlaybackTimingEvent> get timingEvents => _timingTrace.events;
 
   List<PlayerPlaybackTimingEvent> get debugTimingEvents => timingEvents;
 
   String exportTimingReport() {
-    return _timingEvents.map(_formatTimingEvent).join('\n');
+    return _timingTrace.exportReport();
   }
 
   void recordVideoSurfaceShownBeforeFirstFrame({
@@ -294,22 +269,15 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     int? toIndex,
     DateTime? occurredAt,
   }) {
-    final at = occurredAt ?? DateTime.now();
-    _pendingTraceTrigger = trigger ?? event;
-    _pendingTraceFromItemId = fromItemId;
-    _pendingTraceToItemId = toItemId;
-    _pendingTraceUserActionAt = at;
-    _logTiming(
+    _timingTrace.recordUserAction(
       event,
-      itemId: toItemId,
-      details: _timingDetails([
-        'trigger=${trigger ?? event}',
-        'fromItemId=${fromItemId ?? 'null'}',
-        'toItemId=${toItemId ?? 'null'}',
-        if (direction != null) 'direction=$direction',
-        if (fromIndex != null) 'fromIndex=$fromIndex',
-        if (toIndex != null) 'toIndex=$toIndex',
-      ]),
+      trigger: trigger,
+      fromItemId: fromItemId,
+      toItemId: toItemId,
+      direction: direction,
+      fromIndex: fromIndex,
+      toIndex: toIndex,
+      occurredAt: occurredAt,
     );
   }
 
@@ -440,6 +408,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       clearSeekPreview: true,
     );
 
+    var didResolveSource = false;
     try {
       final windowItemsBeforeTake = _windowItemsText();
       final prepared = _prepareManager.takeIfMatches(item.id);
@@ -530,6 +499,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       final playbackSource = await ref
           .read(playerPlaybackSourceRepositoryProvider)
           .resolve(item);
+      didResolveSource = true;
       _logTiming(
         'source resolve end',
         itemId: item.id,
@@ -593,7 +563,16 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         hasEnded: false,
       );
     } catch (error) {
-      _logTiming('error', itemId: item.id, source: sourceHint, error: error);
+      final errorKind = didResolveSource
+          ? PlayerPlaybackErrorKind.mediaFatal
+          : PlayerPlaybackErrorKind.sourceResolve;
+      _logTiming(
+        'error',
+        itemId: item.id,
+        source: sourceHint,
+        error: error,
+        details: 'kind=${errorKind.name}',
+      );
       if (!_isCurrent(generation)) {
         return;
       }
@@ -605,6 +584,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         hasFirstFrame: false,
         isBuffering: false,
         error: error,
+        errorKind: errorKind,
       );
     }
   }
@@ -1136,18 +1116,64 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (state.currentSource == null) {
       return;
     }
+    final errorKind = _classifyPlaybackError(error);
+    final keepPlayingSurface =
+        errorKind == PlayerPlaybackErrorKind.recoverableNetwork &&
+        state.hasFirstFrame &&
+        (state.status == PlayerPlaybackStatus.playing ||
+            state.position > Duration.zero);
     _logTiming(
-      'error',
+      keepPlayingSurface ? 'recoverable error' : 'error',
       itemId: state.currentItemId,
       source: state.currentSource,
       error: error,
+      details: _timingDetails([
+        'kind=${errorKind.name}',
+        'hasFirstFrame=${state.hasFirstFrame}',
+        'positionMs=${state.position.inMilliseconds}',
+        'status=${state.status.name}',
+      ]),
     );
+    if (keepPlayingSurface) {
+      state = state.copyWith(
+        isBuffering: true,
+        error: error,
+        errorKind: errorKind,
+      );
+      return;
+    }
     state = state.copyWith(
       status: PlayerPlaybackStatus.error,
       hasFirstFrame: false,
       isBuffering: false,
       error: error,
+      errorKind: errorKind,
     );
+  }
+
+  PlayerPlaybackErrorKind _classifyPlaybackError(String error) {
+    final normalized = error.toLowerCase();
+    if (normalized.contains('tcp') ||
+        normalized.contains('ffurl') ||
+        normalized.contains('segment') ||
+        normalized.contains('.ts') ||
+        normalized.contains('connection') ||
+        normalized.contains('timed out') ||
+        normalized.contains('timeout')) {
+      return PlayerPlaybackErrorKind.recoverableNetwork;
+    }
+    if (normalized.contains('source') ||
+        normalized.contains('resolve') ||
+        normalized.contains('404') ||
+        normalized.contains('403')) {
+      return PlayerPlaybackErrorKind.sourceResolve;
+    }
+    if (normalized.contains('fatal') ||
+        normalized.contains('invalid') ||
+        normalized.contains('failed to open')) {
+      return PlayerPlaybackErrorKind.mediaFatal;
+    }
+    return PlayerPlaybackErrorKind.unknown;
   }
 
   Duration _clampToDuration(Duration position) {
@@ -1565,150 +1591,34 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     Object? error,
     String? details,
   }) {
-    final now = DateTime.now();
-    final eventEntry = PlayerPlaybackTimingEvent(
-      name: event,
-      at: now,
-      traceId: _playbackTraceId,
+    _timingTrace.record(
+      event,
       itemId: itemId,
       source: source,
-      sourceLabel: _sourceLabel(source),
       elapsed: elapsed,
-      sinceTraceStart: _traceStartedAt == null
-          ? null
-          : now.difference(_traceStartedAt!),
-      sinceUserAction: _traceUserActionAt == null
-          ? null
-          : now.difference(_traceUserActionAt!),
       error: error,
       details: details,
     );
-    _timingEvents.add(eventEntry);
-    if (_timingEvents.length > 160) {
-      _timingEvents.removeRange(0, _timingEvents.length - 160);
-    }
-    const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');
-    if (!shouldPrint) return;
-    final parts = <String>[
-      '[PlayerPlayback][$sessionKey]',
-      event,
-      if (_playbackTraceId != null) 'trace=$_playbackTraceId',
-      if (itemId != null) 'item=$itemId',
-      if (source != null) 'sourceLabel=${_sourceLabel(source)}',
-      if (source != null) 'source=$source',
-      if (elapsed != null) 'elapsed=${elapsed.inMilliseconds}ms',
-      if (eventEntry.sinceTraceStart != null)
-        'sinceTraceStartMs=${eventEntry.sinceTraceStart!.inMilliseconds}',
-      if (eventEntry.sinceUserAction != null)
-        'sinceUserActionMs=${eventEntry.sinceUserAction!.inMilliseconds}',
-      ?details,
-      if (error != null) 'error=$error',
-    ];
-    debugPrint(parts.join(' '));
   }
 
   String _timingDetails(List<String> parts) {
-    return parts.where((part) => part.isNotEmpty).join(' ');
+    return _timingTrace.details(parts);
   }
 
   void _startPlaybackTrace(PlayerFeedItem? item) {
-    final now = DateTime.now();
-    final trigger = _pendingTraceTrigger ?? _inferTraceTrigger(item);
-    final fromItemId = _pendingTraceFromItemId ?? state.currentItemId;
-    final toItemId = item?.id ?? _pendingTraceToItemId;
-    _traceCounter += 1;
-    _playbackTraceId =
-        '${sessionKey.replaceAll(':', '-')}-${_traceCounter.toString().padLeft(3, '0')}';
-    _traceStartedAt = now;
-    _traceUserActionAt = _pendingTraceUserActionAt ?? now;
     _playingBeforeFirstFrameAt = null;
     _positionBeforeFirstFrameAt = null;
-    _pendingTraceTrigger = null;
-    _pendingTraceFromItemId = null;
-    _pendingTraceToItemId = null;
-    _pendingTraceUserActionAt = null;
-    _logTiming(
-      'trace start',
+    _timingTrace.start(
       itemId: item?.id,
       source: item?.episode.videoSource,
-      details: _timingDetails([
-        'trigger=$trigger',
-        'fromItemId=${fromItemId ?? 'null'}',
-        'toItemId=${toItemId ?? 'null'}',
-        'generation=${_generation + 1}',
-      ]),
+      currentItemId: state.currentItemId,
+      currentStatusName: state.status.name,
+      generation: _generation + 1,
     );
-  }
-
-  String _inferTraceTrigger(PlayerFeedItem? item) {
-    if (item == null) {
-      return 'clear';
-    }
-    if (state.status == PlayerPlaybackStatus.error &&
-        state.currentItemId == item.id) {
-      return 'retry';
-    }
-    if (state.currentItemId == null) {
-      return 'list_entry';
-    }
-    return 'programmatic';
-  }
-
-  String _sourceLabel(String? source) {
-    if (source == null) {
-      return 'none';
-    }
-    if (source.contains('x36xhzz')) {
-      return 'mux-x36';
-    }
-    if (source.contains('tos_ismc')) {
-      return 'mux-tears';
-    }
-    if (source.contains('bipbop_16x9/gear1/prog_index')) {
-      return 'apple-bipbop-low';
-    }
-    if (source.contains('bipbop_16x9')) {
-      return 'apple-bipbop-16x9';
-    }
-    if (source.contains('bipbop_4x3')) {
-      return 'apple-bipbop-4x3';
-    }
-    if (source.contains('content.jwplatform.com') ||
-        source.contains('vM7nH0Kl')) {
-      return 'jw-vod';
-    }
-    if (source.contains('demo.unified-streaming.com') ||
-        source.contains('tears-of-steel')) {
-      return 'slow-source-test';
-    }
-    if (source.contains('lz15')) {
-      return 'business-lz15';
-    }
-    return 'unknown-hls';
   }
 
   String _windowItemsText() {
     return _prepareManager.windowItemIds.join(',');
-  }
-
-  String _formatTimingEvent(PlayerPlaybackTimingEvent event) {
-    final parts = <String>[
-      event.at.toIso8601String(),
-      'session=$sessionKey',
-      if (event.traceId != null) 'trace=${event.traceId}',
-      event.name,
-      if (event.itemId != null) 'item=${event.itemId}',
-      if (event.sourceLabel != null) 'sourceLabel=${event.sourceLabel}',
-      if (event.source != null) 'source=${event.source}',
-      if (event.elapsed != null) 'elapsed=${event.elapsed!.inMilliseconds}ms',
-      if (event.sinceTraceStart != null)
-        'sinceTraceStartMs=${event.sinceTraceStart!.inMilliseconds}',
-      if (event.sinceUserAction != null)
-        'sinceUserActionMs=${event.sinceUserAction!.inMilliseconds}',
-      if (event.details != null) event.details!,
-      if (event.error != null) 'error=${event.error}',
-    ];
-    return parts.join(' ');
   }
 
   Future<void> _disposeSessionOnly() async {

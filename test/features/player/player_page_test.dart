@@ -177,6 +177,38 @@ void main() {
     },
   );
 
+  testWidgets('uses cover fit for vertical video sources', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository._(
+          items: _items(firstAspectRatio: 9 / 16),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
+    expect(chrome.videoFit, BoxFit.cover);
+  });
+
+  testWidgets('uses contain fit for non-vertical video sources', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository._(
+          items: _items(firstAspectRatio: 16 / 9),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
+    expect(chrome.videoFit, BoxFit.contain);
+  });
+
   testWidgets('error state does not expose playable video surface', (
     tester,
   ) async {
@@ -898,13 +930,17 @@ class _FakePlayerFeedRepository implements PlayerFeedRepository {
   }
 }
 
-List<PlayerFeedItem> _items({bool lockedEpisode2 = false}) {
+List<PlayerFeedItem> _items({
+  bool lockedEpisode2 = false,
+  double? firstAspectRatio,
+}) {
   final content = _content([
-    const PlayerEpisode(
+    PlayerEpisode(
       id: 'ep-1',
       number: 1,
       isLocked: false,
       videoUrl: _mockVideoUrl,
+      videoAspectRatio: firstAspectRatio,
     ),
     PlayerEpisode(
       id: 'ep-2',

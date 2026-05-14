@@ -31,6 +31,7 @@ class PlayerEpisode {
     required this.isLocked,
     this.videoAssetPath,
     this.videoUrl,
+    this.videoAspectRatio,
     this.isAvailable = true,
   });
 
@@ -39,6 +40,7 @@ class PlayerEpisode {
   final bool isLocked;
   final String? videoAssetPath;
   final String? videoUrl;
+  final double? videoAspectRatio;
   final bool isAvailable;
 
   bool get isUnavailable => !isAvailable;

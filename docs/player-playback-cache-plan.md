@@ -957,14 +957,88 @@ Phase 5.8.2 limits:
 - No HLS segment cache or local proxy.
 - No service integration.
 
+### Phase 5.8.3: Review Consolidation And Next Work
+
+Review status after Phase 5.8.2 device testing and parallel code/function
+review:
+
+- No P0 blocker was found.
+- Default mock HLS sources were moved away from the slow Unified Streaming
+  fixture. The default first episodes now use `mux-x36`, `mux-tears`, and
+  `apple-bipbop-low`.
+- Android release timing showed `mux-x36` first frame around 3-4 seconds on the
+  test device, while prepared/retained session hits usually resume within tens
+  of milliseconds once `firstFrameReady=true`.
+- Previous/current/next session window behavior is acceptable for primary
+  gestures. Fast multi-step backtracking can still miss after a retained session
+  is trimmed, but this is an expected limit of the current window size.
+- Single-player exit, For You tab switching, and app hidden/background flows
+  stop playback and release prepared sessions.
+
+Next implementation priorities:
+
+1. Video fit and aspect-ratio policy. Device review showed non-vertical sources
+   such as `apple-bipbop-low` are heavily cropped under the current cover-style
+   fit. Add a small policy for `cover` versus `contain` based on source
+   dimensions or mock/source metadata.
+2. Recoverable HLS error handling. `errorStream` currently routes most playback
+   errors to fatal playback error. Add a minimal error kind/state so transient
+   network/HLS segment failures can keep the current frame/surface and avoid
+   dropping to poster/error when playback can continue.
+3. Timing trace helper extraction. `PlayerPlaybackController` is still
+   acceptable as the playback orchestrator, but timing trace fields and
+   formatting should move to a helper to reduce controller size without touching
+   playback sequencing.
+
+Keep deferred for now:
+
+- Expanding the prepared-session window beyond previous/current/next.
+- Local HLS cache or local proxy.
+- Large `PlayerPlaybackController` decomposition beyond timing trace extraction.
+- For You-specific playback fork.
+
+### Phase 5.9: Visual Fit, Recoverable Error, Timing Trace Cleanup
+
+Implemented as a small player-only polish pass after the session window and mock
+source validation work.
+
+Completed:
+
+- Added a lightweight video fit policy using episode/source aspect-ratio
+  metadata. Vertical or near-vertical sources keep immersive `cover`; obvious
+  non-vertical sources such as 16:9 and 4:3 use `contain` over the existing
+  poster/background layer so test fixtures are not aggressively cropped.
+- Added minimal playback error classification:
+  - `recoverableNetwork` for transient HLS/network/segment style errors.
+  - `sourceResolve` for playback source resolution failures.
+  - `mediaFatal` for unrecoverable media open/playback failures.
+  - `unknown` as a conservative fallback.
+- Recoverable HLS errors after first frame no longer clear `hasFirstFrame` or
+  immediately force the fatal retry UI while playback position is still moving.
+  The current video surface stays mounted and the existing loading/track loading
+  affordance can cover temporary network churn.
+- Extracted timing event storage, source labeling, trace lifecycle, user action
+  correlation, formatting, and release logging into
+  `PlayerPlaybackTimingTrace`. `PlayerPlaybackController` still owns playback
+  sequencing and calls the helper through `record(...)` / `exportReport()`.
+
+Still deferred:
+
+- Runtime dimension-based fit changes from native video size streams. The MVP
+  uses mock/source metadata first.
+- Consecutive transient error backoff and retry budgets.
+- CDN/HLS segment cache, local proxy, and offline download.
+- Larger playback-controller decomposition beyond timing trace extraction.
+
 ### Player Visual Fit Backlog: Video Crop And Aspect Ratio
 
 Observed during device playback review. Some videos may not appear fully inside
 the player frame because the current video surface is optimized for immersive
 full-screen playback and uses cover-style fitting. This is a product/visual
-policy issue, not part of the current playback-latency work.
+policy issue. After Phase 5.8.2 review, this is promoted to the next P1 player
+polish item.
 
-Track this after the HLS timing and first-frame work is stable:
+Track this in the next player polish implementation:
 
 - Decide the product rule for non-9:16 sources:
   - immersive full-screen first, allowing crop;

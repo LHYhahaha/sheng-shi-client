@@ -9,6 +9,7 @@ const mockPlayerVideoAssets = [
     licenseNote:
         'Public HLS fixture for testing and development; remote URL only.',
     videoUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+    aspectRatio: 16 / 9,
   ),
   MockPlayerVideoAsset(
     sourceLabel: 'mux-tears',
@@ -18,6 +19,7 @@ const mockPlayerVideoAssets = [
     licenseNote:
         'Public HLS fixture for testing and development; remote URL only.',
     videoUrl: 'https://test-streams.mux.dev/tos_ismc/main.m3u8',
+    aspectRatio: 16 / 9,
   ),
   MockPlayerVideoAsset(
     sourceLabel: 'apple-bipbop-low',
@@ -28,6 +30,7 @@ const mockPlayerVideoAssets = [
         'Public HLS fixture for testing and development; remote URL only.',
     videoUrl:
         'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear1/prog_index.m3u8',
+    aspectRatio: 16 / 9,
   ),
   MockPlayerVideoAsset(
     sourceLabel: 'apple-bipbop-16x9',
@@ -38,6 +41,7 @@ const mockPlayerVideoAssets = [
         'Public HLS fixture for testing and development; remote URL only.',
     videoUrl:
         'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8',
+    aspectRatio: 16 / 9,
   ),
   MockPlayerVideoAsset(
     sourceLabel: 'apple-bipbop-4x3',
@@ -48,6 +52,7 @@ const mockPlayerVideoAssets = [
         'Public HLS fixture for testing and development; remote URL only.',
     videoUrl:
         'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8',
+    aspectRatio: 4 / 3,
   ),
   MockPlayerVideoAsset(
     sourceLabel: 'jw-vod',
@@ -57,6 +62,7 @@ const mockPlayerVideoAssets = [
     licenseNote:
         'Public HLS fixture for testing and development; remote URL only.',
     videoUrl: 'https://content.jwplatform.com/manifests/vM7nH0Kl.m3u8',
+    aspectRatio: 16 / 9,
   ),
   MockPlayerVideoAsset(
     sourceLabel: 'slow-source-test',
@@ -68,6 +74,7 @@ const mockPlayerVideoAssets = [
         'Public HLS fixture for slow-source/bad-network testing and development; remote URL only.',
     videoUrl:
         'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+    aspectRatio: 16 / 9,
   ),
 ];
 
@@ -100,6 +107,7 @@ class MockPlayerContentRepository implements PlayerContentRepository {
             number: number,
             isLocked: number >= 11,
             videoUrl: videoAsset.videoUrl,
+            videoAspectRatio: videoAsset.aspectRatio,
             isAvailable: number != 9,
           );
         }),
@@ -159,6 +167,7 @@ class MockPlayerVideoAsset {
     required this.sourcePage,
     required this.licenseNote,
     required this.videoUrl,
+    required this.aspectRatio,
   });
 
   final String sourceLabel;
@@ -167,6 +176,7 @@ class MockPlayerVideoAsset {
   final String sourcePage;
   final String licenseNote;
   final String videoUrl;
+  final double aspectRatio;
 }
 
 const _profiles = {

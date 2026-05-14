@@ -377,6 +377,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                       videoController: canRenderVideo
                           ? playbackState.videoController
                           : null,
+                      videoFit: _videoFitFor(item.episode),
                       showVideo: showVideo,
                       showLoading: showLoading,
                       playbackError: showPlaybackError,
@@ -720,6 +721,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           ),
     );
   }
+}
+
+BoxFit _videoFitFor(PlayerEpisode episode) {
+  final aspectRatio = episode.videoAspectRatio;
+  if (aspectRatio == null || aspectRatio <= 0) {
+    return BoxFit.cover;
+  }
+  const verticalAspectRatio = 9 / 16;
+  const tolerance = 0.18;
+  if ((aspectRatio - verticalAspectRatio).abs() <= tolerance ||
+      aspectRatio < 0.72) {
+    return BoxFit.cover;
+  }
+  return BoxFit.contain;
 }
 
 class _PlayerTopBar extends StatelessWidget {
