@@ -1,14 +1,19 @@
 import '../domain/player_feed.dart';
 import '../domain/player_playback_source.dart';
 import '../domain/player_preload_state.dart';
+import 'hls_local_proxy_server.dart';
 
 class MockPlayerPlaybackSourceRepository
     implements PlayerPlaybackSourceRepository {
-  MockPlayerPlaybackSourceRepository({required this.preloadManager});
+  MockPlayerPlaybackSourceRepository({
+    required this.preloadManager,
+    this.proxyResolver,
+  });
 
   static const requestDelay = Duration(milliseconds: 40);
 
   final PlayerPlaybackPreloadManager preloadManager;
+  final HlsProxyPlaybackSourceResolver? proxyResolver;
   bool failNextResolve = false;
 
   @override
@@ -36,10 +41,14 @@ class MockPlayerPlaybackSourceRepository
       throw StateError('Mock playback source resolve failed.');
     }
 
+    final playableSource = await proxyResolver?.resolvePlayableSource(
+      remoteUrl,
+    );
+
     return PlaybackSource(
       itemId: item.id,
       remoteUrl: remoteUrl,
-      playableSource: remoteUrl,
+      playableSource: playableSource ?? remoteUrl,
       cacheKey: 'player:${item.content.id}:${item.episode.id}',
       expiresAt: DateTime.now().add(const Duration(minutes: 30)),
       codecHint: 'hls',

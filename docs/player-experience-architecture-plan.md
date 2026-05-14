@@ -366,6 +366,35 @@ Next decision:
   cancellation.
 - Validate whether `media_kit` can benefit from the local proxy before product
   implementation.
+- Implementation boundary:
+  - `HlsLocalProxyServer` is an experimental player data-layer component.
+  - `HlsProxyPlaybackSourceResolver` can map a remote m3u8 to a localhost m3u8
+    when `PLAYER_HLS_LOCAL_PROXY_SPIKE=true`.
+  - The default remains remote HLS playback; the spike is off for normal builds.
+  - The proxy rewrites playlist URLs and caches proxied segment bytes in memory
+    only. It does not implement disk quota, LRU, signed URL refresh, offline
+    download, or a production cache policy.
+  - Startup preload, playback preload, and media-session window ownership do
+    not change. Home still never creates a player or `VideoController`.
+  - Proxy source generation failure falls back to the remote HLS URL. Runtime
+    playlist/segment failure is part of the spike validation and is not yet a
+    production fallback path.
+- Device validation should compare:
+  - direct remote HLS first-frame timing;
+  - localhost proxy first-frame timing;
+  - second playback of the same source after segment cache hit;
+  - swipe back/replay behavior;
+  - whether proxy failures cleanly fall back to direct remote playback.
+- Initial Android result on `R58WC02B69R`:
+  - Direct remote baseline from Phase 5.14 remains the better path:
+    `mux-fast` first frame was about 2.7-2.9s after Home tap.
+  - Proxy-enabled release build emitted localhost proxy server, playlist fetch,
+    segment fetch, and segment cache-hit logs, so the experiment is wired.
+  - Proxy playback did not reach a stable first frame inside the sampled window
+    and later segment requests hit the proxy timeout path.
+  - Recommendation: keep the proxy spike default-off and do not productionize it
+    unless a later implementation proves reliable first-frame improvement with
+    robust fallback, variant/range handling, and cache policy.
 
 ### Phase 5.16: Server/CDN Playback Source Specification
 

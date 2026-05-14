@@ -1409,6 +1409,33 @@ than guesswork.
 
 Phase 5 defer:
 
+- Phase 5.15 local HLS proxy/cache spike has an experimental implementation
+  guarded by `PLAYER_HLS_LOCAL_PROXY_SPIKE=false` by default.
+  - The spike starts a localhost proxy only when the feature flag is enabled.
+  - It rewrites remote HLS playlists to localhost playlist/segment routes.
+  - It caches proxied segment bytes in memory for the process lifetime.
+  - It records proxy server start/stop, proxy source generation, playlist
+    fetch, segment hit/miss, bytes, and remote fallback timing through the
+    existing `PLAYER_TIMING_LOGS=true` path.
+  - It falls back to the original remote HLS URL if proxy source generation
+    fails.
+  - It does not change the normal playback/session-window architecture and it
+    is not a production cache.
+  - Locked, unavailable, and null-source items still do not resolve, proxy,
+    preload, or prepare media.
+  - The spike should only be promoted if release-device timing shows meaningful
+    first-frame improvement versus direct remote HLS playback.
+  - Android release spike pass on `R58WC02B69R` with
+    `PLAYER_HLS_LOCAL_PROXY_SPIKE=true` showed the proxy path working at the
+    HTTP level: server start, playlist rewrite/fetch, segment fetch, and segment
+    cache hit logs were emitted. However, the playback did not produce a stable
+    first frame inside the sampling window and later segment proxy requests
+    timed out. This is worse than the direct remote baseline from Phase 5.14
+    (`mux-fast` first frame around 2.7-2.9s).
+  - Current conclusion: do not promote the local proxy to production. A real
+    local HLS proxy would need stronger runtime fallback, variant selection,
+    playlist attribute rewriting such as init-map/key URIs, range handling,
+    timeout policy, and quota/cache ownership before it can be reconsidered.
 - Real playback source API and signed URL refresh.
 - Real CDN header parsing and expiry reconciliation.
 - HLS playlist and segment cache.

@@ -201,6 +201,9 @@ class PlayerPlaybackTimingTrace {
     if (source == null) {
       return 'none';
     }
+    if (source.contains('127.0.0.1') || source.contains('localhost')) {
+      return 'local-hls-proxy';
+    }
     if (source.contains('x36xhzz')) {
       return 'mux-fast';
     }

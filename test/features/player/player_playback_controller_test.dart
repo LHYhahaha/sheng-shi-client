@@ -188,6 +188,34 @@ void main() {
     expect(container.read(provider).status, PlayerPlaybackStatus.unavailable);
   });
 
+  test(
+    'locked unavailable and null source items do not resolve proxy sources',
+    () async {
+      final session = _FakePlaybackSession();
+      final sourceRepository = _CountingPlaybackSourceRepository();
+      final container = _createContainer(
+        session,
+        sourceRepository: sourceRepository,
+      );
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(2, isLocked: true));
+      await controller.playItem(_item(3, isAvailable: false));
+      await controller.playItem(_item(4, hasSource: false));
+      await controller.preloadAround([_item(1), _item(2, isLocked: true)], 0);
+      await controller.preloadAround([
+        _item(1),
+        _item(3, isAvailable: false),
+      ], 0);
+      await controller.preloadAround([_item(1), _item(4, hasSource: false)], 0);
+
+      expect(sourceRepository.resolveCount, 0);
+      expect(sourceRepository.preloadCount, 0);
+      expect(session.openedSources, isEmpty);
+    },
+  );
+
   test('toggles play pause for current source', () async {
     final session = _FakePlaybackSession();
     final container = _createContainer(session);
@@ -1661,6 +1689,39 @@ Map<String, PlaybackPreloadStatus> _preloadStatusById(
     for (final preloadState in state.preloadStates)
       preloadState.itemId: preloadState.status,
   };
+}
+
+class _CountingPlaybackSourceRepository
+    implements PlayerPlaybackSourceRepository {
+  var resolveCount = 0;
+  var preloadCount = 0;
+
+  @override
+  Future<PlaybackSource> resolve(PlayerFeedItem item) async {
+    resolveCount += 1;
+    final source = item.episode.videoSource!;
+    return PlaybackSource(
+      itemId: item.id,
+      remoteUrl: source,
+      playableSource: source,
+      cacheKey: source,
+      expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+      codecHint: 'hls',
+      status: PlaybackSourceStatus.resolved,
+    );
+  }
+
+  @override
+  Future<PlaybackPreloadState> preload(PlayerFeedItem item) async {
+    preloadCount += 1;
+    return PlaybackPreloadState(
+      itemId: item.id,
+      sourceUrl: item.episode.videoSource!,
+      status: PlaybackPreloadStatus.success,
+      startedAt: DateTime.now(),
+      completedAt: DateTime.now(),
+    );
+  }
 }
 
 class _FakePlaybackSession implements PlayerPlaybackSession {
