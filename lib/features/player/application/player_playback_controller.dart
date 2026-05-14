@@ -13,6 +13,7 @@ import '../domain/player_preload_state.dart';
 import 'player_playback_prepare_manager.dart';
 import 'player_playback_timing_trace.dart';
 import 'player_session_controller.dart';
+import 'player_startup_preload_controller.dart';
 
 final playerPlaybackSessionFactoryProvider =
     Provider<PlayerPlaybackSession Function()>((ref) {
@@ -341,6 +342,25 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         'windowItems=${_windowItemsText()}',
       ]),
     );
+    if (item != null &&
+        !item.episode.isLocked &&
+        !item.episode.isUnavailable &&
+        item.episode.videoSource != null) {
+      final startupPreload = ref.read(playerStartupPreloadControllerProvider);
+      final isStartupHit = startupPreload.matches(item);
+      _logTiming(
+        isStartupHit
+            ? 'startup preload hit on playItem'
+            : 'startup preload miss on playItem',
+        itemId: item.id,
+        source: item.episode.videoSource,
+        details: _timingDetails([
+          'startupStatus=${startupPreload.status.name}',
+          'startupItemId=${startupPreload.itemId ?? 'null'}',
+          'startupSource=${startupPreload.sourceUrl ?? 'null'}',
+        ]),
+      );
+    }
 
     if (item == null) {
       final generation = ++_generation;

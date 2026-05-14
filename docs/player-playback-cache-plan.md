@@ -1178,6 +1178,73 @@ Server/CDN/HLS items that remain outside this client pass:
 - Signed URL refresh and redirect latency.
 - CDN edge behavior for first playlist and first media segment.
 
+### Phase 5.12: Startup Preload Architecture
+
+Implemented as the long-term boundary for cold-start preheating. The goal is to
+let Home express "the first visible item is worth preloading" without coupling
+Home to media sessions, `VideoController`, or media_kit.
+
+Architecture:
+
+- `PlayerStartupPreloadController` owns startup preload state:
+  - `idle`
+  - `pending`
+  - `success`
+  - `failed`
+  - `cancelled`
+- Home passes the first loaded `Drama` candidate to the startup preload
+  controller. It does not resolve playback URLs, create a player, hold a
+  `VideoController`, or import media_kit.
+- The startup controller converts the drama candidate through the existing
+  player feed/source repositories, then calls the existing
+  `PlayerPlaybackSourceRepository.preload(...)` path. This keeps startup
+  preheating aligned with the HLS source/playlist/first-segment preload
+  pipeline.
+- The startup controller has its own generation guard so category switches,
+  refreshes, disposal, and late completions cannot write stale success state.
+- Startup preload failure is isolated. It records failed state and timing, but
+  it never drives the real playback controller into error.
+- `PlayerPlaybackController.playItem(...)` checks the current startup preload
+  state and records either `startup preload hit on playItem` or
+  `startup preload miss on playItem`. A hit is diagnostic only; real playback
+  still proceeds through the normal player lifecycle because Dart HTTP prefetch
+  is not guaranteed to be shared with media_kit internals.
+
+Home integration:
+
+- Initial Home feed success preloads only the first item in the loaded list.
+- Category switch, retry, and Home disposal cancel pending startup preload.
+- Pagination does not trigger additional startup preload work.
+- Startup preload does not affect Home loading/error/empty UI.
+
+Release timing to verify with `PLAYER_TIMING_LOGS=true`:
+
+- `startup preload request`
+- `startup preload start`
+- `startup preload success`
+- `startup preload failed`
+- `startup preload cancelled`
+- `startup preload hit on playItem`
+- `startup preload miss on playItem`
+
+Expected device review:
+
+- Confirm Home feed load to startup preload success timing.
+- Confirm Home tap to `playItem` reports startup hit or miss.
+- Compare EP.01 cold-start first frame before/after startup preload.
+- If hit is present but first frame remains slow, the remaining bottleneck is
+  likely still media_kit/HLS first-segment/decode/CDN behavior rather than
+  route/feed/source-resolve overhead.
+
+Deferred:
+
+- Home media session warm-up. This remains intentionally out of scope because it
+  adds audio lifecycle risk outside the player.
+- Startup preload for more than one visible card.
+- Network-aware preload policy.
+- Real backend source API and signed URL refresh.
+- Local HLS cache, segment cache, and offline download.
+
 ### Player Visual Fit Backlog: Video Crop And Aspect Ratio
 
 Observed during device playback review. Some videos may not appear fully inside

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../features/drama/domain/drama.dart';
+import '../../../../features/player/application/player_startup_preload_controller.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
@@ -21,10 +23,14 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage> {
   final _scrollController = ScrollController();
+  late final PlayerStartupPreloadController _startupPreloadController;
 
   @override
   void initState() {
     super.initState();
+    _startupPreloadController = ref.read(
+      playerStartupPreloadControllerProvider.notifier,
+    );
     _scrollController.addListener(_onScroll);
     Future<void>.microtask(() {
       ref.read(homeFeedControllerProvider.notifier).loadInitial();
@@ -33,6 +39,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   void dispose() {
+    unawaited(_startupPreloadController.cancel(reason: 'home dispose'));
     _scrollController
       ..removeListener(_onScroll)
       ..dispose();
@@ -58,6 +65,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       return;
     }
 
+    unawaited(_startupPreloadController.cancel(reason: 'home category switch'));
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
         0,
@@ -71,6 +79,21 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(homeFeedControllerProvider, (previous, next) {
+      final shouldPreload =
+          !next.isInitialLoading &&
+          next.initialError == null &&
+          next.items.isNotEmpty &&
+          (previous == null ||
+              previous.isInitialLoading ||
+              previous.items != next.items);
+      if (!shouldPreload) {
+        return;
+      }
+      unawaited(
+        _startupPreloadController.preloadFirstPlayableDrama(next.items.first),
+      );
+    });
     final feedState = ref.watch(homeFeedControllerProvider);
 
     return Scaffold(
@@ -111,6 +134,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                 hasScrollBody: false,
                 child: _HomeErrorState(
                   onRetry: () {
+                    unawaited(
+                      _startupPreloadController.cancel(reason: 'home retry'),
+                    );
                     ref.read(homeFeedControllerProvider.notifier).loadInitial();
                   },
                 ),
