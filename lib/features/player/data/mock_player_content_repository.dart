@@ -2,7 +2,7 @@ import '../domain/player_content.dart';
 
 const mockPlayerVideoAssets = [
   MockPlayerVideoAsset(
-    sourceLabel: 'mux-x36',
+    sourceLabel: 'mux-fast',
     title: 'Mux x36xhzz HLS',
     sourceName: 'Mux Test Streams',
     sourcePage: 'https://test-streams.mux.dev/',
@@ -12,7 +12,7 @@ const mockPlayerVideoAssets = [
     aspectRatio: 16 / 9,
   ),
   MockPlayerVideoAsset(
-    sourceLabel: 'mux-tears',
+    sourceLabel: 'mux-tears-stable',
     title: 'Mux Tears of Steel HLS',
     sourceName: 'Mux Test Streams',
     sourcePage: 'https://test-streams.mux.dev/',
@@ -22,7 +22,7 @@ const mockPlayerVideoAssets = [
     aspectRatio: 16 / 9,
   ),
   MockPlayerVideoAsset(
-    sourceLabel: 'apple-bipbop-low',
+    sourceLabel: 'apple-bipbop-low-stable',
     title: 'Apple BipBop Low HLS',
     sourceName: 'Apple Developer',
     sourcePage: 'https://developer.apple.com/streaming/examples/',
@@ -33,7 +33,7 @@ const mockPlayerVideoAssets = [
     aspectRatio: 16 / 9,
   ),
   MockPlayerVideoAsset(
-    sourceLabel: 'apple-bipbop-16x9',
+    sourceLabel: 'aspect-ratio-16x9-test',
     title: 'Apple BipBop 16x9 HLS',
     sourceName: 'Apple Developer',
     sourcePage: 'https://developer.apple.com/streaming/examples/',
@@ -44,7 +44,7 @@ const mockPlayerVideoAssets = [
     aspectRatio: 16 / 9,
   ),
   MockPlayerVideoAsset(
-    sourceLabel: 'apple-bipbop-4x3',
+    sourceLabel: 'aspect-ratio-4x3-test',
     title: 'Apple BipBop 4x3 HLS',
     sourceName: 'Apple Developer',
     sourcePage: 'https://developer.apple.com/streaming/examples/',
@@ -55,7 +55,7 @@ const mockPlayerVideoAssets = [
     aspectRatio: 4 / 3,
   ),
   MockPlayerVideoAsset(
-    sourceLabel: 'jw-vod',
+    sourceLabel: 'unstable-source-test',
     title: 'JW Platform VOD HLS',
     sourceName: 'JW Player',
     sourcePage: 'https://developer.jwplayer.com/',
@@ -76,6 +76,12 @@ const mockPlayerVideoAssets = [
         'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
     aspectRatio: 16 / 9,
   ),
+];
+
+final defaultMockPlayerVideoAssets = [
+  mockPlayerVideoAssets[0],
+  mockPlayerVideoAssets[1],
+  mockPlayerVideoAssets[2],
 ];
 
 class MockPlayerContentRepository implements PlayerContentRepository {
@@ -101,7 +107,8 @@ class MockPlayerContentRepository implements PlayerContentRepository {
         episodes: List<PlayerEpisode>.generate(50, (index) {
           final number = index + 1;
           final videoAsset =
-              mockPlayerVideoAssets[index % mockPlayerVideoAssets.length];
+              defaultMockPlayerVideoAssets[index %
+                  defaultMockPlayerVideoAssets.length];
           return PlayerEpisode(
             id: 'ep-$number',
             number: number,

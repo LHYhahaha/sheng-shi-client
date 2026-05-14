@@ -36,12 +36,12 @@ void main() {
       expect(
         mockPlayerVideoAssets.map((asset) => asset.sourceLabel),
         containsAllInOrder(const [
-          'mux-x36',
-          'mux-tears',
-          'apple-bipbop-low',
-          'apple-bipbop-16x9',
-          'apple-bipbop-4x3',
-          'jw-vod',
+          'mux-fast',
+          'mux-tears-stable',
+          'apple-bipbop-low-stable',
+          'aspect-ratio-16x9-test',
+          'aspect-ratio-4x3-test',
+          'unstable-source-test',
           'slow-source-test',
         ]),
       );
@@ -66,23 +66,35 @@ void main() {
       );
     });
 
-    test('uses HLS mock videos across generated episodes', () async {
+    test('default episode chain only cycles stable HLS fixtures', () async {
       final content = await const MockPlayerContentRepository()
           .getPlayerContent(dramaId: 'found-you');
 
       expect(
         content.episodes.first.videoUrl,
-        mockPlayerVideoAssets.first.videoUrl,
+        defaultMockPlayerVideoAssets.first.videoUrl,
       );
       expect(
-        content.episodes[mockPlayerVideoAssets.length].videoUrl,
-        mockPlayerVideoAssets.first.videoUrl,
+        content.episodes[defaultMockPlayerVideoAssets.length].videoUrl,
+        defaultMockPlayerVideoAssets.first.videoUrl,
       );
       expect(
-        content.episodes.take(mockPlayerVideoAssets.length).map((episode) {
+        content.episodes.take(9).map((episode) {
           return episode.videoUrl;
         }),
-        mockPlayerVideoAssets.map((asset) => asset.videoUrl),
+        [
+          ...defaultMockPlayerVideoAssets.map((asset) => asset.videoUrl),
+          ...defaultMockPlayerVideoAssets.map((asset) => asset.videoUrl),
+          ...defaultMockPlayerVideoAssets.map((asset) => asset.videoUrl),
+        ],
+      );
+      expect(
+        content.episodes.map((episode) => episode.videoUrl).toSet(),
+        defaultMockPlayerVideoAssets.map((asset) => asset.videoUrl).toSet(),
+      );
+      expect(
+        content.episodes.map((episode) => episode.videoUrl),
+        isNot(contains(mockPlayerVideoAssets[3].videoUrl)),
       );
     });
   });

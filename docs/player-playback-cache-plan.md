@@ -904,9 +904,11 @@ Trace fields:
 - Timing events include `trace`, `sourceLabel`, `sinceTraceStartMs`, and
   `sinceUserActionMs` in both `exportTimingReport()` and release logs enabled
   by `--dart-define=PLAYER_TIMING_LOGS=true`.
-- Source labels are derived from the mock HLS source URL:
-  `unified-tears-slow`, `apple-bipbop`, `mux-x36`, `business-lz15`, or
-  `unknown-hls`.
+- Source labels are derived from the mock HLS source URL, with stable playback
+  fixtures separated from special-purpose sources: `mux-fast`,
+  `mux-tears-stable`, `apple-bipbop-low-stable`, `aspect-ratio-16x9-test`,
+  `aspect-ratio-4x3-test`, `unstable-source-test`, `slow-source-test`,
+  `business-lz15`, or `unknown-hls`.
 - Home card entry passes a `home_card_tap` trigger and user-action time through
   the player route query so first-entry traces can show time since tap.
 - Player page events record PageView scroll start, PageView page changed,
@@ -964,9 +966,9 @@ review:
 
 - No P0 blocker was found.
 - Default mock HLS sources were moved away from the slow Unified Streaming
-  fixture. The default first episodes now use `mux-x36`, `mux-tears`, and
-  `apple-bipbop-low`.
-- Android release timing showed `mux-x36` first frame around 3-4 seconds on the
+  fixture. The default first episodes now use `mux-fast`, `mux-tears-stable`,
+  and `apple-bipbop-low-stable`.
+- Android release timing showed `mux-fast` first frame around 3-6 seconds on the
   test device, while prepared/retained session hits usually resume within tens
   of milliseconds once `firstFrameReady=true`.
 - Previous/current/next session window behavior is acceptable for primary
@@ -978,9 +980,8 @@ review:
 Next implementation priorities:
 
 1. Video fit and aspect-ratio policy. Device review showed non-vertical sources
-   such as `apple-bipbop-low` are heavily cropped under the current cover-style
-   fit. Add a small policy for `cover` versus `contain` based on source
-   dimensions or mock/source metadata.
+   can be heavily cropped under cover-style fit. Add a small policy for `cover`
+   versus `contain` based on source dimensions or mock/source metadata.
 2. Recoverable HLS error handling. `errorStream` currently routes most playback
    errors to fatal playback error. Add a minimal error kind/state so transient
    network/HLS segment failures can keep the current frame/surface and avoid
@@ -1030,6 +1031,36 @@ Still deferred:
 - CDN/HLS segment cache, local proxy, and offline download.
 - Larger playback-controller decomposition beyond timing trace extraction.
 
+### Phase 5.9.1: Mock HLS Source Stabilization
+
+Device validation after Phase 5.9 showed the playback chain is healthy, but the
+default mock source list still allowed special-purpose HLS fixtures into the
+normal episode cycle. In particular, a non-default source could produce
+`firstFrameReady=false` / `positionMs=0` and make product validation look like a
+player regression.
+
+Completed:
+
+- Default generated episodes now cycle only the stable playback fixtures:
+  - `mux-fast`: `https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`
+  - `mux-tears-stable`: `https://test-streams.mux.dev/tos_ismc/main.m3u8`
+  - `apple-bipbop-low-stable`:
+    `https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear1/prog_index.m3u8`
+- Special-purpose fixtures remain available in `mockPlayerVideoAssets`, but do
+  not enter the default episode chain:
+  - `slow-source-test` for slow first-frame / bad-network validation.
+  - `aspect-ratio-16x9-test` for contain/fit validation.
+  - `aspect-ratio-4x3-test` for contain/fit validation.
+  - `unstable-source-test` for intentionally suspect source behavior.
+
+Validation rule:
+
+- Playback experience tuning should use only the default stable source chain.
+- Slow, unstable, and aspect-ratio fixtures should be selected explicitly by a
+  focused test/profile. If stable sources still cold-start slowly, the next
+  investigation should target HLS first segment, bitrate, CDN behavior, and the
+  media_kit first-frame pipeline rather than papering over the delay in UI.
+
 ### Player Visual Fit Backlog: Video Crop And Aspect Ratio
 
 Observed during device playback review. Some videos may not appear fully inside
@@ -1056,6 +1087,33 @@ Track this in the next player polish implementation:
 Do not change the default video fit as part of Phase 5.8.x unless the product
 decision is confirmed. Switching everything to contain too early may make the
 short-drama experience feel less immersive.
+
+### Player Visual Safe Area Backlog: Android Navigation Bar
+
+Observed during device playback review on Android with system navigation
+buttons. The video frame may be visually affected by the bottom system
+navigation bar: the playable image can look off-center, and non-9:16 `contain`
+sources make the issue easier to notice.
+
+Track this as a P1 player visual verification item after mock source
+stabilization:
+
+- Re-test on Android gesture navigation and three-button navigation.
+- Compare the video layout against `MediaQuery.padding`, `viewPadding`, and
+  `viewInsets` to confirm whether the system navigation bar is included in the
+  video fit container.
+- Check the bottom player frame, progress bar, membership/download row, and
+  system navigation bar spacing together; do not fix only the `Video` widget in
+  isolation.
+- Validate both immersive 9:16 `cover` and 16:9/4:3 `contain` sources with
+  screenshots.
+- If needed, introduce an explicit playback viewport that excludes system
+  navigation controls while keeping overlay controls aligned with the visible
+  player area.
+
+Do not implement this immediately. First finish the stable mock-source pass,
+then run a focused safe-area test so the fix is based on screenshots rather
+than guesswork.
 
 Phase 5 defer:
 

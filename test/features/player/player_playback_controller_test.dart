@@ -1191,7 +1191,7 @@ void main() {
     );
     expect(controller.exportTimingReport(), contains('elapsed='));
     expect(controller.exportTimingReport(), contains('trace='));
-    expect(controller.exportTimingReport(), contains('sourceLabel=mux-x36'));
+    expect(controller.exportTimingReport(), contains('sourceLabel=mux-fast'));
     expect(controller.exportTimingReport(), contains('sinceTraceStartMs='));
     expect(controller.exportTimingReport(), contains('sinceUserActionMs='));
     expect(controller.exportTimingReport(), contains('windowItems='));

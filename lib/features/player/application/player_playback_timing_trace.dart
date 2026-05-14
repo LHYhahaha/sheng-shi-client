@@ -202,23 +202,23 @@ class PlayerPlaybackTimingTrace {
       return 'none';
     }
     if (source.contains('x36xhzz')) {
-      return 'mux-x36';
+      return 'mux-fast';
     }
     if (source.contains('tos_ismc')) {
-      return 'mux-tears';
+      return 'mux-tears-stable';
     }
     if (source.contains('bipbop_16x9/gear1/prog_index')) {
-      return 'apple-bipbop-low';
+      return 'apple-bipbop-low-stable';
     }
     if (source.contains('bipbop_16x9')) {
-      return 'apple-bipbop-16x9';
+      return 'aspect-ratio-16x9-test';
     }
     if (source.contains('bipbop_4x3')) {
-      return 'apple-bipbop-4x3';
+      return 'aspect-ratio-4x3-test';
     }
     if (source.contains('content.jwplatform.com') ||
         source.contains('vM7nH0Kl')) {
-      return 'jw-vod';
+      return 'unstable-source-test';
     }
     if (source.contains('demo.unified-streaming.com') ||
         source.contains('tears-of-steel')) {
