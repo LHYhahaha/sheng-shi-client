@@ -6,6 +6,14 @@ This checklist is for the MVP entitlement chain after E1-E3. It verifies that
 Player, Store, Membership, and Wallet all read/write the shared entitlement
 state instead of maintaining separate mock truth.
 
+## Active Hotfix
+
+真机 + Figma 深度测试发现播放器解锁链路存在 P0 音频泄漏问题，优先处理：
+
+- 计划文档：`docs/playback-unlock-hotfix-plan.md`
+- 优先级：高于多语言 Phase G
+- 目标：锁定剧集 / 解锁弹窗 / 切 tab / 离开播放器时不再后台出声，并完成必要的解锁弹窗、Profile Settings、Wallet mock 默认值收口。
+
 ## Current Shared State Boundary
 
 - `EntitlementController` is the source for membership, coin balance, auto
