@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -315,6 +316,30 @@ class PlayerPlaybackState {
 class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   PlayerPlaybackController(this.sessionKey);
 
+  /// Android texture / surface 销毁后 native resize callback 可能晚到。
+  ///
+  /// 页面退出和 provider teardown 时先 pause、卸载 Video surface，再延迟 dispose media
+  /// player，可以避免 media_kit_video 在 Android integration test teardown 中对已释放
+  /// player 调 `setProperty`。普通业务 dispose 默认不延迟，只有 UI teardown 路径显式传入。
+  static const videoSurfaceTeardownDelay = Duration(milliseconds: 450);
+
+  static bool get shouldDelayVideoSurfaceTeardown {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return false;
+    }
+    final WidgetsBinding binding;
+    try {
+      binding = WidgetsBinding.instance;
+    } catch (_) {
+      return false;
+    }
+    // 普通 widget tests 使用 AutomatedTestWidgetsFlutterBinding。这里不启用真实延迟，
+    // 避免 fake_async 把 teardown timer 判定为泄漏；Android integration test 和真机
+    // runtime 仍启用延迟，覆盖 media_kit_video native resize callback 晚到的问题。
+    return binding.runtimeType.toString() !=
+        'AutomatedTestWidgetsFlutterBinding';
+  }
+
   final String sessionKey;
   late PlayerPlaybackSession _session;
   late final PlayerPlaybackPreloadManager _preloadManager;
@@ -428,7 +453,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       unawaited(_cancelSessionStreams());
       unawaited(_disposePreloads(syncState: false));
       unawaited(_releaseSessionWindowFor('provider dispose'));
-      unawaited(_disposeSessionOnly());
+      unawaited(
+        _disposeSessionOnly(
+          disposeDelay: shouldDelayVideoSurfaceTeardown
+              ? videoSurfaceTeardownDelay
+              : Duration.zero,
+        ),
+      );
     });
     return PlayerPlaybackState.initial(
       videoController: _session.videoController,
@@ -1112,7 +1143,30 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
   }
 
-  Future<void> disposeSession({bool syncState = true}) async {
+  /// 在路由退出或测试 teardown 前先让 UI 卸载 `Video` surface。
+  ///
+  /// Android 的 media_kit_video 可能在 native texture resize callback 晚到时触达
+  /// 已 dispose 的 `VideoController` 内部 notifier。先清空 state 里的 videoController，
+  /// 让 Flutter 树有机会卸载 `Video`，随后再 dispose media session，可以降低 late
+  /// resize callback 打到已释放 notifier 的概率。这个方法不改变播放业务决策，只服务
+  /// 页面退出时的资源释放顺序。
+  void detachVideoSurfaceForTeardown() {
+    if (!ref.mounted || state.videoController == null) {
+      return;
+    }
+    state = state.copyWith(
+      status: state.status == PlayerPlaybackStatus.playing
+          ? PlayerPlaybackStatus.paused
+          : state.status,
+      isBuffering: false,
+      clearVideoController: true,
+    );
+  }
+
+  Future<void> disposeSession({
+    bool syncState = true,
+    Duration disposeDelay = Duration.zero,
+  }) async {
     // 单剧页离开时做强释放：当前 session、prepared window、HLS pending 都要清掉。
     // For You tab 不走 disposeSession，而是 pauseForVisibility，以保留 tab provider。
     _pauseWhenOpenCompletes = true;
@@ -1121,7 +1175,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     await _disposePreloads(syncState: syncState);
     _preloadStates.clear();
     _preloadedItemIds.clear();
-    await _disposeSessionOnly();
+    await _disposeSessionOnly(disposeDelay: disposeDelay);
     _currentPlaybackItemId = null;
     _currentPlaybackSource = null;
     _clearCurrentPlaybackSnapshot();
@@ -1863,12 +1917,17 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     return _prepareManager.windowItemIds.join(',');
   }
 
-  Future<void> _disposeSessionOnly() async {
+  Future<void> _disposeSessionOnly({
+    Duration disposeDelay = Duration.zero,
+  }) async {
     if (_isSessionDisposed) {
       return;
     }
     _isSessionDisposed = true;
     await _session.pause();
+    if (disposeDelay > Duration.zero) {
+      await Future<void>.delayed(disposeDelay);
+    }
     await _session.dispose();
     _logTiming('dispose current session', details: 'reason=dispose session');
   }

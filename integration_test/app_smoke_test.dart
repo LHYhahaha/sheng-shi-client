@@ -1,4 +1,5 @@
 import 'package:drama_client/app/app.dart';
+import 'package:drama_client/features/player/application/player_playback_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -62,6 +63,8 @@ void main() {
     expect(find.text('My Wallet'), findsWidgets);
     await _tap(tester, find.byIcon(Icons.chevron_left_rounded).first);
     expect(find.text('Google User'), findsOneWidget);
+
+    await _stabilizePlayerTeardown(tester);
   });
 }
 
@@ -73,5 +76,14 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
 
 Future<void> _settle(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 100));
+  await tester.pumpAndSettle(const Duration(milliseconds: 100));
+}
+
+Future<void> _stabilizePlayerTeardown(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  await tester.pump(
+    PlayerPlaybackController.videoSurfaceTeardownDelay +
+        const Duration(milliseconds: 150),
+  );
   await tester.pumpAndSettle(const Duration(milliseconds: 100));
 }

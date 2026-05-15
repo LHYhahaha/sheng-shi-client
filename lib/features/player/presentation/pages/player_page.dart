@@ -139,13 +139,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    // 单剧页是独立 route，离开即释放 session；For You 是 shell tab，离开页面实例时
-    // 只按可见性暂停，避免 tab provider 和 indexedStack 生命周期冲突。
-    if (widget.feedMode == PlayerFeedMode.singleDrama) {
-      unawaited(_playbackController.disposeSession(syncState: false));
-    } else {
-      unawaited(_playbackController.pauseForVisibility(syncState: false));
-    }
+    // 真正销毁页面实例时释放 session。底部 tab 切换不会 dispose For You 页面，它走
+    // AppShell 的 pauseForVisibility；这里覆盖的是 app/test teardown 或 route 树销毁，
+    // 不能只 pause，否则 Android VideoController 可能在树释放后仍收到 native callback。
+    _playbackController.detachVideoSurfaceForTeardown();
+    unawaited(
+      _playbackController.disposeSession(
+        syncState: false,
+        disposeDelay: PlayerPlaybackController.shouldDelayVideoSurfaceTeardown
+            ? PlayerPlaybackController.videoSurfaceTeardownDelay
+            : Duration.zero,
+      ),
+    );
     _shellChrome?.show();
     _pageController.dispose();
     super.dispose();
@@ -540,7 +545,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                         episodeNumber: item.episode.number,
                         playbackRate: playbackState.playbackRate,
                         overlayOpacity: _overlayOpacity,
-                        onBackTap: _goBackFromPlayer,
+                        onBackTap: () {
+                          unawaited(_goBackFromPlayer());
+                        },
                         onSpeedTap: _showSpeedSheet,
                       ),
                   ],
@@ -775,7 +782,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
   }
 
-  void _goBackFromPlayer() {
+  Future<void> _goBackFromPlayer() async {
+    _playbackController.detachVideoSurfaceForTeardown();
+    // 给 Flutter 树一个 frame 先卸载 Video widget，再 pop route 触发 media session
+    // dispose。这个顺序专门规避 Android native resize callback 晚于 Widget dispose 的
+    // integration test teardown 问题，不改变播放器业务状态。
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      return;
+    }
     if (context.canPop()) {
       context.pop();
     } else {
