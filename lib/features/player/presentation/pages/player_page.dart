@@ -67,7 +67,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   static const _topBarBackIconSize = 28.0;
   static const _topBarMoreIconSize = 24.0;
   static const _dimmedOverlayOpacity = 0.64;
-  static const _autoUnlockSheetDebounce = Duration(milliseconds: 200);
+  static const _autoUnlockSheetStableDelay = Duration(milliseconds: 120);
+  static const _autoUnlockSheetMaxWait = Duration(milliseconds: 650);
+  static const _autoUnlockSheetPostFrameDelay = Duration(milliseconds: 16);
 
   late final PageController _pageController;
   late final String _sessionKey;
@@ -86,7 +88,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   String? _activeCoinSheetItemId;
   String? _activeRechargeSheetItemId;
   String? _pendingAutoUnlockSheetItemId;
-  Timer? _pendingAutoUnlockSheetTimer;
+  Timer? _pendingAutoUnlockSheetStableTimer;
+  Timer? _pendingAutoUnlockSheetMaxTimer;
 
   String _createSessionKey() {
     return switch (widget.feedMode) {
@@ -700,51 +703,104 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   void _cancelPendingAutoUnlockSheet() {
-    _pendingAutoUnlockSheetTimer?.cancel();
-    _pendingAutoUnlockSheetTimer = null;
+    _pendingAutoUnlockSheetStableTimer?.cancel();
+    _pendingAutoUnlockSheetMaxTimer?.cancel();
+    _pendingAutoUnlockSheetStableTimer = null;
+    _pendingAutoUnlockSheetMaxTimer = null;
     _pendingAutoUnlockSheetItemId = null;
     _autoUnlockSheetGeneration += 1;
   }
 
   void _scheduleAutoUnlockSheetForItem(PlayerFeedItem item) {
-    _pendingAutoUnlockSheetTimer?.cancel();
-    _pendingAutoUnlockSheetTimer = null;
+    _pendingAutoUnlockSheetStableTimer?.cancel();
+    _pendingAutoUnlockSheetMaxTimer?.cancel();
+    _pendingAutoUnlockSheetStableTimer = null;
+    _pendingAutoUnlockSheetMaxTimer = null;
     _pendingAutoUnlockSheetItemId = null;
 
-    if (!mounted || !_isLockedAutoSheetCandidate(item)) {
+    if (!mounted ||
+        _isModalOpen ||
+        _activeCoinSheetItemId != null ||
+        _activeRechargeSheetItemId != null ||
+        !_isLockedAutoSheetCandidate(item)) {
       return;
     }
 
     _pendingAutoUnlockSheetItemId = item.id;
     final generation = ++_autoUnlockSheetGeneration;
-    if (_isPageScrolling) {
+
+    _pendingAutoUnlockSheetStableTimer = Timer(_autoUnlockSheetStableDelay, () {
+      _pendingAutoUnlockSheetStableTimer = null;
+      _queueAutoUnlockSheetPresentation(
+        item,
+        generation: generation,
+        allowWhileScrolling: false,
+      );
+    });
+    _pendingAutoUnlockSheetMaxTimer = Timer(_autoUnlockSheetMaxWait, () {
+      _pendingAutoUnlockSheetMaxTimer = null;
+      _queueAutoUnlockSheetPresentation(
+        item,
+        generation: generation,
+        allowWhileScrolling: true,
+      );
+    });
+  }
+
+  void _queueAutoUnlockSheetPresentation(
+    PlayerFeedItem item, {
+    required int generation,
+    required bool allowWhileScrolling,
+  }) {
+    if (!mounted ||
+        generation != _autoUnlockSheetGeneration ||
+        _pendingAutoUnlockSheetItemId != item.id) {
       return;
     }
 
-    _pendingAutoUnlockSheetTimer = Timer(_autoUnlockSheetDebounce, () {
-      _pendingAutoUnlockSheetTimer = null;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
       if (!mounted ||
           generation != _autoUnlockSheetGeneration ||
           _pendingAutoUnlockSheetItemId != item.id) {
         return;
       }
-      unawaited(_showAutoUnlockSheetForItem(item, generation: generation));
+      unawaited(() async {
+        await Future<void>.delayed(_autoUnlockSheetPostFrameDelay);
+        if (!mounted ||
+            generation != _autoUnlockSheetGeneration ||
+            _pendingAutoUnlockSheetItemId != item.id) {
+          return;
+        }
+        await _showAutoUnlockSheetForItem(
+          item,
+          generation: generation,
+          allowWhileScrolling: allowWhileScrolling,
+        );
+      }());
     });
   }
 
   Future<void> _showAutoUnlockSheetForItem(
     PlayerFeedItem item, {
     required int generation,
+    required bool allowWhileScrolling,
   }) async {
     if (!mounted ||
         generation != _autoUnlockSheetGeneration ||
         !_isCurrentFeedItem(item) ||
         !_isLockedAutoSheetCandidate(item) ||
+        (!allowWhileScrolling && _isPageScrolling) ||
         _isModalOpen ||
         _activeCoinSheetItemId != null ||
         _activeRechargeSheetItemId != null) {
       return;
     }
+
+    _pendingAutoUnlockSheetStableTimer?.cancel();
+    _pendingAutoUnlockSheetMaxTimer?.cancel();
+    _pendingAutoUnlockSheetStableTimer = null;
+    _pendingAutoUnlockSheetMaxTimer = null;
+    _pendingAutoUnlockSheetItemId = null;
 
     final decision = ref
         .read(entitlementControllerProvider.notifier)
@@ -760,6 +816,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!mounted ||
         generation != _autoUnlockSheetGeneration ||
         !_isCurrentFeedItem(item) ||
+        (!_isLockedAutoSheetCandidate(item)) ||
+        (!allowWhileScrolling && _isPageScrolling) ||
         _isModalOpen) {
       return;
     }
