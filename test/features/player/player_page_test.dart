@@ -851,6 +851,67 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets(
+    'membership package success from recharge sheet allows pending coin episode',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          initialLocation: RoutePaths.playerLocation(
+            dramaId: 'drama-a',
+            episodeId: '2',
+          ),
+          repository: _FakePlayerFeedRepository.normal(),
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Recharge to unlock'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey('player_recharge_membership_weekly_vip_promo'),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('player_recharge_unlock_processing')),
+        findsOneWidget,
+      );
+
+      await tester.pump(const Duration(milliseconds: 220));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Recharge to unlock'), findsNothing);
+      expect(find.text('Unlock Now'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('player_video_tap_layer')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('unavailable episode remains blocked for member', (tester) async {
+    final unavailableSession = _FakePlaybackSession();
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '3',
+        ),
+        repository: _FakePlayerFeedRepository.normal(),
+        entitlementRepository: MockEntitlementRepository.loggedInMember(),
+        playbackSessionFactory: () => unavailableSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('This episode is unavailable.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
+    expect(unavailableSession.playCount, 0);
+  });
+
   testWidgets('promotion badge hides when countdown ends', (tester) async {
     await tester.pumpWidget(
       _buildPlayerApp(

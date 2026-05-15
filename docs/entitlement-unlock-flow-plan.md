@@ -616,6 +616,21 @@ Done.
 - Locked/unavailable/null-source protection is still preserved before source open/preload/prepare.
 - Recharge mock success currently grants mock coins or membership through `EntitlementController`, then re-evaluates the pending target.
 
+### E2.1: Member Global Allow + Unlock Flow Cleanup
+
+Done.
+
+- Entitlement decision priority is now:
+  - unavailable
+  - free
+  - member allow
+  - already unlocked
+  - coin feature/balance/auto unlock/recharge
+- Members can play both membership and coin episodes without coin deduction.
+- Unavailable episodes remain blocked even for members.
+- If the user selects a membership package from `PlayerRechargeUnlockSheet`, mock success grants membership and re-evaluates the pending coin episode; the episode then plays directly instead of showing another coin/recharge sheet.
+- Added controller and player widget coverage for member coin playback, member unavailable blocking, and recharge-sheet membership success continuation.
+
 ### E3 Defer: Shared Commerce/Wallet Entitlement State
 
 Still deferred.

@@ -48,6 +48,32 @@ void main() {
       expect(decision.type, EpisodeAccessDecisionType.allowPlay);
     });
 
+    test(
+      'member can play coins episode without coin deduction decision',
+      () async {
+        final container = _containerWith(
+          MockEntitlementRepository.loggedInMember(),
+        );
+        addTearDown(container.dispose);
+        final controller = container.read(
+          entitlementControllerProvider.notifier,
+        );
+        await controller.load();
+
+        final decision = controller.evaluateAccessFromFixture(
+          mockEntitlementEpisodeFixture('found-you-ep-6'),
+        );
+
+        expect(decision.type, EpisodeAccessDecisionType.allowPlay);
+        expect(decision.balance, 20);
+        expect(decision.operationId, isNull);
+        expect(
+          container.read(entitlementControllerProvider).pendingUnlock,
+          isNull,
+        );
+      },
+    );
+
     test('membership episode sends non-member to membership', () async {
       final container = _containerWith(
         MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOff(),
@@ -191,6 +217,22 @@ void main() {
     test('unavailable episode waits unlock', () async {
       final container = _containerWith(
         MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOn(),
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(entitlementControllerProvider.notifier);
+      await controller.load();
+
+      final decision = controller.evaluateAccessFromFixture(
+        mockEntitlementEpisodeFixture('found-you-ep-unavailable'),
+      );
+
+      expect(decision.type, EpisodeAccessDecisionType.waitUnlock);
+      expect(decision.reason, 'episode_unavailable');
+    });
+
+    test('unavailable episode is still blocked for member', () async {
+      final container = _containerWith(
+        MockEntitlementRepository.loggedInMember(),
       );
       addTearDown(container.dispose);
       final controller = container.read(entitlementControllerProvider.notifier);

@@ -192,17 +192,28 @@ class EntitlementController extends Notifier<UserEntitlementState> {
       );
     }
 
-    if (unlockType == EpisodeUnlockType.membership) {
+    // 会员是全局放行权益：只要内容可用，会员剧集和金币剧集都可以直接播。
+    // 这条规则必须放在金币余额/自动解锁之前，避免会员账号被误扣金币或弹充值。
+    if (state.isMember) {
       return _decision(
-        type: state.isMember
-            ? EpisodeAccessDecisionType.allowPlay
-            : EpisodeAccessDecisionType.goMembership,
+        type: EpisodeAccessDecisionType.allowPlay,
         dramaId: dramaId,
         episodeId: episodeId,
         itemId: itemId,
         unlockType: unlockType,
         price: price,
-        reason: state.isMember ? null : 'membership_required',
+      );
+    }
+
+    if (unlockType == EpisodeUnlockType.membership) {
+      return _decision(
+        type: EpisodeAccessDecisionType.goMembership,
+        dramaId: dramaId,
+        episodeId: episodeId,
+        itemId: itemId,
+        unlockType: unlockType,
+        price: price,
+        reason: 'membership_required',
       );
     }
 
