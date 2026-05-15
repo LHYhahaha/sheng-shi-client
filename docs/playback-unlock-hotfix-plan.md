@@ -190,6 +190,62 @@ Figma 对照块：
 - 充值成功只 grant mock entitlement，不直接播放；金币包成功后自动回到金币解锁弹窗，
   等用户点击 `Play` 才扣金币并播放。
 
+## Unlock UX Round 3
+
+日期：2026-05-16
+
+真机体验新增问题：
+
+1. 用户上滑进入 locked episode 时，`PageView` 还没有滑动到位，解锁/充值抽屉就已经弹出，
+   导致画面卡顿、滑动体验不顺。
+2. 用户在 `解锁弹窗` 点击 `Play` 后，音频和进度条已经开始播放，但画面仍停留在封面，
+   说明 unlock success 后 playable video surface 没有可靠恢复，poster 仍然挡住视频。
+
+### 目标
+
+本轮只修 locked episode 的体验时序，不重画弹窗、不新增第二套 UI、不改 entitlement 决策模型。
+
+### 需要修正的行为
+
+1. 自动弹窗必须等滑动稳定后再打开：
+   - `PageView` scroll end 后再评估是否自动打开 `解锁弹窗` / `播放页-充值`。
+   - 可加短 debounce，例如 150-250ms，避免滑动刚落位时立即抢焦点。
+   - 如果用户继续滑动，取消上一轮 pending auto sheet。
+   - auto sheet 打开前必须校验当前 item 仍是同一个 locked episode，且当前没有其他 modal/sheet。
+2. 手动点击 `Unlock Now` 不需要等待 debounce：
+   - 用户主动点击按钮时，应立即打开对应流程。
+   - 但仍需校验 current item / modal / access decision。
+3. 解锁成功后必须恢复 playable video surface：
+   - `Play` 成功扣费后，当前 episode 应重新 evaluate 为可播放。
+   - 调用播放前要确保 locked/paywall blocked 状态清掉，Video surface 可以重新 attach。
+   - 如果 `playing=true` 或 position 已推进但 `hasFirstFrame=false`，应显示 video surface +
+     loading overlay，poster 只能作为底层 fallback，不能继续完整盖住视频。
+   - 不允许出现“有声音、进度在走、画面仍是封面”的状态。
+4. 关闭弹窗后保持现有 Round 2 行为：
+   - 当前 episode 保持 locked poster / fallback。
+   - `Unlock Now` 按钮仍可见。
+   - 不播放旧音频。
+   - 用户可以继续上下滑。
+
+### 验收标准
+
+- 上滑进入 locked episode 时，先完成滑动落位，再弹出对应抽屉；不能在滑动过程中抢弹。
+- 快速连续滑 EP04 -> EP05，只允许最终当前 item 的抽屉出现。
+- 关闭抽屉后，`Unlock Now` 按钮仍在，且无旧音频。
+- 点击 `Unlock Now` 可以立即打开对应流程。
+- 余额足够路径：点击 `Play` 后能显示视频画面并播放，不停留在封面。
+- 余额不足路径：充值成功后回到 `解锁弹窗`；再点 `Play` 后能显示视频画面并播放。
+- locked / unavailable 仍不 preload / prepare / open unauthorized source。
+
+### 建议涉及文件
+
+- `lib/features/player/presentation/pages/player_page.dart`
+- `lib/features/player/presentation/widgets/player_chrome.dart`
+- `lib/features/player/application/player_playback_controller.dart`
+- `lib/features/entitlement/application/entitlement_controller.dart`
+- `test/features/player/player_page_test.dart`
+- `integration_test/app_smoke_test.dart`
+
 ## 必跑验证
 
 ```bash
