@@ -4,6 +4,10 @@ import '../data/player_feed_repository_provider.dart';
 import '../domain/player_content.dart';
 import '../domain/player_feed.dart';
 
+/// 播放器 feed provider，按 sessionKey 隔离实例。
+///
+/// For You tab 和单剧 route 都会使用播放器，但它们的 index、列表和 retry 状态不能互相
+/// 污染。这里使用 family 是为了让“资源播放状态”和“页面 feed 状态”都能按入口隔离。
 final playerFeedControllerProvider =
     NotifierProvider.family<PlayerFeedController, PlayerFeedState, String>(
       PlayerFeedController.new,

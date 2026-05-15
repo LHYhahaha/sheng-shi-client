@@ -8,6 +8,11 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../application/auth_controller.dart';
 import '../../domain/auth_session.dart';
 
+/// 账号操作页。
+///
+/// logout/delete 的 loading 和错误留在 Account 侧展示，是为了让 Profile 继续只做
+/// 登录态合成。真实账号系统接入后，破坏性动作仍应在这里确认和防重复点击，成功后
+/// 再由 AuthState 统一回到 guest。
 class AccountPage extends ConsumerStatefulWidget {
   const AccountPage({super.key});
 

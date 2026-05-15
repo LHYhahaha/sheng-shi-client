@@ -8,6 +8,10 @@ import '../../../../shared/widgets/app_primary_button.dart';
 import '../../application/membership_controller.dart';
 import '../../domain/membership_plan.dart';
 
+/// 会员 mock 开通确认弹窗。
+///
+/// 这里只负责展示确认、processing 和完成态。真实订阅接入后，权益生效仍必须等待
+/// MembershipController 通过服务端订单/权益接口刷新，不应在弹窗里直接改会员状态。
 class MembershipConfirmationSheet extends StatelessWidget {
   const MembershipConfirmationSheet({
     required this.plan,

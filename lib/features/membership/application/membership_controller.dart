@@ -3,11 +3,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/membership_repository_provider.dart';
 import '../domain/membership_plan.dart';
 
+/// Membership feature 的唯一页面状态入口。
+///
+/// 会员页展示、套餐选择和 mock 开通弹窗都通过这里管理。真实订阅接入后，客户端只能
+/// 触发订单/验单流程，会员权益是否生效必须由服务端权益刷新决定。
 final membershipControllerProvider =
     NotifierProvider<MembershipController, MembershipState>(
       MembershipController.new,
     );
 
+/// 会员 mock 开通确认弹窗的本地流程状态。
+///
+/// 只用于按钮禁用、loading 和完成态展示，不代表 App Store/Google Play 或服务端
+/// 已经确认权益。不要用这个 enum 直接驱动 Profile 的会员 active 状态。
 enum MembershipPurchaseStatus { idle, processing, success, cancelled }
 
 /// 会员页状态，包含权益展示、套餐选择和 mock 开通确认。

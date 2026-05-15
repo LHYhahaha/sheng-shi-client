@@ -49,8 +49,15 @@ class HlsLocalProxyResponse {
 }
 
 abstract interface class HlsLocalProxyHttpClient {
+  /// 拉取远端 playlist 或 segment。
+  ///
+  /// 这是 proxy spike 的底层 HTTP 能力，不承担业务鉴权刷新。真实 signed URL 过期时，
+  /// 应回到播放源接口刷新，而不是在这里私自重试旧 URL。
   Future<HlsLocalProxyResponse> get(Uri uri, {required Duration timeout});
 
+  /// 释放仍在进行中的远端请求。
+  ///
+  /// 页面隐藏、播放器 dispose 或 proxy stop 时必须调用，避免本地代理继续下载 segment。
   void releasePending();
 }
 
@@ -349,6 +356,8 @@ String rewritePlaylist(
   String playlistBody, {
   required Uri localBaseUri,
 }) {
+  // 只改写非 tag 行。HLS tag 中可能包含 KEY、MAP、字幕或变体信息，spike 阶段不解析
+  // 这些语义，避免把本地代理误做成半套生产 manifest processor。
   final lines = const LineSplitter().convert(playlistBody);
   final rewrittenLines = lines.map((line) {
     final trimmed = line.trim();

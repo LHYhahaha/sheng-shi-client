@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/auth_repository_provider.dart';
 import '../domain/auth_session.dart';
 
+/// Auth feature 的全局 session provider。
+///
+/// Profile、Account 和 Login 都应该读取这一个 AuthState。不要在 Profile 或 Account
+/// 再缓存一份“是否登录”，否则 logout/delete/token 失效后很容易出现页面状态不一致。
 final authControllerProvider = NotifierProvider<AuthController, AuthState>(
   AuthController.new,
 );

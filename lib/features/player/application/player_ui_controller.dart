@@ -2,6 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/player_content.dart';
 
+/// 播放器 UI 状态 provider，按 sessionKey 隔离。
+///
+/// 这里的状态只服务 paywall、集数展示和 UI 意图。真实 play/pause/open/error 必须以
+/// PlayerPlaybackController 为准，否则 sheet 打开、For You 切 tab 或单剧返回时会出现
+/// UI 以为在播但 media session 已释放的错位。
 final playerUiControllerProvider =
     NotifierProvider.family<PlayerUiController, PlayerUiState, String>(
       PlayerUiController.new,

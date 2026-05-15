@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/wallet_repository_provider.dart';
 import '../domain/wallet_record.dart';
 
+/// Wallet feature 的唯一状态入口。
+///
+/// 钱包余额、自动解锁偏好和三类流水都从这里暴露。真实支付/权益接入后，余额和流水
+/// 只能由 repository 刷新，UI 层不能因为某个 mock 购买成功就直接改钱包数值。
 final walletControllerProvider =
     NotifierProvider<WalletController, WalletState>(WalletController.new);
 

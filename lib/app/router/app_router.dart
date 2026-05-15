@@ -17,6 +17,11 @@ import '../../features/wallet/presentation/pages/wallet_page.dart';
 import 'route_names.dart';
 import 'route_paths.dart';
 
+/// 应用路由表。
+///
+/// 页面跳转统一通过 RoutePaths/RouteNames，避免散落字符串。播放器路由尤其敏感：
+/// For You 在 shell 内保留底部导航，单剧播放器在 shell 外全屏并由 PlayerPage 管理
+/// hide/show bottom navigation。
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: RoutePaths.home,

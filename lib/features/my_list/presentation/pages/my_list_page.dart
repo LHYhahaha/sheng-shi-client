@@ -11,6 +11,11 @@ import '../../../../shared/theme/app_radii.dart';
 import '../../application/my_list_controller.dart';
 import '../../domain/my_list_item.dart';
 
+/// My list 页面。
+///
+/// 页面只负责组装 header/tab/list/slidable 和 shell navigation 显隐；列表数据、编辑态、
+/// 选择集合、删除和 open slidable 都由 MyListController 管理，方便后续接真实接口时
+/// 在 controller 内统一处理乐观更新与失败回滚。
 class MyListPage extends ConsumerStatefulWidget {
   const MyListPage({super.key});
 

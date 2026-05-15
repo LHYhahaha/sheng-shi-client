@@ -8,6 +8,10 @@ import '../../../../shared/widgets/app_primary_button.dart';
 import '../../application/store_controller.dart';
 import '../../domain/store_package.dart';
 
+/// 商店 mock 购买确认弹窗。
+///
+/// 弹窗只展示 StoreController 的本地流程态，并在 processing 期间禁用按钮。真实支付
+/// 接入后，这里仍不应直接发放金币或会员权益，只负责把用户确认交给 controller。
 class StoreConfirmationSheet extends StatelessWidget {
   const StoreConfirmationSheet({
     required this.package,

@@ -3,6 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../drama/data/drama_repository_provider.dart';
 import '../../drama/domain/drama.dart';
 
+/// Home feed 的状态入口。
+///
+/// 首页只管理分类、分页和首屏内容，不持有播放器 session。首屏预热也只是通过
+/// PlayerStartupPreloadController 提交资源准备意图，不能在 Home 里创建 media_kit
+/// Player，否则切 tab、后台和列表刷新都会把播放生命周期复杂化。
 final homeFeedControllerProvider =
     NotifierProvider<HomeFeedController, HomeFeedState>(HomeFeedController.new);
 

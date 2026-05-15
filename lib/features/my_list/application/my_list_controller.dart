@@ -3,6 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/my_list_repository_provider.dart';
 import '../domain/my_list_item.dart';
 
+/// My list feature 的唯一状态入口。
+///
+/// 收藏批量编辑和播放列表左滑删除都依赖同一份列表状态。UI 不直接过滤 items，
+/// 是为了后续接真实收藏/播放历史接口时能统一做乐观更新、失败回滚和 after-delete
+/// empty 状态。
 final myListControllerProvider =
     NotifierProvider<MyListController, MyListState>(MyListController.new);
 

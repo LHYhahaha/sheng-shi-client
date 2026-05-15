@@ -3,10 +3,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/store_repository_provider.dart';
 import '../domain/store_package.dart';
 
+/// Store feature 的唯一页面状态入口。
+///
+/// UI、弹窗和测试都通过这个 provider 读写商店状态，避免各处直接 new repository 或
+/// 自行模拟购买流程。后续接真实订单/IAP 时，订单状态、验单和权益刷新都应从这里
+/// 统一进入，而不是把支付结果散落到按钮回调里。
 final storeControllerProvider = NotifierProvider<StoreController, StoreState>(
   StoreController.new,
 );
 
+/// 商店 mock 购买确认弹窗的本地流程状态。
+///
+/// 这些状态只描述“弹窗交互走到哪一步”，不是支付渠道或服务端订单状态。真实支付接入
+/// 后，`success` 也只能代表服务端确认后的结果，不能由客户端延迟任务自行认定。
 enum StorePurchaseStatus { idle, processing, success, cancelled }
 
 /// 商店页状态，覆盖充值套餐、余额和 mock 购买确认弹窗。
