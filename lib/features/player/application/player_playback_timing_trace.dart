@@ -271,11 +271,44 @@ class PlayerPlaybackTimingTrace {
     if (source.contains('bipbop_16x9/gear1/prog_index')) {
       return 'apple-bipbop-low-stable';
     }
+    if (source.contains('img_bipbop_adv_example_ts')) {
+      return 'apple-bipbop-advanced-ts-test';
+    }
+    if (source.contains('bipbop_16x9/gear2/prog_index')) {
+      return 'apple-bipbop-16x9-gear2-test';
+    }
+    if (source.contains('bipbop_16x9/gear3/prog_index')) {
+      return 'apple-bipbop-16x9-gear3-test';
+    }
+    if (source.contains('bipbop_16x9/gear4/prog_index')) {
+      return 'apple-bipbop-16x9-gear4-test';
+    }
     if (source.contains('bipbop_16x9')) {
       return 'aspect-ratio-16x9-test';
     }
+    if (source.contains('bipbop_4x3/gear1/prog_index')) {
+      return 'apple-bipbop-4x3-gear1-test';
+    }
+    if (source.contains('bipbop_4x3/gear2/prog_index')) {
+      return 'apple-bipbop-4x3-gear2-test';
+    }
+    if (source.contains('bipbop_4x3/gear3/prog_index')) {
+      return 'apple-bipbop-4x3-gear3-test';
+    }
+    if (source.contains('bipbop_4x3/gear4/prog_index')) {
+      return 'apple-bipbop-4x3-gear4-test';
+    }
     if (source.contains('bipbop_4x3')) {
       return 'aspect-ratio-4x3-test';
+    }
+    if (source.contains('angel-one-hls')) {
+      return 'shaka-angel-one-test';
+    }
+    if (source.contains('bbb-dark-truths-hls')) {
+      return 'shaka-bbb-dark-truths-test';
+    }
+    if (source.contains('cph-p2p-msl.akamaized.net')) {
+      return 'akamai-live-hls-test';
     }
     if (source.contains('content.jwplatform.com') ||
         source.contains('vM7nH0Kl')) {
@@ -284,6 +317,18 @@ class PlayerPlaybackTimingTrace {
     if (source.contains('demo.unified-streaming.com') ||
         source.contains('tears-of-steel')) {
       return 'slow-source-test';
+    }
+    if (source.contains('test_001/stream')) {
+      return 'mux-arte-china-test';
+    }
+    if (source.contains('pts_shift')) {
+      return 'mux-pts-shift-test';
+    }
+    if (source.contains('dai-discontinuity-deltatre')) {
+      return 'mux-ad-discontinuity-test';
+    }
+    if (source.contains('issue666')) {
+      return 'mux-issue666-test';
     }
     if (source.contains('lz15')) {
       return 'business-lz15';

@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('MockPlayerContentRepository', () {
     test('keeps remote HLS video metadata for mock playback', () {
-      expect(mockPlayerVideoAssets.length, 7);
+      expect(mockPlayerVideoAssets.length, greaterThanOrEqualTo(20));
 
       for (final asset in mockPlayerVideoAssets) {
         expect(asset.sourceLabel, isNotEmpty);
@@ -13,7 +13,8 @@ void main() {
         expect(asset.sourcePage, startsWith('https://'));
         expect(asset.licenseNote, contains('testing and development'));
         expect(asset.videoUrl, startsWith('https://'));
-        expect(asset.videoUrl, contains('.m3u8'));
+        expect(asset.videoUrl, endsWith('.m3u8'));
+        expect(asset.videoUrl, isNot(contains('.mp4')));
         expect(asset.aspectRatio, greaterThan(0));
       }
 
@@ -29,8 +30,23 @@ void main() {
           'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear1/prog_index.m3u8',
           'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8',
           'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8',
+          'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
+          'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear2/prog_index.m3u8',
+          'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear3/prog_index.m3u8',
+          'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear4/prog_index.m3u8',
+          'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/gear1/prog_index.m3u8',
+          'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/gear2/prog_index.m3u8',
+          'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/gear3/prog_index.m3u8',
+          'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/gear4/prog_index.m3u8',
+          'https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8',
+          'https://storage.googleapis.com/shaka-demo-assets/bbb-dark-truths-hls/hls.m3u8',
+          'https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8',
           'https://content.jwplatform.com/manifests/vM7nH0Kl.m3u8',
           'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+          'https://test-streams.mux.dev/test_001/stream.m3u8',
+          'https://test-streams.mux.dev/pts_shift/master.m3u8',
+          'https://test-streams.mux.dev/dai-discontinuity-deltatre/manifest.m3u8',
+          'https://test-streams.mux.dev/issue666/playlists/cisq0gim60007xzvi505emlxx.m3u8',
         ]),
       );
       expect(
@@ -41,8 +57,23 @@ void main() {
           'apple-bipbop-low-stable',
           'aspect-ratio-16x9-test',
           'aspect-ratio-4x3-test',
+          'apple-bipbop-advanced-ts-test',
+          'apple-bipbop-16x9-gear2-test',
+          'apple-bipbop-16x9-gear3-test',
+          'apple-bipbop-16x9-gear4-test',
+          'apple-bipbop-4x3-gear1-test',
+          'apple-bipbop-4x3-gear2-test',
+          'apple-bipbop-4x3-gear3-test',
+          'apple-bipbop-4x3-gear4-test',
+          'shaka-angel-one-test',
+          'shaka-bbb-dark-truths-test',
+          'akamai-live-hls-test',
           'unstable-source-test',
           'slow-source-test',
+          'mux-arte-china-test',
+          'mux-pts-shift-test',
+          'mux-ad-discontinuity-test',
+          'mux-issue666-test',
         ]),
       );
     });

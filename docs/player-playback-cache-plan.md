@@ -1048,10 +1048,14 @@ Completed:
     `https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear1/prog_index.m3u8`
 - Special-purpose fixtures remain available in `mockPlayerVideoAssets`, but do
   not enter the default episode chain:
+  - At least 20 remote HLS `.m3u8` fixtures are kept for playback tests and
+    source A/B validation. Direct MP4 files are intentionally excluded.
   - `slow-source-test` for slow first-frame / bad-network validation.
   - `aspect-ratio-16x9-test` for contain/fit validation.
   - `aspect-ratio-4x3-test` for contain/fit validation.
   - `unstable-source-test` for intentionally suspect source behavior.
+  - Apple, Mux, Shaka, Akamai, JW, and Unified Streaming HLS fixtures for
+    playlist/parser, timing, and fallback source checks.
 
 Validation rule:
 

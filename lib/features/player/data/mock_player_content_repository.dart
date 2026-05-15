@@ -56,6 +56,127 @@ const mockPlayerVideoAssets = [
     aspectRatio: 4 / 3,
   ),
   MockPlayerVideoAsset(
+    sourceLabel: 'apple-bipbop-advanced-ts-test',
+    title: 'Apple BipBop Advanced TS HLS',
+    sourceName: 'Apple Developer',
+    sourcePage: 'https://developer.apple.com/streaming/examples/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
+    aspectRatio: 16 / 9,
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'apple-bipbop-16x9-gear2-test',
+    title: 'Apple BipBop 16x9 Gear 2 HLS',
+    sourceName: 'Apple Developer',
+    sourcePage: 'https://developer.apple.com/streaming/examples/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear2/prog_index.m3u8',
+    aspectRatio: 16 / 9,
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'apple-bipbop-16x9-gear3-test',
+    title: 'Apple BipBop 16x9 Gear 3 HLS',
+    sourceName: 'Apple Developer',
+    sourcePage: 'https://developer.apple.com/streaming/examples/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear3/prog_index.m3u8',
+    aspectRatio: 16 / 9,
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'apple-bipbop-16x9-gear4-test',
+    title: 'Apple BipBop 16x9 Gear 4 HLS',
+    sourceName: 'Apple Developer',
+    sourcePage: 'https://developer.apple.com/streaming/examples/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/gear4/prog_index.m3u8',
+    aspectRatio: 16 / 9,
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'apple-bipbop-4x3-gear1-test',
+    title: 'Apple BipBop 4x3 Gear 1 HLS',
+    sourceName: 'Apple Developer',
+    sourcePage: 'https://developer.apple.com/streaming/examples/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/gear1/prog_index.m3u8',
+    aspectRatio: 4 / 3,
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'apple-bipbop-4x3-gear2-test',
+    title: 'Apple BipBop 4x3 Gear 2 HLS',
+    sourceName: 'Apple Developer',
+    sourcePage: 'https://developer.apple.com/streaming/examples/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/gear2/prog_index.m3u8',
+    aspectRatio: 4 / 3,
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'apple-bipbop-4x3-gear3-test',
+    title: 'Apple BipBop 4x3 Gear 3 HLS',
+    sourceName: 'Apple Developer',
+    sourcePage: 'https://developer.apple.com/streaming/examples/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/gear3/prog_index.m3u8',
+    aspectRatio: 4 / 3,
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'apple-bipbop-4x3-gear4-test',
+    title: 'Apple BipBop 4x3 Gear 4 HLS',
+    sourceName: 'Apple Developer',
+    sourcePage: 'https://developer.apple.com/streaming/examples/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/gear4/prog_index.m3u8',
+    aspectRatio: 4 / 3,
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'shaka-angel-one-test',
+    title: 'Shaka Angel One HLS',
+    sourceName: 'Shaka Player Demo Assets',
+    sourcePage: 'https://shaka-player-demo.appspot.com/demo/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8',
+    aspectRatio: 16 / 9,
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'shaka-bbb-dark-truths-test',
+    title: 'Shaka Big Buck Bunny Dark Truths HLS',
+    sourceName: 'Shaka Player Demo Assets',
+    sourcePage: 'https://shaka-player-demo.appspot.com/demo/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://storage.googleapis.com/shaka-demo-assets/bbb-dark-truths-hls/hls.m3u8',
+    aspectRatio: 16 / 9,
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'akamai-live-hls-test',
+    title: 'Akamai Live HLS Test',
+    sourceName: 'Akamai Test Stream',
+    sourcePage: 'https://cph-p2p-msl.akamaized.net/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8',
+    aspectRatio: 16 / 9,
+  ),
+  MockPlayerVideoAsset(
     sourceLabel: 'unstable-source-test',
     title: 'JW Platform VOD HLS',
     sourceName: 'JW Player',
@@ -75,6 +196,48 @@ const mockPlayerVideoAssets = [
         'Public HLS fixture for slow-source/bad-network testing and development; remote URL only.',
     videoUrl:
         'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+    aspectRatio: 16 / 9,
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'mux-arte-china-test',
+    title: 'Mux ARTE China HLS',
+    sourceName: 'Mux Test Streams',
+    sourcePage: 'https://test-streams.mux.dev/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl: 'https://test-streams.mux.dev/test_001/stream.m3u8',
+    aspectRatio: 16 / 9,
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'mux-pts-shift-test',
+    title: 'Mux PTS Shift HLS',
+    sourceName: 'Mux Test Streams',
+    sourcePage: 'https://test-streams.mux.dev/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl: 'https://test-streams.mux.dev/pts_shift/master.m3u8',
+    aspectRatio: 16 / 9,
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'mux-ad-discontinuity-test',
+    title: 'Mux DAI Discontinuity HLS',
+    sourceName: 'Mux Test Streams',
+    sourcePage: 'https://test-streams.mux.dev/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://test-streams.mux.dev/dai-discontinuity-deltatre/manifest.m3u8',
+    aspectRatio: 16 / 9,
+  ),
+  MockPlayerVideoAsset(
+    sourceLabel: 'mux-issue666-test',
+    title: 'Mux hls.js Issue 666 HLS',
+    sourceName: 'Mux Test Streams',
+    sourcePage: 'https://test-streams.mux.dev/',
+    licenseNote:
+        'Public HLS fixture for testing and development; remote URL only.',
+    videoUrl:
+        'https://test-streams.mux.dev/issue666/playlists/cisq0gim60007xzvi505emlxx.m3u8',
     aspectRatio: 16 / 9,
   ),
 ];
