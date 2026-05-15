@@ -13,6 +13,7 @@ import 'package:drama_client/features/player/application/player_playback_prepare
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
+import 'package:drama_client/features/player/domain/player_playback_source.dart';
 import 'package:drama_client/features/player/presentation/pages/player_page.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_chrome.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
@@ -98,6 +99,33 @@ void main() {
     );
     expect(find.text('A Life That Shines Again >'), findsOneWidget);
   });
+
+  testWidgets(
+    'preloads next item even while current playback open is pending',
+    (tester) async {
+      final openCompleter = Completer<void>();
+      final preloadManager = MockPlayerPlaybackPreloadManager(
+        preloadDelay: Duration.zero,
+      );
+
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          repository: _FakePlayerFeedRepository.unlocked(),
+          playbackSessionFactory: () =>
+              _FakePlaybackSession(openCompleter: openCompleter),
+          preloadManager: preloadManager,
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+
+      expect(preloadManager.preloadedItemIds, contains('drama-a-ep-2'));
+      expect(openCompleter.isCompleted, isFalse);
+
+      openCompleter.complete();
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets('shows retry when playback open fails', (tester) async {
     await tester.pumpWidget(
@@ -973,8 +1001,106 @@ void main() {
 
     expect(find.text('Recharge to unlock'), findsNothing);
     expect(find.text('Unlock Now'), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_unlock_button')), findsOneWidget);
     expect(find.text('EP.02'), findsOneWidget);
   });
+
+  testWidgets('closing locked sheet allows swiping to free episode playback', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository._(
+          items: _itemsWithAccessPattern([
+            _EpisodeAccessFixture.free(1, _mockVideoUrl),
+            _EpisodeAccessFixture.locked(2, _mockSecondVideoUrl),
+            _EpisodeAccessFixture.free(3, _mockThirdVideoUrl),
+          ]),
+        ),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(playbackSession.openedSources, [_mockVideoUrl]);
+
+    await tester.drag(find.byType(PageView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+    expect(find.text('EP.02'), findsOneWidget);
+    expect(find.text('Recharge to unlock'), findsOneWidget);
+    expect(playbackSession.pauseCount, greaterThan(0));
+    expect(playbackSession.openedSources, [_mockVideoUrl]);
+
+    await tester.tap(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Unlock Now'), findsOneWidget);
+
+    await tester.drag(find.byType(PageView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('EP.03'), findsOneWidget);
+    expect(find.text('Unlock Now'), findsNothing);
+    expect(playbackSession.openedSources, [_mockVideoUrl, _mockThirdVideoUrl]);
+    expect(
+      find.byKey(const ValueKey('player_video_tap_layer')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'consecutive locked episodes reopen sheet without opening locked sources',
+    (tester) async {
+      final playbackSession = _FakePlaybackSession();
+      final preloadManager = MockPlayerPlaybackPreloadManager(
+        preloadDelay: Duration.zero,
+      );
+
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          repository: _FakePlayerFeedRepository._(
+            items: _itemsWithAccessPattern([
+              _EpisodeAccessFixture.free(1, _mockVideoUrl),
+              _EpisodeAccessFixture.locked(2, _mockSecondVideoUrl),
+              _EpisodeAccessFixture.locked(3, _mockThirdVideoUrl),
+              _EpisodeAccessFixture.free(
+                4,
+                'https://cdn.example.test/free-4.m3u8',
+              ),
+            ]),
+          ),
+          playbackSessionFactory: () => playbackSession,
+          preloadManager: preloadManager,
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.byType(PageView), const Offset(0, -500));
+      await tester.pumpAndSettle();
+      expect(find.text('EP.02'), findsOneWidget);
+      expect(find.text('Recharge to unlock'), findsOneWidget);
+      expect(playbackSession.openedSources, [_mockVideoUrl]);
+
+      await tester.tap(
+        find.byKey(const ValueKey('player_recharge_unlock_close')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.byType(PageView), const Offset(0, -500));
+      await tester.pumpAndSettle();
+
+      expect(find.text('EP.03'), findsOneWidget);
+      expect(find.text('Recharge to unlock'), findsOneWidget);
+      expect(playbackSession.openedSources, [_mockVideoUrl]);
+      expect(preloadManager.preloadedItemIds, isNot(contains('drama-a-ep-2')));
+      expect(preloadManager.preloadedItemIds, isNot(contains('drama-a-ep-3')));
+    },
+  );
 
   testWidgets('episodes sheet can select locked episode and show paywall', (
     tester,
@@ -1192,7 +1318,9 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('back closes paywall before leaving player', (tester) async {
+  testWidgets('back closes unlock sheet and keeps inline unlock action', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       _buildPlayerApp(repository: _FakePlayerFeedRepository.normal()),
     );
@@ -1212,10 +1340,6 @@ void main() {
     expect(find.text('Recharge to unlock'), findsNothing);
     expect(find.text('Unlock Now'), findsOneWidget);
 
-    await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
-
-    expect(find.text('Unlock Now'), findsNothing);
     expect(find.text('EP.02'), findsOneWidget);
     expect(find.text('A Life That Shines Again >'), findsOneWidget);
   });
@@ -1285,6 +1409,7 @@ Widget _buildPlayerApp({
   required PlayerFeedRepository repository,
   String initialLocation = '/player/drama-a/1',
   PlayerPlaybackSession Function()? playbackSessionFactory,
+  PlayerPlaybackPreloadManager? preloadManager,
   MockEntitlementRepository? entitlementRepository,
 }) {
   final router = GoRouter(
@@ -1325,7 +1450,8 @@ Widget _buildPlayerApp({
         playbackSessionFactory ?? () => _FakePlaybackSession(),
       ),
       playerPlaybackPreloadManagerProvider.overrideWithValue(
-        MockPlayerPlaybackPreloadManager(preloadDelay: Duration.zero),
+        preloadManager ??
+            MockPlayerPlaybackPreloadManager(preloadDelay: Duration.zero),
       ),
       playerPlaybackPrepareManagerFactoryProvider.overrideWithValue(
         NoopPlayerPlaybackPrepareManager.new,
@@ -1464,6 +1590,74 @@ List<PlayerFeedItem> _items({
       .toList(growable: false);
 }
 
+List<PlayerFeedItem> _itemsWithAccessPattern(
+  List<_EpisodeAccessFixture> fixtures,
+) {
+  final content = _content([
+    for (final fixture in fixtures)
+      PlayerEpisode(
+        id: 'ep-${fixture.number}',
+        number: fixture.number,
+        isLocked: fixture.isLocked,
+        unlockType: fixture.isLocked
+            ? fixture.unlockType
+            : EpisodeUnlockType.free,
+        requiredCoins: fixture.requiredCoins,
+        videoUrl: fixture.videoUrl,
+      ),
+  ]);
+
+  return content.episodes
+      .map(
+        (episode) => PlayerFeedItem(
+          id: '${content.id}-${episode.id}',
+          mode: PlayerFeedMode.singleDrama,
+          content: content,
+          episode: episode,
+        ),
+      )
+      .toList(growable: false);
+}
+
+class _EpisodeAccessFixture {
+  const _EpisodeAccessFixture({
+    required this.number,
+    required this.videoUrl,
+    required this.isLocked,
+    this.unlockType = EpisodeUnlockType.coins,
+    this.requiredCoins = 60,
+  });
+
+  factory _EpisodeAccessFixture.free(int number, String videoUrl) {
+    return _EpisodeAccessFixture(
+      number: number,
+      videoUrl: videoUrl,
+      isLocked: false,
+    );
+  }
+
+  factory _EpisodeAccessFixture.locked(
+    int number,
+    String videoUrl, {
+    EpisodeUnlockType unlockType = EpisodeUnlockType.coins,
+    int requiredCoins = 60,
+  }) {
+    return _EpisodeAccessFixture(
+      number: number,
+      videoUrl: videoUrl,
+      isLocked: true,
+      unlockType: unlockType,
+      requiredCoins: requiredCoins,
+    );
+  }
+
+  final int number;
+  final String videoUrl;
+  final bool isLocked;
+  final EpisodeUnlockType unlockType;
+  final int requiredCoins;
+}
+
 PlayerContent _content(List<PlayerEpisode> episodes) {
   return PlayerContent(
     id: 'drama-a',
@@ -1499,6 +1693,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   final _rateController = StreamController<double>.broadcast();
   final _widthController = StreamController<int?>.broadcast();
   final _errorController = StreamController<String>.broadcast();
+  final openedSources = <String>[];
   final seekedPositions = <Duration>[];
   final rates = <double>[];
   int pauseCount = 0;
@@ -1557,6 +1752,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
 
   @override
   Future<void> open(String source, {bool play = true}) async {
+    openedSources.add(source);
     _bufferingController.add(true);
     await (openCompleter?.future ?? Future<void>.value());
     if (shouldThrowOnOpen) {

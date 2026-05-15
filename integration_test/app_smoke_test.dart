@@ -79,11 +79,13 @@ Future<void> _settle(WidgetTester tester) async {
   // smoke 只验证核心路径是否能走通，所以这里使用有界 pump。
   for (var i = 0; i < 12; i += 1) {
     await tester.pump(const Duration(milliseconds: 100));
+    _takeKnownMediaKitTeardownException(tester);
   }
 }
 
 Future<void> _stabilizePlayerTeardown(WidgetTester tester) async {
   await tester.pumpWidget(const SizedBox.shrink());
+  _takeKnownMediaKitTeardownException(tester);
   await _waitForPlayerSurfaceDetached(tester);
 }
 

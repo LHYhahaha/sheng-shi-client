@@ -505,45 +505,52 @@ void main() {
     });
   }
 
-  testWidgets('paywall state pauses for you playback before switching tabs', (
-    tester,
-  ) async {
-    final sessions = <_FakePlaybackSession>[];
-    await tester.pumpWidget(
-      _buildAppWithFakePlayback(
-        sessions: sessions,
-        entitlementRepository:
-            MockEntitlementRepository.loggedInNonMemberLowCoins(),
-      ),
+  for (final destination in ['My list', 'Profile']) {
+    testWidgets(
+      'locked paywall state stays silent before switching to $destination',
+      (tester) async {
+        final sessions = <_FakePlaybackSession>[];
+        await tester.pumpWidget(
+          _buildAppWithFakePlayback(
+            sessions: sessions,
+            entitlementRepository:
+                MockEntitlementRepository.loggedInNonMemberLowCoins(),
+          ),
+        );
+        await tester.pump(const Duration(seconds: 1));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('For you'));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.pumpAndSettle();
+
+        final forYouSession = sessions.first;
+        for (var i = 0; i < 3; i++) {
+          await tester.drag(find.byType(PageView), const Offset(0, -500));
+          await tester.pumpAndSettle();
+        }
+
+        expect(find.text('Recharge to unlock'), findsOneWidget);
+        expect(forYouSession.pauseCount, greaterThan(0));
+
+        await tester.tap(
+          find.byKey(const ValueKey('player_recharge_unlock_close')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Unlock Now'), findsOneWidget);
+
+        final pauseCountAfterLock = forYouSession.pauseCount;
+        await tester.tap(find.text(destination));
+        await tester.pumpAndSettle();
+
+        expect(
+          forYouSession.pauseCount,
+          greaterThanOrEqualTo(pauseCountAfterLock),
+        );
+        expect(forYouSession.isDisposed, isFalse);
+      },
     );
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('For you'));
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pumpAndSettle();
-
-    final forYouSession = sessions.first;
-    for (var i = 0; i < 3; i++) {
-      await tester.drag(find.byType(PageView), const Offset(0, -500));
-      await tester.pumpAndSettle();
-    }
-
-    expect(find.text('Recharge to unlock'), findsOneWidget);
-    expect(forYouSession.pauseCount, greaterThan(0));
-
-    await tester.tap(
-      find.byKey(const ValueKey('player_recharge_unlock_close')),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Unlock Now'), findsOneWidget);
-
-    await tester.tap(find.text('Profile'));
-    await tester.pumpAndSettle();
-
-    expect(forYouSession.pauseCount, greaterThan(0));
-    expect(forYouSession.isDisposed, isFalse);
-  });
+  }
 
   testWidgets('for you completed while hidden does not auto advance', (
     tester,

@@ -1006,6 +1006,42 @@ void main() {
   });
 
   test(
+    'refreshing same preload window keeps allowed pending preload',
+    () async {
+      final session = _FakePlaybackSession();
+      final preloadManager = _SequentialPreloadManager();
+      final container = _createContainer(
+        session,
+        preloadManager: preloadManager,
+      );
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+      final items = [_item(1), _item(2)];
+
+      final firstFuture = controller.preloadAround(items, 0);
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      await controller.preloadAround(items, 0);
+
+      expect(preloadManager.startedItemIds, ['drama-a-ep-2']);
+      expect(
+        _preloadStatusById(container.read(provider))['drama-a-ep-2'],
+        PlaybackPreloadStatus.pending,
+      );
+
+      preloadManager.completeNext();
+      await firstFuture;
+
+      final state = container.read(provider);
+      expect(state.preloadedItemIds, ['drama-a-ep-2']);
+      expect(
+        _preloadStatusById(state)['drama-a-ep-2'],
+        PlaybackPreloadStatus.success,
+      );
+    },
+  );
+
+  test(
     'preload failure records failed state without touching playback',
     () async {
       final session = _FakePlaybackSession();

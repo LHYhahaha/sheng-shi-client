@@ -27,6 +27,8 @@ class PlayerChrome extends StatefulWidget {
     required this.onShareTap,
     required this.onMoreTap,
     required this.onUnlockTap,
+    this.showUnlockButton = false,
+    this.unlockLabel,
     this.overlayOpacity = 1.0,
     this.showVideo = true,
     this.showLoading = false,
@@ -59,6 +61,8 @@ class PlayerChrome extends StatefulWidget {
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
   final VoidCallback onUnlockTap;
+  final bool showUnlockButton;
+  final String? unlockLabel;
   final double overlayOpacity;
   final bool showVideo;
   final bool showLoading;
@@ -108,6 +112,8 @@ class _PlayerChromeState extends State<PlayerChrome> {
   VoidCallback get onShareTap => widget.onShareTap;
   VoidCallback get onMoreTap => widget.onMoreTap;
   VoidCallback get onUnlockTap => widget.onUnlockTap;
+  bool get showUnlockButton => widget.showUnlockButton;
+  String? get unlockLabel => widget.unlockLabel;
   double get overlayOpacity => widget.overlayOpacity;
   bool get showVideo => widget.showVideo;
   bool get showLoading => widget.showLoading;
@@ -264,7 +270,10 @@ class _PlayerChromeState extends State<PlayerChrome> {
             bottom: forYouWatchNowBottom,
             child: _OverlayOpacity(
               opacity: overlayOpacity,
-              child: _WatchNowButton(onTap: onWatchNowTap),
+              child: _WatchNowButton(
+                label: showUnlockButton ? unlockLabel : null,
+                onTap: showUnlockButton ? onUnlockTap : onWatchNowTap,
+              ),
             ),
           )
         else ...[
@@ -295,6 +304,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
             child: _OverlayOpacity(
               opacity: overlayOpacity,
               child: GestureDetector(
+                key: const ValueKey('player_unlock_button'),
                 behavior: HitTestBehavior.opaque,
                 onTap: onUnlockTap,
                 child: Container(
@@ -307,7 +317,9 @@ class _PlayerChromeState extends State<PlayerChrome> {
                   ),
                   alignment: Alignment.center,
                   child: Text(
-                    context.l10n.playerBecomeMember,
+                    showUnlockButton
+                        ? unlockLabel ?? context.l10n.playerUnlockNow
+                        : context.l10n.playerBecomeMember,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -567,9 +579,10 @@ class PlayerActionRail extends StatelessWidget {
 }
 
 class _WatchNowButton extends StatelessWidget {
-  const _WatchNowButton({required this.onTap});
+  const _WatchNowButton({required this.onTap, this.label});
 
   final VoidCallback onTap;
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
@@ -584,7 +597,8 @@ class _WatchNowButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(3),
         ),
         child: Text(
-          context.l10n.playerWatchNow,
+          label ?? context.l10n.playerWatchNow,
+          key: label == null ? null : const ValueKey('player_unlock_button'),
           style: const TextStyle(
             color: Colors.white,
             fontSize: 14,

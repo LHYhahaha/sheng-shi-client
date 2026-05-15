@@ -69,6 +69,7 @@ enum PlayerPlaybackStatus {
   playing,
   paused,
   blocked,
+  waitUnlock,
   unavailable,
   error,
 }
@@ -567,21 +568,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (item.episode.isLocked) {
       // 锁定内容是业务付费边界，不能为了“预热体验”提前 resolve/open。
       // 客户端 mock 可以展示 paywall，但真实环境必须等服务端授权后再拿 source。
-      final generation = ++_generation;
-      if (!await _pauseIfCurrent(generation)) {
-        return;
-      }
-      state = state.copyWith(
+      await _blockPlaybackForItem(
+        item,
         status: PlayerPlaybackStatus.blocked,
-        currentItemId: item.id,
-        clearSource: true,
-        clearError: true,
-        surfaceLifecycle: PlayerVideoSurfaceLifecycle.detaching,
-        clearVideoController: true,
+        reason: 'locked item play request',
       );
-      _currentPlaybackItemId = null;
-      _currentPlaybackSource = null;
-      _clearCurrentPlaybackSnapshot();
       return;
     }
 
@@ -589,21 +580,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (item.episode.isUnavailable || sourceHint == null) {
       // unavailable/null source 代表内容侧暂不可播放。这里同样只进入状态展示，
       // 不触发 repository，避免把内容缺失误判成网络错误或污染 preload 缓存。
-      final generation = ++_generation;
-      if (!await _pauseIfCurrent(generation)) {
-        return;
-      }
-      state = state.copyWith(
+      await _blockPlaybackForItem(
+        item,
         status: PlayerPlaybackStatus.unavailable,
-        currentItemId: item.id,
-        clearSource: true,
-        clearError: true,
-        surfaceLifecycle: PlayerVideoSurfaceLifecycle.detaching,
-        clearVideoController: true,
+        reason: item.episode.isUnavailable
+            ? 'unavailable item play request'
+            : 'null source play request',
       );
-      _currentPlaybackItemId = null;
-      _currentPlaybackSource = null;
-      _clearCurrentPlaybackSnapshot();
       return;
     }
 
@@ -1003,6 +986,20 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
   }
 
+  Future<void> blockItem(
+    PlayerFeedItem item, {
+    PlayerPlaybackStatus status = PlayerPlaybackStatus.blocked,
+    String reason = 'access denied',
+  }) {
+    final blockedStatus = switch (status) {
+      PlayerPlaybackStatus.blocked ||
+      PlayerPlaybackStatus.waitUnlock ||
+      PlayerPlaybackStatus.unavailable => status,
+      _ => PlayerPlaybackStatus.blocked,
+    };
+    return _blockPlaybackForItem(item, status: blockedStatus, reason: reason);
+  }
+
   List<PlayerFeedItem> _preloadCandidatesInDirection(
     List<PlayerFeedItem> items,
     int currentIndex, {
@@ -1189,6 +1186,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       status:
           state.currentSource == null ||
               state.status == PlayerPlaybackStatus.blocked ||
+              state.status == PlayerPlaybackStatus.waitUnlock ||
               state.status == PlayerPlaybackStatus.unavailable ||
               state.status == PlayerPlaybackStatus.error ||
               state.status == PlayerPlaybackStatus.idle
@@ -1297,6 +1295,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (state.currentSource == null ||
         state.status == PlayerPlaybackStatus.error ||
         state.status == PlayerPlaybackStatus.blocked ||
+        state.status == PlayerPlaybackStatus.waitUnlock ||
         state.status == PlayerPlaybackStatus.unavailable) {
       return;
     }
@@ -1314,6 +1313,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (state.currentSource == null ||
         state.status == PlayerPlaybackStatus.error ||
         state.status == PlayerPlaybackStatus.blocked ||
+        state.status == PlayerPlaybackStatus.waitUnlock ||
         state.status == PlayerPlaybackStatus.unavailable ||
         state.status == PlayerPlaybackStatus.opening) {
       return;
@@ -1364,6 +1364,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         state.isSeeking ||
         state.status == PlayerPlaybackStatus.error ||
         state.status == PlayerPlaybackStatus.blocked ||
+        state.status == PlayerPlaybackStatus.waitUnlock ||
         state.status == PlayerPlaybackStatus.unavailable ||
         state.status == PlayerPlaybackStatus.idle) {
       return;
@@ -1579,6 +1580,44 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   bool _isCurrent(int generation) => generation == _generation;
 
   bool get _shouldPersistProgress => sessionKey.startsWith('single:');
+
+  Future<void> _blockPlaybackForItem(
+    PlayerFeedItem item, {
+    required PlayerPlaybackStatus status,
+    required String reason,
+  }) async {
+    _pauseWhenOpenCompletes = true;
+    final generation = ++_generation;
+    _logTiming(
+      'access blocked',
+      itemId: item.id,
+      source: item.episode.videoSource,
+      details: _timingDetails([
+        'status=${status.name}',
+        'reason=$reason',
+        'wasCurrentItem=${state.currentItemId ?? 'null'}',
+        'wasCurrentSource=${state.currentSource ?? 'null'}',
+        'windowItems=${_windowItemsText()}',
+      ]),
+    );
+    await _session.pause();
+    await _releaseSessionWindowFor(reason);
+    await _disposePreloads();
+    if (!ref.mounted || !_isCurrent(generation)) {
+      return;
+    }
+    state = state.copyWith(
+      status: status,
+      currentItemId: item.id,
+      clearSource: true,
+      clearError: true,
+      surfaceLifecycle: PlayerVideoSurfaceLifecycle.detaching,
+      clearVideoController: true,
+    );
+    _currentPlaybackItemId = null;
+    _currentPlaybackSource = null;
+    _clearCurrentPlaybackSnapshot();
+  }
 
   void _attachSessionStreams(PlayerPlaybackSession session) {
     _subscriptions = <StreamSubscription<dynamic>>[
@@ -1873,8 +1912,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     for (final entry in List<MapEntry<String, PlaybackPreloadState>>.from(
       _preloadStates.entries,
     )) {
-      if (allowedIds.contains(entry.key) &&
-          entry.value.status != PlaybackPreloadStatus.pending) {
+      if (allowedIds.contains(entry.key)) {
         continue;
       }
       if (entry.value.status == PlaybackPreloadStatus.pending) {

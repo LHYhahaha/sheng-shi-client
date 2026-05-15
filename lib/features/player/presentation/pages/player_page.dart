@@ -78,6 +78,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isPressingPlaybackSurface = false;
   bool _isPageScrolling = false;
   bool _didRecordFirstBuild = false;
+  int _preloadRequestGeneration = 0;
   String? _handledEndedItemId;
   final Set<String> _entitlementPlayableItemIds = <String>{};
   String? _activeCoinSheetItemId;
@@ -413,6 +414,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               itemBuilder: (context, index) {
                 final item = feedState.items[index];
                 final isCurrentItem = index == feedState.currentIndex;
+                final isLockedCurrentItem =
+                    isCurrentItem &&
+                    item.episode.isLocked &&
+                    !_isEntitlementPlayable(item) &&
+                    !item.episode.isUnavailable;
+                final lockedActionLabel =
+                    uiState.paywall == PlayerPaywallState.memberUnlock
+                    ? context.l10n.playerMemberUnlock
+                    : context.l10n.playerUnlockNow;
                 final canUsePlaybackSurface =
                     isCurrentItem &&
                     !item.episode.isUnavailable &&
@@ -538,7 +548,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                           initialTab: PlayerDetailTab.synopsis,
                         );
                       },
-                      onUnlockTap: uiController.showMemberPaywall,
+                      showUnlockButton: isLockedCurrentItem,
+                      unlockLabel: lockedActionLabel,
+                      onUnlockTap: isLockedCurrentItem
+                          ? () {
+                              unawaited(_showPendingUnlockActionSheet());
+                            }
+                          : _openMembership,
                       forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
                     ),
                     if (item.episode.isUnavailable)
@@ -561,16 +577,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             ),
           ),
         ),
-        if (uiState.showsPaywall)
-          PlayerPaywallOverlay(
-            label: uiState.paywall == PlayerPaywallState.memberUnlock
-                ? context.l10n.playerMemberUnlock
-                : context.l10n.playerUnlockNow,
-            onTap: uiState.paywall == PlayerPaywallState.memberUnlock
-                ? _openMembership
-                : _showPendingUnlockActionSheet,
-            onDismiss: uiController.hidePaywall,
-          ),
       ],
     );
   }
@@ -661,6 +667,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     return item.copyWith(episode: item.episode.copyWith(isLocked: false));
   }
 
+  bool _isCurrentFeedItem(PlayerFeedItem item) {
+    return ref
+            .read(playerFeedControllerProvider(_sessionKey))
+            .currentItem
+            ?.id ==
+        item.id;
+  }
+
   Future<void> _handleEntitlementDecisionForItem(
     PlayerFeedItem item, {
     required bool autoPresentSheet,
@@ -707,19 +721,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
     switch (decision.type) {
       case EpisodeAccessDecisionType.allowPlay:
-        _entitlementPlayableItemIds.add(item.id);
-        uiController.unlockPaywallAndPlay();
-        await playbackController.playItem(_playableCopy(item));
-        if (!mounted) {
+        if (!_isCurrentFeedItem(item)) {
           return;
         }
-        final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
-        await playbackController.preloadAround(
-          feedState.items,
-          feedState.currentIndex,
-        );
+        _entitlementPlayableItemIds.add(item.id);
+        uiController.unlockPaywallAndPlay();
+        _schedulePreloadAroundItem(item);
+        await playbackController.playItem(_playableCopy(item));
       case EpisodeAccessDecisionType.autoUnlockAndPlay:
-        await playbackController.playItem(item);
+        await playbackController.blockItem(
+          item,
+          status: PlayerPlaybackStatus.waitUnlock,
+          reason: 'auto unlock pending',
+        );
+        _schedulePreloadAroundItem(item);
         final unlockDecision = await ref
             .read(entitlementControllerProvider.notifier)
             .unlockWithCoins(
@@ -744,24 +759,72 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           uiController.hidePaywall();
         }
       case EpisodeAccessDecisionType.goMembership:
-        await playbackController.playItem(item);
+        await playbackController.blockItem(
+          item,
+          status: PlayerPlaybackStatus.blocked,
+          reason: decision.reason ?? 'membership required',
+        );
+        _schedulePreloadAroundItem(item);
         uiController.showMemberPaywall();
       case EpisodeAccessDecisionType.showCoinUnlockDialog:
-        await playbackController.playItem(item);
+        await playbackController.blockItem(
+          item,
+          status: PlayerPlaybackStatus.blocked,
+          reason: decision.reason ?? 'coin unlock required',
+        );
+        _schedulePreloadAroundItem(item);
         uiController.showUnlockPaywall();
         if (autoPresentSheet) {
           unawaited(_showCoinUnlockSheetForItem(item));
         }
       case EpisodeAccessDecisionType.showRechargeDialog:
-        await playbackController.playItem(item);
+        await playbackController.blockItem(
+          item,
+          status: PlayerPlaybackStatus.blocked,
+          reason: decision.reason ?? 'recharge required',
+        );
+        _schedulePreloadAroundItem(item);
         uiController.showUnlockPaywall();
         if (autoPresentSheet) {
           unawaited(_showRechargeUnlockSheetForItem(item));
         }
       case EpisodeAccessDecisionType.waitUnlock:
-        await playbackController.playItem(item);
-        uiController.hidePaywall();
+        await playbackController.blockItem(
+          item,
+          status: item.episode.isUnavailable
+              ? PlayerPlaybackStatus.unavailable
+              : PlayerPlaybackStatus.waitUnlock,
+          reason: decision.reason ?? 'wait unlock',
+        );
+        _schedulePreloadAroundItem(item);
+        if (item.episode.isUnavailable) {
+          uiController.hidePaywall();
+        } else {
+          uiController.showUnlockPaywall();
+        }
     }
+  }
+
+  void _schedulePreloadAroundItem(PlayerFeedItem item) {
+    final requestGeneration = ++_preloadRequestGeneration;
+    unawaited(() async {
+      // Let the current item/index state settle for this frame, then start HLS
+      // preload independently from media open. A slow or stuck current source
+      // should not block the next candidates from warming.
+      await Future<void>.delayed(Duration.zero);
+      if (!mounted || requestGeneration != _preloadRequestGeneration) {
+        return;
+      }
+
+      final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+      if (feedState.currentItem?.id != item.id || feedState.items.isEmpty) {
+        return;
+      }
+
+      await ref
+          .read(playerPlaybackControllerProvider(_sessionKey).notifier)
+          .preloadAround(feedState.items, feedState.currentIndex);
+    }());
   }
 
   Future<void> _advanceToNextFromCompletion() async {
@@ -951,15 +1014,30 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           price: currentItem.episode.requiredCoins,
           isUnavailable: currentItem.episode.isUnavailable,
         );
-    if (decision.type == EpisodeAccessDecisionType.showCoinUnlockDialog) {
-      await _showCoinUnlockSheetForItem(currentItem);
-      return;
+    switch (decision.type) {
+      case EpisodeAccessDecisionType.allowPlay:
+        await _handleAccessDecision(
+          currentItem,
+          decision,
+          autoPresentSheet: false,
+        );
+      case EpisodeAccessDecisionType.autoUnlockAndPlay:
+        await _handleAccessDecision(
+          currentItem,
+          decision,
+          autoPresentSheet: false,
+        );
+      case EpisodeAccessDecisionType.showCoinUnlockDialog:
+        await _showCoinUnlockSheetForItem(currentItem);
+      case EpisodeAccessDecisionType.showRechargeDialog:
+        await _showRechargeUnlockSheetForItem(currentItem);
+      case EpisodeAccessDecisionType.goMembership:
+        _openMembership();
+      case EpisodeAccessDecisionType.waitUnlock:
+        if (!currentItem.episode.isUnavailable) {
+          await _showRechargeUnlockSheetForItem(currentItem);
+        }
     }
-    if (decision.type == EpisodeAccessDecisionType.goMembership) {
-      _openMembership();
-      return;
-    }
-    await _showRechargeUnlockSheetForItem(currentItem);
   }
 
   Future<void> _showCoinUnlockSheetForItem(PlayerFeedItem item) async {
