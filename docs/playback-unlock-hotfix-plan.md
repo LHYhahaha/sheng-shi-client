@@ -129,6 +129,56 @@ Figma：
 - P2 deferred：My List 密度、Store Tips 被固定 CTA 压缩、横屏 HLS 顶部黑屏仍记录为
   后续优化，不在本轮处理。
 
+## Unlock UX Round 2
+
+日期：2026-05-16
+
+最新产品确认：locked 视频不能因为 auto unlock enabled 或金币充足而直接扣费播放。
+当前 locked episode 必须先展示播放器内 `Unlock Now` 覆盖按钮，并进入用户确认流程。
+
+Figma 对照块：
+
+- 图一：`解锁弹窗`
+- 图二：`Unlock Now`
+- 图三：`播放页-充值`
+
+### 目标流程
+
+1. 用户滑到 locked episode。
+2. 播放器中间显示 `Unlock Now` 按钮。
+3. 自动判断当前金币余额：
+   - 余额足够：弹 `解锁弹窗`。
+   - 余额不足：弹 `播放页-充值`。
+4. `解锁弹窗` 中用户点击 `Play` 后，才扣金币、解锁并播放。
+5. `播放页-充值` 中充值成功后，不直接播放；应回到 `解锁弹窗`，由用户点击
+   `Play` 完成解锁。
+6. 用户关闭任一弹窗后：
+   - 当前 episode 保持 locked poster / fallback。
+   - `Unlock Now` 按钮仍可见。
+   - 不播放旧视频声音。
+   - 用户可以继续上下滑。
+7. 用户继续滑到下一个 episode：
+   - free / 已解锁：直接播放。
+   - locked：重复本流程，继续显示 `Unlock Now` 并弹对应抽屉。
+
+### 需要修正的现有偏差
+
+- `autoUnlockAndPlay` 不能绕过当前 locked episode 的确认弹窗。
+- `auto unlock` 开关只能作为“后续自动播放下一集”偏好，不能让当前 locked episode
+  静默扣费播放。
+- 充值成功后不能直接播放，必须回到 `解锁弹窗`。
+- `Unlock Now` 是播放器内覆盖按钮，不是只在底部 sheet 中出现。
+
+### 验收标准
+
+- locked episode 余额足够时，自动弹 `解锁弹窗`，不直接播放。
+- locked episode 余额不足时，自动弹 `播放页-充值`。
+- 充值成功后自动回到 `解锁弹窗`，不直接播放。
+- 关闭 `解锁弹窗` 后，播放器中间仍显示 `Unlock Now`，且无旧音频。
+- 点击 `Unlock Now` 可以再次打开对应流程。
+- 连续 locked episodes 不偷拉未授权 source，不播放旧 session。
+- paywall/locked 状态切 My list / Profile 不出声。
+
 ## 必跑验证
 
 ```bash
