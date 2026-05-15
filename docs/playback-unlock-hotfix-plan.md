@@ -112,6 +112,23 @@ Figma：
 - Profile 显示 Settings 入口。
 - Wallet 默认值按本轮确认结果一致。
 
+## Implementation Status
+
+- P0 fixed：Player 在 entitlement decision 进入会员、金币确认、充值或 waitUnlock
+  分支时，会先把当前 item 交给 `PlayerPlaybackController.playItem()`。controller
+  对 locked / unavailable item 会立即 pause 当前 media session、失效 pending open，
+  并进入 blocked / unavailable 状态，不再让上一集音频留在后台。
+- P1 fixed：金币充足但 auto unlock 关闭时的 coin unlock 弹窗改为 Figma 方向的紧凑
+  card，显示 `Price / Balance`、`Play` 主按钮和自动播放下一集开关文案，不再展示大
+  `Confirm unlock` 双按钮结构。
+- P1 fixed：Profile 增加 `Settings` 入口，当前先接 placeholder 页面，真实设置项
+  后续补齐。
+- P1 fixed：默认 shared entitlement mock 对齐 Wallet Figma 值：Coins 4000、Bonus
+  4000、auto unlock 开启。显式 auto-off / low-coins fixture 仍保留用于解锁弹窗和充值
+  测试。
+- P2 deferred：My List 密度、Store Tips 被固定 CTA 压缩、横屏 HLS 顶部黑屏仍记录为
+  后续优化，不在本轮处理。
+
 ## 必跑验证
 
 ```bash
@@ -129,4 +146,3 @@ flutter test integration_test/app_smoke_test.dart -d R58WC02B69R
 - 不改 Store / Wallet / Membership 支付逻辑。
 - 不大重构 `PlayerPlaybackController`。
 - 不移除现有 smoke 覆盖。
-

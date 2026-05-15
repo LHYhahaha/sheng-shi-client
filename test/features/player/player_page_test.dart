@@ -727,6 +727,19 @@ void main() {
       find.byKey(const ValueKey('player_coin_unlock_confirm')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(const ValueKey('player_coin_unlock_price')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('player_coin_unlock_balance')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('player_coin_unlock_auto_next_switch')),
+      findsOneWidget,
+    );
+    expect(find.text('Play'), findsOneWidget);
     expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
   });
 
@@ -979,6 +992,61 @@ void main() {
 
     expect(find.text('Unlock Now'), findsOneWidget);
     expect(find.text('EP.02'), findsOneWidget);
+  });
+
+  testWidgets('selecting locked episode pauses previous playback', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.normal(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Episodes').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recharge to unlock'), findsOneWidget);
+    expect(playbackSession.pauseCount, greaterThan(0));
+    expect(playbackSession.playCount, 0);
+  });
+
+  testWidgets('closing unlock sheet does not resume previous playback', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.normal(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Episodes').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2'));
+    await tester.pumpAndSettle();
+    final pauseCountAfterLock = playbackSession.pauseCount;
+
+    await tester.tap(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recharge to unlock'), findsNothing);
+    expect(find.text('Unlock Now'), findsOneWidget);
+    expect(playbackSession.pauseCount, pauseCountAfterLock);
+    expect(playbackSession.playCount, 0);
   });
 
   testWidgets('completed playback auto advances to next episode', (

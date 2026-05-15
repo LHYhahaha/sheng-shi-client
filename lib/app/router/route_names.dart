@@ -10,6 +10,7 @@ abstract final class RouteNames {
   static const wallet = 'wallet';
   static const membership = 'membership';
   static const language = 'language';
+  static const settings = 'settings';
   static const transactionHistory = 'transaction-history';
   static const consumptionHistory = 'consumption-history';
   static const recordCoins = 'record-coins';

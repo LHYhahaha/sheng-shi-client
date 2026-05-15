@@ -74,6 +74,11 @@ class AppLocalizations {
   String get profileTopUp => _text(en: 'Top Up', zh: '充值');
   String get profileWallet => _text(en: 'Wallet >', zh: '钱包 >');
   String get profileLanguage => _text(en: 'Language', zh: '语言');
+  String get profileSettings => _text(en: 'Settings', zh: '设置');
+  String get profileSettingsPlaceholder => _text(
+    en: 'Settings will be available in a later phase.',
+    zh: '设置页将在后续阶段开放。',
+  );
   String get authDeviceLogin => _text(en: 'Continue with Device', zh: '使用设备登录');
   String get authGoogleLogin =>
       _text(en: 'Sign in with Google', zh: '使用 Google 登录');

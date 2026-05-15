@@ -5,6 +5,8 @@ import 'package:drama_client/app/router/route_paths.dart';
 import 'package:drama_client/features/auth/data/auth_repository_provider.dart';
 import 'package:drama_client/features/auth/domain/auth_repository.dart';
 import 'package:drama_client/features/auth/domain/auth_session.dart';
+import 'package:drama_client/features/entitlement/data/entitlement_repository_provider.dart';
+import 'package:drama_client/features/entitlement/data/mock_entitlement_repository.dart';
 import 'package:drama_client/features/auth/presentation/pages/account_page.dart';
 import 'package:drama_client/features/my_list/data/my_list_repository_provider.dart';
 import 'package:drama_client/features/my_list/domain/my_list_item.dart';
@@ -111,18 +113,18 @@ void main() {
     await tester.tap(find.text('Wallet >'));
     await tester.pumpAndSettle();
 
-    expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
 
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
-    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
 
     await tester.tap(find.text('Transaction history'));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
     await tester.pumpAndSettle();
 
-    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
   });
 
   testWidgets('store top up updates wallet balance through entitlement', (
@@ -138,7 +140,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('My Wallet'), findsWidgets);
-    expect(find.text('120'), findsOneWidget);
+    expect(find.text('4000'), findsWidgets);
 
     await tester.tap(find.text('Top Up'));
     await tester.pumpAndSettle();
@@ -159,7 +161,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('My Wallet'), findsWidgets);
-    expect(find.text('3420'), findsOneWidget);
+    expect(find.text('7300'), findsOneWidget);
   });
 
   testWidgets('consumption history shows segmented poster rows', (
@@ -503,6 +505,46 @@ void main() {
     });
   }
 
+  testWidgets('paywall state pauses for you playback before switching tabs', (
+    tester,
+  ) async {
+    final sessions = <_FakePlaybackSession>[];
+    await tester.pumpWidget(
+      _buildAppWithFakePlayback(
+        sessions: sessions,
+        entitlementRepository:
+            MockEntitlementRepository.loggedInNonMemberLowCoins(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('For you'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final forYouSession = sessions.first;
+    for (var i = 0; i < 3; i++) {
+      await tester.drag(find.byType(PageView), const Offset(0, -500));
+      await tester.pumpAndSettle();
+    }
+
+    expect(find.text('Recharge to unlock'), findsOneWidget);
+    expect(forYouSession.pauseCount, greaterThan(0));
+
+    await tester.tap(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Unlock Now'), findsOneWidget);
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+
+    expect(forYouSession.pauseCount, greaterThan(0));
+    expect(forYouSession.isDisposed, isFalse);
+  });
+
   testWidgets('for you completed while hidden does not auto advance', (
     tester,
   ) async {
@@ -642,6 +684,25 @@ void main() {
     expect(find.text('Language'), findsOneWidget);
     expect(find.text('简体中文'), findsOneWidget);
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+  });
+
+  testWidgets('opens settings placeholder from profile', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Settings'), findsOneWidget);
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Settings will be available in a later phase.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('changes app locale from language settings', (tester) async {
@@ -1053,9 +1114,14 @@ class _TestRouterApp extends StatelessWidget {
   }
 }
 
-Widget _buildAppWithFakePlayback({List<_FakePlaybackSession>? sessions}) {
+Widget _buildAppWithFakePlayback({
+  List<_FakePlaybackSession>? sessions,
+  MockEntitlementRepository? entitlementRepository,
+}) {
   return ProviderScope(
     overrides: [
+      if (entitlementRepository != null)
+        entitlementRepositoryProvider.overrideWithValue(entitlementRepository),
       playerPlaybackSessionFactoryProvider.overrideWithValue(() {
         final session = _FakePlaybackSession();
         sessions?.add(session);

@@ -689,6 +689,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           feedState.currentIndex,
         );
       case EpisodeAccessDecisionType.autoUnlockAndPlay:
+        await playbackController.playItem(item);
         final unlockDecision = await ref
             .read(entitlementControllerProvider.notifier)
             .unlockWithCoins(
@@ -713,18 +714,22 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           uiController.hidePaywall();
         }
       case EpisodeAccessDecisionType.goMembership:
+        await playbackController.playItem(item);
         uiController.showMemberPaywall();
       case EpisodeAccessDecisionType.showCoinUnlockDialog:
+        await playbackController.playItem(item);
         uiController.showUnlockPaywall();
         if (autoPresentSheet) {
           unawaited(_showCoinUnlockSheetForItem(item));
         }
       case EpisodeAccessDecisionType.showRechargeDialog:
+        await playbackController.playItem(item);
         uiController.showUnlockPaywall();
         if (autoPresentSheet) {
           unawaited(_showRechargeUnlockSheetForItem(item));
         }
       case EpisodeAccessDecisionType.waitUnlock:
+        await playbackController.playItem(item);
         uiController.hidePaywall();
     }
   }

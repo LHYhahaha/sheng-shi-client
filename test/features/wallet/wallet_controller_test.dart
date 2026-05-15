@@ -15,7 +15,7 @@ void main() {
 
     final state = container.read(walletControllerProvider);
     expect(state.isLoading, isFalse);
-    expect(state.coins, 120);
+    expect(state.coins, 4000);
     expect(state.bonus, 4000);
     expect(state.transactionRecords, hasLength(3));
     expect(state.recordsFor(WalletRecordType.consumption), hasLength(3));
@@ -62,18 +62,18 @@ void main() {
 
     expect(
       container.read(walletControllerProvider).autoUnlockNextEpisode,
-      isFalse,
+      isTrue,
     );
 
-    await controller.setAutoUnlockNextEpisode(true);
+    await controller.setAutoUnlockNextEpisode(false);
 
     expect(
       container.read(walletControllerProvider).autoUnlockNextEpisode,
-      isTrue,
+      isFalse,
     );
     expect(
       container.read(entitlementControllerProvider).autoUnlockEnabled,
-      isTrue,
+      isFalse,
     );
   });
 

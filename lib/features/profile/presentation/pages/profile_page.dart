@@ -65,6 +65,10 @@ class ProfilePage extends ConsumerWidget {
               enabled: state.canOpenLanguage,
               onTap: () => context.push(RoutePaths.language),
             ),
+            ProfileMenuRow(
+              title: l10n.profileSettings,
+              onTap: () => context.push(RoutePaths.settings),
+            ),
           ],
         ),
       ),

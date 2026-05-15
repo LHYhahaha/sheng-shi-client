@@ -155,7 +155,7 @@ void main() {
 
         expect(decision.type, EpisodeAccessDecisionType.autoUnlockAndPlay);
         expect(decision.operationId, 'coin-unlock:found-you:found-you-ep-5');
-        expect(decision.balance, 120);
+        expect(decision.balance, 4000);
       },
     );
 
@@ -266,7 +266,7 @@ void main() {
 
       final state = container.read(entitlementControllerProvider);
       expect(decision.type, EpisodeAccessDecisionType.allowPlay);
-      expect(state.coinBalance, 70);
+      expect(state.coinBalance, 3950);
       expect(state.unlockedEpisodeIds, contains('found-you-ep-5'));
       expect(state.inFlightUnlockEpisodeId, isNull);
       expect(state.lastUnlockError, isNull);
@@ -291,7 +291,7 @@ void main() {
       }
 
       final state = container.read(entitlementControllerProvider);
-      expect(state.coinBalance, 40);
+      expect(state.coinBalance, 3920);
       expect(state.unlockedEpisodeIds, contains('found-you-ep-6'));
     });
 
@@ -314,7 +314,7 @@ void main() {
       final state = container.read(entitlementControllerProvider);
       expect(decision.type, EpisodeAccessDecisionType.waitUnlock);
       expect(decision.reason, 'coin_deduction_failed');
-      expect(state.coinBalance, 120);
+      expect(state.coinBalance, 4000);
       expect(state.unlockedEpisodeIds, isNot(contains('found-you-ep-5')));
       expect(state.inFlightUnlockEpisodeId, isNull);
       expect(state.lastUnlockError, isA<StateError>());

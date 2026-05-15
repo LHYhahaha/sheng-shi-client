@@ -44,7 +44,8 @@ class MockEntitlementRepository implements EntitlementRepository {
     return const UserEntitlementState(
       isGuest: false,
       isMember: false,
-      coinBalance: 120,
+      coinBalance: 4000,
+      bonusBalance: 4000,
       autoUnlockEnabled: true,
       unlockedEpisodeIds: <String>{},
     );
@@ -54,7 +55,7 @@ class MockEntitlementRepository implements EntitlementRepository {
     return const UserEntitlementState(
       isGuest: false,
       isMember: false,
-      coinBalance: 120,
+      coinBalance: 60,
       autoUnlockEnabled: false,
       unlockedEpisodeIds: <String>{},
     );
@@ -84,7 +85,8 @@ class MockEntitlementRepository implements EntitlementRepository {
     return const UserEntitlementState(
       isGuest: false,
       isMember: false,
-      coinBalance: 120,
+      coinBalance: 4000,
+      bonusBalance: 4000,
       autoUnlockEnabled: false,
       unlockedEpisodeIds: <String>{'found-you-ep-4'},
     );

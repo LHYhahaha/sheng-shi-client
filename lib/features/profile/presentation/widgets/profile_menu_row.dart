@@ -6,12 +6,14 @@ class ProfileMenuRow extends StatelessWidget {
   const ProfileMenuRow({
     required this.title,
     required this.onTap,
+    this.iconAssetPath = 'assets/images/profile/language_icon_figma.png',
     this.enabled = true,
     super.key,
   });
 
   final String title;
   final VoidCallback onTap;
+  final String iconAssetPath;
   final bool enabled;
 
   @override
@@ -25,7 +27,7 @@ class ProfileMenuRow extends StatelessWidget {
         child: Row(
           children: [
             Image.asset(
-              'assets/images/profile/language_icon_figma.png',
+              iconAssetPath,
               width: 24,
               height: 24,
               fit: BoxFit.contain,

@@ -160,7 +160,7 @@ void main() {
         container.read(storeControllerProvider).purchaseStatus,
         StorePurchaseStatus.success,
       );
-      expect(container.read(entitlementControllerProvider).coinBalance, 3420);
+      expect(container.read(entitlementControllerProvider).coinBalance, 7300);
     },
   );
 }

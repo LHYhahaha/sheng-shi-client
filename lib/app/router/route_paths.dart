@@ -10,6 +10,7 @@ abstract final class RoutePaths {
   static const wallet = '/wallet';
   static const membership = '/membership';
   static const language = '/language';
+  static const settings = '/settings';
   static const transactionHistory = '/wallet/transaction-history';
   static const consumptionHistory = '/wallet/consumption-history';
   static const recordCoins = '/wallet/record-coins';

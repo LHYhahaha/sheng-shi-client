@@ -84,7 +84,7 @@ class _PlayerUnlockSheetState extends State<PlayerUnlockSheet> {
   @override
   Widget build(BuildContext context) {
     return _CompactPlayerSheet(
-      height: 228,
+      height: 260,
       child: Column(
         children: [
           Row(
@@ -188,127 +188,94 @@ class PlayerCoinUnlockSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _CompactPlayerSheet(
-      height: 236,
+      height: 260,
       child: Column(
         children: [
           Row(
             children: [
-              Text(
-                context.l10n.playerConfirmUnlock,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  height: 20 / 16,
+              Text.rich(
+                TextSpan(
+                  text: '${context.l10n.playerPrice} ',
+                  children: [
+                    const WidgetSpan(
+                      alignment: PlaceholderAlignment.middle,
+                      child: Icon(
+                        Icons.monetization_on,
+                        color: AppColors.gold,
+                        size: 14,
+                      ),
+                    ),
+                    TextSpan(text: ' $price'),
+                  ],
+                ),
+                key: const ValueKey('player_coin_unlock_price'),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.58),
+                  fontSize: 12,
+                  height: 16 / 12,
                 ),
               ),
               const Spacer(),
+              Text.rich(
+                TextSpan(
+                  text: '${context.l10n.playerBalance} ',
+                  children: [
+                    const WidgetSpan(
+                      alignment: PlaceholderAlignment.middle,
+                      child: Icon(
+                        Icons.monetization_on,
+                        color: AppColors.gold,
+                        size: 14,
+                      ),
+                    ),
+                    TextSpan(text: ' $balance'),
+                  ],
+                ),
+                key: const ValueKey('player_coin_unlock_balance'),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.58),
+                  fontSize: 12,
+                  height: 16 / 12,
+                ),
+              ),
+              const SizedBox(width: 12),
               _CloseButton(onTap: () => Navigator.of(context).pop(false)),
             ],
           ),
-          const SizedBox(height: 22),
-          Row(
-            children: [
-              Expanded(
-                child: _CoinMetric(
-                  label: context.l10n.playerPrice,
-                  value: price,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _CoinMetric(
-                  label: context.l10n.playerBalance,
-                  value: balance,
-                ),
-              ),
-            ],
+          const SizedBox(height: 30),
+          AppPrimaryButton(
+            key: const ValueKey('player_coin_unlock_confirm'),
+            label: context.l10n.playerPlay,
+            icon: Icons.play_arrow_rounded,
+            onPressed: onConfirm,
           ),
-          const Spacer(),
+          const SizedBox(height: 24),
+          Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
+          const SizedBox(height: 20),
           Row(
             children: [
               Expanded(
-                child: OutlinedButton(
-                  key: const ValueKey('player_coin_unlock_cancel'),
-                  onPressed: () => Navigator.of(context).pop(false),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white.withValues(alpha: 0.82),
-                    side: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.18),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                child: Text(
+                  context.l10n.playerAutoNext,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.45),
+                    fontSize: 12,
+                    height: 16 / 12,
                   ),
-                  child: Text(context.l10n.storeCancel),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: AppPrimaryButton(
-                  key: const ValueKey('player_coin_unlock_confirm'),
-                  label: context.l10n.playerConfirmUnlock,
-                  onPressed: onConfirm,
-                ),
+              Switch.adaptive(
+                key: const ValueKey('player_coin_unlock_auto_next_switch'),
+                value: true,
+                activeThumbColor: Colors.white,
+                activeTrackColor: AppColors.primary,
+                onChanged: (_) {},
               ),
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _CoinMetric extends StatelessWidget {
-  const _CoinMetric({required this.label, required this.value});
-
-  final String label;
-  final int value;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.48),
-                fontSize: 12,
-                height: 16 / 12,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                const Icon(
-                  Icons.monetization_on,
-                  color: AppColors.gold,
-                  size: 17,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '$value',
-                  key: ValueKey('player_coin_metric_$value'),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    height: 24 / 20,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }

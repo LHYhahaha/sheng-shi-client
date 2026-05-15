@@ -22,5 +22,5 @@ final entitlementRepositoryProvider = Provider<EntitlementRepository>((ref) {
       ),
     );
   }
-  return MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOff();
+  return MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOn();
 });
