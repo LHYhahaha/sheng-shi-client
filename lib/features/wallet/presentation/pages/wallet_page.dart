@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router/route_paths.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/wallet_controller.dart';
 
 class WalletPage extends ConsumerStatefulWidget {
@@ -24,7 +25,12 @@ class _WalletPageState extends ConsumerState<WalletPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(walletControllerProvider);
+    final entitlementState = ref.watch(entitlementControllerProvider);
     final controller = ref.read(walletControllerProvider.notifier);
+    final displayState = state.copyWith(
+      coins: entitlementState.coinBalance,
+      autoUnlockNextEpisode: entitlementState.autoUnlockEnabled,
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0014),
@@ -45,7 +51,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
             ),
             Expanded(
               child: _WalletBody(
-                state: state,
+                state: displayState,
                 onRetry: controller.retry,
                 onTopUp: () => context.push(RoutePaths.store),
                 onTransactionHistory: () =>

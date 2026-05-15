@@ -125,6 +125,43 @@ void main() {
     expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
   });
 
+  testWidgets('store top up updates wallet balance through entitlement', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Wallet >'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('My Wallet'), findsWidgets);
+    expect(find.text('120'), findsOneWidget);
+
+    await tester.tap(find.text('Top Up'));
+    await tester.pumpAndSettle();
+    expect(find.text('Store'), findsOneWidget);
+
+    await tester.tap(find.text(r'$ 29.99').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Buy Now'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirm'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.text('Mock purchase completed.'), findsOneWidget);
+
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.chevron_left_rounded).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('My Wallet'), findsWidgets);
+    expect(find.text('3420'), findsOneWidget);
+  });
+
   testWidgets('consumption history shows segmented poster rows', (
     tester,
   ) async {
