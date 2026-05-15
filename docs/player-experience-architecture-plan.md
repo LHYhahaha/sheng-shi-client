@@ -652,6 +652,119 @@ locked 逻辑需要拆成三阶段，避免在滑动关键路径做重操作：
 - 不改支付/权益规则。
 - 不为了 locked 流畅而提前请求未授权播放源。
 
+### Phase 5.21: Active Surface And Locked Dwell Strategy
+
+日期：2026-05-16
+
+Phase 5.20 / S1 真机复测结论：
+
+- `PlayerPage` rebuild blast radius 已经缩小，播放进度不再明显拖着整个 PageView 重建。
+- 真机日志仍显示 playable episode 切换时存在 `Video.mount`、`Video.unmount`、
+  `Video.controller.replace`，说明真实 `Video` surface 仍跟随 PageView item 生命周期。
+- locked episode 卡顿还有另一层交互原因：自动解锁/充值抽屉作为 modal 会打断连续滑动。
+  即使弹窗时机已经延后，连续滑到多个 locked episodes 时，频繁自动弹 modal 仍会让用户感觉
+  PageView 卡住。
+
+因此下一轮不应继续调 debounce，也不应只修一个 EP04 case。需要同时规划两条线：
+
+1. **播放架构线：Active Video Surface Overlay**
+   - 把真实 `Video` widget 从 PageView item / `PlayerChrome` 中移出。
+   - PageView item 只负责静态 shell 和业务 overlay。
+   - 当前 active playable item 的视频由 PlayerPage 顶层 overlay 统一挂载。
+2. **解锁交互线：Locked Dwell Auto Sheet**
+   - locked current item 先快速显示 poster + `Unlock Now`。
+   - 用户停留一段时间且没有继续滑动时，再自动弹解锁/充值抽屉。
+   - 如果用户继续滑动，不自动弹，保留按钮。
+   - 用户点击 `Unlock Now` 立即弹。
+
+#### S2 Implementation Scope: Active Playback Surface Overlay
+
+目标：
+
+- 解决 `Video` surface 跟随 PageView item mount/unmount 的架构风险。
+- 让 PageView shell 滑动更轻，减少 Android `media_kit_video` surface 生命周期干扰。
+
+要求：
+
+- 新增 `ActivePlaybackSurfaceOverlay` 或等价组件，位于 `PlayerPage` 顶层 Stack。
+- overlay 只绑定当前 active playable item 的 `VideoController`。
+- locked / unavailable / no-source / paywall-blocked item 不挂 `Video`。
+- PageView item 不再创建 `Video` widget，只渲染：
+  - poster / fallback；
+  - gradient；
+  - title / synopsis；
+  - top bar；
+  - action rail；
+  - `Unlock Now`；
+  - unavailable overlay；
+  - seekbar 容器或局部进度 UI。
+- 先做低风险版本：surface 可以在 current item settle 后切换，不要求第一版跟手滑动。
+- 保留现有 Android pause -> detach -> dispose 顺序。
+
+验收：
+
+- playable EP01 -> EP02 -> EP03 时，PageView item 不再直接产生 `Video.mount/unmount`。
+- current playable item 有且只有一个 active `Video` surface。
+- locked item 切入时 overlay 隐藏，poster + `Unlock Now` 出现。
+- route pop / tab hidden / app background 仍无后台声音。
+
+#### S3 Implementation Scope: Locked Dwell Auto Sheet
+
+目标：
+
+- 解锁流程不再破坏连续上下滑体验。
+- locked episode 的第一反馈是 inline `Unlock Now`，不是立即 modal 阻断。
+
+建议策略：
+
+- 进入 locked current item 后，立即显示 `Unlock Now`。
+- 自动弹窗改为 dwell 后触发：
+  - 用户停留 800-1000ms；
+  - 当前 item 未变化；
+  - 当前没有 modal/sheet；
+  - 当前 item 仍 locked 且未解锁；
+  - 用户没有继续滑动。
+- 如果用户继续滑动，取消 pending auto sheet。
+- 如果用户手动点击 `Unlock Now`，立即打开对应流程，不等待 dwell。
+- 对连续 locked episodes，不要每一集刚落位就强制弹 modal；以“停留后弹”为准。
+
+验收：
+
+- 快速滑过 locked episodes 不会连续弹多个抽屉。
+- 停留在 locked episode 一段时间后自动弹对应抽屉。
+- 关闭抽屉后继续滑动顺畅。
+- 点击 `Unlock Now` 立即弹。
+- free / 已解锁 episode 不受影响。
+
+#### Phase 5.21 Validation
+
+必须跑：
+
+```bash
+dart format lib test integration_test
+flutter analyze
+flutter test
+flutter test integration_test/app_smoke_test.dart -d R58WC02B69R
+```
+
+建议额外打 release 包验证：
+
+```bash
+flutter build apk --release --dart-define=PLAYER_REBUILD_LOGS=true
+flutter install -d R58WC02B69R --release
+```
+
+真机验证路径：
+
+- Home -> single drama。
+- EP01 -> EP02 -> EP03 playable 切换。
+- EP03 -> EP04 locked。
+- 快速 EP04 -> EP05 -> EP06。
+- 停留在 locked episode 等待 auto sheet。
+- 关闭 sheet 后继续上下滑。
+- 点击 `Unlock Now`。
+- route back、tab hidden、app background。
+
 ## 6. Explicit Prohibitions
 
 - Do not create a player or `VideoController` in Home.
