@@ -417,3 +417,23 @@ flutter test
 - 不引入 `cached_network_image`，不做图片缓存系统。
 - 不迁移 PlayerContent、Profile、My list、Wallet 等其他图片字段。
 - 不处理 CDN 图片参数、渐进加载、统一 placeholder 组件和预加载策略。
+
+## API Skeleton Phase B 状态
+
+已完成 Player / Drama Detail / Playback Source 的远程骨架，但默认运行链路仍保持 mock：
+
+- 新增 Player DTO：剧详情、剧集、For You feed item/feed page、播放源、字幕轨道、seek preview sprite。
+- 新增 DTO -> domain mapper：远程数据可以转换为现有 `PlayerContent`、`PlayerEpisode`、`PlayerFeedItem`、`PlaybackSource`。
+- 新增 `PlayerRemoteDataSource`：预留 `GET /dramas/{dramaId}`、`GET /dramas/{dramaId}/episodes`、`GET /feed/for-you`。
+- 新增 `PlaybackSourceRemoteDataSource`：预留 `GET /episodes/{episodeId}/playback-source`，按播放源接口要求使用 `ApiAuthPolicy.required`。
+- 新增远程 repository：`RemotePlayerContentRepository`、`RemotePlayerFeedRepository`、`RemotePlayerPlaybackSourceRepository`，均实现现有 domain repository interface。
+- Player 相关 provider 增加 `USE_REMOTE_PLAYER_API` 编译期开关；默认值仍为 `false`，因此当前 UI、播放器和 mock flow 不受影响。
+- `PlayerFeedItem.id` 在 remote mapper 中使用稳定 key，优先使用服务端 `feedItemId`，否则按 `mode + dramaId + episodeId` 生成，避免列表 index 污染 session window。
+- `PlaybackSource.cacheKey` 已预留 `sourceId` 维度，避免未来同 URL/不同 source 版本的缓存和预热状态混淆。
+
+仍然 defer：
+
+- 不接真实 Player API，不启用真实 baseUrl，不替换 mock provider 默认行为。
+- 字幕轨道、preview sprite、cachePolicy、preloadPolicy 只完成 contract/mapper，不接播放器 UI。
+- `PlayerContent` 的 poster/background 仍沿用当前 asset fallback；统一 `MediaResource` 迁移留到后续图片资源阶段。
+- 播放源 refresh、source 过期重拉、backup HLS URL fallback、真实 entitlement/access API 仍 defer。
