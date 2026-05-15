@@ -831,13 +831,22 @@ Phase E: IAP verification and entitlement
 - Verify receipts server-side.
 - Refresh wallet/membership/unlock states from server only.
 
-Phase F: Remote localization and subtitles
+Phase F: API integration readiness
+
+- Finalize baseUrl/env and remote switch policy.
+- Connect real `Device-Id`, `Lang`, `Platform`, and `App-Version` sources to
+  `ApiRequestContext`.
+- Add token storage skeleton and refresh queue boundaries.
+- Define logout/delete cleanup for token, feature caches, and playback sessions.
+- Keep all remote repositories disabled by default.
+
+Phase G: Remote localization and subtitles
 
 - Add fixed bundle version/download/cache.
 - Add content locale request propagation.
 - Add playback subtitle track selection.
 
-Phase G: Error, weak network, and release-device regression
+Phase H: Error, weak network, and release-device regression
 
 - Full API error matrix.
 - Offline/timeout retry tests.

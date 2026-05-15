@@ -104,6 +104,8 @@ dart-define。
 
 ## 真实 API 联调前准备清单
 
+详细 Phase F 任务记录见 `docs/api-integration-readiness-plan.md`。
+
 P0 联调前必须确认：
 
 - `APP_ENV` 对应 baseUrl/env 配置。

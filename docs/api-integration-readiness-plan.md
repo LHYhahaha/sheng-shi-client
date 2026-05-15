@@ -1,0 +1,126 @@
+# API Integration Readiness Plan
+
+日期：2026-05-15
+
+本文记录真实 API 联调前准备任务。当前 API skeleton 已覆盖主要业务域，但默认仍走
+mock repository；本阶段不接真实服务端、不打开 remote 默认开关、不改 UI。
+
+## 当前阶段
+
+已完成：
+
+- Network Contract Phase B：基础 header、auth policy、envelope、businessCode。
+- Home / Drama API Skeleton Phase A。
+- Player / Playback Source API Skeleton Phase B。
+- My list / Play history API Skeleton Phase C。
+- Wallet / Store / Membership / Entitlement API Skeleton Phase D。
+- Auth / Profile / Session API Skeleton Phase E。
+- Remote Contract Index 总索引。
+
+下一步进入：
+
+- **Phase F：真实 API 联调前准备**
+
+## Phase F 目标
+
+把真实联调会依赖的基础设施补齐，但不真正接业务 API。
+
+目标包括：
+
+1. baseUrl/env 配置清晰。
+2. `Device-Id`、`Lang`、`Platform`、`App-Version` 来源统一。
+3. token storage 抽象准备好。
+4. 401 refresh queue / 并发刷新有最小骨架或明确设计。
+5. logout/delete account 后的清理入口明确。
+6. remote 开关在 dev/staging/prod 下的启用策略明确。
+
+## 任务范围
+
+### 1. baseUrl/env
+
+- 完善 `dev`、`staging`、`prod` 环境配置。
+- baseUrl 从统一 `AppConfig` 或等价配置入口读取。
+- 继续保持所有 feature 默认 mock。
+- 文档说明不同环境如何构建和启用 remote 开关。
+
+### 2. Request Context
+
+统一 `ApiRequestContext` 的真实来源：
+
+- `Device-Id`：稳定设备/安装 ID provider，当前可保留 mock fallback。
+- `Lang`：来自当前 locale / language controller，切换语言后 request context 更新。
+- `Platform`：自动识别 `ios` / `android` / `web`。
+- `App-Version`：来自 package info 或可替换 provider，当前可保留 fallback。
+- `accessToken`：未来来自 token store，本轮不进 UI 层。
+
+要求：feature 不能自己拼 header，只能通过 `ApiClient` / request context。
+
+### 3. Token Storage Skeleton
+
+- 新增 token storage 抽象，例如 `AuthTokenStore`。
+- 当前可以使用 in-memory/mock implementation。
+- 为未来 secure storage 留实现入口。
+- `accessToken` / `refreshToken` 不允许进入 presentation。
+
+### 4. Refresh Queue Skeleton
+
+本轮不要求完整真实 refresh，但需要准备边界：
+
+- 401 捕获入口。
+- refresh in-flight 去重设计。
+- refresh 成功后重试原请求的策略说明。
+- refresh 失败后清 session 的边界。
+
+如果实现风险高，可以先以文档 + fake 测试方式落地，不影响现有 mock。
+
+### 5. Session Cleanup
+
+设计统一 session cleanup 入口，后续 logout/delete account 成功后调用。
+
+需要覆盖：
+
+- token storage。
+- auth session。
+- feature caches。
+- playback session/window/preload。
+
+本轮不改 UI，不破坏现有 AccountPage 行为。
+
+### 6. Remote Switch Policy
+
+- 所有 `USE_REMOTE_XXX_API` 默认 false。
+- 明确 dev/staging/prod 如何启用 remote。
+- 不在页面中读取 dart-define。
+- 不在本轮打开任何真实 remote 默认路径。
+
+## 验收标准
+
+- `ApiRequestContext` 能统一输出 `Device-Id`、`Lang`、`Platform`、`App-Version`。
+- 语言切换后，request context 能反映新 `Lang`。
+- token store 支持 read/write/clear。
+- auth required 请求可从 token source 取 token。
+- token 缺失时行为和现有设计一致，不导致 mock 业务崩溃。
+- 401 refresh skeleton 如实现，需要有并发去重测试。
+- session cleanup skeleton 如实现，需要覆盖 token/cache/playback 清理入口。
+- 所有 remote 开关仍默认 false。
+
+## 明确不做
+
+- 不接真实服务端。
+- 不接 Google/Facebook SDK。
+- 不接真实 IAP。
+- 不改 UI。
+- 不打开 remote 默认开关。
+- 不改播放器播放逻辑。
+- 不做远程语言包。
+- 不做 Profile 会员/金币聚合展示收口。
+
+## 后续顺序
+
+Phase F 完成后，建议进入：
+
+1. 多语言基础设施：固定语言包、远程 bundle、内容语言、字幕语言。
+2. 真实 API 联调：先 Home/Drama，再 Player playback source。
+3. 用户数据链路：My list、Entitlement、Wallet、Store、Membership。
+4. Auth/Profile 真实登录和 session 流。
+
