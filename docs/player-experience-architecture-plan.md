@@ -837,6 +837,95 @@ Phase 5.21 真机体验新增结论：
 - locked cleanup 是否需要进入三阶段状态机；
 - 是否有 pending timers / modal scheduling 未释放。
 
+### Phase 5.23: Locked Episode As Normal Page Shell
+
+日期：2026-05-16
+
+产品/体验方向更新：
+
+- locked episode 不应该像一条完全不同的“播放阻断链路”。
+- 更好的模型是：locked episode 和 free episode 一样参与 PageView shell 渲染，只是不启动
+  media playback，不请求未授权 source，并在页面上盖一层 locked overlay。
+- 解锁成功后，当前 locked page 转成 playable page，再 attach active video surface 并播放。
+
+当前问题：
+
+- locked current item 进入时调用 `blockItem`，会触发 pause、surface hide、window release、
+  preload dispose、blocked state 和 sheet scheduling。
+- 这让 locked page 成为“特殊页面”，滑到 EP04+ 时体验明显不同于前三个 free episodes。
+- 真机表现是：free episodes 滑动相对顺，locked episodes 尤其卡。
+
+目标模型：
+
+```text
+free / unlocked:
+  Page shell + ActiveVideoSurfaceOverlay
+
+locked:
+  Page shell + poster/fallback + locked overlay
+  不 open source
+  不 attach Video
+  不 preload/prepare unauthorized source
+  不在滑动关键路径 release whole window
+
+unlock success:
+  当前 item 标记为 playable
+  locked overlay 消失
+  ActiveVideoSurfaceOverlay attach
+  playItem
+```
+
+实现原则：
+
+- locked 是内容访问状态，不应该把播放器切成一条重型 blocked page。
+- 进入 locked current item 时，最多只做轻量 quiesce：
+  - 立即停止旧音频；
+  - 不再把旧视频 surface 留在当前 locked page 上；
+  - 但不在滑动关键路径同步释放全部 prepared window / pending preload。
+- locked overlay 应随 PageView shell 自然滑动。
+- 自动弹窗只作为停留后的后续动作，不影响 PageView 滑动。
+- 手动点击 `Unlock Now` 立即打开对应流程。
+
+建议重构：
+
+1. 新增或明确 `PlayerAccessPresentationState`
+   - `playable`
+   - `lockedCoins`
+   - `lockedRecharge`
+   - `lockedMembership`
+   - `unavailable`
+2. `PlayerPage` 对 locked item：
+   - 不调用重型 `blockItem` 作为进入 locked page 的第一步；
+   - 先更新 UI/presentation state；
+   - active video overlay 根据 presentation state 隐藏；
+   - old audio pause 可以快速执行；
+   - heavy cleanup 延后或弱化。
+3. `PlayerPlaybackController` 可新增轻量 API：
+   - `pauseForAccessOverlay(...)`
+   - 或 `quiesceForLockedPage(...)`
+   - 只负责停声和清当前 surface 绑定，不释放整个 window。
+4. 保留 `blockItem` 给真正 fatal/unavailable/route cleanup 等需要重阻断的场景，不要作为
+   locked page 默认入口。
+
+验收：
+
+- EP01 -> EP02 -> EP03 -> EP04 滑动时，EP04 像普通 page 一样进入，先显示 poster +
+  `Unlock Now`，不卡顿。
+- EP04/EP05/EP06 连续滑动不触发重型 media cleanup。
+- locked item 不 open/preload/prepare unauthorized source。
+- 旧音频在进入 locked 后停止。
+- 停留 locked 后才弹 sheet。
+- 点击 `Unlock Now` 立即弹。
+- 解锁成功后，当前 page attach active video surface 并播放，不停在封面。
+
+明确不做：
+
+- 不提前获取 locked 播放源。
+- 不为了流畅而播放未授权内容。
+- 不创建多个 Video widgets。
+- 不改支付/权益规则。
+- 不扩大 HLS cache/proxy。
+
 ## 6. Explicit Prohibitions
 
 - Do not create a player or `VideoController` in Home.
