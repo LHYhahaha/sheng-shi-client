@@ -320,15 +320,15 @@ E1-E3 后，Player、Store、Membership、Wallet 已开始共享 entitlement 状
 
 ## 建议下一轮 / 待派任务
 
-### Next: Network Contract Phase B
+### Completed: Network Contract Phase B
 
-状态：待派发。建议等当前开发任务完成并提交后，再单独派给开发 agent。
+状态：已完成。
 
 目标：把 `core/network` 对齐服务端最新接口规范，但仍不接真实业务 API，不替换 mock repository。
 
-开发范围：
+已完成范围：
 
-1. 新增或完善请求上下文，例如 `ApiRequestContext` / provider，统一提供 `Device-Id`、`Lang`、`Platform`、`App-Version`、`accessToken?`。
+1. 新增 `ApiRequestContext` / provider，统一提供 `Device-Id`、`Lang`、`Platform`、`App-Version`、`accessToken?`。
 2. `ApiClient` 所有请求默认带：
    - `Device-Id`
    - `Lang`
@@ -336,7 +336,7 @@ E1-E3 后，Player、Store、Membership、Wallet 已开始共享 entitlement 状
    - `App-Version`
    - `Accept: application/json`
    - body 请求带 `Content-Type: application/json`
-3. 为接口增加 auth policy：
+3. 新增 `ApiAuthPolicy`：
    - 登录、第三方登录、刷新 token 不带 `Authorization`。
    - 登录后的业务接口带 `Authorization: Bearer xxx`。
    - 当前 skeleton 默认不要强制 token，避免破坏 mock 和远程骨架测试。
@@ -349,15 +349,16 @@ E1-E3 后，Player、Store、Membership、Wallet 已开始共享 entitlement 状
    }
    ```
    `code: 0` 是唯一成功码；不能再把 `200` 当业务成功码。
-5. `ApiException` 增加业务错误码承载能力，例如 `businessCode`，并保留服务端 `message`。
+5. `ApiException` 增加 `businessCode`，并保留服务端 `message`。
 6. 业务错误码按 4 位数字处理：
    - `1001` 参数错误
    - `1002` 请求频繁
    - `1003` 签名 / 验签失败
    - `1004` 系统异常
    - 后续 `2xxx` 用户域、`3xxx` 内容域、`4xxx` 金币/任务/福利域只记录并透传，不在网络层硬编码业务 UI。
-7. 更新 `docs/api-integration-plan.md` 和 `docs/networking-guidelines.md`，让 header、envelope、错误码和实现一致。
-8. 补网络层单测：
+7. 更新 `docs/api-integration-plan.md`、`docs/mock-data-and-api-readiness-review.md`
+   和 `docs/networking-guidelines.md`，让 header、envelope、错误码和实现一致。
+8. 已补网络层单测：
    - 所有请求自动带四个基础 header。
    - auth required 时带 `Authorization`。
    - auth none 时不带 `Authorization`。
@@ -375,7 +376,7 @@ E1-E3 后，Player、Store、Membership、Wallet 已开始共享 entitlement 状
 - 不替换 `MockDramaRepository` / 其他 mock repository。
 - 不把 token 存储、secure storage、401 refresh 队列混进本轮。
 
-验证：
+已验证：
 
 ```bash
 dart format lib test integration_test

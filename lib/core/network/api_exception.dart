@@ -25,6 +25,7 @@ class ApiException implements Exception {
   const ApiException({
     required this.code,
     required this.message,
+    this.businessCode,
     this.statusCode,
     this.requestId,
     this.data,
@@ -34,6 +35,12 @@ class ApiException implements Exception {
 
   /// 归一化错误码。
   final ApiErrorCode code;
+
+  /// 服务端业务错误码。
+  ///
+  /// HTTP 2xx 但 envelope `code != 0` 时放这里，例如 1001 参数错误、2xxx 用户域、
+  /// 3xxx 内容域、4xxx 金币/任务/福利域。网络层只透传，不在这里写业务 UI 逻辑。
+  final int? businessCode;
 
   /// 面向开发调试的错误消息。
   ///
@@ -82,6 +89,7 @@ class ApiException implements Exception {
       DioExceptionType.cancel => ApiException(
         code: ApiErrorCode.cancelled,
         message: 'Request cancelled.',
+        businessCode: _businessCodeFromBody(response?.data),
         statusCode: statusCode,
         requestId: requestId,
         data: response?.data,
@@ -93,6 +101,7 @@ class ApiException implements Exception {
       DioExceptionType.receiveTimeout => ApiException(
         code: ApiErrorCode.timeout,
         message: 'Network request timed out.',
+        businessCode: _businessCodeFromBody(response?.data),
         statusCode: statusCode,
         requestId: requestId,
         data: response?.data,
@@ -102,6 +111,7 @@ class ApiException implements Exception {
       DioExceptionType.connectionError => ApiException(
         code: ApiErrorCode.network,
         message: 'Network connection failed.',
+        businessCode: _businessCodeFromBody(response?.data),
         statusCode: statusCode,
         requestId: requestId,
         data: response?.data,
@@ -118,6 +128,7 @@ class ApiException implements Exception {
       _ => ApiException(
         code: ApiErrorCode.unknown,
         message: error.message ?? 'Unknown network error.',
+        businessCode: _businessCodeFromBody(response?.data),
         statusCode: statusCode,
         requestId: requestId,
         data: response?.data,
@@ -139,6 +150,7 @@ class ApiException implements Exception {
     return ApiException(
       code: _codeFromStatus(statusCode),
       message: message,
+      businessCode: _businessCodeFromBody(data),
       statusCode: statusCode,
       requestId: requestId,
       data: data,
@@ -173,6 +185,22 @@ class ApiException implements Exception {
     return null;
   }
 
+  static int? _businessCodeFromBody(Object? data) {
+    if (data is Map<String, Object?>) {
+      final code = data['code'] ?? data['businessCode'];
+      if (code is int) {
+        return code;
+      }
+      if (code is num) {
+        return code.toInt();
+      }
+      if (code is String) {
+        return int.tryParse(code);
+      }
+    }
+    return null;
+  }
+
   static String? _requestIdFromResponse(Response<dynamic>? response) {
     if (response == null) {
       return null;
@@ -199,6 +227,7 @@ class ApiException implements Exception {
   @override
   String toString() {
     return 'ApiException(code: $code, statusCode: $statusCode, '
-        'requestId: $requestId, message: $message)';
+        'businessCode: $businessCode, requestId: $requestId, '
+        'message: $message)';
   }
 }

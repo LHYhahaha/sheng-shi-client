@@ -50,29 +50,35 @@ final result = await apiClient.get<MyDto>(
 - baseUrl
 - timeout
 - JSON response type
+- 基础请求 header：`Device-Id`、`Lang`、`Platform`、`App-Version`
+- `ApiAuthPolicy` 控制是否注入 `Authorization`
 - HTTP status 错误
 - Dio 错误映射
-- 常见服务端 envelope 解包
+- 服务端 envelope 解包
 
-当前支持的成功 envelope：
+当前成功 envelope：
 
 ```json
 {
   "code": 0,
-  "message": "ok",
-  "data": {}
+  "message": "success",
+  "data": null
 }
 ```
 
-如果响应没有 `code/data`，则直接把 body 交给 `decoder`。
+`code: 0` 是唯一成功码。`code: 200` 不是业务成功码，会作为业务失败抛出
+`ApiException`，并透传 `businessCode`。
 
-目标服务端规范：
+如果响应没有 `code/data`，则直接把 body 交给 `decoder`，用于兼容少量非标准
+调试接口；正式业务接口应使用统一 envelope。
 
 - 所有接口都必须带 `Device-Id`、`Lang`、`Platform`、`App-Version`。
 - 登录、第三方登录、刷新 token 不带 `Authorization`。
 - 登录后的业务接口额外带 `Authorization: Bearer <token>`。
 - 业务 envelope 中 `code: 0` 是唯一成功码，失败返回 4 位业务错误码。
-- Network Contract Phase B 会把这些 header、auth policy、business code 映射落到 `ApiClient`，当前文档先作为实现约束记录。
+- Network Contract Phase B 已把这些 header、auth policy、business code 映射落到
+  `ApiClient`。当前 token 仍是 mock/default，真实 token storage 和 refresh queue
+  后续再接。
 
 ## 异常类型
 
@@ -107,6 +113,10 @@ UI 层一般只关心：
 - `validation`：展示业务提示
 - 其他：通用失败提示
 
+`ApiException.businessCode` 只用于承载服务端业务码，例如 `1001` 参数错误、
+`1002` 请求频繁、`1003` 验签失败、`1004` 系统异常、`2xxx` 用户域、`3xxx`
+内容域、`4xxx` 金币/任务/福利域。网络层不根据这些码展示业务 UI。
+
 ## 分页约定
 
 UI 和 repository 层统一使用 cursor/token：
@@ -136,7 +146,7 @@ baseUrl 来自 `AppConfig.current`：
 
 等登录模块接入后，再增加：
 
-- token 注入 interceptor
+- 真实 token storage
 - 401 refresh token 队列
 - request id header
 - 网络日志脱敏

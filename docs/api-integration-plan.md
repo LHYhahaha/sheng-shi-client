@@ -849,7 +849,10 @@ Current structure is broadly ready for API integration:
 
 - Feature-first repositories already exist for auth, drama/home, player,
   my list, wallet, store, and membership.
-- `core/network` already has an `ApiClient`, `ApiException`, and paging helper.
+- `core/network` already has `ApiClient`, `ApiRequestContext`,
+  `ApiAuthPolicy`, `ApiException.businessCode`, and paging helper. Network
+  Contract Phase B has aligned base headers and envelope handling with the
+  service contract while keeping real token storage/refresh deferred.
 - Player source/CDN requirements are already documented separately.
 
 Recommended later cleanups before remote rollout:

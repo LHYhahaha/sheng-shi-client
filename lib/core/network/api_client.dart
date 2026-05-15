@@ -2,17 +2,51 @@ import 'package:dio/dio.dart';
 
 import '../config/app_environment.dart';
 import 'api_exception.dart';
+import 'api_request_context.dart';
+
+/// API 鉴权策略。
+///
+/// 登录、第三方登录、刷新 token 必须显式使用 none；登录后的业务接口使用 required。
+/// 当前 skeleton 不强制 token 存在，避免破坏 mock 和远程骨架测试。
+enum ApiAuthPolicy {
+  /// 不带 Authorization。
+  none,
+
+  /// 如果 request context 有 token，则带 `Authorization: Bearer <token>`。
+  required,
+}
 
 /// API client 的最小网络入口。
 ///
 /// 这里集中 Dio 配置、headers 和异常映射。feature/UI 不应直接 new Dio；否则
 /// token、requestId、重试和错误码策略会散落到业务层，后续接真实接口很难统一治理。
 class ApiClient {
-  ApiClient({Dio? dio}) : _dio = dio ?? Dio(_defaultOptions) {
+  ApiClient({
+    Dio? dio,
+    ApiRequestContext requestContext = const ApiRequestContext.mock(),
+  }) : _dio = dio ?? Dio(_defaultOptions),
+       _requestContext = requestContext {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          options.headers.putIfAbsent('Accept', () => 'application/json');
+          options.headers.addAll(_requestContext.toBaseHeaders());
+
+          if (_hasJsonBody(options)) {
+            options.headers.putIfAbsent(
+              Headers.contentTypeHeader,
+              () => Headers.jsonContentType,
+            );
+          }
+
+          final authPolicy = _authPolicyFromOptions(options);
+          final token = _requestContext.accessToken;
+          if (authPolicy == ApiAuthPolicy.required &&
+              token != null &&
+              token.isNotEmpty) {
+            options.headers['Authorization'] = 'Bearer $token';
+          } else {
+            options.headers.remove('Authorization');
+          }
           handler.next(options);
         },
       ),
@@ -23,6 +57,7 @@ class ApiClient {
   ///
   /// 暴露 getter 只用于底层扩展和测试；feature 层优先使用 ApiClient 的 get/post/put/delete。
   final Dio _dio;
+  final ApiRequestContext _requestContext;
 
   Dio get dio => _dio;
 
@@ -31,6 +66,7 @@ class ApiClient {
     Map<String, Object?>? queryParameters,
     CancelToken? cancelToken,
     Options? options,
+    ApiAuthPolicy authPolicy = ApiAuthPolicy.none,
     required T Function(Object? data) decoder,
   }) {
     return _request(
@@ -38,7 +74,7 @@ class ApiClient {
         path,
         queryParameters: queryParameters,
         cancelToken: cancelToken,
-        options: options,
+        options: _optionsWithAuthPolicy(options, authPolicy),
       ),
       decoder: decoder,
     );
@@ -50,6 +86,7 @@ class ApiClient {
     Map<String, Object?>? queryParameters,
     CancelToken? cancelToken,
     Options? options,
+    ApiAuthPolicy authPolicy = ApiAuthPolicy.none,
     required T Function(Object? data) decoder,
   }) {
     return _request(
@@ -58,7 +95,7 @@ class ApiClient {
         data: data,
         queryParameters: queryParameters,
         cancelToken: cancelToken,
-        options: options,
+        options: _optionsWithAuthPolicy(options, authPolicy),
       ),
       decoder: decoder,
     );
@@ -70,6 +107,7 @@ class ApiClient {
     Map<String, Object?>? queryParameters,
     CancelToken? cancelToken,
     Options? options,
+    ApiAuthPolicy authPolicy = ApiAuthPolicy.none,
     required T Function(Object? data) decoder,
   }) {
     return _request(
@@ -78,7 +116,7 @@ class ApiClient {
         data: data,
         queryParameters: queryParameters,
         cancelToken: cancelToken,
-        options: options,
+        options: _optionsWithAuthPolicy(options, authPolicy),
       ),
       decoder: decoder,
     );
@@ -90,6 +128,7 @@ class ApiClient {
     Map<String, Object?>? queryParameters,
     CancelToken? cancelToken,
     Options? options,
+    ApiAuthPolicy authPolicy = ApiAuthPolicy.none,
     required T Function(Object? data) decoder,
   }) {
     return _request(
@@ -98,7 +137,7 @@ class ApiClient {
         data: data,
         queryParameters: queryParameters,
         cancelToken: cancelToken,
-        options: options,
+        options: _optionsWithAuthPolicy(options, authPolicy),
       ),
       decoder: decoder,
     );
@@ -150,13 +189,14 @@ class ApiClient {
     }
 
     final code = body['code'];
-    final isSuccess = code == 0 || code == '0' || code == 200 || code == '200';
+    final isSuccess = code == 0 || code == '0';
     if (isSuccess) {
       return body['data'];
     }
 
     throw ApiException(
       code: ApiErrorCode.badResponse,
+      businessCode: _businessCodeFromEnvelope(body),
       message: _messageFromEnvelope(body) ?? 'Request failed.',
       requestId: _requestIdFromEnvelope(body),
       data: body,
@@ -189,6 +229,42 @@ class ApiClient {
     return null;
   }
 
+  Options _optionsWithAuthPolicy(Options? options, ApiAuthPolicy authPolicy) {
+    final mergedExtra = <String, dynamic>{
+      ...?options?.extra,
+      _authPolicyExtraKey: authPolicy.name,
+    };
+    return (options ?? Options()).copyWith(extra: mergedExtra);
+  }
+
+  ApiAuthPolicy _authPolicyFromOptions(RequestOptions options) {
+    final value = options.extra[_authPolicyExtraKey];
+    if (value == ApiAuthPolicy.required.name) {
+      return ApiAuthPolicy.required;
+    }
+    return ApiAuthPolicy.none;
+  }
+
+  bool _hasJsonBody(RequestOptions options) {
+    return options.data != null &&
+        options.data is! FormData &&
+        options.contentType != Headers.formUrlEncodedContentType;
+  }
+
+  int? _businessCodeFromEnvelope(Map<String, Object?> body) {
+    final code = body['code'];
+    if (code is int) {
+      return code;
+    }
+    if (code is num) {
+      return code.toInt();
+    }
+    if (code is String) {
+      return int.tryParse(code);
+    }
+    return null;
+  }
+
   static BaseOptions get _defaultOptions {
     return BaseOptions(
       baseUrl: AppConfig.current.apiBaseUrl.toString(),
@@ -199,4 +275,6 @@ class ApiClient {
       validateStatus: (_) => true,
     );
   }
+
+  static const _authPolicyExtraKey = 'apiAuthPolicy';
 }
