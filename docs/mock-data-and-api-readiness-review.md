@@ -564,3 +564,38 @@ flutter test
 - 商品列表是否必须登录、是否按地区/语言/平台差异下发。
 - Entitlement 真实 access 接口、服务端幂等业务码、失败重试策略。
 - Wallet 记录分页、领取奖励、订单到账后刷新钱包/会员/Profile 聚合展示。
+
+## API Skeleton Phase E 状态
+
+已完成 Auth / Profile / Session / Token 远程骨架，默认运行链路仍保持 mock：
+
+- Auth：
+  - 新增 `AuthUserDto`、`AuthTokenDto`、`AuthSessionDto` 以及 device login、OAuth login、refresh、logout、delete account request DTO。
+  - 新增 `AuthRemoteDataSource`，预留 `POST /auth/login/device`、`POST /auth/login/oauth`、`POST /auth/refresh`、`GET /auth/session`、`POST /auth/logout`、`DELETE /account`。
+  - 新增 `RemoteAuthRepository`，实现当前 `AuthRepository`，输出仍是 `AuthSession` / `AuthUser`。
+  - token 只保留在 data/core 边界；`AuthSession` 不暴露 access token，页面不接触 token。
+  - `AuthUser.avatarUrl` 映射为 `MediaResource.network`，当前 UI 仍可使用既有 asset fallback。
+- Profile：
+  - 新增 `ProfileSummary` domain、`ProfileRepository`、`ProfileSummaryDto`、`ProfileMapper`、`ProfileRemoteDataSource`、`RemoteProfileRepository`。
+  - 预留 `GET /profile`，用于后续账号资料、会员摘要、钱包摘要、语言/地区等聚合展示。
+  - 当前 `ProfilePage` 仍由 AuthState + ProfileController mock 合成展示，不在本阶段强行接远程 Profile。
+- Provider：
+  - 增加 `USE_REMOTE_AUTH_API`、`USE_REMOTE_PROFILE_API` 开关。
+  - 默认全部为 false，AuthPage / AccountPage / ProfilePage UI 行为不变。
+- Auth policy：
+  - 登录、第三方登录、刷新 token 使用 `ApiAuthPolicy.none`，不带 `Authorization`。
+  - session、logout、delete account、profile 使用 `ApiAuthPolicy.required`。
+
+已补测试：
+
+- Auth/Profile DTO fromJson、mapper、provider 默认 mock / remote override。
+- device login、OAuth login、refresh、session、logout、delete account、profile 的 auth policy。
+- `code != 0` 时保留 `ApiException.businessCode`。
+
+仍然 defer：
+
+- 真实 Google / Facebook SDK。
+- secure storage、refresh token queue、401 并发刷新和本地 session 持久化。
+- 真实 device id、app version、token 注入到 `ApiRequestContext`。
+- Profile 会员卡/金币卡从 Auth/Profile/Entitlement/Wallet 的真实接口聚合。
+- logout/delete account 远程失败后的全局 cache 清理和播放器资源释放策略。

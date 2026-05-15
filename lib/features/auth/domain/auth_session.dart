@@ -1,3 +1,5 @@
+import '../../../shared/media/media_resource.dart';
+
 /// 登录渠道类型。
 ///
 /// 枚举值用于 UI loading 和 repository 分发，不应直接映射第三方 SDK 的原始字符串；
@@ -17,6 +19,7 @@ class AuthUser {
     required this.nickname,
     required this.avatarAssetPath,
     required this.provider,
+    this.avatarResource,
   });
 
   /// 用户 id。
@@ -33,6 +36,12 @@ class AuthUser {
   ///
   /// 当前为 mock 本地资源；远程头像接入时仍应保持 UI 只读这个归一化字段。
   final String avatarAssetPath;
+
+  /// 头像统一资源身份。
+  ///
+  /// 远程 profile/auth 会把 avatarUrl 映射为 network resource；当前 UI 仍使用
+  /// avatarAssetPath，后续切网络头像时优先读此字段，不要把 URL 伪装成 asset path。
+  final MediaResource? avatarResource;
 
   /// 登录来源渠道。
   ///

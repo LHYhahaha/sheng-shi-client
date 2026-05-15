@@ -176,14 +176,17 @@ Future endpoints:
 
 - `GET /auth/session`
   - Request: auth token if available, device id.
-  - Response: `isAuthenticated`, `user`, `accessToken`, `refreshToken`,
-    `expiresAt`.
+  - Response: `isAuthenticated`, `user`, `token`, `serverTime`, `isNewUser`.
 - `POST /auth/login/device`
-  - Request: `deviceId`, optional guest token.
+  - Request: `deviceId`, `platform`, `appVersion`, `lang`.
   - Response: session.
 - `POST /auth/login/oauth`
-  - Request: `provider`, `idToken` or `accessToken`, `nonce`, `deviceId`.
+  - Request: `provider`, `idToken` or `accessToken`, `nonce`, `deviceId`,
+    `platform`, `appVersion`, `lang`.
   - Response: session.
+- `POST /auth/refresh`
+  - Request: `refreshToken`.
+  - Response: token.
 - `POST /auth/logout`
   - Request: refresh token/device id.
   - Response: guest session.
@@ -202,6 +205,19 @@ Cache:
 
 - Store tokens in secure storage in a later phase.
 - Keep profile/session in memory; refresh on launch.
+
+Phase E skeleton status:
+
+- `AuthRemoteDataSource` and `RemoteAuthRepository` now exist behind
+  `USE_REMOTE_AUTH_API`, with mock as the default provider path.
+- Auth DTOs are confined to the data layer. `AuthTokenDto` is not mapped into
+  UI-facing `AuthSession`; real token ownership remains in core/network/session.
+- Device login, OAuth login, and refresh use `ApiAuthPolicy.none`; session,
+  logout, and delete account use `ApiAuthPolicy.required`.
+- `ProfileSummaryDto`, `ProfileMapper`, `ProfileRemoteDataSource`, and
+  `RemoteProfileRepository` now exist behind `USE_REMOTE_PROFILE_API`.
+  Profile UI still uses the current mock/Auth composition until the real
+  profile aggregation endpoint is ready.
 
 ### Home Feed
 
@@ -793,7 +809,8 @@ Phase B: Home / detail / playback source behind feature flag
 
 Phase C: Auth / Profile / My list / history
 
-- Add secure token storage, token refresh, session bootstrap.
+- Auth/Profile remote skeletons are in place behind feature flags; secure token
+  storage, refresh queue, and real session bootstrap remain deferred.
 - Connect favorites and play history.
 - Ensure logout clears feature caches and playback session state.
 

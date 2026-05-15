@@ -152,3 +152,17 @@ baseUrl 来自 `AppConfig.current`：
 - 网络日志脱敏
 - Sentry breadcrumb
 - API mock switch
+
+## Auth / Session / Token Skeleton
+
+API Skeleton Phase E 已补 Auth / Profile 远程骨架，但仍不做真实 token 生命周期：
+
+- `AuthRemoteDataSource` 只负责登录、OAuth、refresh、session、logout、delete account 的远程调用。
+- `RemoteAuthRepository` 输出现有 `AuthSession`，不会把 `accessToken` 暴露给 UI。
+- `AuthTokenDto` 只存在 data 层；真实 token storage 和 `ApiRequestContext.accessToken` 注入后续单独实现。
+- 登录、第三方登录、refresh 必须继续使用 `ApiAuthPolicy.none`。
+- session、logout、delete account、profile 按登录后业务接口处理，使用 `ApiAuthPolicy.required`。
+
+后续接真实登录时，应该替换 `apiRequestContextProvider` 的 token 来源，并增加统一 refresh
+queue。不要让页面、controller 或 feature repository 自己保存 access token；否则 401 刷新、
+logout 清理和并发请求会变得不可控。
