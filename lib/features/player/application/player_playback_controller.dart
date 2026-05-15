@@ -1002,6 +1002,43 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     return _blockPlaybackForItem(item, status: blockedStatus, reason: reason);
   }
 
+  Future<void> quiesceForAccessOverlay(
+    PlayerFeedItem item, {
+    String reason = 'access overlay',
+  }) async {
+    if (_isSessionDisposed) {
+      return;
+    }
+    _pauseWhenOpenCompletes = true;
+    final generation = ++_generation;
+    _logTiming(
+      'access overlay quiesce',
+      itemId: item.id,
+      source: item.episode.videoSource,
+      details: _timingDetails([
+        'reason=$reason',
+        'wasCurrentItem=${state.currentItemId ?? 'null'}',
+        'wasCurrentSource=${state.currentSource ?? 'null'}',
+        'windowItems=${_windowItemsText()}',
+      ]),
+    );
+    await _session.pause();
+    if (!ref.mounted || !_isCurrent(generation)) {
+      return;
+    }
+    state = state.copyWith(
+      status:
+          state.currentSource == null ||
+              state.status == PlayerPlaybackStatus.idle ||
+              state.status == PlayerPlaybackStatus.error
+          ? state.status
+          : PlayerPlaybackStatus.paused,
+      isBuffering: false,
+      surfaceLifecycle: PlayerVideoSurfaceLifecycle.detaching,
+      clearVideoController: true,
+    );
+  }
+
   List<PlayerFeedItem> _preloadCandidatesInDirection(
     List<PlayerFeedItem> items,
     int currentIndex, {

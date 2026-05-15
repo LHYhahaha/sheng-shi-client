@@ -482,6 +482,41 @@ void main() {
     );
   });
 
+  test(
+    'access overlay quiesce pauses without blocking or releasing window',
+    () async {
+      final session = _FakePlaybackSession();
+      final container = _createContainer(session);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      await controller.quiesceForAccessOverlay(
+        _item(2, isLocked: true),
+        reason: 'coin unlock required',
+      );
+
+      final state = container.read(provider);
+      expect(session.pauseCount, 1);
+      expect(state.status, PlayerPlaybackStatus.paused);
+      expect(state.currentItemId, 'drama-a-ep-1');
+      expect(state.currentSource, _videoUrl);
+      expect(state.canMountVideoSurface, isFalse);
+      expect(
+        controller.exportTimingReport(),
+        contains('access overlay quiesce'),
+      );
+      expect(
+        controller.exportTimingReport(),
+        isNot(contains('session window release')),
+      );
+      expect(
+        controller.exportTimingReport(),
+        isNot(contains('dispose preloads')),
+      );
+    },
+  );
+
   test('dispose path detaches surface before disposing session', () async {
     final session = _FakePlaybackSession();
     final container = _createContainer(session);

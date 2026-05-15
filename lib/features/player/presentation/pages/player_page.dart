@@ -13,6 +13,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../../entitlement/domain/episode_access_decision.dart';
+import '../../../entitlement/domain/episode_unlock_type.dart';
 import '../../application/player_feed_controller.dart';
 import '../../application/player_playback_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
@@ -24,6 +25,14 @@ import '../widgets/player_action_sheets.dart';
 import '../widgets/player_chrome.dart';
 import '../widgets/player_detail_sheet.dart';
 import '../widgets/player_recharge_unlock_sheet.dart';
+
+enum PlayerAccessPresentationState {
+  playable,
+  lockedCoins,
+  lockedRecharge,
+  lockedMembership,
+  unavailable,
+}
 
 /// 播放器页面。
 ///
@@ -302,12 +311,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         final accessStopwatch = Stopwatch()..start();
         await _handleEntitlementDecisionForItem(next, autoPresentSheet: false);
         accessStopwatch.stop();
+        final accessPresentationState = _accessPresentationStateFor(next);
         PlayerRebuildDiagnostics.recordTiming(
           'currentItemAccessMode',
           itemId: next.id,
-          details: _isLockedAutoSheetCandidate(next)
-              ? 'mode=locked'
-              : 'mode=playable',
+          details: 'mode=${accessPresentationState.name}',
         );
         if (_isLockedAutoSheetCandidate(next)) {
           PlayerRebuildDiagnostics.recordTiming(
@@ -444,8 +452,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final currentItem = feedState.currentItem;
     final canShowActiveVideoOverlay =
         currentItem != null &&
-        !currentItem.episode.isUnavailable &&
-        _isEntitlementPlayable(currentItem);
+        _accessPresentationStateFor(currentItem) ==
+            PlayerAccessPresentationState.playable;
 
     return Stack(
       children: [
@@ -476,23 +484,30 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               itemBuilder: (context, index) {
                 final item = feedState.items[index];
                 final isCurrentItem = index == feedState.currentIndex;
+                final accessPresentationState = _accessPresentationStateFor(
+                  item,
+                );
                 PlayerRebuildDiagnostics.recordPageViewItemBuild(
                   itemId: item.id,
                   isCurrent: isCurrentItem,
                 );
                 final isLockedCurrentItem =
                     isCurrentItem &&
-                    item.episode.isLocked &&
-                    !_isEntitlementPlayable(item) &&
-                    !item.episode.isUnavailable;
+                    (accessPresentationState ==
+                            PlayerAccessPresentationState.lockedCoins ||
+                        accessPresentationState ==
+                            PlayerAccessPresentationState.lockedRecharge ||
+                        accessPresentationState ==
+                            PlayerAccessPresentationState.lockedMembership);
                 final lockedActionLabel =
-                    uiState.paywall == PlayerPaywallState.memberUnlock
+                    accessPresentationState ==
+                        PlayerAccessPresentationState.lockedMembership
                     ? context.l10n.playerMemberUnlock
                     : context.l10n.playerUnlockNow;
                 final canUsePlaybackSurface =
                     isCurrentItem &&
-                    !item.episode.isUnavailable &&
-                    _isEntitlementPlayable(item) &&
+                    accessPresentationState ==
+                        PlayerAccessPresentationState.playable &&
                     playbackShell.shouldAttachVideoSurface &&
                     playbackShell.currentItemId == item.id &&
                     playbackShell.currentSource != null;
@@ -534,8 +549,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                       seekBar:
                           widget.feedMode != PlayerFeedMode.forYou &&
                               isCurrentItem &&
-                              !item.episode.isUnavailable &&
-                              _isEntitlementPlayable(item)
+                              accessPresentationState ==
+                                  PlayerAccessPresentationState.playable
                           ? _PlayerSeekBarConsumer(
                               sessionKey: _sessionKey,
                               thumbnailAssetPath: item.content.posterAssetPath,
@@ -705,6 +720,25 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isEntitlementPlayable(PlayerFeedItem item) {
     return !item.episode.isLocked ||
         _entitlementPlayableItemIds.contains(item.id);
+  }
+
+  PlayerAccessPresentationState _accessPresentationStateFor(
+    PlayerFeedItem item,
+  ) {
+    if (item.episode.isUnavailable) {
+      return PlayerAccessPresentationState.unavailable;
+    }
+    if (_isEntitlementPlayable(item)) {
+      return PlayerAccessPresentationState.playable;
+    }
+    if (item.episode.unlockType == EpisodeUnlockType.membership) {
+      return PlayerAccessPresentationState.lockedMembership;
+    }
+    final entitlementState = ref.read(entitlementControllerProvider);
+    if (entitlementState.coinBalance >= item.episode.requiredCoins) {
+      return PlayerAccessPresentationState.lockedCoins;
+    }
+    return PlayerAccessPresentationState.lockedRecharge;
   }
 
   PlayerFeedItem _playableCopy(PlayerFeedItem item) {
@@ -950,10 +984,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         _schedulePreloadAroundItem(item);
         await playbackController.playItem(_playableCopy(item));
       case EpisodeAccessDecisionType.autoUnlockAndPlay:
-        await _blockItemForAccess(
+        await _quiesceItemForAccessOverlay(
           playbackController,
           item,
-          status: PlayerPlaybackStatus.waitUnlock,
           reason: 'auto unlock requires current confirmation',
         );
         _schedulePreloadAroundItem(item);
@@ -962,19 +995,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           unawaited(_showCoinUnlockSheetForItem(item));
         }
       case EpisodeAccessDecisionType.goMembership:
-        await _blockItemForAccess(
+        await _quiesceItemForAccessOverlay(
           playbackController,
           item,
-          status: PlayerPlaybackStatus.blocked,
           reason: decision.reason ?? 'membership required',
         );
         _schedulePreloadAroundItem(item);
         uiController.showMemberPaywall();
       case EpisodeAccessDecisionType.showCoinUnlockDialog:
-        await _blockItemForAccess(
+        await _quiesceItemForAccessOverlay(
           playbackController,
           item,
-          status: PlayerPlaybackStatus.blocked,
           reason: decision.reason ?? 'coin unlock required',
         );
         _schedulePreloadAroundItem(item);
@@ -983,10 +1014,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           unawaited(_showCoinUnlockSheetForItem(item));
         }
       case EpisodeAccessDecisionType.showRechargeDialog:
-        await _blockItemForAccess(
+        await _quiesceItemForAccessOverlay(
           playbackController,
           item,
-          status: PlayerPlaybackStatus.blocked,
           reason: decision.reason ?? 'recharge required',
         );
         _schedulePreloadAroundItem(item);
@@ -995,14 +1025,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           unawaited(_showRechargeUnlockSheetForItem(item));
         }
       case EpisodeAccessDecisionType.waitUnlock:
-        await _blockItemForAccess(
-          playbackController,
-          item,
-          status: item.episode.isUnavailable
-              ? PlayerPlaybackStatus.unavailable
-              : PlayerPlaybackStatus.waitUnlock,
-          reason: decision.reason ?? 'wait unlock',
-        );
+        if (item.episode.isUnavailable) {
+          await _blockItemForAccess(
+            playbackController,
+            item,
+            status: PlayerPlaybackStatus.unavailable,
+            reason: decision.reason ?? 'wait unlock',
+          );
+        } else {
+          await _quiesceItemForAccessOverlay(
+            playbackController,
+            item,
+            reason: decision.reason ?? 'wait unlock',
+          );
+        }
         _schedulePreloadAroundItem(item);
         if (item.episode.isUnavailable) {
           uiController.hidePaywall();
@@ -1054,6 +1090,28 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       itemId: item.id,
       elapsed: stopwatch.elapsed,
       details: 'status=${status.name} reason=$reason',
+    );
+  }
+
+  Future<void> _quiesceItemForAccessOverlay(
+    PlayerPlaybackController playbackController,
+    PlayerFeedItem item, {
+    required String reason,
+  }) async {
+    final stopwatch = Stopwatch()..start();
+    await playbackController.quiesceForAccessOverlay(item, reason: reason);
+    stopwatch.stop();
+    PlayerRebuildDiagnostics.recordTiming(
+      'quiesceForAccessOverlay',
+      itemId: item.id,
+      elapsed: stopwatch.elapsed,
+      details: 'reason=$reason',
+    );
+    playbackController.recordPlaybackTiming(
+      'access overlay quiesce elapsed',
+      itemId: item.id,
+      elapsed: stopwatch.elapsed,
+      details: 'reason=$reason',
     );
   }
 
@@ -1381,10 +1439,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!_isCurrentFeedItem(item)) {
       return;
     }
-    await _blockItemForAccess(
+    await _quiesceItemForAccessOverlay(
       ref.read(playerPlaybackControllerProvider(_sessionKey).notifier),
       item,
-      status: PlayerPlaybackStatus.waitUnlock,
       reason: selectedMembershipPackage == null
           ? 'recharge success awaiting coin confirmation'
           : 'membership purchase success awaiting user action',
