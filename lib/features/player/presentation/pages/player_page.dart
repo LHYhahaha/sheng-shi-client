@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -324,7 +325,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       backgroundColor: Colors.black,
       extendBody: true,
       body: PopScope(
-        canPop: !widget.hideShellNavigation && !uiState.showsPaywall,
+        canPop:
+            widget.feedMode == PlayerFeedMode.forYou &&
+            !widget.hideShellNavigation &&
+            !uiState.showsPaywall,
         onPopInvokedWithResult: (didPop, result) {
           if (didPop) {
             return;
@@ -337,6 +341,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
           if (widget.hideShellNavigation) {
             _exitForYouFeed();
+            return;
+          }
+
+          if (widget.feedMode == PlayerFeedMode.singleDrama) {
+            unawaited(_goBackFromPlayer());
           }
         },
         child: _buildBody(
@@ -404,12 +413,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               itemBuilder: (context, index) {
                 final item = feedState.items[index];
                 final isCurrentItem = index == feedState.currentIndex;
-                final canRenderVideo =
+                final canUsePlaybackSurface =
                     isCurrentItem &&
                     !item.episode.isUnavailable &&
                     _isEntitlementPlayable(item) &&
+                    playbackState.shouldAttachVideoSurface &&
                     playbackState.currentItemId == item.id &&
                     playbackState.currentSource != null;
+                final canRenderVideo = canUsePlaybackSurface;
                 final canShowVideoSurface =
                     canRenderVideo && !playbackState.isError;
                 final showVideoBeforeFirstFrame =
@@ -445,7 +456,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                     PlayerChrome(
                       content: item.content,
                       overlayOpacity: _overlayOpacity,
-                      videoController: canRenderVideo
+                      videoController: playbackState.canMountVideoSurface
                           ? playbackState.videoController
                           : null,
                       videoFit: _videoFitFor(item.episode),
@@ -465,22 +476,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                           !item.episode.isUnavailable &&
                           _isEntitlementPlayable(item),
                       onSeekStart: () {
-                        setState(() {
-                          _isSeekDragging = true;
-                        });
+                        _setSeekDragging(true);
                         playbackController.beginSeek();
                       },
                       onSeekUpdate: playbackController.updateSeekPreview,
                       onSeekEnd: () {
-                        setState(() {
-                          _isSeekDragging = false;
-                        });
+                        _setSeekDragging(false);
                         unawaited(playbackController.endSeek());
                       },
                       onSeekCancel: () {
-                        setState(() {
-                          _isSeekDragging = false;
-                        });
+                        _setSeekDragging(false);
                         playbackController.cancelSeek();
                       },
                       onRetry: () {
@@ -611,6 +616,31 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
     setState(() {
       _isPageScrolling = isScrolling;
+    });
+  }
+
+  void _setSeekDragging(bool isDragging) {
+    if (_isSeekDragging == isDragging || !mounted) {
+      return;
+    }
+    // 拖动取消可能发生在 route teardown 的 widget tree lock 阶段。此时直接 setState 会
+    // 让测试和真机退出链路变成非确定性，因此延后一帧做 UI 标记收口；播放控制器仍会
+    // 立即收到 cancel/end，不影响真实 seek 状态。
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.idle ||
+        phase == SchedulerPhase.postFrameCallbacks) {
+      setState(() {
+        _isSeekDragging = isDragging;
+      });
+      return;
+    }
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _isSeekDragging == isDragging) {
+        return;
+      }
+      setState(() {
+        _isSeekDragging = isDragging;
+      });
     });
   }
 
@@ -788,11 +818,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _goBackFromPlayer() async {
-    _playbackController.detachVideoSurfaceForTeardown();
+    await _playbackController.detachSurfaceForDispose();
     // 给 Flutter 树一个 frame 先卸载 Video widget，再 pop route 触发 media session
     // dispose。这个顺序专门规避 Android native resize callback 晚于 Widget dispose 的
     // integration test teardown 问题，不改变播放器业务状态。
     await WidgetsBinding.instance.endOfFrame;
+    _playbackController.markSurfaceDetached();
+    if (PlayerPlaybackController.shouldDelayVideoSurfaceTeardown) {
+      await Future<void>.delayed(
+        PlayerPlaybackController.videoSurfaceTeardownDelay,
+      );
+    }
     if (!mounted) {
       return;
     }

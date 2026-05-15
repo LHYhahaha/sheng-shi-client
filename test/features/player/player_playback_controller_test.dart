@@ -448,8 +448,66 @@ void main() {
 
       expect(session.pauseCount, 1);
       expect(container.read(provider).status, PlayerPlaybackStatus.paused);
+      expect(
+        container.read(provider).surfaceLifecycle,
+        isIn(<PlayerVideoSurfaceLifecycle>[
+          PlayerVideoSurfaceLifecycle.detaching,
+          PlayerVideoSurfaceLifecycle.detached,
+        ]),
+      );
     },
   );
+
+  test('locked item pauses playback and detaches video surface', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.playItem(_item(2, isLocked: true));
+
+    final state = container.read(provider);
+    expect(session.pauseCount, 1);
+    expect(state.status, PlayerPlaybackStatus.blocked);
+    expect(state.currentItemId, 'drama-a-ep-2');
+    expect(state.currentSource, isNull);
+    expect(state.canMountVideoSurface, isFalse);
+    expect(
+      state.surfaceLifecycle,
+      isIn(<PlayerVideoSurfaceLifecycle>[
+        PlayerVideoSurfaceLifecycle.detaching,
+        PlayerVideoSurfaceLifecycle.detached,
+      ]),
+    );
+  });
+
+  test('dispose path detaches surface before disposing session', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.detachSurfaceForDispose();
+
+    var state = container.read(provider);
+    expect(session.pauseCount, 1);
+    expect(session.isDisposed, isFalse);
+    expect(state.surfaceLifecycle, PlayerVideoSurfaceLifecycle.disposing);
+    expect(state.canMountVideoSurface, isFalse);
+
+    controller.markSurfaceDetached();
+    state = container.read(provider);
+    expect(state.surfaceLifecycle, PlayerVideoSurfaceLifecycle.detached);
+
+    await controller.disposeSession();
+
+    state = container.read(provider);
+    expect(session.isDisposed, isTrue);
+    expect(state.status, PlayerPlaybackStatus.idle);
+    expect(state.surfaceLifecycle, PlayerVideoSurfaceLifecycle.detached);
+  });
 
   test(
     'pauseForVisibility prevents opening source from continuing audio',
@@ -486,6 +544,10 @@ void main() {
     expect(session.isDisposed, isTrue);
     expect(container.read(provider).status, PlayerPlaybackStatus.idle);
     expect(container.read(provider).currentSource, isNull);
+    expect(
+      container.read(provider).surfaceLifecycle,
+      PlayerVideoSurfaceLifecycle.detached,
+    );
   });
 
   test(

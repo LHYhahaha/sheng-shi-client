@@ -73,6 +73,8 @@ enum PlayerPlaybackStatus {
   error,
 }
 
+enum PlayerVideoSurfaceLifecycle { attached, detaching, detached, disposing }
+
 enum PlayerPlaybackErrorKind {
   recoverableNetwork,
   sourceResolve,
@@ -94,6 +96,7 @@ class PlayerPlaybackState {
     required this.isSeeking,
     required this.hasEnded,
     required this.playbackRate,
+    required this.surfaceLifecycle,
     this.currentItemId,
     this.currentSource,
     this.seekPreviewPosition,
@@ -115,6 +118,9 @@ class PlayerPlaybackState {
         isSeeking: false,
         hasEnded: false,
         playbackRate: 1.0,
+        surfaceLifecycle: videoController == null
+            ? PlayerVideoSurfaceLifecycle.detached
+            : PlayerVideoSurfaceLifecycle.attached,
       );
 
   /// 当前页面应该绑定到 `Video` 组件的 media_kit 控制器。
@@ -191,6 +197,14 @@ class PlayerPlaybackState {
   /// 全局设置，避免一个播放器页面影响另一个。
   final double playbackRate;
 
+  /// 当前 Android/iOS 视频 surface 的挂载生命周期。
+  ///
+  /// 它只描述 `Video` widget 是否应该继续绑定 `videoController`，不替代播放状态。
+  /// Android `media_kit_video` 的 native resize/wid callback 可能晚于 widget dispose
+  /// 到达，所以离开页面或隐藏播放器时必须先进入 detaching/disposing 并清空
+  /// `videoController`，等 Flutter 树卸载 surface 后再释放底层 player。
+  final PlayerVideoSurfaceLifecycle surfaceLifecycle;
+
   /// 当前播放链路绑定的 feed item id。
   ///
   /// 它用于防止旧异步结果覆盖新 item、匹配 prepared/retained session、记录 timing。
@@ -238,6 +252,21 @@ class PlayerPlaybackState {
       duration > Duration.zero &&
       (status == PlayerPlaybackStatus.playing ||
           status == PlayerPlaybackStatus.paused);
+
+  /// 当前播放层是否允许 UI 保持可播放 surface 相关交互。
+  ///
+  /// 这个判断只看生命周期，不要求一定有真实 `VideoController`。widget tests 会使用
+  /// 没有 native surface 的 fake session，但仍需要验证 loading、点击暂停和重试等播放层
+  /// 行为；真正的 `Video` widget 挂载仍由 `canMountVideoSurface` 保护。
+  bool get shouldAttachVideoSurface =>
+      surfaceLifecycle == PlayerVideoSurfaceLifecycle.attached;
+
+  /// 当前是否可以把真实 `VideoController` 挂到 Flutter 树上。
+  ///
+  /// Android teardown 的 late callback 风险发生在这里：只有 attached 且 controller 存在时
+  /// 才允许挂载，detaching/disposing 阶段必须先从树上摘掉，再释放底层 player。
+  bool get canMountVideoSurface =>
+      shouldAttachVideoSurface && videoController != null;
   Duration get displayedPosition => seekPreviewPosition ?? position;
   double get progressValue => _durationRatio(displayedPosition);
   double get bufferedValue => _durationRatio(bufferedPosition);
@@ -254,6 +283,7 @@ class PlayerPlaybackState {
     bool? isSeeking,
     bool? hasEnded,
     double? playbackRate,
+    PlayerVideoSurfaceLifecycle? surfaceLifecycle,
     VideoController? videoController,
     String? currentItemId,
     String? currentSource,
@@ -282,7 +312,14 @@ class PlayerPlaybackState {
       isSeeking: clearSource ? false : isSeeking ?? this.isSeeking,
       hasEnded: clearSource ? false : hasEnded ?? this.hasEnded,
       playbackRate: playbackRate ?? this.playbackRate,
-      currentItemId: clearSource ? null : currentItemId ?? this.currentItemId,
+      surfaceLifecycle:
+          surfaceLifecycle ??
+          (clearVideoController
+              ? PlayerVideoSurfaceLifecycle.detached
+              : this.surfaceLifecycle),
+      currentItemId: clearSource
+          ? currentItemId
+          : currentItemId ?? this.currentItemId,
       currentSource: clearSource ? null : currentSource ?? this.currentSource,
       seekPreviewPosition: clearSource || clearSeekPreview
           ? null
@@ -518,6 +555,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         status: PlayerPlaybackStatus.idle,
         clearSource: true,
         clearError: true,
+        surfaceLifecycle: PlayerVideoSurfaceLifecycle.detaching,
+        clearVideoController: true,
       );
       _currentPlaybackItemId = null;
       _currentPlaybackSource = null;
@@ -537,6 +576,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         currentItemId: item.id,
         clearSource: true,
         clearError: true,
+        surfaceLifecycle: PlayerVideoSurfaceLifecycle.detaching,
+        clearVideoController: true,
       );
       _currentPlaybackItemId = null;
       _currentPlaybackSource = null;
@@ -557,6 +598,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         currentItemId: item.id,
         clearSource: true,
         clearError: true,
+        surfaceLifecycle: PlayerVideoSurfaceLifecycle.detaching,
+        clearVideoController: true,
       );
       _currentPlaybackItemId = null;
       _currentPlaybackSource = null;
@@ -569,6 +612,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         state.currentSource != null &&
         state.status != PlayerPlaybackStatus.error;
     if (isSameSource && !state.hasEnded) {
+      if (state.surfaceLifecycle != PlayerVideoSurfaceLifecycle.attached) {
+        state = state.copyWith(
+          videoController: _session.videoController,
+          surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
+        );
+      }
       return;
     }
 
@@ -596,6 +645,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       currentSource: sourceHint,
       clearError: true,
       clearSeekPreview: true,
+      surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
     );
 
     var didResolveSource = false;
@@ -644,6 +694,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         }
         state = state.copyWith(
           videoController: _session.videoController,
+          surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
           currentSource: prepared.source.playableSource,
           hasFirstFrame: prepared.hasFirstFrame,
           position: prepared.position,
@@ -1115,7 +1166,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     state = state.copyWith(isSeeking: false, clearSeekPreview: true);
   }
 
-  Future<void> pauseForVisibility({bool syncState = true}) async {
+  Future<void> pauseForVisibility({bool syncState = true}) {
+    return detachSurfaceForVisibility(syncState: syncState);
+  }
+
+  Future<void> detachSurfaceForVisibility({bool syncState = true}) async {
     if (_isSessionDisposed) {
       return;
     }
@@ -1130,16 +1185,18 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (!syncState || !ref.mounted) {
       return;
     }
-    if (state.currentSource == null ||
-        state.status == PlayerPlaybackStatus.blocked ||
-        state.status == PlayerPlaybackStatus.unavailable ||
-        state.status == PlayerPlaybackStatus.error ||
-        state.status == PlayerPlaybackStatus.idle) {
-      return;
-    }
     state = state.copyWith(
-      status: PlayerPlaybackStatus.paused,
+      status:
+          state.currentSource == null ||
+              state.status == PlayerPlaybackStatus.blocked ||
+              state.status == PlayerPlaybackStatus.unavailable ||
+              state.status == PlayerPlaybackStatus.error ||
+              state.status == PlayerPlaybackStatus.idle
+          ? state.status
+          : PlayerPlaybackStatus.paused,
       isBuffering: false,
+      surfaceLifecycle: PlayerVideoSurfaceLifecycle.detaching,
+      clearVideoController: true,
     );
   }
 
@@ -1150,6 +1207,41 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   /// 让 Flutter 树有机会卸载 `Video`，随后再 dispose media session，可以降低 late
   /// resize callback 打到已释放 notifier 的概率。这个方法不改变播放业务决策，只服务
   /// 页面退出时的资源释放顺序。
+  Future<void> detachSurfaceForDispose({bool syncState = true}) async {
+    if (_isSessionDisposed) {
+      return;
+    }
+    _pauseWhenOpenCompletes = true;
+    ++_generation;
+    await _session.pause();
+    await _releaseSessionWindowFor('dispose surface detach');
+    await _disposePreloads(syncState: syncState);
+    if (!syncState || !ref.mounted) {
+      return;
+    }
+    state = state.copyWith(
+      status: state.status == PlayerPlaybackStatus.playing
+          ? PlayerPlaybackStatus.paused
+          : state.status,
+      isBuffering: false,
+      surfaceLifecycle: PlayerVideoSurfaceLifecycle.disposing,
+      clearVideoController: true,
+    );
+  }
+
+  void markSurfaceDetached() {
+    if (!ref.mounted) {
+      return;
+    }
+    if (state.surfaceLifecycle == PlayerVideoSurfaceLifecycle.attached) {
+      return;
+    }
+    state = state.copyWith(
+      surfaceLifecycle: PlayerVideoSurfaceLifecycle.detached,
+      clearVideoController: true,
+    );
+  }
+
   void detachVideoSurfaceForTeardown() {
     if (!ref.mounted || state.videoController == null) {
       return;
@@ -1159,6 +1251,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           ? PlayerPlaybackStatus.paused
           : state.status,
       isBuffering: false,
+      surfaceLifecycle: PlayerVideoSurfaceLifecycle.disposing,
       clearVideoController: true,
     );
   }
@@ -1188,6 +1281,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       clearError: true,
       preloadedItemIds: const [],
       preloadStates: const [],
+      surfaceLifecycle: PlayerVideoSurfaceLifecycle.detached,
       clearVideoController: true,
     );
   }
@@ -1641,7 +1735,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _currentPlaybackSource = null;
     _clearCurrentPlaybackSnapshot();
     _attachSessionStreams(_session);
-    state = state.copyWith(videoController: _session.videoController);
+    state = state.copyWith(
+      videoController: _session.videoController,
+      surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
+    );
     _logTiming(
       'create current session',
       details: 'reason=normal fallback open',
