@@ -599,3 +599,36 @@ flutter test
 - 真实 device id、app version、token 注入到 `ApiRequestContext`。
 - Profile 会员卡/金币卡从 Auth/Profile/Entitlement/Wallet 的真实接口聚合。
 - logout/delete account 远程失败后的全局 cache 清理和播放器资源释放策略。
+
+## API Skeleton Phase E Review / Session Contract Tightening
+
+已完成 Auth / Profile / Session / Token 远程骨架的 contract review 和小范围收口：
+
+- Token ownership：
+  - `AuthTokenDto` 只存在 data 层，`AuthMapper` 不把 accessToken / refreshToken 映射进 UI 可见的 `AuthSession`。
+  - `AuthController` 继续只消费 `AuthSession` / `AuthUser`，不把 token 当成页面状态。
+  - `ApiRequestContext.accessToken` 当前仍是 mock/default 注入点；真实 token storage、refresh queue 和 logout 清理留到后续。
+- Auth policy：
+  - device login、OAuth login、refresh token 继续使用 `ApiAuthPolicy.none`。
+  - session bootstrap、logout、delete account、profile 使用 `ApiAuthPolicy.required`。当前设计把 `GET /auth/session` 作为 token 校验/恢复接口；游客 bootstrap 如果后端允许，后续可新增 public bootstrap endpoint，不复用这个语义。
+- Session contract：
+  - authenticated payload 映射为 logged-in `AuthSession`。
+  - guest / unauthenticated / malformed payload 映射为 guest，不把坏响应变成半登录状态。
+  - HTTP 401 继续由 `ApiException.unauthorized` 透传给上层，不在 repository 静默吞掉。
+- Logout / delete contract：
+  - 远程 logout/delete 成功只代表服务端 session/account 操作完成，不等于本地所有 feature cache 已清理。
+  - 失败仍保留 `ApiException.businessCode`；AccountPage 状态机本轮不改。
+- ProfileSummary contract：
+  - `ProfileSummary` 可表达 `userId`、`nickname`、`avatarResource`、`displayId`、language/region、membership summary、wallet summary、createdAt。
+  - `avatarUrl` 映射为 `MediaResource.network`；缺失时回退到当前默认头像 asset。
+  - Profile 的会员/钱包字段只是聚合展示快照，不拥有权益或余额真相。
+- 分层边界：
+  - 补充测试扫描 Auth/Profile application/presentation，防止 DTO / remote datasource 进入 UI 层。
+
+仍然 defer：
+
+- secure storage、refresh token queue、401 并发刷新。
+- login success 后写入 token、logout/delete 后清除 token。
+- logout/delete 后清理 Home/My list/Wallet/Entitlement/Profile cache 和播放器 session。
+- 真实 Google / Facebook SDK 与 OAuth nonce 校验。
+- Profile 会员卡/金币卡从真实 Auth/Profile/Entitlement/Wallet 聚合。

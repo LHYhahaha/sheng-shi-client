@@ -214,6 +214,12 @@ Phase E skeleton status:
   UI-facing `AuthSession`; real token ownership remains in core/network/session.
 - Device login, OAuth login, and refresh use `ApiAuthPolicy.none`; session,
   logout, and delete account use `ApiAuthPolicy.required`.
+- Phase E review keeps `GET /auth/session` as token-backed session recovery.
+  Guest bootstrap without token should be a separate explicit contract if
+  backend needs it.
+- Logout/delete account remote success does not by itself clear secure storage,
+  feature caches, or player sessions. That global cleanup belongs to the later
+  real session lifecycle phase.
 - `ProfileSummaryDto`, `ProfileMapper`, `ProfileRemoteDataSource`, and
   `RemoteProfileRepository` now exist behind `USE_REMOTE_PROFILE_API`.
   Profile UI still uses the current mock/Auth composition until the real

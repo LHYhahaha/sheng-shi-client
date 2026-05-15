@@ -162,7 +162,14 @@ API Skeleton Phase E 已补 Auth / Profile 远程骨架，但仍不做真实 tok
 - `AuthTokenDto` 只存在 data 层；真实 token storage 和 `ApiRequestContext.accessToken` 注入后续单独实现。
 - 登录、第三方登录、refresh 必须继续使用 `ApiAuthPolicy.none`。
 - session、logout、delete account、profile 按登录后业务接口处理，使用 `ApiAuthPolicy.required`。
+- `GET /auth/session` 当前被定义为“用已有 token 恢复/校验 session”的接口，因此使用
+  `ApiAuthPolicy.required`。如果后续服务端需要无 token 的游客 bootstrap，应新增或明确
+  public bootstrap 语义，而不是让同一个接口同时承担两种策略。
 
 后续接真实登录时，应该替换 `apiRequestContextProvider` 的 token 来源，并增加统一 refresh
 queue。不要让页面、controller 或 feature repository 自己保存 access token；否则 401 刷新、
 logout 清理和并发请求会变得不可控。
+
+logout / delete account 成功后，还需要统一清理 secure token、各 feature cache 和播放器
+session/window。Phase E skeleton 只定义远程契约，不做本地全局清理，避免在 mock 阶段误伤
+已经验收的页面状态。

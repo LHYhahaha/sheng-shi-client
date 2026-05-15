@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -62,6 +63,21 @@ void main() {
       expect(session.isLoggedIn, isTrue);
       expect(session.user?.id, 'user-1');
       expect(session.user?.avatarResource?.isNetwork, isTrue);
+    });
+
+    test('guest and malformed session payloads map to guest state', () {
+      final mapper = const AuthMapper();
+
+      expect(
+        mapper
+            .mapSession(AuthSessionDto.fromJson(_guestSessionJson))
+            .isLoggedIn,
+        isFalse,
+      );
+      expect(
+        mapper.mapSession(AuthSessionDto.fromJson('malformed')).isLoggedIn,
+        isFalse,
+      );
     });
 
     test(
@@ -189,6 +205,28 @@ void main() {
         ),
       );
     });
+
+    test(
+      'session bootstrap http 401 maps to unauthorized ApiException',
+      () async {
+        final adapter = _FakeHttpClientAdapter(
+          statusCode: 401,
+          responseData: {'message': 'unauthorized'},
+        );
+        final source = AuthRemoteDataSource(apiClient: _apiClient(adapter));
+
+        await expectLater(
+          source.fetchSession(),
+          throwsA(
+            isA<ApiException>().having(
+              (error) => error.code,
+              'code',
+              ApiErrorCode.unauthorized,
+            ),
+          ),
+        );
+      },
+    );
   });
 
   group('profile remote skeleton', () {
@@ -208,6 +246,23 @@ void main() {
       expect(summary.wallet.bonusBalance, 100);
       expect(summary.language, 'en');
     });
+
+    test(
+      'profile mapper falls back to default asset when avatarUrl is missing',
+      () {
+        final dto = ProfileSummaryDto.fromJson({
+          ..._profileJson,
+          'avatarUrl': '',
+        });
+        final summary = const ProfileMapper().mapSummary(dto);
+
+        expect(summary.avatarResource.type, MediaResourceType.asset);
+        expect(
+          summary.avatarResource.value,
+          'assets/images/profile/profile_avatar_figma.png',
+        );
+      },
+    );
 
     test('profile datasource uses required auth policy', () async {
       final adapter = _FakeHttpClientAdapter(responseData: _ok(_profileJson));
@@ -243,6 +298,31 @@ void main() {
       );
     });
   });
+
+  test('remote DTOs stay out of application and presentation layers', () {
+    final offenders = <String>[];
+    final roots = [
+      Directory('lib/features/auth/application'),
+      Directory('lib/features/auth/presentation'),
+      Directory('lib/features/profile/application'),
+      Directory('lib/features/profile/presentation'),
+    ];
+
+    for (final root in roots.where((directory) => directory.existsSync())) {
+      for (final entity in root.listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) continue;
+        final source = entity.readAsStringSync();
+        if (source.contains('/data/dto/') ||
+            source.contains('/data/remote/') ||
+            source.contains('remote_auth_repository.dart') ||
+            source.contains('remote_profile_repository.dart')) {
+          offenders.add(entity.path);
+        }
+      }
+    }
+
+    expect(offenders, isEmpty);
+  });
 }
 
 Map<String, Object?> _ok(Object? data) => {
@@ -266,9 +346,10 @@ ApiClient _apiClient(_FakeHttpClientAdapter adapter) {
 }
 
 class _FakeHttpClientAdapter implements HttpClientAdapter {
-  _FakeHttpClientAdapter({required this.responseData});
+  _FakeHttpClientAdapter({required this.responseData, this.statusCode = 200});
 
   final Object? responseData;
+  final int statusCode;
   final requests = <RequestOptions>[];
   RequestOptions? lastOptions;
 
@@ -282,7 +363,7 @@ class _FakeHttpClientAdapter implements HttpClientAdapter {
     requests.add(options);
     return ResponseBody.fromString(
       jsonEncode(responseData),
-      200,
+      statusCode,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
       },

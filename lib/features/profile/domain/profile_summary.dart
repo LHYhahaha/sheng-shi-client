@@ -44,7 +44,15 @@ class ProfileSummary {
   final String nickname;
   final String displayId;
   final MediaResource avatarResource;
+
+  /// 会员摘要只服务 Profile 聚合展示。
+  ///
+  /// 真实会员权益仍以后端 entitlement/membership 状态为准，Profile 不应自己判断能否播放。
   final ProfileMembershipSummary membership;
+
+  /// 钱包摘要只服务 Profile 聚合展示。
+  ///
+  /// 真实金币余额的业务真相应来自 Wallet/Entitlement；Profile 只展示聚合后的快照。
   final ProfileWalletSummary wallet;
   final String language;
   final String region;

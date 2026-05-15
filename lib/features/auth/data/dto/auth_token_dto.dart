@@ -1,3 +1,8 @@
+/// 远程 token 契约 DTO。
+///
+/// token 只允许停留在 data/core session 边界。不要把这个 DTO 或字段映射进
+/// presentation 可见的 AuthSession；真实阶段应由 secure storage + ApiRequestContext
+/// provider 负责读取、刷新和清理。
 class AuthTokenDto {
   const AuthTokenDto({
     required this.accessToken,
