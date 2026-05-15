@@ -96,6 +96,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   final ValueNotifier<double> _overlayOpacityNotifier = ValueNotifier<double>(
     1.0,
   );
+  final ValueNotifier<double> _pagePositionNotifier = ValueNotifier<double>(
+    0.0,
+  );
   String? _handledEndedItemId;
   final Set<String> _entitlementPlayableItemIds = <String>{};
   String? _activeCoinSheetItemId;
@@ -120,6 +123,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _pageController = PageController();
+    _pageController.addListener(_syncActiveVideoPagePosition);
     _sessionKey = _createSessionKey();
     _playbackController = ref.read(
       playerPlaybackControllerProvider(_sessionKey).notifier,
@@ -176,6 +180,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
     _shellChrome?.show();
     _overlayOpacityNotifier.dispose();
+    _pageController.removeListener(_syncActiveVideoPagePosition);
+    _pagePositionNotifier.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -454,16 +460,29 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         currentItem != null &&
         _accessPresentationStateFor(currentItem) ==
             PlayerAccessPresentationState.playable;
+    final activeVideoItemId = playbackShell.currentItemId ?? currentItem?.id;
+    final activeVideoIndex = activeVideoItemId == null
+        ? feedState.currentIndex
+        : feedState.items.indexWhere(
+            (candidate) => candidate.id == activeVideoItemId,
+          );
+    final activeVideoItem = activeVideoIndex == -1
+        ? currentItem
+        : feedState.items[activeVideoIndex];
 
     return Stack(
       children: [
         _ActivePlaybackSurfaceOverlay(
           sessionKey: _sessionKey,
-          itemId: currentItem?.id,
+          itemId: activeVideoItemId,
+          currentIndex: activeVideoIndex == -1
+              ? feedState.currentIndex
+              : activeVideoIndex,
+          pagePositionListenable: _pagePositionNotifier,
           canShowVideo: canShowActiveVideoOverlay,
-          videoFit: currentItem == null
+          videoFit: activeVideoItem == null
               ? BoxFit.cover
-              : _videoFitFor(currentItem.episode),
+              : _videoFitFor(activeVideoItem.episode),
           forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
         ),
         Listener(
@@ -640,6 +659,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     _overlayOpacityNotifier.value = next;
+  }
+
+  void _syncActiveVideoPagePosition() {
+    if (!_pageController.hasClients) {
+      return;
+    }
+    final page = _pageController.page ?? _pageController.initialPage.toDouble();
+    if ((_pagePositionNotifier.value - page).abs() < 0.001) {
+      return;
+    }
+    _pagePositionNotifier.value = page;
   }
 
   bool _handlePageScrollNotification(ScrollNotification notification) {
@@ -1713,6 +1743,8 @@ class _ActivePlaybackSurfaceOverlay extends ConsumerStatefulWidget {
   const _ActivePlaybackSurfaceOverlay({
     required this.sessionKey,
     required this.itemId,
+    required this.currentIndex,
+    required this.pagePositionListenable,
     required this.canShowVideo,
     required this.videoFit,
     required this.forYouLayout,
@@ -1720,6 +1752,8 @@ class _ActivePlaybackSurfaceOverlay extends ConsumerStatefulWidget {
 
   final String sessionKey;
   final String? itemId;
+  final int currentIndex;
+  final ValueListenable<double> pagePositionListenable;
   final bool canShowVideo;
   final BoxFit videoFit;
   final bool forYouLayout;
@@ -1733,6 +1767,8 @@ class _ActivePlaybackSurfaceOverlayState
     extends ConsumerState<_ActivePlaybackSurfaceOverlay> {
   VideoController? _mountedController;
   String? _visibleItemId;
+  double? _lastLoggedPage;
+  double? _lastLoggedTranslateY;
 
   @override
   void dispose() {
@@ -1798,18 +1834,35 @@ class _ActivePlaybackSurfaceOverlayState
       right: 0,
       bottom: bottomFrameHeight,
       child: IgnorePointer(
-        child: AnimatedOpacity(
-          opacity: showVideo ? 1 : 0,
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOut,
-          child: controller == null
-              ? const SizedBox.shrink()
-              : Video(
-                  key: const ValueKey('active_playback_video_surface'),
-                  controller: controller,
-                  controls: NoVideoControls,
-                  fit: widget.videoFit,
-                ),
+        child: ValueListenableBuilder<double>(
+          valueListenable: widget.pagePositionListenable,
+          builder: (context, page, child) {
+            final viewportHeight = MediaQuery.sizeOf(context).height;
+            final translateY = (widget.currentIndex - page) * viewportHeight;
+            _recordOverlayTranslated(
+              page: page,
+              translateY: translateY,
+              viewportHeight: viewportHeight,
+            );
+            return Transform.translate(
+              key: const ValueKey('active_playback_surface_follow_scroll'),
+              offset: Offset(0, translateY),
+              child: child,
+            );
+          },
+          child: AnimatedOpacity(
+            opacity: showVideo ? 1 : 0,
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOut,
+            child: controller == null
+                ? const SizedBox.shrink()
+                : Video(
+                    key: const ValueKey('active_playback_video_surface'),
+                    controller: controller,
+                    controls: NoVideoControls,
+                    fit: widget.videoFit,
+                  ),
+          ),
         ),
       ),
     );
@@ -1866,6 +1919,32 @@ class _ActivePlaybackSurfaceOverlayState
       itemId: previous,
       details:
           'status=${snapshot.status.name} current=${snapshot.currentItemId ?? 'null'} canShow=${widget.canShowVideo}',
+    );
+  }
+
+  void _recordOverlayTranslated({
+    required double page,
+    required double translateY,
+    required double viewportHeight,
+  }) {
+    if (!PlayerRebuildDiagnostics.enabled) {
+      return;
+    }
+    final lastPage = _lastLoggedPage;
+    final lastTranslateY = _lastLoggedTranslateY;
+    if (lastPage != null &&
+        lastTranslateY != null &&
+        (lastPage - page).abs() < 0.25 &&
+        (lastTranslateY - translateY).abs() < 80) {
+      return;
+    }
+    _lastLoggedPage = page;
+    _lastLoggedTranslateY = translateY;
+    PlayerRebuildDiagnostics.recordTiming(
+      'ActiveVideoSurface.translate',
+      itemId: widget.itemId,
+      details:
+          'currentIndex=${widget.currentIndex} page=${page.toStringAsFixed(3)} translateY=${translateY.toStringAsFixed(1)} viewportHeight=${viewportHeight.toStringAsFixed(1)}',
     );
   }
 }

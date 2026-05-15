@@ -208,6 +208,30 @@ void main() {
     },
   );
 
+  testWidgets('active video surface follows PageView drag', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final followSurface = find.byKey(
+      const ValueKey('active_playback_surface_follow_scroll'),
+    );
+    expect(followSurface, findsOneWidget);
+    final before = tester.widget<Transform>(followSurface);
+    expect(before.transform.getTranslation().y, 0);
+
+    await tester.drag(
+      find.byKey(const ValueKey('player_page_view_surface')),
+      const Offset(0, -220),
+    );
+    await tester.pump(const Duration(milliseconds: 16));
+
+    final during = tester.widget<Transform>(followSurface);
+    expect(during.transform.getTranslation().y, isNot(0));
+  });
+
   testWidgets('uses cover fit for vertical video sources', (tester) async {
     await tester.pumpWidget(
       _buildPlayerApp(
