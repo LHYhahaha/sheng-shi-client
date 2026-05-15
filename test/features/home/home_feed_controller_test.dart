@@ -61,7 +61,7 @@ ProviderContainer _createContainer(DramaRepository repository) {
 }
 
 class _FakeDramaRepository implements DramaRepository {
-  _FakeDramaRepository({this.items = const [_drama]});
+  _FakeDramaRepository({List<Drama>? items}) : items = items ?? [_drama];
 
   bool shouldThrow = false;
   final List<Drama> items;
@@ -87,7 +87,7 @@ class _FakeDramaRepository implements DramaRepository {
   }
 }
 
-const _drama = Drama(
+final _drama = Drama(
   id: 'drama-1',
   title: 'Drama 1',
   coverAssetPath: 'assets/images/home/drama_cover_figma.png',

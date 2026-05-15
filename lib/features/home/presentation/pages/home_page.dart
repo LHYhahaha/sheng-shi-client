@@ -10,6 +10,7 @@ import '../../../../app/router/route_paths.dart';
 import '../../../../features/drama/domain/drama.dart';
 import '../../../../features/player/application/player_startup_preload_controller.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/media/media_resource.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
 import '../../application/home_feed_controller.dart';
@@ -395,12 +396,9 @@ class _HomeDramaCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.asset(
-                    data.coverAssetPath,
+                  _HomeCoverImage(
+                    resource: data.coverResource,
                     cacheWidth: coverCacheWidth,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.topCenter,
-                    filterQuality: FilterQuality.low,
                   ),
                   const DecoratedBox(
                     decoration: BoxDecoration(
@@ -466,6 +464,54 @@ class _HomeDramaCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _HomeCoverImage extends StatelessWidget {
+  const _HomeCoverImage({required this.resource, required this.cacheWidth});
+
+  final MediaResource resource;
+  final int cacheWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    if (resource.isNetwork) {
+      return Image.network(
+        resource.value,
+        cacheWidth: cacheWidth,
+        fit: BoxFit.cover,
+        alignment: Alignment.topCenter,
+        filterQuality: FilterQuality.low,
+        errorBuilder: (context, error, stackTrace) {
+          return _FallbackCoverImage(cacheWidth: cacheWidth);
+        },
+      );
+    }
+
+    return Image.asset(
+      resource.value,
+      cacheWidth: cacheWidth,
+      fit: BoxFit.cover,
+      alignment: Alignment.topCenter,
+      filterQuality: FilterQuality.low,
+    );
+  }
+}
+
+class _FallbackCoverImage extends StatelessWidget {
+  const _FallbackCoverImage({required this.cacheWidth});
+
+  final int cacheWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      Drama.fallbackCoverAssetPath,
+      cacheWidth: cacheWidth,
+      fit: BoxFit.cover,
+      alignment: Alignment.topCenter,
+      filterQuality: FilterQuality.low,
     );
   }
 }

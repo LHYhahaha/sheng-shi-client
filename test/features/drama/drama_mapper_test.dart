@@ -4,6 +4,7 @@ import 'package:drama_client/features/drama/data/dto/drama_category_dto.dart';
 import 'package:drama_client/features/drama/data/dto/drama_dto.dart';
 import 'package:drama_client/features/drama/data/dto/drama_feed_page_dto.dart';
 import 'package:drama_client/features/drama/data/mapper/drama_mapper.dart';
+import 'package:drama_client/features/drama/domain/drama.dart';
 
 void main() {
   const mapper = DramaMapper();
@@ -37,7 +38,10 @@ void main() {
 
     expect(drama.id, 'found-you');
     expect(drama.title, 'Found You');
-    expect(drama.coverAssetPath, 'https://cdn.example.com/found-you.jpg');
+    expect(drama.coverAssetPath, Drama.fallbackCoverAssetPath);
+    expect(drama.coverResource.isNetwork, isTrue);
+    expect(drama.coverResource.value, 'https://cdn.example.com/found-you.jpg');
+    expect(drama.coverResource.aspectRatio, 0.75);
     expect(drama.viewCountLabel, '84.1 M');
     expect(drama.episodeCount, 52);
     expect(drama.categoryId, 'popular');
@@ -64,7 +68,9 @@ void main() {
       ),
     );
 
-    expect(drama.coverAssetPath, 'https://cdn.example.com/poster.jpg');
+    expect(drama.coverAssetPath, Drama.fallbackCoverAssetPath);
+    expect(drama.coverResource.isNetwork, isTrue);
+    expect(drama.coverResource.value, 'https://cdn.example.com/poster.jpg');
     expect(drama.viewCountLabel, '1.2 K');
     expect(drama.categoryId, '');
     expect(drama.coverAspectRatio, closeTo(171 / 226, 0.0001));
@@ -97,6 +103,46 @@ void main() {
     expect(page.items, hasLength(1));
     expect(page.items.single.id, 'found-you');
     expect(page.nextPageToken, 'next-token');
+  });
+
+  test('missing cover and poster falls back to asset resource', () {
+    final drama = mapper.mapDrama(
+      const DramaDto(
+        dramaId: 'no-cover',
+        title: 'No Cover',
+        description: null,
+        coverUrl: null,
+        posterUrl: null,
+        viewCount: null,
+        viewCountLabel: null,
+        episodeCount: 1,
+        tags: [],
+        badges: [],
+        categoryIds: ['popular'],
+        coverAspectRatio: 0.8,
+      ),
+    );
+
+    expect(drama.coverResource.isAsset, isTrue);
+    expect(drama.coverResource.value, Drama.fallbackCoverAssetPath);
+    expect(drama.coverResource.aspectRatio, 0.8);
+  });
+
+  test('mock drama constructor creates asset coverResource by default', () {
+    final drama = Drama(
+      id: 'mock',
+      title: 'Mock',
+      coverAssetPath: Drama.fallbackCoverAssetPath,
+      viewCountLabel: '1 M',
+      episodeCount: 12,
+      categoryId: 'popular',
+      tags: [],
+      coverAspectRatio: 0.75,
+    );
+
+    expect(drama.coverResource.isAsset, isTrue);
+    expect(drama.coverResource.value, Drama.fallbackCoverAssetPath);
+    expect(drama.coverResource.aspectRatio, 0.75);
   });
 
   test('dto fromJson accepts missing optional fields', () {

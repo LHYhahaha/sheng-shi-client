@@ -117,7 +117,7 @@ Widget _buildHomeApp({
 }
 
 final _dramas = [
-  const Drama(
+  Drama(
     id: 'drama-a',
     title: 'Drama A',
     coverAssetPath: 'assets/images/home/drama_cover_figma.png',

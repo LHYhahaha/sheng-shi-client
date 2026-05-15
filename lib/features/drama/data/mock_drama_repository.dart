@@ -65,7 +65,7 @@ class MockDramaRepository implements DramaRepository {
     DramaCategory(id: 'asian', title: 'Asian'),
   ];
 
-  static const _items = [
+  static final _items = [
     Drama(
       id: 'found-you',
       title: 'Found You,Hea',

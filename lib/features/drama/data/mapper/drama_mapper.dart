@@ -1,4 +1,5 @@
 import '../../domain/drama.dart';
+import '../../../../shared/media/media_resource.dart';
 import '../dto/drama_category_dto.dart';
 import '../dto/drama_dto.dart';
 import '../dto/drama_feed_page_dto.dart';
@@ -16,17 +17,24 @@ class DramaMapper {
   }
 
   Drama mapDrama(DramaDto dto) {
+    final coverUrl = dto.coverUrl ?? dto.posterUrl;
+    final aspectRatio = dto.coverAspectRatio ?? 171 / 226;
+
     return Drama(
       id: dto.dramaId,
       title: dto.title,
-      // TODO(api): 当前 domain 只有 coverAssetPath 字段，先临时承载 remote coverUrl。
-      // 接真实图片缓存/占位策略前，应引入 MediaImage/MediaResource，避免 UI 判断 asset/url。
-      coverAssetPath: dto.coverUrl ?? dto.posterUrl ?? '',
+      coverAssetPath: Drama.fallbackCoverAssetPath,
+      coverResource: coverUrl == null || coverUrl.isEmpty
+          ? MediaResource.asset(
+              Drama.fallbackCoverAssetPath,
+              aspectRatio: aspectRatio,
+            )
+          : MediaResource.network(coverUrl, aspectRatio: aspectRatio),
       viewCountLabel: dto.viewCountLabel ?? _formatViewCount(dto.viewCount),
       episodeCount: dto.episodeCount,
       categoryId: dto.categoryIds.isNotEmpty ? dto.categoryIds.first : '',
       tags: dto.tags,
-      coverAspectRatio: dto.coverAspectRatio ?? 171 / 226,
+      coverAspectRatio: aspectRatio,
       isExclusive: dto.badges.any(
         (badge) => badge.toLowerCase() == 'exclusive',
       ),

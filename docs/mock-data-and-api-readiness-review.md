@@ -342,6 +342,21 @@ E1-E3 后，Player、Store、Membership、Wallet 已开始共享 entitlement 状
 
 仍然 defer：
 
-- `MediaImage/MediaResource` 统一资源模型。当前 mapper 临时把 remote `coverUrl` 映射到既有 `coverAssetPath` 字段。
 - 真实 baseUrl、鉴权 header、token refresh、locale header。
 - 全量 DTO 体系和其他 feature 的 remote implementation。
+
+## MediaResource Phase A 状态
+
+已完成 Home / Drama 图片资源身份的小收口：
+
+- 新增 `MediaResource` / `MediaResourceType`，只表达 asset/network 与资源值，不负责缓存、占位、错误图或加载策略。
+- `Drama` 新增 `coverResource`，旧 `coverAssetPath` 仍保留兼容 mock 和旧 UI。
+- mock `Drama` 默认自动生成 `MediaResource.asset(...)`。
+- remote mapper 将 `coverUrl` 映射为 `MediaResource.network(...)`，缺 `coverUrl` 时使用 `posterUrl`，两者都缺失时回落到默认 asset。
+- Home 卡片封面已最小适配 `Image.asset` / `Image.network`，并保留现有布局、圆角和失败 fallback。
+
+仍然 defer：
+
+- 不引入 `cached_network_image`，不做图片缓存系统。
+- 不迁移 PlayerContent、Profile、My list、Wallet 等其他图片字段。
+- 不处理 CDN 图片参数、渐进加载、统一 placeholder 组件和预加载策略。

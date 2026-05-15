@@ -1,3 +1,5 @@
+import '../../../shared/media/media_resource.dart';
+
 /// 首页分类模型。
 ///
 /// 分类 id 是分页和首屏预热的稳定 key，展示标题可以多语言化，但不要用 title 反查分类。
@@ -20,7 +22,7 @@ class DramaCategory {
 /// Home 只展示剧维度数据，不携带可播放 source。进入播放器前必须通过 player feed
 /// 再解析 episode，避免首页提前触碰授权和媒体资源。
 class Drama {
-  const Drama({
+  Drama({
     required this.id,
     required this.title,
     required this.coverAssetPath,
@@ -29,8 +31,18 @@ class Drama {
     required this.categoryId,
     required this.tags,
     required this.coverAspectRatio,
+    MediaResource? coverResource,
     this.isExclusive = false,
-  });
+  }) : coverResource =
+           coverResource ??
+           MediaResource.asset(coverAssetPath, aspectRatio: coverAspectRatio);
+
+  /// Home mock 默认封面。
+  ///
+  /// 远程接口缺图或网络图加载失败时作为安全兜底。后续接入全局占位图策略后，可以把
+  /// 这个常量迁移到 shared media/image 组件中。
+  static const fallbackCoverAssetPath =
+      'assets/images/home/drama_cover_figma.png';
 
   /// 剧 id。
   ///
@@ -42,8 +54,15 @@ class Drama {
 
   /// 首页封面 asset 路径。
   ///
-  /// 当前为本地 mock 图；远程图接入时也应在 repository 层归一化。
+  /// 兼容旧 UI 和 mock 数据保留。新代码优先读取 `coverResource`，避免把远端 URL
+  /// 伪装成 asset path。
   final String coverAssetPath;
+
+  /// 首页封面的统一资源身份。
+  ///
+  /// 只表达 asset/network 与资源值，不负责加载策略。Home 渲染时根据 type 选择
+  /// Image.asset 或 Image.network。
+  final MediaResource coverResource;
 
   /// 播放量展示文案。
   ///
