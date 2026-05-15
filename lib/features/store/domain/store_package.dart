@@ -13,6 +13,8 @@ class StorePackage {
     required this.kind,
     required this.title,
     required this.priceLabel,
+    this.baseCoins = 0,
+    this.bonusCoins = 0,
     this.bonusLabel,
     this.badgeLabel,
     this.originalPriceLabel,
@@ -39,6 +41,16 @@ class StorePackage {
   /// 已格式化，不能作为客户端金额计算来源。真实金额应由服务端订单返回。
   final String priceLabel;
 
+  /// 基础充值金币数。
+  ///
+  /// 仅金币包使用；真实接入后应该来自商品接口的结构化字段，而不是解析 title。
+  final int baseCoins;
+
+  /// 赠送金币数。
+  ///
+  /// 只用于 mock 权益发放和展示校验。真实权益发放必须以后端验单/订单结果为准。
+  final int bonusCoins;
+
   /// 赠送或优惠展示文案。
   final String? bonusLabel;
 
@@ -62,6 +74,12 @@ class StorePackage {
   final List<StorePackageBenefit> benefits;
 
   bool get isCoinPackage => kind == StorePackageKind.coins;
+
+  /// mock 充值成功后写入 Entitlement 的总金币数。
+  ///
+  /// 这里刻意保留结构化总数，避免 StoreController 去解析展示文案。真实阶段仍不能只信
+  /// 客户端这个值，必须等服务端订单确认后再发放。
+  int get totalCoins => baseCoins + bonusCoins;
 }
 
 /// 商店套餐权益展示项。

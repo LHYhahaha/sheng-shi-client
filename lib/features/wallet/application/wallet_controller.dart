@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../entitlement/application/entitlement_controller.dart';
 import '../data/wallet_repository_provider.dart';
 import '../domain/wallet_record.dart';
 
@@ -139,8 +140,9 @@ class WalletState {
 
 /// 钱包控制器。
 ///
-/// 当前实现是 mock 本地状态，但边界按真实钱包设计：余额和流水只来自 repository，
-/// UI 操作只能改本地偏好或 mock 奖励领取状态，不能直接制造消费/充值结果。
+/// 当前实现是 mock 本地状态，但 E3 起金币余额和自动解锁偏好以共享 EntitlementState
+/// 为准。钱包 repository 仍负责流水、赠币和页面展示数据；自动解锁写入必须走
+/// EntitlementController，避免 Player 的解锁决策和 Wallet 开关出现两套状态。
 class WalletController extends Notifier<WalletState> {
   int _generation = 0;
 
@@ -153,19 +155,19 @@ class WalletController extends Notifier<WalletState> {
 
     try {
       final data = await ref.read(walletRepositoryProvider).fetchWallet();
+      await ref.read(entitlementControllerProvider.notifier).load();
       if (!_isCurrent(generation)) {
         return;
       }
 
+      final entitlementState = ref.read(entitlementControllerProvider);
       state = state.copyWith(
         isLoading: false,
-        coins: data.coins,
+        coins: entitlementState.coinBalance,
         bonus: data.bonus,
-        // 用户本地切过自动解锁后，load 不覆盖这个开关，避免刷新接口把刚操作的 UI
-        // 打回旧值。接真实接口时应在保存成功后再清理 touched 或以服务端返回为准。
-        autoUnlockNextEpisode: state.autoUnlockTouched
-            ? state.autoUnlockNextEpisode
-            : data.autoUnlockNextEpisode,
+        // 自动解锁现在以 EntitlementState 为准，Player evaluateAccess 会读取同一份状态。
+        // 钱包 mock 返回值只保留为历史接口占位，不再覆盖用户实际权益偏好。
+        autoUnlockNextEpisode: entitlementState.autoUnlockEnabled,
         transactionRecords: List<WalletRecord>.unmodifiable(
           data.transactionRecords,
         ),
@@ -186,9 +188,13 @@ class WalletController extends Notifier<WalletState> {
 
   Future<void> retry() => load();
 
-  void setAutoUnlockNextEpisode(bool value) {
+  Future<void> setAutoUnlockNextEpisode(bool value) async {
+    await ref
+        .read(entitlementControllerProvider.notifier)
+        .setAutoUnlockEnabled(value);
+    final entitlementState = ref.read(entitlementControllerProvider);
     state = state.copyWith(
-      autoUnlockNextEpisode: value,
+      autoUnlockNextEpisode: entitlementState.autoUnlockEnabled,
       autoUnlockTouched: true,
     );
   }

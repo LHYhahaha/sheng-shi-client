@@ -1,3 +1,4 @@
+import 'package:drama_client/features/entitlement/application/entitlement_controller.dart';
 import 'package:drama_client/features/store/application/store_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -140,6 +141,26 @@ void main() {
       final state = container.read(storeControllerProvider);
       expect(state.confirmationPackage, isNull);
       expect(state.purchaseStatus, StorePurchaseStatus.idle);
+    },
+  );
+
+  test(
+    'coin purchase success grants coins to shared entitlement state',
+    () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final controller = container.read(storeControllerProvider.notifier);
+
+      await controller.load();
+      controller.selectPackage('coins_3000_bonus');
+      controller.showConfirmation();
+      await controller.confirmMockPurchase();
+
+      expect(
+        container.read(storeControllerProvider).purchaseStatus,
+        StorePurchaseStatus.success,
+      );
+      expect(container.read(entitlementControllerProvider).coinBalance, 3420);
     },
   );
 }

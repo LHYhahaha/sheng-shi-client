@@ -1,3 +1,4 @@
+import 'package:drama_client/features/entitlement/application/entitlement_controller.dart';
 import 'package:drama_client/features/wallet/application/wallet_controller.dart';
 import 'package:drama_client/features/wallet/data/wallet_repository_provider.dart';
 import 'package:drama_client/features/wallet/domain/wallet_record.dart';
@@ -14,7 +15,7 @@ void main() {
 
     final state = container.read(walletControllerProvider);
     expect(state.isLoading, isFalse);
-    expect(state.coins, 4000);
+    expect(state.coins, 120);
     expect(state.bonus, 4000);
     expect(state.transactionRecords, hasLength(3));
     expect(state.recordsFor(WalletRecordType.consumption), hasLength(3));
@@ -61,14 +62,18 @@ void main() {
 
     expect(
       container.read(walletControllerProvider).autoUnlockNextEpisode,
-      isTrue,
+      isFalse,
     );
 
-    controller.setAutoUnlockNextEpisode(false);
+    await controller.setAutoUnlockNextEpisode(true);
 
     expect(
       container.read(walletControllerProvider).autoUnlockNextEpisode,
-      isFalse,
+      isTrue,
+    );
+    expect(
+      container.read(entitlementControllerProvider).autoUnlockEnabled,
+      isTrue,
     );
   });
 
@@ -78,12 +83,16 @@ void main() {
 
     final controller = container.read(walletControllerProvider.notifier);
     await controller.load();
-    controller.setAutoUnlockNextEpisode(false);
+    await controller.setAutoUnlockNextEpisode(true);
     await controller.load();
 
     expect(
       container.read(walletControllerProvider).autoUnlockNextEpisode,
-      isFalse,
+      isTrue,
+    );
+    expect(
+      container.read(entitlementControllerProvider).autoUnlockEnabled,
+      isTrue,
     );
   });
 

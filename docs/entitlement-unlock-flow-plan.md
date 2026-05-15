@@ -631,14 +631,16 @@ Done.
 - If the user selects a membership package from `PlayerRechargeUnlockSheet`, mock success grants membership and re-evaluates the pending coin episode; the episode then plays directly instead of showing another coin/recharge sheet.
 - Added controller and player widget coverage for member coin playback, member unavailable blocking, and recharge-sheet membership success continuation.
 
-### E3 Defer: Shared Commerce/Wallet Entitlement State
+### E3: Store / Membership / Wallet Shared Entitlement State
 
-Still deferred.
+Done.
 
-- Store mock purchase success should grant mock coins through shared entitlement state.
-- Membership mock purchase success should grant mock membership through shared entitlement state.
-- Wallet auto unlock toggle should read/write entitlement state.
-- Profile/member/wallet display should eventually refresh from server-side entitlement truth.
+- Store coin mock purchase success now grants `selectedPackage.totalCoins` through `EntitlementController.grantMockCoins`.
+- Membership mock purchase success now grants shared membership through `EntitlementController.grantMockMembership`.
+- Wallet auto unlock now reads/writes `EntitlementController.setAutoUnlockEnabled`, so Player decision and Wallet switch use the same preference.
+- Wallet coin balance now prioritizes `UserEntitlementState.coinBalance`; Wallet repository still owns bonus and the three record lists.
+- Store/Membership still keep their local confirmation UI states (`idle`, `processing`, `success`, `cancelled`), but entitlement truth is shared.
+- Profile/member card visual refresh and full Wallet ledger reconciliation remain deferred until server-side entitlement/order APIs exist.
 - Real IAP/order success must not directly trust client state; service-side receipt verification and entitlement refresh remain required.
 
 ## Conclusions

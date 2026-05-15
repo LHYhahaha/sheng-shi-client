@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../entitlement/application/entitlement_controller.dart';
 import '../data/store_repository_provider.dart';
 import '../domain/store_package.dart';
 
@@ -237,12 +238,31 @@ class StoreController extends Notifier<StoreState> {
       return;
     }
 
-    // mock 只模拟“processing -> success”的 UI 节奏。真实支付不能在这里直接加余额：
-    // 必须等服务端校验支付渠道回调/订单状态后，再刷新钱包和会员权益。
+    // mock 只模拟“processing -> success”的 UI 节奏。E3 起，金币权益统一写入
+    // EntitlementController，避免 Store、Wallet、Player 各自维护一份余额。
+    // 真实支付仍必须等服务端校验支付渠道回调/订单状态后，再刷新钱包和权益。
     final purchaseGeneration = _purchaseGeneration;
     final packageId = state.confirmationPackageId;
     state = state.copyWith(purchaseStatus: StorePurchaseStatus.processing);
     await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (purchaseGeneration != _purchaseGeneration ||
+        state.confirmationPackageId != packageId ||
+        state.purchaseStatus != StorePurchaseStatus.processing) {
+      return;
+    }
+
+    final purchasedPackage = state.confirmationPackage;
+    if (purchasedPackage != null &&
+        purchasedPackage.isCoinPackage &&
+        purchasedPackage.totalCoins > 0) {
+      await ref
+          .read(entitlementControllerProvider.notifier)
+          .grantMockCoins(
+            amount: purchasedPackage.totalCoins,
+            source: 'store:${purchasedPackage.id}',
+          );
+    }
+
     if (purchaseGeneration != _purchaseGeneration ||
         state.confirmationPackageId != packageId ||
         state.purchaseStatus != StorePurchaseStatus.processing) {

@@ -1,3 +1,4 @@
+import 'package:drama_client/features/entitlement/application/entitlement_controller.dart';
 import 'package:drama_client/features/membership/application/membership_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -149,6 +150,25 @@ void main() {
       final state = container.read(membershipControllerProvider);
       expect(state.confirmationPlan, isNull);
       expect(state.purchaseStatus, MembershipPurchaseStatus.idle);
+    },
+  );
+
+  test(
+    'membership purchase success grants shared entitlement membership',
+    () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final controller = container.read(membershipControllerProvider.notifier);
+
+      await controller.load();
+      controller.showConfirmation();
+      await controller.confirmMockPurchase();
+
+      expect(
+        container.read(membershipControllerProvider).purchaseStatus,
+        MembershipPurchaseStatus.success,
+      );
+      expect(container.read(entitlementControllerProvider).isMember, isTrue);
     },
   );
 }

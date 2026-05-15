@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../entitlement/application/entitlement_controller.dart';
 import '../data/membership_repository_provider.dart';
 import '../domain/membership_plan.dart';
 
@@ -247,12 +248,22 @@ class MembershipController extends Notifier<MembershipState> {
       return;
     }
 
-    // mock success 只代表确认弹窗流程完成，不代表真实会员已生效。
-    // 接真实支付时这里应等待服务端订单确认或触发权益刷新，不能只信客户端状态。
+    // mock success 会写入共享 EntitlementState，让 Player/Profile/Wallet 后续读取同一份
+    // 会员状态。真实接入时这里仍应等待服务端订单确认或触发权益刷新，不能只信客户端状态。
     final purchaseGeneration = _purchaseGeneration;
     final planId = state.confirmationPlanId;
     state = state.copyWith(purchaseStatus: MembershipPurchaseStatus.processing);
     await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (purchaseGeneration != _purchaseGeneration ||
+        state.confirmationPlanId != planId ||
+        state.purchaseStatus != MembershipPurchaseStatus.processing) {
+      return;
+    }
+
+    await ref
+        .read(entitlementControllerProvider.notifier)
+        .grantMockMembership(source: 'membership:$planId');
+
     if (purchaseGeneration != _purchaseGeneration ||
         state.confirmationPlanId != planId ||
         state.purchaseStatus != MembershipPurchaseStatus.processing) {
