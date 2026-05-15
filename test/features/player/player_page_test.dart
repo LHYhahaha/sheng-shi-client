@@ -945,6 +945,47 @@ void main() {
     expect(find.text('Recharge to unlock'), findsOneWidget);
   });
 
+  testWidgets('dragging toward locked episode does not run runtime work', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: Duration.zero,
+    );
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository._(
+          items: _itemsWithAccessPattern([
+            _EpisodeAccessFixture.free(1, _mockVideoUrl),
+            _EpisodeAccessFixture.locked(2, _mockSecondVideoUrl),
+          ]),
+        ),
+        playbackSessionFactory: () => playbackSession,
+        preloadManager: preloadManager,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    playbackSession.pauseCount = 0;
+    playbackSession.playCount = 0;
+    preloadManager.preloadedItemIds.clear();
+    preloadManager.preloadCount = 0;
+    preloadManager.releasePendingCount = 0;
+
+    await tester.drag(find.byType(PageView), const Offset(0, -500));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(find.text('Recharge to unlock'), findsNothing);
+    expect(playbackSession.pauseCount, 0);
+    expect(playbackSession.playCount, 0);
+    expect(playbackSession.openedSources, [_mockVideoUrl]);
+    expect(preloadManager.preloadedItemIds, isEmpty);
+    expect(preloadManager.preloadCount, 0);
+    expect(preloadManager.releasePendingCount, 0);
+  });
+
   testWidgets(
     'fast swipe across locked episodes only opens final current sheet',
     (tester) async {
@@ -1235,12 +1276,24 @@ void main() {
       expect(playbackSession.openedSources, [_mockVideoUrl]);
 
       await tester.drag(find.byType(PageView), const Offset(0, -500));
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(playbackSession.pauseCount, 0);
+      expect(playbackSession.openedSources, [_mockVideoUrl]);
+
+      await tester.pumpAndSettle();
 
       expect(find.text('EP.02'), findsOneWidget);
       expect(find.text('Unlock Now'), findsOneWidget);
       expect(playbackSession.pauseCount, greaterThan(0));
       expect(playbackSession.openedSources, [_mockVideoUrl]);
+
+      if (find.text('Recharge to unlock').evaluate().isNotEmpty) {
+        await tester.tap(
+          find.byKey(const ValueKey('player_recharge_unlock_close')),
+        );
+        await tester.pumpAndSettle();
+      }
 
       await tester.drag(find.byType(PageView), const Offset(0, 500));
       await tester.pumpAndSettle();

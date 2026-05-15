@@ -19,6 +19,7 @@ import '../../application/player_playback_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
 import '../../application/player_rebuild_diagnostics.dart';
 import '../../application/player_ui_controller.dart';
+import '../../application/player_viewport_controller.dart';
 import '../../domain/player_feed.dart';
 import '../../domain/player_content.dart';
 import '../widgets/player_action_sheets.dart';
@@ -231,6 +232,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     final feedState = ref.read(feedProvider);
+    if (feedState.currentItem != null) {
+      ref
+          .read(playerViewportControllerProvider(_sessionKey).notifier)
+          .initialize(
+            index: feedState.currentIndex,
+            itemId: feedState.currentItem!.id,
+            pageOffset: feedState.currentIndex.toDouble(),
+          );
+    }
     _playbackController.recordPlaybackTiming(
       'feed load end',
       itemId: feedState.currentItem?.id,
@@ -250,8 +260,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final sessionKey = _sessionKey;
     final feedProvider = playerFeedControllerProvider(sessionKey);
     final uiProvider = playerUiControllerProvider(sessionKey);
+    final viewportProvider = playerViewportControllerProvider(sessionKey);
     final feedState = ref.watch(feedProvider);
     final feedController = ref.read(feedProvider.notifier);
+    final viewportState = ref.watch(viewportProvider);
+    final viewportController = ref.read(viewportProvider.notifier);
     final uiState = ref.watch(uiProvider);
     final uiController = ref.read(uiProvider.notifier);
     final playbackProvider = playerPlaybackControllerProvider(sessionKey);
@@ -275,71 +288,98 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       );
     }
 
-    ref.listen(feedProvider.select((state) => state.currentItem), (
+    ref.listen(viewportProvider.select(_ViewportSettledSnapshot.fromState), (
       previous,
       next,
     ) {
-      if (next == null || previous?.id == next.id) {
+      if (next.itemId == null ||
+          (previous?.itemId == next.itemId &&
+              previous?.generation == next.generation)) {
         return;
       }
 
-      ref.read(uiProvider.notifier).selectEpisode(next.episode);
-      if (previous != null) {
-        final previousIndex = ref
-            .read(feedProvider)
-            .items
-            .indexWhere((item) => item.id == previous.id);
-        final nextIndex = ref
-            .read(feedProvider)
-            .items
-            .indexWhere((item) => item.id == next.id);
-        final direction = previousIndex == -1
-            ? null
-            : nextIndex > previousIndex
-            ? 'next'
-            : 'previous';
+      final latestFeedState = ref.read(feedProvider);
+      if (next.index < 0 || next.index >= latestFeedState.items.length) {
+        return;
+      }
+      final settledItem = latestFeedState.items[next.index];
+      if (settledItem.id != next.itemId) {
+        return;
+      }
+      if (latestFeedState.currentIndex != next.index) {
+        ref.read(feedProvider.notifier).setCurrentIndex(next.index);
+      }
+      ref.read(uiProvider.notifier).selectEpisode(settledItem.episode);
+      if (previous?.itemId != null) {
+        final previousIndex = previous!.index;
+        final direction = next.index > previousIndex ? 'next' : 'previous';
         playbackController.recordPlaybackUserAction(
-          'PageView page changed',
+          'PageView settled',
           trigger: _isAutoAdvancing
               ? 'auto_next'
               : direction == 'previous'
               ? 'swipe_previous'
               : 'swipe_next',
-          fromItemId: previous.id,
-          toItemId: next.id,
+          fromItemId: previous.itemId,
+          toItemId: settledItem.id,
           direction: direction,
           fromIndex: previousIndex,
-          toIndex: nextIndex,
+          toIndex: next.index,
         );
       }
-      // feed currentItem 是播放链路入口。先问 entitlement，再决定是否播放或展示解锁
-      // UI。PlayerPlaybackController 不知道金币/会员，仍只接收“已允许播放”的 item。
+      // viewport settledItem 是播放链路入口。拖动和 page threshold 变化只更新视觉状态，
+      // 真正 access/playback/preload/sheet 都等最终落位后再执行。
       unawaited(() async {
         final accessStopwatch = Stopwatch()..start();
-        await _handleEntitlementDecisionForItem(next, autoPresentSheet: false);
-        accessStopwatch.stop();
-        final accessPresentationState = _accessPresentationStateFor(next);
         PlayerRebuildDiagnostics.recordTiming(
-          'currentItemAccessMode',
-          itemId: next.id,
+          'settledAccessEvaluateStart',
+          itemId: settledItem.id,
+        );
+        await _handleEntitlementDecisionForItem(
+          settledItem,
+          autoPresentSheet: false,
+        );
+        accessStopwatch.stop();
+        final accessPresentationState = _accessPresentationStateFor(
+          settledItem,
+        );
+        PlayerRebuildDiagnostics.recordTiming(
+          'settledAccessEvaluateEnd',
+          itemId: settledItem.id,
+          elapsed: accessStopwatch.elapsed,
           details: 'mode=${accessPresentationState.name}',
         );
-        if (_isLockedAutoSheetCandidate(next)) {
+        PlayerRebuildDiagnostics.recordTiming(
+          'currentItemAccessMode',
+          itemId: settledItem.id,
+          details: 'mode=${accessPresentationState.name}',
+        );
+        PlayerRebuildDiagnostics.recordTiming(
+          'postSettledPlaybackCommand',
+          itemId: settledItem.id,
+          elapsed: accessStopwatch.elapsed,
+          details: 'mode=${accessPresentationState.name}',
+        );
+        if (_isLockedAutoSheetCandidate(settledItem)) {
           PlayerRebuildDiagnostics.recordTiming(
             'currentItemChangeToUnlockNow',
-            itemId: next.id,
+            itemId: settledItem.id,
             elapsed: accessStopwatch.elapsed,
           );
           playbackController.recordPlaybackTiming(
             'current item to unlock now',
-            itemId: next.id,
+            itemId: settledItem.id,
             elapsed: accessStopwatch.elapsed,
           );
         }
         if (!mounted) {
           return;
         }
-        _scheduleAutoUnlockSheetForItem(next);
+        PlayerRebuildDiagnostics.recordTiming(
+          'postSettledSheetSchedule',
+          itemId: settledItem.id,
+        );
+        _scheduleAutoUnlockSheetForItem(settledItem);
       }());
     });
 
@@ -414,6 +454,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         child: _buildBody(
           feedState,
           feedController,
+          viewportState,
+          viewportController,
           uiState,
           uiController,
           playbackShell,
@@ -426,6 +468,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   Widget _buildBody(
     PlayerFeedState feedState,
     PlayerFeedController feedController,
+    PlayerViewportState viewportState,
+    PlayerViewportController viewportController,
     PlayerUiState uiState,
     PlayerUiController uiController,
     _PlayerPlaybackShellSnapshot playbackShell,
@@ -500,10 +544,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   : const PageScrollPhysics(),
               scrollDirection: Axis.vertical,
               itemCount: feedState.items.length,
-              onPageChanged: feedController.setCurrentIndex,
+              onPageChanged: viewportController.markPageChanged,
               itemBuilder: (context, index) {
                 final item = feedState.items[index];
-                final isCurrentItem = index == feedState.currentIndex;
+                final isCurrentItem = index == viewportState.currentIndex;
                 final accessPresentationState = _accessPresentationStateFor(
                   item,
                 );
@@ -671,6 +715,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     _pagePositionNotifier.value = page;
+    ref
+        .read(playerViewportControllerProvider(_sessionKey).notifier)
+        .updatePageOffset(page);
   }
 
   bool _handlePageScrollNotification(ScrollNotification notification) {
@@ -678,6 +725,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         notification is ScrollUpdateNotification) {
       if (notification is ScrollStartNotification) {
         _cancelPendingAutoUnlockSheet();
+        ref
+            .read(playerViewportControllerProvider(_sessionKey).notifier)
+            .markScrollStart();
         final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
         _playbackController.recordPlaybackUserAction(
           'PageView scroll start',
@@ -692,11 +742,22 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
     if (notification is ScrollEndNotification) {
       _setPageScrolling(false);
-      final currentItem = ref
-          .read(playerFeedControllerProvider(_sessionKey))
-          .currentItem;
-      if (currentItem != null) {
-        _scheduleAutoUnlockSheetForItem(currentItem);
+      final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+      final viewportController = ref.read(
+        playerViewportControllerProvider(_sessionKey).notifier,
+      );
+      viewportController.markScrollEnd();
+      if (feedState.items.isNotEmpty) {
+        final page = _pageController.hasClients ? _pageController.page : null;
+        final settledIndex = (page ?? feedState.currentIndex.toDouble())
+            .round()
+            .clamp(0, feedState.items.length - 1);
+        final settledItem = feedState.items[settledIndex];
+        viewportController.settle(
+          index: settledIndex,
+          itemId: settledItem.id,
+          pageOffset: settledIndex.toDouble(),
+        );
       }
     }
     return false;
@@ -1210,6 +1271,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         return;
       }
 
+      ref
+          .read(playerViewportControllerProvider(_sessionKey).notifier)
+          .settle(
+            index: nextIndex,
+            itemId: feedState.items[nextIndex].id,
+            pageOffset: nextIndex.toDouble(),
+          );
       final latestFeedState = ref.read(feedProvider);
       if (latestFeedState.currentIndex != nextIndex) {
         ref.read(feedProvider.notifier).setCurrentIndex(nextIndex);
@@ -1549,6 +1617,37 @@ BoxFit _videoFitFor(PlayerEpisode episode) {
     return BoxFit.cover;
   }
   return BoxFit.contain;
+}
+
+class _ViewportSettledSnapshot {
+  const _ViewportSettledSnapshot({
+    required this.index,
+    required this.itemId,
+    required this.generation,
+  });
+
+  factory _ViewportSettledSnapshot.fromState(PlayerViewportState state) {
+    return _ViewportSettledSnapshot(
+      index: state.settledIndex,
+      itemId: state.settledItemId,
+      generation: state.generation,
+    );
+  }
+
+  final int index;
+  final String? itemId;
+  final int generation;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _ViewportSettledSnapshot &&
+        other.index == index &&
+        other.itemId == itemId &&
+        other.generation == generation;
+  }
+
+  @override
+  int get hashCode => Object.hash(index, itemId, generation);
 }
 
 class _PlayerPlaybackShellSnapshot {
