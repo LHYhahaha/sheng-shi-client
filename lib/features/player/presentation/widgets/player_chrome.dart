@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -30,6 +31,7 @@ class PlayerChrome extends StatefulWidget {
     this.showUnlockButton = false,
     this.unlockLabel,
     this.overlayOpacity = 1.0,
+    this.overlayOpacityListenable,
     this.showVideo = true,
     this.showLoading = false,
     this.playbackError = false,
@@ -47,6 +49,8 @@ class PlayerChrome extends StatefulWidget {
     this.onRetry,
     this.onDownloadTap,
     this.videoController,
+    this.playbackLayer,
+    this.seekBar,
     this.videoFit = BoxFit.cover,
     this.forYouLayout = false,
     super.key,
@@ -64,6 +68,7 @@ class PlayerChrome extends StatefulWidget {
   final bool showUnlockButton;
   final String? unlockLabel;
   final double overlayOpacity;
+  final ValueListenable<double>? overlayOpacityListenable;
   final bool showVideo;
   final bool showLoading;
   final bool playbackError;
@@ -81,6 +86,8 @@ class PlayerChrome extends StatefulWidget {
   final VoidCallback? onRetry;
   final VoidCallback? onDownloadTap;
   final VideoController? videoController;
+  final Widget? playbackLayer;
+  final Widget? seekBar;
   final BoxFit videoFit;
   final bool forYouLayout;
 
@@ -115,6 +122,8 @@ class _PlayerChromeState extends State<PlayerChrome> {
   bool get showUnlockButton => widget.showUnlockButton;
   String? get unlockLabel => widget.unlockLabel;
   double get overlayOpacity => widget.overlayOpacity;
+  ValueListenable<double>? get overlayOpacityListenable =>
+      widget.overlayOpacityListenable;
   bool get showVideo => widget.showVideo;
   bool get showLoading => widget.showLoading;
   bool get playbackError => widget.playbackError;
@@ -132,6 +141,8 @@ class _PlayerChromeState extends State<PlayerChrome> {
   VoidCallback? get onRetry => widget.onRetry;
   VoidCallback? get onDownloadTap => widget.onDownloadTap;
   VideoController? get videoController => widget.videoController;
+  Widget? get playbackLayer => widget.playbackLayer;
+  Widget? get seekBar => widget.seekBar;
   BoxFit get videoFit => widget.videoFit;
   bool get forYouLayout => widget.forYouLayout;
 
@@ -166,6 +177,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
               fit: StackFit.expand,
               children: [
                 Image.asset(content.backgroundAssetPath, fit: BoxFit.cover),
+                ?playbackLayer,
                 if (videoController != null)
                   IgnorePointer(
                     child: AnimatedOpacity(
@@ -190,22 +202,28 @@ class _PlayerChromeState extends State<PlayerChrome> {
           top: 0,
           right: 0,
           bottom: bottomFrameHeight,
-          child: ClipRRect(
-            borderRadius: forYouLayout
-                ? const BorderRadius.vertical(bottom: Radius.circular(10))
-                : BorderRadius.zero,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: forYouLayout ? 0.28 : 0.78),
-                    Colors.transparent,
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: forYouLayout ? 0.58 : 0.72),
-                  ],
-                  stops: const [0, 0.2, 0.68, 1],
+          child: IgnorePointer(
+            child: ClipRRect(
+              borderRadius: forYouLayout
+                  ? const BorderRadius.vertical(bottom: Radius.circular(10))
+                  : BorderRadius.zero,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(
+                        alpha: forYouLayout ? 0.28 : 0.78,
+                      ),
+                      Colors.transparent,
+                      Colors.transparent,
+                      Colors.black.withValues(
+                        alpha: forYouLayout ? 0.58 : 0.72,
+                      ),
+                    ],
+                    stops: const [0, 0.2, 0.68, 1],
+                  ),
                 ),
               ),
             ),
@@ -250,6 +268,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
                   : _PlayerLayoutMetrics.singleActionRailBottom),
           child: _OverlayOpacity(
             opacity: overlayOpacity,
+            opacityListenable: overlayOpacityListenable,
             child: PlayerActionRail(
               likeCountLabel: content.likeCountLabel,
               onEpisodesTap: onEpisodesTap,
@@ -264,6 +283,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
           bottom: forYouLayout ? forYouMetaBottom : bottomInset + 91,
           child: _OverlayOpacity(
             opacity: overlayOpacity,
+            opacityListenable: overlayOpacityListenable,
             child: PlayerBottomMeta(
               content: content,
               showChevron: !forYouLayout,
@@ -278,6 +298,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
               bottom: forYouWatchNowBottom,
               child: _OverlayOpacity(
                 opacity: overlayOpacity,
+                opacityListenable: overlayOpacityListenable,
                 child: _WatchNowButton(onTap: onWatchNowTap),
               ),
             ),
@@ -286,22 +307,24 @@ class _PlayerChromeState extends State<PlayerChrome> {
             left: 16,
             right: 16,
             bottom: bottomInset + 78,
-            child: canSeek || duration > Duration.zero || showTrackLoading
-                ? PlayerSeekBar(
-                    position: position,
-                    duration: duration,
-                    bufferedPosition: bufferedPosition,
-                    previewPosition: seekPreviewPosition,
-                    thumbnailAssetPath: content.posterAssetPath,
-                    isDragging: isSeeking,
-                    showTrackLoading: showTrackLoading,
-                    enabled: canSeek,
-                    onDragStart: onSeekStart,
-                    onDragUpdate: onSeekUpdate,
-                    onDragEnd: onSeekEnd,
-                    onDragCancel: onSeekCancel,
-                  )
-                : const SizedBox.shrink(),
+            child:
+                seekBar ??
+                (canSeek || duration > Duration.zero || showTrackLoading
+                    ? PlayerSeekBar(
+                        position: position,
+                        duration: duration,
+                        bufferedPosition: bufferedPosition,
+                        previewPosition: seekPreviewPosition,
+                        thumbnailAssetPath: content.posterAssetPath,
+                        isDragging: isSeeking,
+                        showTrackLoading: showTrackLoading,
+                        enabled: canSeek,
+                        onDragStart: onSeekStart,
+                        onDragUpdate: onSeekUpdate,
+                        onDragEnd: onSeekEnd,
+                        onDragCancel: onSeekCancel,
+                      )
+                    : const SizedBox.shrink()),
           ),
           if (!showUnlockButton)
             Positioned(
@@ -310,6 +333,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
                   bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
               child: _OverlayOpacity(
                 opacity: overlayOpacity,
+                opacityListenable: overlayOpacityListenable,
                 child: GestureDetector(
                   key: const ValueKey('player_member_button'),
                   behavior: HitTestBehavior.opaque,
@@ -343,6 +367,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
             bottom: bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
             child: _OverlayOpacity(
               opacity: overlayOpacity,
+              opacityListenable: overlayOpacityListenable,
               child: GestureDetector(
                 key: const ValueKey('player_download_button'),
                 behavior: HitTestBehavior.opaque,
@@ -394,13 +419,34 @@ class _PlayerChromeState extends State<PlayerChrome> {
 }
 
 class _OverlayOpacity extends StatelessWidget {
-  const _OverlayOpacity({required this.opacity, required this.child});
+  const _OverlayOpacity({
+    required this.opacity,
+    required this.child,
+    this.opacityListenable,
+  });
 
   final double opacity;
+  final ValueListenable<double>? opacityListenable;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
+    final listenable = opacityListenable;
+    if (listenable != null) {
+      return ValueListenableBuilder<double>(
+        valueListenable: listenable,
+        builder: (context, value, child) {
+          return AnimatedOpacity(
+            key: const ValueKey('player_overlay_opacity'),
+            opacity: value,
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOut,
+            child: child,
+          );
+        },
+        child: child,
+      );
+    }
     return AnimatedOpacity(
       key: const ValueKey('player_overlay_opacity'),
       opacity: opacity,

@@ -14,6 +14,7 @@ import '../domain/player_playback_source.dart';
 import '../domain/player_preload_state.dart';
 import 'player_playback_prepare_manager.dart';
 import 'player_playback_timing_trace.dart';
+import 'player_rebuild_diagnostics.dart';
 import 'player_session_controller.dart';
 import 'player_startup_preload_controller.dart';
 
@@ -1963,6 +1964,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   Future<void> _disposePreloads({bool syncState = true}) async {
+    final stopwatch = Stopwatch()..start();
     // playback preload 使用独立 generation 和 preloadManager。不能和 startup preload
     // 共用 pending/release，否则首页取消首屏预热可能中断播放器页相邻预热，播放器页
     // 隐藏释放也可能误取消首页下一次启动预热。
@@ -1970,6 +1972,17 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _activePreloadAllowedIds = <String>{};
     _cancelPendingPreloads(syncState: syncState);
     await _preloadManager.releasePending();
+    stopwatch.stop();
+    _logTiming(
+      'dispose preloads',
+      elapsed: stopwatch.elapsed,
+      details: _timingDetails(['syncState=$syncState']),
+    );
+    PlayerRebuildDiagnostics.recordTiming(
+      'disposePreloads',
+      elapsed: stopwatch.elapsed,
+      details: 'syncState=$syncState',
+    );
   }
 
   void _clearCurrentPlaybackSnapshot() {
@@ -1997,8 +2010,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   Future<void> _releaseSessionWindowFor(String reason) async {
+    final stopwatch = Stopwatch()..start();
     final itemIds = _prepareManager.windowItemIds;
     await _prepareManager.release();
+    stopwatch.stop();
     for (final itemId in itemIds) {
       _logTiming(
         'dispose window session',
@@ -2008,10 +2023,16 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
     _logTiming(
       'session window release',
+      elapsed: stopwatch.elapsed,
       details: _timingDetails([
         'reason=$reason',
         'released=${itemIds.join(',')}',
       ]),
+    );
+    PlayerRebuildDiagnostics.recordTiming(
+      'releaseSessionWindow',
+      elapsed: stopwatch.elapsed,
+      details: 'reason=$reason released=${itemIds.join(',')}',
     );
   }
 

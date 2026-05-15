@@ -164,9 +164,10 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
-    expect(chrome.showVideo, isTrue);
-    expect(chrome.showLoading, isTrue);
+    expect(
+      find.byKey(const ValueKey('player_video_tap_layer')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('player_seek_track_loading')),
       findsOneWidget,
@@ -187,9 +188,10 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       await tester.pump();
 
-      var chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
-      expect(chrome.showVideo, isTrue);
-      expect(chrome.showLoading, isTrue);
+      expect(
+        find.byKey(const ValueKey('player_video_tap_layer')),
+        findsOneWidget,
+      );
       expect(
         find.byKey(const ValueKey('player_seek_track_loading')),
         findsOneWidget,
@@ -199,9 +201,6 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
-      expect(chrome.showVideo, isTrue);
-      expect(chrome.showLoading, isFalse);
       expect(
         find.byKey(const ValueKey('player_seek_track_loading')),
         findsNothing,
@@ -291,9 +290,11 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
-    expect(chrome.showVideo, isFalse);
-    expect(chrome.showLoading, isFalse);
+    expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_seek_track_loading')),
+      findsNothing,
+    );
   });
 
   testWidgets('single drama taps video to pause and center play resumes', (
@@ -528,12 +529,13 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
-    expect(chrome.position, const Duration(seconds: 25));
-    expect(chrome.duration, const Duration(seconds: 100));
-    expect(chrome.bufferedPosition, const Duration(seconds: 60));
-
     final seekBar = find.byKey(const ValueKey('player_seek_bar'));
+    final seekBarWidget = tester.widget<PlayerSeekBar>(
+      find.byType(PlayerSeekBar),
+    );
+    expect(seekBarWidget.position, const Duration(seconds: 25));
+    expect(seekBarWidget.duration, const Duration(seconds: 100));
+    expect(seekBarWidget.bufferedPosition, const Duration(seconds: 60));
     final gesture = await tester.startGesture(tester.getCenter(seekBar));
     await gesture.moveBy(const Offset(240, 0));
     await tester.pump();
@@ -551,6 +553,39 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
     expect(playbackSession.seekedPositions, isNotEmpty);
+  });
+
+  testWidgets('progress updates do not rebuild PlayerChrome shell', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    playbackSession.emitDuration(const Duration(seconds: 100));
+    await tester.pump();
+    final chromeBefore = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
+
+    playbackSession.emitPosition(const Duration(seconds: 20));
+    await tester.pump();
+    playbackSession.emitBufferedPosition(const Duration(seconds: 45));
+    await tester.pump();
+
+    final chromeAfter = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
+    expect(identical(chromeBefore, chromeAfter), isTrue);
+
+    final seekBarWidget = tester.widget<PlayerSeekBar>(
+      find.byType(PlayerSeekBar),
+    );
+    expect(seekBarWidget.position, const Duration(seconds: 20));
+    expect(seekBarWidget.duration, const Duration(seconds: 100));
   });
 
   testWidgets('dragging seek bar does not switch PageView item', (
@@ -798,9 +833,14 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
 
-    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
-    expect(chrome.showVideo, isTrue);
-    expect(chrome.showLoading, isTrue);
+    expect(
+      find.byKey(const ValueKey('player_video_tap_layer')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('player_seek_track_loading')),
+      findsOneWidget,
+    );
     expect(find.text('Unlock Now'), findsNothing);
     expect(
       find.byKey(const ValueKey('player_video_tap_layer')),
@@ -951,8 +991,6 @@ void main() {
       findsNothing,
     );
     expect(find.text('Unlock Now'), findsNothing);
-    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
-    expect(chrome.showVideo, isTrue);
     expect(
       find.byKey(const ValueKey('player_video_tap_layer')),
       findsOneWidget,
