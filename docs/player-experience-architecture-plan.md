@@ -515,6 +515,143 @@ Current decision:
 - Future large player work should reopen after real source/CDN timing proves a
   specific bottleneck.
 
+### Phase 5.20: PageView Performance Architecture Refactor
+
+日期：2026-05-16
+
+真机新增结论：
+
+- 滑到 locked episode 时卡顿不只是解锁抽屉时机问题。
+- 用户关闭解锁抽屉后继续上下滑，PageView 仍然会卡，说明当前播放器页面存在
+  PageView / playback state / Video surface / locked business state 混合导致的结构性性能风险。
+- 当前 `PlayerPage` 监听完整 `PlayerPlaybackState`，而 playback state 包含 position、
+  buffering、first frame、surface lifecycle、preload 等高频字段。高频媒体状态更新会扩大
+  到 `PlayerPage`、`PageView.builder` 和 `PlayerChrome` 的 rebuild 路径。
+
+阶段目标：
+
+- 不继续围绕解锁抽屉做小补丁。
+- 先验证并降低 PageView rebuild 面。
+- 再决定是否把真实 `Video` surface 从每个 PageView item 上提到 PlayerPage viewport 层。
+- 保持 `PlayerPlaybackController` 作为唯一播放真相来源，不把播放真相下放到 UI widget。
+
+#### S0: Build / Frame Diagnostics
+
+只读或极小改动，目标是验证卡顿来源。
+
+- 统计 `PlayerPage.build` 次数和耗时。
+- 统计 `PageView.itemBuilder`、当前 item `PlayerChrome.build`、非当前 item build 次数。
+- 统计 `Video` mount / unmount / controller 替换次数。
+- 统计 EP03 -> EP04 locked 时：
+  - current item change 到 locked UI 出现耗时；
+  - `blockItem` 耗时；
+  - `_releaseSessionWindowFor` 耗时；
+  - `_disposePreloads` 耗时；
+  - auto sheet scheduling 耗时。
+- 只在 debug/profile/timing flag 下启用日志，不污染 release 默认输出。
+
+#### S1: Rebuild Boundary Split
+
+第一轮开发优先做，风险最低。
+
+- `PlayerPage` 不再直接 watch 完整 `PlayerPlaybackState`。
+- 为主 PageView 提供低频 view state，只包含：
+  - current item id；
+  - status 是否 blocked/unavailable/error；
+  - 是否展示 unlock button；
+  - 是否允许挂载当前 video surface。
+- `PlayerSeekBar` 单独监听 progress 字段：
+  - position；
+  - duration；
+  - bufferedPosition；
+  - seeking preview。
+- `Video surface / loading / firstFrame` 单独监听 render 字段：
+  - videoController；
+  - surfaceLifecycle；
+  - hasFirstFrame；
+  - isBuffering；
+  - currentItemId。
+- `preloadStates / preloadedItemIds / timing/debug state` 不进入 PageView 主 build。
+- `_isPageScrolling` / `_overlayOpacity` 尽量局部化，避免 setState 重建整棵 PageView。
+
+验收：
+
+- position 高频更新不应导致整个 `PageView.builder` 重跑。
+- seekbar 能独立更新。
+- 滑到 locked episode 时 `Unlock Now` 快速出现，PageView 不明显卡顿。
+- free / 已解锁 episode 播放链路不回退。
+
+#### S2: Active Video Surface Overlay Spike
+
+如果 S1 后 PageView 仍明显卡顿，再进入本阶段。
+
+推荐方向：
+
+- PageView item 只渲染静态 shell：
+  - poster / fallback；
+  - title / synopsis；
+  - action rail；
+  - top bar；
+  - locked / unavailable placeholder；
+  - unlock button。
+- 真实 `Video` widget 提升到 PlayerPage 顶层 `ActivePlaybackSurfaceOverlay`。
+- overlay 只绑定当前 active item 的 `VideoController`。
+- 非当前 item 永远不挂 `Video`。
+- 对齐策略分两步：
+  1. 低风险版本：page settle 后切换 overlay 到当前 item；
+  2. 体验增强版本：监听 `PageController.page`，让 overlay 跟随页面滑动。
+
+风险：
+
+- 需要处理滑动时视频 surface 与 page shell 的视觉对齐。
+- Android `media_kit_video` native surface late callback 仍需沿用 pause -> detach -> dispose
+  顺序。
+- prepared next session 不应同时挂第二个 `Video` widget。
+
+#### S3: Locked / Paywall State Split
+
+locked 逻辑需要拆成三阶段，避免在滑动关键路径做重操作：
+
+1. `LockedPresentation`
+   - 立即展示 locked poster / fallback 和 `Unlock Now`。
+   - 不触发 media resolve/open/preload/prepare。
+2. `PlaybackQuiesce`
+   - 尽快 pause 当前 session，保证旧音频停止。
+   - 尽量轻，不在滑动帧里释放整个 window。
+3. `ResourceCleanup`
+   - scroll settle / post frame 后释放 stale prepared window、pending preload、surface。
+   - auto sheet 也在这个阶段后弹出或确认 current item 后弹出。
+
+原则：
+
+- locked / unavailable / null-source item 仍不能 resolve、open、prepare 或 preload 未授权 source。
+- 但“显示 locked UI”和“释放媒体资源”不能强绑在同一个滑动关键路径。
+
+#### S4: Tests And Device Acceptance
+
+必须补充：
+
+- position 更新不触发 PageView shell rebuild 的测试或可观测诊断。
+- locked item 不挂 `Video`、不显示 seekbar、不触发 source resolve/preload/prepare。
+- EP03 -> EP04 locked，`Unlock Now` 先出现，旧音频停止。
+- 关闭抽屉后继续滑动不卡，快速上下滑不重复弹旧 item。
+- Android 真机验证：
+  - single drama EP03 -> EP04 locked；
+  - 关闭 sheet 后 EP04 -> EP05 -> EP06；
+  - For You 上下滑；
+  - route pop；
+  - tab hidden；
+  - app background。
+
+明确不做：
+
+- 不换播放器库。
+- 不扩大 HLS cache/proxy。
+- 不扩大 prepared session window。
+- 不接真实 API。
+- 不改支付/权益规则。
+- 不为了 locked 流畅而提前请求未授权播放源。
+
 ## 6. Explicit Prohibitions
 
 - Do not create a player or `VideoController` in Home.
