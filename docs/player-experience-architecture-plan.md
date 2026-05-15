@@ -926,6 +926,102 @@ unlock success:
 - 不改支付/权益规则。
 - 不扩大 HLS cache/proxy。
 
+### Phase 5.24: Settled-First Feed Runtime
+
+日期：2026-05-16
+
+真机体验问题：
+
+- 单剧播放器在 locked episode 附近仍会出现“手拖不动”的感觉。
+- 这类卡顿不是单纯的 HLS 加载慢，也不是单个抽屉弹出慢，而是 PageView 拖动过程中仍可能触发
+  access / playback / preload / sheet / surface 相关运行时逻辑。
+- 当前 `onPageChanged` 和 `feed.currentItem` 更接近“页面阈值已切换”，不等于“PageView 已完全
+  settled”。如果在这个阶段触发 `playItem`、`quiesceForAccessOverlay`、`preloadAround` 或
+  auto sheet 调度，就会把播放运行时工作挤进用户手势路径。
+
+核心规则：
+
+```text
+dragging / settling:
+  只允许 PageView shell 和 active video surface transform 跟随手势。
+  不触发 access decision。
+  不触发 playItem / open source。
+  不触发 quiesce / block / release。
+  不触发 preload / prepare。
+  不触发 auto sheet schedule/fire。
+
+settled:
+  只处理最终 settled item。
+  先计算 access presentation。
+  playable 才播放/恢复。
+  locked 才展示 Unlock Now，并按 dwell 规则弹 sheet。
+  unavailable 才展示不可用态。
+  周边 preload/prepare 也从 settled playable item 出发。
+```
+
+目标架构：
+
+```text
+PlayerPage
+  -> Feed Viewport Layer
+     pageOffset / scrollPhase / candidateIndex / settledIndex / settledItemId
+     只管手势和 PageView settled，不碰权益、播放、弹窗、预加载。
+
+  -> Access Presentation Layer
+     只在 settled item 后计算 playable / lockedCoins / rechargeRequired /
+     membershipRequired / unavailable。
+
+  -> Playback Runtime Layer
+     只消费 settled playable item，负责 play / resume / prepare next /
+     retain previous / pause / hide / release。
+
+  -> Overlay Orchestrator
+     只消费 settled locked presentation，负责 dwell、dismiss once per item、
+     manual Unlock Now、recharge -> unlock -> play。
+```
+
+阶段拆分：
+
+1. R1/R2 合并：`PlayerViewportController` + settled-only access
+   - 新增 `player_viewport_controller.dart`。
+   - `onPageChanged` 只更新 viewport candidate/current index。
+   - `ScrollStart/ScrollUpdate` 只更新 `scrollPhase/pageOffset`。
+   - `ScrollEnd` 后等待 page 稳定，再输出 `settledIndex/settledItemId`。
+   - `feed.currentItem` listener 不再直接触发 access/playback/sheet/preload。
+   - `_handleEntitlementDecisionForItem` 只由 settled item 触发。
+2. R3：抽出 overlay/sheet orchestration
+   - 把 dwell、dismissed item、manual Unlock Now、modal state 从 `PlayerPage`
+     收到 `player_overlay_orchestrator.dart`。
+3. R4：抽出 playback runtime scheduler
+   - Page 不再散落调用 `playItem`、`quiesceForAccessOverlay`、`preloadAround`。
+   - scheduler 根据 settled access presentation 发出唯一 runtime command 序列。
+4. R5：`PlayerPage` 只保留 UI 组装
+   - PageView shell、active video surface、top bar、sheet host。
+   - 不拥有 access decision、runtime command、dwell timer。
+
+R1/R2 验收：
+
+- drag 中不触发 entitlement evaluate。
+- drag 中不 schedule auto sheet。
+- drag 中不 quiesce / block / release / dispose preload。
+- drag 中不 source resolve / preload / prepare / open。
+- 快速滑过 EP04 -> EP05 -> EP06，只处理最终 settled 的 EP06。
+- locked item 连续滑动不阻塞 PageView。
+- free -> locked -> free 回滑恢复播放。
+- `Unlock Now` 手动点击仍立即打开解锁/充值流程。
+- 解锁 `Play` 后恢复 active video surface，不停封面。
+- For You 和 single drama 共用 viewport/access/runtime 思路，但 sessionKey 保持隔离。
+
+明确不做：
+
+- 不换播放器库。
+- 不接真实 API。
+- 不做 HLS local cache/proxy。
+- 不扩大 player session window。
+- 不把多个 `Video` 放回 PageView item。
+- 不改支付/权益业务规则。
+- 不提前 resolve/open/preload/prepare locked source。
+
 ## 6. Explicit Prohibitions
 
 - Do not create a player or `VideoController` in Home.
