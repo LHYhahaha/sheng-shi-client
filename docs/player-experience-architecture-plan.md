@@ -765,6 +765,78 @@ flutter install -d R58WC02B69R --release
 - 点击 `Unlock Now`。
 - route back、tab hidden、app background。
 
+### Phase 5.22: Follow-Scroll Video Surface And Long Swipe Stability
+
+日期：2026-05-16
+
+Phase 5.21 真机体验新增结论：
+
+- Active video surface 上提后，playable / unlocked 视频切换的 native surface 绑定更清晰，
+  但低风险版本只在 current item settle 后切换 overlay，导致视频画面不跟随 PageView 滑动。
+  对短剧类产品来说，已解锁/免费内容滑动时视频必须跟手，否则体验不自然。
+- 测试不能只滑 3-5 条。真机反馈显示越往下滑越卡，后续验收必须覆盖连续滑动 10-15 条，
+  包括 free / locked / membership / unavailable 混合内容。
+
+下一轮目标：
+
+1. 保留 Active Video Surface Overlay 的“单一真实 Video surface”架构。
+2. 让 playable / unlocked 当前视频 surface 在 PageView 滑动时跟随页面位移。
+3. locked / unavailable item 仍只显示静态 shell，不挂 Video，不请求未授权 source。
+4. 增加长滑动诊断，确认越往下卡是 item shell、sheet scheduling、entitlement/block、还是
+   PageView 缓存/图片解码导致。
+
+#### Follow-Scroll Surface Strategy
+
+推荐实现：
+
+- 使用 `PageController` 的 `Listenable` 或 `AnimatedBuilder` 读取 `page` 值。
+- 根据 `currentIndex` 和 `page` 计算 active video surface 的垂直偏移：
+  - `offsetY = (currentIndex - page) * viewportHeight`
+  - 只在当前 playable item 附近显示 overlay。
+- 当用户从 playable 滑向 locked：
+  - active video surface 跟随旧 playable page 滑出；
+  - locked page shell 跟随滑入；
+  - 到达 locked current 后 hide overlay，显示 poster + `Unlock Now`。
+- 当用户从 locked 滑回 playable：
+  - playable page shell 进入；
+  - overlay attach 后跟随 current playable page 显示。
+- 第一版只需要跟随 single drama；For You 可同步使用同一套逻辑，但如果风险大，可先保证
+  single drama。
+
+风险：
+
+- 跟手期间 overlay 和 PageView shell 可能出现一帧错位，必须用真机录屏验证。
+- 不允许为了跟手而在邻近页挂第二个 Video。
+- 不允许把 prepared next session 直接挂到另一个 Video widget。
+
+#### Long Swipe Diagnostics
+
+必须增加或复用日志，覆盖连续滑动 10-15 条：
+
+- `PageView.itemBuilder` build count 按 item 分类；
+- active overlay show/hide/translate；
+- dwell auto sheet schedule/cancel/fire；
+- `blockItem`、`releaseSessionWindow`、`disposePreloads` 耗时；
+- image/poster 是否重复解码或频繁创建；
+- 当前页面 index 越大时，是否存在 build 数、timer、pending sheet、retained state 累积。
+
+验收路径：
+
+- 从 EP01 连续向下滑到 EP12 或更后。
+- 途中遇到 locked episode 不停留时不能弹 sheet；停留后才弹。
+- 已解锁/免费 episode 视频要跟手滑动。
+- locked episode 只显示 shell + `Unlock Now`。
+- 越往下滑不应越来越卡。
+- 关闭 sheet 后继续连续滑 5 条。
+- 再向上滑回已播放 episode，仍无旧音频泄漏。
+
+如果 S5.22 后仍然越滑越卡，下一步再检查：
+
+- PageView 缓存范围和 item shell 是否过重；
+- poster 图片尺寸/解码是否需要预缓存或降尺寸；
+- locked cleanup 是否需要进入三阶段状态机；
+- 是否有 pending timers / modal scheduling 未释放。
+
 ## 6. Explicit Prohibitions
 
 - Do not create a player or `VideoController` in Home.
