@@ -1,5 +1,10 @@
 import 'package:flutter/foundation.dart';
 
+/// 播放链路 timing 事件。
+///
+/// 事件同时记录 trace 起点、用户动作起点和 source label，用来定位“点击/滑动到首帧”
+/// 的耗时。不要在 report 里默认暴露完整 source URL 给普通 UI，签名 URL 后续可能
+/// 带鉴权参数。
 class PlayerPlaybackTimingEvent {
   const PlayerPlaybackTimingEvent({
     required this.name,
@@ -28,6 +33,10 @@ class PlayerPlaybackTimingEvent {
   final String? details;
 }
 
+/// 播放器 timing trace 收集器。
+///
+/// trace 不是业务状态，不参与播放决策；它只帮助排查 source resolve、media open、
+/// first frame、prepared hit/miss 等链路。事件数量有上限，避免长时间滑动导致内存增长。
 class PlayerPlaybackTimingTrace {
   PlayerPlaybackTimingTrace({required this.sessionKey});
 
@@ -55,6 +64,8 @@ class PlayerPlaybackTimingTrace {
     int? toIndex,
     DateTime? occurredAt,
   }) {
+    // 用户动作先作为 pending 记录，下一次 trace start 会把它绑定到播放请求。
+    // 这样 route push、PageView 滑动和自动下一集都能统一计算 sinceUserAction。
     _pendingTrigger = trigger ?? event;
     _pendingFromItemId = fromItemId;
     _pendingToItemId = toItemId;
@@ -140,6 +151,7 @@ class PlayerPlaybackTimingTrace {
     );
     _events.add(eventEntry);
     if (_events.length > 160) {
+      // timing 只保留最近窗口，避免播放器长会话把诊断事件变成无限日志缓存。
       _events.removeRange(0, _events.length - 160);
     }
     const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');

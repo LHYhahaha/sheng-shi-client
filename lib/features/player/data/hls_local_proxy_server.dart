@@ -4,6 +4,11 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+/// 本地 HLS proxy 的 spike 配置。
+///
+/// 默认必须关闭：本地代理会启动 loopback server、重写 playlist 和缓存 segment，
+/// 这会改变播放器实际访问路径。没有覆盖真机、后台、网络安全策略和 CDN 行为前，
+/// 不能把它作为默认播放链路。
 class HlsLocalProxyConfig {
   const HlsLocalProxyConfig({
     this.enabled = false,
@@ -89,6 +94,10 @@ class HlsLocalCacheStore {
   void clear() => _bytesByUrl.clear();
 }
 
+/// 本地 HLS proxy spike，用于验证“playlist 重写 + segment 本地缓存”的可行性。
+///
+/// 这不是正式缓存层。它只适合受控调试：生产链路仍应优先播放远端签名 URL，
+/// 避免本地 server 生命周期、缓存过期、鉴权续期和错误回退影响播放稳定性。
 class HlsLocalProxyServer {
   HlsLocalProxyServer({
     HlsLocalProxyHttpClient? client,
@@ -120,6 +129,8 @@ class HlsLocalProxyServer {
   }
 
   Future<void> stop() async {
+    // stop 会失效所有进行中的 segment 请求并清缓存。后台/释放时不保留本地数据，
+    // 避免 spike 缓存被误当成跨会话持久缓存。
     _generation += 1;
     _client.releasePending();
     final server = _server;
@@ -181,6 +192,8 @@ class HlsLocalProxyServer {
       );
       return;
     }
+    // 只重写 playlist 中的媒体 URI，不改 HLS tag。这样方便观察代理链路，
+    // 也避免客户端在 spike 阶段承担完整 HLS manifest 解析职责。
     final rewritten = rewritePlaylist(
       remoteUri,
       response.body,
@@ -201,6 +214,8 @@ class HlsLocalProxyServer {
 
   Future<void> _proxySegment(HttpRequest request, Uri remoteUri) async {
     final cacheKey = remoteUri.toString();
+    // segment 缓存只按完整 URL 命中，不做跨 token/跨清晰度合并，避免签名 URL 或
+    // variant 切换时错用旧内容。
     final cachedBytes = _cacheStore.read(cacheKey);
     if (cachedBytes != null) {
       await _sendBytes(request, cachedBytes);
@@ -340,6 +355,8 @@ class HlsProxyPlaybackSourceResolver {
     try {
       return await proxyServer.proxyUrlFor(remoteUrl);
     } catch (error) {
+      // proxy 失败必须回退远端源，不能阻断播放。local proxy 是诊断 spike，
+      // 任何启动端口、URL 重写或请求失败都不应扩大成业务不可播放。
       const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');
       if (shouldPrint) {
         debugPrint(

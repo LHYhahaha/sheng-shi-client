@@ -6,6 +6,11 @@ import '../../drama/domain/drama.dart';
 final homeFeedControllerProvider =
     NotifierProvider<HomeFeedController, HomeFeedState>(HomeFeedController.new);
 
+/// 首页 feed 状态。
+///
+/// initial loading/error 和 load-more loading/error 分开存，是为了让首屏失败显示整页
+/// retry，而分页失败只影响底部 footer。不要合并成一个 error，否则分页失败会清空
+/// 已经加载的首页内容。
 class HomeFeedState {
   const HomeFeedState({
     required this.categories,
@@ -79,6 +84,11 @@ class HomeFeedState {
   }
 }
 
+/// 首页分类与分页控制器。
+///
+/// Home 只负责 drama 列表，不创建播放器 media session。首页首屏预热由 HomePage
+/// 监听成功加载后触发 PlayerStartupPreloadController，并且只做 HLS/source 预热；
+/// 真正播放必须等用户进入 PlayerPage 后由 PlayerPlaybackController 接管。
 class HomeFeedController extends Notifier<HomeFeedState> {
   int _generation = 0;
 
@@ -98,6 +108,8 @@ class HomeFeedController extends Notifier<HomeFeedState> {
 
     try {
       final repository = ref.read(dramaRepositoryProvider);
+      // 分类和第一页 feed 属于同一代请求。切分类/重试时旧请求返回必须丢弃，
+      // 否则旧分类的分页 token 会覆盖新分类。
       final categories = await repository.listHomeCategories();
       if (!_isCurrent(generation)) {
         return;
@@ -163,6 +175,8 @@ class HomeFeedController extends Notifier<HomeFeedState> {
       return;
     }
 
+    // 分页不递增 generation，因为它属于当前分类的追加请求；但完成时仍检查分类 id，
+    // 防止用户切分类后旧分页结果 append 到新列表。
     final generation = _generation;
     state = state.copyWith(isLoadingMore: true, clearLoadMoreError: true);
 

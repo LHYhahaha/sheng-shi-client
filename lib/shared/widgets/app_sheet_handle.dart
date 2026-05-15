@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+/// 底部弹层拖拽提示条。
+///
+/// 组件只表达“这里是 sheet 顶部”的视觉 affordance，不绑定拖拽手势；实际拖拽能力
+/// 由 bottom sheet 容器决定，避免业务弹窗误以为 handle 本身负责交互。
 class AppSheetHandle extends StatelessWidget {
   const AppSheetHandle({
     this.width = 42,

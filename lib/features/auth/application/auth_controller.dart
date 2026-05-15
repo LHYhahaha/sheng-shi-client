@@ -7,6 +7,11 @@ final authControllerProvider = NotifierProvider<AuthController, AuthState>(
   AuthController.new,
 );
 
+/// 全局登录态。
+///
+/// `session` 是唯一可信登录来源，`pendingProvider/failedAction/error` 只是 UI 过程态。
+/// Profile、Account 等页面应从 AuthState 合成展示，不要各自缓存“是否登录”，否则
+/// logout/delete 后会出现页面状态不同步。
 class AuthState {
   const AuthState({
     required this.isLoading,
@@ -59,6 +64,11 @@ class AuthState {
 
 enum AuthFailureAction { load, login, logout, deleteAccount }
 
+/// Auth 状态机，负责 session 加载、登录、退出和注销账号。
+///
+/// 所有账号动作都通过 repository provider 进入，UI 不直接调用平台登录或网络层。
+/// 这样后续接真实 OAuth、token refresh、账号删除审计时，可以统一处理 loading、
+/// error 和 session 清理。
 class AuthController extends Notifier<AuthState> {
   int _generation = 0;
 
@@ -102,6 +112,8 @@ class AuthController extends Notifier<AuthState> {
       return;
     }
 
+    // pendingProvider 同时承担按钮 loading 和并发保护。登录渠道 SDK 往往会弹系统页，
+    // 重复点击可能创建多个回调，导致后返回的失败覆盖先成功的 session。
     state = state.copyWith(
       pendingProvider: provider,
       clearError: true,
@@ -132,6 +144,8 @@ class AuthController extends Notifier<AuthState> {
       return;
     }
 
+    // logout/delete 共用 isLoading 锁，避免账号操作交叉执行。失败时保留原 session，
+    // 让用户仍可重试，而不是把本地状态清成半登录。
     state = state.copyWith(
       isLoading: true,
       clearError: true,
@@ -161,6 +175,8 @@ class AuthController extends Notifier<AuthState> {
       return;
     }
 
+    // 注销账号比 logout 风险更高，但状态处理仍保持一致：只有 repository 返回 guest
+    // session 后才认为本地退出成功。
     state = state.copyWith(
       isLoading: true,
       clearError: true,

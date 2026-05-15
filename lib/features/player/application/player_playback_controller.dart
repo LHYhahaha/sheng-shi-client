@@ -21,6 +21,11 @@ final playerPlaybackSessionFactoryProvider =
       return MediaKitPlayerSession.new;
     });
 
+/// 统一创建 prepared/retained media session 的工厂。
+///
+/// 这里故意通过 provider 注入，而不是在 UI 或控制器里直接 new 播放器实例：
+/// 播放器资源、测试替身和真机生命周期都必须从同一个入口约束，否则很容易出现
+/// 多个 session 抢音频焦点、测试无法隔离或 dispose 顺序不可控的问题。
 final playerPlaybackPrepareManagerFactoryProvider =
     Provider<PlayerPlaybackPrepareManager Function()>((ref) {
       final sessionFactory = ref.watch(playerPlaybackSessionFactoryProvider);
@@ -37,8 +42,16 @@ final playerPlaybackControllerProvider =
 class PlayerPlaybackSessionKeys {
   const PlayerPlaybackSessionKeys._();
 
+  /// For You tab 使用稳定 session key，离开 tab 时暂停但保留 provider 生命周期。
+  ///
+  /// 这样底部 tab 来回切换不会不断重建播放器；真正释放由可见性、内存压力和
+  /// provider dispose 路径负责。
   static const forYouTab = 'for-you-tab';
 
+  /// 单剧播放页每个页面实例使用独立 key。
+  ///
+  /// 单剧页从首页或列表进入时可能同时存在多个 route 实例。不要只用 drama/episode
+  /// 作为 key，否则旧页面的 dispose 可能误释放新页面正在播放的 session。
   static String singleDrama({
     required String? dramaId,
     required String? episodeId,
@@ -200,6 +213,19 @@ class PlayerPlaybackState {
   }
 }
 
+/// 播放器核心状态机，负责把 feed item 转成可播放 source、media session 和 UI 状态。
+///
+/// 这个控制器是播放器链路的业务边界：UI 只提交“播放哪个 item / 用户做了什么”，
+/// 不直接创建 repository、Dio/HTTP client 或播放器 session。这样做是为了保证
+/// source resolve、HLS preload、prepared session window、进度恢复和 timing trace
+/// 都能用同一套 generation/cancel/release 规则串起来。绕过这里会让隐藏页继续播放、
+/// locked 内容被预热、或旧异步结果覆盖新页面状态。
+///
+/// 重要边界：
+/// - startup preload 只预热首页首个可播放 source，不能接管 media session。
+/// - playback preload 只在播放器页相邻 item 范围内工作，不能共享 startup 的 pending/release。
+/// - prepared media session window 固定服务 previous/current/next，不能随着 HLS preload count 扩大。
+/// - locked/unavailable/null source 不能 resolve、preload、open 或 prepare。
 class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   PlayerPlaybackController(this.sessionKey);
 
@@ -310,6 +336,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _attachSessionStreams(_session);
     _logTiming('create current session', details: 'reason=build');
     ref.onDispose(() {
+      // provider dispose 是最后一道兜底：必须同时释放流、HTTP 预加载、prepared
+      // window 和当前播放器。这里不依赖 UI dispose，因为 tab、route、后台切换的
+      // 生命周期触发顺序并不总是稳定。
       unawaited(_cancelSessionStreams());
       unawaited(_disposePreloads(syncState: false));
       unawaited(_releaseSessionWindowFor('provider dispose'));
@@ -362,6 +391,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
 
     if (item == null) {
+      // 空 item 表示 feed 当前没有可播放目标。需要暂停并清掉 source，但不把它记为
+      // error，否则空列表/切分类会误触发播放失败 UI。
       final generation = ++_generation;
       if (!await _pauseIfCurrent(generation)) {
         return;
@@ -378,6 +409,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
 
     if (item.episode.isLocked) {
+      // 锁定内容是业务付费边界，不能为了“预热体验”提前 resolve/open。
+      // 客户端 mock 可以展示 paywall，但真实环境必须等服务端授权后再拿 source。
       final generation = ++_generation;
       if (!await _pauseIfCurrent(generation)) {
         return;
@@ -396,6 +429,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
     final sourceHint = item.episode.videoSource;
     if (item.episode.isUnavailable || sourceHint == null) {
+      // unavailable/null source 代表内容侧暂不可播放。这里同样只进入状态展示，
+      // 不触发 repository，避免把内容缺失误判成网络错误或污染 preload 缓存。
       final generation = ++_generation;
       if (!await _pauseIfCurrent(generation)) {
         return;
@@ -449,6 +484,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     var didResolveSource = false;
     try {
       final windowItemsBeforeTake = _windowItemsText();
+      // prepared/retained 命中时直接接管已经 open 的 session，避免同一个 item
+      // 重复 open。命中窗口只覆盖相邻滑动，不承诺覆盖所有 HLS preload 候选。
       final prepared = _prepareManager.takeIfMatches(item.id);
       _logTiming(
         'take window session',
@@ -532,6 +569,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         source: sourceHint,
         details: _timingDetails(['window=miss', 'firstFrameReady=false']),
       );
+      // fallback open 前先把当前已出首帧的 session 收进 retained window。
+      // 这样用户快速回滑能复用 previous；如果直接 dispose，回滑会重新走 resolve/open。
       await _retainCurrentBeforeNormalOpen(item.id);
       if (!ref.mounted || !_isCurrent(generation)) {
         return;
@@ -653,6 +692,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     final isForYou = items[currentIndex].mode == PlayerFeedMode.forYou;
     final forwardPreloadCount = config.forwardHlsPreloadCountFor(isForYou);
     final backwardPreloadCount = config.backwardHlsPreloadCountFor(isForYou);
+    // HLS preload 只挑可播放的相邻 source。locked/unavailable/null source 不占有效名额，
+    // 否则一个付费或下架 item 会把真正可预热的下一集挤掉。
     final forwardCandidates = _preloadCandidatesInDirection(
       items,
       currentIndex,
@@ -671,6 +712,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       ),
     ];
 
+    // HLS preload count 控制 HTTP playlist/segment 预热，不控制 prepared session window。
+    // prepared session 持有播放器和解码资源，扩大到多个 next/previous 会提高内存、
+    // 音频焦点和后台释放风险，所以这里即使 HLS count 变大也只选择 HTTP 候选集合。
     final maxPreloadedSources = forwardPreloadCount + backwardPreloadCount;
     final selectedCandidates = candidates
         .take(maxPreloadedSources)
@@ -713,6 +757,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           ? null
           : forwardCandidates.first;
       if (nextItem != null) {
+        // 只 prepare 第一个 forward playable item，保持 previous/current/next 窗口。
+        // 不要按 HLS preload 数量循环 prepare，否则会变成播放器实例池。
         unawaited(_prepareNextItem(nextItem, preloadGeneration));
       }
     }
@@ -956,6 +1002,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (_isSessionDisposed) {
       return;
     }
+    // 页面隐藏、切 tab、进后台都走这里。generation 先失效旧 open，避免异步 open
+    // 完成后又自动 play；随后释放 session window 和 HTTP preload，防止隐藏页面继续
+    // 占用音频/网络资源。
     _pauseWhenOpenCompletes = true;
     ++_generation;
     await _session.pause();
@@ -978,6 +1027,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   Future<void> disposeSession({bool syncState = true}) async {
+    // 单剧页离开时做强释放：当前 session、prepared window、HLS pending 都要清掉。
+    // For You tab 不走 disposeSession，而是 pauseForVisibility，以保留 tab provider。
     _pauseWhenOpenCompletes = true;
     ++_generation;
     await _releaseSessionWindowFor('dispose');
@@ -1211,6 +1262,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
     final errorKind = _classifyPlaybackError(error);
+    // HLS 分片短暂失败在首帧后通常可由播放器继续重试。此时保留画面并展示 buffering，
+    // 不立刻进入 fatal error；但首帧前失败必须暴露为错误，避免黑屏假播放。
     final keepPlayingSurface =
         errorKind == PlayerPlaybackErrorKind.recoverableNetwork &&
         state.hasFirstFrame &&
@@ -1331,6 +1384,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _attachSessionStreams(_session);
     await previousSession.pause();
     if (previousSource != null && previousItemId != null) {
+      // next prepared 被接管后，旧 current 变成 previous retained。这个窗口最多保留
+      // previous/current/next，目的是覆盖自然回滑，不是缓存任意历史播放页。
       _logTiming(
         'retain current before normal open',
         itemId: previousItemId,
@@ -1415,6 +1470,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         'windowItems=${_windowItemsText()}',
       ]),
     );
+    // normal open fallback 也要保留 previous，因为 source resolve/open 期间最容易发生
+    // 用户反向滑动。先 pause 再换新 session，可避免两个播放器同时出声。
     await previousSession.pause();
     await _cancelSessionStreams();
     await _prepareManager.retainPaused(
@@ -1474,6 +1531,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         itemId: item.id,
         source: item.episode.videoSource,
       );
+      // prepare 只暖下一个可播放 item，并通过 preloadGeneration 绑定当前候选窗口。
+      // 用户滑走或列表刷新后，旧 prepared 必须释放，不能被后续 item 误接管。
       final prepared = await _prepareManager.prepare(
         item: item,
         sourceRepository: ref.read(playerPlaybackSourceRepositoryProvider),
@@ -1628,6 +1687,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   Future<void> _disposePreloads({bool syncState = true}) async {
+    // playback preload 使用独立 generation 和 preloadManager。不能和 startup preload
+    // 共用 pending/release，否则首页取消首屏预热可能中断播放器页相邻预热，播放器页
+    // 隐藏释放也可能误取消首页下一次启动预热。
     _preloadGeneration += 1;
     _activePreloadAllowedIds = <String>{};
     _cancelPendingPreloads(syncState: syncState);

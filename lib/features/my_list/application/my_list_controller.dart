@@ -6,6 +6,11 @@ import '../domain/my_list_item.dart';
 final myListControllerProvider =
     NotifierProvider<MyListController, MyListState>(MyListController.new);
 
+/// 片单页状态。
+///
+/// 收藏列表和播放列表共享页面骨架，但交互边界不同：收藏列表支持批量编辑/选择/删除，
+/// 播放列表支持单条滑出删除。`openPlayItemId` 只服务播放列表滑动状态，进入编辑、
+/// 切 tab、删除或加载失败时都要清掉，避免旧行的 slidable 状态残留到新列表。
 class MyListState {
   const MyListState({
     required this.selectedTab,
@@ -65,6 +70,10 @@ class MyListState {
   }
 }
 
+/// My list 状态控制器。
+///
+/// 控制器集中处理 tab、loading/error/empty、编辑选择和删除。UI 不直接改列表集合，
+/// 是为了后续接真实收藏/播放历史接口时能在这里统一处理乐观更新、失败回滚和重试。
 class MyListController extends Notifier<MyListState> {
   int _generation = 0;
 
@@ -73,6 +82,8 @@ class MyListController extends Notifier<MyListState> {
 
   Future<void> load() async {
     final generation = ++_generation;
+    // 重新加载会退出编辑并关闭已打开的播放列表滑动项。列表来源变了以后继续保留
+    // selection/open item 会让删除操作命中不存在或错误的条目。
     state = state.copyWith(
       isLoading: true,
       isCollectionEditing: false,
@@ -115,6 +126,7 @@ class MyListController extends Notifier<MyListState> {
       return;
     }
 
+    // tab 切换是数据域切换，不沿用收藏列表的选择态，也不沿用播放列表的 slidable。
     state = state.copyWith(
       selectedTab: tab,
       isCollectionEditing: false,
@@ -129,6 +141,8 @@ class MyListController extends Notifier<MyListState> {
       return;
     }
 
+    // 只有收藏列表允许批量编辑。播放列表用单行滑动删除，两套交互不能同时存在，
+    // 否则底部删除栏和 slidable 删除会对同一列表产生冲突。
     state = state.copyWith(
       isCollectionEditing: true,
       selectedIds: const {},
@@ -162,6 +176,8 @@ class MyListController extends Notifier<MyListState> {
     }
 
     final selectedIds = state.selectedIds;
+    // mock 阶段本地删除是乐观结果；真实接口接入后，这里应成为发起批量删除和
+    // 失败回滚的唯一入口，避免 UI 层各自过滤列表。
     state = state.copyWith(
       items: List<MyListItem>.unmodifiable(
         state.items.where((item) => !selectedIds.contains(item.id)),
@@ -189,6 +205,8 @@ class MyListController extends Notifier<MyListState> {
       return;
     }
 
+    // 只记录一个打开项，配合 SlidableAutoCloseBehavior 保证播放列表不会同时露出
+    // 多个删除动作。编辑态下不允许打开，避免批量选择和单行删除混用。
     state = state.copyWith(openPlayItemId: id);
   }
 

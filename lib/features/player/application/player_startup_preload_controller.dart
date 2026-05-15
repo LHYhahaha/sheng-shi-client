@@ -17,6 +17,11 @@ final playerStartupPreloadControllerProvider =
 
 enum PlayerStartupPreloadStatus { idle, pending, success, failed, cancelled }
 
+/// 首页启动预热的可观测状态。
+///
+/// 这个状态只说明“首屏候选的 HLS/source 是否提前热过”，不代表播放器已经创建
+/// media session。启动预热的结果可以被播放链路识别为 hit/miss，但不能接管播放，
+/// 否则 Home 就会在用户点击前持有播放器资源。
 class PlayerStartupPreloadState {
   const PlayerStartupPreloadState({
     required this.status,
@@ -56,6 +61,16 @@ class PlayerStartupPreloadState {
   }
 }
 
+/// 首页首屏启动预热控制器。
+///
+/// Home 只知道 drama 卡片，不知道最终可播放 episode 和授权状态，所以这里先拉取
+/// 单剧 feed，再挑第一个 playable item 做 HLS preload。Home 不能创建 media session：
+/// 创建播放器会抢音频焦点、引入后台释放责任，并让首页滚动与播放页生命周期耦合。
+///
+/// startup preload 与 playback preload 必须使用独立 repository/preloadManager。
+/// 两者的 pending/release 触发时机不同：Home 切分类或 dispose 会取消 startup，
+/// 播放页隐藏会取消 playback；共享会互相误杀，导致首屏预热中断或播放器页相邻预热
+/// 被首页生命周期影响。
 class PlayerStartupPreloadController
     extends Notifier<PlayerStartupPreloadState> {
   int _generation = 0;
@@ -96,6 +111,8 @@ class PlayerStartupPreloadController
       itemId: drama.id,
       details: 'dramaId=${drama.id}',
     );
+    // 每次只保留一个 startup pending。首页首屏候选变化时，旧请求继续跑只会浪费
+    // 带宽，并可能把过期 drama 记录成成功命中。
     final preloadManager = ref.read(playerStartupPreloadManagerProvider);
     await preloadManager.releasePending();
     if (!_isCurrent(generation)) {
@@ -109,6 +126,8 @@ class PlayerStartupPreloadController
       if (!_isCurrent(generation)) {
         return;
       }
+      // 不能预热 locked/unavailable/null source。即使 mock 数据能给出 URL，也要把
+      // 可播放边界留给授权和内容状态，避免后续接真实接口时出现越权预取。
       final item = _firstPlayableItem(items);
       if (item == null) {
         state = PlayerStartupPreloadState(
@@ -194,6 +213,8 @@ class PlayerStartupPreloadController
   Future<void> cancel({String reason = 'cancel', bool syncState = true}) async {
     final previous = state;
     final preloadManager = ref.read(playerStartupPreloadManagerProvider);
+    // cancel 同时失效 generation 和释放 pending。这里不能调用 playback preload 的
+    // release，因为 startup 和 playback 的资源作用域不同。
     _generation += 1;
     await preloadManager.releasePending();
     if (!ref.mounted) {

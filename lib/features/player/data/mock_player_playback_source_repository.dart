@@ -3,6 +3,11 @@ import '../domain/player_playback_source.dart';
 import '../domain/player_preload_state.dart';
 import 'hls_local_proxy_server.dart';
 
+/// MVP 阶段的播放源 repository。
+///
+/// 虽然当前返回 mock URL，但调用方仍必须把它当成真实边界：这里未来会接服务端鉴权、
+/// 签名 URL、过期时间和 preload 策略。UI 不能绕过 provider 直接拼 URL，否则
+/// locked/unavailable、proxy spike 和 timing trace 都会失去统一入口。
 class MockPlayerPlaybackSourceRepository
     implements PlayerPlaybackSourceRepository {
   MockPlayerPlaybackSourceRepository({
@@ -41,6 +46,8 @@ class MockPlayerPlaybackSourceRepository
       throw StateError('Mock playback source resolve failed.');
     }
 
+    // proxy resolver 只改变播放器实际打开的 playableSource，不改变 remoteUrl。
+    // remoteUrl 仍用于业务识别和后续签名/过期策略，避免把本地 spike URL 写回领域层。
     final playableSource = await proxyResolver?.resolvePlayableSource(
       remoteUrl,
     );

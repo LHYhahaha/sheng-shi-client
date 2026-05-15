@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'app_tap_target.dart';
 
+/// 圆形图标按钮的统一外观。
+///
+/// 点击热区交给 AppTapTarget 保证，视觉尺寸由 `size` 控制。不要在业务页复制圆形
+/// Container + GestureDetector，否则无障碍标签和最小热区会很快不一致。
 class AppRoundIconButton extends StatelessWidget {
   const AppRoundIconButton({
     required this.icon,

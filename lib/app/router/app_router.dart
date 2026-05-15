@@ -21,6 +21,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: RoutePaths.home,
     routes: [
+      // 底部四个主 tab 使用 indexedStack 保持页面状态。
+      //
+      // For You 播放器因此不会因为切到 Home/Profile 就被销毁；离开 tab 时的暂停
+      // 由 AppShell 统一触发，避免路由层和播放器层互相直接依赖。
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return AppShell(navigationShell: navigationShell);
@@ -74,6 +78,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             state.uri.queryParameters['userActionAtMs'] ?? '',
           );
 
+          // 单剧播放器是 shell 外 route，进入时隐藏/显示底部导航由 PlayerPage 的
+          // hideShellNavigation 和 dispose 处理。这里仅传递触发来源和点击时间，
+          // 用于 playback timing trace 关联“用户点击 -> 首帧”。
           return PlayerPage(
             dramaId: dramaId,
             episodeId: episodeId,

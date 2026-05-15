@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+/// 统一点击热区与语义标签的轻量包装。
+///
+/// 视觉图标可以小于 44px，但可点击区域默认不小于 44px，保证移动端易点和无障碍
+/// 扫描稳定。新图标按钮优先复用这里，不要在业务组件里各自手写 GestureDetector。
 class AppTapTarget extends StatelessWidget {
   const AppTapTarget({
     required this.child,

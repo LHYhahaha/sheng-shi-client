@@ -81,6 +81,10 @@ class PlayerPreloadConfig {
   int get effectiveHomeStartupPreloadCount =>
       homeStartupPreloadCount.clamp(0, 1).toInt();
 
+  /// 当前有效并发被强制收敛到 1。
+  ///
+  /// 配置字段保留为未来远程调参入口，但客户端现在不允许并发 HLS 预热扩散，
+  /// 因为多个 playlist/segment 同时抢带宽时，当前播放首帧和滑动接管更容易抖动。
   int get effectiveMaxConcurrentHlsPreloads =>
       maxConcurrentHlsPreloads.clamp(1, 1).toInt();
 
@@ -97,6 +101,10 @@ class PlayerPreloadConfig {
   int get effectivePreparedForwardSessionCount =>
       preparedForwardSessionCount.clamp(0, 1).toInt();
 
+  /// retained previous 也被强制 cap 到 1。
+  ///
+  /// 这个 cap 和 HLS preload 数量无关。previous/current/next 是交互窗口，不是缓存池；
+  /// 如果随着 HLS preload count 增加，会让历史播放器实例累积并放大内存/音频风险。
   int get effectiveRetainedBackwardSessionCount =>
       retainedBackwardSessionCount.clamp(0, 1).toInt();
 

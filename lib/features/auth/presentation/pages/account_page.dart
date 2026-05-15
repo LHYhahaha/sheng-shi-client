@@ -27,6 +27,8 @@ class _AccountPageState extends ConsumerState<AccountPage> {
     final state = ref.watch(authControllerProvider);
     final controller = ref.read(authControllerProvider.notifier);
     final user = state.user;
+    // Account 页把 load/logout/delete 共用一个 busy 态，避免用户在退出或注销过程中
+    // 继续触发另一个账号动作。错误文案则通过 failedAction 区分具体失败来源。
     final isBusy = state.isLoading;
     final errorLabel = _accountErrorLabel(context, state.failedAction);
 

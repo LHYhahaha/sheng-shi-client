@@ -17,6 +17,11 @@ import '../widgets/player_action_sheets.dart';
 import '../widgets/player_chrome.dart';
 import '../widgets/player_detail_sheet.dart';
 
+/// 播放器页面。
+///
+/// 页面负责手势、PageView、弹层和 shell chrome；真正的播放 source、preload、
+/// prepared session window 和错误分类都交给 PlayerPlaybackController。这样 UI 可以
+/// 随 feed 切换而重建，但播放器资源生命周期仍由同一个状态机保护。
 class PlayerPage extends ConsumerStatefulWidget {
   const PlayerPage({
     required this.dramaId,
@@ -123,6 +128,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // 单剧页是独立 route，离开即释放 session；For You 是 shell tab，离开页面实例时
+    // 只按可见性暂停，避免 tab provider 和 indexedStack 生命周期冲突。
     if (widget.feedMode == PlayerFeedMode.singleDrama) {
       unawaited(_playbackController.disposeSession(syncState: false));
     } else {
@@ -138,6 +145,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (state == AppLifecycleState.resumed) {
       return;
     }
+    // 进入后台/非活跃时统一走 visibility pause，释放相邻预热和 prepared window。
+    // 不直接 dispose，避免用户回到 app 时 For You tab provider 已被意外清空。
     unawaited(_playbackController.pauseForVisibility());
   }
 
@@ -250,6 +259,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           toIndex: nextIndex,
         );
       }
+      // feed currentItem 是播放链路入口。先 playItem，再按最新 feed/currentIndex 做
+      // 相邻 HLS preload 和 next prepare；locked/unavailable 的过滤留给 controller。
       unawaited(() async {
         final playbackNotifier = ref.read(playbackProvider.notifier);
         await playbackNotifier.playItem(next);

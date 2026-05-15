@@ -16,6 +16,11 @@ typedef PlayerPrepareTimingLogger =
       String? details,
     });
 
+/// 已经被播放器实例承载的相邻 item session。
+///
+/// `prepared` 表示向前预热的 next，`retained` 表示刚离开的 previous。两者都已经
+/// 消耗 media player 资源，所以窗口必须小而明确，只服务自然滑动路径，不能当作
+/// HLS 缓存层使用。
 class PreparedPlaybackSession {
   PreparedPlaybackSession({
     required this.itemId,
@@ -61,6 +66,12 @@ class PreparedPlaybackSession {
   }
 }
 
+/// 管理 previous/current/next 范围内的 media-session 预热窗口。
+///
+/// 这里和 HLS preload 是两层能力：HLS preload 只发 HTTP 请求预热 playlist/segment，
+/// prepare 会真的创建播放器、open source、等待首帧并处理音量。正因为成本高，
+/// prepared media session window 不能随 HLS preload count 扩大；扩大窗口会让多个
+/// player 同时持有解码器/音频焦点，后台释放和切页接管也会变得不可预测。
 class PlayerPlaybackPrepareManager {
   PlayerPlaybackPrepareManager({
     required PlayerPlaybackSession Function() sessionFactory,
@@ -88,6 +99,8 @@ class PlayerPlaybackPrepareManager {
     if (item.episode.isLocked ||
         item.episode.isUnavailable ||
         item.episode.videoSource == null) {
+      // 付费锁、下架或缺 source 的 item 不能 prepare。prepare 会创建真实播放器，
+      // 不能用“提前打开”绕过授权/可用性判断。
       return null;
     }
 
@@ -168,6 +181,8 @@ class PlayerPlaybackPrepareManager {
           'timeoutMs=${warmUpTimeout.inMilliseconds}',
         ]),
       );
+      // warm-up 必须静音播放到首帧或超时。media_kit 只有真正 open/play 后才会推进
+      // 解码和 width/position stream；直接静态缓存 URL 无法覆盖首帧黑屏问题。
       await session.setVolume(0);
       _log(
         'prepare open start',
@@ -235,6 +250,7 @@ class PlayerPlaybackPrepareManager {
   PreparedPlaybackSession? takeIfMatches(String itemId) {
     final before = _windowItemsText;
     _completeWarmUpCancel(itemId);
+    // take 会取消 warm-up pause，避免“被接管后又被后台 warm-up 任务 pause”。
     final session = _window.remove(itemId);
     _log(
       'prepare manager take',
@@ -251,6 +267,7 @@ class PlayerPlaybackPrepareManager {
   }
 
   Future<void> retainPaused(PreparedPlaybackSession session) async {
+    // retained previous 必须先 pause 再入窗，防止 current 与 previous 同时出声。
     await session.session.pause();
     await _put(session);
   }
@@ -301,6 +318,8 @@ class PlayerPlaybackPrepareManager {
   }
 
   Future<void> release() async {
+    // 整窗释放会 bump generation，使未完成的 prepare/open 结果失效。不要只清 map，
+    // 否则异步 warm-up 可能在释放后继续 pause/setVolume 已被接管的 session。
     _generation += 1;
     final before = _windowItemsText;
     for (final itemId in List<String>.from(_warmUpCancels.keys)) {
@@ -371,6 +390,8 @@ class PlayerPlaybackPrepareManager {
         itemId: itemId,
         source: prepared?.source.playableSource,
       );
+      // 首帧到达或超时后都要 pause 并恢复音量。保留打开好的 session 是为了接管快，
+      // 不是让 next 在后台继续播放。
       await session.pause();
       await session.setVolume(100);
       _log(
@@ -408,6 +429,7 @@ class PlayerPlaybackPrepareManager {
       await replaced.dispose();
     }
     _window[session.itemId] = session;
+    // LRU 风格淘汰最旧 session，确保窗口不会因为快速滑动积累成播放器池。
     while (_window.length > maxWindowSessions) {
       final oldestKey = _window.keys.first;
       await releaseItem(oldestKey, reason: 'window overflow');

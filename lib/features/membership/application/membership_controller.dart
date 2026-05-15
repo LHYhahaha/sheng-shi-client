@@ -10,6 +10,10 @@ final membershipControllerProvider =
 
 enum MembershipPurchaseStatus { idle, processing, success, cancelled }
 
+/// 会员页状态，包含权益展示、套餐选择和 mock 开通确认。
+///
+/// `isActive` 来自会员接口，不应由客户端 mock purchase success 直接推断。真实接入时，
+/// 开通成功必须以服务端权益刷新为准，否则会出现支付成功/失败与会员态不一致。
 class MembershipState {
   const MembershipState({
     required this.isLoading,
@@ -102,6 +106,10 @@ class MembershipState {
   }
 }
 
+/// 会员页控制器。
+///
+/// 控制器保持“加载会员权益”和“购买确认状态”分离。这样接支付后可以先完成订单流程，
+/// 再通过 membership repository 重新拉取权益，而不是在 UI 层临时拼会员态。
 class MembershipController extends Notifier<MembershipState> {
   int _generation = 0;
   int _purchaseGeneration = 0;
@@ -161,6 +169,7 @@ class MembershipController extends Notifier<MembershipState> {
       return;
     }
 
+    // 打开确认弹窗即刷新购买代次，防止旧弹窗的异步 processing 结果污染新套餐。
     _purchaseGeneration++;
     state = state.copyWith(
       confirmationPlanId: selectedPlan.id,
@@ -182,6 +191,8 @@ class MembershipController extends Notifier<MembershipState> {
       return;
     }
 
+    // mock success 只代表确认弹窗流程完成，不代表真实会员已生效。
+    // 接真实支付时这里应等待服务端订单确认或触发权益刷新，不能只信客户端状态。
     final purchaseGeneration = _purchaseGeneration;
     final planId = state.confirmationPlanId;
     state = state.copyWith(purchaseStatus: MembershipPurchaseStatus.processing);
@@ -200,6 +211,7 @@ class MembershipController extends Notifier<MembershipState> {
       return;
     }
 
+    // processing 中不允许取消本地状态，避免支付渠道仍在处理时 UI 先进入 cancelled。
     state = state.copyWith(purchaseStatus: MembershipPurchaseStatus.cancelled);
   }
 

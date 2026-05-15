@@ -39,6 +39,8 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   void dispose() {
+    // Home 离开时只取消 startup preload，不释放播放器页 playback preload。
+    // 两条预热线路作用域不同，共享释放会导致进入播放器后的相邻预热被首页 dispose 误杀。
     unawaited(_startupPreloadController.cancel(reason: 'home dispose'));
     _scrollController
       ..removeListener(_onScroll)
@@ -65,6 +67,8 @@ class _HomePageState extends ConsumerState<HomePage> {
       return;
     }
 
+    // 切分类会让首屏候选失效，必须取消 startup preload。Home 不创建 media session，
+    // 所以这里只处理 HLS/source 预热生命周期。
     unawaited(_startupPreloadController.cancel(reason: 'home category switch'));
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
@@ -90,6 +94,8 @@ class _HomePageState extends ConsumerState<HomePage> {
       if (!shouldPreload) {
         return;
       }
+      // 首屏数据稳定后触发启动预热。这里传 drama 而不是 episode，是因为 Home 卡片
+      // 只承载剧信息；最终 playable episode 由 startup controller 拉单剧 feed 决定。
       unawaited(
         _startupPreloadController.preloadFirstPlayableDrama(next.items.first),
       );

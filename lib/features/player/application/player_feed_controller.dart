@@ -9,6 +9,11 @@ final playerFeedControllerProvider =
       PlayerFeedController.new,
     );
 
+/// 播放页 feed 状态。
+///
+/// 同一个控制器支持单剧列表和 For You 流。它只管理 item 顺序和当前 index，
+/// 不解析播放源，也不判断付费可播放；这些边界由 playback/controller 和 UI paywall
+/// 处理，避免 feed 层提前触碰媒体资源。
 class PlayerFeedState {
   const PlayerFeedState({
     required this.config,
@@ -59,6 +64,10 @@ class PlayerFeedState {
   }
 }
 
+/// 播放页 feed 控制器。
+///
+/// `sessionKey` 让 For You tab 与单剧 route 拥有独立 feed 状态。不要复用全局 feed，
+/// 否则一个页面的滑动 index 会影响另一个播放器实例。
 class PlayerFeedController extends Notifier<PlayerFeedState> {
   PlayerFeedController(this.sessionKey);
 
@@ -155,6 +164,8 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
       return matchingIndex;
     }
 
+    // 如果选集不在当前 feed 中，用当前 item 替换 episode 而不是重建整个列表。
+    // 这保留页面上下文和 PageView 位置，后续播放源仍由 playback controller 重新解析。
     final updatedItems = [...state.items];
     updatedItems[state.currentIndex] = currentItem.copyWith(episode: episode);
     state = state.copyWith(

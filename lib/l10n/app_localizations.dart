@@ -1,6 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+/// 应用固定 UI 文案的轻量本地化表。
+///
+/// 这里覆盖的是客户端 chrome、按钮、错误态等固定语言包，不承载剧名、简介、剧集
+/// 等内容多语言。内容多语言应来自内容接口字段或服务端文案策略。
+///
+/// 当前不接远程 JSON，是为了 MVP 阶段保持启动稳定、离线可用和测试确定性。远程文案
+/// 后续接入时也应保留本地 fallback，避免配置拉取失败导致基础 UI 无文案。
 class AppLocalizations {
   const AppLocalizations(this.locale);
 

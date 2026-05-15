@@ -43,6 +43,8 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     ref.listen(
       myListControllerProvider.select((state) => state.isCollectionEditing),
       (previous, next) {
+        // 批量编辑时隐藏 shell bottom navigation，给底部删除栏让位。
+        // dispose 时会强制 show，避免从编辑态离开页面后全局导航永久隐藏。
         if (next) {
           _shellChrome.hide();
         } else {
@@ -419,6 +421,8 @@ class _MyListRowSwipeAction extends StatelessWidget {
       return child;
     }
 
+    // 播放列表的删除是单行 slidable；收藏编辑态关闭该能力，避免同一行同时响应
+    // 选择和滑动删除。
     return _SlidableOpenTracker(
       onOpened: onOpened,
       onClosed: onClosed,
@@ -508,6 +512,8 @@ class _SlidableOpenTrackerState extends State<_SlidableOpenTracker>
     }
 
     _lastPaneType = paneType;
+    // flutter_slidable 的打开状态在 controller 内部，业务层只需要知道“哪一行打开”。
+    // 这里把状态同步回 MyListController，便于点击其他区域或删除后关闭旧行。
     if (paneType == ActionPaneType.none) {
       widget.onClosed();
     } else {

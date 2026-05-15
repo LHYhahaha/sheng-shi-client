@@ -105,6 +105,11 @@ class DartIoHlsPlaylistHttpClient implements HlsPlaylistHttpClient {
   }
 }
 
+/// 轻量 HLS HTTP 预热器，只预取 playlist 和有限首段 segment。
+///
+/// 它不创建 media session，也不保证后续播放一定走本地缓存；目标只是让 CDN/DNS/TLS
+/// 和首段数据提前热起来。不要把它扩展成通用下载器，否则会和当前播放抢带宽，
+/// 还会引入离线缓存、过期和版权策略问题。
 class HlsPlaylistPreloader {
   HlsPlaylistPreloader({
     HlsPlaylistHttpClient? client,
@@ -163,6 +168,8 @@ class HlsPlaylistPreloader {
     final preheatedSegments = <Uri>[];
     var segmentBytesPreheated = 0;
 
+    // 只预热少量首段并受字节预算限制。短剧滑动场景下，用户可能马上离开当前 item，
+    // 过度预取会浪费流量并影响真正播放中的 source。
     for (var index = 0; index < segmentUris.length; index += 1) {
       if (segmentBytesPreheated >= maxPreheatBytes) {
         diagnostics.add('segment preheat max bytes reached');
@@ -204,6 +211,7 @@ class HlsPlaylistPreloader {
   }
 
   void releasePending() {
+    // generation 用来让已发出的异步请求在返回后自我失效；HTTP abort 只是尽力而为。
     _generation += 1;
     _client.releasePending();
   }

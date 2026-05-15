@@ -12,6 +12,11 @@ import '../widgets/profile_header.dart';
 import '../widgets/profile_membership_card.dart';
 import '../widgets/profile_menu_row.dart';
 
+/// 我的页。
+///
+/// 页面展示态由 Profile mock 数据和 AuthState 合成：会员/金币等资料仍来自
+/// ProfileController，登录身份、昵称和头像以 AuthState 为准。这样 logout/delete
+/// 后不需要手动同步 ProfileController，也避免多个页面各自维护登录布尔值。
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
 
@@ -21,6 +26,8 @@ class ProfilePage extends ConsumerWidget {
     final profileState = ref.watch(profileControllerProvider);
     final authState = ref.watch(authControllerProvider);
     final authUser = authState.user;
+    // 这里只做展示层合成，不写回 profileState。Auth 是登录态源头；Profile 是资料
+    // mock 源头。把合成结果回写会让退出登录后的旧昵称/头像残留在资料状态里。
     final state = profileState.copyWith(
       isLoggedIn: authState.isLoggedIn,
       userId: authUser?.id ?? profileState.userId,
