@@ -23,6 +23,59 @@ import 'package:drama_client/shared/media/media_resource.dart';
 void main() {
   const mapper = MyListMapper();
 
+  test('favorite dto parses full contract fields', () {
+    final dto = FavoriteItemDto.fromJson(const {
+      'favoriteId': 'favorite-1',
+      'dramaId': 'drama-1',
+      'title': 'Remote Favorite',
+      'introduction': 'Intro from server',
+      'coverUrl': 'https://cdn.example.com/fav.jpg',
+      'coverAspectRatio': 0.72,
+      'totalEpisodes': 52,
+      'latestEpisodeNumber': 6,
+      'tags': ['Rebirth'],
+      'badges': ['Hot'],
+      'createdAt': '2026-05-15T01:00:00Z',
+    });
+
+    expect(dto.favoriteId, 'favorite-1');
+    expect(dto.dramaId, 'drama-1');
+    expect(dto.description, 'Intro from server');
+    expect(dto.coverAspectRatio, 0.72);
+    expect(dto.totalEpisodes, 52);
+    expect(dto.latestEpisodeNumber, 6);
+    expect(dto.tags, ['Rebirth']);
+    expect(dto.badges, ['Hot']);
+    expect(dto.createdAt, DateTime.parse('2026-05-15T01:00:00Z'));
+  });
+
+  test('play history dto parses full progress contract fields', () {
+    final dto = PlayHistoryItemDto.fromJson(const {
+      'historyId': 'history-1',
+      'dramaId': 'drama-1',
+      'episodeId': 'ep-2',
+      'title': 'Continue Watching',
+      'description': 'History intro',
+      'coverUrl': 'https://cdn.example.com/history.jpg',
+      'coverAspectRatio': 0.72,
+      'episodeNumber': 2,
+      'totalEpisodes': 52,
+      'progressMs': 12000,
+      'durationMs': 60000,
+      'progressPercent': 0.2,
+      'updatedAt': '2026-05-15T02:00:00Z',
+    });
+
+    expect(dto.historyId, 'history-1');
+    expect(dto.dramaId, 'drama-1');
+    expect(dto.episodeId, 'ep-2');
+    expect(dto.description, 'History intro');
+    expect(dto.progressMs, 12000);
+    expect(dto.durationMs, 60000);
+    expect(dto.progressPercent, 0.2);
+    expect(dto.updatedAt, DateTime.parse('2026-05-15T02:00:00Z'));
+  });
+
   test('favorite dto maps to MyListItem with network cover resource', () {
     final item = mapper.mapFavorite(_favoriteDto);
 
@@ -35,6 +88,26 @@ void main() {
     expect(item.coverResource.type, MediaResourceType.network);
     expect(item.coverResource.value, 'https://cdn.example.com/fav.jpg');
     expect(item.coverResource.aspectRatio, 0.72);
+  });
+
+  test('favorite stable id prefers dramaId for delete semantics', () {
+    final item = mapper.mapFavorite(
+      const FavoriteItemDto(
+        favoriteId: 'favorite-server-row-id',
+        dramaId: 'drama-delete-id',
+        title: 'Favorite',
+        description: null,
+        coverUrl: null,
+        coverAspectRatio: null,
+        totalEpisodes: 12,
+        latestEpisodeNumber: null,
+        tags: [],
+        badges: [],
+        createdAt: null,
+      ),
+    );
+
+    expect(item.id, 'drama-delete-id');
   });
 
   test('play history dto maps stable id and progress contract', () {
@@ -58,6 +131,30 @@ void main() {
     expect(item.id, 'history:drama-1:ep-2');
     expect(item.currentEpisode, 2);
     expect(item.coverResource.isNetwork, isTrue);
+  });
+
+  test('play history stable id prefers historyId for delete semantics', () {
+    final withHistoryId = mapper.mapPlayHistory(_historyDto);
+    final withoutHistoryId = mapper.mapPlayHistory(
+      const PlayHistoryItemDto(
+        historyId: null,
+        dramaId: 'drama-1',
+        episodeId: 'ep-2',
+        title: 'History',
+        description: null,
+        coverUrl: null,
+        coverAspectRatio: null,
+        episodeNumber: 2,
+        totalEpisodes: 52,
+        progressMs: null,
+        durationMs: null,
+        progressPercent: null,
+        updatedAt: null,
+      ),
+    );
+
+    expect(withHistoryId.id, 'history-1');
+    expect(withoutHistoryId.id, 'history:drama-1:ep-2');
   });
 
   test('missing cover url falls back to asset resource', () {
@@ -165,6 +262,45 @@ void main() {
 
     expect(adapter.lastOptions!.headers['Authorization'], 'Bearer token-1');
   });
+
+  test(
+    'remote datasource uses required auth and correct mutation contract',
+    () async {
+      final adapter = _FakeHttpClientAdapter(
+        responseData: {
+          'code': 0,
+          'message': 'success',
+          'data': {'success': true, 'operationId': 'op-1'},
+        },
+      );
+      final dataSource = MyListRemoteDataSource(
+        apiClient: ApiClient(
+          dio: Dio()..httpClientAdapter = adapter,
+          requestContext: const ApiRequestContext(
+            deviceId: 'device-1',
+            lang: 'en',
+            platform: 'android',
+            appVersion: '1.0.0',
+            accessToken: 'token-1',
+          ),
+        ),
+      );
+
+      await dataSource.deleteFavorite(dramaId: 'drama-1');
+      await dataSource.deleteFavorites(dramaIds: ['drama-1', 'drama-2']);
+      await dataSource.deletePlayHistory(historyId: 'history-1');
+
+      expect(adapter.requests[0].path, '/me/favorites/drama-1');
+      expect(adapter.requests[0].headers['Authorization'], 'Bearer token-1');
+      expect(adapter.requests[1].path, '/me/favorites:batch');
+      expect(adapter.requests[1].data, {
+        'dramaIds': ['drama-1', 'drama-2'],
+      });
+      expect(adapter.requests[1].headers['Authorization'], 'Bearer token-1');
+      expect(adapter.requests[2].path, '/me/play-history/history-1');
+      expect(adapter.requests[2].headers['Authorization'], 'Bearer token-1');
+    },
+  );
 
   test('remote datasource keeps business code on envelope failure', () {
     final adapter = _FakeHttpClientAdapter(
@@ -297,6 +433,7 @@ class _FakeHttpClientAdapter implements HttpClientAdapter {
   _FakeHttpClientAdapter({required this.responseData});
 
   final Object? responseData;
+  final requests = <RequestOptions>[];
   RequestOptions? lastOptions;
 
   @override
@@ -306,6 +443,7 @@ class _FakeHttpClientAdapter implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     lastOptions = options;
+    requests.add(options);
     return ResponseBody.fromString(
       jsonEncode(responseData),
       200,

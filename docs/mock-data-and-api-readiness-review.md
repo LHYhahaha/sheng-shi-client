@@ -470,3 +470,20 @@ flutter test
 - MyListController 仍保持当前本地乐观删除交互；远程 mutation 失败回滚、404 幂等业务码处理后续再接。
 - 播放历史和 `PlaybackProgressRepository` 暂不合并，本轮只保留字段契约。
 - My list 网络图 UI 渲染、图片缓存、分页加载更多和本地缓存仍 defer。
+
+## API Skeleton Phase C Review / Mutation Tightening
+
+已完成 My list / Play history 的 contract review 和 mutation 语义收口：
+
+- Favorite DTO 已覆盖 `favoriteId`、`dramaId`、标题、简介、封面、画幅、总集数、最新集数、标签、角标、创建时间。
+- Play history DTO 已覆盖 `historyId`、`dramaId`、`episodeId`、标题、简介、封面、画幅、当前集、总集数、`progressMs`、`durationMs`、`progressPercent`、更新时间。
+- Favorite item 的 domain `id` 优先使用 `dramaId`，因为当前删除收藏接口是 `DELETE /me/favorites/{dramaId}`；`favoriteId` 只保留为服务端收藏记录 id。
+- Play history item 的 domain `id` 优先使用 `historyId`，没有 `historyId` 时才用 `history:{dramaId}:{episodeId}` 做稳定展示 id；删除播放历史必须使用 `historyId`。
+- `MyListRemoteDataSource` 的收藏/播放历史查询和删除 mutation 均使用 `ApiAuthPolicy.required`。
+- 批量删除收藏请求体使用 `dramaIds`，和当前接口草案保持一致；如果后续服务端改为 favoriteIds，需要只调整 data/mapper/repository 边界，不应让 UI 感知。
+
+真实 API 接入时建议：
+
+- MyListController 当前仍是本地乐观删除。接真实 mutation 后，应在 controller 内统一调用 repository，并处理失败回滚。
+- 删除失败、重复删除、已删除/404 可按业务码做幂等成功处理，但本阶段只透传 `ApiException.businessCode`。
+- 播放历史删除和播放进度同步不要混在一起；`PlaybackProgressRepository` 与 Play history 的合并仍留到真实接口阶段。
