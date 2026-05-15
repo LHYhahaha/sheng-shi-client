@@ -15,6 +15,14 @@ class StorePackage {
     required this.priceLabel,
     this.baseCoins = 0,
     this.bonusCoins = 0,
+    this.priceMicros,
+    this.currencyCode,
+    this.originalPriceMicros,
+    this.platformProductId,
+    this.promotionId,
+    this.promotionExpiresAt,
+    this.sortOrder,
+    this.enabled = true,
     this.bonusLabel,
     this.badgeLabel,
     this.originalPriceLabel,
@@ -50,6 +58,34 @@ class StorePackage {
   ///
   /// 只用于 mock 权益发放和展示校验。真实权益发放必须以后端验单/订单结果为准。
   final int bonusCoins;
+
+  /// 原始价格微单位。
+  ///
+  /// 只做真实 API contract 预留；当前 UI 仍使用 priceLabel 展示。
+  final int? priceMicros;
+
+  /// 货币代码，例如 USD。
+  final String? currencyCode;
+
+  /// 原价微单位，只用于促销展示和订单校验，不参与客户端计费。
+  final int? originalPriceMicros;
+
+  /// Google/Apple 商品 id。
+  ///
+  /// 真实 IAP 下单使用平台商品 id，不要用展示标题反查。
+  final String? platformProductId;
+
+  /// 促销 id。
+  final String? promotionId;
+
+  /// 促销结束时间。
+  final DateTime? promotionExpiresAt;
+
+  /// 服务端排序值。
+  final int? sortOrder;
+
+  /// 商品是否可售。
+  final bool enabled;
 
   /// 赠送或优惠展示文案。
   final String? bonusLabel;

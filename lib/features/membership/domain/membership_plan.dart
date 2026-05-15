@@ -10,6 +10,14 @@ class MembershipPlan {
     required this.title,
     required this.priceLabel,
     required this.dailyPriceLabel,
+    this.period,
+    this.platformProductId,
+    this.priceMicros,
+    this.currencyCode,
+    this.originalPriceMicros,
+    this.promotionId,
+    this.promotionExpiresAt,
+    this.enabled = true,
     this.originalPriceLabel,
     this.badgeLabel,
     this.description,
@@ -30,6 +38,30 @@ class MembershipPlan {
   ///
   /// 只用于营销展示，不参与客户端金额计算。
   final String dailyPriceLabel;
+
+  /// 订阅周期，如 weekly/monthly/yearly。
+  final String? period;
+
+  /// Google/Apple 平台商品 id。
+  final String? platformProductId;
+
+  /// 原始价格微单位。
+  final int? priceMicros;
+
+  /// 货币代码。
+  final String? currencyCode;
+
+  /// 原价微单位。
+  final int? originalPriceMicros;
+
+  /// 促销 id。
+  final String? promotionId;
+
+  /// 促销结束时间。
+  final DateTime? promotionExpiresAt;
+
+  /// 商品是否可售。
+  final bool enabled;
 
   /// 原价展示文案。
   final String? originalPriceLabel;

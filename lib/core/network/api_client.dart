@@ -122,6 +122,27 @@ class ApiClient {
     );
   }
 
+  Future<T> patch<T>(
+    String path, {
+    Object? data,
+    Map<String, Object?>? queryParameters,
+    CancelToken? cancelToken,
+    Options? options,
+    ApiAuthPolicy authPolicy = ApiAuthPolicy.none,
+    required T Function(Object? data) decoder,
+  }) {
+    return _request(
+      () => _dio.patch<Object?>(
+        path,
+        data: data,
+        queryParameters: queryParameters,
+        cancelToken: cancelToken,
+        options: _optionsWithAuthPolicy(options, authPolicy),
+      ),
+      decoder: decoder,
+    );
+  }
+
   Future<T> delete<T>(
     String path, {
     Object? data,

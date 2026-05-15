@@ -1,3 +1,5 @@
+import '../../../shared/media/media_resource.dart';
+
 /// 钱包记录类型。
 ///
 /// 三类记录有不同对账口径和 UI，不要混成一个列表再靠文案区分。
@@ -21,6 +23,7 @@ class WalletRecord {
     required this.trailingLabel,
     this.showCoinIcon = false,
     this.posterAssetPath,
+    this.posterResource,
     this.subtitle,
     this.detailLabel,
     this.trailingSubtitle,
@@ -53,6 +56,12 @@ class WalletRecord {
 
   /// 消费记录的剧封面。
   final String? posterAssetPath;
+
+  /// 消费记录封面的统一资源身份。
+  ///
+  /// remote mapper 会把 coverUrl 映射为 network resource。当前 Wallet UI 仍使用
+  /// posterAssetPath，后续做网络图时应优先读此字段，避免把 URL 伪装成 asset。
+  final MediaResource? posterResource;
 
   /// 副标题。
   final String? subtitle;
@@ -87,6 +96,7 @@ class WalletRecord {
       trailingLabel: trailingLabel,
       showCoinIcon: showCoinIcon,
       posterAssetPath: posterAssetPath,
+      posterResource: posterResource,
       subtitle: subtitle,
       detailLabel: detailLabel,
       trailingSubtitle: trailingSubtitle,

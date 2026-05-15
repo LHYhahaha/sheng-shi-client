@@ -487,3 +487,44 @@ flutter test
 - MyListController 当前仍是本地乐观删除。接真实 mutation 后，应在 controller 内统一调用 repository，并处理失败回滚。
 - 删除失败、重复删除、已删除/404 可按业务码做幂等成功处理，但本阶段只透传 `ApiException.businessCode`。
 - 播放历史删除和播放进度同步不要混在一起；`PlaybackProgressRepository` 与 Play history 的合并仍留到真实接口阶段。
+
+## API Skeleton Phase D 状态
+
+已完成 Wallet / Store / Membership / Entitlement 商业链路的远程骨架，默认运行链路仍保持 mock：
+
+- Wallet：
+  - 新增钱包余额、交易流水、消费记录、奖励金币、分页和设置 DTO。
+  - 新增 `WalletRemoteDataSource`，预留 `GET /wallet`、`GET /wallet/transactions`、`GET /wallet/consumption-records`、`GET /wallet/reward-coins`、`POST /wallet/reward-coins/{id}/claim`、`PATCH /entitlements/settings/auto-unlock`。
+  - 新增 `RemoteWalletRepository`，实现当前 `WalletRepository.fetchWallet()`。
+  - 消费记录 `coverUrl` 映射为 `MediaResource.network`，当前 UI 仍保留 asset fallback。
+- Store：
+  - 新增充值商品、聚合数据、创建订单请求和订单 DTO。
+  - DTO 保留 `platformProductId`、`priceMicros`、`currencyCode`、促销和原价字段，UI 继续使用 `localizedPrice` 展示。
+  - 新增 `StoreRemoteDataSource`，预留 `GET /store/recharge-products` 和 `POST /orders`；商品列表本阶段按可公开查看处理，创建订单使用 `ApiAuthPolicy.required`。
+  - 新增 `RemoteStoreRepository`，实现当前 `StoreRepository.fetchRechargeData()`。
+- Membership：
+  - 新增会员商品、会员状态、会员权益和聚合数据 DTO。
+  - 新增 `MembershipRemoteDataSource`，预留 `GET /membership/products` 和 `GET /membership/status`；商品列表按可公开查看处理，状态使用 `ApiAuthPolicy.required`。
+  - 新增 `RemoteMembershipRepository`，实现当前 `MembershipRepository.fetchMembership()`。
+- Entitlement：
+  - 新增权益状态、访问决策、解锁请求和解锁响应 DTO。
+  - 新增 `EntitlementRemoteDataSource`，预留 `GET /entitlements`、`POST /entitlements/unlock-episode`、`PATCH /entitlements/settings/auto-unlock`，全部使用 `ApiAuthPolicy.required`。
+  - 新增 `RemoteEntitlementRepository`，实现当前 `EntitlementRepository`。远程实现中的 `grantMockCoins/grantMockMembership` 不做本地发放，只刷新服务端权益快照；真实支付成功仍必须经过订单/验单/权益刷新。
+- Provider：
+  - 增加 `USE_REMOTE_WALLET_API`、`USE_REMOTE_STORE_API`、`USE_REMOTE_MEMBERSHIP_API`、`USE_REMOTE_ENTITLEMENT_API` 开关。
+  - 默认全部为 false，当前 UI、mock purchase、Player unlock flow 不受影响。
+
+已补测试：
+
+- DTO fromJson、mapper、provider 默认 mock / remote override。
+- Wallet / Store order / Membership status / Entitlement 接口的 `ApiAuthPolicy`。
+- `code != 0` 时保留 `ApiException.businessCode`。
+
+仍然 defer：
+
+- 真实 baseUrl、真实登录 token、401 refresh 队列。
+- Google / Apple IAP SDK、订单状态机、验单和权益发放。
+- Store / Membership 商品接口是否必须登录的最终产品策略。
+- Wallet 记录分页加载、奖励领取 UI 状态机和失败回滚。
+- Profile 会员卡/金币卡从 Auth/Profile/Entitlement/Wallet 聚合派生。
+- Entitlement 真实 access 接口、source refresh、服务端幂等业务码细分。

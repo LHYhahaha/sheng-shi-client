@@ -36,6 +36,11 @@ class UserEntitlementState {
     required this.coinBalance,
     required this.autoUnlockEnabled,
     required this.unlockedEpisodeIds,
+    this.bonusBalance = 0,
+    this.membershipExpiresAt,
+    this.pendingOperationId,
+    this.serverTime,
+    this.refreshReason,
     this.pendingUnlock,
     this.inFlightUnlockEpisodeId,
     this.lastUnlockError,
@@ -45,8 +50,13 @@ class UserEntitlementState {
     : isGuest = true,
       isMember = false,
       coinBalance = 0,
+      bonusBalance = 0,
       autoUnlockEnabled = false,
       unlockedEpisodeIds = const <String>{},
+      membershipExpiresAt = null,
+      pendingOperationId = null,
+      serverTime = null,
+      refreshReason = null,
       pendingUnlock = null,
       inFlightUnlockEpisodeId = null,
       lastUnlockError = null;
@@ -66,6 +76,23 @@ class UserEntitlementState {
   ///
   /// 真实余额来自钱包/权益服务；本地扣减只用于 mock 和单测验证幂等逻辑。
   final int coinBalance;
+
+  /// 赠币余额。
+  ///
+  /// 当前 mock 主要使用 coinBalance；真实钱包/权益接口会区分可消费金币和赠币。
+  final int bonusBalance;
+
+  /// 会员过期时间。
+  final DateTime? membershipExpiresAt;
+
+  /// 服务端正在处理的权益操作 id。
+  final String? pendingOperationId;
+
+  /// 服务端时间，用于促销/权益过期倒计时校准。
+  final DateTime? serverTime;
+
+  /// 权益刷新原因。
+  final String? refreshReason;
 
   /// 是否自动解锁金币剧集。
   ///
@@ -98,6 +125,11 @@ class UserEntitlementState {
     bool? isGuest,
     bool? isMember,
     int? coinBalance,
+    int? bonusBalance,
+    DateTime? membershipExpiresAt,
+    String? pendingOperationId,
+    DateTime? serverTime,
+    String? refreshReason,
     bool? autoUnlockEnabled,
     Set<String>? unlockedEpisodeIds,
     PendingEpisodeUnlock? pendingUnlock,
@@ -111,6 +143,11 @@ class UserEntitlementState {
       isGuest: isGuest ?? this.isGuest,
       isMember: isMember ?? this.isMember,
       coinBalance: coinBalance ?? this.coinBalance,
+      bonusBalance: bonusBalance ?? this.bonusBalance,
+      membershipExpiresAt: membershipExpiresAt ?? this.membershipExpiresAt,
+      pendingOperationId: pendingOperationId ?? this.pendingOperationId,
+      serverTime: serverTime ?? this.serverTime,
+      refreshReason: refreshReason ?? this.refreshReason,
       autoUnlockEnabled: autoUnlockEnabled ?? this.autoUnlockEnabled,
       unlockedEpisodeIds: unlockedEpisodeIds ?? this.unlockedEpisodeIds,
       pendingUnlock: clearPendingUnlock
