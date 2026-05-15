@@ -850,6 +850,14 @@ Phase F status:
 - `SessionCleanupCoordinator` establishes the cleanup entry; feature cache and Player hooks remain deferred.
 - All `USE_REMOTE_XXX_API` switches remain false by default.
 
+Phase F review:
+
+- Added boundary tests so token storage, refresh coordination, and session cleanup do not leak into UI,
+  pages, app shell, or feature controllers.
+- Confirmed refresh failures clear the in-flight marker, so later refresh attempts are not blocked.
+- Confirmed cleanup remains a skeleton entry point and is not wired into current mock Auth / Account /
+  Player flows yet.
+
 Phase G: Remote localization and subtitles
 
 - Add fixed bundle version/download/cache.

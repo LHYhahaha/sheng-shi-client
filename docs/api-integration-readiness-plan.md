@@ -22,6 +22,12 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
   - 新增 in-memory `AuthTokenStore` skeleton，后续可替换 secure storage。
   - 新增 `AuthRefreshCoordinator` skeleton，固定 refresh in-flight 去重边界。
   - 新增 `SessionCleanupCoordinator` skeleton，作为 logout/delete/refresh failed 后的统一清理入口。
+- Phase F Review / Integration Readiness Tightening：
+  - 补充架构测试，确保 token store / refresh coordinator / cleanup coordinator 不被
+    UI、页面或 feature controller 直接使用。
+  - 补充 refresh failure 测试，确认失败后 in-flight 状态会释放，后续请求可重新触发 refresh。
+  - 确认所有 `USE_REMOTE_XXX_API` 开关默认仍为 false。
+  - 确认 Phase F 仍只提供基础设施骨架，不自动调用真实 refresh API，不打开 remote 默认路径。
 
 下一步进入真实 API 联调前的分域验证，仍保持 remote 默认关闭。
 
@@ -106,8 +112,10 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
 - auth required 请求可从 token source 取 token。已测。
 - token 缺失时行为和现有设计一致，不导致 mock 业务崩溃。已测。
 - 401 refresh skeleton 已有并发去重测试。
+- refresh failure 后会释放 in-flight 状态，不会把后续 refresh 永久挡住。已测。
 - session cleanup skeleton 已覆盖 token 清理和 hook 调用。
 - 所有 remote 开关仍默认 false。已测。
+- token / refresh / cleanup runtime 边界未泄漏到 UI 或 feature controller。已测。
 
 ## 明确不做
 

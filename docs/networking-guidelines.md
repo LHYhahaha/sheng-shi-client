@@ -204,3 +204,12 @@ feature repository 自己保存 access token；否则 401 刷新、logout 清理
 logout / delete account 成功后，还需要统一清理 secure token、各 feature cache 和播放器
 session/window。Phase F 已准备 cleanup coordinator，但尚未把 AuthController、feature caches
 和 Player session/window 挂到真实 cleanup hook，避免在 mock 阶段误伤已经验收的页面状态。
+
+Phase F Review 额外确认：
+
+- token store / refresh coordinator / cleanup coordinator 不应被 presentation、feature
+  controller 或 app shell 直接 import；这些运行时边界只服务网络/session 基础设施。
+- refresh coordinator 失败后必须释放 in-flight 状态，避免一次失败把后续所有 401 refresh
+  永久挡住。
+- 本阶段仍不在 `ApiClient` 中自动执行 refresh/retry。真实 refresh API、secure storage、
+  logout cleanup hook 都接好后，再把 401 自动恢复放进网络层。

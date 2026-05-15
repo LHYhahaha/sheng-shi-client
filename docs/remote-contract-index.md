@@ -101,6 +101,15 @@ Phase F 已补真实 API 联调前的 runtime context 骨架：
 仍 defer：真实安装 ID 持久化、package info 插件、secure storage、401 自动 refresh/retry、
 logout/delete 后清 feature caches 和播放器 session/window。
 
+Phase F Review 已收口：
+
+- 架构测试覆盖 token store / refresh coordinator / cleanup coordinator 不进入
+  presentation、feature application controller 或 app shell。
+- refresh coordinator 覆盖成功去重和失败释放 in-flight 两种路径。
+- session cleanup 覆盖 token clear 和 fake hook 调用，不接当前 AuthPage / AccountPage
+  行为，避免在 mock 阶段误清已验收状态。
+- remote switch default 测试覆盖所有 scoped `USE_REMOTE_XXX_API`，默认仍为 mock。
+
 ## 分层边界检查结果
 
 - 当前没有发现 DTO import 到 presentation/application。
@@ -108,6 +117,8 @@ logout/delete 后清 feature caches 和播放器 session/window。
 - 当前 remote repository 输出 domain model，不直接返回 DTO。
 - 已新增全局架构测试 `test/architecture/remote_contract_boundary_test.dart`，防止 remote
   contract 泄漏到 UI/controller 层。
+- 已新增全局架构测试 `test/architecture/auth_runtime_boundary_test.dart`，防止 token /
+  refresh / cleanup runtime 边界被 UI/controller 直接使用。
 - 远程图片 URL 已通过 `MediaResource.network` 表达；Home/Drama、My list、Profile 等
   mapper 不应再把 URL 写成 asset path。
 

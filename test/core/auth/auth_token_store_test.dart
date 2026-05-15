@@ -49,6 +49,25 @@ void main() {
     expect(coordinator.hasInFlightRefresh, isFalse);
   });
 
+  test('refresh coordinator clears in-flight state after failure', () async {
+    final coordinator = AuthRefreshCoordinator();
+    var calls = 0;
+
+    Future<AuthTokenSnapshot?> refresh() async {
+      calls += 1;
+      throw StateError('refresh failed');
+    }
+
+    await expectLater(coordinator.refresh(refresh), throwsStateError);
+
+    expect(calls, 1);
+    expect(coordinator.hasInFlightRefresh, isFalse);
+
+    await expectLater(coordinator.refresh(refresh), throwsStateError);
+
+    expect(calls, 2);
+  });
+
   test('session cleanup clears token and invokes registered hooks', () async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
