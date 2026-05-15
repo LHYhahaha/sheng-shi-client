@@ -328,3 +328,20 @@ E1-E3 后，Player、Store、Membership、Wallet 已开始共享 entitlement 状
 4. 同步定义 `MediaImage` 或等价资源模型，先解决 asset/url 归一化问题。
 
 这样能最小风险验证“mock -> remote”的形状，而不会影响当前已验收 UI 和播放器链路。
+
+## API Skeleton Phase A 状态
+
+已完成 Home / Drama 第一条 mock -> remote 迁移骨架：
+
+- 新增 Home/Drama DTO：category、drama item、feed page。
+- 新增 DTO -> domain mapper：远程 category/feed 可转换为当前 `DramaCategory`、`Drama`、`DramaFeedPage`。
+- 新增 `DramaRemoteDataSource`：预留 `GET /home/categories` 和 `GET /home/feed`。
+- 新增 `RemoteDramaRepository`：实现现有 `DramaRepository`，上层仍只感知 domain model。
+- `dramaRepositoryProvider` 增加 `USE_REMOTE_API` 编译期开关，但默认仍返回 `MockDramaRepository`，不影响当前 Home UI。
+- 已补 mapper/repository/provider 默认行为测试。
+
+仍然 defer：
+
+- `MediaImage/MediaResource` 统一资源模型。当前 mapper 临时把 remote `coverUrl` 映射到既有 `coverAssetPath` 字段。
+- 真实 baseUrl、鉴权 header、token refresh、locale header。
+- 全量 DTO 体系和其他 feature 的 remote implementation。
