@@ -574,6 +574,58 @@ Rules:
 - Persistent local entitlement cache.
 - Complex bonus-versus-coin spend ordering beyond recording the field.
 
+## Implementation Status
+
+### E1: Domain + Mock State + Decision Tests
+
+Done.
+
+- Added `lib/features/entitlement`.
+- Added entitlement domain models:
+  - `EpisodeUnlockType`
+  - `EpisodeAccessDecision`
+  - `UserEntitlementState`
+  - `EntitlementFeatureConfig`
+  - `EntitlementRepository`
+- Added `MockEntitlementRepository` with guest/member/coin balance/auto unlock/unlocked/idempotency fixtures.
+- Added `EntitlementController`.
+- Covered the free, membership, coin, unavailable, auto unlock, insufficient balance, idempotent deduction, failure, and feature-switch matrix.
+
+### E2: Player Decision Flow Integration
+
+Done.
+
+- `PlayerEpisode` now carries entitlement metadata:
+  - `unlockType`
+  - `requiredCoins`
+  - `isUnavailable` still represents unavailable content.
+- Mock player content now maps:
+  - EP.01-EP.03: free
+  - EP.04+: coin unlock with 30/50/80/default pricing
+  - EP.07: membership fixture
+  - EP.09: unavailable fixture
+- `PlayerPage` current-item flow now calls `EntitlementController.evaluateAccess(...)` before playback.
+- Decision handling:
+  - `allowPlay`: passes a temporary playable copy to `PlayerPlaybackController.playItem`.
+  - `autoUnlockAndPlay`: calls `unlockWithCoins`, then plays on success.
+  - `goMembership`: shows member paywall and routes to Membership on CTA.
+  - `showCoinUnlockDialog`: shows a lightweight coin confirmation sheet.
+  - `showRechargeDialog`: opens `PlayerRechargeUnlockSheet`.
+  - `waitUnlock`: keeps the target episode visible without opening media.
+- `PlayerPlaybackController` remains unaware of membership/coin logic.
+- Locked/unavailable/null-source protection is still preserved before source open/preload/prepare.
+- Recharge mock success currently grants mock coins or membership through `EntitlementController`, then re-evaluates the pending target.
+
+### E3 Defer: Shared Commerce/Wallet Entitlement State
+
+Still deferred.
+
+- Store mock purchase success should grant mock coins through shared entitlement state.
+- Membership mock purchase success should grant mock membership through shared entitlement state.
+- Wallet auto unlock toggle should read/write entitlement state.
+- Profile/member/wallet display should eventually refresh from server-side entitlement truth.
+- Real IAP/order success must not directly trust client state; service-side receipt verification and entitlement refresh remain required.
+
 ## Conclusions
 
 ### Should We Add Entitlement Feature?

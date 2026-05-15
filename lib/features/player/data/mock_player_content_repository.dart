@@ -1,3 +1,4 @@
+import '../../entitlement/domain/episode_unlock_type.dart';
 import '../domain/player_content.dart';
 
 const mockPlayerVideoAssets = [
@@ -113,10 +114,13 @@ class MockPlayerContentRepository implements PlayerContentRepository {
           final videoAsset =
               defaultMockPlayerVideoAssets[index %
                   defaultMockPlayerVideoAssets.length];
+          final unlockType = _unlockTypeForEpisode(number);
           return PlayerEpisode(
             id: 'ep-$number',
             number: number,
-            isLocked: number >= 11,
+            isLocked: unlockType != EpisodeUnlockType.free,
+            unlockType: unlockType,
+            requiredCoins: _requiredCoinsForEpisode(number),
             videoUrl: videoAsset.videoUrl,
             videoAspectRatio: videoAsset.aspectRatio,
             isAvailable: number != 9,
@@ -168,6 +172,25 @@ class MockPlayerContentRepository implements PlayerContentRepository {
     final normalizedId = dramaId.replaceFirst(RegExp(r'-\d+$'), '');
     return _profiles[normalizedId] ?? _profiles['found-you']!;
   }
+}
+
+EpisodeUnlockType _unlockTypeForEpisode(int number) {
+  if (number <= 3) {
+    return EpisodeUnlockType.free;
+  }
+  if (number == 7) {
+    return EpisodeUnlockType.membership;
+  }
+  return EpisodeUnlockType.coins;
+}
+
+int _requiredCoinsForEpisode(int number) {
+  return switch (number) {
+    4 => 30,
+    5 => 50,
+    6 => 80,
+    _ => 60,
+  };
 }
 
 /// mock 视频资源描述。

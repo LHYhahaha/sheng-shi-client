@@ -8,6 +8,8 @@ import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../entitlement/application/entitlement_controller.dart';
+import '../../../entitlement/domain/episode_access_decision.dart';
 import '../../application/player_feed_controller.dart';
 import '../../application/player_playback_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
@@ -76,6 +78,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isPageScrolling = false;
   bool _didRecordFirstBuild = false;
   String? _handledEndedItemId;
+  final Set<String> _entitlementPlayableItemIds = <String>{};
+  String? _activeCoinSheetItemId;
+  String? _activeRechargeSheetItemId;
 
   String _createSessionKey() {
     return switch (widget.feedMode) {
@@ -118,8 +123,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       );
       _shellChrome = shellChrome;
     }
-    Future<void>.microtask(() {
+    Future<void>.microtask(() async {
       _shellChrome?.hide();
+      await ref.read(entitlementControllerProvider.notifier).load();
+      if (!mounted) {
+        return;
+      }
       ref
           .read(playerUiControllerProvider(_sessionKey).notifier)
           .startSession(widget.episodeId ?? '1');
@@ -261,18 +270,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           toIndex: nextIndex,
         );
       }
-      // feed currentItem 是播放链路入口。先 playItem，再按最新 feed/currentIndex 做
-      // 相邻 HLS preload 和 next prepare；locked/unavailable 的过滤留给 controller。
+      // feed currentItem 是播放链路入口。先问 entitlement，再决定是否播放或展示解锁
+      // UI。PlayerPlaybackController 不知道金币/会员，仍只接收“已允许播放”的 item。
       unawaited(() async {
-        final playbackNotifier = ref.read(playbackProvider.notifier);
-        await playbackNotifier.playItem(next);
-        if (!mounted) {
-          return;
-        }
-        await playbackNotifier.preloadAround(
-          ref.read(feedProvider).items,
-          ref.read(feedProvider).currentIndex,
-        );
+        await _handleEntitlementDecisionForItem(next, autoPresentSheet: true);
       }());
     });
 
@@ -401,7 +402,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                 final canRenderVideo =
                     isCurrentItem &&
                     !item.episode.isUnavailable &&
-                    !item.episode.isLocked &&
+                    _isEntitlementPlayable(item) &&
                     playbackState.currentItemId == item.id &&
                     playbackState.currentSource != null;
                 final canShowVideoSurface =
@@ -457,7 +458,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                           !showLoading &&
                           !showPlaybackError &&
                           !item.episode.isUnavailable &&
-                          !item.episode.isLocked,
+                          _isEntitlementPlayable(item),
                       onSeekStart: () {
                         setState(() {
                           _isSeekDragging = true;
@@ -484,7 +485,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                           fromItemId: playbackState.currentItemId,
                           toItemId: item.id,
                         );
-                        unawaited(playbackController.playItem(item));
+                        unawaited(
+                          _handleEntitlementDecisionForItem(
+                            item,
+                            autoPresentSheet: true,
+                          ),
+                        );
                       },
                       onDownloadTap:
                           widget.feedMode == PlayerFeedMode.singleDrama
@@ -494,7 +500,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                           playbackState.isPlaying &&
                           isCurrentItem &&
                           !item.episode.isUnavailable &&
-                          !item.episode.isLocked,
+                          _isEntitlementPlayable(item),
                       showCenterPlayButton: showCenterPlayButton,
                       onTogglePlay: canTogglePlayback
                           ? () {
@@ -548,7 +554,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             label: uiState.paywall == PlayerPaywallState.memberUnlock
                 ? context.l10n.playerMemberUnlock
                 : context.l10n.playerUnlockNow,
-            onTap: _showUnlockSheet,
+            onTap: uiState.paywall == PlayerPaywallState.memberUnlock
+                ? _openMembership
+                : _showPendingUnlockActionSheet,
             onDismiss: uiController.hidePaywall,
           ),
       ],
@@ -602,6 +610,116 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   void _exitForYouFeed() {
     _shellChrome?.show();
     context.go(RoutePaths.home);
+  }
+
+  bool _isEntitlementPlayable(PlayerFeedItem item) {
+    return !item.episode.isLocked ||
+        _entitlementPlayableItemIds.contains(item.id);
+  }
+
+  PlayerFeedItem _playableCopy(PlayerFeedItem item) {
+    if (!item.episode.isLocked) {
+      return item;
+    }
+    return item.copyWith(episode: item.episode.copyWith(isLocked: false));
+  }
+
+  Future<void> _handleEntitlementDecisionForItem(
+    PlayerFeedItem item, {
+    required bool autoPresentSheet,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+
+    final uiController = ref.read(
+      playerUiControllerProvider(_sessionKey).notifier,
+    );
+    uiController.selectEpisode(item.episode);
+
+    final entitlementController = ref.read(
+      entitlementControllerProvider.notifier,
+    );
+    final decision = entitlementController.evaluateAccess(
+      dramaId: item.content.id,
+      episodeId: item.episode.id,
+      itemId: item.id,
+      unlockType: item.episode.unlockType,
+      price: item.episode.requiredCoins,
+      isUnavailable: item.episode.isUnavailable,
+    );
+
+    await _handleAccessDecision(
+      item,
+      decision,
+      autoPresentSheet: autoPresentSheet,
+    );
+  }
+
+  Future<void> _handleAccessDecision(
+    PlayerFeedItem item,
+    EpisodeAccessDecision decision, {
+    required bool autoPresentSheet,
+  }) async {
+    final uiController = ref.read(
+      playerUiControllerProvider(_sessionKey).notifier,
+    );
+    final playbackController = ref.read(
+      playerPlaybackControllerProvider(_sessionKey).notifier,
+    );
+
+    switch (decision.type) {
+      case EpisodeAccessDecisionType.allowPlay:
+        _entitlementPlayableItemIds.add(item.id);
+        uiController.unlockPaywallAndPlay();
+        await playbackController.playItem(_playableCopy(item));
+        if (!mounted) {
+          return;
+        }
+        final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+        await playbackController.preloadAround(
+          feedState.items,
+          feedState.currentIndex,
+        );
+      case EpisodeAccessDecisionType.autoUnlockAndPlay:
+        final unlockDecision = await ref
+            .read(entitlementControllerProvider.notifier)
+            .unlockWithCoins(
+              dramaId: item.content.id,
+              episodeId: item.episode.id,
+              itemId: item.id,
+              price: item.episode.requiredCoins,
+              operationId:
+                  decision.operationId ??
+                  'coin-unlock:${item.content.id}:${item.episode.id}',
+            );
+        if (!mounted) {
+          return;
+        }
+        if (unlockDecision.type == EpisodeAccessDecisionType.allowPlay) {
+          await _handleAccessDecision(
+            item,
+            unlockDecision,
+            autoPresentSheet: false,
+          );
+        } else {
+          uiController.hidePaywall();
+        }
+      case EpisodeAccessDecisionType.goMembership:
+        uiController.showMemberPaywall();
+      case EpisodeAccessDecisionType.showCoinUnlockDialog:
+        uiController.showUnlockPaywall();
+        if (autoPresentSheet) {
+          unawaited(_showCoinUnlockSheetForItem(item));
+        }
+      case EpisodeAccessDecisionType.showRechargeDialog:
+        uiController.showUnlockPaywall();
+        if (autoPresentSheet) {
+          unawaited(_showRechargeUnlockSheetForItem(item));
+        }
+      case EpisodeAccessDecisionType.waitUnlock:
+        uiController.hidePaywall();
+    }
   }
 
   Future<void> _advanceToNextFromCompletion() async {
@@ -759,7 +877,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _isModalOpen = false;
   }
 
-  Future<void> _showUnlockSheet() async {
+  Future<void> _showPendingUnlockActionSheet() async {
     final currentItem = ref
         .read(playerFeedControllerProvider(_sessionKey))
         .currentItem;
@@ -767,13 +885,82 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
 
+    final decision = ref
+        .read(entitlementControllerProvider.notifier)
+        .evaluateAccess(
+          dramaId: currentItem.content.id,
+          episodeId: currentItem.episode.id,
+          itemId: currentItem.id,
+          unlockType: currentItem.episode.unlockType,
+          price: currentItem.episode.requiredCoins,
+          isUnavailable: currentItem.episode.isUnavailable,
+        );
+    if (decision.type == EpisodeAccessDecisionType.showCoinUnlockDialog) {
+      await _showCoinUnlockSheetForItem(currentItem);
+      return;
+    }
+    if (decision.type == EpisodeAccessDecisionType.goMembership) {
+      _openMembership();
+      return;
+    }
+    await _showRechargeUnlockSheetForItem(currentItem);
+  }
+
+  Future<void> _showCoinUnlockSheetForItem(PlayerFeedItem item) async {
+    if (_activeCoinSheetItemId == item.id) {
+      return;
+    }
+    _activeCoinSheetItemId = item.id;
+    _isModalOpen = true;
+    final balance = ref.read(entitlementControllerProvider).coinBalance;
+    final unlocked = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.7),
+      isDismissible: true,
+      enableDrag: true,
+      builder: (sheetContext) {
+        return PlayerCoinUnlockSheet(
+          price: item.episode.requiredCoins,
+          balance: balance,
+          onConfirm: () => Navigator.of(sheetContext).pop(true),
+        );
+      },
+    );
+    _isModalOpen = false;
+    _activeCoinSheetItemId = null;
+
+    if (!mounted || unlocked != true) {
+      return;
+    }
+
+    final decision = await ref
+        .read(entitlementControllerProvider.notifier)
+        .unlockWithCoins(
+          dramaId: item.content.id,
+          episodeId: item.episode.id,
+          itemId: item.id,
+          price: item.episode.requiredCoins,
+          operationId: 'coin-unlock:${item.content.id}:${item.episode.id}',
+        );
+    if (!mounted) {
+      return;
+    }
+    await _handleAccessDecision(item, decision, autoPresentSheet: false);
+  }
+
+  Future<void> _showRechargeUnlockSheetForItem(PlayerFeedItem item) async {
+    if (_activeRechargeSheetItemId == item.id) {
+      return;
+    }
+    _activeRechargeSheetItemId = item.id;
     _isModalOpen = true;
     final rechargeController = ref.read(
       playerRechargeUnlockControllerProvider(_sessionKey).notifier,
     );
     await rechargeController.open(
-      itemId: currentItem.id,
-      requiredCoins: currentItem.episode.requiredCoins,
+      itemId: item.id,
+      requiredCoins: item.episode.requiredCoins,
     );
     if (!mounted) {
       return;
@@ -788,6 +975,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       builder: (context) => PlayerRechargeUnlockSheet(sessionKey: _sessionKey),
     );
     _isModalOpen = false;
+    _activeRechargeSheetItemId = null;
 
     if (!mounted) {
       return;
@@ -798,16 +986,40 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
 
-    ref
-        .read(playerUiControllerProvider(_sessionKey).notifier)
-        .unlockPaywallAndPlay();
-    unawaited(
-      ref
-          .read(playerPlaybackControllerProvider(_sessionKey).notifier)
-          .playItem(
-            ref.read(playerFeedControllerProvider(_sessionKey)).currentItem,
-          ),
+    final rechargeState = ref.read(
+      playerRechargeUnlockControllerProvider(_sessionKey),
     );
+    final selectedCoinPackage = rechargeState.selectedCoinPackage;
+    final selectedMembershipPackage = rechargeState.selectedMembershipPackage;
+    final entitlementController = ref.read(
+      entitlementControllerProvider.notifier,
+    );
+    if (selectedCoinPackage != null) {
+      await entitlementController.grantMockCoins(
+        amount: selectedCoinPackage.totalCoins,
+        source: 'player_recharge_unlock_sheet',
+      );
+    } else if (selectedMembershipPackage != null) {
+      await entitlementController.grantMockMembership(
+        source: 'player_recharge_unlock_sheet',
+      );
+    }
+    if (!mounted) {
+      return;
+    }
+    final decision = entitlementController.evaluateAccess(
+      dramaId: item.content.id,
+      episodeId: item.episode.id,
+      itemId: item.id,
+      unlockType: item.episode.unlockType,
+      price: item.episode.requiredCoins,
+      isUnavailable: item.episode.isUnavailable,
+    );
+    await _handleAccessDecision(item, decision, autoPresentSheet: false);
+  }
+
+  void _openMembership() {
+    context.push(RoutePaths.membership);
   }
 }
 

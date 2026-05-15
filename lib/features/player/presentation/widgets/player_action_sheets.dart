@@ -173,6 +173,147 @@ class _PlayerUnlockSheetState extends State<PlayerUnlockSheet> {
   }
 }
 
+class PlayerCoinUnlockSheet extends StatelessWidget {
+  const PlayerCoinUnlockSheet({
+    required this.price,
+    required this.balance,
+    required this.onConfirm,
+    super.key,
+  });
+
+  final int price;
+  final int balance;
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CompactPlayerSheet(
+      height: 236,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Text(
+                context.l10n.playerConfirmUnlock,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  height: 20 / 16,
+                ),
+              ),
+              const Spacer(),
+              _CloseButton(onTap: () => Navigator.of(context).pop(false)),
+            ],
+          ),
+          const SizedBox(height: 22),
+          Row(
+            children: [
+              Expanded(
+                child: _CoinMetric(
+                  label: context.l10n.playerPrice,
+                  value: price,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _CoinMetric(
+                  label: context.l10n.playerBalance,
+                  value: balance,
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  key: const ValueKey('player_coin_unlock_cancel'),
+                  onPressed: () => Navigator.of(context).pop(false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white.withValues(alpha: 0.82),
+                    side: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.18),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(context.l10n.storeCancel),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: AppPrimaryButton(
+                  key: const ValueKey('player_coin_unlock_confirm'),
+                  label: context.l10n.playerConfirmUnlock,
+                  onPressed: onConfirm,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CoinMetric extends StatelessWidget {
+  const _CoinMetric({required this.label, required this.value});
+
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.48),
+                fontSize: 12,
+                height: 16 / 12,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(
+                  Icons.monetization_on,
+                  color: AppColors.gold,
+                  size: 17,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '$value',
+                  key: ValueKey('player_coin_metric_$value'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    height: 24 / 20,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class PlayerSpeedSheet extends StatelessWidget {
   const PlayerSpeedSheet({
     required this.selectedRate,

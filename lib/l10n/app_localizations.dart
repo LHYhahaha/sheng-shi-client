@@ -157,6 +157,7 @@ class AppLocalizations {
   String get playerSynopsis => _text(en: 'Synopsis', zh: '简介');
   String get playerMoreLikeThis => _text(en: 'More Like This', zh: '猜你喜欢');
   String get playerUnlockNow => _text(en: 'Unlock Now', zh: '立即解锁');
+  String get playerConfirmUnlock => _text(en: 'Confirm unlock', zh: '确认解锁');
   String get playerMemberUnlock => _text(en: 'Member unlock', zh: '会员解锁');
   String get playerBecomeMember => _text(en: 'Become a member >', zh: '开通会员 >');
   String get playerPlay => _text(en: 'Play', zh: '播放');

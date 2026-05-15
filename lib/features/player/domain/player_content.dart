@@ -1,3 +1,5 @@
+import '../../entitlement/domain/episode_unlock_type.dart';
+
 /// 播放器剧集内容模型。
 ///
 /// 这是播放页 chrome 和详情弹层共用的数据，不等同于首页 Drama 卡片。这里可以包含
@@ -76,6 +78,7 @@ class PlayerEpisode {
     required this.id,
     required this.number,
     required this.isLocked,
+    this.unlockType = EpisodeUnlockType.free,
     this.requiredCoins = 60,
     this.videoAssetPath,
     this.videoUrl,
@@ -98,6 +101,12 @@ class PlayerEpisode {
   /// locked episode 不能 preload/open/prepare。即使 mock 数据带 videoSource，也必须等
   /// 解锁后重新走 source resolve。
   final bool isLocked;
+
+  /// entitlement 解锁策略。
+  ///
+  /// `isLocked` 只是播放器层的保护位：只要为 true，PlayerPlaybackController 就不会
+  /// open/preload/prepare。`unlockType` 才描述为什么锁定以及 UI 下一步去哪。
+  final EpisodeUnlockType unlockType;
 
   /// 解锁该集需要的金币数。
   ///
@@ -127,6 +136,30 @@ class PlayerEpisode {
   final bool isAvailable;
 
   bool get isUnavailable => !isAvailable;
+
+  PlayerEpisode copyWith({
+    String? id,
+    int? number,
+    bool? isLocked,
+    EpisodeUnlockType? unlockType,
+    int? requiredCoins,
+    String? videoAssetPath,
+    String? videoUrl,
+    double? videoAspectRatio,
+    bool? isAvailable,
+  }) {
+    return PlayerEpisode(
+      id: id ?? this.id,
+      number: number ?? this.number,
+      isLocked: isLocked ?? this.isLocked,
+      unlockType: unlockType ?? this.unlockType,
+      requiredCoins: requiredCoins ?? this.requiredCoins,
+      videoAssetPath: videoAssetPath ?? this.videoAssetPath,
+      videoUrl: videoUrl ?? this.videoUrl,
+      videoAspectRatio: videoAspectRatio ?? this.videoAspectRatio,
+      isAvailable: isAvailable ?? this.isAvailable,
+    );
+  }
 
   String? get videoSource {
     if (videoUrl != null && videoUrl!.isNotEmpty) {

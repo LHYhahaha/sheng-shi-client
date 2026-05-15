@@ -91,6 +91,10 @@ class PlayerUiController extends Notifier<PlayerUiState> {
     state = state.copyWith(paywall: PlayerPaywallState.memberUnlock);
   }
 
+  void showUnlockPaywall() {
+    state = state.copyWith(paywall: PlayerPaywallState.unlock);
+  }
+
   void hidePaywall() {
     state = state.copyWith(paywall: PlayerPaywallState.hidden);
   }

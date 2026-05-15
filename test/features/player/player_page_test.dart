@@ -1,6 +1,10 @@
 import 'dart:async';
 
 import 'package:drama_client/app/router/route_paths.dart';
+import 'package:drama_client/features/entitlement/data/entitlement_repository_provider.dart';
+import 'package:drama_client/features/entitlement/data/mock_entitlement_repository.dart';
+import 'package:drama_client/features/entitlement/domain/episode_unlock_type.dart';
+import 'package:drama_client/features/entitlement/domain/user_entitlement_state.dart';
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
 import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
@@ -601,6 +605,131 @@ void main() {
     expect(unavailableSession.playCount, 0);
   });
 
+  testWidgets('membership episode sends non-member to member paywall', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
+        ),
+        repository: _FakePlayerFeedRepository.membershipLocked(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Member unlock'), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
+
+    await tester.tap(find.text('Member unlock'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Membership'), findsOneWidget);
+    expect(playbackSession.playCount, 0);
+  });
+
+  testWidgets('membership episode allows member to play', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
+        ),
+        repository: _FakePlayerFeedRepository.membershipLocked(),
+        entitlementRepository: MockEntitlementRepository.loggedInMember(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Member unlock'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_video_tap_layer')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('coin episode already unlocked can play', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
+        ),
+        repository: _FakePlayerFeedRepository.normal(),
+        entitlementRepository: MockEntitlementRepository(
+          initialState: const UserEntitlementState(
+            isGuest: false,
+            isMember: false,
+            coinBalance: 20,
+            autoUnlockEnabled: false,
+            unlockedEpisodeIds: <String>{'ep-2'},
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unlock Now'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_video_tap_layer')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('coin episode auto unlocks when enabled and balance is enough', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
+        ),
+        repository: _FakePlayerFeedRepository.normal(),
+        entitlementRepository:
+            MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOn(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unlock Now'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_video_tap_layer')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('coin episode enough balance with auto off shows coin dialog', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
+        ),
+        repository: _FakePlayerFeedRepository.normal(),
+        entitlementRepository:
+            MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOff(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('player_coin_unlock_confirm')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
+  });
+
   testWidgets('locked episode opens recharge unlock sheet with offer details', (
     tester,
   ) async {
@@ -614,10 +743,6 @@ void main() {
       ),
     );
     await tester.pump(const Duration(seconds: 1));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Unlock Now'));
-    await tester.pump(const Duration(milliseconds: 80));
     await tester.pumpAndSettle();
 
     expect(find.text('Recharge to unlock'), findsOneWidget);
@@ -643,43 +768,59 @@ void main() {
     );
   });
 
-  testWidgets(
-    'coin package purchase closes sheet and clears paywall after success',
-    (tester) async {
-      final playbackSession = _FakePlaybackSession();
-      await tester.pumpWidget(
-        _buildPlayerApp(
-          initialLocation: RoutePaths.playerLocation(
-            dramaId: 'drama-a',
-            episodeId: '2',
-          ),
-          repository: _FakePlayerFeedRepository.normal(),
-          playbackSessionFactory: () => playbackSession,
+  testWidgets('coin package purchase continues to coin unlock confirmation', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
         ),
-      );
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
+        repository: _FakePlayerFeedRepository.normal(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Unlock Now'));
-      await tester.pump(const Duration(milliseconds: 80));
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const ValueKey('player_recharge_coin_coins_300')),
-      );
-      await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('player_recharge_coin_coins_300')),
+    );
+    await tester.pump();
 
-      expect(
-        find.byKey(const ValueKey('player_recharge_unlock_processing')),
-        findsOneWidget,
-      );
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_processing')),
+      findsOneWidget,
+    );
 
-      await tester.pump(const Duration(milliseconds: 220));
-      await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pumpAndSettle();
 
-      expect(find.text('Unlock Now'), findsNothing);
-      expect(playbackSession.playCount, 0);
-    },
-  );
+    expect(find.text('Unlock Now'), findsOneWidget);
+    expect(playbackSession.playCount, 0);
+
+    await tester.tap(find.text('Unlock Now'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('player_coin_unlock_confirm')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('player_coin_unlock_confirm')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('player_coin_unlock_confirm')),
+      findsNothing,
+    );
+    expect(find.text('Unlock Now'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_video_tap_layer')),
+      findsOneWidget,
+    );
+  });
 
   testWidgets('membership package can start mock unlock purchase', (
     tester,
@@ -696,9 +837,6 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Unlock Now'));
-    await tester.pump(const Duration(milliseconds: 80));
-    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('player_recharge_membership_weekly_vip_promo')),
     );
@@ -724,10 +862,6 @@ void main() {
       ),
     );
     await tester.pump(const Duration(seconds: 1));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Unlock Now'));
-    await tester.pump(const Duration(milliseconds: 80));
     await tester.pumpAndSettle();
 
     expect(
@@ -758,9 +892,6 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Unlock Now'));
-    await tester.pump(const Duration(milliseconds: 80));
-    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('player_recharge_unlock_close')),
     );
@@ -944,6 +1075,13 @@ void main() {
     await tester.tap(find.text('2'));
     await tester.pumpAndSettle();
     expect(find.text('Unlock Now'), findsOneWidget);
+    expect(find.text('Recharge to unlock'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recharge to unlock'), findsNothing);
+    expect(find.text('Unlock Now'), findsOneWidget);
 
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
@@ -1018,6 +1156,7 @@ Widget _buildPlayerApp({
   required PlayerFeedRepository repository,
   String initialLocation = '/player/drama-a/1',
   PlayerPlaybackSession Function()? playbackSessionFactory,
+  MockEntitlementRepository? entitlementRepository,
 }) {
   final router = GoRouter(
     initialLocation: initialLocation,
@@ -1039,11 +1178,19 @@ Widget _buildPlayerApp({
         path: '/for-you',
         builder: (context, state) => const PlayerPage.forYou(),
       ),
+      GoRoute(
+        path: RoutePaths.membership,
+        builder: (context, state) => const Scaffold(body: Text('Membership')),
+      ),
     ],
   );
 
   return ProviderScope(
     overrides: [
+      entitlementRepositoryProvider.overrideWithValue(
+        entitlementRepository ??
+            MockEntitlementRepository.loggedInNonMemberLowCoins(),
+      ),
       playerFeedRepositoryProvider.overrideWithValue(repository),
       playerPlaybackSessionFactoryProvider.overrideWithValue(
         playbackSessionFactory ?? () => _FakePlaybackSession(),
@@ -1077,6 +1224,15 @@ class _FakePlayerFeedRepository implements PlayerFeedRepository {
 
   factory _FakePlayerFeedRepository.normal() {
     return _FakePlayerFeedRepository._(items: _items(lockedEpisode2: true));
+  }
+
+  factory _FakePlayerFeedRepository.membershipLocked() {
+    return _FakePlayerFeedRepository._(
+      items: _items(
+        lockedEpisode2: true,
+        episode2UnlockType: EpisodeUnlockType.membership,
+      ),
+    );
   }
 
   factory _FakePlayerFeedRepository.unlocked() {
@@ -1139,6 +1295,7 @@ class _FakePlayerFeedRepository implements PlayerFeedRepository {
 
 List<PlayerFeedItem> _items({
   bool lockedEpisode2 = false,
+  EpisodeUnlockType episode2UnlockType = EpisodeUnlockType.coins,
   double? firstAspectRatio,
 }) {
   final content = _content([
@@ -1153,6 +1310,8 @@ List<PlayerFeedItem> _items({
       id: 'ep-2',
       number: 2,
       isLocked: lockedEpisode2,
+      unlockType: lockedEpisode2 ? episode2UnlockType : EpisodeUnlockType.free,
+      requiredCoins: 60,
       videoUrl: _mockSecondVideoUrl,
     ),
     const PlayerEpisode(
