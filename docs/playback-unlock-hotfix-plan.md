@@ -246,6 +246,62 @@ Figma 对照块：
 - `test/features/player/player_page_test.dart`
 - `integration_test/app_smoke_test.dart`
 
+## Unlock UX Round 4
+
+日期：2026-05-16
+
+真机体验新增问题：
+
+1. 如果 `PageView` 滑动不够流畅或 settle 时间较长，自动解锁/充值抽屉会等待很久才弹出，
+   用户会感觉 locked episode 卡住、没有反馈。
+2. 当前策略过度依赖 `ScrollEnd + debounce`，虽然避免了“滑动中抢弹”，但在低端机或 HLS
+   状态切换较重时会把弹窗时机拖得太晚。
+
+### 目标
+
+本轮优化 locked episode 的滑动手感和自动弹窗调度策略。重点是“更快给反馈，但不在滑动中
+抢弹”。不重画弹窗、不改解锁业务规则、不改播放资源/cache 架构。
+
+### 需要修正的行为
+
+1. 不要只依赖 `ScrollEnd`：
+   - `onPageChanged` 已经切到 locked episode 后，可以开始准备 auto sheet。
+   - 可结合当前页阈值/稳定窗口判断，例如当前页已经变成目标 locked item 后等待 80-150ms。
+   - 如果用户继续滑动或再次 page change，取消旧 pending sheet。
+2. 增加最大等待时间：
+   - 正常情况下，落位后短 debounce 弹出。
+   - 如果 `PageView` settle 很慢，但当前 item 已经稳定为 locked episode，最多等待 500-700ms。
+   - 超过最大等待后弹当前 item 的 sheet，避免无限等。
+3. `Unlock Now` 覆盖按钮要尽快出现：
+   - 进入 locked current item 后，立即显示 locked poster + `Unlock Now`。
+   - 即使 auto sheet 还在等待，用户也可以手动点击 `Unlock Now` 立即打开流程。
+4. 自动弹窗必须避开滑动动画抢主线程：
+   - showModalBottomSheet 前应放到当前 frame 之后。
+   - 建议 `addPostFrameCallback` + 短延迟后再校验 current item。
+   - 弹出前仍要校验：current item 未变、仍 locked、未解锁、无 modal/sheet。
+5. 滑动期间不要做重活：
+   - locked episode 不应触发 source resolve / preload / prepare / open。
+   - entitlement evaluate 可以轻量执行，但不要在 build 中重复触发。
+   - pending sheet 逻辑应避免造成多次 setState / 重复 rebuild。
+
+### 验收标准
+
+- 滑到 locked episode 后，`Unlock Now` 按钮先快速出现。
+- 自动 sheet 不在明显滑动中弹，但不会因为 PageView 卡顿而等待很久。
+- 快速连续滑动多个 locked episodes，只弹最终当前 item 的 sheet。
+- 用户点击 `Unlock Now` 仍立即打开对应流程。
+- 关闭 sheet 后可以继续滑动；滑到下一个 locked episode 会再次按新策略弹出。
+- free / 已解锁 episode 不受影响，仍直接播放。
+- locked/unavailable 仍不 preload / prepare / open unauthorized source。
+
+### 建议涉及文件
+
+- `lib/features/player/presentation/pages/player_page.dart`
+- `lib/features/player/presentation/widgets/player_chrome.dart`
+- `test/features/player/player_page_test.dart`
+- `test/widget_test.dart`
+- `integration_test/app_smoke_test.dart`
+
 ## 必跑验证
 
 ```bash
