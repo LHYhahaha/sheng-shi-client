@@ -101,6 +101,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   );
   String? _handledEndedItemId;
   final Set<String> _entitlementPlayableItemIds = <String>{};
+  final Set<String> _autoUnlockSheetDismissedItemIds = <String>{};
   String? _activeCoinSheetItemId;
   String? _activeRechargeSheetItemId;
   String? _pendingAutoUnlockSheetItemId;
@@ -828,6 +829,21 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
   }
 
+  void _markAutoUnlockSheetDismissed(String itemId) {
+    _cancelPendingAutoUnlockSheet();
+    if (!_autoUnlockSheetDismissedItemIds.add(itemId)) {
+      return;
+    }
+    PlayerRebuildDiagnostics.recordTiming(
+      'autoUnlockSheetDismissed',
+      itemId: itemId,
+    );
+    _playbackController.recordPlaybackTiming(
+      'auto unlock sheet dismissed',
+      itemId: itemId,
+    );
+  }
+
   void _scheduleAutoUnlockSheetForItem(PlayerFeedItem item) {
     if (_pendingAutoUnlockSheetItemId == item.id) {
       return;
@@ -840,6 +856,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         _isModalOpen ||
         _activeCoinSheetItemId != null ||
         _activeRechargeSheetItemId != null ||
+        _isPageScrolling ||
+        _autoUnlockSheetDismissedItemIds.contains(item.id) ||
         !_isLockedAutoSheetCandidate(item)) {
       return;
     }
@@ -896,7 +914,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         !_isLockedAutoSheetCandidate(item) ||
         _isModalOpen ||
         _activeCoinSheetItemId != null ||
-        _activeRechargeSheetItemId != null) {
+        _activeRechargeSheetItemId != null ||
+        _autoUnlockSheetDismissedItemIds.contains(item.id)) {
       return;
     }
 
@@ -942,7 +961,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         generation != _autoUnlockSheetGeneration ||
         !_isCurrentFeedItem(item) ||
         (!_isLockedAutoSheetCandidate(item)) ||
-        _isModalOpen) {
+        _isModalOpen ||
+        _autoUnlockSheetDismissedItemIds.contains(item.id)) {
       return;
     }
 
@@ -951,9 +971,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         await _handleAccessDecision(item, decision, autoPresentSheet: false);
       case EpisodeAccessDecisionType.autoUnlockAndPlay:
       case EpisodeAccessDecisionType.showCoinUnlockDialog:
-        await _showCoinUnlockSheetForItem(item);
+        await _showCoinUnlockSheetForItem(item, launchedByAutoSheet: true);
       case EpisodeAccessDecisionType.showRechargeDialog:
-        await _showRechargeUnlockSheetForItem(item);
+        await _showRechargeUnlockSheetForItem(item, launchedByAutoSheet: true);
       case EpisodeAccessDecisionType.goMembership:
       case EpisodeAccessDecisionType.waitUnlock:
         return;
@@ -1010,6 +1030,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           return;
         }
         _entitlementPlayableItemIds.add(item.id);
+        _autoUnlockSheetDismissedItemIds.remove(item.id);
         uiController.unlockPaywallAndPlay();
         _schedulePreloadAroundItem(item);
         await playbackController.playItem(
@@ -1025,7 +1046,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         _schedulePreloadAroundItem(item);
         uiController.showUnlockPaywall();
         if (autoPresentSheet) {
-          unawaited(_showCoinUnlockSheetForItem(item));
+          unawaited(
+            _showCoinUnlockSheetForItem(item, launchedByAutoSheet: true),
+          );
         }
       case EpisodeAccessDecisionType.goMembership:
         await _quiesceItemForAccessOverlay(
@@ -1044,7 +1067,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         _schedulePreloadAroundItem(item);
         uiController.showUnlockPaywall();
         if (autoPresentSheet) {
-          unawaited(_showCoinUnlockSheetForItem(item));
+          unawaited(
+            _showCoinUnlockSheetForItem(item, launchedByAutoSheet: true),
+          );
         }
       case EpisodeAccessDecisionType.showRechargeDialog:
         await _quiesceItemForAccessOverlay(
@@ -1055,7 +1080,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         _schedulePreloadAroundItem(item);
         uiController.showUnlockPaywall();
         if (autoPresentSheet) {
-          unawaited(_showRechargeUnlockSheetForItem(item));
+          unawaited(
+            _showRechargeUnlockSheetForItem(item, launchedByAutoSheet: true),
+          );
         }
       case EpisodeAccessDecisionType.waitUnlock:
         if (item.episode.isUnavailable) {
@@ -1367,7 +1394,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
   }
 
-  Future<void> _showCoinUnlockSheetForItem(PlayerFeedItem item) async {
+  Future<void> _showCoinUnlockSheetForItem(
+    PlayerFeedItem item, {
+    bool launchedByAutoSheet = false,
+  }) async {
     if (_activeCoinSheetItemId == item.id) {
       return;
     }
@@ -1391,6 +1421,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _isModalOpen = false;
     _activeCoinSheetItemId = null;
 
+    if (unlocked != true && launchedByAutoSheet) {
+      _markAutoUnlockSheetDismissed(item.id);
+    }
+
     if (!mounted || unlocked != true || !_isCurrentFeedItem(item)) {
       return;
     }
@@ -1410,7 +1444,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     await _handleAccessDecision(item, decision, autoPresentSheet: false);
   }
 
-  Future<void> _showRechargeUnlockSheetForItem(PlayerFeedItem item) async {
+  Future<void> _showRechargeUnlockSheetForItem(
+    PlayerFeedItem item, {
+    bool launchedByAutoSheet = false,
+  }) async {
     if (_activeRechargeSheetItemId == item.id) {
       return;
     }
@@ -1443,6 +1480,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
 
     if (unlocked != true) {
+      if (launchedByAutoSheet) {
+        _markAutoUnlockSheetDismissed(item.id);
+      }
       rechargeController.close();
       return;
     }
@@ -1483,7 +1523,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         .read(playerUiControllerProvider(_sessionKey).notifier)
         .showUnlockPaywall();
     if (selectedCoinPackage != null) {
-      unawaited(_showCoinUnlockSheetForItem(item));
+      unawaited(
+        _showCoinUnlockSheetForItem(
+          item,
+          launchedByAutoSheet: launchedByAutoSheet,
+        ),
+      );
     }
   }
 

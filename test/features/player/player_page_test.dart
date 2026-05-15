@@ -845,6 +845,14 @@ void main() {
     expect(find.text('Unlock Now'), findsOneWidget);
     expect(find.byKey(const ValueKey('player_unlock_button')), findsOneWidget);
 
+    await _pumpAutoUnlockSheet(tester);
+
+    expect(
+      find.byKey(const ValueKey('player_coin_unlock_confirm')),
+      findsNothing,
+    );
+    expect(find.text('Unlock Now'), findsOneWidget);
+
     await tester.tap(find.byKey(const ValueKey('player_unlock_button')));
     await tester.pumpAndSettle();
 
@@ -1376,6 +1384,16 @@ void main() {
     expect(find.text('Unlock Now'), findsOneWidget);
     expect(playbackSession.pauseCount, pauseCountAfterLock);
     expect(playbackSession.playCount, 0);
+
+    await _pumpAutoUnlockSheet(tester);
+
+    expect(find.text('Recharge to unlock'), findsNothing);
+    expect(find.text('Unlock Now'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('player_unlock_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recharge to unlock'), findsOneWidget);
   });
 
   testWidgets('completed playback auto advances to next episode', (
