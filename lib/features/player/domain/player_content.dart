@@ -76,6 +76,7 @@ class PlayerEpisode {
     required this.id,
     required this.number,
     required this.isLocked,
+    this.requiredCoins = 60,
     this.videoAssetPath,
     this.videoUrl,
     this.videoAspectRatio,
@@ -97,6 +98,12 @@ class PlayerEpisode {
   /// locked episode 不能 preload/open/prepare。即使 mock 数据带 videoSource，也必须等
   /// 解锁后重新走 source resolve。
   final bool isLocked;
+
+  /// 解锁该集需要的金币数。
+  ///
+  /// 仅在 locked episode 上用于 entitlement unlock sheet 展示。真实价格仍应由服务端
+  /// 决策返回，客户端不能用本地默认值完成扣费。
+  final int requiredCoins;
 
   /// 本地视频 asset 路径。
   ///

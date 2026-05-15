@@ -164,6 +164,20 @@ class AppLocalizations {
       _text(en: 'Play the next episode automatically', zh: '自动播放下一集');
   String get playerPrice => _text(en: 'Price:', zh: '价格:');
   String get playerBalance => _text(en: 'Balance:', zh: '余额:');
+  String get playerRechargeUnlockTitle =>
+      _text(en: 'Recharge to unlock', zh: '充值解锁');
+  String get playerRequiredCoins => _text(en: 'Required', zh: '所需金币');
+  String get playerCoinBalance => _text(en: 'Balance', zh: '余额');
+  String get playerCoinPackages => _text(en: 'Coins', zh: '金币充值');
+  String get playerMembershipPackages => _text(en: 'VIP', zh: '会员');
+  String get playerBonus => _text(en: 'Bonus', zh: '赠送');
+  String get playerLimitedOffer => _text(en: 'Limited offer', zh: '限时优惠');
+  String get playerAutoRenewCancel =>
+      _text(en: 'Auto renew · Cancel anytime', zh: '自动续费 · 可随时取消');
+  String get playerUnlockProcessing =>
+      _text(en: 'Processing mock purchase...', zh: '正在模拟购买...');
+  String get playerUnlockFailed =>
+      _text(en: 'Purchase failed. Please try again.', zh: '购买失败，请重试。');
   String get playerFeedEmpty =>
       _text(en: 'No episodes available yet.', zh: '暂无可播放剧集');
   String get playerFeedLoadFailed =>

@@ -10,12 +10,14 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/player_feed_controller.dart';
 import '../../application/player_playback_controller.dart';
+import '../../application/player_recharge_unlock_controller.dart';
 import '../../application/player_ui_controller.dart';
 import '../../domain/player_feed.dart';
 import '../../domain/player_content.dart';
 import '../widgets/player_action_sheets.dart';
 import '../widgets/player_chrome.dart';
 import '../widgets/player_detail_sheet.dart';
+import '../widgets/player_recharge_unlock_sheet.dart';
 
 /// 播放器页面。
 ///
@@ -758,18 +760,41 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _showUnlockSheet() async {
+    final currentItem = ref
+        .read(playerFeedControllerProvider(_sessionKey))
+        .currentItem;
+    if (currentItem == null) {
+      return;
+    }
+
     _isModalOpen = true;
-    await showModalBottomSheet<void>(
+    final rechargeController = ref.read(
+      playerRechargeUnlockControllerProvider(_sessionKey).notifier,
+    );
+    await rechargeController.open(
+      itemId: currentItem.id,
+      requiredCoins: currentItem.episode.requiredCoins,
+    );
+    if (!mounted) {
+      return;
+    }
+    final unlocked = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: 0.7),
       isDismissible: true,
       enableDrag: true,
-      builder: (context) => const PlayerUnlockSheet(),
+      isScrollControlled: true,
+      builder: (context) => PlayerRechargeUnlockSheet(sessionKey: _sessionKey),
     );
     _isModalOpen = false;
 
     if (!mounted) {
+      return;
+    }
+
+    if (unlocked != true) {
+      rechargeController.close();
       return;
     }
 

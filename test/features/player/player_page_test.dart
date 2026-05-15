@@ -601,6 +601,176 @@ void main() {
     expect(unavailableSession.playCount, 0);
   });
 
+  testWidgets('locked episode opens recharge unlock sheet with offer details', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
+        ),
+        repository: _FakePlayerFeedRepository.normal(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Unlock Now'));
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recharge to unlock'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_info')),
+      findsOneWidget,
+    );
+    expect(find.text('Required'), findsOneWidget);
+    expect(find.text('Balance'), findsOneWidget);
+    expect(find.text('60'), findsOneWidget);
+    expect(find.text('20'), findsOneWidget);
+    expect(find.text('+9%'), findsOneWidget);
+    expect(find.text('Weekly VIP'), findsOneWidget);
+    expect(find.text(r'$12.99'), findsOneWidget);
+    expect(find.text(r'$24.99'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_recharge_promo_badge')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_tips')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'coin package purchase closes sheet and clears paywall after success',
+    (tester) async {
+      final playbackSession = _FakePlaybackSession();
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          initialLocation: RoutePaths.playerLocation(
+            dramaId: 'drama-a',
+            episodeId: '2',
+          ),
+          repository: _FakePlayerFeedRepository.normal(),
+          playbackSessionFactory: () => playbackSession,
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Unlock Now'));
+      await tester.pump(const Duration(milliseconds: 80));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('player_recharge_coin_coins_300')),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('player_recharge_unlock_processing')),
+        findsOneWidget,
+      );
+
+      await tester.pump(const Duration(milliseconds: 220));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Unlock Now'), findsNothing);
+      expect(playbackSession.playCount, 0);
+    },
+  );
+
+  testWidgets('membership package can start mock unlock purchase', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
+        ),
+        repository: _FakePlayerFeedRepository.normal(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Unlock Now'));
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('player_recharge_membership_weekly_vip_promo')),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_processing')),
+      findsOneWidget,
+    );
+
+    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('promotion badge hides when countdown ends', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
+        ),
+        repository: _FakePlayerFeedRepository.normal(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Unlock Now'));
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('player_recharge_promo_badge')),
+      findsOneWidget,
+    );
+
+    await tester.pump(const Duration(hours: 1, seconds: 1));
+
+    expect(
+      find.byKey(const ValueKey('player_recharge_promo_badge')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('recharge sheet close keeps player in pending unlock state', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
+        ),
+        repository: _FakePlayerFeedRepository.normal(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Unlock Now'));
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recharge to unlock'), findsNothing);
+    expect(find.text('Unlock Now'), findsOneWidget);
+    expect(find.text('EP.02'), findsOneWidget);
+  });
+
   testWidgets('episodes sheet can select locked episode and show paywall', (
     tester,
   ) async {
