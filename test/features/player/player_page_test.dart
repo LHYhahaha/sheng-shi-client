@@ -11,6 +11,7 @@ import 'package:drama_client/features/player/data/player_playback_source_reposit
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
 import 'package:drama_client/features/player/application/player_playback_prepare_manager.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
+import 'package:drama_client/features/player/application/player_viewport_controller.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/domain/player_playback_source.dart';
@@ -231,6 +232,63 @@ void main() {
     final during = tester.widget<Transform>(followSurface);
     expect(during.transform.getTranslation().y, isNot(0));
   });
+
+  testWidgets(
+    'drag page offset only moves active surface without viewport state churn',
+    (tester) async {
+      final observer = _ViewportUpdateObserver();
+
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          repository: _FakePlayerFeedRepository.unlocked(),
+          observers: [observer],
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      observer.reset();
+
+      final pageSurface = find.byKey(
+        const ValueKey('player_page_view_surface'),
+      );
+      final followSurface = find.byKey(
+        const ValueKey('active_playback_surface_follow_scroll'),
+      );
+      final gesture = await tester.startGesture(tester.getCenter(pageSurface));
+
+      await gesture.moveBy(const Offset(0, -80));
+      await tester.pump(const Duration(milliseconds: 16));
+
+      final updatesAfterScrollStart = observer.updateCount;
+      final chromeAfterScrollStart = tester.widget<PlayerChrome>(
+        find.byType(PlayerChrome).first,
+      );
+      final transformAfterScrollStart = tester
+          .widget<Transform>(followSurface)
+          .transform
+          .getTranslation()
+          .y;
+
+      await gesture.moveBy(const Offset(0, -80));
+      await tester.pump(const Duration(milliseconds: 16));
+
+      final chromeAfterPageOffset = tester.widget<PlayerChrome>(
+        find.byType(PlayerChrome).first,
+      );
+      final transformAfterPageOffset = tester
+          .widget<Transform>(followSurface)
+          .transform
+          .getTranslation()
+          .y;
+
+      expect(observer.updateCount, updatesAfterScrollStart);
+      expect(identical(chromeAfterScrollStart, chromeAfterPageOffset), isTrue);
+      expect(transformAfterPageOffset, isNot(transformAfterScrollStart));
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets('uses cover fit for vertical video sources', (tester) async {
     await tester.pumpWidget(
@@ -1700,6 +1758,7 @@ Widget _buildPlayerApp({
   PlayerPlaybackSession Function()? playbackSessionFactory,
   PlayerPlaybackPreloadManager? preloadManager,
   MockEntitlementRepository? entitlementRepository,
+  List<ProviderObserver> observers = const [],
 }) {
   final router = GoRouter(
     initialLocation: initialLocation,
@@ -1729,6 +1788,7 @@ Widget _buildPlayerApp({
   );
 
   return ProviderScope(
+    observers: observers,
     overrides: [
       entitlementRepositoryProvider.overrideWithValue(
         entitlementRepository ??
@@ -1757,6 +1817,26 @@ Widget _buildPlayerApp({
       routerConfig: router,
     ),
   );
+}
+
+final class _ViewportUpdateObserver extends ProviderObserver {
+  int updateCount = 0;
+
+  void reset() {
+    updateCount = 0;
+  }
+
+  @override
+  void didUpdateProvider(
+    ProviderObserverContext context,
+    Object? previousValue,
+    Object? newValue,
+  ) {
+    if (previousValue is PlayerViewportState ||
+        newValue is PlayerViewportState) {
+      updateCount += 1;
+    }
+  }
 }
 
 class _FakePlayerFeedRepository implements PlayerFeedRepository {

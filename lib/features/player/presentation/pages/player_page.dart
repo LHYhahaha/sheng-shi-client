@@ -238,7 +238,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           .initialize(
             index: feedState.currentIndex,
             itemId: feedState.currentItem!.id,
-            pageOffset: feedState.currentIndex.toDouble(),
           );
     }
     _playbackController.recordPlaybackTiming(
@@ -263,7 +262,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final viewportProvider = playerViewportControllerProvider(sessionKey);
     final feedState = ref.watch(feedProvider);
     final feedController = ref.read(feedProvider.notifier);
-    final viewportState = ref.watch(viewportProvider);
+    final viewportState = ref.watch(
+      viewportProvider.select(_ViewportBuildSnapshot.fromState),
+    );
     final viewportController = ref.read(viewportProvider.notifier);
     final uiState = ref.watch(uiProvider);
     final uiController = ref.read(uiProvider.notifier);
@@ -468,7 +469,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   Widget _buildBody(
     PlayerFeedState feedState,
     PlayerFeedController feedController,
-    PlayerViewportState viewportState,
+    _ViewportBuildSnapshot viewportState,
     PlayerViewportController viewportController,
     PlayerUiState uiState,
     PlayerUiController uiController,
@@ -715,9 +716,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     _pagePositionNotifier.value = page;
-    ref
-        .read(playerViewportControllerProvider(_sessionKey).notifier)
-        .updatePageOffset(page);
   }
 
   bool _handlePageScrollNotification(ScrollNotification notification) {
@@ -753,11 +751,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             .round()
             .clamp(0, feedState.items.length - 1);
         final settledItem = feedState.items[settledIndex];
-        viewportController.settle(
-          index: settledIndex,
-          itemId: settledItem.id,
-          pageOffset: settledIndex.toDouble(),
-        );
+        viewportController.settle(index: settledIndex, itemId: settledItem.id);
       }
     }
     return false;
@@ -1273,11 +1267,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
       ref
           .read(playerViewportControllerProvider(_sessionKey).notifier)
-          .settle(
-            index: nextIndex,
-            itemId: feedState.items[nextIndex].id,
-            pageOffset: nextIndex.toDouble(),
-          );
+          .settle(index: nextIndex, itemId: feedState.items[nextIndex].id);
       final latestFeedState = ref.read(feedProvider);
       if (latestFeedState.currentIndex != nextIndex) {
         ref.read(feedProvider.notifier).setCurrentIndex(nextIndex);
@@ -1617,6 +1607,56 @@ BoxFit _videoFitFor(PlayerEpisode episode) {
     return BoxFit.cover;
   }
   return BoxFit.contain;
+}
+
+class _ViewportBuildSnapshot {
+  const _ViewportBuildSnapshot({
+    required this.currentIndex,
+    required this.candidateIndex,
+    required this.settledIndex,
+    required this.settledItemId,
+    required this.scrollPhase,
+    required this.generation,
+  });
+
+  factory _ViewportBuildSnapshot.fromState(PlayerViewportState state) {
+    return _ViewportBuildSnapshot(
+      currentIndex: state.currentIndex,
+      candidateIndex: state.candidateIndex,
+      settledIndex: state.settledIndex,
+      settledItemId: state.settledItemId,
+      scrollPhase: state.scrollPhase,
+      generation: state.generation,
+    );
+  }
+
+  final int currentIndex;
+  final int candidateIndex;
+  final int settledIndex;
+  final String? settledItemId;
+  final PlayerViewportScrollPhase scrollPhase;
+  final int generation;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _ViewportBuildSnapshot &&
+        other.currentIndex == currentIndex &&
+        other.candidateIndex == candidateIndex &&
+        other.settledIndex == settledIndex &&
+        other.settledItemId == settledItemId &&
+        other.scrollPhase == scrollPhase &&
+        other.generation == generation;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    currentIndex,
+    candidateIndex,
+    settledIndex,
+    settledItemId,
+    scrollPhase,
+    generation,
+  );
 }
 
 class _ViewportSettledSnapshot {

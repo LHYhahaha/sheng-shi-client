@@ -11,7 +11,6 @@ void main() {
 
     controller.initialize(index: 0, itemId: 'ep-1');
     controller.markScrollStart();
-    controller.updatePageOffset(0.52);
     controller.markPageChanged(1);
 
     var state = container.read(provider);
@@ -26,7 +25,7 @@ void main() {
     expect(state.scrollPhase, PlayerViewportScrollPhase.settling);
     expect(state.settledIndex, 0);
 
-    controller.settle(index: 1, itemId: 'ep-2', pageOffset: 1);
+    controller.settle(index: 1, itemId: 'ep-2');
     state = container.read(provider);
     expect(state.scrollPhase, PlayerViewportScrollPhase.idle);
     expect(state.currentIndex, 1);
@@ -46,7 +45,7 @@ void main() {
     controller.markPageChanged(1);
     controller.markPageChanged(2);
     controller.markScrollEnd();
-    controller.settle(index: 2, itemId: 'ep-3', pageOffset: 2);
+    controller.settle(index: 2, itemId: 'ep-3');
 
     final state = container.read(provider);
     expect(state.currentIndex, 2);
