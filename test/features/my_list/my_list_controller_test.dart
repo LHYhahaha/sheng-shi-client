@@ -149,6 +149,15 @@ class _FakeMyListRepository implements MyListRepository {
       MyListTab.play => playItems,
     };
   }
+
+  @override
+  Future<void> deleteFavorite({required String dramaId}) async {}
+
+  @override
+  Future<void> deleteFavorites({required List<String> dramaIds}) async {}
+
+  @override
+  Future<void> deletePlayHistory({required String historyId}) async {}
 }
 
 const _collectionItem = MyListItem(

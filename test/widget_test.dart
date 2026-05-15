@@ -1215,6 +1215,15 @@ class _EmptyMyListRepository implements MyListRepository {
   Future<List<MyListItem>> fetchItems({required MyListTab tab}) async {
     return const [];
   }
+
+  @override
+  Future<void> deleteFavorite({required String dramaId}) async {}
+
+  @override
+  Future<void> deleteFavorites({required List<String> dramaIds}) async {}
+
+  @override
+  Future<void> deletePlayHistory({required String historyId}) async {}
 }
 
 class _EmptyWalletRepository implements WalletRepository {

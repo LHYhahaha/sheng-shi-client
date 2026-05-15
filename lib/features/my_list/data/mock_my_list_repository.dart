@@ -12,6 +12,15 @@ class MockMyListRepository implements MyListRepository {
       MyListTab.play => _playItems,
     };
   }
+
+  @override
+  Future<void> deleteFavorite({required String dramaId}) async {}
+
+  @override
+  Future<void> deleteFavorites({required List<String> dramaIds}) async {}
+
+  @override
+  Future<void> deletePlayHistory({required String historyId}) async {}
 }
 
 const _intro =

@@ -450,3 +450,23 @@ flutter test
 - 字幕轨道、preview sprite、cachePolicy、preloadPolicy 只完成 contract/mapper，不接播放器 UI。
 - `PlayerContent` 的 poster/background 仍沿用当前 asset fallback；统一 `MediaResource` 迁移留到后续图片资源阶段。
 - 播放源 refresh、source 过期重拉、backup HLS URL fallback、真实 entitlement/access API 仍 defer。
+
+## API Skeleton Phase C 状态
+
+已完成 My list / Play history 远程骨架，但默认运行链路仍保持 mock：
+
+- 新增 DTO：收藏条目、播放历史条目、分页结果、mutation 响应。
+- 新增 DTO -> domain mapper：远程收藏和播放历史可以转换为当前 `MyListItem`。
+- `MyListItem` 增加 `coverResource`，remote `coverUrl` 映射为 `MediaResource.network`，旧 UI 仍使用 `coverAssetPath` 兜底，不把网络 URL 伪装成 asset。
+- 新增 `MyListRemoteDataSource`：预留 `GET /me/favorites`、`POST /me/favorites`、`DELETE /me/favorites/{dramaId}`、`DELETE /me/favorites:batch`、`GET /me/play-history`、`DELETE /me/play-history/{historyId}`。
+- 新增 `RemoteMyListRepository`，实现现有 `MyListRepository`，上层仍只感知 domain model。
+- `myListRepositoryProvider` 增加 `USE_REMOTE_MY_LIST_API` 编译期开关；默认值仍为 `false`，不影响当前 My list UI 和交互。
+- 收藏条目 id 优先使用 `dramaId`，保证删除接口能明确 drama 维度；播放历史优先使用 `historyId`，缺失时用 `dramaId + episodeId` 生成稳定展示 id。
+- 播放历史 DTO 已预留 `progressMs`、`durationMs`、`progressPercent`，当前 UI 暂不展示，为后续继续观看和播放进度同步准备。
+
+仍然 defer：
+
+- 不接真实 My list / Play history API，不启用真实 baseUrl，不替换 mock provider 默认行为。
+- MyListController 仍保持当前本地乐观删除交互；远程 mutation 失败回滚、404 幂等业务码处理后续再接。
+- 播放历史和 `PlaybackProgressRepository` 暂不合并，本轮只保留字段契约。
+- My list 网络图 UI 渲染、图片缓存、分页加载更多和本地缓存仍 defer。

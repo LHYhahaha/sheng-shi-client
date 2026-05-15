@@ -1,3 +1,5 @@
+import '../../../shared/media/media_resource.dart';
+
 /// 片单 tab。
 ///
 /// collection 支持批量编辑，play 支持单行滑动删除，两者交互不能混用。
@@ -15,7 +17,14 @@ class MyListItem {
     required this.coverAssetPath,
     required this.currentEpisode,
     required this.episodeCount,
-  });
+    MediaResource? coverResource,
+  }) : _coverResource = coverResource;
+
+  /// My list 默认封面兜底。
+  ///
+  /// 远程接口缺图或网络图加载失败时仍能保持当前 UI 可展示。后续如果抽统一图片组件，
+  /// 可以把这个兜底迁移到 shared media 层。
+  static const fallbackCoverAssetPath = 'assets/images/my_list/cover_1.png';
 
   /// 条目 id。
   ///
@@ -32,6 +41,15 @@ class MyListItem {
 
   /// 封面 asset 路径。
   final String coverAssetPath;
+
+  /// 封面的统一资源身份。
+  ///
+  /// remote mapper 会把 coverUrl 映射为 network resource。当前 MyListPage 仍使用
+  /// coverAssetPath 渲染，避免本轮扩大 UI 改动；后续切网络图时应优先读此字段。
+  MediaResource get coverResource =>
+      _coverResource ?? MediaResource.asset(coverAssetPath);
+
+  final MediaResource? _coverResource;
 
   /// 当前观看到的集数。
   ///
