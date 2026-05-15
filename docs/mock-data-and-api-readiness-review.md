@@ -528,3 +528,39 @@ flutter test
 - Wallet 记录分页加载、奖励领取 UI 状态机和失败回滚。
 - Profile 会员卡/金币卡从 Auth/Profile/Entitlement/Wallet 聚合派生。
 - Entitlement 真实 access 接口、source refresh、服务端幂等业务码细分。
+
+## API Skeleton Phase D Review / Commerce Contract Tightening
+
+已完成商业链路远程骨架的 contract review 和小范围收口：
+
+- 价格 raw/display 分离：
+  - Store / Membership 商品 DTO 和 domain 均保留 `priceMicros`、`currencyCode`、`localizedPrice`、`originalPriceMicros`、`localizedOriginalPrice`。
+  - Mapper 只透传 raw 字段，不从 `localizedPrice` 反推金额；UI 仍可继续使用 localized label 展示。
+- Google / Apple 商品兼容：
+  - Store / Membership 商品补充 `basePlanId`、`offerId`、`productType` 预留字段。
+  - Store 金币商品可表达 `consumable`；Membership 商品可表达 `subscription`、base plan 和 offer。
+  - `enabled`、`sortOrder`、促销 id / 促销结束时间继续保留。
+- Order skeleton 安全边界：
+  - `OrderDto.status` 仅表达订单状态快照，例如 pending / paid / failed / cancelled / verifying。
+  - 创建订单不等于支付成功，也不等于权益已发放；真实金币/会员权益必须等平台支付、服务端验单和 entitlement refresh。
+- Entitlement mapper：
+  - 已覆盖 `allowPlay`、`goMembership`、`showCoinUnlockDialog`、`showRechargeDialog`、`autoUnlockAndPlay`、`waitUnlock`。
+  - `insufficientCoins` 映射充值弹窗，`membershipRequired` 映射会员流程，`alreadyUnlocked/success` 映射允许播放，`unavailable` 不会误映射为可播放。
+- Wallet 与 Entitlement 真相边界：
+  - Wallet remote repository 只返回钱包聚合数据，不写入 mock entitlement state。
+  - Entitlement remote repository 不依赖 mock repository 内存状态。
+  - `PATCH /entitlements/settings/auto-unlock` 可以被 Wallet/Entitlement 共用，但最终真相是服务端 entitlement/settings。
+- Auth policy：
+  - Wallet、Store 创建订单、Membership status、Entitlement state/unlock/settings 均使用 `ApiAuthPolicy.required`。
+  - Store / Membership 商品列表当前按“允许未登录浏览”假设使用 `ApiAuthPolicy.none`；如果产品要求登录展示，只需调整 data source，不应影响 UI。
+- 分层边界：
+  - DTO 仍只存在 data 层，remote repository 输出现有 domain model。
+  - UI / Controller 不 import remote datasource，也不直接处理 DTO。
+
+仍然 defer：
+
+- 真实 IAP SDK、验单、订单轮询、退款/撤销、权益发放。
+- `bonusBalance` 是否可消费、是否优先扣、是否会过期，以及赠币过期流水口径。
+- 商品列表是否必须登录、是否按地区/语言/平台差异下发。
+- Entitlement 真实 access 接口、服务端幂等业务码、失败重试策略。
+- Wallet 记录分页、领取奖励、订单到账后刷新钱包/会员/Profile 聚合展示。

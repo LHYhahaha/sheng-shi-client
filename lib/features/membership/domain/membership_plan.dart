@@ -12,6 +12,9 @@ class MembershipPlan {
     required this.dailyPriceLabel,
     this.period,
     this.platformProductId,
+    this.basePlanId,
+    this.offerId,
+    this.productType,
     this.priceMicros,
     this.currencyCode,
     this.originalPriceMicros,
@@ -44,6 +47,17 @@ class MembershipPlan {
 
   /// Google/Apple 平台商品 id。
   final String? platformProductId;
+
+  /// Google Play base plan id。
+  ///
+  /// 订阅商品常见字段，真实下单不能只靠平台商品 id。
+  final String? basePlanId;
+
+  /// 订阅优惠 offer id。
+  final String? offerId;
+
+  /// 平台商品类型，通常是 subscription。
+  final String? productType;
 
   /// 原始价格微单位。
   final int? priceMicros;

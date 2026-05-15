@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:drama_client/core/network/api_client.dart';
 import 'package:drama_client/core/network/api_exception.dart';
 import 'package:drama_client/core/network/api_request_context.dart';
+import 'package:drama_client/features/entitlement/data/dto/episode_access_decision_dto.dart';
 import 'package:drama_client/features/entitlement/data/dto/unlock_episode_response_dto.dart';
 import 'package:drama_client/features/entitlement/data/dto/user_entitlement_state_dto.dart';
 import 'package:drama_client/features/entitlement/data/entitlement_repository_provider.dart';
@@ -114,6 +115,8 @@ void main() {
       expect(package.totalCoins, 1200);
       expect(package.priceMicros, 9990000);
       expect(package.currencyCode, 'USD');
+      expect(package.platformProductId, 'google.coins.1');
+      expect(package.productType, 'consumable');
       expect(package.badgeLabel, '+17%');
     });
 
@@ -199,7 +202,13 @@ void main() {
 
       expect(data.isActive, isTrue);
       expect(data.plans.single.priceMicros, 12990000);
+      expect(data.plans.single.currencyCode, 'USD');
       expect(data.plans.single.originalPriceMicros, 24990000);
+      expect(data.plans.single.originalPriceLabel, r'$24.99');
+      expect(data.plans.single.platformProductId, 'google.weekly.vip');
+      expect(data.plans.single.basePlanId, 'weekly-base');
+      expect(data.plans.single.offerId, 'intro-offer');
+      expect(data.plans.single.productType, 'subscription');
       expect(data.plans.single.badgeLabel, 'Limited offer');
       expect(data.benefits.single.icon, MembershipBenefitIcon.download);
     });
@@ -318,6 +327,44 @@ void main() {
     );
 
     test(
+      'remote decision dto covers coin confirm and auto unlock decisions',
+      () {
+        final mapper = const EntitlementMapper();
+        final coinConfirm = mapper.mapDecision(
+          EpisodeAccessDecisionDto.fromJson({
+            'type': 'showCoinUnlockDialog',
+            'dramaId': 'drama',
+            'episodeId': 'ep-4',
+            'itemId': 'item-4',
+            'unlockType': 'coins',
+            'price': 30,
+            'balance': 120,
+          }),
+        );
+        final autoUnlock = mapper.mapDecision(
+          EpisodeAccessDecisionDto.fromJson({
+            'type': 'autoUnlockAndPlay',
+            'dramaId': 'drama',
+            'episodeId': 'ep-4',
+            'itemId': 'item-4',
+            'unlockType': 'coins',
+            'price': 30,
+            'balance': 120,
+            'operationId': 'op-1',
+          }),
+        );
+
+        expect(
+          coinConfirm.type,
+          EpisodeAccessDecisionType.showCoinUnlockDialog,
+        );
+        expect(coinConfirm.price, 30);
+        expect(autoUnlock.type, EpisodeAccessDecisionType.autoUnlockAndPlay);
+        expect(autoUnlock.operationId, 'op-1');
+      },
+    );
+
+    test(
       'entitlement unlock and setting endpoints use required auth',
       () async {
         final adapter = _FakeHttpClientAdapter(
@@ -392,6 +439,7 @@ Map<String, Object?> _ok(Object? data) => {
 const _coinProductJson = {
   'productId': 'coins-1',
   'platformProductId': 'google.coins.1',
+  'productType': 'consumable',
   'kind': 'coins',
   'title': '1000',
   'baseCoins': 1000,
@@ -409,6 +457,9 @@ const _coinProductJson = {
 const _membershipProductJson = {
   'productId': 'weekly-vip',
   'platformProductId': 'google.weekly.vip',
+  'basePlanId': 'weekly-base',
+  'offerId': 'intro-offer',
+  'productType': 'subscription',
   'period': 'weekly',
   'title': 'Weekly VIP',
   'priceMicros': 12990000,

@@ -19,6 +19,9 @@ class StorePackage {
     this.currencyCode,
     this.originalPriceMicros,
     this.platformProductId,
+    this.basePlanId,
+    this.offerId,
+    this.productType,
     this.promotionId,
     this.promotionExpiresAt,
     this.sortOrder,
@@ -74,6 +77,19 @@ class StorePackage {
   ///
   /// 真实 IAP 下单使用平台商品 id，不要用展示标题反查。
   final String? platformProductId;
+
+  /// Google Play base plan id。
+  ///
+  /// 订阅商品可能需要 base plan + offer 才能精确下单；金币消耗型商品通常为空。
+  final String? basePlanId;
+
+  /// Google Play / App Store 促销 offer id。
+  final String? offerId;
+
+  /// 平台商品类型，例如 consumable/subscription。
+  ///
+  /// 只做订单 contract 预留，不参与当前 mock UI 判断。
+  final String? productType;
 
   /// 促销 id。
   final String? promotionId;

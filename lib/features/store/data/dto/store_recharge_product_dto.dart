@@ -2,6 +2,9 @@ class StoreRechargeProductDto {
   const StoreRechargeProductDto({
     required this.productId,
     required this.platformProductId,
+    this.basePlanId,
+    this.offerId,
+    this.productType,
     required this.kind,
     required this.title,
     required this.baseCoins,
@@ -23,6 +26,9 @@ class StoreRechargeProductDto {
 
   final String productId;
   final String platformProductId;
+  final String? basePlanId;
+  final String? offerId;
+  final String? productType;
   final String kind;
   final String title;
   final int baseCoins;
@@ -46,6 +52,9 @@ class StoreRechargeProductDto {
     return StoreRechargeProductDto(
       productId: _string(map['productId']),
       platformProductId: _string(map['platformProductId']),
+      basePlanId: _nullableString(map['basePlanId']),
+      offerId: _nullableString(map['offerId']),
+      productType: _nullableString(map['productType']),
       kind: _string(map['kind'], fallback: 'coins'),
       title: _string(map['title']),
       baseCoins: _int(map['baseCoins']),

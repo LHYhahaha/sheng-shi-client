@@ -4,6 +4,9 @@ class MembershipProductDto {
   const MembershipProductDto({
     required this.productId,
     required this.platformProductId,
+    this.basePlanId,
+    this.offerId,
+    this.productType,
     required this.period,
     required this.title,
     required this.priceMicros,
@@ -22,6 +25,9 @@ class MembershipProductDto {
 
   final String productId;
   final String platformProductId;
+  final String? basePlanId;
+  final String? offerId;
+  final String? productType;
   final String period;
   final String title;
   final int? priceMicros;
@@ -42,6 +48,9 @@ class MembershipProductDto {
     return MembershipProductDto(
       productId: _string(map['productId']),
       platformProductId: _string(map['platformProductId']),
+      basePlanId: _nullableString(map['basePlanId']),
+      offerId: _nullableString(map['offerId']),
+      productType: _nullableString(map['productType']),
       period: _string(map['period'], fallback: 'weekly'),
       title: _string(map['title']),
       priceMicros: _nullableInt(map['priceMicros']),
