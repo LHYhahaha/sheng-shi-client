@@ -318,16 +318,72 @@ E1-E3 后，Player、Store、Membership、Wallet 已开始共享 entitlement 状
 - 不迁移 ARB/gen-l10n。
 - 不重构现有 UI 和播放器主流程。
 
-## 建议下一轮
+## 建议下一轮 / 待派任务
 
-建议下一轮做 **API Skeleton Phase A**，只补基础设施，不替换 mock：
+### Next: Network Contract Phase B
 
-1. 新增 `core/network`：ApiClient/Dio provider、header、timeout、ApiException 映射。
-2. 选 Home/Drama 做第一条 remote datasource + DTO + mapper skeleton。
-3. 保持 feature flag 默认 mock，remote implementation 只在测试中验证 mapper。
-4. 同步定义 `MediaImage` 或等价资源模型，先解决 asset/url 归一化问题。
+状态：待派发。建议等当前开发任务完成并提交后，再单独派给开发 agent。
 
-这样能最小风险验证“mock -> remote”的形状，而不会影响当前已验收 UI 和播放器链路。
+目标：把 `core/network` 对齐服务端最新接口规范，但仍不接真实业务 API，不替换 mock repository。
+
+开发范围：
+
+1. 新增或完善请求上下文，例如 `ApiRequestContext` / provider，统一提供 `Device-Id`、`Lang`、`Platform`、`App-Version`、`accessToken?`。
+2. `ApiClient` 所有请求默认带：
+   - `Device-Id`
+   - `Lang`
+   - `Platform`
+   - `App-Version`
+   - `Accept: application/json`
+   - body 请求带 `Content-Type: application/json`
+3. 为接口增加 auth policy：
+   - 登录、第三方登录、刷新 token 不带 `Authorization`。
+   - 登录后的业务接口带 `Authorization: Bearer xxx`。
+   - 当前 skeleton 默认不要强制 token，避免破坏 mock 和远程骨架测试。
+4. 服务端 envelope 统一为：
+   ```json
+   {
+     "code": 0,
+     "message": "success",
+     "data": null
+   }
+   ```
+   `code: 0` 是唯一成功码；不能再把 `200` 当业务成功码。
+5. `ApiException` 增加业务错误码承载能力，例如 `businessCode`，并保留服务端 `message`。
+6. 业务错误码按 4 位数字处理：
+   - `1001` 参数错误
+   - `1002` 请求频繁
+   - `1003` 签名 / 验签失败
+   - `1004` 系统异常
+   - 后续 `2xxx` 用户域、`3xxx` 内容域、`4xxx` 金币/任务/福利域只记录并透传，不在网络层硬编码业务 UI。
+7. 更新 `docs/api-integration-plan.md` 和 `docs/networking-guidelines.md`，让 header、envelope、错误码和实现一致。
+8. 补网络层单测：
+   - 所有请求自动带四个基础 header。
+   - auth required 时带 `Authorization`。
+   - auth none 时不带 `Authorization`。
+   - `code: 0` 成功。
+   - `code: 200` 应作为业务失败处理。
+   - `code: 1001` 抛出 `ApiException.businessCode == 1001`。
+   - `data: null` 可以被 decoder 正常处理。
+
+限制：
+
+- 不接真实登录。
+- 不接真实 token refresh。
+- 不接真实业务接口。
+- 不改 UI。
+- 不替换 `MockDramaRepository` / 其他 mock repository。
+- 不把 token 存储、secure storage、401 refresh 队列混进本轮。
+
+验证：
+
+```bash
+dart format lib test integration_test
+flutter analyze
+flutter test
+```
+
+### 已完成: API Skeleton Phase A
 
 ## API Skeleton Phase A 状态
 

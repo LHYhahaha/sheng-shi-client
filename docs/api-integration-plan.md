@@ -71,15 +71,45 @@ Current network skeleton:
 
 Required request headers:
 
-- `Accept: application/json`
-- `Content-Type: application/json` for body requests
-- `Authorization: Bearer <accessToken>` when authenticated
-- `X-Locale`: app/content locale, for example `en-US`
-- `X-App-Version`: native app version/build number
-- `X-Platform`: `ios` or `android`
-- `X-Device-Id`: stable install/device identifier
-- `X-Timezone`: IANA timezone
-- `X-Request-Id`: optional client-generated request id
+All requests, including login, third-party login, and refresh token:
+
+- `Device-Id`: stable install/device identifier.
+- `Lang`: app/content language, currently `en`, `es`, `pt`, or `hi`.
+- `Platform`: `ios`, `android`, or `web`.
+- `App-Version`: native app version, for example `1.0.0`.
+- `Accept: application/json`.
+- `Content-Type: application/json` for body requests.
+
+Authenticated business requests, excluding login, third-party login, and
+refresh token:
+
+- `Authorization: Bearer <accessToken>`.
+
+Optional client diagnostics headers should only be added after the server
+confirms support:
+
+- `X-Timezone`: IANA timezone.
+- `X-Request-Id`: optional client-generated request id.
+
+Response envelope:
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": null
+}
+```
+
+- `code: 0` is the only success code.
+- Failure responses use a four-digit business code and `data: null` unless a
+  specific endpoint defines otherwise.
+- Four-digit business codes use the format: domain digit + module digit +
+  two-digit sequence. Examples: `1001`, `3102`, `4205`.
+- Current reserved domains: `0` global, `1` admin, `2` app user, `3` short
+  drama content, `4` coins/tasks/welfare.
+- Current global examples: `1001` parameter error, `1002` request too frequent,
+  `1003` signature/verification failed, `1004` system exception.
 
 Timeout defaults:
 

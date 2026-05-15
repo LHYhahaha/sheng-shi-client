@@ -66,6 +66,14 @@ final result = await apiClient.get<MyDto>(
 
 如果响应没有 `code/data`，则直接把 body 交给 `decoder`。
 
+目标服务端规范：
+
+- 所有接口都必须带 `Device-Id`、`Lang`、`Platform`、`App-Version`。
+- 登录、第三方登录、刷新 token 不带 `Authorization`。
+- 登录后的业务接口额外带 `Authorization: Bearer <token>`。
+- 业务 envelope 中 `code: 0` 是唯一成功码，失败返回 4 位业务错误码。
+- Network Contract Phase B 会把这些 header、auth policy、business code 映射落到 `ApiClient`，当前文档先作为实现约束记录。
+
 ## 异常类型
 
 统一异常是 `ApiException`：
@@ -130,7 +138,7 @@ baseUrl 来自 `AppConfig.current`：
 
 - token 注入 interceptor
 - 401 refresh token 队列
-- request id / device id / app version header
+- request id header
 - 网络日志脱敏
 - Sentry breadcrumb
 - API mock switch
