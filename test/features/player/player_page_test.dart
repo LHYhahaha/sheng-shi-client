@@ -1537,9 +1537,17 @@ double _topBarOpacity(WidgetTester tester) {
 }
 
 Future<void> _pumpAutoUnlockSheet(WidgetTester tester) async {
-  await tester.pumpAndSettle();
-  await tester.pump(const Duration(milliseconds: 210));
-  await tester.pump(const Duration(milliseconds: 30));
+  for (var i = 0; i < 80; i += 1) {
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(Duration.zero);
+    if (find.text('Recharge to unlock').evaluate().isNotEmpty ||
+        find
+            .byKey(const ValueKey('player_coin_unlock_confirm'))
+            .evaluate()
+            .isNotEmpty) {
+      break;
+    }
+  }
   await tester.pumpAndSettle();
 }
 

@@ -32,6 +32,7 @@ class PlayerChrome extends StatefulWidget {
     this.unlockLabel,
     this.overlayOpacity = 1.0,
     this.overlayOpacityListenable,
+    this.showViewportBackdrop = true,
     this.showVideo = true,
     this.showLoading = false,
     this.playbackError = false,
@@ -69,6 +70,7 @@ class PlayerChrome extends StatefulWidget {
   final String? unlockLabel;
   final double overlayOpacity;
   final ValueListenable<double>? overlayOpacityListenable;
+  final bool showViewportBackdrop;
   final bool showVideo;
   final bool showLoading;
   final bool playbackError;
@@ -124,6 +126,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
   double get overlayOpacity => widget.overlayOpacity;
   ValueListenable<double>? get overlayOpacityListenable =>
       widget.overlayOpacityListenable;
+  bool get showViewportBackdrop => widget.showViewportBackdrop;
   bool get showVideo => widget.showVideo;
   bool get showLoading => widget.showLoading;
   bool get playbackError => widget.playbackError;
@@ -162,7 +165,8 @@ class _PlayerChromeState extends State<PlayerChrome> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        const Positioned.fill(child: ColoredBox(color: AppColors.black)),
+        if (showViewportBackdrop)
+          const Positioned.fill(child: ColoredBox(color: AppColors.black)),
         Positioned(
           key: const ValueKey('player_video_viewport'),
           left: 0,
@@ -176,7 +180,8 @@ class _PlayerChromeState extends State<PlayerChrome> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Image.asset(content.backgroundAssetPath, fit: BoxFit.cover),
+                if (showViewportBackdrop)
+                  Image.asset(content.backgroundAssetPath, fit: BoxFit.cover),
                 ?playbackLayer,
                 if (videoController != null)
                   IgnorePointer(

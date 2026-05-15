@@ -70,9 +70,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   static const _topBarBackIconSize = 28.0;
   static const _topBarMoreIconSize = 24.0;
   static const _dimmedOverlayOpacity = 0.64;
-  static const _autoUnlockSheetStableDelay = Duration(milliseconds: 120);
-  static const _autoUnlockSheetMaxWait = Duration(milliseconds: 650);
-  static const _autoUnlockSheetPostFrameDelay = Duration(milliseconds: 16);
+  static const _autoUnlockSheetDwellDelay = Duration(milliseconds: 900);
 
   late final PageController _pageController;
   late final String _sessionKey;
@@ -95,8 +93,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   String? _activeRechargeSheetItemId;
   String? _pendingAutoUnlockSheetItemId;
   DateTime? _pendingAutoUnlockSheetScheduledAt;
-  Timer? _pendingAutoUnlockSheetStableTimer;
-  Timer? _pendingAutoUnlockSheetMaxTimer;
+  Duration? _pendingAutoUnlockSheetFrameStartedAt;
 
   String _createSessionKey() {
     return switch (widget.feedMode) {
@@ -305,6 +302,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         final accessStopwatch = Stopwatch()..start();
         await _handleEntitlementDecisionForItem(next, autoPresentSheet: false);
         accessStopwatch.stop();
+        PlayerRebuildDiagnostics.recordTiming(
+          'currentItemAccessMode',
+          itemId: next.id,
+          details: _isLockedAutoSheetCandidate(next)
+              ? 'mode=locked'
+              : 'mode=playable',
+        );
         if (_isLockedAutoSheetCandidate(next)) {
           PlayerRebuildDiagnostics.recordTiming(
             'currentItemChangeToUnlockNow',
@@ -437,8 +441,23 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       );
     }
 
+    final currentItem = feedState.currentItem;
+    final canShowActiveVideoOverlay =
+        currentItem != null &&
+        !currentItem.episode.isUnavailable &&
+        _isEntitlementPlayable(currentItem);
+
     return Stack(
       children: [
+        _ActivePlaybackSurfaceOverlay(
+          sessionKey: _sessionKey,
+          itemId: currentItem?.id,
+          canShowVideo: canShowActiveVideoOverlay,
+          videoFit: currentItem == null
+              ? BoxFit.cover
+              : _videoFitFor(currentItem.episode),
+          forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
+        ),
         Listener(
           key: const ValueKey('player_page_view_surface'),
           onPointerDown: (_) => _setPlaybackSurfacePressed(true),
@@ -477,16 +496,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                     playbackShell.shouldAttachVideoSurface &&
                     playbackShell.currentItemId == item.id &&
                     playbackShell.currentSource != null;
+                final canHideViewportBackdrop =
+                    canUsePlaybackSurface && playbackShell.hasVideoController;
                 return Stack(
                   children: [
                     PlayerChrome(
                       content: item.content,
                       overlayOpacityListenable: _overlayOpacityNotifier,
+                      showViewportBackdrop: !canHideViewportBackdrop,
                       playbackLayer: canUsePlaybackSurface
-                          ? _PlayerPlaybackSurfaceConsumer(
+                          ? _PlayerPlaybackControlsConsumer(
                               sessionKey: _sessionKey,
                               itemId: item.id,
-                              videoFit: _videoFitFor(item.episode),
                               onTogglePlay: () {
                                 unawaited(playbackController.togglePlay());
                               },
@@ -707,23 +728,49 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         !_isEntitlementPlayable(item);
   }
 
+  bool _isPageActivelyMovingForAutoSheet(PlayerFeedItem item) {
+    if (!_isPageScrolling) {
+      return false;
+    }
+    if (!_pageController.hasClients) {
+      return true;
+    }
+    final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+    final itemIndex = feedState.items.indexWhere(
+      (candidate) => candidate.id == item.id,
+    );
+    final page = _pageController.page;
+    if (itemIndex == -1 || page == null) {
+      return true;
+    }
+    return (page - itemIndex).abs() > 0.01;
+  }
+
   void _cancelPendingAutoUnlockSheet() {
-    _pendingAutoUnlockSheetStableTimer?.cancel();
-    _pendingAutoUnlockSheetMaxTimer?.cancel();
-    _pendingAutoUnlockSheetStableTimer = null;
-    _pendingAutoUnlockSheetMaxTimer = null;
+    final itemId = _pendingAutoUnlockSheetItemId;
+    final scheduledAt = _pendingAutoUnlockSheetScheduledAt;
     _pendingAutoUnlockSheetItemId = null;
     _pendingAutoUnlockSheetScheduledAt = null;
+    _pendingAutoUnlockSheetFrameStartedAt = null;
     _autoUnlockSheetGeneration += 1;
+    if (itemId != null) {
+      PlayerRebuildDiagnostics.recordTiming(
+        'dwellAutoSheetCancel',
+        itemId: itemId,
+        elapsed: scheduledAt == null
+            ? null
+            : DateTime.now().difference(scheduledAt),
+      );
+    }
   }
 
   void _scheduleAutoUnlockSheetForItem(PlayerFeedItem item) {
-    _pendingAutoUnlockSheetStableTimer?.cancel();
-    _pendingAutoUnlockSheetMaxTimer?.cancel();
-    _pendingAutoUnlockSheetStableTimer = null;
-    _pendingAutoUnlockSheetMaxTimer = null;
+    if (_pendingAutoUnlockSheetItemId == item.id) {
+      return;
+    }
     _pendingAutoUnlockSheetItemId = null;
     _pendingAutoUnlockSheetScheduledAt = null;
+    _pendingAutoUnlockSheetFrameStartedAt = null;
 
     if (!mounted ||
         _isModalOpen ||
@@ -735,95 +782,84 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
     _pendingAutoUnlockSheetItemId = item.id;
     _pendingAutoUnlockSheetScheduledAt = DateTime.now();
+    _pendingAutoUnlockSheetFrameStartedAt = null;
     final generation = ++_autoUnlockSheetGeneration;
+    PlayerRebuildDiagnostics.recordTiming(
+      'dwellAutoSheetSchedule',
+      itemId: item.id,
+      details: 'delayMs=${_autoUnlockSheetDwellDelay.inMilliseconds}',
+    );
 
-    _pendingAutoUnlockSheetStableTimer = Timer(_autoUnlockSheetStableDelay, () {
-      _pendingAutoUnlockSheetStableTimer = null;
-      _queueAutoUnlockSheetPresentation(
-        item,
-        generation: generation,
-        allowWhileScrolling: false,
-      );
-    });
-    _pendingAutoUnlockSheetMaxTimer = Timer(_autoUnlockSheetMaxWait, () {
-      _pendingAutoUnlockSheetMaxTimer = null;
-      _queueAutoUnlockSheetPresentation(
-        item,
-        generation: generation,
-        allowWhileScrolling: true,
-      );
-    });
+    _queueDwellAutoUnlockSheetFrame(item, generation: generation);
   }
 
-  void _queueAutoUnlockSheetPresentation(
+  void _queueDwellAutoUnlockSheetFrame(
     PlayerFeedItem item, {
     required int generation,
-    required bool allowWhileScrolling,
   }) {
-    if (!mounted ||
-        generation != _autoUnlockSheetGeneration ||
-        _pendingAutoUnlockSheetItemId != item.id) {
-      return;
-    }
-
     SchedulerBinding.instance.addPostFrameCallback((_) {
       if (!mounted ||
           generation != _autoUnlockSheetGeneration ||
           _pendingAutoUnlockSheetItemId != item.id) {
         return;
       }
-      unawaited(() async {
-        await Future<void>.delayed(_autoUnlockSheetPostFrameDelay);
-        if (!mounted ||
-            generation != _autoUnlockSheetGeneration ||
-            _pendingAutoUnlockSheetItemId != item.id) {
-          return;
-        }
-        await _showAutoUnlockSheetForItem(
-          item,
-          generation: generation,
-          allowWhileScrolling: allowWhileScrolling,
-        );
-      }());
+      final frameTime = SchedulerBinding.instance.currentFrameTimeStamp;
+      final startedAt = _pendingAutoUnlockSheetFrameStartedAt;
+      if (startedAt == null) {
+        _pendingAutoUnlockSheetFrameStartedAt = frameTime;
+        SchedulerBinding.instance.scheduleFrame();
+        _queueDwellAutoUnlockSheetFrame(item, generation: generation);
+        return;
+      }
+      final elapsed = frameTime - startedAt;
+      if (elapsed < _autoUnlockSheetDwellDelay) {
+        SchedulerBinding.instance.scheduleFrame();
+        _queueDwellAutoUnlockSheetFrame(item, generation: generation);
+        return;
+      }
+      unawaited(_showAutoUnlockSheetForItem(item, generation: generation));
     });
+    SchedulerBinding.instance.scheduleFrame();
   }
 
   Future<void> _showAutoUnlockSheetForItem(
     PlayerFeedItem item, {
     required int generation,
-    required bool allowWhileScrolling,
   }) async {
     if (!mounted ||
         generation != _autoUnlockSheetGeneration ||
         !_isCurrentFeedItem(item) ||
         !_isLockedAutoSheetCandidate(item) ||
-        (!allowWhileScrolling && _isPageScrolling) ||
         _isModalOpen ||
         _activeCoinSheetItemId != null ||
         _activeRechargeSheetItemId != null) {
       return;
     }
 
-    _pendingAutoUnlockSheetStableTimer?.cancel();
-    _pendingAutoUnlockSheetMaxTimer?.cancel();
-    _pendingAutoUnlockSheetStableTimer = null;
-    _pendingAutoUnlockSheetMaxTimer = null;
+    if (_isPageActivelyMovingForAutoSheet(item)) {
+      PlayerRebuildDiagnostics.recordTiming(
+        'dwellAutoSheetWaitForSettle',
+        itemId: item.id,
+      );
+      _queueDwellAutoUnlockSheetFrame(item, generation: generation);
+      return;
+    }
+
     final scheduledAt = _pendingAutoUnlockSheetScheduledAt;
     _pendingAutoUnlockSheetItemId = null;
     _pendingAutoUnlockSheetScheduledAt = null;
+    _pendingAutoUnlockSheetFrameStartedAt = null;
     if (scheduledAt != null) {
       final elapsed = DateTime.now().difference(scheduledAt);
       PlayerRebuildDiagnostics.recordTiming(
-        'autoSheetScheduling',
+        'dwellAutoSheetFire',
         itemId: item.id,
         elapsed: elapsed,
-        details: 'allowWhileScrolling=$allowWhileScrolling',
       );
       _playbackController.recordPlaybackTiming(
-        'auto sheet scheduling',
+        'dwell auto sheet scheduling',
         itemId: item.id,
         elapsed: elapsed,
-        details: 'allowWhileScrolling=$allowWhileScrolling',
       );
     }
 
@@ -842,7 +878,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         generation != _autoUnlockSheetGeneration ||
         !_isCurrentFeedItem(item) ||
         (!_isLockedAutoSheetCandidate(item)) ||
-        (!allowWhileScrolling && _isPageScrolling) ||
         _isModalOpen) {
       return;
     }
@@ -1204,6 +1239,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         !_isLockedAutoSheetCandidate(currentItem)) {
       return;
     }
+    PlayerRebuildDiagnostics.recordTiming(
+      'manualUnlockNowTap',
+      itemId: currentItem.id,
+    );
 
     final decision = ref
         .read(entitlementControllerProvider.notifier)
@@ -1383,6 +1422,7 @@ class _PlayerPlaybackShellSnapshot {
     required this.currentSource,
     required this.status,
     required this.surfaceLifecycle,
+    required this.hasVideoController,
     required this.playbackRate,
   });
 
@@ -1392,6 +1432,7 @@ class _PlayerPlaybackShellSnapshot {
       currentSource: state.currentSource,
       status: state.status,
       surfaceLifecycle: state.surfaceLifecycle,
+      hasVideoController: state.videoController != null,
       playbackRate: state.playbackRate,
     );
   }
@@ -1400,6 +1441,7 @@ class _PlayerPlaybackShellSnapshot {
   final String? currentSource;
   final PlayerPlaybackStatus status;
   final PlayerVideoSurfaceLifecycle surfaceLifecycle;
+  final bool hasVideoController;
   final double playbackRate;
 
   bool get shouldAttachVideoSurface =>
@@ -1416,6 +1458,7 @@ class _PlayerPlaybackShellSnapshot {
         other.currentSource == currentSource &&
         other.status == status &&
         other.surfaceLifecycle == surfaceLifecycle &&
+        other.hasVideoController == hasVideoController &&
         other.playbackRate == playbackRate;
   }
 
@@ -1425,6 +1468,7 @@ class _PlayerPlaybackShellSnapshot {
     currentSource,
     status,
     surfaceLifecycle,
+    hasVideoController,
     playbackRate,
   );
 }
@@ -1465,7 +1509,7 @@ class _PlayerPlaybackRenderSnapshot {
     required this.surfaceLifecycle,
     required this.hasFirstFrame,
     required this.isBuffering,
-    required this.position,
+    required this.isPlaybackAdvancing,
   });
 
   factory _PlayerPlaybackRenderSnapshot.fromState(PlayerPlaybackState state) {
@@ -1477,7 +1521,7 @@ class _PlayerPlaybackRenderSnapshot {
       surfaceLifecycle: state.surfaceLifecycle,
       hasFirstFrame: state.hasFirstFrame,
       isBuffering: state.isBuffering,
-      position: state.position,
+      isPlaybackAdvancing: state.position > Duration.zero,
     );
   }
 
@@ -1488,7 +1532,7 @@ class _PlayerPlaybackRenderSnapshot {
   final PlayerVideoSurfaceLifecycle surfaceLifecycle;
   final bool hasFirstFrame;
   final bool isBuffering;
-  final Duration position;
+  final bool isPlaybackAdvancing;
 
   bool get shouldAttachVideoSurface =>
       surfaceLifecycle == PlayerVideoSurfaceLifecycle.attached;
@@ -1515,7 +1559,7 @@ class _PlayerPlaybackRenderSnapshot {
         other.surfaceLifecycle == surfaceLifecycle &&
         other.hasFirstFrame == hasFirstFrame &&
         other.isBuffering == isBuffering &&
-        other.position == position;
+        other.isPlaybackAdvancing == isPlaybackAdvancing;
   }
 
   @override
@@ -1527,7 +1571,7 @@ class _PlayerPlaybackRenderSnapshot {
     surfaceLifecycle,
     hasFirstFrame,
     isBuffering,
-    position,
+    isPlaybackAdvancing,
   );
 }
 
@@ -1608,39 +1652,37 @@ class _PlayerSeekBarSnapshot {
   );
 }
 
-class _PlayerPlaybackSurfaceConsumer extends ConsumerStatefulWidget {
-  const _PlayerPlaybackSurfaceConsumer({
+class _ActivePlaybackSurfaceOverlay extends ConsumerStatefulWidget {
+  const _ActivePlaybackSurfaceOverlay({
     required this.sessionKey,
     required this.itemId,
+    required this.canShowVideo,
     required this.videoFit,
-    required this.onTogglePlay,
-    required this.onRetry,
+    required this.forYouLayout,
   });
 
   final String sessionKey;
-  final String itemId;
+  final String? itemId;
+  final bool canShowVideo;
   final BoxFit videoFit;
-  final VoidCallback onTogglePlay;
-  final VoidCallback onRetry;
+  final bool forYouLayout;
 
   @override
-  ConsumerState<_PlayerPlaybackSurfaceConsumer> createState() =>
-      _PlayerPlaybackSurfaceConsumerState();
+  ConsumerState<_ActivePlaybackSurfaceOverlay> createState() =>
+      _ActivePlaybackSurfaceOverlayState();
 }
 
-class _PlayerPlaybackSurfaceConsumerState
-    extends ConsumerState<_PlayerPlaybackSurfaceConsumer> {
-  bool _showPauseFeedback = false;
-  Timer? _feedbackTimer;
+class _ActivePlaybackSurfaceOverlayState
+    extends ConsumerState<_ActivePlaybackSurfaceOverlay> {
   VideoController? _mountedController;
+  String? _visibleItemId;
 
   @override
   void dispose() {
-    _feedbackTimer?.cancel();
     final controller = _mountedController;
     if (controller != null) {
       PlayerRebuildDiagnostics.recordVideoUnmounted(
-        itemId: widget.itemId,
+        itemId: _visibleItemId ?? widget.itemId ?? 'null',
         controller: controller,
       );
     }
@@ -1657,33 +1699,170 @@ class _PlayerPlaybackSurfaceConsumerState
     );
     final playbackController = ref.read(playbackProvider.notifier);
     final canRender =
+        widget.canShowVideo &&
         snapshot.shouldAttachVideoSurface &&
+        widget.itemId != null &&
         snapshot.currentItemId == widget.itemId &&
         snapshot.currentSource != null;
     final controller = canRender && snapshot.canMountVideoSurface
         ? snapshot.videoController
         : null;
-    _recordControllerLifecycle(controller);
+    _recordControllerLifecycle(controller, snapshot.currentItemId);
 
     if (!canRender) {
+      _recordOverlayHidden(snapshot);
       return const SizedBox.shrink();
     }
 
+    _recordOverlayShown(snapshot);
     final canShowVideoSurface = !snapshot.isError;
     final showVideoBeforeFirstFrame =
         canShowVideoSurface &&
         !snapshot.hasFirstFrame &&
         (snapshot.status == PlayerPlaybackStatus.playing ||
-            snapshot.position > Duration.zero);
+            snapshot.isPlaybackAdvancing);
     if (showVideoBeforeFirstFrame) {
       playbackController.recordVideoSurfaceShownBeforeFirstFrame(
-        itemId: widget.itemId,
+        itemId: widget.itemId!,
         source: snapshot.currentSource,
       );
     }
     final showVideo =
         canShowVideoSurface &&
         (snapshot.hasFirstFrame || showVideoBeforeFirstFrame);
+    final mediaQuery = MediaQuery.of(context);
+    final bottomFrameHeight = widget.forYouLayout
+        ? mediaQuery.padding.bottom
+        : mediaQuery.padding.bottom + 79;
+
+    return Positioned(
+      left: 0,
+      top: 0,
+      right: 0,
+      bottom: bottomFrameHeight,
+      child: IgnorePointer(
+        child: AnimatedOpacity(
+          opacity: showVideo ? 1 : 0,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          child: controller == null
+              ? const SizedBox.shrink()
+              : Video(
+                  key: const ValueKey('active_playback_video_surface'),
+                  controller: controller,
+                  controls: NoVideoControls,
+                  fit: widget.videoFit,
+                ),
+        ),
+      ),
+    );
+  }
+
+  void _recordControllerLifecycle(
+    VideoController? controller,
+    String? currentItemId,
+  ) {
+    if (controller == _mountedController) {
+      return;
+    }
+    final previous = _mountedController;
+    if (previous != null && controller != null) {
+      PlayerRebuildDiagnostics.recordVideoControllerReplaced(
+        itemId: currentItemId ?? widget.itemId ?? 'null',
+        previous: previous,
+        next: controller,
+      );
+    } else if (previous == null && controller != null) {
+      PlayerRebuildDiagnostics.recordVideoMounted(
+        itemId: currentItemId ?? widget.itemId ?? 'null',
+        controller: controller,
+      );
+    } else if (previous != null && controller == null) {
+      PlayerRebuildDiagnostics.recordVideoUnmounted(
+        itemId: _visibleItemId ?? widget.itemId ?? 'null',
+        controller: previous,
+      );
+    }
+    _mountedController = controller;
+  }
+
+  void _recordOverlayShown(_PlayerPlaybackRenderSnapshot snapshot) {
+    if (_visibleItemId == snapshot.currentItemId) {
+      return;
+    }
+    _visibleItemId = snapshot.currentItemId;
+    PlayerRebuildDiagnostics.recordTiming(
+      'ActiveVideoSurface.show',
+      itemId: snapshot.currentItemId,
+      details: 'status=${snapshot.status.name}',
+    );
+  }
+
+  void _recordOverlayHidden(_PlayerPlaybackRenderSnapshot snapshot) {
+    final previous = _visibleItemId;
+    if (previous == null) {
+      return;
+    }
+    _visibleItemId = null;
+    PlayerRebuildDiagnostics.recordTiming(
+      'ActiveVideoSurface.hide',
+      itemId: previous,
+      details:
+          'status=${snapshot.status.name} current=${snapshot.currentItemId ?? 'null'} canShow=${widget.canShowVideo}',
+    );
+  }
+}
+
+class _PlayerPlaybackControlsConsumer extends ConsumerStatefulWidget {
+  const _PlayerPlaybackControlsConsumer({
+    required this.sessionKey,
+    required this.itemId,
+    required this.onTogglePlay,
+    required this.onRetry,
+  });
+
+  final String sessionKey;
+  final String itemId;
+  final VoidCallback onTogglePlay;
+  final VoidCallback onRetry;
+
+  @override
+  ConsumerState<_PlayerPlaybackControlsConsumer> createState() =>
+      _PlayerPlaybackControlsConsumerState();
+}
+
+class _PlayerPlaybackControlsConsumerState
+    extends ConsumerState<_PlayerPlaybackControlsConsumer> {
+  bool _showPauseFeedback = false;
+  Timer? _feedbackTimer;
+
+  @override
+  void dispose() {
+    _feedbackTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final snapshot = ref.watch(
+      playerPlaybackControllerProvider(
+        widget.sessionKey,
+      ).select(_PlayerPlaybackRenderSnapshot.fromState),
+    );
+    final canRender =
+        snapshot.shouldAttachVideoSurface &&
+        snapshot.currentItemId == widget.itemId &&
+        snapshot.currentSource != null;
+
+    if (!canRender) {
+      return const SizedBox.shrink();
+    }
+
+    final showVideoBeforeFirstFrame =
+        !snapshot.isError &&
+        !snapshot.hasFirstFrame &&
+        (snapshot.status == PlayerPlaybackStatus.playing ||
+            snapshot.isPlaybackAdvancing);
     final showLoading =
         canRender && (snapshot.isLoading || showVideoBeforeFirstFrame);
     final canTogglePlayback = snapshot.canTogglePlayback;
@@ -1696,19 +1875,6 @@ class _PlayerPlaybackSurfaceConsumerState
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (controller != null)
-          IgnorePointer(
-            child: AnimatedOpacity(
-              opacity: showVideo ? 1 : 0,
-              duration: const Duration(milliseconds: 120),
-              curve: Curves.easeOut,
-              child: Video(
-                controller: controller,
-                controls: NoVideoControls,
-                fit: widget.videoFit,
-              ),
-            ),
-          ),
         if (showLoading) const _PlaybackLoadingOverlay(),
         if (snapshot.isError) _PlaybackRetryOverlay(onRetry: widget.onRetry),
         if (canTogglePlayback)
@@ -1723,31 +1889,6 @@ class _PlayerPlaybackSurfaceConsumerState
         if (_showPauseFeedback) const _PauseFeedbackIcon(),
       ],
     );
-  }
-
-  void _recordControllerLifecycle(VideoController? controller) {
-    if (controller == _mountedController) {
-      return;
-    }
-    final previous = _mountedController;
-    if (previous != null && controller != null) {
-      PlayerRebuildDiagnostics.recordVideoControllerReplaced(
-        itemId: widget.itemId,
-        previous: previous,
-        next: controller,
-      );
-    } else if (previous == null && controller != null) {
-      PlayerRebuildDiagnostics.recordVideoMounted(
-        itemId: widget.itemId,
-        controller: controller,
-      );
-    } else if (previous != null && controller == null) {
-      PlayerRebuildDiagnostics.recordVideoUnmounted(
-        itemId: widget.itemId,
-        controller: previous,
-      );
-    }
-    _mountedController = controller;
   }
 
   void _handleVideoTap() {
