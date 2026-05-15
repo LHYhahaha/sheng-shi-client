@@ -431,6 +431,19 @@ flutter test
 - `PlayerFeedItem.id` 在 remote mapper 中使用稳定 key，优先使用服务端 `feedItemId`，否则按 `mode + dramaId + episodeId` 生成，避免列表 index 污染 session window。
 - `PlaybackSource.cacheKey` 已预留 `sourceId` 维度，避免未来同 URL/不同 source 版本的缓存和预热状态混淆。
 
+## API Skeleton Phase B Review / Contract Tightening
+
+已完成 Phase B 的小范围 contract 收口：
+
+- `PlaybackSourceDto` 增加 `isAvailable`、`accessStatus`、`reasonCode`，用于承接服务端 access denied / unavailable / blocked 等拒播语义。
+- `PlayerEpisodeDto` 增加 `accessStatus`、`reasonCode` 预留字段，后续可把下架、地区限制、会员限制等原因映射到 Entitlement，而不是让 PlayerPage 猜。
+- `PlaybackSourceMapper` 收紧不可播放源处理：
+  - 缺 `hlsUrl` 时抛出 source resolve error，不生成可播放 source。
+  - `expiresAt` 已过期时抛出 source resolve error，避免把过期签名 URL 当正常播放源。
+  - `isAvailable=false` 或 `accessStatus=denied/blocked/unavailable` 时抛出 source resolve error，交由上层进入现有 retry/unavailable/entitlement 流程。
+- 补充测试确认同一个 HLS URL 但不同 `sourceId` 会生成不同 `cacheKey`。
+- 补充测试确认 playback source remote datasource 使用 `ApiAuthPolicy.required`，且服务端 envelope 非 `code:0` 时保留 `ApiException.businessCode`。
+
 仍然 defer：
 
 - 不接真实 Player API，不启用真实 baseUrl，不替换 mock provider 默认行为。

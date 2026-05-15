@@ -1,6 +1,13 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:drama_client/core/network/api_client.dart';
+import 'package:drama_client/core/network/api_exception.dart';
+import 'package:drama_client/core/network/api_request_context.dart';
 import 'package:drama_client/features/entitlement/domain/episode_unlock_type.dart';
 import 'package:drama_client/features/player/data/dto/playback_source_dto.dart';
 import 'package:drama_client/features/player/data/dto/player_content_dto.dart';
@@ -86,6 +93,55 @@ void main() {
     expect(source.codecHint, 'hls');
   });
 
+  test('same HLS url with different sourceId gets different cache keys', () {
+    final item = _feedItem();
+    final sourceA = sourceMapper.mapSource(
+      const PlaybackSourceDto(
+        episodeId: 'ep-1',
+        sourceId: 'source-a',
+        hlsUrl: 'https://cdn.example.com/shared.m3u8',
+        backupHlsUrls: [],
+        expiresAt: null,
+        durationMs: null,
+        width: null,
+        height: null,
+        aspectRatio: null,
+        codec: null,
+        cachePolicy: {},
+        preloadPolicy: {},
+        subtitleTracks: [],
+        previewSpriteUrl: null,
+        previewVttUrl: null,
+      ),
+      item: item,
+      status: PlaybackSourceStatus.resolved,
+    );
+    final sourceB = sourceMapper.mapSource(
+      const PlaybackSourceDto(
+        episodeId: 'ep-1',
+        sourceId: 'source-b',
+        hlsUrl: 'https://cdn.example.com/shared.m3u8',
+        backupHlsUrls: [],
+        expiresAt: null,
+        durationMs: null,
+        width: null,
+        height: null,
+        aspectRatio: null,
+        codec: null,
+        cachePolicy: {},
+        preloadPolicy: {},
+        subtitleTracks: [],
+        previewSpriteUrl: null,
+        previewVttUrl: null,
+      ),
+      item: item,
+      status: PlaybackSourceStatus.resolved,
+    );
+
+    expect(sourceA.remoteUrl, sourceB.remoteUrl);
+    expect(sourceA.cacheKey, isNot(sourceB.cacheKey));
+  });
+
   test('missing hlsUrl throws instead of creating invalid source', () {
     final item = _feedItem();
 
@@ -115,32 +171,82 @@ void main() {
     );
   });
 
-  test('expired playback source remains visible to playback layer', () {
-    final item = _feedItem();
-    final expiredAt = DateTime.now().subtract(const Duration(minutes: 1));
-    final source = sourceMapper.mapSource(
-      PlaybackSourceDto(
-        episodeId: 'ep-1',
-        sourceId: 'expired-source',
-        hlsUrl: 'https://cdn.example.com/expired.m3u8',
-        backupHlsUrls: const [],
-        expiresAt: expiredAt,
-        durationMs: null,
-        width: null,
-        height: null,
-        aspectRatio: null,
-        codec: null,
-        cachePolicy: const {},
-        preloadPolicy: const {},
-        subtitleTracks: const [],
-        previewSpriteUrl: null,
-        previewVttUrl: null,
-      ),
-      item: item,
-      status: PlaybackSourceStatus.resolved,
-    );
+  test(
+    'expired playback source throws instead of creating playable source',
+    () {
+      final item = _feedItem();
+      final expiredAt = DateTime.now().subtract(const Duration(minutes: 1));
 
-    expect(source.expiresAt.isBefore(DateTime.now()), isTrue);
+      expect(
+        () => sourceMapper.mapSource(
+          PlaybackSourceDto(
+            episodeId: 'ep-1',
+            sourceId: 'expired-source',
+            hlsUrl: 'https://cdn.example.com/expired.m3u8',
+            backupHlsUrls: const [],
+            expiresAt: expiredAt,
+            durationMs: null,
+            width: null,
+            height: null,
+            aspectRatio: null,
+            codec: null,
+            cachePolicy: const {},
+            preloadPolicy: const {},
+            subtitleTracks: const [],
+            previewSpriteUrl: null,
+            previewVttUrl: null,
+          ),
+          item: item,
+          status: PlaybackSourceStatus.resolved,
+        ),
+        throwsStateError,
+      );
+    },
+  );
+
+  test('access denied playback source throws with reason contract', () {
+    final item = _feedItem();
+
+    expect(
+      () => sourceMapper.mapSource(
+        const PlaybackSourceDto(
+          episodeId: 'ep-1',
+          sourceId: 'blocked-source',
+          hlsUrl: 'https://cdn.example.com/blocked.m3u8',
+          backupHlsUrls: [],
+          expiresAt: null,
+          durationMs: null,
+          width: null,
+          height: null,
+          aspectRatio: null,
+          codec: null,
+          cachePolicy: {},
+          preloadPolicy: {},
+          subtitleTracks: [],
+          previewSpriteUrl: null,
+          previewVttUrl: null,
+          isAvailable: false,
+          accessStatus: 'denied',
+          reasonCode: 'ENTITLEMENT_REQUIRED',
+        ),
+        item: item,
+        status: PlaybackSourceStatus.resolved,
+      ),
+      throwsStateError,
+    );
+  });
+
+  test('playback source dto parses nested access contract', () {
+    final dto = PlaybackSourceDto.fromJson(const {
+      'episodeId': 'ep-1',
+      'sourceId': 'source-a',
+      'hlsUrl': 'https://cdn.example.com/a.m3u8',
+      'access': {'status': 'denied', 'reasonCode': 'REGION_BLOCKED'},
+    });
+
+    expect(dto.accessStatus, 'denied');
+    expect(dto.reasonCode, 'REGION_BLOCKED');
+    expect(dto.hasPlayableHls, isFalse);
   });
 
   test('remote content repository combines detail and episode list', () async {
@@ -241,6 +347,58 @@ void main() {
       expect(resolved.remoteUrl, 'https://cdn.example.com/a.m3u8');
       expect(preloaded.status, PlaybackPreloadStatus.success);
       expect(preloadManager.preloadCount, 1);
+    },
+  );
+
+  test('playback source remote datasource requires auth policy', () async {
+    final adapter = _FakeHttpClientAdapter(
+      responseData: {
+        'code': 0,
+        'message': 'success',
+        'data': {
+          'episodeId': 'ep-1',
+          'sourceId': 'source-a',
+          'hlsUrl': 'https://cdn.example.com/a.m3u8',
+        },
+      },
+    );
+    final client = ApiClient(
+      dio: Dio()..httpClientAdapter = adapter,
+      requestContext: const ApiRequestContext(
+        deviceId: 'device-1',
+        lang: 'en',
+        platform: 'android',
+        appVersion: '1.0.0',
+        accessToken: 'token-1',
+      ),
+    );
+    final dataSource = PlaybackSourceRemoteDataSource(apiClient: client);
+
+    final dto = await dataSource.getPlaybackSource(episodeId: 'ep-1');
+
+    expect(dto.sourceId, 'source-a');
+    expect(adapter.lastOptions!.headers['Authorization'], 'Bearer token-1');
+  });
+
+  test(
+    'playback source remote datasource preserves business code failures',
+    () {
+      final adapter = _FakeHttpClientAdapter(
+        responseData: {'code': 3001, 'message': 'source expired', 'data': null},
+      );
+      final client = ApiClient(dio: Dio()..httpClientAdapter = adapter);
+      final dataSource = PlaybackSourceRemoteDataSource(apiClient: client);
+
+      final future = dataSource.getPlaybackSource(episodeId: 'ep-1');
+
+      expect(
+        future,
+        throwsA(
+          isA<ApiException>()
+              .having((error) => error.businessCode, 'businessCode', 3001)
+              .having((error) => error.message, 'message', 'source expired'),
+        ),
+      );
     },
   );
 
@@ -411,4 +569,30 @@ class _FakePlaybackSourceRemoteDataSource
   }) async {
     return source;
   }
+}
+
+class _FakeHttpClientAdapter implements HttpClientAdapter {
+  _FakeHttpClientAdapter({required this.responseData});
+
+  final Object? responseData;
+  RequestOptions? lastOptions;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    lastOptions = options;
+    return ResponseBody.fromString(
+      jsonEncode(responseData),
+      200,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
 }

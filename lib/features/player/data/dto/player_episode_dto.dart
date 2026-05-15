@@ -15,6 +15,8 @@ class PlayerEpisodeDto {
     required this.aspectRatio,
     required this.posterUrl,
     required this.previewImageUrl,
+    this.accessStatus,
+    this.reasonCode,
   });
 
   final String episodeId;
@@ -28,6 +30,16 @@ class PlayerEpisodeDto {
   final double? aspectRatio;
   final String? posterUrl;
   final String? previewImageUrl;
+
+  /// 服务端访问状态预留字段。
+  ///
+  /// 详情/剧集列表只描述“这一集是否能进入权益判断”，真实播放 URL 仍由
+  /// playback-source 接口给出。这里保留 access 信息是为了后续把下架、地区限制、
+  /// 会员限制等原因映射到 Entitlement，而不是让 PlayerPage 猜。
+  final String? accessStatus;
+
+  /// 服务端不可用/拒绝访问原因码，当前只作为 contract 预留。
+  final String? reasonCode;
 
   factory PlayerEpisodeDto.fromJson(Map<String, Object?> json) {
     return PlayerEpisodeDto(
@@ -44,6 +56,12 @@ class PlayerEpisodeDto {
       aspectRatio: _doubleValue(json['aspectRatio']),
       posterUrl: _stringValue(json['posterUrl']),
       previewImageUrl: _stringValue(json['previewImageUrl']),
+      accessStatus:
+          _stringValue(json['accessStatus']) ??
+          _stringValue(_mapValue(json['access'])['status']),
+      reasonCode:
+          _stringValue(json['reasonCode']) ??
+          _stringValue(_mapValue(json['access'])['reasonCode']),
     );
   }
 
@@ -74,5 +92,10 @@ class PlayerEpisodeDto {
       };
     }
     return null;
+  }
+
+  static Map<String, Object?> _mapValue(Object? value) {
+    if (value is Map<String, Object?>) return value;
+    return const <String, Object?>{};
   }
 }

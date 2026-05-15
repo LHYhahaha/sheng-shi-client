@@ -14,6 +14,17 @@ class PlaybackSourceMapper {
     required PlayerFeedItem item,
     required PlaybackSourceStatus status,
   }) {
+    if (!_isAccessAllowed(dto)) {
+      throw StateError(
+        'Playback source unavailable: ${dto.reasonCode ?? dto.accessStatus ?? 'unknown'}.',
+      );
+    }
+
+    final expiresAt = dto.expiresAt;
+    if (expiresAt != null && !expiresAt.isAfter(DateTime.now())) {
+      throw StateError('Playback source expired.');
+    }
+
     final hlsUrl = dto.hlsUrl;
     if (hlsUrl == null || hlsUrl.isEmpty) {
       throw StateError('Playback source missing hlsUrl.');
@@ -24,11 +35,20 @@ class PlaybackSourceMapper {
       remoteUrl: hlsUrl,
       playableSource: hlsUrl,
       cacheKey: _cacheKey(dto, item),
-      expiresAt:
-          dto.expiresAt ?? DateTime.now().add(const Duration(minutes: 5)),
+      expiresAt: expiresAt ?? DateTime.now().add(const Duration(minutes: 5)),
       codecHint: dto.codec ?? 'hls',
       status: status,
     );
+  }
+
+  bool _isAccessAllowed(PlaybackSourceDto dto) {
+    if (!dto.isAvailable) return false;
+    final accessStatus = dto.accessStatus?.toLowerCase();
+    if (accessStatus == null || accessStatus.isEmpty) return true;
+    return switch (accessStatus) {
+      'allowed' || 'allow' || 'ok' || 'available' => true,
+      _ => false,
+    };
   }
 
   String _cacheKey(PlaybackSourceDto dto, PlayerFeedItem item) {
