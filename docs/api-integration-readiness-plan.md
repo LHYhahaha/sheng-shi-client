@@ -16,10 +16,14 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
 - Wallet / Store / Membership / Entitlement API Skeleton Phase D。
 - Auth / Profile / Session API Skeleton Phase E。
 - Remote Contract Index 总索引。
+- Phase F 基础设施：
+  - `AppConfig` 支持 `dev` / `staging` / `prod`，并预留 `API_BASE_URL` override。
+  - `ApiRequestContext` 已从统一 provider 组合 `Device-Id`、`Lang`、`Platform`、`App-Version`、`accessToken`。
+  - 新增 in-memory `AuthTokenStore` skeleton，后续可替换 secure storage。
+  - 新增 `AuthRefreshCoordinator` skeleton，固定 refresh in-flight 去重边界。
+  - 新增 `SessionCleanupCoordinator` skeleton，作为 logout/delete/refresh failed 后的统一清理入口。
 
-下一步进入：
-
-- **Phase F：真实 API 联调前准备**
+下一步进入真实 API 联调前的分域验证，仍保持 remote 默认关闭。
 
 ## Phase F 目标
 
@@ -38,8 +42,9 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
 
 ### 1. baseUrl/env
 
-- 完善 `dev`、`staging`、`prod` 环境配置。
-- baseUrl 从统一 `AppConfig` 或等价配置入口读取。
+- 已完善 `dev`、`staging`、`prod` 环境配置。
+- baseUrl 从统一 `AppConfig` 读取。
+- 如需临时联调自定义 host，可用 `--dart-define=API_BASE_URL=https://...` override。
 - 继续保持所有 feature 默认 mock。
 - 文档说明不同环境如何构建和启用 remote 开关。
 
@@ -48,17 +53,17 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
 统一 `ApiRequestContext` 的真实来源：
 
 - `Device-Id`：稳定设备/安装 ID provider，当前可保留 mock fallback。
-- `Lang`：来自当前 locale / language controller，切换语言后 request context 更新。
+- `Lang`：已来自当前 locale / language controller，切换语言后 request context 更新。
 - `Platform`：自动识别 `ios` / `android` / `web`。
-- `App-Version`：来自 package info 或可替换 provider，当前可保留 fallback。
-- `accessToken`：未来来自 token store，本轮不进 UI 层。
+- `App-Version`：当前来自可替换 provider / dart-define fallback，未来可接 package info。
+- `accessToken`：来自 token store snapshot，不进 UI 层。
 
 要求：feature 不能自己拼 header，只能通过 `ApiClient` / request context。
 
 ### 3. Token Storage Skeleton
 
-- 新增 token storage 抽象，例如 `AuthTokenStore`。
-- 当前可以使用 in-memory/mock implementation。
+- 已新增 `AuthTokenStore`。
+- 当前使用 in-memory implementation。
 - 为未来 secure storage 留实现入口。
 - `accessToken` / `refreshToken` 不允许进入 presentation。
 
@@ -66,23 +71,23 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
 
 本轮不要求完整真实 refresh，但需要准备边界：
 
-- 401 捕获入口。
-- refresh in-flight 去重设计。
-- refresh 成功后重试原请求的策略说明。
-- refresh 失败后清 session 的边界。
+- 已新增 `AuthRefreshCoordinator`，提供 refresh in-flight 去重边界。
+- 401 捕获仍由 `ApiClient` 抛 `ApiException.unauthorized`，尚未自动 refresh/retry。
+- refresh 成功后重试原请求的策略留到真实 token 接入。
+- refresh 失败后应调用 `SessionCleanupCoordinator`，本轮只准备入口。
 
 如果实现风险高，可以先以文档 + fake 测试方式落地，不影响现有 mock。
 
 ### 5. Session Cleanup
 
-设计统一 session cleanup 入口，后续 logout/delete account 成功后调用。
+已新增统一 session cleanup 入口 `SessionCleanupCoordinator`，后续 logout/delete account 成功后调用。
 
 需要覆盖：
 
-- token storage。
-- auth session。
-- feature caches。
-- playback session/window/preload。
+- token storage：本轮已清理。
+- auth session：后续真实 AuthController/session store 接入。
+- feature caches：后续按 feature 注册 cleanup hook。
+- playback session/window/preload：后续由 Player scope 注册 cleanup hook。
 
 本轮不改 UI，不破坏现有 AccountPage 行为。
 
@@ -95,14 +100,14 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
 
 ## 验收标准
 
-- `ApiRequestContext` 能统一输出 `Device-Id`、`Lang`、`Platform`、`App-Version`。
-- 语言切换后，request context 能反映新 `Lang`。
-- token store 支持 read/write/clear。
-- auth required 请求可从 token source 取 token。
-- token 缺失时行为和现有设计一致，不导致 mock 业务崩溃。
-- 401 refresh skeleton 如实现，需要有并发去重测试。
-- session cleanup skeleton 如实现，需要覆盖 token/cache/playback 清理入口。
-- 所有 remote 开关仍默认 false。
+- `ApiRequestContext` 能统一输出 `Device-Id`、`Lang`、`Platform`、`App-Version`。已测。
+- 语言切换后，request context 能反映新 `Lang`。已测。
+- token store 支持 read/write/clear。已测。
+- auth required 请求可从 token source 取 token。已测。
+- token 缺失时行为和现有设计一致，不导致 mock 业务崩溃。已测。
+- 401 refresh skeleton 已有并发去重测试。
+- session cleanup skeleton 已覆盖 token 清理和 hook 调用。
+- 所有 remote 开关仍默认 false。已测。
 
 ## 明确不做
 
@@ -119,8 +124,17 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
 
 Phase F 完成后，建议进入：
 
-1. 多语言基础设施：固定语言包、远程 bundle、内容语言、字幕语言。
-2. 真实 API 联调：先 Home/Drama，再 Player playback source。
-3. 用户数据链路：My list、Entitlement、Wallet、Store、Membership。
-4. Auth/Profile 真实登录和 session 流。
+1. Home / Drama 真实 API 联调。
+2. Player playback source 真实 API 联调。
+3. My list 真实用户数据接口。
+4. Entitlement / Wallet / Store / Membership 商业链路。
+5. Auth / Profile 真实登录和 session 流。
 
+继续 defer：
+
+- package info 插件接入真实 app version。
+- stable install id / device id 持久化。
+- secure storage 实现。
+- ApiClient 自动 refresh/retry 队列。
+- logout/delete 后真实 feature cache 和 player session cleanup hooks。
+- 远程语言包、内容多语言和字幕语言。

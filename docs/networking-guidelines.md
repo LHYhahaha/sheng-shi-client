@@ -77,8 +77,12 @@ final result = await apiClient.get<MyDto>(
 - 登录后的业务接口额外带 `Authorization: Bearer <token>`。
 - 业务 envelope 中 `code: 0` 是唯一成功码，失败返回 4 位业务错误码。
 - Network Contract Phase B 已把这些 header、auth policy、business code 映射落到
-  `ApiClient`。当前 token 仍是 mock/default，真实 token storage 和 refresh queue
-  后续再接。
+  `ApiClient`。
+- Phase F 已把 `ApiRequestContext` 接到统一 provider：`Device-Id` / `App-Version`
+  当前来自可替换 provider 和 dart-define fallback，`Lang` 来自当前 locale controller，
+  `Platform` 自动识别，`accessToken` 来自 `AuthTokenStore` snapshot。
+- 当前 token store 仍是 in-memory skeleton；真实 secure storage、401 自动 refresh/retry
+  和 refresh 失败后的全局登出策略后续再接。
 
 ## 异常类型
 
@@ -140,14 +144,31 @@ baseUrl 来自 `AppConfig.current`：
 --dart-define=APP_ENV=prod
 ```
 
-接口域名确定后，只改 `AppConfig.forEnvironment`。
+如需临时联调指定 host，可用：
+
+```bash
+--dart-define=API_BASE_URL=https://staging-api.example.com
+```
+
+`API_BASE_URL` 优先级高于 `APP_ENV` 的默认域名。接口域名确定后，优先只改
+`AppConfig.forEnvironment`，不要在 feature repository 或页面里写死 baseUrl。
+
+请求上下文可替换项：
+
+```bash
+--dart-define=API_DEVICE_ID=local-test-device
+--dart-define=APP_VERSION=1.2.3
+```
+
+这些 fallback 只用于 skeleton 和联调便利。真实阶段应接持久化 install/device id 和
+package info，仍通过 provider 注入，不允许各 feature 自己拼 header。
 
 ## 后续待补
 
 等登录模块接入后，再增加：
 
-- 真实 token storage
-- 401 refresh token 队列
+- secure storage 实现替换 in-memory `AuthTokenStore`
+- `ApiClient` 401 自动 refresh/retry 队列
 - request id header
 - 网络日志脱敏
 - Sentry breadcrumb
@@ -166,10 +187,20 @@ API Skeleton Phase E 已补 Auth / Profile 远程骨架，但仍不做真实 tok
   `ApiAuthPolicy.required`。如果后续服务端需要无 token 的游客 bootstrap，应新增或明确
   public bootstrap 语义，而不是让同一个接口同时承担两种策略。
 
-后续接真实登录时，应该替换 `apiRequestContextProvider` 的 token 来源，并增加统一 refresh
-queue。不要让页面、controller 或 feature repository 自己保存 access token；否则 401 刷新、
-logout 清理和并发请求会变得不可控。
+Phase F 已新增 `AuthTokenStore`、`AuthRefreshCoordinator` 和
+`SessionCleanupCoordinator`：
+
+- `AuthTokenStore` 是 token ownership 的唯一 skeleton。当前 in-memory，后续由
+  secure storage implementation 替换；UI 不应持有或展示 access token。
+- `AuthRefreshCoordinator` 只负责 refresh in-flight 去重边界。本轮不在 `ApiClient`
+  中自动拦截 401，也不重试原请求，避免在没有真实 refresh API 时引入隐藏状态机。
+- `SessionCleanupCoordinator` 是 logout/delete/refresh failed 后的统一清理入口。当前
+  先清 token，并允许 feature 注册 cache / playback cleanup hook。
+
+后续接真实登录时，应该让 `apiRequestContextProvider` 继续只从 token store 读取
+access token，并在 `ApiClient` 层接统一 refresh queue。不要让页面、controller 或
+feature repository 自己保存 access token；否则 401 刷新、logout 清理和并发请求会变得不可控。
 
 logout / delete account 成功后，还需要统一清理 secure token、各 feature cache 和播放器
-session/window。Phase E skeleton 只定义远程契约，不做本地全局清理，避免在 mock 阶段误伤
-已经验收的页面状态。
+session/window。Phase F 已准备 cleanup coordinator，但尚未把 AuthController、feature caches
+和 Player session/window 挂到真实 cleanup hook，避免在 mock 阶段误伤已经验收的页面状态。

@@ -1,16 +1,23 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../auth/auth_token_store.dart';
+import '../device/api_device_context_provider.dart';
+import '../locale/app_locale_controller.dart';
 import 'api_client.dart';
 import 'api_request_context.dart';
 
 final apiRequestContextProvider = Provider<ApiRequestContext>((ref) {
-  // Phase B 先提供稳定 mock/default header。后续接真实 device id、locale、
-  // app version 和 token storage 时，只替换这个 provider。
+  final locale = ref.watch(appLocaleControllerProvider);
+  final token = ref.watch(authTokenStoreProvider);
+
+  // 统一请求上下文。feature 不应该自行拼 Device-Id/Lang/Platform/App-Version 或
+  // Authorization；真实 device id、package info、secure token 后续只替换对应 provider。
   return ApiRequestContext(
-    deviceId: 'mock-device-id',
-    lang: 'en',
+    deviceId: ref.watch(apiDeviceIdProvider),
+    lang: locale.languageCode,
     platform: defaultApiPlatform(),
-    appVersion: '1.0.0',
+    appVersion: ref.watch(apiAppVersionProvider),
+    accessToken: token.accessToken,
   );
 });
 

@@ -834,11 +834,21 @@ Phase E: IAP verification and entitlement
 Phase F: API integration readiness
 
 - Finalize baseUrl/env and remote switch policy.
-- Connect real `Device-Id`, `Lang`, `Platform`, and `App-Version` sources to
+- Connect unified `Device-Id`, `Lang`, `Platform`, `App-Version`, and token snapshot sources to
   `ApiRequestContext`.
 - Add token storage skeleton and refresh queue boundaries.
-- Define logout/delete cleanup for token, feature caches, and playback sessions.
+- Define logout/delete cleanup entry for token, feature caches, and playback sessions.
 - Keep all remote repositories disabled by default.
+
+Phase F status:
+
+- `AppConfig` supports dev/staging/prod and `API_BASE_URL` override.
+- `ApiRequestContext` is now composed by provider from device/app-version providers,
+  `AppLocaleController`, platform detection, and `AuthTokenStore`.
+- `AuthTokenStore` is an in-memory skeleton; secure storage remains deferred.
+- `AuthRefreshCoordinator` establishes refresh in-flight dedupe; automatic 401 retry remains deferred.
+- `SessionCleanupCoordinator` establishes the cleanup entry; feature cache and Player hooks remain deferred.
+- All `USE_REMOTE_XXX_API` switches remain false by default.
 
 Phase G: Remote localization and subtitles
 

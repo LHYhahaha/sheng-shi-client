@@ -54,6 +54,9 @@ class ApiRequestContext {
 }
 
 String defaultApiPlatform() {
+  if (kIsWeb) {
+    return 'web';
+  }
   return switch (defaultTargetPlatform) {
     TargetPlatform.android => 'android',
     TargetPlatform.iOS => 'ios',

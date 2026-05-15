@@ -20,7 +20,18 @@ class AppConfig {
 
   static final current = AppConfig.forEnvironment(_environmentFromDefine);
 
-  static AppConfig forEnvironment(AppEnvironment environment) {
+  static AppConfig forEnvironment(
+    AppEnvironment environment, {
+    String? apiBaseUrlOverride,
+  }) {
+    final override = apiBaseUrlOverride ?? _apiBaseUrlOverrideFromDefine;
+    if (override != null && override.isNotEmpty) {
+      return AppConfig(
+        environment: environment,
+        apiBaseUrl: Uri.parse(override),
+      );
+    }
+
     return switch (environment) {
       AppEnvironment.dev => AppConfig(
         environment: environment,
@@ -35,6 +46,11 @@ class AppConfig {
         apiBaseUrl: Uri.parse('https://api.example.com'),
       ),
     };
+  }
+
+  static String? get _apiBaseUrlOverrideFromDefine {
+    const value = String.fromEnvironment('API_BASE_URL');
+    return value.isEmpty ? null : value;
   }
 
   static AppEnvironment get _environmentFromDefine {

@@ -20,7 +20,7 @@ defer 项。不接真实服务端，不替换 mock 默认实现，不改变 UI�
 
 | 模块 | Remote 开关 | 默认 | Remote repository | Remote datasource | DTO / Mapper | Endpoint skeleton | Auth policy | 测试 | 主要 defer |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Network / ApiClient | 无 | 统一启用 | 不适用 | `lib/core/network/api_client.dart` | `ApiRequestContext`、`ApiPage`、`ApiException` | 所有 remote skeleton 共用 | 调用方显式传 `none/required` | `test/core/network/api_client_test.dart` | 真实 baseUrl、真实 device id、app version、token storage、401 refresh queue、网络日志脱敏 |
+| Network / ApiClient | 无 | 统一启用 | 不适用 | `lib/core/network/api_client.dart` | `ApiRequestContext`、`ApiPage`、`ApiException` | 所有 remote skeleton 共用 | 调用方显式传 `none/required` | `test/core/network/api_client_test.dart`、`test/core/network/api_request_context_provider_test.dart` | 真实持久化 device id、package info app version、secure storage、自动 401 refresh/retry、网络日志脱敏 |
 | Home / Drama | `USE_REMOTE_DRAMA_API`，兼容旧 `USE_REMOTE_API` | mock | `lib/features/drama/data/remote_drama_repository.dart` | `lib/features/drama/data/remote/drama_remote_data_source.dart` | `lib/features/drama/data/dto/`、`lib/features/drama/data/mapper/drama_mapper.dart` | `GET /home/categories`、`GET /home/feed` | `none`，公共首页内容假设 | `test/features/drama/drama_mapper_test.dart`、`test/features/drama/remote_drama_repository_test.dart` | 真实分页字段、内容 locale/region、推荐策略、图片 CDN 策略 |
 | MediaResource | 无 | domain/shared model | 不适用 | 不适用 | `lib/shared/media/media_resource.dart` | 不适用 | 不适用 | Home/Drama/My list/Profile mapper tests | 图片缓存、占位图、错误图、CDN resize、全站图片字段迁移 |
 | Player / Drama detail / For You | `USE_REMOTE_PLAYER_API` | mock | `remote_player_content_repository.dart`、`remote_player_feed_repository.dart` | `remote/player_remote_data_source.dart` | `player_content_dto.dart`、`player_episode_dto.dart`、`player_feed_item_dto.dart`、`player_feed_page_dto.dart`；`player_content_mapper.dart`、`player_feed_mapper.dart` | `GET /dramas/{dramaId}`、`GET /dramas/{dramaId}/episodes`、`GET /feed/for-you` | `none`，内容详情/feed 当前按公共内容假设；真实个性化可改 required | `test/features/player/player_remote_api_skeleton_test.dart` | 真实个性化 feed auth 策略、详情分页、内容多语言、真实 access 对象 |
@@ -67,6 +67,10 @@ public bootstrap 语义，不要让同一个接口同时承担两种策略。
 
 ## Provider Switch 总览
 
+- `APP_ENV`：`dev` / `staging` / `prod`，决定 `AppConfig.current.apiBaseUrl`。
+- `API_BASE_URL`：临时联调 host override，优先级高于 `APP_ENV` 的默认域名。
+- `API_DEVICE_ID`：当前稳定设备 ID fallback；真实阶段应替换为持久化 install/device id。
+- `APP_VERSION`：当前 app version fallback；真实阶段应替换为 package info。
 - `USE_REMOTE_DRAMA_API`：Home / Drama。兼容早期 `USE_REMOTE_API`，后续联调应使用 scoped 名称。
 - `USE_REMOTE_PLAYER_API`：Player detail / For You / playback source。
 - `USE_REMOTE_MY_LIST_API`：My list / Play history。
@@ -79,6 +83,23 @@ public bootstrap 语义，不要让同一个接口同时承担两种策略。
 
 所有开关默认 false。测试通过 provider override 或默认路径断言 mock/remote 切换；不要在页面中读取
 dart-define。
+
+## Phase F Runtime Context
+
+Phase F 已补真实 API 联调前的 runtime context 骨架：
+
+- `AppConfig` 统一管理 dev / staging / prod baseUrl，并支持 `API_BASE_URL` 临时覆盖。
+- `apiRequestContextProvider` 统一组合 `Device-Id`、`Lang`、`Platform`、`App-Version`
+  和 `accessToken`；feature 不允许自己拼 header。
+- `Lang` 来自当前 `AppLocaleController`，语言切换后后续请求会带新语言。
+- `Platform` 由 Flutter 平台自动识别为 `android` / `ios` / `web` 等。
+- `AuthTokenStore` 当前是 in-memory skeleton；后续 secure storage 替换这个边界即可。
+- `AuthRefreshCoordinator` 只提供 refresh in-flight 去重骨架，暂不自动重试 401 请求。
+- `SessionCleanupCoordinator` 是 logout / delete / refresh failed 后的统一清理入口，当前先清
+  token 并支持 feature 注册 hook。
+
+仍 defer：真实安装 ID 持久化、package info 插件、secure storage、401 自动 refresh/retry、
+logout/delete 后清 feature caches 和播放器 session/window。
 
 ## 分层边界检查结果
 
@@ -108,11 +129,11 @@ dart-define。
 
 P0 联调前必须确认：
 
-- `APP_ENV` 对应 baseUrl/env 配置。
-- 真实 `Device-Id`、`Lang`、`Platform`、`App-Version` 来源。
-- secure storage 与 `ApiRequestContext.accessToken` 注入。
-- token refresh queue、401 并发刷新和 refresh 失败后的 logout 策略。
-- logout / delete account 后清理 token、feature caches、playback sessions/window。
+- `APP_ENV` / `API_BASE_URL` 对应真实 dev/staging/prod 域名。
+- 真实 `Device-Id` 持久化来源和 `App-Version` package info 接入。
+- secure storage 实现替换 in-memory `AuthTokenStore`。
+- 401 自动 refresh/retry、并发刷新和 refresh 失败后的 logout 策略。
+- logout / delete account 后清理 feature caches、playback sessions/window。
 - 各 remote 开关在 dev/staging/prod 的启用方式。
 
 P1 联调中应优先补齐：
