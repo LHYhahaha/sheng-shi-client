@@ -253,18 +253,6 @@ class EntitlementController extends Notifier<UserEntitlementState> {
       );
     }
 
-    if (state.autoUnlockEnabled) {
-      return _decision(
-        type: EpisodeAccessDecisionType.autoUnlockAndPlay,
-        dramaId: dramaId,
-        episodeId: episodeId,
-        itemId: itemId,
-        unlockType: unlockType,
-        price: price,
-        operationId: _operationIdFor(dramaId, episodeId),
-      );
-    }
-
     return _decision(
       type: EpisodeAccessDecisionType.showCoinUnlockDialog,
       dramaId: dramaId,
@@ -272,7 +260,10 @@ class EntitlementController extends Notifier<UserEntitlementState> {
       itemId: itemId,
       unlockType: unlockType,
       price: price,
-      reason: 'auto_unlock_disabled',
+      reason: state.autoUnlockEnabled
+          ? 'auto_unlock_requires_current_confirmation'
+          : 'auto_unlock_disabled',
+      operationId: _operationIdFor(dramaId, episodeId),
     );
   }
 

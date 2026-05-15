@@ -239,7 +239,10 @@ class PlayerCoinUnlockSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              _CloseButton(onTap: () => Navigator.of(context).pop(false)),
+              _CloseButton(
+                key: const ValueKey('player_coin_unlock_close'),
+                onTap: () => Navigator.of(context).pop(false),
+              ),
             ],
           ),
           const SizedBox(height: 30),
@@ -524,7 +527,7 @@ class _ShareTarget extends StatelessWidget {
 }
 
 class _CloseButton extends StatelessWidget {
-  const _CloseButton({required this.onTap});
+  const _CloseButton({required this.onTap, super.key});
 
   final VoidCallback onTap;
 

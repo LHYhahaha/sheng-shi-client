@@ -732,31 +732,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         await playbackController.blockItem(
           item,
           status: PlayerPlaybackStatus.waitUnlock,
-          reason: 'auto unlock pending',
+          reason: 'auto unlock requires current confirmation',
         );
         _schedulePreloadAroundItem(item);
-        final unlockDecision = await ref
-            .read(entitlementControllerProvider.notifier)
-            .unlockWithCoins(
-              dramaId: item.content.id,
-              episodeId: item.episode.id,
-              itemId: item.id,
-              price: item.episode.requiredCoins,
-              operationId:
-                  decision.operationId ??
-                  'coin-unlock:${item.content.id}:${item.episode.id}',
-            );
-        if (!mounted) {
-          return;
-        }
-        if (unlockDecision.type == EpisodeAccessDecisionType.allowPlay) {
-          await _handleAccessDecision(
-            item,
-            unlockDecision,
-            autoPresentSheet: false,
-          );
-        } else {
-          uiController.hidePaywall();
+        uiController.showUnlockPaywall();
+        if (autoPresentSheet) {
+          unawaited(_showCoinUnlockSheetForItem(item));
         }
       case EpisodeAccessDecisionType.goMembership:
         await playbackController.blockItem(
@@ -1022,11 +1003,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           autoPresentSheet: false,
         );
       case EpisodeAccessDecisionType.autoUnlockAndPlay:
-        await _handleAccessDecision(
-          currentItem,
-          decision,
-          autoPresentSheet: false,
-        );
+        await _showCoinUnlockSheetForItem(currentItem);
       case EpisodeAccessDecisionType.showCoinUnlockDialog:
         await _showCoinUnlockSheetForItem(currentItem);
       case EpisodeAccessDecisionType.showRechargeDialog:
@@ -1064,7 +1041,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _isModalOpen = false;
     _activeCoinSheetItemId = null;
 
-    if (!mounted || unlocked != true) {
+    if (!mounted || unlocked != true || !_isCurrentFeedItem(item)) {
       return;
     }
 
@@ -1141,15 +1118,25 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!mounted) {
       return;
     }
-    final decision = entitlementController.evaluateAccess(
-      dramaId: item.content.id,
-      episodeId: item.episode.id,
-      itemId: item.id,
-      unlockType: item.episode.unlockType,
-      price: item.episode.requiredCoins,
-      isUnavailable: item.episode.isUnavailable,
-    );
-    await _handleAccessDecision(item, decision, autoPresentSheet: false);
+    rechargeController.close();
+    if (!_isCurrentFeedItem(item)) {
+      return;
+    }
+    await ref
+        .read(playerPlaybackControllerProvider(_sessionKey).notifier)
+        .blockItem(
+          item,
+          status: PlayerPlaybackStatus.waitUnlock,
+          reason: selectedMembershipPackage == null
+              ? 'recharge success awaiting coin confirmation'
+              : 'membership purchase success awaiting user action',
+        );
+    ref
+        .read(playerUiControllerProvider(_sessionKey).notifier)
+        .showUnlockPaywall();
+    if (selectedCoinPackage != null) {
+      unawaited(_showCoinUnlockSheetForItem(item));
+    }
   }
 
   void _openMembership() {

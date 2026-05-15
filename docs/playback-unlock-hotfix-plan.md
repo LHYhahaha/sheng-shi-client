@@ -179,6 +179,17 @@ Figma 对照块：
 - 连续 locked episodes 不偷拉未授权 source，不播放旧 session。
 - paywall/locked 状态切 My list / Profile 不出声。
 
+### Round 2 实现备注
+
+- `autoUnlockAndPlay` enum / remote mapper 保留兼容，但播放器当前 locked episode 不再
+  静默调用 `unlockWithCoins`；即使 auto unlock 开启，也按 `showCoinUnlockDialog`
+  确认流程处理。
+- `PlayerCoinUnlockSheet`、`PlayerRechargeUnlockSheet`、
+  `PlayerRechargeUnlockController` 和 `PlayerChrome` 原有结构继续复用；本轮只做链路
+  串接和 Figma 尺寸/位置小修，不新增第二套 unlock/recharge UI。
+- 充值成功只 grant mock entitlement，不直接播放；金币包成功后自动回到金币解锁弹窗，
+  等用户点击 `Play` 才扣金币并播放。
+
 ## 必跑验证
 
 ```bash

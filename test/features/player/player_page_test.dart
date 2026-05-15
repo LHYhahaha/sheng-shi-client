@@ -710,9 +710,10 @@ void main() {
     );
   });
 
-  testWidgets('coin episode auto unlocks when enabled and balance is enough', (
+  testWidgets('coin episode auto unlock enabled still requires confirmation', (
     tester,
   ) async {
+    final playbackSession = _FakePlaybackSession();
     await tester.pumpWidget(
       _buildPlayerApp(
         initialLocation: RoutePaths.playerLocation(
@@ -722,16 +723,19 @@ void main() {
         repository: _FakePlayerFeedRepository.normal(),
         entitlementRepository:
             MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOn(),
+        playbackSessionFactory: () => playbackSession,
       ),
     );
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    expect(find.text('Unlock Now'), findsNothing);
     expect(
-      find.byKey(const ValueKey('player_video_tap_layer')),
+      find.byKey(const ValueKey('player_coin_unlock_confirm')),
       findsOneWidget,
     );
+    expect(find.text('Unlock Now'), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
+    expect(playbackSession.playCount, 0);
   });
 
   testWidgets('coin episode enough balance with auto off shows coin dialog', (
@@ -769,6 +773,24 @@ void main() {
     );
     expect(find.text('Play'), findsOneWidget);
     expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('player_coin_unlock_close')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('player_coin_unlock_confirm')),
+      findsNothing,
+    );
+    expect(find.text('Unlock Now'), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_unlock_button')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('player_unlock_button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('player_coin_unlock_confirm')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('locked episode opens recharge unlock sheet with offer details', (
@@ -842,9 +864,6 @@ void main() {
     expect(find.text('Unlock Now'), findsOneWidget);
     expect(playbackSession.playCount, 0);
 
-    await tester.tap(find.text('Unlock Now'));
-    await tester.pumpAndSettle();
-
     expect(
       find.byKey(const ValueKey('player_coin_unlock_confirm')),
       findsOneWidget,
@@ -892,45 +911,39 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets(
-    'membership package success from recharge sheet allows pending coin episode',
-    (tester) async {
-      await tester.pumpWidget(
-        _buildPlayerApp(
-          initialLocation: RoutePaths.playerLocation(
-            dramaId: 'drama-a',
-            episodeId: '2',
-          ),
-          repository: _FakePlayerFeedRepository.normal(),
+  testWidgets('membership package success from recharge sheet stays blocked', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
         ),
-      );
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
+        repository: _FakePlayerFeedRepository.normal(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
 
-      expect(find.text('Recharge to unlock'), findsOneWidget);
+    expect(find.text('Recharge to unlock'), findsOneWidget);
 
-      await tester.tap(
-        find.byKey(
-          const ValueKey('player_recharge_membership_weekly_vip_promo'),
-        ),
-      );
-      await tester.pump();
-      expect(
-        find.byKey(const ValueKey('player_recharge_unlock_processing')),
-        findsOneWidget,
-      );
+    await tester.tap(
+      find.byKey(const ValueKey('player_recharge_membership_weekly_vip_promo')),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_processing')),
+      findsOneWidget,
+    );
 
-      await tester.pump(const Duration(milliseconds: 220));
-      await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 220));
+    await tester.pumpAndSettle();
 
-      expect(find.text('Recharge to unlock'), findsNothing);
-      expect(find.text('Unlock Now'), findsNothing);
-      expect(
-        find.byKey(const ValueKey('player_video_tap_layer')),
-        findsOneWidget,
-      );
-    },
-  );
+    expect(find.text('Recharge to unlock'), findsNothing);
+    expect(find.text('Unlock Now'), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
+  });
 
   testWidgets('unavailable episode remains blocked for member', (tester) async {
     final unavailableSession = _FakePlaybackSession();

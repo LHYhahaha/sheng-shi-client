@@ -232,7 +232,14 @@ class _PlayerChromeState extends State<PlayerChrome> {
             child: const ColoredBox(color: Color(0xFF141414)),
           ),
         ],
-        if (showCenterPlayButton) _CenterPlayButton(onTap: onTogglePlay),
+        if (showUnlockButton)
+          _CenterUnlockButton(
+            label: unlockLabel ?? context.l10n.playerUnlockNow,
+            bottomInset: bottomFrameHeight,
+            onTap: onUnlockTap,
+          )
+        else if (showCenterPlayButton)
+          _CenterPlayButton(onTap: onTogglePlay),
         if (_showPauseFeedback) const _PauseFeedbackIcon(),
         Positioned(
           right: 17,
@@ -263,20 +270,18 @@ class _PlayerChromeState extends State<PlayerChrome> {
             ),
           ),
         ),
-        if (forYouLayout)
-          Positioned(
-            left: 16,
-            right: 98,
-            bottom: forYouWatchNowBottom,
-            child: _OverlayOpacity(
-              opacity: overlayOpacity,
-              child: _WatchNowButton(
-                label: showUnlockButton ? unlockLabel : null,
-                onTap: showUnlockButton ? onUnlockTap : onWatchNowTap,
+        if (forYouLayout) ...[
+          if (!showUnlockButton)
+            Positioned(
+              left: 16,
+              right: 98,
+              bottom: forYouWatchNowBottom,
+              child: _OverlayOpacity(
+                opacity: overlayOpacity,
+                child: _WatchNowButton(onTap: onWatchNowTap),
               ),
             ),
-          )
-        else ...[
+        ] else ...[
           Positioned(
             left: 16,
             right: 16,
@@ -298,41 +303,41 @@ class _PlayerChromeState extends State<PlayerChrome> {
                   )
                 : const SizedBox.shrink(),
           ),
-          Positioned(
-            left: 16,
-            bottom: bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
-            child: _OverlayOpacity(
-              opacity: overlayOpacity,
-              child: GestureDetector(
-                key: const ValueKey('player_unlock_button'),
-                behavior: HitTestBehavior.opaque,
-                onTap: onUnlockTap,
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 168),
-                  height: 24,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.gold.withValues(alpha: 0.8),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    showUnlockButton
-                        ? unlockLabel ?? context.l10n.playerUnlockNow
-                        : context.l10n.playerBecomeMember,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF4B2C0D),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      height: 16 / 12,
+          if (!showUnlockButton)
+            Positioned(
+              left: 16,
+              bottom:
+                  bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
+              child: _OverlayOpacity(
+                opacity: overlayOpacity,
+                child: GestureDetector(
+                  key: const ValueKey('player_member_button'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onUnlockTap,
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 168),
+                    height: 24,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.gold.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      context.l10n.playerBecomeMember,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF4B2C0D),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        height: 16 / 12,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
           Positioned(
             right: 31,
             bottom: bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
@@ -497,6 +502,55 @@ class _CenterPlayButton extends StatelessWidget {
   }
 }
 
+class _CenterUnlockButton extends StatelessWidget {
+  const _CenterUnlockButton({
+    required this.label,
+    required this.bottomInset,
+    required this.onTap,
+  });
+
+  final String label;
+  final double bottomInset;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: 0,
+      top: 0,
+      right: 0,
+      bottom: bottomInset,
+      child: Center(
+        child: GestureDetector(
+          key: const ValueKey('player_unlock_button'),
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Container(
+            width: 275,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                height: 18 / 14,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PauseFeedbackIcon extends StatelessWidget {
   const _PauseFeedbackIcon();
 
@@ -579,10 +633,9 @@ class PlayerActionRail extends StatelessWidget {
 }
 
 class _WatchNowButton extends StatelessWidget {
-  const _WatchNowButton({required this.onTap, this.label});
+  const _WatchNowButton({required this.onTap});
 
   final VoidCallback onTap;
-  final String? label;
 
   @override
   Widget build(BuildContext context) {
@@ -597,8 +650,7 @@ class _WatchNowButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(3),
         ),
         child: Text(
-          label ?? context.l10n.playerWatchNow,
-          key: label == null ? null : const ValueKey('player_unlock_button'),
+          context.l10n.playerWatchNow,
           style: const TextStyle(
             color: Colors.white,
             fontSize: 14,

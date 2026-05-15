@@ -138,7 +138,7 @@ void main() {
     );
 
     test(
-      'coin episode enough balance and auto on returns autoUnlockAndPlay',
+      'coin episode enough balance and auto on returns coin dialog',
       () async {
         final container = _containerWith(
           MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOn(),
@@ -153,9 +153,10 @@ void main() {
           mockEntitlementEpisodeFixture('found-you-ep-5'),
         );
 
-        expect(decision.type, EpisodeAccessDecisionType.autoUnlockAndPlay);
+        expect(decision.type, EpisodeAccessDecisionType.showCoinUnlockDialog);
         expect(decision.operationId, 'coin-unlock:found-you:found-you-ep-5');
         expect(decision.balance, 4000);
+        expect(decision.reason, 'auto_unlock_requires_current_confirmation');
       },
     );
 
