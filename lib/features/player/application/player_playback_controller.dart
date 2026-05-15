@@ -116,22 +116,108 @@ class PlayerPlaybackState {
         playbackRate: 1.0,
       );
 
+  /// 当前页面应该绑定到 `Video` 组件的 media_kit 控制器。
+  ///
+  /// 它只在当前 session 可展示时存在；`disposeSession` 会清空，避免 UI 继续持有已释放
+  /// 的播放器。不要在 UI 层缓存这个对象，播放器 session 被 prepared takeover 替换时
+  /// 这里会更新为新的 controller。
   final VideoController? videoController;
+
+  /// 播放状态机的主状态。
+  ///
+  /// UI 应优先读这个字段判断 idle/opening/playing/paused/blocked/unavailable/error，
+  /// 不要只通过 `videoController` 或 source 是否为空推断播放态；locked 和 unavailable
+  /// 都可能没有 source，但它们不是错误。
   final PlayerPlaybackStatus status;
+
+  /// 当前 source 是否已经收到可渲染首帧。
+  ///
+  /// 首帧由播放器 width stream 推进。它和 `playing` 不是同一件事：HLS 可能先出音频或
+  /// position，再出画面。UI 的加载遮罩、黑屏规避和 timing trace 都依赖这个字段。
   final bool hasFirstFrame;
+
+  /// 当前播放器是否处于缓冲中。
+  ///
+  /// 这个字段只描述当前 source，不描述 HLS preload pending。首帧后的可恢复网络错误
+  /// 也会把这里置为 true，用于保留画面并提示等待。
   final bool isBuffering;
+
+  /// 已经完成 HLS HTTP 预热的 item id 列表。
+  ///
+  /// 它只代表 playlist/segment 预热成功，不代表 media session 已打开，也不代表用户
+  /// 有权限播放。不要用这个列表跳过 source resolve 或授权判断。
   final List<String> preloadedItemIds;
+
+  /// 每个相邻 item 的 HLS preload 细节状态。
+  ///
+  /// 用于调试、测试和 UI 观测 pending/failed/cancelled。这个列表的生命周期跟播放页
+  /// 可见性绑定，页面隐藏或 generation 变化时可能被清理。
   final List<PlaybackPreloadState> preloadStates;
+
+  /// 当前播放位置。
+  ///
+  /// 来自 media session position stream，并会被 seek 和进度恢复修正。拖动进度条时
+  /// UI 展示应读 `displayedPosition`，不要直接用它覆盖用户正在拖动的预览位置。
   final Duration position;
+
+  /// 当前媒体总时长。
+  ///
+  /// HLS 打开初期可能为 0，只有大于 0 时才允许 seek 和计算进度比例。不要用 0 判定
+  /// 播放失败，它也可能只是播放器尚未解析完 manifest。
   final Duration duration;
+
+  /// 当前播放器已缓冲到的位置。
+  ///
+  /// 它是 media session 对当前 source 的缓冲进度，不包含后台 HLS preload 的数据。
+  /// 进度恢复时会至少抬到恢复位置，避免 UI 显示“播放位置超过缓冲”。
   final Duration bufferedPosition;
+
+  /// 用户是否正在拖动 seek bar。
+  ///
+  /// seek 期间 position stream 仍可能继续推送，控制器会避免用流更新覆盖预览态。
+  /// PageView 也会据此禁用纵向滑动，防止拖进度时误切集。
   final bool isSeeking;
+
+  /// 当前 source 是否已经自然播放结束。
+  ///
+  /// 自动下一集和中心播放按钮依赖它。seek 到结尾附近会短暂忽略 completed 事件，避免
+  /// 用户拖动到末尾时被误判为自然完播。
   final bool hasEnded;
+
+  /// 当前播放倍速。
+  ///
+  /// 倍速属于 session 状态，For You 和单剧通过不同 sessionKey 隔离。不要把它放成
+  /// 全局设置，避免一个播放器页面影响另一个。
   final double playbackRate;
+
+  /// 当前播放链路绑定的 feed item id。
+  ///
+  /// 它用于防止旧异步结果覆盖新 item、匹配 prepared/retained session、记录 timing。
+  /// blocked/unavailable 状态也会保留 item id，便于 UI 展示对应遮罩。
   final String? currentItemId;
+
+  /// 当前播放器实际打开或准备打开的 source。
+  ///
+  /// 这里可能是远端 HLS URL，也可能是 local proxy spike 生成的 localhost URL。业务层
+  /// 不应把它当成原始内容 URL 保存，原始 URL 在 PlaybackSource.remoteUrl 中。
   final String? currentSource;
+
+  /// seek 拖动过程中的预览位置。
+  ///
+  /// 只有 `isSeeking` 时才有意义；取消或结束 seek 会清空。这样 UI 可以展示预览气泡，
+  /// 同时不提前污染真实 position。
   final Duration? seekPreviewPosition;
+
+  /// 当前播放链路最后一次错误对象。
+  ///
+  /// 这个字段用于调试和错误 UI，不应直接把错误对象展示给用户。用户文案应根据
+  /// `errorKind/status` 映射，避免泄漏 URL、SDK 异常或内部状态。
   final Object? error;
+
+  /// 当前错误的业务分类。
+  ///
+  /// 分类用于区分可恢复网络错误、source resolve 失败和 media fatal。UI 与重试策略
+  /// 应依赖这个稳定枚举，不要解析底层错误字符串。
   final PlayerPlaybackErrorKind? errorKind;
 
   bool get isPlaying => status == PlayerPlaybackStatus.playing;

@@ -38,15 +38,51 @@ class PreparedPlaybackSession {
   }) : _firstFrameSubscription = firstFrameSubscription,
        _positionSubscription = positionSubscription;
 
+  /// prepared/retained session 对应的 item id。
+  ///
+  /// takeover 时必须精确匹配，不能按 source URL 命中；不同 item 可能临时共用测试 URL。
   final String itemId;
+
+  /// 已解析的播放源。
+  ///
+  /// takeover 时直接复用它，避免重复 resolve/open。
   final PlaybackSource source;
+
+  /// 已创建并可能已经 open 的播放器 session。
+  ///
+  /// 这个 session 持有真实解码资源，必须通过 prepare manager 释放，不能只从 window
+  /// map 中移除。
   final PlayerPlaybackSession session;
+
+  /// session 在窗口里的角色。
+  ///
+  /// prepared 是 next 预热，retained 是 previous 回滑保留；两者释放和日志含义不同。
   final PreparedPlaybackSessionKind kind;
+
+  /// session 是否已经 open 过 source。
+  ///
+  /// prepared takeover 用它判断能否避免重复 open。
   bool isOpened;
+
+  /// prepared session 是否已经收到首帧。
+  ///
+  /// 命中后会同步到 PlayerPlaybackState.hasFirstFrame，影响是否继续显示 loading。
   bool hasFirstFrame;
+
+  /// prepared session 是否已有播放位置推进。
+  ///
+  /// 某些平台可能先 position 前进再收到 width；这个字段帮助判断 session 是否已经热起来。
   bool hasPlaybackAdvanced;
+
+  /// retained previous 的播放位置快照。
+  ///
+  /// 回滑命中时用于恢复 UI 进度，不重新 seek。
   final Duration position;
+
+  /// retained previous 的时长快照。
   final Duration duration;
+
+  /// retained previous 的缓冲位置快照。
   final Duration bufferedPosition;
   StreamSubscription<int?>? _firstFrameSubscription;
   StreamSubscription<Duration>? _positionSubscription;
@@ -80,8 +116,19 @@ class PlayerPlaybackPrepareManager {
     this.timingLogger,
   }) : _sessionFactory = sessionFactory;
 
+  /// 创建独立播放器 session 的工厂。
+  ///
+  /// 通过注入保证测试可替换，也避免 manager 自己知道 media_kit 具体实现。
   final PlayerPlaybackSession Function() _sessionFactory;
+
+  /// prepared/retained window 最大 session 数。
+  ///
+  /// 当前有效保持 previous + next。调大意味着更多播放器实例和音频/内存风险。
   final int maxWindowSessions;
+
+  /// warm-up 等待首帧的最长时间。
+  ///
+  /// 超时后仍会保留已 open session，但会 pause，避免一直静音播放消耗资源。
   final Duration warmUpTimeout;
   PlayerPrepareTimingLogger? timingLogger;
   final _window = <String, PreparedPlaybackSession>{};

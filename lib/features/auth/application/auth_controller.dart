@@ -28,10 +28,33 @@ class AuthState {
       failedAction = null,
       error = null;
 
+  /// Auth 是否正在执行全局加载或账号动作。
+  ///
+  /// logout/delete 使用它锁住账号页动作，避免两个破坏性账号操作并发。登录按钮级
+  /// loading 另由 `pendingProvider` 表达。
   final bool isLoading;
+
+  /// 当前认证会话。
+  ///
+  /// 这是登录态唯一来源。guest session 也要显式保存，避免页面用 null 状态自行推断
+  /// “尚未加载”和“游客”。
   final AuthSession session;
+
+  /// 当前正在登录的渠道。
+  ///
+  /// 用于对应按钮 loading 和并发保护。它不是最终登录渠道，最终渠道以 `session.user`
+  /// 中 provider 为准。
   final AuthProviderType? pendingProvider;
+
+  /// 最近一次失败的账号动作。
+  ///
+  /// Account/Auth 页面用它映射具体错误文案。不要只根据 error 是否存在展示统一文案，
+  /// logout/delete/login 的用户处理方式不同。
   final AuthFailureAction? failedAction;
+
+  /// 最近一次 auth 操作错误。
+  ///
+  /// 只用于 UI 错误态和调试，不应该直接向用户展示底层异常文本。
   final Object? error;
 
   bool get isLoggedIn => session.isLoggedIn;

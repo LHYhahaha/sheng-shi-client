@@ -84,6 +84,10 @@ final defaultMockPlayerVideoAssets = [
   mockPlayerVideoAssets[2],
 ];
 
+/// 播放内容 mock 仓库。
+///
+/// mock 内容使用稳定公开 HLS fixture，便于播放器链路测试。这里不要引入本地视频资源，
+/// 否则 HLS preload/proxy/source resolve 的边界会被绕开。
 class MockPlayerContentRepository implements PlayerContentRepository {
   const MockPlayerContentRepository();
 
@@ -166,6 +170,9 @@ class MockPlayerContentRepository implements PlayerContentRepository {
   }
 }
 
+/// mock 视频资源描述。
+///
+/// 这里记录远端 HLS URL 和比例等播放器测试数据，不代表生产内容模型。
 class MockPlayerVideoAsset {
   const MockPlayerVideoAsset({
     required this.sourceLabel,

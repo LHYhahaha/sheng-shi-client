@@ -1,6 +1,10 @@
 import '../domain/player_content.dart';
 import '../domain/player_feed.dart';
 
+/// 播放 feed mock 仓库。
+///
+/// 它负责把内容 mock 组装成单剧/For You feed，不负责 source resolve。这样测试能覆盖
+/// “feed item -> playback controller -> source repository”的真实调用链。
 class MockPlayerFeedRepository implements PlayerFeedRepository {
   const MockPlayerFeedRepository({required this.contentRepository});
 

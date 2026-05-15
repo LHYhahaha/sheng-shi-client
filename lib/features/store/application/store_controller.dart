@@ -37,14 +37,56 @@ class StoreState {
       purchaseStatus = StorePurchaseStatus.idle,
       error = null;
 
+  /// 商店页是否正在加载充值数据。
+  ///
+  /// 只覆盖套餐/余额初始加载和 retry，不表示支付 processing。支付中的 loading 由
+  /// `purchaseStatus` 表达，避免整页 loading 和确认弹窗 loading 混在一起。
   final bool isLoading;
+
+  /// 当前展示的金币余额。
+  ///
+  /// mock 阶段来自充值页接口数据；真实接入后应以钱包/服务端刷新为准。客户端 mock
+  /// purchase success 不能直接累加这个字段。
   final int balance;
+
+  /// 金币充值套餐列表。
+  ///
+  /// 只用于展示和选择，不代表已创建订单。点击确认时仍要用 `confirmationPackageId`
+  /// 锁定下单对象，防止 selected 在弹窗打开后被其他交互改变。
   final List<StorePackage> coinPackages;
+
+  /// VIP 相关售卖套餐列表。
+  ///
+  /// 与会员页套餐展示可能来自不同接口口径，不能简单和 MembershipPlan 互相替代。
   final List<StorePackage> vipPackages;
+
+  /// 商店提示文案。
+  ///
+  /// 当前为 mock 固定文案；未来如由服务端下发，仍应作为展示数据处理，不参与支付判断。
   final StoreTips? tips;
+
+  /// 当前页面选中的套餐 id。
+  ///
+  /// 这是列表选择态，用于高亮卡片；不是最终购买对象。最终购买对象由打开确认弹窗时
+  /// 写入的 `confirmationPackageId` 决定。
   final String? selectedPackageId;
+
+  /// 当前确认弹窗锁定的套餐 id。
+  ///
+  /// 弹窗打开后用它隔离异步 purchase result。用户切换列表选择或关闭弹窗时，旧的
+  /// processing 结果不能落到新的确认对象上。
   final String? confirmationPackageId;
+
+  /// mock 购买确认流程状态。
+  ///
+  /// 只表达客户端弹窗流程：idle/processing/success/cancelled。真实支付成功必须等待
+  /// 服务端订单或渠道收据确认，不能只依赖这个字段发放金币/权益。
   final StorePurchaseStatus purchaseStatus;
+
+  /// 加载商店数据时的错误。
+  ///
+  /// 支付失败未来应单独建订单错误或 purchase error，不要复用整页 error，否则支付
+  /// 弹窗错误可能把套餐列表误清空。
   final Object? error;
 
   List<StorePackage> get packages => [...coinPackages, ...vipPackages];

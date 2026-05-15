@@ -37,15 +37,61 @@ class WalletState {
       coinRecords = const [],
       error = null;
 
+  /// 钱包页是否正在加载余额和流水。
+  ///
+  /// 只覆盖钱包数据拉取，不表示领奖或自动解锁开关保存中。后续如果这些动作接接口，
+  /// 应单独增加动作级状态，避免整页闪 loading。
   final bool isLoading;
+
+  /// 可消费金币余额。
+  ///
+  /// 余额只能来自钱包数据刷新；充值、消费、奖励的客户端操作不应直接改这个字段，
+  /// 否则会和服务端对账结果不一致。
   final int coins;
+
+  /// 赠币余额。
+  ///
+  /// 赠币和金币可能有不同过期/消费规则，所以单独展示和保存，不合并到 coins。
   final int bonus;
+
+  /// 是否自动解锁下一集。
+  ///
+  /// 这是用户偏好开关，不代表当前剧集一定可解锁。真正解锁仍要经过余额、会员权益
+  /// 和 episode 状态判断。
   final bool autoUnlockNextEpisode;
+
+  /// 用户本地是否已经操作过自动解锁开关。
+  ///
+  /// 用来避免 reload 用 mock/旧服务端值覆盖刚刚的本地选择。真实保存接口接入后，
+  /// 可以在保存成功并刷新服务端状态后重置这个标记。
   final bool autoUnlockTouched;
+
+  /// 消费记录页当前筛选状态。
+  ///
+  /// 只影响本地展示 spent/expired，不改变原始 `consumptionRecords`。不要把筛选后的
+  /// 结果写回 records，否则切换筛选会丢数据。
   final WalletConsumptionStatus consumptionFilter;
+
+  /// 充值/交易流水。
+  ///
+  /// 代表资金进入或订单交易记录，和内容消费流水不是同一口径，后续对账/发票入口也
+  /// 应挂在这里而不是消费记录里。
   final List<WalletRecord> transactionRecords;
+
+  /// 内容消费流水。
+  ///
+  /// 代表解锁、扣费、过期等消费侧记录。它可以按 spent/expired 筛选，但不应与充值
+  /// 交易记录混排。
   final List<WalletRecord> consumptionRecords;
+
+  /// 金币任务/奖励记录。
+  ///
+  /// 代表签到、奖励领取等活动记录。mock 领取只改记录状态，不直接改余额。
   final List<WalletRecord> coinRecords;
+
+  /// 钱包数据加载错误。
+  ///
+  /// 只用于整页 retry。后续动作级错误应单独建字段，避免领奖失败导致钱包页整体失败。
   final Object? error;
 
   bool get hasContent => !isLoading && error == null;

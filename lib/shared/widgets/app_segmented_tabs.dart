@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_radii.dart';
 
+/// 通用分段 tab。
+///
+/// 只适合少量文本 tab。复杂筛选、带图标或可滚动分类应使用业务组件，避免交互语义混乱。
 class AppSegmentedTabs extends StatelessWidget {
   const AppSegmentedTabs({
     required this.tabs,
@@ -11,8 +14,13 @@ class AppSegmentedTabs extends StatelessWidget {
     super.key,
   });
 
+  /// tab 文案列表。
   final List<String> tabs;
+
+  /// 当前选中索引。
   final int selectedIndex;
+
+  /// tab 切换回调。
   final ValueChanged<int> onChanged;
 
   @override

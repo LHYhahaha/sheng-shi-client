@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 
+/// 通用空态组件。
+///
+/// 用于简单页面空列表。业务强定制空态仍可单独实现，不要为了复用牺牲页面语义。
 class AppEmptyState extends StatelessWidget {
   const AppEmptyState({
     required this.title,
@@ -11,8 +14,13 @@ class AppEmptyState extends StatelessWidget {
     super.key,
   });
 
+  /// 空态标题。
   final String title;
+
+  /// 空态说明。
   final String message;
+
+  /// 空态图标。
   final IconData icon;
 
   @override

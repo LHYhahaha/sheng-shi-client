@@ -19,13 +19,34 @@ class AppRoundIconButton extends StatelessWidget {
     super.key,
   });
 
+  /// 图标。
   final IconData icon;
+
+  /// 点击回调。
+  ///
+  /// null 表示禁用，点击热区仍保持稳定尺寸。
   final VoidCallback? onTap;
+
+  /// 无障碍标签。
+  ///
+  /// 纯图标按钮应提供，避免读屏只读出“按钮”。
   final String? semanticLabel;
+
+  /// 圆形视觉尺寸。
+  ///
+  /// 不等于最小点击热区；点击热区由 AppTapTarget 兜底。
   final double size;
+
+  /// 图标尺寸。
   final double iconSize;
+
+  /// 背景色。
   final Color? backgroundColor;
+
+  /// 图标颜色。
   final Color iconColor;
+
+  /// 边框色。
   final Color? borderColor;
 
   @override

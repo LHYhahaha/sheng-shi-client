@@ -16,6 +16,9 @@ import 'app_shell_chrome.dart';
 class AppShell extends ConsumerWidget {
   const AppShell({required this.navigationShell, super.key});
 
+  /// go_router 提供的 StatefulShell。
+  ///
+  /// 它负责保留四个主 tab 的页面栈；Shell 只在切 tab 时补充播放器可见性处理。
   final StatefulNavigationShell navigationShell;
 
   @override

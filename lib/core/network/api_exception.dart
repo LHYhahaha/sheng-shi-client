@@ -1,5 +1,8 @@
 import 'package:dio/dio.dart';
 
+/// 业务层可识别的 API 错误类型。
+///
+/// UI 应依赖这些稳定错误码展示状态，而不是解析底层 Dio/HTTP 异常文案。
 enum ApiErrorCode {
   cancelled,
   timeout,
@@ -14,6 +17,10 @@ enum ApiErrorCode {
   unknown,
 }
 
+/// API 异常的统一包装。
+///
+/// `canRetry` 表示“可以展示重试入口”，不表示一定会自动重试。自动重试需要结合
+/// 请求幂等性判断，尤其支付、消费、领奖等接口不能简单重放。
 class ApiException implements Exception {
   const ApiException({
     required this.code,
@@ -25,12 +32,33 @@ class ApiException implements Exception {
     this.stackTrace,
   });
 
+  /// 归一化错误码。
   final ApiErrorCode code;
+
+  /// 面向开发调试的错误消息。
+  ///
+  /// 用户文案应由 UI 根据 code 映射，不直接展示该字段。
   final String message;
+
+  /// HTTP 状态码。
+  ///
+  /// 网络超时或连接失败时可能为空。
   final int? statusCode;
+
+  /// 后端请求 id。
+  ///
+  /// 用于排查接口问题，不参与业务判断。
   final String? requestId;
+
+  /// 后端返回的错误数据。
+  ///
+  /// 只用于调试或结构化错误映射，UI 不应直接渲染。
   final Object? data;
+
+  /// 原始异常。
   final Object? cause;
+
+  /// 原始堆栈。
   final StackTrace? stackTrace;
 
   bool get isAuthFailure => code == ApiErrorCode.unauthorized;

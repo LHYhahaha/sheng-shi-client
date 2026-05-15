@@ -1,6 +1,10 @@
 import '../domain/drama.dart';
 import '../domain/drama_repository.dart';
 
+/// 首页 mock 数据仓库。
+///
+/// 这里模拟分类、分页和剧卡元信息，不模拟播放源。播放源留在 player mock repository，
+/// 保持 Home 与 Player 的业务边界和真实后端一致。
 class MockDramaRepository implements DramaRepository {
   const MockDramaRepository();
 

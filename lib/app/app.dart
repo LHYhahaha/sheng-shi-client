@@ -7,6 +7,10 @@ import '../l10n/app_localizations.dart';
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
 
+/// 应用根组件。
+///
+/// 这里组装主题、路由和固定语言包。业务页面不要自己创建 MaterialApp，否则 router、
+/// locale 和 provider scope 会分裂。
 class DramaClientApp extends ConsumerWidget {
   const DramaClientApp({super.key});
 

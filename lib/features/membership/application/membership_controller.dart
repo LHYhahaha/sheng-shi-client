@@ -42,16 +42,64 @@ class MembershipState {
       purchaseStatus = MembershipPurchaseStatus.idle,
       error = null;
 
+  /// 会员页是否正在加载权益和套餐数据。
+  ///
+  /// 不表示购买 processing；购买流程只通过 `purchaseStatus` 表达，避免整页 loading
+  /// 遮住确认弹窗状态。
   final bool isLoading;
+
+  /// 当前账号是否已经是会员。
+  ///
+  /// 这个字段来自会员接口，不应由本地 mock purchase success 直接改写。真实支付后
+  /// 需要重新拉取权益或等待服务端回写。
   final bool isActive;
+
+  /// 会员页 hero 主标题。
+  ///
+  /// 属于营销展示文案，不参与权益判断。后续多语言或远程配置只应影响展示。
   final String heroTitle;
+
+  /// 会员页 hero 副标题。
+  ///
+  /// 与 `heroTitle` 一样只用于展示，不要在业务逻辑中解析文案判断套餐类型。
   final String heroSubtitle;
+
+  /// 可购买会员套餐列表。
+  ///
+  /// 套餐价格、周期和标签都以接口返回为准；UI 不应根据数组顺序推断真实推荐策略，
+  /// 当前默认选第一个只是 MVP 初始态。
   final List<MembershipPlan> plans;
+
+  /// 会员权益展示列表。
+  ///
+  /// 只用于说明权益，不代表实际授权开关。播放器解锁仍需要 source/账号权益接口确认。
   final List<MembershipBenefit> benefits;
+
+  /// 会员页提示文案。
+  ///
+  /// 当前为展示数据，不能作为支付条款或风控判断来源。
   final MembershipTips? tips;
+
+  /// 当前选中的套餐 id。
+  ///
+  /// 用于卡片高亮；打开确认弹窗后应以 `confirmationPlanId` 为准，防止切换选择影响
+  /// 正在处理的购买流程。
   final String? selectedPlanId;
+
+  /// 确认弹窗锁定的套餐 id。
+  ///
+  /// processing 延迟完成时会再次校验它，避免旧弹窗结果污染新套餐。
   final String? confirmationPlanId;
+
+  /// mock 会员购买流程状态。
+  ///
+  /// success 只说明客户端确认流程完成，不说明会员权益已生效。真实接入时必须通过
+  /// 服务端订单/权益刷新更新 `isActive`。
   final MembershipPurchaseStatus purchaseStatus;
+
+  /// 加载会员页数据时的错误。
+  ///
+  /// 购买错误未来应与加载错误分开，否则支付失败会错误地把权益页面置为整页失败。
   final Object? error;
 
   bool get hasContent => !isLoading && error == null;

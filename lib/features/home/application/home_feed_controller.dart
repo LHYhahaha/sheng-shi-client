@@ -33,13 +33,45 @@ class HomeFeedState {
       initialError = null,
       loadMoreError = null;
 
+  /// 首页分类列表。
+  ///
+  /// 分类是分页请求的上游条件。切分类时必须重新加载第一页，不能只本地过滤旧 items。
   final List<DramaCategory> categories;
+
+  /// 当前分类下的剧卡列表。
+  ///
+  /// 只包含 Home 展示信息，不包含 episode source。点击后仍要进入 Player feed 链路。
   final List<Drama> items;
+
+  /// 当前选中分类的索引。
+  ///
+  /// 使用索引是为了驱动 tab UI；真实请求仍使用 categories[selectedIndex].id，避免
+  /// 展示标题变化影响分页。
   final int selectedIndex;
+
+  /// 当前分类下一页游标。
+  ///
+  /// null 表示没有更多。不要用 items.length 或 pageSize 推断分页结束。
   final String? nextPageToken;
+
+  /// 首屏分类和第一页是否加载中。
+  ///
+  /// 该状态会显示整页 loading，并清理分页状态。
   final bool isInitialLoading;
+
+  /// 是否正在追加下一页。
+  ///
+  /// 该状态只影响底部 footer，不能清空已加载 items。
   final bool isLoadingMore;
+
+  /// 首屏加载错误。
+  ///
+  /// 用于整页 retry。分页错误不能写到这里，否则会把已加载内容隐藏。
   final Object? initialError;
+
+  /// 分页加载错误。
+  ///
+  /// 只用于底部 retry，保留现有 items 和 selected category。
   final Object? loadMoreError;
 
   bool get canLoadMore => nextPageToken != null && !isLoadingMore;

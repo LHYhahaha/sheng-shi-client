@@ -31,12 +31,42 @@ class MyListState {
       openPlayItemId = null,
       error = null;
 
+  /// 当前选中的片单 tab。
+  ///
+  /// collection 和 play 的交互不同：collection 才能批量编辑，play 才能滑动删除。
   final MyListTab selectedTab;
+
+  /// 收藏列表是否处于批量编辑模式。
+  ///
+  /// 只允许在 collection tab 为 true。进入编辑会隐藏 shell bottom navigation，并关闭
+  /// 播放列表 slidable 状态。
   final bool isCollectionEditing;
+
+  /// 当前 tab 下展示的条目。
+  ///
+  /// mock 删除会本地过滤这个列表；真实接口接入后，这里仍应只保存 controller 统一
+  /// 处理后的结果，UI 不直接改集合。
   final List<MyListItem> items;
+
+  /// 批量编辑时选中的 item id 集合。
+  ///
+  /// 只对 collection tab 有意义。切 tab、reload、删除后必须清空，避免选择态命中
+  /// 已不存在的条目。
   final Set<String> selectedIds;
+
+  /// 当前列表是否正在加载。
+  ///
+  /// loading 会退出编辑并清空 selection/open item，确保新数据到来前没有旧交互状态。
   final bool isLoading;
+
+  /// 当前 tab 加载失败的错误。
+  ///
+  /// 只用于整页 retry，不表示删除失败。后续删除接口失败应有独立动作错误或回滚机制。
   final Object? error;
+
+  /// 播放列表当前打开滑动删除动作的 item id。
+  ///
+  /// 只允许一个打开项。它不用于 collection 编辑态，切 tab/删除/reload 都要清空。
   final String? openPlayItemId;
 
   bool get isEmpty => !isLoading && error == null && items.isEmpty;

@@ -42,12 +42,41 @@ class PlayerStartupPreloadState {
       error = null,
       details = null;
 
+  /// startup preload 当前阶段。
+  ///
+  /// success 只代表 HLS/source 预热成功，不代表播放器已经打开。播放仍要由
+  /// PlayerPlaybackController 重新接管 source 和 media session。
   final PlayerStartupPreloadStatus status;
+
+  /// 被启动预热命中的 feed item id。
+  ///
+  /// Home 传入的是 drama，controller 会拉单剧 feed 后挑第一个 playable item，所以
+  /// 这里保存的是 episode item id，而不是 drama id。
   final String? itemId;
+
+  /// 启动预热时使用的原始 episode source hint。
+  ///
+  /// matches 会同时比较 itemId 和 sourceUrl，避免同一 item 换源后误认为预热命中。
   final String? sourceUrl;
+
+  /// 预热开始时间。
+  ///
+  /// 用于 timing report 和诊断首屏预热耗时。idle/cancel 前可能为空。
   final DateTime? startedAt;
+
+  /// 预热完成、失败或取消时间。
+  ///
+  /// pending 时为空。不要用它判断是否可以播放，应结合 status。
   final DateTime? completedAt;
+
+  /// 预热失败的错误对象。
+  ///
+  /// 仅用于诊断和测试，不直接展示给用户。启动预热失败不应阻断用户点击播放。
   final Object? error;
+
+  /// 预热过程的诊断细节。
+  ///
+  /// 可能包含 HLS playlist/segment 预热摘要。不要作为业务判断输入。
   final String? details;
 
   bool matches(PlayerFeedItem item) {

@@ -1,3 +1,7 @@
+/// 播放器剧集内容模型。
+///
+/// 这是播放页 chrome 和详情弹层共用的数据，不等同于首页 Drama 卡片。这里可以包含
+/// episodes/recommendations，但仍不代表当前 episode 已授权播放。
 class PlayerContent {
   const PlayerContent({
     required this.id,
@@ -12,18 +16,61 @@ class PlayerContent {
     required this.recommendations,
   });
 
+  /// 剧内容 id。
+  ///
+  /// 用于详情、推荐和播放 feed 关联，不要用展示标题做业务关联。
   final String id;
+
+  /// 剧名展示文案。
+  ///
+  /// 只用于 UI 展示；内容多语言接入后应由内容接口返回对应语言。
   final String title;
+
+  /// 播放页标题展示文案。
+  ///
+  /// 可以和 `title` 不同，用于播放器 chrome 的短标题或营销标题。
   final String playTitle;
+
+  /// 剧情简介。
+  ///
+  /// 只用于详情弹层展示，不参与推荐或播放权限判断。
   final String synopsis;
+
+  /// 播放量展示文案。
+  ///
+  /// 已经是格式化后的 label，UI 不应再解析其中数字做排序或统计。
   final String viewCountLabel;
+
+  /// 点赞量展示文案。
+  ///
+  /// 与播放量一样是展示 label，真实埋点/互动计数应走单独接口。
   final String likeCountLabel;
+
+  /// 播放页背景图 asset 路径。
+  ///
+  /// 当前是本地 mock asset；远程图接入时应在 repository 层转换为可渲染资源。
   final String backgroundAssetPath;
+
+  /// 播放页海报图 asset 路径。
+  ///
+  /// 用于首帧前或不可播放时的视觉占位，不代表视频源。
   final String posterAssetPath;
+
+  /// 剧集列表。
+  ///
+  /// 列表包含 locked/unavailable 信息；播放前仍必须经过 playback controller 判断。
   final List<PlayerEpisode> episodes;
+
+  /// 详情页推荐列表。
+  ///
+  /// 推荐项只用于展示/跳转，不应直接加入当前播放 feed 或预热。
   final List<PlayerRecommendation> recommendations;
 }
 
+/// 播放页 episode 模型。
+///
+/// `videoSource` 是 source hint，不是最终 playable URL。真实链路必须通过
+/// PlayerPlaybackSourceRepository resolve，才能处理签名、过期和 proxy spike。
 class PlayerEpisode {
   const PlayerEpisode({
     required this.id,
@@ -35,12 +82,41 @@ class PlayerEpisode {
     this.isAvailable = true,
   });
 
+  /// 剧集 id。
+  ///
+  /// 与 content id 组合后形成 feed item id。不要只用集数 number 作为稳定 id。
   final String id;
+
+  /// 剧集序号。
+  ///
+  /// 用于 UI 展示和选集排序，不用于授权或 source cache key。
   final int number;
+
+  /// 是否被付费/会员锁定。
+  ///
+  /// locked episode 不能 preload/open/prepare。即使 mock 数据带 videoSource，也必须等
+  /// 解锁后重新走 source resolve。
   final bool isLocked;
+
+  /// 本地视频 asset 路径。
+  ///
+  /// 当前主链路使用远端 HLS；本地 asset 仅作为兼容字段。生产 HLS preload 不应依赖它。
   final String? videoAssetPath;
+
+  /// 远端视频 URL hint。
+  ///
+  /// 这是内容侧给出的原始 hint，不是播放器最终 source。最终 source 由
+  /// PlayerPlaybackSourceRepository 解析。
   final String? videoUrl;
+
+  /// 视频画幅比例。
+  ///
+  /// 用于播放器 fit 和 UI 适配，不参与 source 选择。
   final double? videoAspectRatio;
+
+  /// 内容是否可用。
+  ///
+  /// unavailable 代表下架、缺源或地区不可用，不能 preload/open/prepare。
   final bool isAvailable;
 
   bool get isUnavailable => !isAvailable;
@@ -56,6 +132,9 @@ class PlayerEpisode {
   }
 }
 
+/// 播放详情页推荐项。
+///
+/// 推荐只用于展示和跳转，不应该被 preload/open；真正播放仍要重新进入 feed/source 链路。
 class PlayerRecommendation {
   const PlayerRecommendation({
     required this.id,
@@ -64,12 +143,24 @@ class PlayerRecommendation {
     required this.coverAssetPath,
   });
 
+  /// 推荐剧 id。
+  ///
+  /// 点击后应重新进入详情/feed 链路，不直接复用当前 content。
   final String id;
+
+  /// 推荐标题。
   final String title;
+
+  /// 推荐副标题或标签。
   final String subtitle;
+
+  /// 推荐封面 asset 路径。
   final String coverAssetPath;
 }
 
+/// 播放内容仓库边界。
+///
+/// 负责剧集详情、选集和推荐内容，不负责 media session。不要在仓库实现里创建播放器。
 abstract interface class PlayerContentRepository {
   Future<PlayerContent> getPlayerContent({required String dramaId});
 }

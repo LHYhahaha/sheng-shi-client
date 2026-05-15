@@ -1,6 +1,10 @@
 import '../domain/auth_repository.dart';
 import '../domain/auth_session.dart';
 
+/// Auth mock 仓库。
+///
+/// 用延迟模拟平台登录/账号操作，但不持久化真实凭证。真实接入时仍应保持相同接口，
+/// 让 AuthController 继续负责 pending/error/session 合成。
 class MockAuthRepository implements AuthRepository {
   MockAuthRepository();
 

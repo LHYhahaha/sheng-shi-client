@@ -3,6 +3,10 @@ import 'package:dio/dio.dart';
 import '../config/app_environment.dart';
 import 'api_exception.dart';
 
+/// API client 的最小网络入口。
+///
+/// 这里集中 Dio 配置、headers 和异常映射。feature/UI 不应直接 new Dio；否则
+/// token、requestId、重试和错误码策略会散落到业务层，后续接真实接口很难统一治理。
 class ApiClient {
   ApiClient({Dio? dio}) : _dio = dio ?? Dio(_defaultOptions) {
     _dio.interceptors.add(
@@ -15,6 +19,9 @@ class ApiClient {
     );
   }
 
+  /// 底层 Dio 实例。
+  ///
+  /// 暴露 getter 只用于底层扩展和测试；feature 层优先使用 ApiClient 的 get/post/put/delete。
   final Dio _dio;
 
   Dio get dio => _dio;

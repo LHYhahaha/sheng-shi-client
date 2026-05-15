@@ -30,10 +30,33 @@ class PlayerFeedState {
       isLoading = true,
       error = null;
 
+  /// 当前 feed 的加载配置。
+  ///
+  /// retry 依赖它重新加载相同来源。null 只出现在初始状态，表示还没有确定加载单剧或
+  /// For You。
   final PlayerFeedConfig? config;
+
+  /// 当前播放器 PageView 的 item 列表。
+  ///
+  /// 列表顺序决定滑动方向和 preloadAround 的 previous/current/next 计算。不要在 UI
+  /// 层临时排序或过滤，否则 playback window 会和页面不一致。
   final List<PlayerFeedItem> items;
+
+  /// 当前 PageView index。
+  ///
+  /// 播放器页面通过它同步 PageController 和 currentItem。它只描述 feed 位置，不代表
+  /// 当前 item 已经完成播放 source resolve。
   final int currentIndex;
+
+  /// feed 是否正在加载。
+  ///
+  /// 只覆盖内容列表加载，不表示播放器 opening/buffering。播放器 loading 由
+  /// PlayerPlaybackState 管理。
   final bool isLoading;
+
+  /// feed 加载错误。
+  ///
+  /// 只表示列表/详情加载失败，不表示媒体播放失败。媒体错误在 PlayerPlaybackState。
   final Object? error;
 
   PlayerFeedItem? get currentItem {

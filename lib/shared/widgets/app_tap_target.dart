@@ -14,10 +14,29 @@ class AppTapTarget extends StatelessWidget {
     super.key,
   });
 
+  /// 实际视觉内容。
+  ///
+  /// 通常是图标或小尺寸控件；点击热区由 AppTapTarget 外层补足。
   final Widget child;
+
+  /// 点击回调。
+  ///
+  /// null 表示禁用，同时 Semantics 会标记为 disabled。
   final VoidCallback? onTap;
+
+  /// 无障碍语义标签。
+  ///
+  /// 只有图标没有文字时必须传入，避免读屏无法说明按钮用途。
   final String? semanticLabel;
+
+  /// 最小点击区域尺寸。
+  ///
+  /// 默认 44px，符合移动端可点热区要求。不要为了视觉紧凑随意调小。
   final double minSize;
+
+  /// 点击区域内边距。
+  ///
+  /// 用于扩大或调整热区，不改变 child 自身语义。
   final EdgeInsetsGeometry padding;
 
   @override

@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../theme/app_colors.dart';
 
+/// 应用底部主导航。
+///
+/// 只服务四个 shell tab。播放器全屏、My List 编辑等场景应通过 shell chrome provider
+/// 隐藏它，不要在单个页面里复制导航栏。
 class AppBottomNavigation extends StatelessWidget {
   const AppBottomNavigation({
     required this.currentIndex,
@@ -41,7 +45,12 @@ class AppBottomNavigation extends StatelessWidget {
     ),
   ];
 
+  /// 当前选中 tab 索引。
   final int currentIndex;
+
+  /// tab 点击回调。
+  ///
+  /// Shell 会在这里处理 For You pauseForVisibility，再交给 navigationShell 切换。
   final ValueChanged<int> onDestinationSelected;
 
   @override

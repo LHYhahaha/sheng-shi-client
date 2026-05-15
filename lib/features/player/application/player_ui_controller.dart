@@ -7,6 +7,10 @@ final playerUiControllerProvider =
       PlayerUiController.new,
     );
 
+/// 播放器纯 UI 状态。
+///
+/// 这里只保存 paywall、当前展示集数等 UI 选择，不保存真实播放状态。播放/缓冲/错误
+/// 以 PlayerPlaybackState 为准，避免两个状态机互相覆盖。
 class PlayerUiState {
   const PlayerUiState({
     required this.episodeNumber,
@@ -19,8 +23,20 @@ class PlayerUiState {
       isPlaying = false,
       paywall = PlayerPaywallState.hidden;
 
+  /// 当前 UI 展示的集数。
+  ///
+  /// 用于顶部栏和选集态，不代表播放器已经打开了对应 episode。
   final int episodeNumber;
+
+  /// UI 层的播放意图。
+  ///
+  /// 这是早期交互态，真实是否播放要看 PlayerPlaybackState.isPlaying。新增播放逻辑
+  /// 不应依赖这个字段判断 media session。
   final bool isPlaying;
+
+  /// 当前 paywall 展示状态。
+  ///
+  /// hidden/unlock/memberUnlock 只影响遮罩和弹层，不代表服务端授权结果。
   final PlayerPaywallState paywall;
 
   bool get showsPaywall => paywall != PlayerPaywallState.hidden;
@@ -38,8 +54,13 @@ class PlayerUiState {
   }
 }
 
+/// 播放器付费遮罩状态。
 enum PlayerPaywallState { hidden, unlock, memberUnlock }
 
+/// 播放器 UI 控制器。
+///
+/// 与 PlayerPlaybackController 分离，是为了让付费弹层、选集和 UI 意图不污染真实
+/// 播放器 session 状态。
 class PlayerUiController extends Notifier<PlayerUiState> {
   PlayerUiController(this.sessionKey);
 

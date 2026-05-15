@@ -20,16 +20,62 @@ class PlayerPlaybackTimingEvent {
     this.details,
   });
 
+  /// 事件名称。
+  ///
+  /// 名称保持短字符串，方便在测试和日志里搜索。不要把动态数据拼进名称，动态数据放
+  /// `details`。
   final String name;
+
+  /// 事件发生时间。
+  ///
+  /// 用本地时间只用于诊断排序，不作为服务端埋点可信时间。
   final DateTime at;
+
+  /// 当前播放 trace id。
+  ///
+  /// 同一次 playItem/open 链路共享一个 trace，便于串起用户动作、source resolve、
+  /// media open 和 first frame。
   final String? traceId;
+
+  /// 事件关联的 item id。
+  ///
+  /// 可为空，因为某些事件是 session 生命周期或全局释放事件，不绑定具体 item。
   final String? itemId;
+
+  /// 事件关联的 source。
+  ///
+  /// 可能包含签名 URL 或 local proxy URL；导出给普通 UI 时应谨慎，避免泄漏鉴权参数。
   final String? source;
+
+  /// source 的可读分类标签。
+  ///
+  /// 用于报告里快速区分远端 fixture、local proxy 等来源，不替代真实 URL。
   final String? sourceLabel;
+
+  /// 单个操作自己的耗时。
+  ///
+  /// 例如 source resolve 或 media open 的耗时；不等同于从用户点击到首帧的总耗时。
   final Duration? elapsed;
+
+  /// 距离当前 trace start 的时间。
+  ///
+  /// 用于定位播放链路内部哪个阶段慢。
   final Duration? sinceTraceStart;
+
+  /// 距离用户动作发生的时间。
+  ///
+  /// 用于衡量点击/滑动到关键事件的感知耗时；如果没有显式用户动作，则从 trace start
+  /// 近似计算。
   final Duration? sinceUserAction;
+
+  /// 事件附带错误。
+  ///
+  /// 仅用于诊断，不直接面向用户展示。
   final Object? error;
+
+  /// 事件附加细节。
+  ///
+  /// 放置 key=value 形式的诊断信息。不要在事件名称中塞这些动态字段。
   final String? details;
 }
 

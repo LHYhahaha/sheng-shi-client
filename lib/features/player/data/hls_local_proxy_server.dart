@@ -15,10 +15,16 @@ class HlsLocalProxyConfig {
     this.timeout = const Duration(seconds: 4),
   });
 
+  /// 是否启用本地代理 spike。
+  ///
+  /// 默认 false，必须通过编译期开关显式开启。
   final bool enabled;
+
+  /// 代理向远端请求 playlist/segment 的超时。
   final Duration timeout;
 }
 
+/// 本地 HLS proxy 的远端响应包装。
 class HlsLocalProxyResponse {
   const HlsLocalProxyResponse({
     required this.statusCode,
@@ -26,8 +32,17 @@ class HlsLocalProxyResponse {
     this.contentType,
   });
 
+  /// 远端 HTTP 状态码。
   final int statusCode;
+
+  /// 响应字节。
+  ///
+  /// playlist 和 segment 都以字节保存，playlist 需要时再按文本解码。
   final List<int> bytes;
+
+  /// 响应 content type。
+  ///
+  /// segment 回写给播放器时尽量保留，避免播放器 MIME 判断异常。
   final String? contentType;
 
   String get body => utf8.decode(bytes, allowMalformed: true);
@@ -80,6 +95,10 @@ class DartIoHlsLocalProxyHttpClient implements HlsLocalProxyHttpClient {
   }
 }
 
+/// 本地代理的内存 segment 缓存。
+///
+/// 只在 proxy server 生命周期内有效，不是持久缓存。stop 时必须清空，避免 spike 数据
+/// 跨会话复用。
 class HlsLocalCacheStore {
   final _bytesByUrl = <String, List<int>>{};
 
@@ -106,8 +125,15 @@ class HlsLocalProxyServer {
   }) : _client = client ?? DartIoHlsLocalProxyHttpClient(),
        _cacheStore = cacheStore ?? HlsLocalCacheStore();
 
+  /// 代理向远端拉取 playlist/segment 的 HTTP client。
   final HlsLocalProxyHttpClient _client;
+
+  /// 内存缓存。
+  ///
+  /// 只缓存 segment bytes，不缓存业务授权状态。
   final HlsLocalCacheStore _cacheStore;
+
+  /// 远端请求超时。
   final Duration timeout;
   HttpServer? _server;
   var _generation = 0;

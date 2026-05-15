@@ -16,6 +16,9 @@ class AppLocalizations {
   static const LocalizationsDelegate<AppLocalizations> delegate =
       _AppLocalizationsDelegate();
 
+  /// 当前用于取文案的 Locale。
+  ///
+  /// 只按 languageCode 切换固定 UI 文案；内容多语言不走这里。
   final Locale locale;
 
   static AppLocalizations of(BuildContext context) {

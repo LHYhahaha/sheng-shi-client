@@ -6,6 +6,9 @@ import '../domain/player_feed.dart';
 import '../domain/player_playback_source.dart';
 import '../domain/player_preload_state.dart';
 
+/// HLS 预热结果。
+///
+/// 这个结果用于诊断和状态记录，不用于证明视频一定可播放；播放仍要经过 media open。
 class HlsPlaylistPrefetchResult {
   const HlsPlaylistPrefetchResult({
     required this.url,
@@ -18,19 +21,45 @@ class HlsPlaylistPrefetchResult {
     required this.diagnostics,
   });
 
+  /// 原始预热 URL。
   final String url;
+
+  /// playlist 响应累计字节数。
+  ///
+  /// 不包含 segment 预热字节，segment 另见 `segmentBytesPreheated`。
   final int contentLength;
+
+  /// 是否为 master playlist。
+  ///
+  /// master playlist 会再选择一个 variant media playlist 预热。
   final bool isMasterPlaylist;
+
+  /// 预热完成时间。
   final DateTime fetchedAt;
+
+  /// 实际预热的 media playlist URL。
+  ///
+  /// master playlist 下可能与原始 URL 不同。
   final String mediaPlaylistUrl;
+
+  /// 已预热的 segment URL 列表。
+  ///
+  /// 受 maxSegments 和 maxPreheatBytes 限制，不代表完整视频已缓存。
   final List<String> segmentUrls;
+
+  /// 已预热 segment 的字节数。
   final int segmentBytesPreheated;
+
+  /// 预热诊断信息。
+  ///
+  /// 用于 timing/report，不作为业务逻辑判断。
   final List<String> diagnostics;
 }
 
 class HlsPlaylistPrefetchException implements Exception {
   const HlsPlaylistPrefetchException(this.message);
 
+  /// 预热失败原因。
   final String message;
 
   @override
@@ -51,8 +80,17 @@ class HlsPlaylistHttpResponse {
     this.contentLength,
   });
 
+  /// HTTP 状态码。
   final int statusCode;
+
+  /// 响应文本。
+  ///
+  /// 只用于 playlist 解析；segment 预热在这里也按字节长度统计，不解析媒体内容。
   final String body;
+
+  /// 响应字节长度。
+  ///
+  /// 如果 HTTP client 没提供，则按 UTF-8 文本估算。
   final int? contentLength;
 
   int get byteLength => contentLength ?? utf8.encode(body).length;
@@ -118,9 +156,22 @@ class HlsPlaylistPreloader {
     this.maxPreheatBytes = 2 * 1024 * 1024,
   }) : _client = client ?? DartIoHlsPlaylistHttpClient();
 
+  /// HLS HTTP client。
+  ///
+  /// 通过接口注入，方便测试取消、超时和失败，不直接绑定 dart:io。
   final HlsPlaylistHttpClient _client;
+
+  /// 单次 playlist/segment 请求超时。
   final Duration timeout;
+
+  /// 最多预热的 segment 数量。
+  ///
+  /// 控制请求数量，避免信息流快速滑动时过度预取。
   final int maxSegments;
+
+  /// segment 预热字节预算。
+  ///
+  /// 控制流量上限，避免首段过大时抢占当前播放带宽。
   final int maxPreheatBytes;
   int _generation = 0;
 

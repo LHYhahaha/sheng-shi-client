@@ -12,8 +12,15 @@ class AppSheetHandle extends StatelessWidget {
     super.key,
   });
 
+  /// handle 宽度。
   final double width;
+
+  /// handle 高度。
   final double height;
+
+  /// handle 颜色。
+  ///
+  /// null 时使用统一半透明白色。
   final Color? color;
 
   @override
