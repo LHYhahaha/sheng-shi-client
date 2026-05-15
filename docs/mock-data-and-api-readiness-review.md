@@ -394,7 +394,7 @@ flutter test
 - 新增 DTO -> domain mapper：远程 category/feed 可转换为当前 `DramaCategory`、`Drama`、`DramaFeedPage`。
 - 新增 `DramaRemoteDataSource`：预留 `GET /home/categories` 和 `GET /home/feed`。
 - 新增 `RemoteDramaRepository`：实现现有 `DramaRepository`，上层仍只感知 domain model。
-- `dramaRepositoryProvider` 增加 `USE_REMOTE_API` 编译期开关，但默认仍返回 `MockDramaRepository`，不影响当前 Home UI。
+- `dramaRepositoryProvider` 增加 `USE_REMOTE_DRAMA_API` 编译期开关，并兼容 Phase A 早期 `USE_REMOTE_API`；默认仍返回 `MockDramaRepository`，不影响当前 Home UI。
 - 已补 mapper/repository/provider 默认行为测试。
 
 仍然 defer：
@@ -632,3 +632,14 @@ flutter test
 - logout/delete 后清理 Home/My list/Wallet/Entitlement/Profile cache 和播放器 session。
 - 真实 Google / Facebook SDK 与 OAuth nonce 校验。
 - Profile 会员卡/金币卡从真实 Auth/Profile/Entitlement/Wallet 聚合。
+
+## API Skeleton 总回归 / Remote Contract Index
+
+已新增 `docs/remote-contract-index.md`，作为当前远程契约总索引：
+
+- 汇总 Network、Home/Drama、MediaResource、Player/Playback Source、My list、Wallet、Store、Membership、Entitlement、Auth/Profile 的 provider switch、remote repository、remote datasource、DTO/mapper、endpoint skeleton、auth policy、测试和 defer 项。
+- 统一记录 `USE_REMOTE_XXX_API` 命名。Home/Drama 已新增 scoped `USE_REMOTE_DRAMA_API`，同时保留旧 `USE_REMOTE_API` fallback。
+- 新增 `test/architecture/remote_contract_boundary_test.dart`，防止 DTO / remote datasource / remote repository 泄漏到 application/presentation。
+- 当前没有发现 remote datasource 被 Page/Controller 直接 import，也没有发现 remote repository 返回 DTO 给 UI。
+
+真实 API 联调前的 P0/P1/P2 准备清单以 `docs/remote-contract-index.md` 为准。

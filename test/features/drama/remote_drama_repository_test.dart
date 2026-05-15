@@ -74,6 +74,18 @@ void main() {
     expect(repository, isA<MockDramaRepository>());
     expect(repository, isA<DramaRepository>());
   });
+
+  test('dramaRepositoryProvider can be switched to remote', () {
+    final container = ProviderContainer(
+      overrides: [useRemoteDramaApiProvider.overrideWithValue(true)],
+    );
+    addTearDown(container.dispose);
+
+    final repository = container.read(dramaRepositoryProvider);
+
+    expect(repository, isA<RemoteDramaRepository>());
+    expect(repository, isA<DramaRepository>());
+  });
 }
 
 class _FakeDramaRemoteDataSource implements DramaRemoteDataSource {
