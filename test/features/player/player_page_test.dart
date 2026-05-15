@@ -1206,6 +1206,49 @@ void main() {
   });
 
   testWidgets(
+    'swiping back to access-overlay paused episode resumes playback',
+    (tester) async {
+      final playbackSession = _FakePlaybackSession();
+
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          repository: _FakePlayerFeedRepository._(
+            items: _itemsWithAccessPattern([
+              _EpisodeAccessFixture.free(1, _mockVideoUrl),
+              _EpisodeAccessFixture.locked(2, _mockSecondVideoUrl),
+            ]),
+          ),
+          playbackSessionFactory: () => playbackSession,
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      expect(playbackSession.openedSources, [_mockVideoUrl]);
+
+      await tester.drag(find.byType(PageView), const Offset(0, -500));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('EP.02'), findsOneWidget);
+      expect(find.text('Unlock Now'), findsOneWidget);
+      expect(playbackSession.pauseCount, greaterThan(0));
+      expect(playbackSession.openedSources, [_mockVideoUrl]);
+
+      await tester.drag(find.byType(PageView), const Offset(0, 500));
+      await tester.pumpAndSettle();
+
+      expect(find.text('EP.01'), findsOneWidget);
+      expect(find.text('Unlock Now'), findsNothing);
+      expect(playbackSession.openedSources, [_mockVideoUrl]);
+      expect(playbackSession.playCount, 1);
+      expect(
+        find.byKey(const ValueKey('player_video_tap_layer')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
     'consecutive locked episodes reopen sheet without opening locked sources',
     (tester) async {
       final playbackSession = _FakePlaybackSession();

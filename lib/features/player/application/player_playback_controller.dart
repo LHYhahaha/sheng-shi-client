@@ -392,6 +392,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   int _generation = 0;
   int _preloadGeneration = 0;
   bool _pauseWhenOpenCompletes = false;
+  String? _accessOverlayPausedItemId;
   bool _isSessionDisposed = false;
   bool _wasPlayingBeforeSeek = false;
   bool _ignoreNextCompleted = false;
@@ -505,7 +506,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
   }
 
-  Future<void> playItem(PlayerFeedItem? item) async {
+  Future<void> playItem(
+    PlayerFeedItem? item, {
+    bool resumeIfCurrentSource = false,
+  }) async {
     if (_isSessionDisposed) {
       return;
     }
@@ -549,6 +553,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (item == null) {
       // 空 item 表示 feed 当前没有可播放目标。需要暂停并清掉 source，但不把它记为
       // error，否则空列表/切分类会误触发播放失败 UI。
+      _accessOverlayPausedItemId = null;
       final generation = ++_generation;
       if (!await _pauseIfCurrent(generation)) {
         return;
@@ -569,6 +574,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (item.episode.isLocked) {
       // 锁定内容是业务付费边界，不能为了“预热体验”提前 resolve/open。
       // 客户端 mock 可以展示 paywall，但真实环境必须等服务端授权后再拿 source。
+      _accessOverlayPausedItemId = null;
       await _blockPlaybackForItem(
         item,
         status: PlayerPlaybackStatus.blocked,
@@ -581,6 +587,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (item.episode.isUnavailable || sourceHint == null) {
       // unavailable/null source 代表内容侧暂不可播放。这里同样只进入状态展示，
       // 不触发 repository，避免把内容缺失误判成网络错误或污染 preload 缓存。
+      _accessOverlayPausedItemId = null;
       await _blockPlaybackForItem(
         item,
         status: PlayerPlaybackStatus.unavailable,
@@ -602,6 +609,30 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
         );
       }
+      final shouldResumeDetachedCurrent =
+          resumeIfCurrentSource &&
+          _accessOverlayPausedItemId == item.id &&
+          state.status == PlayerPlaybackStatus.paused &&
+          state.currentSource != null;
+      if (shouldResumeDetachedCurrent) {
+        _pauseWhenOpenCompletes = false;
+        _accessOverlayPausedItemId = null;
+        _logTiming(
+          'same source access overlay resume',
+          itemId: item.id,
+          source: state.currentSource,
+        );
+        await _session.play();
+        if (!ref.mounted) {
+          return;
+        }
+        state = state.copyWith(
+          status: PlayerPlaybackStatus.playing,
+          hasEnded: false,
+          videoController: _session.videoController,
+          surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
+        );
+      }
       return;
     }
 
@@ -613,6 +644,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       details: 'generation=$generation',
     );
     _pauseWhenOpenCompletes = false;
+    _accessOverlayPausedItemId = null;
     final resumeProgress = _shouldPersistProgress
         ? await _progressRepository.getProgress(item.id)
         : null;
@@ -1009,6 +1041,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (_isSessionDisposed) {
       return;
     }
+    final shouldResumeCurrentLater =
+        state.currentItemId != null &&
+        (state.status == PlayerPlaybackStatus.playing ||
+            state.status == PlayerPlaybackStatus.opening);
+    if (shouldResumeCurrentLater) {
+      _accessOverlayPausedItemId = state.currentItemId;
+    }
     _pauseWhenOpenCompletes = true;
     final generation = ++_generation;
     _logTiming(
@@ -1081,6 +1120,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
 
     if (state.status == PlayerPlaybackStatus.playing) {
+      _accessOverlayPausedItemId = null;
       await _session.pause();
       state = state.copyWith(status: PlayerPlaybackStatus.paused);
       return;
@@ -1140,6 +1180,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (_isSessionDisposed) {
       return;
     }
+    _accessOverlayPausedItemId = null;
     await _session.pause();
     state = state.copyWith(status: PlayerPlaybackStatus.paused);
   }
@@ -1214,6 +1255,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     // 完成后又自动 play；随后释放 session window 和 HTTP preload，防止隐藏页面继续
     // 占用音频/网络资源。
     _pauseWhenOpenCompletes = true;
+    _accessOverlayPausedItemId = null;
     ++_generation;
     await _session.pause();
     await _releaseSessionWindowFor('hidden');
@@ -1249,6 +1291,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
     _pauseWhenOpenCompletes = true;
+    _accessOverlayPausedItemId = null;
     ++_generation;
     await _session.pause();
     await _releaseSessionWindowFor('dispose surface detach');
@@ -1283,6 +1326,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (!ref.mounted || state.videoController == null) {
       return;
     }
+    _accessOverlayPausedItemId = null;
     state = state.copyWith(
       status: state.status == PlayerPlaybackStatus.playing
           ? PlayerPlaybackStatus.paused
@@ -1300,6 +1344,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     // 单剧页离开时做强释放：当前 session、prepared window、HLS pending 都要清掉。
     // For You tab 不走 disposeSession，而是 pauseForVisibility，以保留 tab provider。
     _pauseWhenOpenCompletes = true;
+    _accessOverlayPausedItemId = null;
     ++_generation;
     await _releaseSessionWindowFor('dispose');
     await _disposePreloads(syncState: syncState);

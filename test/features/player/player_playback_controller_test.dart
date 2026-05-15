@@ -517,6 +517,49 @@ void main() {
     },
   );
 
+  test('same source shortcut resumes access overlay paused playback', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.quiesceForAccessOverlay(
+      _item(2, isLocked: true),
+      reason: 'coin unlock required',
+    );
+
+    var state = container.read(provider);
+    expect(state.status, PlayerPlaybackStatus.paused);
+    expect(state.currentItemId, 'drama-a-ep-1');
+    expect(state.canMountVideoSurface, isFalse);
+
+    await controller.playItem(_item(1), resumeIfCurrentSource: true);
+
+    state = container.read(provider);
+    expect(session.openedSources, [_videoUrl]);
+    expect(session.playCount, 1);
+    expect(state.status, PlayerPlaybackStatus.playing);
+    expect(state.currentItemId, 'drama-a-ep-1');
+    expect(state.surfaceLifecycle, PlayerVideoSurfaceLifecycle.attached);
+  });
+
+  test('same source shortcut does not resume user paused playback', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.pause();
+    await controller.playItem(_item(1), resumeIfCurrentSource: true);
+
+    final state = container.read(provider);
+    expect(session.openedSources, [_videoUrl]);
+    expect(session.playCount, 0);
+    expect(state.status, PlayerPlaybackStatus.paused);
+  });
+
   test('dispose path detaches surface before disposing session', () async {
     final session = _FakePlaybackSession();
     final container = _createContainer(session);

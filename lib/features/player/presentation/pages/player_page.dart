@@ -1012,7 +1012,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         _entitlementPlayableItemIds.add(item.id);
         uiController.unlockPaywallAndPlay();
         _schedulePreloadAroundItem(item);
-        await playbackController.playItem(_playableCopy(item));
+        await playbackController.playItem(
+          _playableCopy(item),
+          resumeIfCurrentSource: true,
+        );
       case EpisodeAccessDecisionType.autoUnlockAndPlay:
         await _quiesceItemForAccessOverlay(
           playbackController,
