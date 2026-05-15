@@ -628,6 +628,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       currentSource: sourceHint,
       clearError: true,
       clearSeekPreview: true,
+      videoController: _session.videoController,
       surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
     );
 

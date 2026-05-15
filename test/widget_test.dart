@@ -529,6 +529,7 @@ void main() {
           await tester.drag(find.byType(PageView), const Offset(0, -500));
           await tester.pumpAndSettle();
         }
+        await _pumpAutoUnlockSheet(tester);
 
         expect(find.text('Recharge to unlock'), findsOneWidget);
         expect(forYouSession.pauseCount, greaterThan(0));
@@ -1248,6 +1249,13 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     await _widthController.close();
     await _errorController.close();
   }
+}
+
+Future<void> _pumpAutoUnlockSheet(WidgetTester tester) async {
+  await tester.pumpAndSettle();
+  await tester.pump(const Duration(milliseconds: 210));
+  await tester.pump(const Duration(milliseconds: 30));
+  await tester.pumpAndSettle();
 }
 
 class _SignedInAuthRepository implements AuthRepository {

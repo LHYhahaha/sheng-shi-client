@@ -67,6 +67,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   static const _topBarBackIconSize = 28.0;
   static const _topBarMoreIconSize = 24.0;
   static const _dimmedOverlayOpacity = 0.64;
+  static const _autoUnlockSheetDebounce = Duration(milliseconds: 200);
 
   late final PageController _pageController;
   late final String _sessionKey;
@@ -79,10 +80,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isPageScrolling = false;
   bool _didRecordFirstBuild = false;
   int _preloadRequestGeneration = 0;
+  int _autoUnlockSheetGeneration = 0;
   String? _handledEndedItemId;
   final Set<String> _entitlementPlayableItemIds = <String>{};
   String? _activeCoinSheetItemId;
   String? _activeRechargeSheetItemId;
+  String? _pendingAutoUnlockSheetItemId;
+  Timer? _pendingAutoUnlockSheetTimer;
 
   String _createSessionKey() {
     return switch (widget.feedMode) {
@@ -141,6 +145,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _cancelPendingAutoUnlockSheet();
     // 真正销毁页面实例时释放 session。底部 tab 切换不会 dispose For You 页面，它走
     // AppShell 的 pauseForVisibility；这里覆盖的是 app/test teardown 或 route 树销毁，
     // 不能只 pause，否则 Android VideoController 可能在树释放后仍收到 native callback。
@@ -280,7 +285,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       // feed currentItem 是播放链路入口。先问 entitlement，再决定是否播放或展示解锁
       // UI。PlayerPlaybackController 不知道金币/会员，仍只接收“已允许播放”的 item。
       unawaited(() async {
-        await _handleEntitlementDecisionForItem(next, autoPresentSheet: true);
+        await _handleEntitlementDecisionForItem(next, autoPresentSheet: false);
+        if (!mounted) {
+          return;
+        }
+        _scheduleAutoUnlockSheetForItem(next);
       }());
     });
 
@@ -466,7 +475,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                     PlayerChrome(
                       content: item.content,
                       overlayOpacity: _overlayOpacity,
-                      videoController: playbackState.canMountVideoSurface
+                      videoController:
+                          playbackState.canMountVideoSurface &&
+                              canUsePlaybackSurface
                           ? playbackState.videoController
                           : null,
                       videoFit: _videoFitFor(item.episode),
@@ -589,6 +600,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (notification is ScrollStartNotification ||
         notification is ScrollUpdateNotification) {
       if (notification is ScrollStartNotification) {
+        _cancelPendingAutoUnlockSheet();
         final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
         _playbackController.recordPlaybackUserAction(
           'PageView scroll start',
@@ -603,6 +615,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
     if (notification is ScrollEndNotification) {
       _setPageScrolling(false);
+      final currentItem = ref
+          .read(playerFeedControllerProvider(_sessionKey))
+          .currentItem;
+      if (currentItem != null) {
+        _scheduleAutoUnlockSheetForItem(currentItem);
+      }
     }
     return false;
   }
@@ -673,6 +691,91 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             .currentItem
             ?.id ==
         item.id;
+  }
+
+  bool _isLockedAutoSheetCandidate(PlayerFeedItem item) {
+    return item.episode.isLocked &&
+        !item.episode.isUnavailable &&
+        !_isEntitlementPlayable(item);
+  }
+
+  void _cancelPendingAutoUnlockSheet() {
+    _pendingAutoUnlockSheetTimer?.cancel();
+    _pendingAutoUnlockSheetTimer = null;
+    _pendingAutoUnlockSheetItemId = null;
+    _autoUnlockSheetGeneration += 1;
+  }
+
+  void _scheduleAutoUnlockSheetForItem(PlayerFeedItem item) {
+    _pendingAutoUnlockSheetTimer?.cancel();
+    _pendingAutoUnlockSheetTimer = null;
+    _pendingAutoUnlockSheetItemId = null;
+
+    if (!mounted || !_isLockedAutoSheetCandidate(item)) {
+      return;
+    }
+
+    _pendingAutoUnlockSheetItemId = item.id;
+    final generation = ++_autoUnlockSheetGeneration;
+    if (_isPageScrolling) {
+      return;
+    }
+
+    _pendingAutoUnlockSheetTimer = Timer(_autoUnlockSheetDebounce, () {
+      _pendingAutoUnlockSheetTimer = null;
+      if (!mounted ||
+          generation != _autoUnlockSheetGeneration ||
+          _pendingAutoUnlockSheetItemId != item.id) {
+        return;
+      }
+      unawaited(_showAutoUnlockSheetForItem(item, generation: generation));
+    });
+  }
+
+  Future<void> _showAutoUnlockSheetForItem(
+    PlayerFeedItem item, {
+    required int generation,
+  }) async {
+    if (!mounted ||
+        generation != _autoUnlockSheetGeneration ||
+        !_isCurrentFeedItem(item) ||
+        !_isLockedAutoSheetCandidate(item) ||
+        _isModalOpen ||
+        _activeCoinSheetItemId != null ||
+        _activeRechargeSheetItemId != null) {
+      return;
+    }
+
+    final decision = ref
+        .read(entitlementControllerProvider.notifier)
+        .evaluateAccess(
+          dramaId: item.content.id,
+          episodeId: item.episode.id,
+          itemId: item.id,
+          unlockType: item.episode.unlockType,
+          price: item.episode.requiredCoins,
+          isUnavailable: item.episode.isUnavailable,
+        );
+
+    if (!mounted ||
+        generation != _autoUnlockSheetGeneration ||
+        !_isCurrentFeedItem(item) ||
+        _isModalOpen) {
+      return;
+    }
+
+    switch (decision.type) {
+      case EpisodeAccessDecisionType.allowPlay:
+        await _handleAccessDecision(item, decision, autoPresentSheet: false);
+      case EpisodeAccessDecisionType.autoUnlockAndPlay:
+      case EpisodeAccessDecisionType.showCoinUnlockDialog:
+        await _showCoinUnlockSheetForItem(item);
+      case EpisodeAccessDecisionType.showRechargeDialog:
+        await _showRechargeUnlockSheetForItem(item);
+      case EpisodeAccessDecisionType.goMembership:
+      case EpisodeAccessDecisionType.waitUnlock:
+        return;
+    }
   }
 
   Future<void> _handleEntitlementDecisionForItem(
@@ -978,10 +1081,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _showPendingUnlockActionSheet() async {
+    _cancelPendingAutoUnlockSheet();
+    if (_isModalOpen) {
+      return;
+    }
     final currentItem = ref
         .read(playerFeedControllerProvider(_sessionKey))
         .currentItem;
-    if (currentItem == null) {
+    if (currentItem == null ||
+        !_isCurrentFeedItem(currentItem) ||
+        !_isLockedAutoSheetCandidate(currentItem)) {
       return;
     }
 

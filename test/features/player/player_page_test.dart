@@ -741,6 +741,7 @@ void main() {
   testWidgets('coin episode enough balance with auto off shows coin dialog', (
     tester,
   ) async {
+    final playbackSession = _FakePlaybackSession(emitWidthOnOpen: false);
     await tester.pumpWidget(
       _buildPlayerApp(
         initialLocation: RoutePaths.playerLocation(
@@ -750,6 +751,7 @@ void main() {
         repository: _FakePlayerFeedRepository.normal(),
         entitlementRepository:
             MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOff(),
+        playbackSessionFactory: () => playbackSession,
       ),
     );
     await tester.pump(const Duration(seconds: 1));
@@ -789,6 +791,19 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('player_coin_unlock_confirm')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('player_coin_unlock_confirm')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
+    expect(chrome.showVideo, isTrue);
+    expect(chrome.showLoading, isTrue);
+    expect(find.text('Unlock Now'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_video_tap_layer')),
       findsOneWidget,
     );
   });
@@ -831,6 +846,67 @@ void main() {
     );
   });
 
+  testWidgets(
+    'swiping into locked episode waits for scroll end debounce before sheet',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          repository: _FakePlayerFeedRepository._(
+            items: _itemsWithAccessPattern([
+              _EpisodeAccessFixture.free(1, _mockVideoUrl),
+              _EpisodeAccessFixture.locked(2, _mockSecondVideoUrl),
+            ]),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      await tester.fling(find.byType(PageView), const Offset(0, -700), 1600);
+      await tester.pump();
+
+      expect(find.text('Recharge to unlock'), findsNothing);
+
+      await _pumpAutoUnlockSheet(tester);
+
+      expect(find.text('EP.02'), findsOneWidget);
+      expect(find.text('Recharge to unlock'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'fast swipe across locked episodes only opens final current sheet',
+    (tester) async {
+      final playbackSession = _FakePlaybackSession();
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          repository: _FakePlayerFeedRepository._(
+            items: _itemsWithAccessPattern([
+              _EpisodeAccessFixture.free(1, _mockVideoUrl),
+              _EpisodeAccessFixture.locked(2, _mockSecondVideoUrl),
+              _EpisodeAccessFixture.locked(3, _mockThirdVideoUrl),
+            ]),
+          ),
+          playbackSessionFactory: () => playbackSession,
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.byType(PageView), const Offset(0, -500));
+      await tester.pumpAndSettle();
+      expect(find.text('EP.02'), findsOneWidget);
+      expect(find.text('Recharge to unlock'), findsNothing);
+
+      await tester.drag(find.byType(PageView), const Offset(0, -500));
+      await _pumpAutoUnlockSheet(tester);
+
+      expect(find.text('EP.03'), findsOneWidget);
+      expect(find.text('Recharge to unlock'), findsOneWidget);
+      expect(playbackSession.openedSources, [_mockVideoUrl]);
+    },
+  );
+
   testWidgets('coin package purchase continues to coin unlock confirmation', (
     tester,
   ) async {
@@ -869,13 +945,16 @@ void main() {
       findsOneWidget,
     );
     await tester.tap(find.byKey(const ValueKey('player_coin_unlock_confirm')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
 
     expect(
       find.byKey(const ValueKey('player_coin_unlock_confirm')),
       findsNothing,
     );
     expect(find.text('Unlock Now'), findsNothing);
+    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
+    expect(chrome.showVideo, isTrue);
     expect(
       find.byKey(const ValueKey('player_video_tap_layer')),
       findsOneWidget,
@@ -1041,7 +1120,7 @@ void main() {
     expect(playbackSession.openedSources, [_mockVideoUrl]);
 
     await tester.drag(find.byType(PageView), const Offset(0, -500));
-    await tester.pumpAndSettle();
+    await _pumpAutoUnlockSheet(tester);
     expect(find.text('EP.02'), findsOneWidget);
     expect(find.text('Recharge to unlock'), findsOneWidget);
     expect(playbackSession.pauseCount, greaterThan(0));
@@ -1054,7 +1133,7 @@ void main() {
     expect(find.text('Unlock Now'), findsOneWidget);
 
     await tester.drag(find.byType(PageView), const Offset(0, -500));
-    await tester.pumpAndSettle();
+    await _pumpAutoUnlockSheet(tester);
 
     expect(find.text('EP.03'), findsOneWidget);
     expect(find.text('Unlock Now'), findsNothing);
@@ -1094,7 +1173,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.drag(find.byType(PageView), const Offset(0, -500));
-      await tester.pumpAndSettle();
+      await _pumpAutoUnlockSheet(tester);
       expect(find.text('EP.02'), findsOneWidget);
       expect(find.text('Recharge to unlock'), findsOneWidget);
       expect(playbackSession.openedSources, [_mockVideoUrl]);
@@ -1105,7 +1184,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.drag(find.byType(PageView), const Offset(0, -500));
-      await tester.pumpAndSettle();
+      await _pumpAutoUnlockSheet(tester);
 
       expect(find.text('EP.03'), findsOneWidget);
       expect(find.text('Recharge to unlock'), findsOneWidget);
@@ -1127,7 +1206,7 @@ void main() {
     await tester.tap(find.text('Episodes').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('2'));
-    await tester.pumpAndSettle();
+    await _pumpAutoUnlockSheet(tester);
 
     expect(find.text('Unlock Now'), findsOneWidget);
     expect(find.text('EP.02'), findsOneWidget);
@@ -1150,7 +1229,7 @@ void main() {
     await tester.tap(find.text('Episodes').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('2'));
-    await tester.pumpAndSettle();
+    await _pumpAutoUnlockSheet(tester);
 
     expect(find.text('Recharge to unlock'), findsOneWidget);
     expect(playbackSession.pauseCount, greaterThan(0));
@@ -1174,7 +1253,7 @@ void main() {
     await tester.tap(find.text('Episodes').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('2'));
-    await tester.pumpAndSettle();
+    await _pumpAutoUnlockSheet(tester);
     final pauseCountAfterLock = playbackSession.pauseCount;
 
     await tester.tap(
@@ -1203,7 +1282,7 @@ void main() {
     await tester.pumpAndSettle();
 
     playbackSession.emitCompleted(true);
-    await tester.pumpAndSettle();
+    await _pumpAutoUnlockSheet(tester);
 
     expect(find.text('EP.02'), findsOneWidget);
   });
@@ -1250,7 +1329,7 @@ void main() {
     await tester.pumpAndSettle();
 
     playbackSession.emitCompleted(true);
-    await tester.pumpAndSettle();
+    await _pumpAutoUnlockSheet(tester);
 
     expect(find.text('EP.02'), findsOneWidget);
     expect(find.text('Unlock Now'), findsOneWidget);
@@ -1343,7 +1422,7 @@ void main() {
     await tester.tap(find.text('Episodes').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('2'));
-    await tester.pumpAndSettle();
+    await _pumpAutoUnlockSheet(tester);
     expect(find.text('Unlock Now'), findsOneWidget);
     expect(find.text('Recharge to unlock'), findsOneWidget);
 
@@ -1411,6 +1490,13 @@ double _topBarOpacity(WidgetTester tester) {
     find.byKey(const ValueKey('player_top_bar_opacity')).first,
   );
   return opacity.opacity;
+}
+
+Future<void> _pumpAutoUnlockSheet(WidgetTester tester) async {
+  await tester.pumpAndSettle();
+  await tester.pump(const Duration(milliseconds: 210));
+  await tester.pump(const Duration(milliseconds: 30));
+  await tester.pumpAndSettle();
 }
 
 const _mockVideoUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
