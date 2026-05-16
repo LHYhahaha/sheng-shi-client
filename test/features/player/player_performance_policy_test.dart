@@ -24,7 +24,12 @@ void main() {
 
     final policy = container.read(playerPerformancePolicyProvider);
     expect(policy.mode, PlayerPerformanceMode.stable);
-    expect(policy.allowVideoSurfaceFollowDuringDrag, isFalse);
+    expect(policy.allowVideoSurfaceVisibleDuringDrag, isTrue);
+    expect(policy.allowVideoSurfaceFollowDuringDrag, isTrue);
+    expect(policy.allowVideoSurfaceOpacityAnimationDuringDrag, isFalse);
+    expect(policy.allowPressChromeDimming, isFalse);
+    expect(policy.allowPlayPauseScaleFeedback, isFalse);
+    expect(policy.allowRichTransitions, isFalse);
     expect(policy.preparedForwardSessionCount, 1);
     expect(policy.skipPreloadWhenCurrentItemLocked, isFalse);
   });
@@ -38,6 +43,7 @@ void main() {
 
     final policy = container.read(playerPerformancePolicyProvider);
     expect(policy.mode, PlayerPerformanceMode.rich);
+    expect(policy.allowVideoSurfaceVisibleDuringDrag, isTrue);
     expect(policy.allowVideoSurfaceFollowDuringDrag, isTrue);
     expect(policy.allowPressChromeDimming, isTrue);
   });
@@ -212,6 +218,44 @@ void main() {
     expect(policy.isUltraStable, isTrue);
     expect(policy.singleDramaForwardHlsPreloadCount, 0);
     expect(policy.retainedBackwardSessionCount, 0);
+  });
+
+  test('各档位拖动时 Video surface 可见性与跟手策略', () {
+    expect(
+      PlayerPerformancePolicy.rich.allowVideoSurfaceVisibleDuringDrag,
+      isTrue,
+    );
+    expect(
+      PlayerPerformancePolicy.rich.allowVideoSurfaceFollowDuringDrag,
+      isTrue,
+    );
+
+    expect(
+      PlayerPerformancePolicy.stable.allowVideoSurfaceVisibleDuringDrag,
+      isTrue,
+    );
+    expect(
+      PlayerPerformancePolicy.stable.allowVideoSurfaceFollowDuringDrag,
+      isTrue,
+    );
+    expect(
+      PlayerPerformancePolicy
+          .stable
+          .allowVideoSurfaceOpacityAnimationDuringDrag,
+      isFalse,
+    );
+    expect(PlayerPerformancePolicy.stable.allowPressChromeDimming, isFalse);
+    expect(PlayerPerformancePolicy.stable.allowPlayPauseScaleFeedback, isFalse);
+    expect(PlayerPerformancePolicy.stable.allowRichTransitions, isFalse);
+
+    expect(
+      PlayerPerformancePolicy.ultraStable.allowVideoSurfaceVisibleDuringDrag,
+      isFalse,
+    );
+    expect(
+      PlayerPerformancePolicy.ultraStable.allowVideoSurfaceFollowDuringDrag,
+      isFalse,
+    );
   });
 
   test('各档位 seek 预览策略', () {

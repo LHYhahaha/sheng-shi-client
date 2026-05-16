@@ -270,7 +270,7 @@ void main() {
     },
   );
 
-  testWidgets('stable 策略下拖动不跟手 transform 且隐藏 Video surface', (tester) async {
+  testWidgets('stable 策略下拖动 Video surface 跟手且无 opacity 压暗', (tester) async {
     await tester.pumpWidget(
       _buildPlayerApp(
         repository: _FakePlayerFeedRepository.unlocked(),
@@ -281,21 +281,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('active_playback_surface_follow_scroll')),
+      find.byKey(const ValueKey('active_playback_surface_static')),
       findsNothing,
     );
+    final followSurface = find.byKey(
+      const ValueKey('active_playback_surface_follow_scroll'),
+    );
+    expect(followSurface, findsOneWidget);
+    final before = tester.widget<Transform>(followSurface);
+    expect(before.transform.getTranslation().y, 0);
 
     await tester.drag(find.byType(PageView), const Offset(0, -420));
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(
-      find.byKey(const ValueKey('active_playback_video_surface')),
-      findsNothing,
+    expect(followSurface, findsOneWidget);
+    final duringDrag = tester.widget<Transform>(followSurface);
+    expect(duringDrag.transform.getTranslation().y, isNot(0.0));
+    final dragOpacity = tester.widget<Opacity>(
+      find.descendant(
+        of: followSurface,
+        matching: find.byKey(const ValueKey('active_playback_surface_opacity')),
+      ),
     );
-    expect(
-      find.byKey(const ValueKey('active_playback_surface_follow_scroll')),
-      findsNothing,
-    );
+    expect(dragOpacity.opacity, 1.0);
   });
 
   testWidgets('stable 策略下暂停无 scale feedback', (tester) async {

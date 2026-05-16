@@ -19,7 +19,7 @@ void main() {
       playerFeedEngineProvider(PlayerPlaybackSessionKeys.forYouTab),
     );
     expect(state.policy.mode, PlayerPerformanceMode.stable);
-    expect(state.policy.allowVideoSurfaceFollowDuringDrag, isFalse);
+    expect(state.policy.allowVideoSurfaceFollowDuringDrag, isTrue);
   });
 
   test('iOS 默认 rich policy 经 engine state 暴露', () {

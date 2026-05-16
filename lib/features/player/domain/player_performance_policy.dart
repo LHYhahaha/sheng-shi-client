@@ -23,6 +23,7 @@ enum PlayerPerformanceMode {
 class PlayerPerformancePolicy {
   const PlayerPerformancePolicy({
     required this.mode,
+    required this.allowVideoSurfaceVisibleDuringDrag,
     required this.allowVideoSurfaceFollowDuringDrag,
     required this.allowVideoSurfaceOpacityAnimationDuringDrag,
     required this.allowVideoSurfaceOpacityAnimationOnSettle,
@@ -46,9 +47,16 @@ class PlayerPerformancePolicy {
   /// 当前策略档位。
   final PlayerPerformanceMode mode;
 
+  /// 拖动 PageView 时，是否保持顶层真实 Video surface 可见（不黑屏）。
+  ///
+  /// 影响：仅 UI。关闭时拖动期间隐藏 surface，优先滑动流畅（典型 ultraStable）。
+  /// 与 [allowVideoSurfaceFollowDuringDrag] 独立：可见 ≠ 跟手 transform。
+  final bool allowVideoSurfaceVisibleDuringDrag;
+
   /// 拖动 PageView 时，是否让顶层真实 Video surface 跟随手指位移。
   ///
-  /// 影响：仅 UI 合成。开启可提升跟手感；低端机关闭可避免 SurfaceView transform 开销。
+  /// 影响：仅 UI 合成。需 [allowVideoSurfaceVisibleDuringDrag] 为 true 才有意义；
+  /// 开启可提升跟手感；stable 常仅保留画面、不跟手。
   final bool allowVideoSurfaceFollowDuringDrag;
 
   /// 拖动过程中，是否对真实 Video surface 做 opacity 动画/压暗。
@@ -136,6 +144,7 @@ class PlayerPerformancePolicy {
   /// iOS / 高性能默认可视策略；HLS/session 与 stable 同级（仍为保守 cap）。
   static const rich = PlayerPerformancePolicy(
     mode: PlayerPerformanceMode.rich,
+    allowVideoSurfaceVisibleDuringDrag: true,
     allowVideoSurfaceFollowDuringDrag: true,
     allowVideoSurfaceOpacityAnimationDuringDrag: true,
     allowVideoSurfaceOpacityAnimationOnSettle: true,
@@ -158,7 +167,8 @@ class PlayerPerformancePolicy {
   /// 普通 Android 默认。
   static const stable = PlayerPerformancePolicy(
     mode: PlayerPerformanceMode.stable,
-    allowVideoSurfaceFollowDuringDrag: false,
+    allowVideoSurfaceVisibleDuringDrag: true,
+    allowVideoSurfaceFollowDuringDrag: true,
     allowVideoSurfaceOpacityAnimationDuringDrag: false,
     allowVideoSurfaceOpacityAnimationOnSettle: false,
     allowPressChromeDimming: false,
@@ -180,6 +190,7 @@ class PlayerPerformancePolicy {
   /// 低端 Android：视觉同 stable，HLS/session 更保守。
   static const ultraStable = PlayerPerformancePolicy(
     mode: PlayerPerformanceMode.ultraStable,
+    allowVideoSurfaceVisibleDuringDrag: false,
     allowVideoSurfaceFollowDuringDrag: false,
     allowVideoSurfaceOpacityAnimationDuringDrag: false,
     allowVideoSurfaceOpacityAnimationOnSettle: false,
