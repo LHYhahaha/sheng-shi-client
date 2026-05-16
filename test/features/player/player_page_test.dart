@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:drama_client/app/router/route_paths.dart';
+import 'package:drama_client/features/entitlement/application/entitlement_controller.dart';
 import 'package:drama_client/features/entitlement/data/entitlement_repository_provider.dart';
 import 'package:drama_client/features/entitlement/data/mock_entitlement_repository.dart';
 import 'package:drama_client/features/entitlement/domain/episode_unlock_type.dart';
@@ -1374,6 +1375,39 @@ void main() {
     );
   });
 
+  testWidgets(
+    'coin unlock sheet toggle updates shared auto unlock preference',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          initialLocation: RoutePaths.playerLocation(
+            dramaId: 'drama-a',
+            episodeId: '2',
+          ),
+          repository: _FakePlayerFeedRepository.normal(),
+          entitlementRepository:
+              MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOff(),
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      final switchFinder = find.byKey(
+        const ValueKey('player_coin_unlock_auto_next_switch'),
+      );
+      expect(tester.widget<Switch>(switchFinder).value, isFalse);
+
+      await tester.tap(switchFinder);
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(tester.element(switchFinder));
+      expect(
+        container.read(entitlementControllerProvider).autoUnlockEnabled,
+        isTrue,
+      );
+    },
+  );
+
   testWidgets('coin episode auto unlock enabled auto deducts and plays', (
     tester,
   ) async {
@@ -1444,6 +1478,14 @@ void main() {
     expect(
       find.byKey(const ValueKey('player_coin_unlock_auto_next_switch')),
       findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Switch>(
+            find.byKey(const ValueKey('player_coin_unlock_auto_next_switch')),
+          )
+          .value,
+      isFalse,
     );
     expect(find.text('Play'), findsOneWidget);
     expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);

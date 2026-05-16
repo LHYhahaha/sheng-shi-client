@@ -109,7 +109,7 @@ class AppLocalizations {
   String get walletBonus => _text(en: 'Bonus', zh: '赠币');
   String get walletTopUp => _text(en: 'Top Up', zh: '充值');
   String get walletAutoUnlockNextEpisode =>
-      _text(en: 'Anto-unlock the next episode', zh: '自动解锁下一集');
+      _text(en: 'Auto-unlock the next episode', zh: '自动解锁下一集');
   String get transactionHistoryTitle =>
       _text(en: 'Transaction history', zh: '交易记录');
   String get consumptionHistoryTitle =>

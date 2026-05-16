@@ -1,5 +1,9 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../entitlement/application/entitlement_controller.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_sheet_handle.dart';
@@ -179,7 +183,7 @@ class _PlayerUnlockSheetState extends State<PlayerUnlockSheet> {
   }
 }
 
-class PlayerCoinUnlockSheet extends StatelessWidget {
+class PlayerCoinUnlockSheet extends ConsumerWidget {
   const PlayerCoinUnlockSheet({
     required this.price,
     required this.balance,
@@ -192,7 +196,10 @@ class PlayerCoinUnlockSheet extends StatelessWidget {
   final VoidCallback onConfirm;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final autoUnlockEnabled = ref
+        .watch(entitlementControllerProvider)
+        .autoUnlockEnabled;
     return _CompactPlayerSheet(
       height: 260,
       child: Column(
@@ -277,10 +284,16 @@ class PlayerCoinUnlockSheet extends StatelessWidget {
               ),
               Switch.adaptive(
                 key: const ValueKey('player_coin_unlock_auto_next_switch'),
-                value: true,
+                value: autoUnlockEnabled,
                 activeThumbColor: Colors.white,
                 activeTrackColor: AppColors.primary,
-                onChanged: (_) {},
+                onChanged: (value) {
+                  unawaited(
+                    ref
+                        .read(entitlementControllerProvider.notifier)
+                        .setAutoUnlockEnabled(value),
+                  );
+                },
               ),
             ],
           ),

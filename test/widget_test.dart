@@ -101,6 +101,20 @@ void main() {
     expect(find.text('3000 Coins + 300bonus'), findsOneWidget);
   });
 
+  testWidgets('wallet shows corrected auto unlock copy', (tester) async {
+    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Wallet >'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Auto-unlock the next episode'), findsOneWidget);
+    expect(find.text('Anto-unlock the next episode'), findsNothing);
+  });
+
   testWidgets('wallet keeps auto unlock toggle after opening history', (
     tester,
   ) async {
