@@ -209,7 +209,9 @@ void main() {
     },
   );
 
-  testWidgets('active video surface follows PageView drag', (tester) async {
+  testWidgets('active video surface freezes while PageView drags', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
     );
@@ -223,18 +225,22 @@ void main() {
     final before = tester.widget<Transform>(followSurface);
     expect(before.transform.getTranslation().y, 0);
 
-    await tester.drag(
-      find.byKey(const ValueKey('player_page_view_surface')),
-      const Offset(0, -220),
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('player_page_view_surface'))),
     );
+    await gesture.moveBy(const Offset(0, -220));
     await tester.pump(const Duration(milliseconds: 16));
 
-    final during = tester.widget<Transform>(followSurface);
-    expect(during.transform.getTranslation().y, isNot(0));
+    expect(followSurface, findsNothing);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(followSurface, findsOneWidget);
   });
 
   testWidgets(
-    'drag page offset only moves active surface without viewport state churn',
+    'drag page offset freezes active surface without viewport state churn',
     (tester) async {
       final observer = _ViewportUpdateObserver();
 
@@ -251,9 +257,6 @@ void main() {
       final pageSurface = find.byKey(
         const ValueKey('player_page_view_surface'),
       );
-      final followSurface = find.byKey(
-        const ValueKey('active_playback_surface_follow_scroll'),
-      );
       final gesture = await tester.startGesture(tester.getCenter(pageSurface));
 
       await gesture.moveBy(const Offset(0, -80));
@@ -263,11 +266,10 @@ void main() {
       final chromeAfterScrollStart = tester.widget<PlayerChrome>(
         find.byType(PlayerChrome).first,
       );
-      final transformAfterScrollStart = tester
-          .widget<Transform>(followSurface)
-          .transform
-          .getTranslation()
-          .y;
+      expect(
+        find.byKey(const ValueKey('active_playback_surface_follow_scroll')),
+        findsNothing,
+      );
 
       await gesture.moveBy(const Offset(0, -80));
       await tester.pump(const Duration(milliseconds: 16));
@@ -275,18 +277,17 @@ void main() {
       final chromeAfterPageOffset = tester.widget<PlayerChrome>(
         find.byType(PlayerChrome).first,
       );
-      final transformAfterPageOffset = tester
-          .widget<Transform>(followSurface)
-          .transform
-          .getTranslation()
-          .y;
 
       expect(observer.updateCount, updatesAfterScrollStart);
       expect(identical(chromeAfterScrollStart, chromeAfterPageOffset), isTrue);
-      expect(transformAfterPageOffset, isNot(transformAfterScrollStart));
 
       await gesture.up();
       await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('active_playback_surface_follow_scroll')),
+        findsOneWidget,
+      );
     },
   );
 

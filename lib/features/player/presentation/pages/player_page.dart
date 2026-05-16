@@ -502,6 +502,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
 
     final currentItem = feedState.currentItem;
+    final isPlaybackSurfaceFrozen =
+        viewportState.scrollPhase != PlayerViewportScrollPhase.idle;
     final canShowActiveVideoOverlay =
         currentItem != null &&
         _accessPresentationStateFor(currentItem) ==
@@ -526,6 +528,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               : activeVideoIndex,
           pagePositionListenable: _pagePositionNotifier,
           canShowVideo: canShowActiveVideoOverlay,
+          freezeForScroll: isPlaybackSurfaceFrozen,
           videoFit: activeVideoItem == null
               ? BoxFit.cover
               : _videoFitFor(activeVideoItem.episode),
@@ -577,7 +580,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                     playbackShell.currentItemId == item.id &&
                     playbackShell.currentSource != null;
                 final canHideViewportBackdrop =
-                    canUsePlaybackSurface && playbackShell.hasVideoController;
+                    canUsePlaybackSurface &&
+                    playbackShell.hasVideoController &&
+                    !isPlaybackSurfaceFrozen;
                 return Stack(
                   children: [
                     PlayerChrome(
@@ -1933,6 +1938,7 @@ class _ActivePlaybackSurfaceOverlay extends ConsumerStatefulWidget {
     required this.currentIndex,
     required this.pagePositionListenable,
     required this.canShowVideo,
+    required this.freezeForScroll,
     required this.videoFit,
     required this.forYouLayout,
   });
@@ -1942,6 +1948,7 @@ class _ActivePlaybackSurfaceOverlay extends ConsumerStatefulWidget {
   final int currentIndex;
   final ValueListenable<double> pagePositionListenable;
   final bool canShowVideo;
+  final bool freezeForScroll;
   final BoxFit videoFit;
   final bool forYouLayout;
 
@@ -1980,6 +1987,7 @@ class _ActivePlaybackSurfaceOverlayState
     final playbackController = ref.read(playbackProvider.notifier);
     final canRender =
         widget.canShowVideo &&
+        !widget.freezeForScroll &&
         snapshot.shouldAttachVideoSurface &&
         widget.itemId != null &&
         snapshot.currentItemId == widget.itemId &&
