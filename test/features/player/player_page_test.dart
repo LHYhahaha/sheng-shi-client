@@ -828,6 +828,33 @@ void main() {
     expect(playbackSession.seekedPositions, isNotEmpty);
   });
 
+  testWidgets('single drama seek bar stays visible before duration arrives', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final seekBar = find.byKey(const ValueKey('player_seek_bar'));
+    expect(seekBar, findsOneWidget);
+    final seekBarWidget = tester.widget<PlayerSeekBar>(
+      find.byType(PlayerSeekBar),
+    );
+    expect(seekBarWidget.duration, Duration.zero);
+    expect(seekBarWidget.enabled, isFalse);
+    expect(
+      find.byKey(const ValueKey('player_seek_track_loading')),
+      findsNothing,
+    );
+  });
+
   testWidgets('progress updates do not rebuild PlayerChrome shell', (
     tester,
   ) async {

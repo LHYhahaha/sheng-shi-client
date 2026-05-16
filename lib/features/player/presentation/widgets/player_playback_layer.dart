@@ -298,6 +298,12 @@ class PlayerSeekBarSnapshot {
       duration > Duration.zero &&
       (status == PlayerPlaybackStatus.playing ||
           status == PlayerPlaybackStatus.paused);
+  bool get canShowPassiveTrack =>
+      currentSource != null &&
+      !isError &&
+      (isOpening ||
+          status == PlayerPlaybackStatus.playing ||
+          status == PlayerPlaybackStatus.paused);
 
   @override
   bool operator ==(Object other) {
@@ -721,7 +727,10 @@ class PlayerSeekBarConsumer extends ConsumerWidget {
     final showTrackLoading = snapshot.isLoading && !snapshot.isSeeking;
     final canSeek =
         snapshot.isSeekAllowed && !showTrackLoading && !snapshot.isError;
-    if (!canSeek && snapshot.duration <= Duration.zero && !showTrackLoading) {
+    if (!canSeek &&
+        snapshot.duration <= Duration.zero &&
+        !showTrackLoading &&
+        !snapshot.canShowPassiveTrack) {
       return const SizedBox.shrink();
     }
     return PlayerSeekBar(
