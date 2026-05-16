@@ -603,6 +603,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         state.currentSource != null &&
         state.status != PlayerPlaybackStatus.error;
     if (isSameSource && !state.hasEnded) {
+      _applyMetadataDurationFallback(item.episode.duration);
       if (state.surfaceLifecycle != PlayerVideoSurfaceLifecycle.attached) {
         state = state.copyWith(
           videoController: _session.videoController,
@@ -653,7 +654,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       hasFirstFrame: false,
       isBuffering: true,
       position: Duration.zero,
-      duration: Duration.zero,
+      duration: _effectiveDuration(Duration.zero, item.episode.duration),
       bufferedPosition: Duration.zero,
       isSeeking: false,
       hasEnded: false,
@@ -715,12 +716,18 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           currentSource: prepared.source.playableSource,
           hasFirstFrame: prepared.hasFirstFrame,
           position: prepared.position,
-          duration: prepared.duration,
+          duration: _effectiveDuration(
+            prepared.duration,
+            item.episode.duration,
+          ),
           bufferedPosition: prepared.bufferedPosition,
         );
         _currentPlaybackHasFirstFrame = prepared.hasFirstFrame;
         _currentPlaybackPosition = prepared.position;
-        _currentPlaybackDuration = prepared.duration;
+        _currentPlaybackDuration = _effectiveDuration(
+          prepared.duration,
+          item.episode.duration,
+        );
         _currentPlaybackBufferedPosition = prepared.bufferedPosition;
         await _restoreProgressIfNeeded(resumeProgress, generation);
         if (!ref.mounted || !_isCurrent(generation)) {
@@ -1511,9 +1518,30 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
     final normalized = duration < Duration.zero ? Duration.zero : duration;
-    _currentPlaybackDuration = normalized;
-    state = state.copyWith(duration: normalized);
-    _saveProgressIfNeeded(duration: normalized);
+    final effective = _effectiveDuration(normalized, state.duration);
+    _currentPlaybackDuration = effective;
+    state = state.copyWith(duration: effective);
+    _saveProgressIfNeeded(duration: effective);
+  }
+
+  void _applyMetadataDurationFallback(Duration? metadataDuration) {
+    final effective = _effectiveDuration(state.duration, metadataDuration);
+    if (effective == state.duration) {
+      return;
+    }
+    _currentPlaybackDuration = effective;
+    state = state.copyWith(duration: effective);
+    _saveProgressIfNeeded(duration: effective);
+  }
+
+  Duration _effectiveDuration(Duration mediaDuration, Duration? fallback) {
+    if (mediaDuration > Duration.zero) {
+      return mediaDuration;
+    }
+    if (fallback != null && fallback > Duration.zero) {
+      return fallback;
+    }
+    return Duration.zero;
   }
 
   void _handleBufferedPosition(Duration position) {

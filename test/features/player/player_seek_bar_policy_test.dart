@@ -9,6 +9,7 @@ void main() {
     WidgetTester tester, {
     required PlayerSeekPreviewConfig previewConfig,
     bool isDragging = true,
+    bool hasThumbnailPreviewAsset = false,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -22,6 +23,7 @@ void main() {
                 bufferedPosition: const Duration(seconds: 60),
                 previewPosition: const Duration(seconds: 40),
                 thumbnailAssetPath: 'assets/images/player/recommend_1.png',
+                hasThumbnailPreviewAsset: hasThumbnailPreviewAsset,
                 previewConfig: previewConfig,
                 isDragging: isDragging,
                 showTrackLoading: false,
@@ -38,12 +40,31 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('rich 拖动显示缩略图预览', (tester) async {
+  testWidgets('rich 拖动没有真实预览资源时不显示缩略图', (tester) async {
     await pumpSeekBar(
       tester,
       previewConfig: PlayerSeekPreviewConfig.fromPolicy(
         PlayerPerformancePolicy.rich,
       ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('player_seek_thumbnail_preview')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('player_seek_time_bubble')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('rich 拖动有真实预览资源时才显示缩略图', (tester) async {
+    await pumpSeekBar(
+      tester,
+      previewConfig: PlayerSeekPreviewConfig.fromPolicy(
+        PlayerPerformancePolicy.rich,
+      ),
+      hasThumbnailPreviewAsset: true,
     );
 
     expect(

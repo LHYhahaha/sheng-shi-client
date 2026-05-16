@@ -83,6 +83,7 @@ class PlayerEpisode {
     this.videoAssetPath,
     this.videoUrl,
     this.videoAspectRatio,
+    this.duration,
     this.isAvailable = true,
   });
 
@@ -130,6 +131,12 @@ class PlayerEpisode {
   /// 用于播放器 fit 和 UI 适配，不参与 source 选择。
   final double? videoAspectRatio;
 
+  /// 内容侧下发的剧集时长。
+  ///
+  /// HLS duration 在打开初期可能为 0 或延迟返回，短剧 seek UI 可用该字段作为
+  /// metadata fallback；真实媒体 duration 大于 0 后仍应优先使用播放器返回值。
+  final Duration? duration;
+
   /// 内容是否可用。
   ///
   /// unavailable 代表下架、缺源或地区不可用，不能 preload/open/prepare。
@@ -146,6 +153,7 @@ class PlayerEpisode {
     String? videoAssetPath,
     String? videoUrl,
     double? videoAspectRatio,
+    Duration? duration,
     bool? isAvailable,
   }) {
     return PlayerEpisode(
@@ -157,6 +165,7 @@ class PlayerEpisode {
       videoAssetPath: videoAssetPath ?? this.videoAssetPath,
       videoUrl: videoUrl ?? this.videoUrl,
       videoAspectRatio: videoAspectRatio ?? this.videoAspectRatio,
+      duration: duration ?? this.duration,
       isAvailable: isAvailable ?? this.isAvailable,
     );
   }

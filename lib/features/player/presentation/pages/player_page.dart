@@ -635,6 +635,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   unawaited(_goBackFromPlayer());
                 },
                 onSpeedTap: _showSpeedSheet,
+                isImmersiveMode: !showsChromeOverlays,
+                onImmersiveTap: uiController.toggleChromeDisplayMode,
               ),
             ),
           ),

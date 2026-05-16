@@ -51,6 +51,7 @@ void main() {
     expect(content.episodes.single.requiredCoins, 30);
     expect(content.episodes.single.isLocked, isTrue);
     expect(content.episodes.single.videoAspectRatio, 16 / 9);
+    expect(content.episodes.single.duration, const Duration(seconds: 60));
   });
 
   test('unavailable episode dto maps to unavailable domain episode', () {

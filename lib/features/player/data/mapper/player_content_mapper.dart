@@ -34,8 +34,16 @@ class PlayerContentMapper {
       unlockType: unlockType,
       requiredCoins: dto.requiredCoins ?? 0,
       videoAspectRatio: dto.aspectRatio,
+      duration: _durationFromMs(dto.durationMs),
       isAvailable: dto.isAvailable,
     );
+  }
+
+  Duration? _durationFromMs(int? durationMs) {
+    if (durationMs == null || durationMs <= 0) {
+      return null;
+    }
+    return Duration(milliseconds: durationMs);
   }
 
   EpisodeUnlockType _unlockType(String value) {

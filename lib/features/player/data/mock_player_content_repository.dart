@@ -286,6 +286,7 @@ class MockPlayerContentRepository implements PlayerContentRepository {
             requiredCoins: _requiredCoinsForEpisode(number),
             videoUrl: videoAsset.videoUrl,
             videoAspectRatio: videoAsset.aspectRatio,
+            duration: _durationForEpisode(number),
             isAvailable: number != 9,
           );
         }),
@@ -345,6 +346,15 @@ EpisodeUnlockType _unlockTypeForEpisode(int number) {
     return EpisodeUnlockType.membership;
   }
   return EpisodeUnlockType.coins;
+}
+
+Duration _durationForEpisode(int number) {
+  return switch (number) {
+    1 => const Duration(seconds: 105),
+    2 => const Duration(seconds: 90),
+    3 => const Duration(seconds: 95),
+    _ => const Duration(seconds: 100),
+  };
 }
 
 int _requiredCoinsForEpisode(int number) {

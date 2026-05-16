@@ -978,6 +978,7 @@ class PlayerSeekBar extends StatefulWidget {
     required this.showTrackLoading,
     required this.thumbnailAssetPath,
     required this.previewConfig,
+    this.hasThumbnailPreviewAsset = false,
     this.isPassiveTrack = false,
     this.trackFadeDuration = Duration.zero,
     this.previewPosition,
@@ -992,6 +993,7 @@ class PlayerSeekBar extends StatefulWidget {
   final Duration duration;
   final Duration bufferedPosition;
   final String thumbnailAssetPath;
+  final bool hasThumbnailPreviewAsset;
   final PlayerSeekPreviewConfig previewConfig;
   final bool isPassiveTrack;
   final Duration trackFadeDuration;
@@ -1017,6 +1019,7 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
     final showThumbnail =
         widget.isDragging &&
         config.allowThumbnailPreview &&
+        widget.hasThumbnailPreviewAsset &&
         widget.thumbnailAssetPath.isNotEmpty;
     final showTimeBubble =
         widget.isDragging && config.allowTimeBubble && !showThumbnail;

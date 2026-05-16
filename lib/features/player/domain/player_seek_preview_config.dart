@@ -10,9 +10,10 @@ class PlayerSeekPreviewConfig {
     required this.allowPreviewShadow,
   });
 
-  /// 拖动时是否显示海报/缩略图卡片预览。
+  /// 拖动时是否允许显示真实时间点缩略图卡片预览。
   ///
-  /// rich 为 true；会增加 Image + 圆角容器绘制。低端机关闭以减轻拖动重绘。
+  /// rich 为 true，但 UI 还必须确认当前 episode/source 有真实 preview sprite/VTT
+  /// 或 frame thumbnail asset。没有真实资源时只能显示时间气泡，不能用 poster 冒充截图。
   final bool allowThumbnailPreview;
 
   /// 拖动时是否显示轻量时间文本（无图）。

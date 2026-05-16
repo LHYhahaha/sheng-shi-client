@@ -817,6 +817,10 @@ void main() {
     expect(find.textContaining(' / 01:40'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('player_seek_thumbnail_preview')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('player_seek_time_bubble')),
       findsOneWidget,
     );
     expect(
@@ -928,6 +932,37 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('player_seek_bar')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_immersive_button')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('single drama immersive icon toggles chrome mode', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => _FakePlaybackSession(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('player_immersive_button')));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
+    expect(chrome.showChromeOverlays, isFalse);
+
+    await tester.tap(find.byKey(const ValueKey('player_video_tap_layer')));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final chromeAfterExit = tester.widget<PlayerChrome>(
+      find.byType(PlayerChrome),
+    );
+    expect(chromeAfterExit.showChromeOverlays, isTrue);
   });
 
   testWidgets('single drama tap toggles immersive chrome while playing', (
@@ -1037,14 +1072,32 @@ void main() {
     expect(find.byKey(const ValueKey('player_download_button')), findsNothing);
   });
 
-  testWidgets('single drama seek bar stays visible before duration arrives', (
+  testWidgets('single drama seek bar uses episode metadata duration fallback', (
     tester,
   ) async {
     final playbackSession = _FakePlaybackSession();
 
     await tester.pumpWidget(
       _buildPlayerApp(
-        repository: _FakePlayerFeedRepository.unlocked(),
+        repository: _FakePlayerFeedRepository._(
+          items: _itemsWithAccessPattern([
+            _EpisodeAccessFixture.free(
+              1,
+              _mockVideoUrl,
+              duration: const Duration(seconds: 105),
+            ),
+            _EpisodeAccessFixture.free(
+              2,
+              _mockSecondVideoUrl,
+              duration: const Duration(seconds: 90),
+            ),
+            _EpisodeAccessFixture.free(
+              3,
+              _mockThirdVideoUrl,
+              duration: const Duration(seconds: 95),
+            ),
+          ]),
+        ),
         playbackSessionFactory: () => playbackSession,
       ),
     );
@@ -1056,9 +1109,9 @@ void main() {
     final seekBarWidget = tester.widget<PlayerSeekBar>(
       find.byType(PlayerSeekBar),
     );
-    expect(seekBarWidget.duration, Duration.zero);
-    expect(seekBarWidget.enabled, isFalse);
-    expect(seekBarWidget.isPassiveTrack, isTrue);
+    expect(seekBarWidget.duration, const Duration(seconds: 105));
+    expect(seekBarWidget.enabled, isTrue);
+    expect(seekBarWidget.isPassiveTrack, isFalse);
     expect(
       find.byKey(const ValueKey('player_seek_track_loading')),
       findsNothing,
@@ -1074,6 +1127,78 @@ void main() {
     expect(seekBarAfter.duration, const Duration(seconds: 100));
     expect(find.byKey(const ValueKey('player_seek_bar')), findsOneWidget);
   });
+
+  testWidgets('seek bar remains passive without media or metadata duration', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => _FakePlaybackSession(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final seekBarWidget = tester.widget<PlayerSeekBar>(
+      find.byType(PlayerSeekBar),
+    );
+    expect(seekBarWidget.duration, Duration.zero);
+    expect(seekBarWidget.enabled, isFalse);
+    expect(seekBarWidget.isPassiveTrack, isTrue);
+  });
+
+  testWidgets(
+    'EP02 and EP03 metadata duration enables seek before media duration',
+    (tester) async {
+      final playbackSession = _FakePlaybackSession();
+
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          repository: _FakePlayerFeedRepository._(
+            items: _itemsWithAccessPattern([
+              _EpisodeAccessFixture.free(
+                1,
+                _mockVideoUrl,
+                duration: const Duration(seconds: 105),
+              ),
+              _EpisodeAccessFixture.free(
+                2,
+                _mockSecondVideoUrl,
+                duration: const Duration(seconds: 90),
+              ),
+              _EpisodeAccessFixture.free(
+                3,
+                _mockThirdVideoUrl,
+                duration: const Duration(seconds: 95),
+              ),
+            ]),
+          ),
+          playbackSessionFactory: () => playbackSession,
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.byType(PageView), const Offset(0, -500));
+      await tester.pumpAndSettle();
+
+      var seekBarWidget = tester.widget<PlayerSeekBar>(
+        find.byType(PlayerSeekBar),
+      );
+      expect(find.text('EP.02'), findsOneWidget);
+      expect(seekBarWidget.duration, const Duration(seconds: 90));
+      expect(seekBarWidget.enabled, isTrue);
+
+      await tester.drag(find.byType(PageView), const Offset(0, -500));
+      await tester.pumpAndSettle();
+
+      seekBarWidget = tester.widget<PlayerSeekBar>(find.byType(PlayerSeekBar));
+      expect(find.text('EP.03'), findsOneWidget);
+      expect(seekBarWidget.duration, const Duration(seconds: 95));
+      expect(seekBarWidget.enabled, isTrue);
+    },
+  );
 
   testWidgets('progress updates do not rebuild PlayerChrome shell', (
     tester,
@@ -2423,6 +2548,7 @@ List<PlayerFeedItem> _itemsWithAccessPattern(
             : EpisodeUnlockType.free,
         requiredCoins: fixture.requiredCoins,
         videoUrl: fixture.videoUrl,
+        duration: fixture.duration,
       ),
   ]);
 
@@ -2445,13 +2571,19 @@ class _EpisodeAccessFixture {
     required this.isLocked,
     this.unlockType = EpisodeUnlockType.coins,
     this.requiredCoins = 60,
+    this.duration,
   });
 
-  factory _EpisodeAccessFixture.free(int number, String videoUrl) {
+  factory _EpisodeAccessFixture.free(
+    int number,
+    String videoUrl, {
+    Duration? duration,
+  }) {
     return _EpisodeAccessFixture(
       number: number,
       videoUrl: videoUrl,
       isLocked: false,
+      duration: duration,
     );
   }
 
@@ -2460,6 +2592,7 @@ class _EpisodeAccessFixture {
     String videoUrl, {
     EpisodeUnlockType unlockType = EpisodeUnlockType.coins,
     int requiredCoins = 60,
+    Duration? duration,
   }) {
     return _EpisodeAccessFixture(
       number: number,
@@ -2467,6 +2600,7 @@ class _EpisodeAccessFixture {
       isLocked: true,
       unlockType: unlockType,
       requiredCoins: requiredCoins,
+      duration: duration,
     );
   }
 
@@ -2475,6 +2609,7 @@ class _EpisodeAccessFixture {
   final bool isLocked;
   final EpisodeUnlockType unlockType;
   final int requiredCoins;
+  final Duration? duration;
 }
 
 PlayerContent _content(List<PlayerEpisode> episodes) {
