@@ -11,7 +11,7 @@ policies by platform or device capability.
 ## Seal Status (封板, 2026-05-16) — Current
 
 - **rich / stable / ultraStable** 三档已落地；Android 默认 stable，iOS 默认 rich。
-- Android stable 规则（无 drag 时 video transform/opacity、无 press dim、无 pause scale）已在代码与 widget 测试中验收。
+- Android stable 规则（drag 时 Video 保持可见并跟手 transform，但无 opacity、无 press dim、无 pause scale、无 rich transition）已在代码与 widget 测试中验收。
 - **后续工作**：Phase B 真机 RAM/型号自动填入 probe；档位已由 `device_performance_tier_rules` + `deviceCapabilityProvider` 推导。
 - **当前**：基础本地 denylist（Samsung A14 / SM-A145* / Galaxy A14）命中 → `low` → `ultraStable`。
 - **不引入**第三方 feed/player 库。
@@ -24,6 +24,21 @@ policies by platform or device capability.
 | Android 低端 denylist / `low` tier | `ultraStable` |
 | iOS 默认 | `rich` |
 | 实现方式 | 单播放器 + `PlayerPerformancePolicy`，**非** Android/iOS 两套实现 |
+
+### 拖动时 Video surface 策略（Current）
+
+| 档位 | 拖动时可见 | 拖动时跟手 Transform | opacity 压暗 | chrome 按压渐隐 | pause scale | rich 转场 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `rich` | 是 | 是 | 是 | 是 | 是 | 是 |
+| `stable` | 是 | 是 | 否 | 否 | 否 | 否 |
+| `ultraStable` | 否 | 否 | 否 | 否 | 否 | 否 |
+
+当前结论：
+
+- `stable` 不能固定 Video surface。真机反馈显示“视频不动、其他内容滑动”会造成明显割裂。
+- `stable` 只做必要的 `Transform.translate` 跟手，不做 opacity、chrome dim、scale、rich transition 等额外动画。
+- 只有 `ultraStable` 在拖动时隐藏 Video surface，用于低端机优先保证手势响应。
+- 不允许为了跟手把多个真实 `Video` 放回 PageView item；真实 Video 仍只在顶层 active playback surface。
 
 后续仅做 **Phase B** 真机 model/RAM 填入 probe；不继续拆 engine、不生产化 local proxy。
 
@@ -99,18 +114,24 @@ On Android stable mode:
 - remove scale animation from transient play/pause feedback;
 - keep only essential loading, retry, and unlock affordances.
 
-### 2. Avoid Transform/Opacity On Real Video Surface
+### 2. Keep Stable Drag Follow Lightweight
 
 On Android stable mode:
 
-- do not transform the real `Video` surface during PageView drag;
+- keep the real `Video` surface visible during PageView drag;
+- allow only the necessary `Transform.translate` that keeps video aligned with the PageView shell;
 - do not animate video surface opacity;
-- PageView should drag only lightweight shell content;
-- after PageView settles, attach or switch the current playable video surface;
+- do not add chrome dimming, scale feedback, or rich transitions;
 - locked and unavailable pages must not mount a playable `Video` surface.
 
-This intentionally sacrifices "video follows finger" polish on Android in favor
-of stable touch response.
+This keeps the short-drama feed visually coherent on normal Android devices
+while still avoiding the heavier visual effects reserved for rich mode.
+
+On Android ultraStable mode:
+
+- hide the real `Video` surface during drag;
+- do not transform or opacity-animate the real `Video` surface;
+- prioritize touch response over visual continuity.
 
 ### 3. Keep Drag Path Pure
 
@@ -170,9 +191,11 @@ But rich mode must remain behind policy, not scattered platform checks.
 
 ### Phase C: Stabilize Android Video Surface
 
-- Android stable should not transform or opacity-animate the real video surface
-  during PageView drag.
-- PageView should drag lightweight shell only.
+- Android stable should keep the real video surface visible and aligned with
+  PageView drag via lightweight transform only.
+- Android stable should not opacity-animate, dim chrome, or scale feedback
+  during drag.
+- Android ultraStable should hide the real video surface during drag.
 - Settled playable item attaches the active video surface.
 - Locked/unavailable/no-source items do not mount video.
 
@@ -202,7 +225,9 @@ But rich mode must remain behind policy, not scattered platform checks.
 - iOS rich policy is selected by default.
 - Android stable does not dim overlay on press.
 - Android stable does not animate overlay opacity.
-- Android stable does not transform the real video surface during drag.
+- Android stable transforms the real video surface during drag but keeps
+  opacity fixed and disables chrome dim / scale feedback.
+- Android ultraStable hides the real video surface during drag.
 - Dragging across locked items does not trigger entitlement evaluation or sheet.
 - Settled locked item shows `Unlock Now`.
 - Manual `Unlock Now` opens the correct sheet.
@@ -211,8 +236,10 @@ But rich mode must remain behind policy, not scattered platform checks.
 ## Acceptance Criteria
 
 - Android stable mode release build installs and runs on the test device.
-- Vertical drag no longer feels blocked by overlay animation or video-surface
-  transform work.
+- Vertical drag feels visually coherent on stable devices: video and PageView
+  shell move together without extra opacity/scale/chrome animation.
+- Low-end ultraStable devices can still hide Video during drag to prioritize
+  touch response.
 - Locked pages remain interactive and do not leak audio.
 - iOS/rich behavior is not removed; it is controlled by policy.
 - Existing player, entitlement, and smoke tests pass.
