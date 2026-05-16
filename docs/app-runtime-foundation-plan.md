@@ -9,6 +9,8 @@ The player low-end Android policy is the first consumer, but the system must be
 usable by Home, Store, Membership, Wallet, Localization, API switches, and later
 experiments.
 
+**Release 封板前提：** `USE_REMOTE_*` 默认关闭；mock 权益/支付。开启 remote 前须同步 runtime feature flags 与真实 API 开关，避免文档与 `dart-define` 双轨漂移。
+
 ## Goals
 
 - Initialize global runtime state once during app startup.

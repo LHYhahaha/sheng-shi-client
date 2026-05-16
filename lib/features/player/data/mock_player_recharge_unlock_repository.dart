@@ -17,7 +17,6 @@ class MockPlayerRechargeUnlockRepository
     await Future<void>.delayed(const Duration(milliseconds: 20));
     return PlayerRechargeUnlockOffer(
       requiredCoins: requiredCoins,
-      coinBalance: 20,
       coinPackages: const [
         PlayerRechargeCoinPackage(
           id: 'coins_100',

@@ -1519,7 +1519,11 @@ void main() {
     expect(find.text('Price:'), findsOneWidget);
     expect(find.text('Balance:'), findsOneWidget);
     expect(find.text('60'), findsOneWidget);
-    expect(find.text('20'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_balance')),
+      findsOneWidget,
+    );
+    expect(find.text('10'), findsOneWidget);
     expect(find.text('+9%'), findsOneWidget);
     expect(find.text('Weekly VIP'), findsOneWidget);
     expect(find.text(r'$12.99'), findsOneWidget);
@@ -1796,6 +1800,10 @@ void main() {
       find.byKey(const ValueKey('player_coin_unlock_confirm')),
       findsOneWidget,
     );
+    final balanceText = tester.widget<Text>(
+      find.byKey(const ValueKey('player_coin_unlock_balance')),
+    );
+    expect(balanceText.textSpan!.toPlainText(), contains('340'));
     await tester.tap(find.byKey(const ValueKey('player_coin_unlock_confirm')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));

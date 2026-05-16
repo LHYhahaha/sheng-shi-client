@@ -16,7 +16,7 @@ void main() {
     expect(package.bonusPercent, 9);
   });
 
-  test('loads offer with required coins and mock balance', () async {
+  test('loads offer without embedding coin balance', () async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
 
@@ -28,7 +28,6 @@ void main() {
     final state = container.read(provider);
     expect(state.status, PlayerRechargeUnlockStatus.idle);
     expect(state.offer?.requiredCoins, 60);
-    expect(state.offer?.coinBalance, 20);
     expect(state.offer?.coinPackages, hasLength(4));
     expect(state.offer?.membershipPackages, hasLength(2));
   });

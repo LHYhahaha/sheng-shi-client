@@ -40,6 +40,8 @@ class PlayerAccessPresenter {
     if (item.episode.unlockType == EpisodeUnlockType.membership) {
       return PlayerAccessPresentationState.lockedMembership;
     }
+    // 仅用于 chrome 展示分档；解锁决策以 EntitlementController.evaluateAccess 为准。
+    // bonusBalance 当前不参与扣费，故此处也只比较 coinBalance。
     if (entitlement.coinBalance >= item.episode.requiredCoins) {
       return PlayerAccessPresentationState.lockedCoins;
     }

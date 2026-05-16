@@ -8,6 +8,8 @@ feed. The refactor **已完成并封板**；后续仅在真实 API、线上指�
 
 ## Mainline Seal (封板, 2026-05-16) — Current
 
+**Release 封板前提：** `USE_REMOTE_*=false`；支付与权益走 mock（`grantMock*`）。开启 remote 或真实 IAP 前须处理 401 refresh、secure token、订单验单、strict DTO（见 `docs/remote-contract-index.md`）。
+
 **播放器主线已封板。** 后续仅保留 **Low-end Android Policy** 优化线（`ultraStable`、设备分级 override），不再大拆 `PlayerFeedEngine` / Coordinator 文件结构。
 
 | 项 | 状态 |

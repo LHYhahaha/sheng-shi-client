@@ -4,6 +4,11 @@
 
 本文只评估当前 mock 数据、domain model、repository 边界到真实 API 的可迁移性，不接真实接口、不改 UI、不调整业务逻辑。结论基于当前 feature-first 结构、`docs/api-integration-plan.md`、`docs/player-source-and-cdn-spec.md`、`docs/entitlement-unlock-flow-plan.md` 和播放器资源调度相关文档。
 
+## Release 封板前提（Current）
+
+- 封板默认：`USE_REMOTE_*=false`，mock payment / mock entitlement（含 Store/Player 充值成功后的 `grantMock*`）。
+- 开启 remote 或真实支付前：须完成 401 refresh、订单验单、strict DTO、auth 端点矩阵等（见 `docs/remote-contract-index.md`）。
+
 ## 总体结论
 
 当前项目的 mock 到 API 迁移基础是健康的：大多数页面已经通过 domain model + repository + controller 访问数据，UI 没有直接依赖 Dio/HTTP，也没有在 Page 中散落大量 mock JSON。播放器、权益、商店、会员、钱包几个复杂模块已经形成比较清晰的“展示状态”和“业务真相”边界。

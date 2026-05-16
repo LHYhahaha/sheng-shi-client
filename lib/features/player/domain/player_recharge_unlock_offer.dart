@@ -6,7 +6,6 @@
 class PlayerRechargeUnlockOffer {
   const PlayerRechargeUnlockOffer({
     required this.requiredCoins,
-    required this.coinBalance,
     required this.coinPackages,
     required this.membershipPackages,
     required this.benefits,
@@ -15,9 +14,6 @@ class PlayerRechargeUnlockOffer {
 
   /// 当前剧集解锁需要的金币数。
   final int requiredCoins;
-
-  /// 当前账号金币余额。
-  final int coinBalance;
 
   /// 金币充值档位。
   ///

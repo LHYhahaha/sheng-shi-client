@@ -252,15 +252,18 @@ class StoreController extends Notifier<StoreState> {
     }
 
     final purchasedPackage = state.confirmationPackage;
-    if (purchasedPackage != null &&
-        purchasedPackage.isCoinPackage &&
-        purchasedPackage.totalCoins > 0) {
-      await ref
-          .read(entitlementControllerProvider.notifier)
-          .grantMockCoins(
-            amount: purchasedPackage.totalCoins,
-            source: 'store:${purchasedPackage.id}',
-          );
+    if (purchasedPackage != null) {
+      final entitlement = ref.read(entitlementControllerProvider.notifier);
+      if (purchasedPackage.isCoinPackage && purchasedPackage.totalCoins > 0) {
+        await entitlement.grantMockCoins(
+          amount: purchasedPackage.totalCoins,
+          source: 'store:${purchasedPackage.id}',
+        );
+      } else if (!purchasedPackage.isCoinPackage) {
+        await entitlement.grantMockMembership(
+          source: 'store:${purchasedPackage.id}',
+        );
+      }
     }
 
     if (purchaseGeneration != _purchaseGeneration ||

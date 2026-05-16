@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_spacing.dart';
@@ -109,9 +110,9 @@ class _StorePageState extends ConsumerState<StorePage> {
                     }
                   },
                   onRestore: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(l10n.storeRestoreUnavailable)),
-                    );
+                    ref
+                        .read(appToastProvider)
+                        .info(l10n.storeRestoreUnavailable);
                   },
                 ),
                 Expanded(

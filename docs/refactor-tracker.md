@@ -22,7 +22,7 @@
 | P1 | Profile | 语言、登录态、金币、会员入口和本地 UI 文案需要更清晰分层 | 补 Profile application 状态和可复用 setting row/card 组件 | Done |
 | P1 | L10n | 当前手写本地化可用，但后续语言切换和维护成本会升高 | 评估迁移 ARB/gen-l10n，先保持 key 语义稳定 | Todo |
 | P2 | Theme tokens | 部分页面仍可能散落 magic number 和局部颜色 | 抽查核心页面，沉淀颜色、间距、圆角、文本样式 | In Review |
-| P2 | Network | 网络封装已有基础规范，业务 repository 还未接真实接口 | 接口确定后补 remote datasource、DTO、异常映射测试 | Blocked |
+| P2 | Network | Remote skeleton done; integration blocked on backend | 401 refresh、验单、strict DTO 后再默认开 remote | In Review |
 | P2 | Player domain | 当前播放页仍以 mock 和 UI 状态为主 | 接入真实播放器 session、解锁状态、自动下一集、错误恢复 | Todo |
 
 ## 3. 已完成记录

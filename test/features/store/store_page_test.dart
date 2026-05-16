@@ -1,9 +1,12 @@
+import 'package:drama_client/core/toast/app_toast_provider.dart';
 import 'package:drama_client/features/store/presentation/pages/store_page.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../core/toast/recording_app_toast_service.dart';
 
 void main() {
   testWidgets('store purchase success closes and reopens idle', (tester) async {
@@ -60,16 +63,31 @@ void main() {
     expect(find.text('Mock purchase completed.'), findsNothing);
   });
 
-  testWidgets('store purchase cancel closes and restore shows mock feedback', (
-    tester,
-  ) async {
-    await tester.pumpWidget(_buildStorePage());
+  testWidgets('store restore uses app toast not snackbar', (tester) async {
+    final toast = RecordingAppToastService();
+    await tester.pumpWidget(_buildStorePage(toastService: toast));
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Restore'));
     await tester.pumpAndSettle();
-    expect(find.text('Restore is unavailable in mock mode.'), findsOneWidget);
+
+    expect(toast.infos, contains('Restore is unavailable in mock mode.'));
+    expect(find.byType(SnackBar), findsNothing);
+    expect(find.byType(ScaffoldMessenger), findsWidgets);
+  });
+
+  testWidgets('store purchase cancel closes and restore shows mock feedback', (
+    tester,
+  ) async {
+    final toast = RecordingAppToastService();
+    await tester.pumpWidget(_buildStorePage(toastService: toast));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Restore'));
+    await tester.pumpAndSettle();
+    expect(toast.infos, contains('Restore is unavailable in mock mode.'));
 
     await tester.tap(find.text('Buy Now'));
     await tester.pumpAndSettle();
@@ -88,9 +106,11 @@ void main() {
   });
 }
 
-Widget _buildStorePage() {
-  return const ProviderScope(
-    child: MaterialApp(
+Widget _buildStorePage({RecordingAppToastService? toastService}) {
+  final toast = toastService ?? RecordingAppToastService();
+  return ProviderScope(
+    overrides: [appToastProvider.overrideWithValue(toast)],
+    child: const MaterialApp(
       localizationsDelegates: [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,

@@ -163,4 +163,24 @@ void main() {
       expect(container.read(entitlementControllerProvider).coinBalance, 7300);
     },
   );
+
+  test(
+    'vip purchase success grants membership to shared entitlement state',
+    () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final controller = container.read(storeControllerProvider.notifier);
+
+      await controller.load();
+      controller.selectPackage('weekly_vip_intro');
+      controller.showConfirmation();
+      await controller.confirmMockPurchase();
+
+      expect(
+        container.read(storeControllerProvider).purchaseStatus,
+        StorePurchaseStatus.success,
+      );
+      expect(container.read(entitlementControllerProvider).isMember, isTrue);
+    },
+  );
 }

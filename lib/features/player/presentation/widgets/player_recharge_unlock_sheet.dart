@@ -6,13 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
 import '../../domain/player_recharge_unlock_offer.dart';
 
 /// 播放器内充值解锁弹窗。
 ///
 /// 这是 entitlement unlock flow 的一部分，不复用普通 Store 页面：它带着当前剧集
-/// requiredCoins/coinBalance 上下文，并在 mock purchase success 后通知 PlayerPage
+/// requiredCoins 与商品目录上下文；余额展示统一读 EntitlementController，不在 offer 内缓存。
 /// 继续 pending unlock。
 class PlayerRechargeUnlockSheet extends ConsumerStatefulWidget {
   const PlayerRechargeUnlockSheet({required this.sessionKey, super.key});
@@ -627,14 +628,15 @@ class _UnlockInfo extends StatelessWidget {
   }
 }
 
-class _RechargeHeader extends StatelessWidget {
+class _RechargeHeader extends ConsumerWidget {
   const _RechargeHeader({required this.offer, required this.onClose});
 
   final PlayerRechargeUnlockOffer offer;
   final VoidCallback onClose;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final coinBalance = ref.watch(entitlementControllerProvider).coinBalance;
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -657,8 +659,9 @@ class _RechargeHeader extends StatelessWidget {
                   ),
                   const SizedBox(width: 34),
                   _InlineCoinMetric(
+                    key: const ValueKey('player_recharge_unlock_balance'),
                     label: '${context.l10n.playerCoinBalance}:',
-                    value: offer.coinBalance,
+                    value: coinBalance,
                   ),
                   const Spacer(),
                   GestureDetector(
@@ -696,7 +699,11 @@ class _RechargeHeader extends StatelessWidget {
 }
 
 class _InlineCoinMetric extends StatelessWidget {
-  const _InlineCoinMetric({required this.label, required this.value});
+  const _InlineCoinMetric({
+    required this.label,
+    required this.value,
+    super.key,
+  });
 
   final String label;
   final int value;

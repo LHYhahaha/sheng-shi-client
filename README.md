@@ -4,6 +4,17 @@ Flutter short drama client.
 
 ## Documentation
 
+### API / 封板与契约
+
+- [Remote Contract Index（远程契约总索引）](docs/remote-contract-index.md)
+- [Mock Data & API Readiness Review（mock 与真实 API 迁移评估）](docs/mock-data-and-api-readiness-review.md)
+- [App Runtime Foundation Plan（全局运行时基础）](docs/app-runtime-foundation-plan.md)
+- [Player Feed Engine Refactor Plan（播放器引擎封板结论）](docs/player-feed-engine-refactor-plan.md)
+
+**当前 release 封板前提：** 所有 `USE_REMOTE_*` 开关默认 `false`；支付与权益走 mock（`grantMock*` / mock purchase delay）。若开启 remote 或真实 IAP，须先处理 401 refresh、secure token、订单验单、strict DTO 等项（见上述文档）。
+
+### 工程与播放器
+
 - **重点：播放器本地 HLS proxy/cache 当前不建议生产化。先读
   [Player Local HLS Proxy / Cache Decision](docs/player-local-hls-proxy-cache.md)，
   再考虑任何本地 HLS 缓存、localhost proxy、segment cache 或类似优化。**

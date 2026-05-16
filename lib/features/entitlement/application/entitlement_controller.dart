@@ -254,6 +254,8 @@ class EntitlementController extends Notifier<UserEntitlementState> {
       );
     }
 
+    // 解锁扣费仅以 coinBalance 为准；bonusBalance 当前不参与 affordability 判断。
+    // 真实阶段余额/会员/已解锁集须由服务端 entitlement refresh 更新，客户端不得本地累加。
     if (state.coinBalance < price) {
       return _decision(
         type: EpisodeAccessDecisionType.showRechargeDialog,

@@ -5,6 +5,11 @@
 本文是当前 API skeleton 的总索引，只记录远程契约、开关、分层边界和真实联调前的
 defer 项。不接真实服务端，不替换 mock 默认实现，不改变 UI。
 
+## Release 封板前提（Current）
+
+- 所有 `USE_REMOTE_*` 默认 `false`；UI 默认 mock repository / mock payment / mock entitlement（`grantMock*`）。
+- 若开启任一 remote 开关或真实 IAP，须先处理：401 refresh + session cleanup、secure token、`ApiAuthPolicy` 与端点矩阵、订单验单、strict DTO（见下文 DTO Strict vs Display Fallback）。
+
 ## 总体约束
 
 - 所有业务页面默认仍走 mock repository。

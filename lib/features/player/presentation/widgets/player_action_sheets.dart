@@ -71,6 +71,12 @@ class PlayerShareSheet extends StatelessWidget {
   }
 }
 
+/// 旧版通用金币解锁弹窗，已由 [PlayerCoinUnlockSheet] 与 [PlayerRechargeUnlockSheet] 替代。
+///
+/// 当前播放器解锁流程经 [PlayerFeedEngine] 调度，请勿在新代码中引用。
+@Deprecated(
+  'Use PlayerCoinUnlockSheet or PlayerRechargeUnlockSheet via PlayerFeedEngine.',
+)
 class PlayerUnlockSheet extends StatefulWidget {
   const PlayerUnlockSheet({super.key});
 
@@ -378,6 +384,10 @@ class _SpeedOption extends StatelessWidget {
   }
 }
 
+/// 旧版居中解锁遮罩，已由 feed chrome 内联 Unlock 与 entitlement sheet 流程替代。
+@Deprecated(
+  'Use PlayerFeedEngine sheet intents and player chrome unlock controls.',
+)
 class PlayerPaywallOverlay extends StatelessWidget {
   const PlayerPaywallOverlay({
     required this.label,
