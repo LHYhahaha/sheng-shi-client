@@ -331,20 +331,55 @@ Metrics/logs:
 
 ## Implementation Status Checklist
 
-Use this checklist to avoid repeating completed work and to make review
-concrete.
+Last updated: 2026-05-16 (PlayerFeedEngine completion pass).
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Real `Video` outside PageView item shell | Mostly done | Keep tests preventing real `Video` from returning to `PlayerChrome` / item shell. |
-| Drag page offset no high-frequency Riverpod write | Done | Keep page offset in lightweight listenable or viewport-local channel only. |
-| Runtime waits for settled item | Partially done | Must verify no direct `currentItem` listener still triggers playback/access work. |
-| Access presentation separated from UI shell | Partial | Needs a clear AccessCoordinator boundary. |
-| Overlay/sheet orchestration separated | Partial | Dwell, dismissed state, manual unlock, recharge -> unlock should move out of `PlayerPage`. |
-| PlaybackCoordinator separated | Partial | `PlayerPlaybackController` should stay media truth; command sequencing should move to coordinator/engine. |
-| Android stable policy | Not complete | Android must disable video transform/opacity and non-essential overlay animation. |
-| iOS rich policy | Not complete | Rich behavior should be policy-controlled, not implicit global behavior. |
-| Open-source reference decision | Planned | Borrow `video_pool` pooling/reconcile ideas; do not replace UI wholesale. |
+| Real `Video` outside PageView item shell | **Done** | `player_chrome_source_test` + active surface only in `player_playback_layer.dart`. |
+| Drag page offset no high-frequency Riverpod write | **Done** | `_pagePositionNotifier` + viewport phase. |
+| `PlayerFeedEngine` facade | **Done** | Viewport, settled runtime, overlay schedule, access/sheet flow entry. |
+| Runtime waits for settled item | **Done** | Drag 不 evaluate/play/preload/sheet；`PlayerRuntimeCoordinator` drag guard. |
+| `PlayerPerformancePolicy` | **Done** | Android stable / iOS rich / test override. |
+| Android stable enforcement | **Done** | No video transform/opacity on drag; no press dim; no pause scale. |
+| iOS rich policy | **Done** | Rich follow/dim/scale behind policy + test override. |
+| Access presentation in shell | **Done** | `PlayerAccessPresenter` + engine `accessPresentationFor`. |
+| Overlay dwell / dismissed | **Done** | `PlayerOverlayOrchestrator`; engine `prepareAutoUnlockSheet` / `markAutoSheetDismissed`. |
+| Manual unlock / retry / recharge flow | **Done** | Engine `prepareManualUnlock`, `retryPlayback`, `completeCoinUnlock`, `continueAfterRechargeSuccess`; Page 只 `showModalBottomSheet`. |
+| PlaybackCoordinator split | **Defer** | `PlayerRuntimeCoordinator` + `PlayerPlaybackController` 仍承担 play/preload/quiesce；未单独 `PlaybackCoordinator` 文件。 |
+| AccessCoordinator split | **Defer** | 逻辑在 `PlayerAccessPresenter` + runtime；未单独 coordinator 文件。 |
+| Open-source reference decision | **Done** | 参考 `video_pool` pool/reconcile；不替换 PageView/业务 UI。 |
+
+### Phase Status (R1–R7)
+
+| Phase | Status | Summary |
+| --- | --- | --- |
+| **R1a** Engine skeleton | **Done** | `PlayerFeedEngine` + state aggregation. |
+| **R1b** Policy wiring | **Done** | `PlayerPerformancePolicy` + Android stable / iOS rich. |
+| **R2** Settled-only runtime | **Done** | Page 无 drag 路径 evaluate/play；测试覆盖。 |
+| **R3** AccessCoordinator | **Partial** | Presenter + engine 入口；未独立 coordinator 类。 |
+| **R4** OverlayCoordinator | **Mostly done** | Orchestrator + engine sheet intent；Page 仍 host modal UI。 |
+| **R5** PlaybackCoordinator | **Partial** | Runtime coordinator 收口；未再拆文件。 |
+| **R6** Android stable | **Done** | Policy + widget tests + device stress (stable path on Android). |
+| **R7** Device verification | **Ongoing** | Smoke + stress on device; 见下方设备结论。 |
+
+### Device Validation Notes (2026-05)
+
+| Device | Observation |
+| --- | --- |
+| Samsung Galaxy A14 (`R58WC02B69R`) | 低端机仍可能感到滑动偏重；**不继续为全 Android 大改 rich 行为**。后续仅 **Low-end Android Player Policy** 优化线（更激进 stable / 减动画），不另起播放器架构。 |
+| Huawei / Honor ELS AN00 (`8MY0221119007507`) | 新 Android 机滑动明显好于 A14；说明 **settled runtime + 单 Video + stable policy** 方向有效。 |
+
+### Explicitly Deferred (next optimization line only)
+
+- `PlayerPage` 编程切集 / `feed.currentIndex` → PageView `animateToPage`（已标 TODO，非 drag）。
+- Lifecycle teardown 仍直连 `PlayerPlaybackController`（dispose/visibility/memory）。
+- 倍速 / tap-to-play 仍直连 playback（纯 UI 控制，非 feed runtime）。
+- 独立 `PlaybackCoordinator` / `AccessCoordinator` 文件拆分（当前 engine + 现有 coordinator 已够用）。
+- HLS cache/proxy、扩大 prepared window、多 Video 回 PageView：**不做**。
+
+### Follow-up: Low-end Android Player Policy (only)
+
+Do not re-open a full player rewrite. If A14-class devices still feel heavy, add a **low-end** policy tier (stricter than default Android stable) rather than changing iOS rich or the core engine shape.
 
 ## Files Expected To Change
 

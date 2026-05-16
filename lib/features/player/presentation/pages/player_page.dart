@@ -9,9 +9,9 @@ import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
-import '../../../entitlement/domain/episode_access_decision.dart';
 import '../../application/player_feed_controller.dart';
 import '../../application/player_feed_engine.dart';
+import '../../application/player_feed_engine_access_flow.dart';
 import '../../application/player_overlay_orchestrator.dart';
 import '../../application/player_performance_policy_provider.dart';
 import '../../application/player_playback_controller.dart';
@@ -32,8 +32,8 @@ import '../widgets/player_recharge_unlock_sheet.dart';
 
 /// 播放器页面：纵向 [PageView] feed + 顶层单例视频 surface。
 ///
-/// 手势与落位由 [PlayerViewportController] 管理；权益/播放/预加载仅在 settled 后由
-/// [PlayerRuntimeCoordinator] 执行；自动解锁弹窗由 [PlayerOverlayOrchestrator] 调度。
+/// UI host：PageView / 单例 Video surface / top bar / sheet。
+/// 业务入口经 [PlayerFeedEngine]；settled runtime 由 engine → coordinator 执行。
 class PlayerPage extends ConsumerStatefulWidget {
   const PlayerPage({
     required this.dramaId,
@@ -352,6 +352,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       },
     );
 
+    // TODO(engine): feed 编程 currentIndex 变更仍直接 animate PageView，非手势 drag 路径。
     ref.listen(feedProvider.select((state) => state.currentIndex), (
       previous,
       next,
@@ -813,107 +814,56 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _retryPlaybackForItem(PlayerFeedItem item) async {
-    final runtime = ref.read(
-      playerRuntimeCoordinatorProvider(_sessionKey).notifier,
-    );
-    final decision = ref
-        .read(entitlementControllerProvider.notifier)
-        .evaluateAccess(
-          dramaId: item.content.id,
-          episodeId: item.episode.id,
-          itemId: item.id,
-          unlockType: item.episode.unlockType,
-          price: item.episode.requiredCoins,
-          isUnavailable: item.episode.isUnavailable,
-        );
-    switch (decision.type) {
-      case EpisodeAccessDecisionType.allowPlay:
-        await runtime.handleAccessDecision(
+    final engine = ref.read(playerFeedEngineProvider(_sessionKey).notifier);
+    final intent = await engine.retryPlayback(item);
+    if (!mounted) {
+      return;
+    }
+    await _presentSheetIntent(item, intent);
+  }
+
+  Future<void> _presentSheetIntent(
+    PlayerFeedItem item,
+    PlayerOverlaySheetIntent intent, {
+    bool launchedByAutoSheet = false,
+  }) async {
+    final engine = ref.read(playerFeedEngineProvider(_sessionKey).notifier);
+    if (!mounted || !engine.isCurrentFeedItem(item)) {
+      return;
+    }
+    switch (intent) {
+      case PlayerOverlaySheetIntent.none:
+        return;
+      case PlayerOverlaySheetIntent.coinUnlock:
+        await _showCoinUnlockSheetForItem(
           item,
-          decision,
-          autoPresentSheet: false,
+          launchedByAutoSheet: launchedByAutoSheet,
         );
-      case EpisodeAccessDecisionType.autoUnlockAndPlay:
-      case EpisodeAccessDecisionType.showCoinUnlockDialog:
-        await runtime.handleAccessDecision(
+      case PlayerOverlaySheetIntent.rechargeUnlock:
+        await _showRechargeUnlockSheetForItem(
           item,
-          decision,
-          autoPresentSheet: false,
+          launchedByAutoSheet: launchedByAutoSheet,
         );
-        if (mounted && runtime.isCurrentFeedItem(item)) {
-          await _showCoinUnlockSheetForItem(item);
-        }
-      case EpisodeAccessDecisionType.showRechargeDialog:
-        await runtime.handleAccessDecision(
-          item,
-          decision,
-          autoPresentSheet: false,
-        );
-        if (mounted && runtime.isCurrentFeedItem(item)) {
-          await _showRechargeUnlockSheetForItem(item);
-        }
-      case EpisodeAccessDecisionType.goMembership:
-        await runtime.handleAccessDecision(
-          item,
-          decision,
-          autoPresentSheet: false,
-        );
-      case EpisodeAccessDecisionType.waitUnlock:
-        await runtime.handleAccessDecision(
-          item,
-          decision,
-          autoPresentSheet: false,
-        );
+      case PlayerOverlaySheetIntent.membership:
+        _openMembership();
     }
   }
 
   Future<void> _presentAutoUnlockSheetForItem(PlayerFeedItem item) async {
-    final runtime = ref.read(
-      playerRuntimeCoordinatorProvider(_sessionKey).notifier,
+    final engine = ref.read(playerFeedEngineProvider(_sessionKey).notifier);
+    final intent = await engine.prepareAutoUnlockSheet(
+      item: item,
+      isModalOpen: _isModalOpen,
+      hasActiveCoinSheet: _activeCoinSheetItemId != null,
+      hasActiveRechargeSheet: _activeRechargeSheetItemId != null,
     );
-    if (!runtime.isCurrentFeedItem(item) ||
-        _isModalOpen ||
-        _activeCoinSheetItemId != null ||
-        _activeRechargeSheetItemId != null) {
+    if (!mounted) {
       return;
     }
-    final presenter = ref
-        .read(playerRuntimeCoordinatorProvider(_sessionKey))
-        .accessPresenter;
-    if (!presenter.isLockedAutoSheetCandidate(item)) {
-      return;
-    }
-    final decision = ref
-        .read(entitlementControllerProvider.notifier)
-        .evaluateAccess(
-          dramaId: item.content.id,
-          episodeId: item.episode.id,
-          itemId: item.id,
-          unlockType: item.episode.unlockType,
-          price: item.episode.requiredCoins,
-          isUnavailable: item.episode.isUnavailable,
-        );
-    if (!mounted || !runtime.isCurrentFeedItem(item)) {
-      return;
-    }
-    switch (decision.type) {
-      case EpisodeAccessDecisionType.allowPlay:
-        await runtime.handleAccessDecision(
-          item,
-          decision,
-          autoPresentSheet: false,
-        );
-      case EpisodeAccessDecisionType.autoUnlockAndPlay:
-      case EpisodeAccessDecisionType.showCoinUnlockDialog:
-        await _showCoinUnlockSheetForItem(item, launchedByAutoSheet: true);
-      case EpisodeAccessDecisionType.showRechargeDialog:
-        await _showRechargeUnlockSheetForItem(item, launchedByAutoSheet: true);
-      case EpisodeAccessDecisionType.goMembership:
-      case EpisodeAccessDecisionType.waitUnlock:
-        return;
-    }
+    await _presentSheetIntent(item, intent, launchedByAutoSheet: true);
   }
 
+  // TODO(engine): 选集编程跳转仍由 Page 驱动 PageController。
   void _closeSheetAndSelectEpisode(
     BuildContext sheetContext,
     PlayerEpisode episode,
@@ -1009,55 +959,21 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _showPendingUnlockActionSheet() async {
-    ref
-        .read(playerOverlayOrchestratorProvider(_sessionKey).notifier)
-        .cancelPending();
     if (_isModalOpen) {
       return;
     }
     final currentItem = ref
         .read(playerFeedControllerProvider(_sessionKey))
         .currentItem;
-    final runtime = ref.read(
-      playerRuntimeCoordinatorProvider(_sessionKey).notifier,
-    );
-    if (currentItem == null ||
-        !runtime.isCurrentFeedItem(currentItem) ||
-        !ref
-            .read(playerRuntimeCoordinatorProvider(_sessionKey))
-            .accessPresenter
-            .isLockedAutoSheetCandidate(currentItem)) {
+    if (currentItem == null) {
       return;
     }
-    final decision = ref
-        .read(entitlementControllerProvider.notifier)
-        .evaluateAccess(
-          dramaId: currentItem.content.id,
-          episodeId: currentItem.episode.id,
-          itemId: currentItem.id,
-          unlockType: currentItem.episode.unlockType,
-          price: currentItem.episode.requiredCoins,
-          isUnavailable: currentItem.episode.isUnavailable,
-        );
-    switch (decision.type) {
-      case EpisodeAccessDecisionType.allowPlay:
-        await runtime.handleAccessDecision(
-          currentItem,
-          decision,
-          autoPresentSheet: false,
-        );
-      case EpisodeAccessDecisionType.autoUnlockAndPlay:
-      case EpisodeAccessDecisionType.showCoinUnlockDialog:
-        await _showCoinUnlockSheetForItem(currentItem);
-      case EpisodeAccessDecisionType.showRechargeDialog:
-        await _showRechargeUnlockSheetForItem(currentItem);
-      case EpisodeAccessDecisionType.goMembership:
-        _openMembership();
-      case EpisodeAccessDecisionType.waitUnlock:
-        if (!currentItem.episode.isUnavailable) {
-          await _showRechargeUnlockSheetForItem(currentItem);
-        }
+    final engine = ref.read(playerFeedEngineProvider(_sessionKey).notifier);
+    final intent = await engine.prepareManualUnlock(currentItem);
+    if (!mounted) {
+      return;
     }
+    await _presentSheetIntent(currentItem, intent);
   }
 
   Future<void> _showCoinUnlockSheetForItem(
@@ -1088,31 +1004,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _activeCoinSheetItemId = null;
     if (unlocked != true && launchedByAutoSheet) {
       ref
-          .read(playerOverlayOrchestratorProvider(_sessionKey).notifier)
-          .markDismissed(item.id);
+          .read(playerFeedEngineProvider(_sessionKey).notifier)
+          .markAutoSheetDismissed(item.id);
     }
     if (!mounted || unlocked != true) {
       return;
     }
-    final runtime = ref.read(
-      playerRuntimeCoordinatorProvider(_sessionKey).notifier,
-    );
-    if (!runtime.isCurrentFeedItem(item)) {
-      return;
-    }
-    final decision = await ref
-        .read(entitlementControllerProvider.notifier)
-        .unlockWithCoins(
-          dramaId: item.content.id,
-          episodeId: item.episode.id,
-          itemId: item.id,
-          price: item.episode.requiredCoins,
-          operationId: 'coin-unlock:${item.content.id}:${item.episode.id}',
-        );
-    if (!mounted) {
-      return;
-    }
-    await runtime.handleAccessDecision(item, decision, autoPresentSheet: false);
+    await ref
+        .read(playerFeedEngineProvider(_sessionKey).notifier)
+        .completeCoinUnlock(item);
   }
 
   Future<void> _showRechargeUnlockSheetForItem(
@@ -1151,8 +1051,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (unlocked != true) {
       if (launchedByAutoSheet) {
         ref
-            .read(playerOverlayOrchestratorProvider(_sessionKey).notifier)
-            .markDismissed(item.id);
+            .read(playerFeedEngineProvider(_sessionKey).notifier)
+            .markAutoSheetDismissed(item.id);
       }
       rechargeController.close();
       return;
@@ -1162,46 +1062,28 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
     final selectedCoinPackage = rechargeState.selectedCoinPackage;
     final selectedMembershipPackage = rechargeState.selectedMembershipPackage;
-    final entitlementController = ref.read(
-      entitlementControllerProvider.notifier,
+    final engine = ref.read(playerFeedEngineProvider(_sessionKey).notifier);
+    await engine.grantRechargeSelection(
+      selectedCoinPackage: selectedCoinPackage != null,
+      selectedMembershipPackage: selectedMembershipPackage != null,
+      coinPackageTotalCoins: selectedCoinPackage?.totalCoins,
     );
-    if (selectedCoinPackage != null) {
-      await entitlementController.grantMockCoins(
-        amount: selectedCoinPackage.totalCoins,
-        source: 'player_recharge_unlock_sheet',
-      );
-    } else if (selectedMembershipPackage != null) {
-      await entitlementController.grantMockMembership(
-        source: 'player_recharge_unlock_sheet',
-      );
-    }
     if (!mounted) {
       return;
     }
-    rechargeController.close();
-    final runtime = ref.read(
-      playerRuntimeCoordinatorProvider(_sessionKey).notifier,
+    final nextIntent = await engine.continueAfterRechargeSuccess(
+      item: item,
+      grantedCoinPackage: selectedCoinPackage != null,
+      grantedMembershipPackage: selectedMembershipPackage != null,
     );
-    if (!runtime.isCurrentFeedItem(item)) {
+    if (!mounted) {
       return;
     }
-    await runtime.quiesceAfterRecharge(
+    await _presentSheetIntent(
       item,
-      reason: selectedMembershipPackage == null
-          ? 'recharge success awaiting coin confirmation'
-          : 'membership purchase success awaiting user action',
+      nextIntent,
+      launchedByAutoSheet: launchedByAutoSheet,
     );
-    ref
-        .read(playerUiControllerProvider(_sessionKey).notifier)
-        .showUnlockPaywall();
-    if (selectedCoinPackage != null) {
-      unawaited(
-        _showCoinUnlockSheetForItem(
-          item,
-          launchedByAutoSheet: launchedByAutoSheet,
-        ),
-      );
-    }
   }
 
   void _openMembership() {

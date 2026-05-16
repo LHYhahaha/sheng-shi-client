@@ -298,6 +298,25 @@ void main() {
     );
   });
 
+  testWidgets('stable 策略下暂停无 scale feedback', (tester) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+        performancePolicy: PlayerPerformancePolicy.stable,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('player_video_tap_layer')));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('player_pause_feedback')), findsNothing);
+  });
+
   testWidgets('stable 策略下按压不触发 chrome 渐隐', (tester) async {
     await tester.pumpWidget(
       _buildPlayerApp(
