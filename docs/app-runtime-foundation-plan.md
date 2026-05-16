@@ -19,6 +19,33 @@ experiments.
 - Avoid feature modules making their own device/model/config decisions.
 - Keep mock/local defaults working before real backend integration.
 
+## Phase A Status (2026-05-16) — Done
+
+Implemented skeleton (no UI / no player flow changes / no real API):
+
+| Item | Location |
+| --- | --- |
+| `DeviceCapability` + `DevicePerformanceTier` | `lib/core/runtime/device_capability.dart` |
+| Device providers + test overrides | `lib/core/runtime/device_capability_provider.dart` |
+| `AppRuntimeConfig` + merge rules | `lib/core/runtime/app_runtime_config.dart` |
+| Config providers (defaults / remote stub / test override) | `lib/core/runtime/app_runtime_config_provider.dart` |
+| Player mode from tier | `lib/core/runtime/player_performance_mode_for_device.dart` |
+| `playerPerformanceModeFromDeviceProvider` | `player_performance_policy_provider.dart` |
+| `playerPreloadConfigProvider` runtime merge + ultraStable clamp | `player_preload_config_provider.dart` |
+
+**Priority (production path):**
+
+```text
+Player: full policy override > mode override > AppRuntimeConfig.playerPerformanceModeOverride > device tier > platform default
+AppRuntimeConfig: test override > remote merge > device rules > defaults
+```
+
+**Still deferred (Phase B+):** real RAM/model via `device_info_plus` / platform channel, `package_info` for app version, secure local config cache, remote config fetch/repository, startup `AppRuntimeController`, localization bundle download.
+
+Remote config fetch failure must not block app boot — Phase A remote provider is always `null`.
+
+**API metadata (unchanged this phase):** `apiDeviceIdProvider` / `apiAppVersionProvider` remain dart-define fallbacks; future install id / package info may reuse runtime device layer without coupling to performance tier.
+
 ## Non-Goals For Phase 1
 
 - Do not connect a real remote config API.
@@ -314,23 +341,21 @@ Content localization remains separate from fixed UI strings:
 
 ## Implementation Phases
 
-### Phase A: Runtime Foundation Skeleton
+### Phase A: Runtime Foundation Skeleton — **Done (2026-05-16)**
 
-Tasks:
+Delivered:
 
-- Add `DeviceCapability` and `DevicePerformanceTier`.
-- Add `DeviceCapabilityRepository` with mock/default implementation.
-- Add `AppRuntimeState`.
-- Add typed runtime config, feature flags, performance policy, localization
-  config.
-- Add `AppRuntimeController` and provider.
-- Add tests for default startup and device-tier mapping.
+- `DeviceCapability` / `DevicePerformanceTier` + platform fallback providers.
+- `AppRuntimeConfig` + merge (defaults → device rules → remote stub → test override).
+- Player policy + preload wired; tests in `test/core/runtime/`.
 
-Acceptance:
+Not in Phase A (deferred):
 
-- App can read runtime state from a provider.
-- Missing device info falls back safely.
-- No feature behavior changes yet.
+- `AppRuntimeState` / `AppRuntimeController` monolith.
+- Separate repository files under `lib/core/device/` (names in plan are illustrative).
+- Real remote fetch / local cache.
+
+Acceptance: met — providers testable; missing remote/device info falls back safely.
 
 ### Phase B: Platform Device Capability
 
@@ -347,24 +372,13 @@ Acceptance:
 - iOS returns high fallback.
 - Tests can override device capability.
 
-### Phase C: Player Runtime Policy Integration
+### Phase C: Player Runtime Policy Integration — **Done in Phase A (2026-05-16)**
 
-Tasks:
+`playerPerformancePolicyProvider` and `playerPreloadConfigProvider` consume
+`deviceCapabilityProvider` and `appRuntimeConfigProvider`. Test overrides unchanged.
 
-- Make `playerPerformancePolicyProvider` consume AppRuntime performance policy.
-- Keep existing player policy override for tests.
-- Map:
-  - runtime low Android -> `ultraStable`;
-  - runtime medium Android -> `stable`;
-  - runtime iOS/high -> `rich`.
-- Keep current player tests passing.
-
-Acceptance:
-
-- Low-end device capability selects `ultraStable`.
-- Normal Android selects `stable`.
-- iOS/high selects `rich`.
-- Existing player behavior can still be overridden in tests.
+Acceptance: covered by `player_performance_policy_test.dart` and
+`player_preload_config_provider_test.dart`.
 
 ### Phase D: Runtime Config / Feature Flags Skeleton
 

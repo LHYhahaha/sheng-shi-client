@@ -9,7 +9,7 @@ policies by platform or device capability.
 
 - **rich / stable / ultraStable** 三档已落地；Android 默认 stable，iOS 默认 rich。
 - Android stable 规则（无 drag 时 video transform/opacity、无 press dim、无 pause scale）已在代码与 widget 测试中验收。
-- **后续工作**：仅低端机 policy（`ultraStable`、预留 `playerPerformanceModeFromDeviceProvider`），**不**再拆第二套播放器或 Android/iOS 双实现。
+- **后续工作**：低端机 policy（`ultraStable`）+ Phase B 真机 RAM/型号；档位已由 `deviceCapabilityProvider` 推导（Phase A fallback）。
 - **不引入**第三方 feed/player 库。
 
 ## Background
@@ -66,7 +66,7 @@ Default behavior:
 
 - Android: `stable`
 - iOS: `rich`
-- Low-end Android: `ultraStable` via override / future device tier (not auto-detected yet)
+- Low-end Android: `ultraStable` when `DevicePerformanceTier.low` (Phase A: test override or future RAM/model rules in Phase B)
 - Tests: overrideable provider
 
 The policy must be consumed by presentation/runtime glue only. Playback truth
@@ -238,6 +238,8 @@ drag path and moving real runtime commands to the settled phase.
 
 - `playerPerformancePolicyOverrideProvider` — full policy object
 - `playerPerformanceModeOverrideProvider` — `rich` / `stable` / `ultraStable`
-- `playerPerformanceModeFromDeviceProvider` — reserved for RAM/API/brand/model
+- `deviceCapabilityProvider` / `devicePerformanceTierOverrideProvider` — global tier (Phase A fallback; Phase B real device info)
+- `appRuntimeConfigProvider` — runtime preload / mode overrides (remote stub null in Phase A)
+- `playerPerformanceModeFromDeviceProvider` — maps tier → `PlayerPerformanceMode`
 
 Do not scatter `Platform.isAndroid` or model checks in UI or runtime code.

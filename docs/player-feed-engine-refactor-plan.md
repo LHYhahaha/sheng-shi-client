@@ -396,13 +396,13 @@ Last updated: 2026-05-16 (mainline seal / code-quality pass).
 **Done (minimal):**
 
 - `PlayerPerformanceMode.ultraStable`：视觉同 stable；HLS preload 0；prepared/retained 0；locked 落位跳过 preloadAround。
-- Provider 链：`playerPerformancePolicyOverrideProvider` / `playerPerformanceModeOverrideProvider` / 预留 `playerPerformanceModeFromDeviceProvider`。
+- Provider 链：`playerPerformancePolicyOverrideProvider` / `playerPerformanceModeOverrideProvider` / `playerPerformanceModeFromDeviceProvider`（接 `deviceCapabilityProvider`，见 App Runtime Phase A）。
 - `playerPreloadConfigProvider` 从 policy 派生，playback controller 尊重 prepared/retained cap。
 
 **不做的：**
 
 - 不扩大 session window；不增加 PageView 内 Video；不大改 `PlayerFeedEngine`。
-- 复杂 RAM/机型识别留 TODO，真机 A14 可先手动 override ultraStable 观测。
+- 复杂 RAM/机型真机识别留 Phase B；A14 可用 `devicePerformanceTierOverrideProvider` → `low` 观测 ultraStable。
 
 ## Files Expected To Change
 

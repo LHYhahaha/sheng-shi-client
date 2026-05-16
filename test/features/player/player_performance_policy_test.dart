@@ -1,3 +1,7 @@
+import 'package:drama_client/core/runtime/app_runtime_config.dart';
+import 'package:drama_client/core/runtime/app_runtime_config_provider.dart';
+import 'package:drama_client/core/runtime/device_capability.dart';
+import 'package:drama_client/core/runtime/device_capability_provider.dart';
 import 'package:drama_client/features/player/application/player_performance_policy_provider.dart';
 import 'package:drama_client/features/player/data/player_preload_config_provider.dart';
 import 'package:drama_client/features/player/domain/player_performance_policy.dart';
@@ -46,6 +50,113 @@ void main() {
     expect(
       container.read(playerPerformancePolicyProvider),
       PlayerPerformancePolicy.ultraStable,
+    );
+  });
+
+  test('Android low 设备档 -> ultraStable', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    final container = ProviderContainer(
+      overrides: [
+        devicePerformanceTierOverrideProvider.overrideWithValue(
+          DevicePerformanceTier.low,
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final policy = container.read(playerPerformancePolicyProvider);
+    expect(policy.mode, PlayerPerformanceMode.ultraStable);
+    expect(policy.preparedForwardSessionCount, 0);
+  });
+
+  test('Android standard 设备档 -> stable', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    expect(
+      container.read(playerPerformancePolicyProvider).mode,
+      PlayerPerformanceMode.stable,
+    );
+  });
+
+  test('iOS high 设备档 -> rich', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    expect(
+      container.read(playerPerformancePolicyProvider).mode,
+      PlayerPerformanceMode.rich,
+    );
+  });
+
+  test('runtime config 覆盖播放器档位', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    final container = ProviderContainer(
+      overrides: [
+        appRuntimeConfigOverrideProvider.overrideWithValue(
+          const AppRuntimeConfig(
+            playerPerformanceModeOverride: PlayerPerformanceMode.rich,
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    expect(
+      container.read(playerPerformancePolicyProvider).mode,
+      PlayerPerformanceMode.rich,
+    );
+  });
+
+  test('完整 policy override 高于 runtime 档位', () {
+    final container = ProviderContainer(
+      overrides: [
+        appRuntimeConfigOverrideProvider.overrideWithValue(
+          const AppRuntimeConfig(
+            playerPerformanceModeOverride: PlayerPerformanceMode.rich,
+          ),
+        ),
+        playerPerformancePolicyOverrideProvider.overrideWithValue(
+          PlayerPerformancePolicy.ultraStable,
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    expect(
+      container.read(playerPerformancePolicyProvider),
+      PlayerPerformancePolicy.ultraStable,
+    );
+  });
+
+  test('档位 override 高于 runtime 档位', () {
+    final container = ProviderContainer(
+      overrides: [
+        appRuntimeConfigOverrideProvider.overrideWithValue(
+          const AppRuntimeConfig(
+            playerPerformanceModeOverride: PlayerPerformanceMode.rich,
+          ),
+        ),
+        playerPerformanceModeOverrideProvider.overrideWithValue(
+          PlayerPerformanceMode.ultraStable,
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    expect(
+      container.read(playerPerformancePolicyProvider).mode,
+      PlayerPerformanceMode.ultraStable,
     );
   });
 
