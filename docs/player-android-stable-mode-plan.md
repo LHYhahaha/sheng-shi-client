@@ -9,7 +9,8 @@ policies by platform or device capability.
 
 - **rich / stable / ultraStable** 三档已落地；Android 默认 stable，iOS 默认 rich。
 - Android stable 规则（无 drag 时 video transform/opacity、无 press dim、无 pause scale）已在代码与 widget 测试中验收。
-- **后续工作**：低端机 policy（`ultraStable`）+ Phase B 真机 RAM/型号；档位已由 `deviceCapabilityProvider` 推导（Phase A fallback）。
+- **后续工作**：Phase B 真机 RAM/型号自动填入 probe；档位已由 `device_performance_tier_rules` + `deviceCapabilityProvider` 推导。
+- **当前**：基础本地 denylist（Samsung A14 / SM-A145* / Galaxy A14）命中 → `low` → `ultraStable`。
 - **不引入**第三方 feed/player 库。
 
 ## Background
@@ -66,7 +67,7 @@ Default behavior:
 
 - Android: `stable`
 - iOS: `rich`
-- Low-end Android: `ultraStable` when `DevicePerformanceTier.low` (Phase A: test override or future RAM/model rules in Phase B)
+- Low-end Android: `ultraStable` when `DevicePerformanceTier.low` (denylist / RAM<=3GB / test override; remote override 仍可覆盖)
 - Tests: overrideable provider
 
 The policy must be consumed by presentation/runtime glue only. Playback truth
@@ -230,15 +231,16 @@ drag path and moving real runtime commands to the settled phase.
 
 - **ELS AN00**: stable mode already feels noticeably smoother than A14-class
   devices; validates settled runtime + single Video architecture.
-- **Samsung A14**: may still feel heavy on stable; enable `ultraStable` via
-  `playerPerformanceModeOverrideProvider` for field tests before automatic
-  device tier detection ships.
+- **Samsung A14**: denylist 命中后自动 `ultraStable`；若 probe 尚无真型号（Phase B 前），可用
+  `--dart-define=DEVICE_MODEL=SM-A145F` 或 `deviceHardwareSnapshotProvider` override 验证。
 
 ### Provider entry points
 
 - `playerPerformancePolicyOverrideProvider` — full policy object
 - `playerPerformanceModeOverrideProvider` — `rich` / `stable` / `ultraStable`
-- `deviceCapabilityProvider` / `devicePerformanceTierOverrideProvider` — global tier (Phase A fallback; Phase B real device info)
+- `device_performance_tier_rules.dart` — denylist + RAM 规则
+- `device_capability_probe.dart` — 启动硬件快照（Phase B 真机读取）
+- `deviceCapabilityProvider` — 一次性分级；override 仍可覆盖
 - `appRuntimeConfigProvider.player` — grouped `RuntimePlayerConfig` (remote stub null in Phase A)
 - `runtime_performance_mode_mapper.dart` — `RuntimePerformanceMode` → `PlayerPerformanceMode`
 - `playerPreloadConfigProvider` — player preload **统一入口**（HLS + policy cap）

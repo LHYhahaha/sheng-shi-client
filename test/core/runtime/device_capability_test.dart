@@ -1,5 +1,8 @@
 import 'package:drama_client/core/runtime/device_capability.dart';
+import 'package:drama_client/core/runtime/device_capability_probe.dart';
 import 'package:drama_client/core/runtime/device_capability_provider.dart';
+import 'package:drama_client/features/player/application/player_performance_policy_provider.dart';
+import 'package:drama_client/features/player/domain/player_performance_policy.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -34,6 +37,42 @@ void main() {
       DevicePerformanceTier.low,
     );
     expect(container.read(deviceCapabilityProvider).isLowEnd, isTrue);
+  });
+
+  test('DeviceCapability.resolve 对 SM-A145F 解析为 low', () {
+    final capability = DeviceCapability.resolve(
+      platform: TargetPlatform.android,
+      manufacturer: 'samsung',
+      model: 'SM-A145F',
+    );
+    expect(capability.performanceTier, DevicePerformanceTier.low);
+  });
+
+  test('hardware snapshot 提供真型号时 provider 链进入 ultraStable', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    final container = ProviderContainer(
+      overrides: [
+        deviceHardwareSnapshotProvider.overrideWithValue(
+          const DeviceHardwareSnapshot(
+            manufacturer: 'samsung',
+            model: 'SM-A145F',
+            osVersion: '14',
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    expect(
+      container.read(deviceCapabilityProvider).performanceTier,
+      DevicePerformanceTier.low,
+    );
+    expect(
+      container.read(playerPerformancePolicyProvider).mode,
+      PlayerPerformanceMode.ultraStable,
+    );
   });
 
   test('deviceCapabilityOverrideProvider 覆盖完整快照', () {

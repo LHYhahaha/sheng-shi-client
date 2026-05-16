@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'device_performance_tier_rules.dart';
+
 /// 设备性能档位（全局 runtime 使用；播放器映射见 player feature
 /// `runtime_performance_mode_mapper.dart`）。
 enum DevicePerformanceTier {
@@ -49,22 +51,38 @@ class DeviceCapability {
   /// 是否低端档（语义糖，等价于 [performanceTier] == [DevicePerformanceTier.low]）。
   bool get isLowEnd => performanceTier == DevicePerformanceTier.low;
 
-  /// Phase A 保守 fallback：Android standard，iOS high，其它 standard。
-  factory DeviceCapability.fallbackForPlatform(TargetPlatform platform) {
-    final tier = switch (platform) {
-      TargetPlatform.iOS || TargetPlatform.macOS => DevicePerformanceTier.high,
-      TargetPlatform.android => DevicePerformanceTier.standard,
-      _ => DevicePerformanceTier.standard,
-    };
+  /// 根据平台与硬件字段解析档位（启动时调用一次）。
+  factory DeviceCapability.resolve({
+    required TargetPlatform platform,
+    String? manufacturer,
+    String? model,
+    String? osVersion,
+    int? physicalMemoryMb,
+    int? processorCount,
+  }) {
+    final resolvedModel = model ?? _fallbackModel(platform);
+    final tier = resolveDevicePerformanceTier(
+      platform: platform,
+      manufacturer: manufacturer,
+      model: resolvedModel,
+      osVersion: osVersion,
+      physicalMemoryMb: physicalMemoryMb,
+      processorCount: processorCount,
+    );
     return DeviceCapability(
       platform: platform,
-      osVersion: 'unknown',
-      deviceModel: _fallbackModel(platform),
-      manufacturer: 'unknown',
+      osVersion: osVersion ?? 'unknown',
+      deviceModel: resolvedModel,
+      manufacturer: manufacturer ?? 'unknown',
       performanceTier: tier,
-      physicalMemoryMb: null,
-      processorCount: null,
+      physicalMemoryMb: physicalMemoryMb,
+      processorCount: processorCount,
     );
+  }
+
+  /// 无硬件探针时的平台占位（Android generic → standard）。
+  factory DeviceCapability.fallbackForPlatform(TargetPlatform platform) {
+    return DeviceCapability.resolve(platform: platform);
   }
 
   static String _fallbackModel(TargetPlatform platform) {

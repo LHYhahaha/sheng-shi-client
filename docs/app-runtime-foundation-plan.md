@@ -62,7 +62,16 @@ Player: full policy override > mode override > AppRuntimeConfig.playerPerformanc
 AppRuntimeConfig: test override > remote merge > device rules > defaults
 ```
 
-**Still deferred (Phase B+):** real RAM/model via `device_info_plus` / platform channel, `package_info` for app version, secure local config cache, remote config fetch/repository, startup `AppRuntimeController`, localization bundle download, `RuntimeExperimentConfig`.
+### Device Tier Basic Local Rules (2026-05) — Done
+
+- `device_performance_tier_rules.dart`：`resolveDevicePerformanceTier` 纯函数。
+- 保守 Android denylist：Samsung `SM-A145*`、`SM-A14*` 字母后缀、`Galaxy A14`（大小写不敏感）。
+- 可选 RAM：已知且 `<= 3072` MB → low；未知 RAM 不单独触发 low。
+- iOS / macOS 不自动 low；缺失 model/manufacturer 占位符 → Android standard。
+- `device_capability_probe.dart`：启动一次；Phase B 接入真机读取；可选 `--dart-define=DEVICE_MODEL` 供脚本。
+- 命中 low → 现有 `runtime_performance_mode_mapper` → `ultraStable`；remote / 测试 override 仍可覆盖。
+
+**Still deferred (Phase B+):** automatic RAM/model via `device_info_plus` / platform channel (rules ready), `package_info` for app version, secure local config cache, remote config fetch/repository, startup `AppRuntimeController`, localization bundle download, `RuntimeExperimentConfig`.
 
 Remote config fetch failure must not block app boot — Phase A remote provider is always `null`.
 

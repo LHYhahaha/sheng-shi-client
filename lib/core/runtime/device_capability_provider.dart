@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'device_capability.dart';
+import 'device_capability_probe.dart';
 
 /// 测试 / debug：覆盖完整 [DeviceCapability]（优先级最高）。
 final deviceCapabilityOverrideProvider = Provider<DeviceCapability?>(
@@ -13,18 +14,32 @@ final devicePerformanceTierOverrideProvider = Provider<DevicePerformanceTier?>(
   (ref) => null,
 );
 
-/// 当前设备能力（Phase A：平台 fallback，不阻塞启动）。
+/// 启动时本地硬件探针结果（Phase B 前多为占位；可整段 override 做集成测试）。
+final deviceHardwareSnapshotProvider = Provider<DeviceHardwareSnapshot>(
+  (ref) => readLocalDeviceHardwareSnapshot(),
+);
+
+/// 当前设备能力（启动时一次性解析；不随运行中状态变化）。
 final deviceCapabilityProvider = Provider<DeviceCapability>((ref) {
   final fullOverride = ref.watch(deviceCapabilityOverrideProvider);
   if (fullOverride != null) {
     return fullOverride;
   }
 
+  final snapshot = ref.watch(deviceHardwareSnapshotProvider);
+  final capability = DeviceCapability.resolve(
+    platform: defaultTargetPlatform,
+    manufacturer: snapshot.manufacturer,
+    model: snapshot.model,
+    osVersion: snapshot.osVersion,
+    physicalMemoryMb: snapshot.physicalMemoryMb,
+    processorCount: snapshot.processorCount,
+  );
+
   final tierOverride = ref.watch(devicePerformanceTierOverrideProvider);
-  final fallback = DeviceCapability.fallbackForPlatform(defaultTargetPlatform);
   if (tierOverride != null) {
-    return fallback.copyWith(performanceTier: tierOverride);
+    return capability.copyWith(performanceTier: tierOverride);
   }
 
-  return fallback;
+  return capability;
 });
