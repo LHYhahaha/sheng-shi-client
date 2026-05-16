@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart';
 
 /// 远程功能开关 key 常量（避免 magic string 散落 feature 模块）。
+///
+/// **不包含** HLS local proxy/cache：该能力仅保留为 diagnostic spike，由
+/// `--dart-define=PLAYER_HLS_LOCAL_PROXY_SPIKE` 手动开启，不得通过本表或
+/// `AppRuntimeConfig` remote featureFlags 生产化。
 abstract final class RuntimeFeatureFlagKeys {
-  /// 播放器本地 HLS proxy/cache（当前产品明确不做，默认 false）。
-  static const playerLocalHlsProxy = 'player_local_hls_proxy';
-
   /// 远程 UI 语言包。
   static const remoteLocalization = 'remote_localization';
 

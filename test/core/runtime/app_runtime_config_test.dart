@@ -136,9 +136,13 @@ void main() {
       flags: {RuntimeFeatureFlagKeys.remoteLocalization: true},
     );
     expect(config.isEnabled(RuntimeFeatureFlagKeys.remoteLocalization), isTrue);
+    expect(config.isEnabled(RuntimeFeatureFlagKeys.subtitleByLocale), isFalse);
     expect(
-      config.isEnabled(RuntimeFeatureFlagKeys.playerLocalHlsProxy),
-      isFalse,
+      config.isEnabled(
+        RuntimeFeatureFlagKeys.subtitleByLocale,
+        defaultValue: true,
+      ),
+      isTrue,
     );
   });
 

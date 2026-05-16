@@ -16,6 +16,15 @@ defer 项。不接真实服务端，不替换 mock 默认实现，不改变 UI�
   透传。
 - `MediaResource.network` 用于表达远程图片 URL，不再把 URL 伪装成本地 asset path。
 
+## DTO Strict vs Display Fallback（Record Only）
+
+封板阶段 **不收紧** mapper。真实联调前须区分：
+
+- **Strict**：`id`、`sourceId`、`hlsUrl`、金额 raw、`accessStatus`、`orderId`、商品 id 等 — 缺失即错误。
+- **Display fallback**：标题、副标题、tips、封面占位、描述等 — 可空 + UI 占位。
+
+详见 `docs/mock-data-and-api-readiness-review.md` § DTO Strict vs Display Fallback。本轮仅记录，不改解析行为。
+
 ## 全局索引
 
 | 模块 | Remote 开关 | 默认 | Remote repository | Remote datasource | DTO / Mapper | Endpoint skeleton | Auth policy | 测试 | 主要 defer |

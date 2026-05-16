@@ -142,12 +142,25 @@ class EntitlementController extends Notifier<UserEntitlementState> {
     }
   }
 
+  /// **仅 MVP / mock 购买链路使用**，在本地 repository 直接写入会员状态。
+  ///
+  /// 生产 UI 不得调用此方法发放权益。真实支付（Store / Membership IAP）成功后，
+  /// 必须等待服务端订单与 Google/Apple 验单确认，再 refresh
+  /// entitlement / wallet / membership，不得以客户端本地 grant 代替服务端真相。
+  ///
+  /// 接入真实 API 后，应迁移至 mock repository 或测试 helper，移出生产权益发放路径。
   Future<void> grantMockMembership({required String source}) async {
     state = await ref
         .read(entitlementRepositoryProvider)
         .grantMockMembership(source: source);
   }
 
+  /// **仅 MVP / mock 充值链路使用**，在本地 repository 直接增加金币余额。
+  ///
+  /// 生产 UI 不得调用此方法发放金币。真实充值成功后须以服务端钱包余额为准，
+  /// 经订单验单与 `GET /wallet`（或等价接口）刷新，不得客户端自行累加余额。
+  ///
+  /// 接入真实 API 后，应迁移至 mock repository 或测试 helper，移出生产权益发放路径。
   Future<void> grantMockCoins({
     required int amount,
     required String source,

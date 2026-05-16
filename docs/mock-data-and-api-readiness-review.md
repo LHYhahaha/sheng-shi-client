@@ -12,6 +12,17 @@
 
 当前没有阻塞真实接口接入的 P0，但有若干 P1 数据契约需要在 Phase A/B 前收口，尤其是图片/视频资源 URL 归一化、支付价格 raw/display 拆分、Profile 聚合来源、Wallet 记录细分、播放源 sourceId/expiresAt/字幕/preview sprite 的真实字段映射。
 
+## DTO Strict vs Display Fallback（Record Only，封板 2026-05）
+
+**本轮不改 mapper 行为**，避免影响 mock 与现有测试。真实 API 联调前须逐 feature 收紧。
+
+| 类型 | 原则 | 示例字段 |
+| --- | --- | --- |
+| **Strict contract** | 缺失 / 类型错误 → mapper 失败或显式业务错误，不用展示兜底冒充成功 | `id`、`sourceId`、`hlsUrl`、`price`/`amount` raw、`accessStatus`、`orderId`、`membershipProductId`、`platformProductId` |
+| **Display fallback** | 允许空值 + UI 占位 / 本地 asset / 省略展示 | `title`、`subtitle`、`tips`、`cover` fallback、`description`、营销文案 |
+
+当前 skeleton mapper **仍允许部分 fallback** 以支撑 mock/skeleton 开发。联调阶段应对 strict 字段改为 fail-fast，display 字段保持可选。详见 `docs/remote-contract-index.md` 各模块 defer 与 mapper 测试。
+
 ## 模块现状与 API 对接建议
 
 | 模块 | 当前数据来源 | 当前 readiness | 未来 repository / endpoint 建议 | 主要注意点 |

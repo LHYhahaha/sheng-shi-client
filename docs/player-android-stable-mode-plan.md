@@ -1,11 +1,14 @@
 # Player Android Stable Mode Plan
 
+> **Document status: Current（封板策略）** — 性能档位与 denylist 以代码与
+> `device_performance_tier_rules.dart` 为准；下文 Phase 清单中未勾选项多为 **Historical**。
+
 This document records a standalone player optimization task for Android device
 smoothness. The goal is not to fork the whole player into two implementations.
 Instead, the player should keep one architecture and switch visual/runtime
 policies by platform or device capability.
 
-## Seal Status (封板, 2026-05-16)
+## Seal Status (封板, 2026-05-16) — Current
 
 - **rich / stable / ultraStable** 三档已落地；Android 默认 stable，iOS 默认 rich。
 - Android stable 规则（无 drag 时 video transform/opacity、无 press dim、无 pause scale）已在代码与 widget 测试中验收。
@@ -13,7 +16,18 @@ policies by platform or device capability.
 - **当前**：基础本地 denylist（Samsung A14 / SM-A145* / Galaxy A14）命中 → `low` → `ultraStable`。
 - **不引入**第三方 feed/player 库。
 
-## Background
+### 封板策略（Current）
+
+| 平台 / 条件 | 档位 |
+| --- | --- |
+| Android 默认 | `stable` |
+| Android 低端 denylist / `low` tier | `ultraStable` |
+| iOS 默认 | `rich` |
+| 实现方式 | 单播放器 + `PlayerPerformancePolicy`，**非** Android/iOS 两套实现 |
+
+后续仅做 **Phase B** 真机 model/RAM 填入 probe；不继续拆 engine、不生产化 local proxy。
+
+## Background — Historical context
 
 Recent player-feed work reduced several obvious bottlenecks:
 

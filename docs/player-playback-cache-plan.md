@@ -1,7 +1,20 @@
 # Player Playback And Cache Plan
 
+> **Document status: Historical Plan / Current Decision**
+>
+> 本文档保留预研与历史方案讨论。**当前产品结论（Current）** 见下框；勿按全文推进 local cache/proxy 生产化。
+>
+> | Current decision | |
+> | --- | --- |
+> | Local HLS cache/proxy | **不生产化**；仅 diagnostic spike（`PLAYER_HLS_LOCAL_PROXY_SPIKE`） |
+> | Session window | **不扩大**；prepared/retained cap 0..1 |
+> | 保留能力 | HLS source resolve、轻量 playlist/segment preload、prepared/retained window、runtime performance policy |
+> | Local proxy 文档 | 见 `docs/player-local-hls-proxy-cache.md`（**Diagnostic**） |
+>
+> ---
+
 This plan covers Player and For You playback reliability, loading experience,
-preload strategy, and future HTTP/CDN cache boundaries.
+preload strategy, and future HTTP/CDN cache boundaries. **以下内容多为 Historical。**
 
 ## Current Problems
 

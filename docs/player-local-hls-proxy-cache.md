@@ -1,8 +1,16 @@
 # Player Local HLS Proxy / Cache Decision
 
-This document explains the current decision around local HLS proxy/cache for
+> **Document status: Diagnostic Spike（非产品路线）**
+>
+> - **默认关闭**；仅 `--dart-define=PLAYER_HLS_LOCAL_PROXY_SPIKE=true` 本地手动诊断。
+> - **不接** `AppRuntimeConfig` / remote featureFlags / `RuntimeFeatureFlagKeys`。
+> - **不作为** 产品能力；不建议生产化，除非未来单独立项 HLS proxy/cache 项目。
+> - 实现代码（`hls_local_proxy_server.dart` 等）**保留**供实验与对比 timing，勿删。
+
+This document explains the diagnostic spike around local HLS proxy/cache for
 the short-drama player. It should be read before adding or enabling any local
-HLS cache, localhost proxy, segment cache, or offline-like playback workaround.
+HLS cache, localhost proxy, segment cache, or offline-like playback workaround
+**outside** the dart-define spike path.
 
 ## Current Decision
 

@@ -1,11 +1,12 @@
 # Player Feed Engine Refactor Plan
 
-This document records the structural refactor plan for the short-drama player
-feed. The goal is to solve Android swipe jank and locked-episode flow
-instability at the architecture level instead of continuing with small patches
-inside `PlayerPage`.
+> **Document status: Current (封板结论)** — 下文「Why / Current Vs Target / Phase R1–R7」为
+> **Historical** 实施记录；**以本节 Seal 与架构结论为准**。勿按过期 “likely new files” 继续拆文件。
 
-## Mainline Seal (封板, 2026-05-16)
+This document records the structural refactor plan for the short-drama player
+feed. The refactor **已完成并封板**；后续仅在真实 API、线上指标或明确 P0 时再评估 engine 变更。
+
+## Mainline Seal (封板, 2026-05-16) — Current
 
 **播放器主线已封板。** 后续仅保留 **Low-end Android Policy** 优化线（`ultraStable`、设备分级 override），不再大拆 `PlayerFeedEngine` / Coordinator 文件结构。
 
@@ -17,9 +18,25 @@ inside `PlayerPage`.
 | 真实 `Video` 仅在顶层 active surface | **Done** |
 | `PlaybackController` 仅 media truth | **Done** |
 | 开源 feed/player 库 | **不引入**；仅参考 pool/reconcile 思想 |
-| 独立 Access/Playback coordinator 文件 | **Defer**（现有 engine + runtime 已够用） |
+| 独立 Access/Playback coordinator 文件 | **Defer / 不再拆**（见下） |
 
-## Why This Refactor Is Needed
+### 何时才允许重新拆 PlayerFeedEngine（Current policy）
+
+仅在以下任一条件成立时重新立项，**不**为局部优化或文档完整性单独拆文件：
+
+- 真实播放/权益 API 上线后，现有 engine 边界无法承载新契约（有线上证据）；
+- 线上 P0（卡顿、错播、权益事故）归因于 engine 职责过载（有 metrics）；
+- 产品明确要求的新播放形态且无法以 policy / runtime config 扩展。
+
+**明确不做：** 继续拆 `AccessCoordinator` / `PlaybackCoordinator` 独立文件；引入第三方 feed/player 库；扩大 session window；PageView 内多 Video。
+
+### 封板策略结论（Current）
+
+- **Android** 默认 `stable`；低端 denylist / `low` tier → `ultraStable`。
+- **iOS** 默认 `rich`（单实现 + policy，非双播放器 codebase）。
+- **drag** 不触发 runtime；**settled** 后才 evaluate / play / preload / sheet。
+
+## Why This Refactor Is Needed — Historical
 
 The current player has already fixed several obvious issues:
 
@@ -40,7 +57,7 @@ The next phase should introduce a real feed player engine so that dragging,
 playback, entitlement, overlays, and platform performance policy have clear
 boundaries.
 
-## Current Vs Target
+## Current Vs Target — Historical (pre-seal planning)
 
 Current implementation status:
 
@@ -404,31 +421,20 @@ Last updated: 2026-05-16 (mainline seal / code-quality pass).
 - 不扩大 session window；不增加 PageView 内 Video；不大改 `PlayerFeedEngine`。
 - 复杂 RAM/机型真机识别留 Phase B；A14 可用 `devicePerformanceTierOverrideProvider` → `low` 观测 ultraStable。
 
-## Files Expected To Change
+## Implemented Files (Seal Snapshot) — Current
 
-Likely new files:
+以下为**已落地**结构（非待办）。**不再**新增 `player_access_coordinator.dart` /
+`player_playback_coordinator.dart` 等平行文件。
 
-- `lib/features/player/application/player_feed_engine.dart`
-- `lib/features/player/application/player_access_coordinator.dart`
-- `lib/features/player/application/player_overlay_coordinator.dart`
-- `lib/features/player/application/player_playback_coordinator.dart`
-- `lib/features/player/application/player_performance_policy.dart`
-
-Likely modified files:
-
-- `lib/features/player/presentation/pages/player_page.dart`
-- `lib/features/player/presentation/widgets/player_chrome.dart`
-- `lib/features/player/presentation/widgets/player_playback_layer.dart`
-- `lib/features/player/application/player_playback_controller.dart`
-- `lib/features/player/application/player_viewport_controller.dart`
-
-Tests:
-
-- `test/features/player/player_page_test.dart`
-- `test/features/player/player_playback_controller_test.dart`
-- new engine/coordinator tests under `test/features/player/`
-- `integration_test/app_smoke_test.dart`
-- optional Android-focused scroll stress integration test
+| 角色 | 路径 |
+| --- | --- |
+| UI host | `lib/features/player/presentation/pages/player_page.dart` |
+| Application 入口 | `lib/features/player/application/player_feed_engine.dart` |
+| Viewport / Runtime / Overlay | `player_viewport_controller.dart`、`player_runtime_coordinator.dart`、`player_overlay_orchestrator.dart` |
+| Media truth | `player_playback_controller.dart` |
+| Policy | `player_performance_policy.dart`、`player_performance_policy_provider.dart` |
+| 单 Video surface | `player_playback_layer.dart`（active surface） |
+| 测试 | `test/features/player/player_feed_engine_test.dart`、`player_page_test.dart`、`integration_test/app_smoke_test.dart` |
 
 ## Explicit Constraints
 
