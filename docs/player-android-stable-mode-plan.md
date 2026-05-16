@@ -27,17 +27,16 @@ policies by platform or device capability.
 
 ### 拖动时 Video surface 策略（Current）
 
-| 档位 | 拖动时可见 | 拖动时跟手 Transform | opacity 压暗 | chrome 按压渐隐 | pause scale | rich 转场 |
+| 档位 | 可见 | 跟手 Transform | opacity 压暗 | chrome 按压渐隐 | pause scale | rich 转场 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `rich` | 是 | 是 | 是 | 是 | 是 | 是 |
-| `stable` | 是 | 是 | 否 | 否 | 否 | 否 |
-| `ultraStable` | 否 | 否 | 否 | 否 | 否 | 否 |
+| `rich` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `stable` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `ultraStable` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 当前结论：
 
-- `stable` 不能固定 Video surface。真机反馈显示“视频不动、其他内容滑动”会造成明显割裂。
-- `stable` 只做必要的 `Transform.translate` 跟手，不做 opacity、chrome dim、scale、rich transition 等额外动画。
-- 只有 `ultraStable` 在拖动时隐藏 Video surface，用于低端机优先保证手势响应。
+- `stable` 要点：与 `rich` 一样用 `Transform.translate` 跟 PageView；拖动时 opacity 恒为 1.0，无压暗/渐隐/缩放等额外动画。
+- `ultraStable`：拖动时切整层 `SizedBox.shrink()`，不挂 surface，优先保证低端机手势流畅。
 - 不允许为了跟手把多个真实 `Video` 放回 PageView item；真实 Video 仍只在顶层 active playback surface。
 
 后续仅做 **Phase B** 真机 model/RAM 填入 probe；不继续拆 engine、不生产化 local proxy。
