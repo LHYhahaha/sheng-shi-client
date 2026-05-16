@@ -89,9 +89,7 @@ void main() {
       },
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('player_detail_sheet_expand')),
-    );
+    await tester.tap(find.byKey(const ValueKey('player_detail_sheet_expand')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('1'));
     await tester.pumpAndSettle();
@@ -101,10 +99,7 @@ void main() {
   });
 
   testWidgets('top chrome is outside scrollable content', (tester) async {
-    await _openDetailSheet(
-      tester,
-      initialTab: PlayerDetailTab.synopsis,
-    );
+    await _openDetailSheet(tester, initialTab: PlayerDetailTab.synopsis);
 
     final scrollView = find.descendant(
       of: find.byType(PlayerDetailSheet),

@@ -1494,13 +1494,16 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    expect(find.text('Recharge to unlock'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('player_recharge_unlock_info')),
       findsOneWidget,
     );
-    expect(find.text('Required'), findsOneWidget);
-    expect(find.text('Balance'), findsOneWidget);
+    expect(find.text('Price:'), findsOneWidget);
+    expect(find.text('Balance:'), findsOneWidget);
     expect(find.text('60'), findsOneWidget);
     expect(find.text('20'), findsOneWidget);
     expect(find.text('+9%'), findsOneWidget);
@@ -1536,12 +1539,18 @@ void main() {
     await tester.fling(find.byType(PageView), const Offset(0, -700), 1600);
     await tester.pump();
 
-    expect(find.text('Recharge to unlock'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsNothing,
+    );
 
     await _pumpAutoUnlockSheet(tester);
 
     expect(find.text('EP.02'), findsOneWidget);
-    expect(find.text('Recharge to unlock'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('auto unlock sheet can reappear after leaving dismissed item', (
@@ -1565,7 +1574,10 @@ void main() {
     await _pumpAutoUnlockSheet(tester);
 
     expect(find.text('EP.02'), findsOneWidget);
-    expect(find.text('Recharge to unlock'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsOneWidget,
+    );
 
     await tester.tap(
       find.byKey(const ValueKey('player_recharge_unlock_close')),
@@ -1575,7 +1587,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('EP.02'), findsOneWidget);
-    expect(find.text('Recharge to unlock'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsNothing,
+    );
 
     await tester.drag(find.byType(PageView), const Offset(0, -500));
     await tester.pumpAndSettle();
@@ -1585,7 +1600,10 @@ void main() {
     await _pumpAutoUnlockSheet(tester);
 
     expect(find.text('EP.02'), findsOneWidget);
-    expect(find.text('Recharge to unlock'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('dragging toward locked episode does not run runtime work', (
@@ -1620,7 +1638,10 @@ void main() {
     await tester.drag(find.byType(PageView), const Offset(0, -500));
     await tester.pump(const Duration(milliseconds: 16));
 
-    expect(find.text('Recharge to unlock'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsNothing,
+    );
     expect(playbackSession.pauseCount, 0);
     expect(playbackSession.playCount, 0);
     expect(playbackSession.openedSources, [_mockVideoUrl]);
@@ -1650,13 +1671,19 @@ void main() {
 
       await tester.fling(find.byType(PageView), const Offset(0, -700), 1600);
       await tester.pump(const Duration(milliseconds: 80));
-      expect(find.text('Recharge to unlock'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('player_recharge_unlock_close')),
+        findsNothing,
+      );
 
       await tester.fling(find.byType(PageView), const Offset(0, -700), 1600);
       await _pumpAutoUnlockSheet(tester);
 
       expect(find.text('EP.03'), findsOneWidget);
-      expect(find.text('Recharge to unlock'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('player_recharge_unlock_close')),
+        findsOneWidget,
+      );
       expect(playbackSession.openedSources, [_mockVideoUrl]);
     },
   );
@@ -1757,7 +1784,10 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    expect(find.text('Recharge to unlock'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsOneWidget,
+    );
 
     await tester.tap(
       find.byKey(const ValueKey('player_recharge_membership_weekly_vip_promo')),
@@ -1771,7 +1801,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 220));
     await tester.pumpAndSettle();
 
-    expect(find.text('Recharge to unlock'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsNothing,
+    );
     expect(find.text('Unlock Now'), findsOneWidget);
     expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
   });
@@ -1843,7 +1876,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Recharge to unlock'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsNothing,
+    );
     expect(find.text('Unlock Now'), findsOneWidget);
     expect(find.byKey(const ValueKey('player_unlock_button')), findsOneWidget);
     expect(find.text('EP.02'), findsOneWidget);
@@ -1874,7 +1910,10 @@ void main() {
     await tester.drag(find.byType(PageView), const Offset(0, -500));
     await _pumpAutoUnlockSheet(tester);
     expect(find.text('EP.02'), findsOneWidget);
-    expect(find.text('Recharge to unlock'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsOneWidget,
+    );
     expect(playbackSession.pauseCount, greaterThan(0));
     expect(playbackSession.openedSources, [_mockVideoUrl]);
 
@@ -1883,7 +1922,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Unlock Now'), findsOneWidget);
-    expect(find.text('Recharge to unlock'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsNothing,
+    );
 
     await tester.drag(find.byType(PageView), const Offset(0, -500));
     await _pumpAutoUnlockSheet(tester);
@@ -1931,7 +1973,10 @@ void main() {
       expect(playbackSession.pauseCount, greaterThan(0));
       expect(playbackSession.openedSources, [_mockVideoUrl]);
 
-      if (find.text('Recharge to unlock').evaluate().isNotEmpty) {
+      if (find
+          .byKey(const ValueKey('player_recharge_unlock_close'))
+          .evaluate()
+          .isNotEmpty) {
         await tester.tap(
           find.byKey(const ValueKey('player_recharge_unlock_close')),
         );
@@ -1983,20 +2028,29 @@ void main() {
       await tester.drag(find.byType(PageView), const Offset(0, -500));
       await _pumpAutoUnlockSheet(tester);
       expect(find.text('EP.02'), findsOneWidget);
-      expect(find.text('Recharge to unlock'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('player_recharge_unlock_close')),
+        findsOneWidget,
+      );
       expect(playbackSession.openedSources, [_mockVideoUrl]);
 
       await tester.tap(
         find.byKey(const ValueKey('player_recharge_unlock_close')),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Recharge to unlock'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('player_recharge_unlock_close')),
+        findsNothing,
+      );
 
       await tester.drag(find.byType(PageView), const Offset(0, -500));
       await _pumpAutoUnlockSheet(tester);
 
       expect(find.text('EP.03'), findsOneWidget);
-      expect(find.text('Recharge to unlock'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('player_recharge_unlock_close')),
+        findsOneWidget,
+      );
       expect(playbackSession.openedSources, [_mockVideoUrl]);
       expect(preloadManager.preloadedItemIds, isNot(contains('drama-a-ep-2')));
       expect(preloadManager.preloadedItemIds, isNot(contains('drama-a-ep-3')));
@@ -2020,7 +2074,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 80));
 
     expect(find.text('Unlock Now'), findsOneWidget);
-    expect(find.text('Recharge to unlock'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsNothing,
+    );
 
     await _pumpAutoUnlockSheet(tester);
 
@@ -2048,7 +2105,10 @@ void main() {
     await tester.tap(find.text('2'));
     await _pumpAutoUnlockSheet(tester);
 
-    expect(find.text('Recharge to unlock'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsOneWidget,
+    );
     expect(playbackSession.pauseCount, greaterThan(0));
     expect(playbackSession.playCount, 0);
   });
@@ -2079,20 +2139,29 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Recharge to unlock'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsNothing,
+    );
     expect(find.text('Unlock Now'), findsOneWidget);
     expect(playbackSession.pauseCount, pauseCountAfterLock);
     expect(playbackSession.playCount, 0);
 
     await _pumpAutoUnlockSheet(tester);
 
-    expect(find.text('Recharge to unlock'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsNothing,
+    );
     expect(find.text('Unlock Now'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('player_unlock_button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Recharge to unlock'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('completed playback auto advances to next episode', (
@@ -2253,12 +2322,18 @@ void main() {
     await tester.tap(find.text('2'));
     await _pumpAutoUnlockSheet(tester);
     expect(find.text('Unlock Now'), findsOneWidget);
-    expect(find.text('Recharge to unlock'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsOneWidget,
+    );
 
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
 
-    expect(find.text('Recharge to unlock'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsNothing,
+    );
     expect(find.text('Unlock Now'), findsOneWidget);
 
     expect(find.text('EP.02'), findsOneWidget);
@@ -2388,9 +2463,7 @@ double _topBarOpacity(WidgetTester tester) {
 }
 
 Future<void> _expandPlayerDetailSheet(WidgetTester tester) async {
-  await tester.tap(
-    find.byKey(const ValueKey('player_detail_sheet_expand')),
-  );
+  await tester.tap(find.byKey(const ValueKey('player_detail_sheet_expand')));
   await tester.pumpAndSettle();
 }
 
@@ -2398,7 +2471,10 @@ Future<void> _pumpAutoUnlockSheet(WidgetTester tester) async {
   for (var i = 0; i < 80; i += 1) {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump(Duration.zero);
-    if (find.text('Recharge to unlock').evaluate().isNotEmpty ||
+    if (find
+            .byKey(const ValueKey('player_recharge_unlock_close'))
+            .evaluate()
+            .isNotEmpty ||
         find
             .byKey(const ValueKey('player_coin_unlock_confirm'))
             .evaluate()

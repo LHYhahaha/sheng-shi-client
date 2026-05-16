@@ -531,7 +531,10 @@ void main() {
         }
         await _pumpAutoUnlockSheet(tester);
 
-        expect(find.text('Recharge to unlock'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('player_recharge_unlock_close')),
+          findsOneWidget,
+        );
         expect(forYouSession.pauseCount, greaterThan(0));
 
         await tester.tap(
