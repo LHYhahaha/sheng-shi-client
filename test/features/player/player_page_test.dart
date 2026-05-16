@@ -923,6 +923,10 @@ void main() {
       find.byKey(const ValueKey('player_top_bar_repaint_boundary')),
       findsOneWidget,
     );
+    expect(find.byKey(const ValueKey('player_back_button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_episode_label')), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_speed_button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_more_button')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('player_download_button')),
       findsOneWidget,
@@ -932,37 +936,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('player_seek_bar')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('player_immersive_button')),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('single drama immersive icon toggles chrome mode', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      _buildPlayerApp(
-        repository: _FakePlayerFeedRepository.unlocked(),
-        playbackSessionFactory: () => _FakePlaybackSession(),
-      ),
-    );
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const ValueKey('player_immersive_button')));
-    await tester.pump(const Duration(milliseconds: 300));
-
-    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
-    expect(chrome.showChromeOverlays, isFalse);
-
-    await tester.tap(find.byKey(const ValueKey('player_video_tap_layer')));
-    await tester.pump(const Duration(milliseconds: 300));
-
-    final chromeAfterExit = tester.widget<PlayerChrome>(
-      find.byType(PlayerChrome),
-    );
-    expect(chromeAfterExit.showChromeOverlays, isTrue);
+    expect(find.byKey(const ValueKey('player_immersive_button')), findsNothing);
   });
 
   testWidgets('single drama tap toggles immersive chrome while playing', (

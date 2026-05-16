@@ -955,8 +955,6 @@ class PlayerTopBar extends StatelessWidget {
     this.overlayOpacityListenable,
     required this.onBackTap,
     required this.onSpeedTap,
-    required this.isImmersiveMode,
-    required this.onImmersiveTap,
   });
 
   final int episodeNumber;
@@ -965,8 +963,6 @@ class PlayerTopBar extends StatelessWidget {
   final ValueListenable<double>? overlayOpacityListenable;
   final VoidCallback onBackTap;
   final VoidCallback onSpeedTap;
-  final bool isImmersiveMode;
-  final VoidCallback onImmersiveTap;
 
   @override
   Widget build(BuildContext context) {
@@ -990,8 +986,6 @@ class PlayerTopBar extends StatelessWidget {
             playbackRate: playbackRate,
             onBackTap: onBackTap,
             onSpeedTap: onSpeedTap,
-            isImmersiveMode: isImmersiveMode,
-            onImmersiveTap: onImmersiveTap,
           ),
         ),
       );
@@ -1008,8 +1002,6 @@ class PlayerTopBar extends StatelessWidget {
           playbackRate: playbackRate,
           onBackTap: onBackTap,
           onSpeedTap: onSpeedTap,
-          isImmersiveMode: isImmersiveMode,
-          onImmersiveTap: onImmersiveTap,
         ),
       ),
     );
@@ -1023,16 +1015,12 @@ class PlayerTopBarContent extends StatelessWidget {
     required this.playbackRate,
     required this.onBackTap,
     required this.onSpeedTap,
-    required this.isImmersiveMode,
-    required this.onImmersiveTap,
   });
 
   final int episodeNumber;
   final double playbackRate;
   final VoidCallback onBackTap;
   final VoidCallback onSpeedTap;
-  final bool isImmersiveMode;
-  final VoidCallback onImmersiveTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1097,24 +1085,6 @@ class PlayerTopBarContent extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 14),
-              GestureDetector(
-                key: const ValueKey('player_immersive_button'),
-                behavior: HitTestBehavior.opaque,
-                onTap: onImmersiveTap,
-                child: SizedBox.square(
-                  dimension: PlayerTopBarMetrics.height,
-                  child: Center(
-                    child: Icon(
-                      isImmersiveMode
-                          ? Icons.fullscreen_exit_rounded
-                          : Icons.fullscreen_rounded,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
               const Icon(
                 key: ValueKey('player_more_button'),
                 Icons.more_horiz,
