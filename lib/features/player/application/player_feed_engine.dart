@@ -163,6 +163,11 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     if (viewport.settledItemId != item.id || viewport.settledIndex != index) {
       return;
     }
+    if (previousItemId != null && previousItemId != item.id) {
+      // 自动解锁弹窗的 dismiss 只对“当前这次停留”生效。
+      // 用户离开该 item 后，下次再滑回来应重新允许自动弹出。
+      _overlay.clearDismissed(previousItemId);
+    }
 
     await _runtime.onViewportSettled(
       item: item,

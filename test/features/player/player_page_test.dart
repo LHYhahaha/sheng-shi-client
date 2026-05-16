@@ -1543,6 +1543,50 @@ void main() {
     expect(find.text('Recharge to unlock'), findsOneWidget);
   });
 
+  testWidgets('auto unlock sheet can reappear after leaving dismissed item', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository._(
+          items: _itemsWithAccessPattern([
+            _EpisodeAccessFixture.free(1, _mockVideoUrl),
+            _EpisodeAccessFixture.locked(2, _mockSecondVideoUrl),
+            _EpisodeAccessFixture.free(3, _mockThirdVideoUrl),
+          ]),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(PageView), const Offset(0, -500));
+    await _pumpAutoUnlockSheet(tester);
+
+    expect(find.text('EP.02'), findsOneWidget);
+    expect(find.text('Recharge to unlock'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+    );
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 1200));
+    await tester.pumpAndSettle();
+
+    expect(find.text('EP.02'), findsOneWidget);
+    expect(find.text('Recharge to unlock'), findsNothing);
+
+    await tester.drag(find.byType(PageView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+    expect(find.text('EP.03'), findsOneWidget);
+
+    await tester.drag(find.byType(PageView), const Offset(0, 500));
+    await _pumpAutoUnlockSheet(tester);
+
+    expect(find.text('EP.02'), findsOneWidget);
+    expect(find.text('Recharge to unlock'), findsOneWidget);
+  });
+
   testWidgets('dragging toward locked episode does not run runtime work', (
     tester,
   ) async {
