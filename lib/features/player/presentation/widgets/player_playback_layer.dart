@@ -175,33 +175,6 @@ class PlayerPlaybackShellSnapshot {
   );
 }
 
-class _PlaybackEndedSnapshot {
-  const _PlaybackEndedSnapshot({
-    required this.currentItemId,
-    required this.hasEnded,
-  });
-
-  factory _PlaybackEndedSnapshot.fromState(PlayerPlaybackState state) {
-    return _PlaybackEndedSnapshot(
-      currentItemId: state.currentItemId,
-      hasEnded: state.hasEnded,
-    );
-  }
-
-  final String? currentItemId;
-  final bool hasEnded;
-
-  @override
-  bool operator ==(Object other) {
-    return other is _PlaybackEndedSnapshot &&
-        other.currentItemId == currentItemId &&
-        other.hasEnded == hasEnded;
-  }
-
-  @override
-  int get hashCode => Object.hash(currentItemId, hasEnded);
-}
-
 class PlayerPlaybackRenderSnapshot {
   const PlayerPlaybackRenderSnapshot({
     required this.videoController,
@@ -356,6 +329,7 @@ class PlayerSeekBarSnapshot {
 
 class ActivePlaybackSurfaceOverlay extends ConsumerStatefulWidget {
   const ActivePlaybackSurfaceOverlay({
+    super.key,
     required this.sessionKey,
     required this.itemId,
     required this.currentIndex,
@@ -618,6 +592,7 @@ class ActivePlaybackSurfaceOverlayState
 
 class PlayerPlaybackControlsConsumer extends ConsumerStatefulWidget {
   const PlayerPlaybackControlsConsumer({
+    super.key,
     required this.sessionKey,
     required this.itemId,
     required this.onTogglePlay,
@@ -720,6 +695,7 @@ class PlayerPlaybackControlsConsumerState
 
 class PlayerSeekBarConsumer extends ConsumerWidget {
   const PlayerSeekBarConsumer({
+    super.key,
     required this.sessionKey,
     required this.thumbnailAssetPath,
     required this.onSeekStart,
@@ -766,7 +742,7 @@ class PlayerSeekBarConsumer extends ConsumerWidget {
 }
 
 class PlaybackLoadingOverlay extends StatelessWidget {
-  const PlaybackLoadingOverlay();
+  const PlaybackLoadingOverlay({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -789,7 +765,7 @@ class PlaybackLoadingOverlay extends StatelessWidget {
 }
 
 class PlaybackRetryOverlay extends StatelessWidget {
-  const PlaybackRetryOverlay({required this.onRetry});
+  const PlaybackRetryOverlay({super.key, required this.onRetry});
 
   final VoidCallback onRetry;
 
@@ -827,7 +803,7 @@ class PlaybackRetryOverlay extends StatelessWidget {
 }
 
 class CenterPlayButton extends StatelessWidget {
-  const CenterPlayButton({required this.onTap});
+  const CenterPlayButton({super.key, required this.onTap});
 
   final VoidCallback onTap;
 
@@ -857,7 +833,7 @@ class CenterPlayButton extends StatelessWidget {
 }
 
 class PauseFeedbackIcon extends StatelessWidget {
-  const PauseFeedbackIcon();
+  const PauseFeedbackIcon({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -892,6 +868,7 @@ class PauseFeedbackIcon extends StatelessWidget {
 
 class PlayerTopBar extends StatelessWidget {
   const PlayerTopBar({
+    super.key,
     required this.episodeNumber,
     required this.playbackRate,
     required this.overlayOpacity,
@@ -953,6 +930,7 @@ class PlayerTopBar extends StatelessWidget {
 
 class PlayerTopBarContent extends StatelessWidget {
   const PlayerTopBarContent({
+    super.key,
     required this.episodeNumber,
     required this.playbackRate,
     required this.onBackTap,
@@ -1050,6 +1028,7 @@ class PlayerTopBarContent extends StatelessWidget {
 
 class PlayerStateMessage extends StatelessWidget {
   const PlayerStateMessage({
+    super.key,
     required this.icon,
     required this.message,
     this.actionLabel,
@@ -1092,7 +1071,7 @@ class PlayerStateMessage extends StatelessWidget {
 }
 
 class UnavailableEpisodeOverlay extends StatelessWidget {
-  const UnavailableEpisodeOverlay({required this.message});
+  const UnavailableEpisodeOverlay({super.key, required this.message});
 
   final String message;
 
