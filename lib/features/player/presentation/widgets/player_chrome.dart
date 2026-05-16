@@ -960,12 +960,7 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final bubbleWidth = 116.0;
-        final thumbnailWidth = 82.0;
-        final bubbleLeft = (progress * width - bubbleWidth / 2).clamp(
-          0.0,
-          (width - bubbleWidth).clamp(0.0, width),
-        );
+        final thumbnailWidth = 124.0;
         final thumbnailLeft = (progress * width - thumbnailWidth / 2).clamp(
           0.0,
           (width - thumbnailWidth).clamp(0.0, width),
@@ -996,25 +991,17 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
                 }
               : null,
           child: SizedBox(
-            height: widget.isDragging ? 98 : 20,
+            height: widget.isDragging ? 112 : 20,
             child: Stack(
               clipBehavior: Clip.none,
               children: [
                 if (widget.isDragging)
                   Positioned(
                     left: thumbnailLeft,
-                    bottom: 45,
+                    bottom: 30,
                     width: thumbnailWidth,
                     child: _SeekThumbnailPreview(
                       assetPath: widget.thumbnailAssetPath,
-                    ),
-                  ),
-                if (widget.isDragging)
-                  Positioned(
-                    left: bubbleLeft,
-                    bottom: 14,
-                    width: bubbleWidth,
-                    child: _SeekTimeBubble(
                       position: widget.previewPosition ?? widget.position,
                       duration: widget.duration,
                     ),
@@ -1100,32 +1087,76 @@ class _SeekTrackLoadingAnimation extends StatelessWidget {
   }
 }
 
-class _SeekTimeBubble extends StatelessWidget {
-  const _SeekTimeBubble({required this.position, required this.duration});
+class _SeekThumbnailPreview extends StatelessWidget {
+  const _SeekThumbnailPreview({
+    required this.assetPath,
+    required this.position,
+    required this.duration,
+  });
 
+  final String assetPath;
   final Duration position;
   final Duration duration;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    return Container(
+      key: const ValueKey('player_seek_thumbnail_preview'),
+      height: 70,
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.62),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        child: Text(
-          '${_format(position)} / ${_format(duration)}',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            height: 14 / 12,
+        color: Colors.black.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.34)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.38),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
-        ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(assetPath, fit: BoxFit.cover),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.56),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 8,
+            right: 8,
+            bottom: 6,
+            child: Text(
+              '${_format(position)} / ${_format(duration)}',
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                height: 13 / 11,
+                shadows: [
+                  Shadow(
+                    color: Colors.black54,
+                    blurRadius: 4,
+                    offset: Offset(0, 1),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1135,34 +1166,6 @@ class _SeekTimeBubble extends StatelessWidget {
     final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
     final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
-  }
-}
-
-class _SeekThumbnailPreview extends StatelessWidget {
-  const _SeekThumbnailPreview({required this.assetPath});
-
-  final String assetPath;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      key: const ValueKey('player_seek_thumbnail_preview'),
-      height: 52,
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.58),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Image.asset(assetPath, fit: BoxFit.cover),
-    );
   }
 }
 
