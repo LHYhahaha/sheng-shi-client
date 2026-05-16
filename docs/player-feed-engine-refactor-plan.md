@@ -26,6 +26,34 @@ The next phase should introduce a real feed player engine so that dragging,
 playback, entitlement, overlays, and platform performance policy have clear
 boundaries.
 
+## Current Vs Target
+
+Current implementation status:
+
+- settled-only runtime has been partially implemented;
+- real `Video` is already outside PageView item shells;
+- PageView item shells are lighter than before;
+- drag page offset no longer writes high-frequency Riverpod state;
+- locked source open/prepare is blocked before authorization;
+- several engine-like files may already exist in work-in-progress branches.
+
+Target implementation:
+
+- `PlayerFeedEngine` becomes the single application-layer entry point for
+  viewport, access, playback, overlay, and performance policy coordination;
+- Android defaults to stable mode;
+- iOS can keep rich motion through policy;
+- PageView drag never becomes a playback/access command bus.
+
+Important current gap:
+
+- The recent scroll-follow behavior is closer to rich mode. It should not be
+  treated as the Android stable target.
+- Android stable specifically means no real video-surface transform or opacity
+  animation during drag.
+- If a release package still uses scroll-follow transform on Android, Phase R6
+  is not complete.
+
 ## Core Principle
 
 During drag, the player feed must only move lightweight visual shells.
@@ -99,11 +127,44 @@ iOS rich mode may keep richer effects where smooth:
 Important: iOS and Android must share the same engine. Do not fork business
 logic into two player implementations.
 
+## Open Source References
+
+The plan should stay custom because this product combines short-drama playback,
+single-drama episode flow, entitlement, coin unlock, recharge, membership, HLS,
+and platform-specific performance behavior. Still, open-source projects can be
+used as architecture references.
+
+| Reference | Type | Useful Ideas | Not A Fit For |
+| --- | --- | --- | --- |
+| `video_pool` | Flutter library with `media_kit` support | fixed player pool, source swap/reuse, visibility threshold, lifecycle reconciliation, memory/thermal awareness | entitlement, unlock sheets, single-drama EP business, current UI contract |
+| `flutter_video_feed` | Flutter demo app | vertical feed structure, MVVM-style feed separation, LRU-style lifecycle ideas | not a drop-in package, no entitlement/payment flow |
+| `tiktoklikescroller` | scroll physics package | vertical full-screen snapping and threshold behavior | playback, preload, surface lifecycle, access control |
+| `progressive_video_cache` | video cache package | future HLS/segment cache ideas | drag lifecycle, PageView runtime orchestration, entitlement |
+| `media_kit` examples | playback primitives | player/session/media API behavior | feed orchestration must remain app-specific |
+
+Recommended use:
+
+- Keep custom `ViewportController`, `AccessCoordinator`, and
+  `OverlayCoordinator` because these are product-specific.
+- Borrow the `video_pool` style of fixed player pool/reconcile for the playback
+  coordinator, but do not replace the whole player page with a third-party feed
+  widget.
+- Do not adopt scroll-only packages as the main fix. They do not address
+  media-session lifecycle or unlock flows.
+
+Decision:
+
+- Build `PlayerFeedEngine` in this codebase.
+- Use `video_pool` as the closest reference for playback pooling and lifecycle
+  reconciliation.
+- Avoid directly introducing a third-party feed widget until the custom engine
+  path is proven insufficient.
+
 ## Implementation Phases
 
-### Phase R1: Engine Skeleton
+### Phase R1a: Engine Skeleton
 
-Goal: introduce the engine boundary without changing visuals.
+Goal: introduce the engine boundary without intentionally changing visuals.
 
 Tasks:
 
@@ -122,6 +183,24 @@ Acceptance:
 - `PlayerPage` can read engine state.
 - Drag still behaves as before.
 - No entitlement/playback behavior change yet.
+
+### Phase R1b: Policy Wiring
+
+Goal: introduce policy switches without forcing all platforms into the same
+motion model.
+
+Tasks:
+
+- Add `PlayerPerformancePolicy`.
+- Android selects stable by default.
+- iOS selects rich by default.
+- Tests can override policy.
+- Existing rich scroll-follow behavior must be guarded behind policy.
+
+Acceptance:
+
+- Android stable can disable rich motion without deleting rich behavior.
+- iOS/rich can keep richer motion through the same engine.
 
 ### Phase R2: Runtime Commands Only After Settled
 
@@ -250,6 +329,23 @@ Metrics/logs:
 - memory/PSS before and after 10-15 swipes;
 - any jank/ANR/crash.
 
+## Implementation Status Checklist
+
+Use this checklist to avoid repeating completed work and to make review
+concrete.
+
+| Area | Status | Notes |
+| --- | --- | --- |
+| Real `Video` outside PageView item shell | Mostly done | Keep tests preventing real `Video` from returning to `PlayerChrome` / item shell. |
+| Drag page offset no high-frequency Riverpod write | Done | Keep page offset in lightweight listenable or viewport-local channel only. |
+| Runtime waits for settled item | Partially done | Must verify no direct `currentItem` listener still triggers playback/access work. |
+| Access presentation separated from UI shell | Partial | Needs a clear AccessCoordinator boundary. |
+| Overlay/sheet orchestration separated | Partial | Dwell, dismissed state, manual unlock, recharge -> unlock should move out of `PlayerPage`. |
+| PlaybackCoordinator separated | Partial | `PlayerPlaybackController` should stay media truth; command sequencing should move to coordinator/engine. |
+| Android stable policy | Not complete | Android must disable video transform/opacity and non-essential overlay animation. |
+| iOS rich policy | Not complete | Rich behavior should be policy-controlled, not implicit global behavior. |
+| Open-source reference decision | Planned | Borrow `video_pool` pooling/reconcile ideas; do not replace UI wholesale. |
+
 ## Files Expected To Change
 
 Likely new files:
@@ -296,4 +392,3 @@ Tests:
 - Existing unit/widget tests pass.
 - Android smoke passes.
 - Android release manual test shows materially improved swipe responsiveness.
-
