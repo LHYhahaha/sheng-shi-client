@@ -15,6 +15,7 @@ abstract final class _PlayerLayoutMetrics {
   static const forYouWatchNowBottom = 24.0;
   static const forYouMetaGap = 58.0;
   static const singleBottomFrameHeight = 32.0;
+  static const singleMetaBottom = 58.0;
   static const singleSeekBarBottom = 10.0;
 }
 
@@ -228,7 +229,9 @@ class _PlayerChromeState extends State<PlayerChrome> {
         ),
         _PlayerMetaLayer(
           content: content,
-          bottom: forYouLayout ? forYouMetaBottom : bottomInset + 91,
+          bottom: forYouLayout
+              ? forYouMetaBottom
+              : bottomInset + _PlayerLayoutMetrics.singleMetaBottom,
           forYouLayout: forYouLayout,
           overlayOpacity: overlayOpacity,
           overlayOpacityListenable: overlayOpacityListenable,
