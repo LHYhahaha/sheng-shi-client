@@ -11,7 +11,9 @@ import '../../domain/player_feed.dart';
 import 'player_chrome.dart';
 import 'player_playback_layer.dart';
 
-/// One PageView page: static chrome + settled-only interactive playback UI.
+/// PageView 单页轻量 shell：海报/文案/按钮，不含真实 Video（Video 在顶层 surface）。
+///
+/// 权益展示只读：经 [PlayerAccessPresenter]（与 engine 同源），不在此触发 evaluate/play。
 class PlayerFeedPageShell extends ConsumerWidget {
   const PlayerFeedPageShell({
     required this.sessionKey,
@@ -61,6 +63,7 @@ class PlayerFeedPageShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final entitlement = ref.watch(entitlementControllerProvider);
+    // 与 PlayerFeedEngine.accessPresentationFor 同源；勿在 select 内 ref.read。
     final accessPresentation = ref.watch(
       playerRuntimeCoordinatorProvider(sessionKey).select(
         (state) => state.accessPresenter.presentationFor(item, entitlement),

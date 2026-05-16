@@ -5,6 +5,20 @@ feed. The goal is to solve Android swipe jank and locked-episode flow
 instability at the architecture level instead of continuing with small patches
 inside `PlayerPage`.
 
+## Mainline Seal (封板, 2026-05-16)
+
+**播放器主线已封板。** 后续仅保留 **Low-end Android Policy** 优化线（`ultraStable`、设备分级 override），不再大拆 `PlayerFeedEngine` / Coordinator 文件结构。
+
+| 项 | 状态 |
+| --- | --- |
+| `PlayerPage` 为 UI host（PageView / surface / sheet） | **Done** |
+| `PlayerFeedEngine` 为应用层统一入口 | **Done** |
+| drag 不触发 runtime；settled 才 evaluate/play/preload/sheet | **Done** |
+| 真实 `Video` 仅在顶层 active surface | **Done** |
+| `PlaybackController` 仅 media truth | **Done** |
+| 开源 feed/player 库 | **不引入**；仅参考 pool/reconcile 思想 |
+| 独立 Access/Playback coordinator 文件 | **Defer**（现有 engine + runtime 已够用） |
+
 ## Why This Refactor Is Needed
 
 The current player has already fixed several obvious issues:
@@ -331,7 +345,7 @@ Metrics/logs:
 
 ## Implementation Status Checklist
 
-Last updated: 2026-05-16 (Low-end Android Player Policy pass).
+Last updated: 2026-05-16 (mainline seal / code-quality pass).
 
 | Area | Status | Notes |
 | --- | --- | --- |

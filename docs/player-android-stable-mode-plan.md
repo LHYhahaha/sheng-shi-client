@@ -5,6 +5,13 @@ smoothness. The goal is not to fork the whole player into two implementations.
 Instead, the player should keep one architecture and switch visual/runtime
 policies by platform or device capability.
 
+## Seal Status (封板, 2026-05-16)
+
+- **rich / stable / ultraStable** 三档已落地；Android 默认 stable，iOS 默认 rich。
+- Android stable 规则（无 drag 时 video transform/opacity、无 press dim、无 pause scale）已在代码与 widget 测试中验收。
+- **后续工作**：仅低端机 policy（`ultraStable`、预留 `playerPerformanceModeFromDeviceProvider`），**不**再拆第二套播放器或 Android/iOS 双实现。
+- **不引入**第三方 feed/player 库。
+
 ## Background
 
 Recent player-feed work reduced several obvious bottlenecks:

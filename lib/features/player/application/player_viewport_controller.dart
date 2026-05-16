@@ -9,8 +9,23 @@ final playerViewportControllerProvider =
       String
     >(PlayerViewportController.new);
 
-enum PlayerViewportScrollPhase { idle, dragging, settling }
+/// 视口手势阶段：drag 期间禁止 settled runtime（见 [PlayerFeedEngine]）。
+enum PlayerViewportScrollPhase {
+  /// 已落位，可执行 access/play/preload。
+  idle,
 
+  /// 用户手指拖动 PageView：仅更新 candidate，不 settled。
+  dragging,
+
+  /// 手指抬起、等待 PageView 惯性结束。
+  settling,
+}
+
+/// PageView 视口状态。
+///
+/// - [currentIndex] / [candidateIndex]：拖动中跟手页，可不同于 [settledIndex]。
+/// - [settledIndex] + [settledItemId]：唯一可触发 runtime 的落位项。
+/// - [generation]：settled 变更序号，供 listener 去重。
 class PlayerViewportState {
   const PlayerViewportState({
     required this.scrollPhase,
@@ -90,6 +105,7 @@ class PlayerViewportController extends Notifier<PlayerViewportState> {
     );
   }
 
+  /// 手指按下开始拖动：进入 dragging，禁止 runtime（不更新 settled）。
   void markScrollStart() {
     if (state.scrollPhase == PlayerViewportScrollPhase.dragging) {
       return;
@@ -102,6 +118,7 @@ class PlayerViewportController extends Notifier<PlayerViewportState> {
     );
   }
 
+  /// PageView 跟手页变化：只更新 candidate/current，仍不算 settled。
   void markPageChanged(int index) {
     if (state.candidateIndex == index && state.currentIndex == index) {
       return;
@@ -126,6 +143,7 @@ class PlayerViewportController extends Notifier<PlayerViewportState> {
     );
   }
 
+  /// 惯性结束且 index 对齐：写入 settled 并回到 idle，供 engine listener 触发 runtime。
   void settle({required int index, required String? itemId}) {
     if (state.settledIndex == index &&
         state.settledItemId == itemId &&

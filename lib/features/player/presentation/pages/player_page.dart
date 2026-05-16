@@ -17,7 +17,6 @@ import '../../application/player_performance_policy_provider.dart';
 import '../../application/player_playback_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
 import '../../application/player_rebuild_diagnostics.dart';
-import '../../application/player_runtime_coordinator.dart';
 import '../../application/player_ui_controller.dart';
 import '../../application/player_viewport_controller.dart';
 import '../../domain/player_access_presentation.dart';
@@ -30,10 +29,12 @@ import '../widgets/player_feed_page_shell.dart';
 import '../widgets/player_playback_layer.dart';
 import '../widgets/player_recharge_unlock_sheet.dart';
 
-/// 播放器页面：纵向 [PageView] feed + 顶层单例视频 surface。
+/// 播放器 UI 宿主：纵向 [PageView] + 顶层单例 Video surface + sheet。
 ///
-/// UI host：PageView / 单例 Video surface / top bar / sheet。
-/// 业务入口经 [PlayerFeedEngine]；settled runtime 由 engine → coordinator 执行。
+/// 职责边界：
+/// - 本文件：布局、手势转发、`showModalBottomSheet`、生命周期里 detach surface。
+/// - [PlayerFeedEngine]：viewport settled、权益/播放/预加载/弹窗调度（不在 drag 路径调用）。
+/// - [PlayerPlaybackController]：media_kit 真实状态（position/play/source），不含 sheet 业务。
 class PlayerPage extends ConsumerStatefulWidget {
   const PlayerPage({
     required this.dramaId,
@@ -89,6 +90,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   final ValueNotifier<double> _pagePositionNotifier = ValueNotifier<double>(
     0.0,
   );
+
+  PlayerFeedEngine get _feedEngine =>
+      ref.read(playerFeedEngineProvider(_sessionKey).notifier);
 
   String _createSessionKey() {
     return switch (widget.feedMode) {
@@ -209,12 +213,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
     final feedState = ref.read(feedProvider);
     if (feedState.currentItem != null) {
-      ref
-          .read(playerViewportControllerProvider(_sessionKey).notifier)
-          .initialize(
-            index: feedState.currentIndex,
-            itemId: feedState.currentItem!.id,
-          );
+      _feedEngine.initializeViewport(
+        index: feedState.currentIndex,
+        itemId: feedState.currentItem!.id,
+      );
       if (_pageController.hasClients &&
           feedState.currentIndex != _pageController.page?.round()) {
         _pageController.jumpToPage(feedState.currentIndex);
@@ -240,8 +242,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final feedProvider = playerFeedControllerProvider(sessionKey);
     final uiProvider = playerUiControllerProvider(sessionKey);
     final viewportProvider = playerViewportControllerProvider(sessionKey);
-    final engineProvider = playerFeedEngineProvider(sessionKey);
-    final runtimeProvider = playerRuntimeCoordinatorProvider(sessionKey);
     final overlayProvider = playerOverlayOrchestratorProvider(sessionKey);
     final performancePolicy = ref.watch(playerPerformancePolicyProvider);
 
@@ -270,8 +270,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
     final feedState = ref.read(feedProvider);
     final feedController = ref.read(feedProvider.notifier);
-    final feedEngine = ref.read(engineProvider.notifier);
-    final runtimeController = ref.read(runtimeProvider.notifier);
+    final feedEngine = _feedEngine;
     final uiController = ref.read(uiProvider.notifier);
     final playbackController = ref.read(
       playerPlaybackControllerProvider(sessionKey).notifier,
@@ -324,7 +323,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             hasActiveCoinSheet: _activeCoinSheetItemId != null,
             hasActiveRechargeSheet: _activeRechargeSheetItemId != null,
             isPageScrolling: _isPageScrolling,
-            isCurrentFeedItem: runtimeController.isCurrentFeedItem,
+            isCurrentFeedItem: feedEngine.isCurrentFeedItem,
             isPageActivelyMoving: _isPageActivelyMovingForAutoSheet,
           ),
         );
@@ -352,7 +351,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       },
     );
 
-    // TODO(engine): feed 编程 currentIndex 变更仍直接 animate PageView，非手势 drag 路径。
+    // Defer：feed 编程切页仍直接驱动 PageController（非用户 drag），见 _closeSheetAndSelectEpisode。
     ref.listen(feedProvider.select((state) => state.currentIndex), (
       previous,
       next,
@@ -433,8 +432,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           viewportState: viewportState,
           playbackShell: playbackShell,
           playbackController: playbackController,
-          runtimeController: runtimeController,
-          feedEngine: ref.read(engineProvider.notifier),
+          feedEngine: feedEngine,
           performancePolicy: performancePolicy,
         ),
       ),
@@ -449,7 +447,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     required PlayerViewportBuildSnapshot viewportState,
     required PlayerPlaybackShellSnapshot playbackShell,
     required PlayerPlaybackController playbackController,
-    required PlayerRuntimeCoordinator runtimeController,
     required PlayerFeedEngine feedEngine,
     required PlayerPerformancePolicy performancePolicy,
   }) {
@@ -632,9 +629,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (index < 0 || index >= feedState.items.length) {
       return;
     }
-    ref
-        .read(playerViewportControllerProvider(_sessionKey).notifier)
-        .settle(index: index, itemId: feedState.items[index].id);
+    _feedEngine.settleViewport(index: index, itemId: feedState.items[index].id);
   }
 
   void _syncActiveVideoPagePosition() {
@@ -649,11 +644,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   bool _handlePageScrollNotification(ScrollNotification notification) {
-    final feedEngine = ref.read(playerFeedEngineProvider(_sessionKey).notifier);
     if (notification is ScrollStartNotification ||
         notification is ScrollUpdateNotification) {
       if (notification is ScrollStartNotification) {
-        feedEngine.onScrollStart();
+        _feedEngine.onScrollStart();
         final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
         _playbackController.recordPlaybackUserAction(
           'PageView scroll start',
@@ -668,7 +662,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (notification is ScrollEndNotification) {
       _setPageScrolling(false);
       final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
-      feedEngine.onScrollEnd();
+      _feedEngine.onScrollEnd();
       if (feedState.items.isNotEmpty) {
         SchedulerBinding.instance.addPostFrameCallback((_) {
           if (!mounted || !_pageController.hasClients) {
@@ -683,7 +677,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             feedState.items.length - 1,
           );
           final settledItem = feedState.items[settledIndex];
-          feedEngine.settleViewport(
+          _feedEngine.settleViewport(
             index: settledIndex,
             itemId: settledItem.id,
           );
@@ -814,7 +808,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _retryPlaybackForItem(PlayerFeedItem item) async {
-    final engine = ref.read(playerFeedEngineProvider(_sessionKey).notifier);
+    final engine = _feedEngine;
     final intent = await engine.retryPlayback(item);
     if (!mounted) {
       return;
@@ -827,7 +821,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     PlayerOverlaySheetIntent intent, {
     bool launchedByAutoSheet = false,
   }) async {
-    final engine = ref.read(playerFeedEngineProvider(_sessionKey).notifier);
+    final engine = _feedEngine;
     if (!mounted || !engine.isCurrentFeedItem(item)) {
       return;
     }
@@ -850,7 +844,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _presentAutoUnlockSheetForItem(PlayerFeedItem item) async {
-    final engine = ref.read(playerFeedEngineProvider(_sessionKey).notifier);
+    final engine = _feedEngine;
     final intent = await engine.prepareAutoUnlockSheet(
       item: item,
       isModalOpen: _isModalOpen,
@@ -968,7 +962,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (currentItem == null) {
       return;
     }
-    final engine = ref.read(playerFeedEngineProvider(_sessionKey).notifier);
+    final engine = _feedEngine;
     final intent = await engine.prepareManualUnlock(currentItem);
     if (!mounted) {
       return;
@@ -1062,7 +1056,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
     final selectedCoinPackage = rechargeState.selectedCoinPackage;
     final selectedMembershipPackage = rechargeState.selectedMembershipPackage;
-    final engine = ref.read(playerFeedEngineProvider(_sessionKey).notifier);
+    final engine = _feedEngine;
     await engine.grantRechargeSelection(
       selectedCoinPackage: selectedCoinPackage != null,
       selectedMembershipPackage: selectedMembershipPackage != null,

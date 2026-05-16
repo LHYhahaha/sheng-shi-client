@@ -5,6 +5,14 @@ experience across Home, For You, and single-drama playback. It is a planning
 document only: no UI, playback logic, local HLS cache, or backend integration is
 changed by this phase.
 
+## Mainline Seal (封板, 2026-05-16)
+
+播放器体验主线（Home / For You / 单剧、`PlayerFeedEngine`、settled-only runtime、单 Video surface、previous/current/next session window）**已封板**。
+
+- **后续**：低端 Android **policy** 线（HLS preload / prepared-retained cap / locked 跳过 preload），不扩大 session window、不把 Video 放回 PageView、不接 HLS proxy。
+- **架构**：不继续大拆 engine；开源方案仅作思想参考，**不**替换 `media_kit` 或引入第三方 feed 库。
+- **Playback truth** 仍在 `PlayerPlaybackController`；UI / sheet / dwell 由 Page + engine 协调。
+
 ## 1. System Goals
 
 - Home card entry should feel close to instant. The first playable frame should

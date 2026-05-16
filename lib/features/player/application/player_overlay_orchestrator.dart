@@ -12,7 +12,14 @@ final playerOverlayOrchestratorProvider =
       String
     >(PlayerOverlayOrchestrator.new);
 
-/// Auto unlock / recharge sheet scheduling after dwell on a locked settled item.
+/// 落位 locked 项上的自动弹窗调度（dwell），不负责真正 show sheet（由 Page 监听 state）。
+///
+/// 规则摘要：
+/// - 仅 settled 且仍为 current item 时，dwell [dwellDelay] 后写入 [pendingAutoSheetItemId]。
+/// - [onScrollStart] / [cancelPending]：滑动或路由打断时取消待触发。
+/// - [markDismissed]：用户手动关 sheet 后，该 item 不再自动弹（直到 [clearDismissed]）。
+/// - 已有 modal、coin/recharge sheet、或页仍在滚动时不调度。
+/// - membership 自动 dwell 只产生 sheet 意图，不直接跳转会员页（见 engine 层 intent）。
 class PlayerOverlayOrchestratorState {
   const PlayerOverlayOrchestratorState({
     this.pendingAutoSheetItemId,

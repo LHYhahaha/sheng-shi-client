@@ -21,11 +21,17 @@ final playerFeedEngineProvider =
       PlayerFeedEngine.new,
     );
 
-/// Feed 播放器引擎门面：聚合 viewport / access / playback / overlay / policy。
+/// Feed 播放器引擎门面（应用层统一入口）。
 ///
-/// 业务规则：
-/// - drag 阶段只允许轻量 shell 滑动，不触发 runtime。
-/// - 仅 settled 后执行权益评估、播放、预加载与弹窗调度。
+/// 聚合：viewport、[PlayerRuntimeCoordinator]、[PlayerOverlayOrchestrator]、
+/// [PlayerPerformancePolicy]、权益/sheet 意图解析。
+///
+/// 入口约定：
+/// - 手势：`onScrollStart` / `onPageChanged` / `onScrollEnd` / `settleViewport` / `onViewportSettled`
+/// - 用户操作：`retryPlayback`、`prepareManualUnlock`、`completeCoinUnlock`、`continueAfterRechargeSuccess`
+/// - 只读：`accessPresentationFor`、`isCurrentFeedItem`
+///
+/// drag 阶段不 evaluate/play/preload/弹窗；仅 settled 且 viewport idle 时执行 runtime。
 class PlayerFeedEngineState {
   const PlayerFeedEngineState({
     required this.policy,
@@ -195,7 +201,7 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     EpisodeAccessDecision decision, {
     required bool autoPresentSheet,
   }) {
-    return _runtime.handleAccessDecision(
+    return _runtime.applyAccessDecisionForEngine(
       item,
       decision,
       autoPresentSheet: autoPresentSheet,

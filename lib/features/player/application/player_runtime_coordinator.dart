@@ -50,7 +50,14 @@ class PlayerRuntimeCoordinatorState {
   }
 }
 
-/// Settled-only playback runtime: access evaluation, play/quiesce/preload.
+/// Settled-only 播放运行时：权益评估、play/quiesce/preload。
+///
+/// 原则：
+/// - [PlayerViewportScrollPhase.dragging] 时拒绝一切入口（与 engine 双重 guard）。
+/// - 不展示 sheet、不读写 UI；sheet 由 [PlayerFeedEngine] + Page 负责。
+/// - 真实 media 状态仅在 [PlayerPlaybackController]。
+///
+/// UI 层请使用 [PlayerFeedEngine]，勿直接调用本类。
 class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
   PlayerRuntimeCoordinator(this.sessionKey);
 
@@ -177,6 +184,19 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
     );
   }
 
+  /// 仅供 [PlayerFeedEngine]：unlock/recharge 后应用已算好的 decision（不重复 evaluate）。
+  Future<void> applyAccessDecisionForEngine(
+    PlayerFeedItem item,
+    EpisodeAccessDecision decision, {
+    required bool autoPresentSheet,
+  }) {
+    return _handleAccessDecision(
+      item,
+      decision,
+      autoPresentSheet: autoPresentSheet,
+    );
+  }
+
   Future<void> _handleAccessDecision(
     PlayerFeedItem item,
     EpisodeAccessDecision decision, {
@@ -251,18 +271,6 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
           _uiController.showUnlockPaywall();
         }
     }
-  }
-
-  Future<void> handleAccessDecision(
-    PlayerFeedItem item,
-    EpisodeAccessDecision decision, {
-    required bool autoPresentSheet,
-  }) async {
-    await _handleAccessDecision(
-      item,
-      decision,
-      autoPresentSheet: autoPresentSheet,
-    );
   }
 
   void markEndedHandled(String itemId) {
