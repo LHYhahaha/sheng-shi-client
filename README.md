@@ -11,13 +11,18 @@ Flutter short drama client.
 - [开发约束与 AI 协作规范](docs/development-guidelines.md)
 - [底部导航图片资源规范](docs/bottom-navigation-assets.md)
 - [Technical Architecture](docs/technical-architecture.md)
-- [App Runtime System](docs/app-runtime-system.md)
 - [多语言与首页数据架构规范](docs/localization-and-home-data-architecture.md)
 - [Player Experience System Architecture](docs/player-experience-architecture-plan.md)
 - [Player Android Performance Policy](docs/player-android-stable-mode-plan.md)
 - [Player Playback And Cache Plan](docs/player-playback-cache-plan.md)
 - [Player Source And CDN Spec](docs/player-source-and-cdn-spec.md)
 - [Development Schedule](docs/development-schedule.md)
+
+## App Runtime System
+
+全局 Runtime 是 App 启动后的统一运行时策略入口，用来集中管理设备能力、性能档位、播放器预加载配置、多语言包元数据和 feature flags。任何模块需要设备分级、运行时配置或远程配置能力，都应优先从这里扩展，避免在各 feature 内各写一套判断。
+
+- [App Runtime System（全局运行时系统）](docs/app-runtime-system.md)
 
 ## Player Device Performance Policy
 
