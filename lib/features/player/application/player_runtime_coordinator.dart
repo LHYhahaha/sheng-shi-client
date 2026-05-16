@@ -12,6 +12,7 @@ import 'player_playback_controller.dart';
 import 'player_rebuild_diagnostics.dart';
 import 'player_overlay_orchestrator.dart';
 import 'player_ui_controller.dart';
+import 'player_viewport_controller.dart';
 
 final playerRuntimeCoordinatorProvider =
     NotifierProvider.family<
@@ -79,6 +80,10 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
     int? previousIndex,
     required String playbackTrigger,
   }) async {
+    final viewport = ref.read(playerViewportControllerProvider(sessionKey));
+    if (viewport.scrollPhase != PlayerViewportScrollPhase.idle) {
+      return;
+    }
     final feedProvider = playerFeedControllerProvider(sessionKey);
     final latestFeedState = ref.read(feedProvider);
     if (latestFeedState.currentIndex != index) {
@@ -149,6 +154,10 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
     PlayerFeedItem item, {
     required bool autoPresentSheet,
   }) async {
+    final viewport = ref.read(playerViewportControllerProvider(sessionKey));
+    if (viewport.scrollPhase == PlayerViewportScrollPhase.dragging) {
+      return;
+    }
     _uiController.selectEpisode(item.episode);
     final decision = ref
         .read(entitlementControllerProvider.notifier)
@@ -198,9 +207,7 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
         _schedulePreloadAroundItem(item);
         _uiController.showUnlockPaywall();
         if (autoPresentSheet) {
-          state = state.copyWith(
-            accessPresenter: presenter,
-          );
+          state = state.copyWith(accessPresenter: presenter);
         }
       case EpisodeAccessDecisionType.goMembership:
         await _quiesceItemForAccessOverlay(
@@ -250,7 +257,11 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
     EpisodeAccessDecision decision, {
     required bool autoPresentSheet,
   }) async {
-    await _handleAccessDecision(item, decision, autoPresentSheet: autoPresentSheet);
+    await _handleAccessDecision(
+      item,
+      decision,
+      autoPresentSheet: autoPresentSheet,
+    );
   }
 
   void markEndedHandled(String itemId) {
@@ -272,7 +283,9 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
         showsPaywall) {
       return false;
     }
-    final feedItem = ref.read(playerFeedControllerProvider(sessionKey)).currentItem;
+    final feedItem = ref
+        .read(playerFeedControllerProvider(sessionKey))
+        .currentItem;
     return feedItem?.id == currentItemId;
   }
 
@@ -338,7 +351,10 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
     );
   }
 
-  Future<void> quiesceAfterRecharge(PlayerFeedItem item, {required String reason}) async {
+  Future<void> quiesceAfterRecharge(
+    PlayerFeedItem item, {
+    required String reason,
+  }) async {
     await _quiesceItemForAccessOverlay(item, reason: reason);
   }
 

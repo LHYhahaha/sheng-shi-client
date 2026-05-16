@@ -11,7 +11,9 @@ import 'package:drama_client/features/player/data/player_playback_source_reposit
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
 import 'package:drama_client/features/player/application/player_playback_prepare_manager.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
+import 'package:drama_client/features/player/application/player_performance_policy_provider.dart';
 import 'package:drama_client/features/player/application/player_viewport_controller.dart';
+import 'package:drama_client/features/player/domain/player_performance_policy.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/domain/player_playback_source.dart';
@@ -215,112 +217,160 @@ void main() {
     },
   );
 
-  testWidgets('active video surface follows PageView drag with dimmed opacity', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
-    );
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pumpAndSettle();
-
-    final followSurface = find.byKey(
-      const ValueKey('active_playback_surface_follow_scroll'),
-    );
-    expect(followSurface, findsOneWidget);
-    final before = tester.widget<Transform>(followSurface);
-    expect(before.transform.getTranslation().y, 0);
-
-    await tester.drag(find.byType(PageView), const Offset(0, -420));
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(followSurface, findsOneWidget);
-    final duringDrag = tester.widget<Transform>(followSurface);
-    expect(duringDrag.transform.getTranslation().y, isNot(0.0));
-    final dragOpacity = tester.widget<AnimatedOpacity>(
-      find.descendant(
-        of: followSurface,
-        matching: find.byKey(
-          const ValueKey('active_playback_surface_opacity'),
-        ),
-      ),
-    );
-    expect(
-      dragOpacity.opacity,
-      ActivePlaybackSurfaceOverlay.scrollFollowOpacity,
-    );
-
-    await tester.pumpAndSettle();
-
-    expect(followSurface, findsOneWidget);
-    final settledOpacity = tester.widget<AnimatedOpacity>(
-      find.descendant(
-        of: followSurface,
-        matching: find.byKey(
-          const ValueKey('active_playback_surface_opacity'),
-        ),
-      ),
-    );
-    expect(settledOpacity.opacity, 1);
-  });
-
   testWidgets(
-    'drag page offset follows scroll without viewport state churn',
+    'active video surface follows PageView drag with dimmed opacity',
     (tester) async {
-      final observer = _ViewportUpdateObserver();
-
       await tester.pumpWidget(
         _buildPlayerApp(
           repository: _FakePlayerFeedRepository.unlocked(),
-          observers: [observer],
+          performancePolicy: PlayerPerformancePolicy.rich,
         ),
       );
       await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
-      observer.reset();
 
-      final pageSurface = find.byKey(
-        const ValueKey('player_page_view_surface'),
-      );
-      final gesture = await tester.startGesture(tester.getCenter(pageSurface));
-
-      await gesture.moveBy(const Offset(0, -80));
-      await tester.pump(const Duration(milliseconds: 16));
-
-      final updatesAfterScrollStart = observer.updateCount;
-      final chromeAfterScrollStart = tester.widget<PlayerChrome>(
-        find.byType(PlayerChrome).first,
-      );
       final followSurface = find.byKey(
         const ValueKey('active_playback_surface_follow_scroll'),
       );
       expect(followSurface, findsOneWidget);
-      final transformAfterFirstMove = tester.widget<Transform>(followSurface);
+      final before = tester.widget<Transform>(followSurface);
+      expect(before.transform.getTranslation().y, 0);
 
-      await gesture.moveBy(const Offset(0, -80));
-      await tester.pump(const Duration(milliseconds: 16));
+      await tester.drag(find.byType(PageView), const Offset(0, -420));
+      await tester.pump(const Duration(milliseconds: 50));
 
-      final chromeAfterPageOffset = tester.widget<PlayerChrome>(
-        find.byType(PlayerChrome).first,
+      expect(followSurface, findsOneWidget);
+      final duringDrag = tester.widget<Transform>(followSurface);
+      expect(duringDrag.transform.getTranslation().y, isNot(0.0));
+      final dragOpacity = tester.widget<AnimatedOpacity>(
+        find.descendant(
+          of: followSurface,
+          matching: find.byKey(
+            const ValueKey('active_playback_surface_opacity'),
+          ),
+        ),
       );
-      final transformAfterSecondMove = tester.widget<Transform>(followSurface);
-
-      expect(observer.updateCount, updatesAfterScrollStart);
-      expect(identical(chromeAfterScrollStart, chromeAfterPageOffset), isTrue);
       expect(
-        transformAfterFirstMove.transform.getTranslation().y,
-        isNot(transformAfterSecondMove.transform.getTranslation().y),
+        dragOpacity.opacity,
+        ActivePlaybackSurfaceOverlay.richScrollFollowOpacity,
       );
 
-      await gesture.up();
       await tester.pumpAndSettle();
 
-      expect(
-        find.byKey(const ValueKey('active_playback_surface_follow_scroll')),
-        findsOneWidget,
+      expect(followSurface, findsOneWidget);
+      final settledOpacity = tester.widget<AnimatedOpacity>(
+        find.descendant(
+          of: followSurface,
+          matching: find.byKey(
+            const ValueKey('active_playback_surface_opacity'),
+          ),
+        ),
       );
+      expect(settledOpacity.opacity, 1);
     },
   );
+
+  testWidgets('stable 策略下拖动不跟手 transform 且隐藏 Video surface', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        performancePolicy: PlayerPerformancePolicy.stable,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('active_playback_surface_follow_scroll')),
+      findsNothing,
+    );
+
+    await tester.drag(find.byType(PageView), const Offset(0, -420));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(
+      find.byKey(const ValueKey('active_playback_video_surface')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('active_playback_surface_follow_scroll')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('stable 策略下按压不触发 chrome 渐隐', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        performancePolicy: PlayerPerformancePolicy.stable,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final pageSurface = find.byKey(const ValueKey('player_page_view_surface'));
+    await tester.startGesture(tester.getCenter(pageSurface));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome).first);
+    expect(chrome.overlayOpacityListenable, isNull);
+  });
+
+  testWidgets('drag page offset follows scroll without viewport state churn', (
+    tester,
+  ) async {
+    final observer = _ViewportUpdateObserver();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        observers: [observer],
+        performancePolicy: PlayerPerformancePolicy.rich,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    observer.reset();
+
+    final pageSurface = find.byKey(const ValueKey('player_page_view_surface'));
+    final gesture = await tester.startGesture(tester.getCenter(pageSurface));
+
+    await gesture.moveBy(const Offset(0, -80));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    final updatesAfterScrollStart = observer.updateCount;
+    final chromeAfterScrollStart = tester.widget<PlayerChrome>(
+      find.byType(PlayerChrome).first,
+    );
+    final followSurface = find.byKey(
+      const ValueKey('active_playback_surface_follow_scroll'),
+    );
+    expect(followSurface, findsOneWidget);
+    final transformAfterFirstMove = tester.widget<Transform>(followSurface);
+
+    await gesture.moveBy(const Offset(0, -80));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    final chromeAfterPageOffset = tester.widget<PlayerChrome>(
+      find.byType(PlayerChrome).first,
+    );
+    final transformAfterSecondMove = tester.widget<Transform>(followSurface);
+
+    expect(observer.updateCount, updatesAfterScrollStart);
+    expect(identical(chromeAfterScrollStart, chromeAfterPageOffset), isTrue);
+    expect(
+      transformAfterFirstMove.transform.getTranslation().y,
+      isNot(transformAfterSecondMove.transform.getTranslation().y),
+    );
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('active_playback_surface_follow_scroll')),
+      findsOneWidget,
+    );
+  });
 
   testWidgets('uses cover fit for vertical video sources', (tester) async {
     await tester.pumpWidget(
@@ -511,6 +561,7 @@ void main() {
       _buildPlayerApp(
         repository: _FakePlayerFeedRepository.unlocked(),
         playbackSessionFactory: () => playbackSession,
+        performancePolicy: PlayerPerformancePolicy.rich,
       ),
     );
     await tester.pump(const Duration(seconds: 1));
@@ -634,7 +685,10 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        performancePolicy: PlayerPerformancePolicy.rich,
+      ),
     );
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
@@ -658,7 +712,10 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        performancePolicy: PlayerPerformancePolicy.rich,
+      ),
     );
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
@@ -1847,6 +1904,7 @@ Widget _buildPlayerApp({
   PlayerPlaybackPreloadManager? preloadManager,
   MockEntitlementRepository? entitlementRepository,
   List<ProviderObserver> observers = const [],
+  PlayerPerformancePolicy? performancePolicy,
 }) {
   final router = GoRouter(
     initialLocation: initialLocation,
@@ -1893,6 +1951,10 @@ Widget _buildPlayerApp({
       playerPlaybackPrepareManagerFactoryProvider.overrideWithValue(
         NoopPlayerPlaybackPrepareManager.new,
       ),
+      if (performancePolicy != null)
+        playerPerformancePolicyOverrideProvider.overrideWithValue(
+          performancePolicy,
+        ),
     ],
     child: MaterialApp.router(
       localizationsDelegates: const [

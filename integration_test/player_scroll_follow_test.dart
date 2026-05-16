@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:drama_client/app/app.dart';
+import 'package:drama_client/features/player/application/player_performance_policy_provider.dart';
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
+import 'package:drama_client/features/player/domain/player_performance_policy.dart';
 import 'package:drama_client/features/player/application/player_playback_prepare_manager.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_playback_layer.dart';
@@ -20,6 +22,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          playerPerformancePolicyOverrideProvider.overrideWithValue(
+            PlayerPerformancePolicy.rich,
+          ),
           playerPlaybackSessionFactoryProvider.overrideWithValue(
             _ScrollFollowSmokePlaybackSession.new,
           ),
@@ -52,7 +57,7 @@ void main() {
     );
     expect(
       dragOpacity.opacity,
-      ActivePlaybackSurfaceOverlay.scrollFollowOpacity,
+      ActivePlaybackSurfaceOverlay.richScrollFollowOpacity,
     );
 
     final duringDrag = tester.widget<Transform>(followSurface);
@@ -89,7 +94,9 @@ void _takeKnownMediaKitTeardownException(WidgetTester tester) {
   final message = exception.toString();
   if (message.contains('ValueNotifier<Rect?> was used after being disposed') ||
       message.contains('[Player] has been disposed')) {
-    debugPrint('Ignored media_kit teardown during scroll follow test: $exception');
+    debugPrint(
+      'Ignored media_kit teardown during scroll follow test: $exception',
+    );
     return;
   }
   throw exception;

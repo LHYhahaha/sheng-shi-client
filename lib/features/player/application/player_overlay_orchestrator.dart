@@ -41,7 +41,8 @@ class PlayerOverlayOrchestratorState {
   }
 }
 
-class PlayerOverlayOrchestrator extends Notifier<PlayerOverlayOrchestratorState> {
+class PlayerOverlayOrchestrator
+    extends Notifier<PlayerOverlayOrchestratorState> {
   PlayerOverlayOrchestrator(this.sessionKey);
 
   static const dwellDelay = Duration(milliseconds: 900);

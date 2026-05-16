@@ -5,6 +5,7 @@ import 'package:drama_client/features/player/application/player_playback_control
 import 'package:drama_client/features/player/application/player_playback_prepare_manager.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_playback_layer.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,6 +29,7 @@ void main() {
       pageView: find.byType(PageView).first,
       label: 'for_you',
       rounds: 6,
+      expectRichScrollFollow: _expectsRichScrollFollow,
     );
     expect(issues, isEmpty, reason: issues.join('\n'));
   });
@@ -48,10 +50,14 @@ void main() {
       pageView: find.byType(PageView),
       label: 'single_drama',
       rounds: 6,
+      expectRichScrollFollow: _expectsRichScrollFollow,
     );
     expect(issues, isEmpty, reason: issues.join('\n'));
   });
 }
+
+bool get _expectsRichScrollFollow =>
+    defaultTargetPlatform != TargetPlatform.android;
 
 Future<void> _pumpApp(WidgetTester tester) async {
   await tester.pumpWidget(
@@ -75,6 +81,7 @@ Future<List<String>> _stressSwipe(
   required Finder pageView,
   required String label,
   required int rounds,
+  required bool expectRichScrollFollow,
 }) async {
   final followSurface = find.byKey(
     const ValueKey('active_playback_surface_follow_scroll'),
@@ -89,6 +96,7 @@ Future<List<String>> _stressSwipe(
         followSurface: followSurface,
         offset: const Offset(0, -560),
         tag: '${label}_up_$round',
+        expectRichScrollFollow: expectRichScrollFollow,
       ),
     );
     issues.addAll(
@@ -98,6 +106,7 @@ Future<List<String>> _stressSwipe(
         followSurface: followSurface,
         offset: const Offset(0, 560),
         tag: '${label}_down_$round',
+        expectRichScrollFollow: expectRichScrollFollow,
       ),
     );
   }
@@ -111,10 +120,26 @@ Future<List<String>> _swipeOnce(
   required Finder followSurface,
   required Offset offset,
   required String tag,
+  required bool expectRichScrollFollow,
 }) async {
   final issues = <String>[];
   await tester.drag(pageView, offset);
   await tester.pump(const Duration(milliseconds: 100));
+
+  if (!expectRichScrollFollow) {
+    if (followSurface.evaluate().isNotEmpty) {
+      issues.add('$tag: stable mode should not transform video during drag');
+    }
+    await _settle(tester);
+    if (find
+        .byKey(const ValueKey('active_playback_video_surface'))
+        .evaluate()
+        .isEmpty) {
+      issues.add('$tag: stable mode should show video after settle');
+    }
+    _takeKnownMediaKitTeardownException(tester);
+    return issues;
+  }
 
   if (followSurface.evaluate().isEmpty) {
     issues.add('$tag: video follow surface missing while dragging');
@@ -141,8 +166,10 @@ Future<List<String>> _swipeOnce(
     if (offset.dy.abs() > 200 && y == 0) {
       issues.add('$tag: expected translate while dragging');
     }
-    if (opacity != ActivePlaybackSurfaceOverlay.scrollFollowOpacity) {
-      issues.add('$tag: expected dim ${ActivePlaybackSurfaceOverlay.scrollFollowOpacity}, got $opacity');
+    if (opacity != ActivePlaybackSurfaceOverlay.richScrollFollowOpacity) {
+      issues.add(
+        '$tag: expected dim ${ActivePlaybackSurfaceOverlay.richScrollFollowOpacity}, got $opacity',
+      );
     }
   }
 

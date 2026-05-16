@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,7 +11,9 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../../entitlement/domain/episode_access_decision.dart';
 import '../../application/player_feed_controller.dart';
+import '../../application/player_feed_engine.dart';
 import '../../application/player_overlay_orchestrator.dart';
+import '../../application/player_performance_policy_provider.dart';
 import '../../application/player_playback_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
 import '../../application/player_rebuild_diagnostics.dart';
@@ -20,6 +21,7 @@ import '../../application/player_runtime_coordinator.dart';
 import '../../application/player_ui_controller.dart';
 import '../../application/player_viewport_controller.dart';
 import '../../domain/player_access_presentation.dart';
+import '../../domain/player_performance_policy.dart';
 import '../../domain/player_content.dart';
 import '../../domain/player_feed.dart';
 import '../widgets/player_action_sheets.dart';
@@ -128,9 +130,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       occurredAt: widget.initialUserActionAt,
     );
     if (widget.hideShellNavigation) {
-      _shellChrome = ref.read(
-        appShellBottomNavigationVisibleProvider.notifier,
-      );
+      _shellChrome = ref.read(appShellBottomNavigationVisibleProvider.notifier);
     }
     Future<void>.microtask(() async {
       _shellChrome?.hide();
@@ -240,8 +240,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final feedProvider = playerFeedControllerProvider(sessionKey);
     final uiProvider = playerUiControllerProvider(sessionKey);
     final viewportProvider = playerViewportControllerProvider(sessionKey);
+    final engineProvider = playerFeedEngineProvider(sessionKey);
     final runtimeProvider = playerRuntimeCoordinatorProvider(sessionKey);
     final overlayProvider = playerOverlayOrchestratorProvider(sessionKey);
+    final performancePolicy = ref.watch(playerPerformancePolicyProvider);
 
     final feedSnapshot = ref.watch(
       feedProvider.select(
@@ -254,19 +256,21 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         ),
       ),
     );
-    final showsPaywall = ref.watch(uiProvider.select((state) => state.showsPaywall));
+    final showsPaywall = ref.watch(
+      uiProvider.select((state) => state.showsPaywall),
+    );
     final viewportState = ref.watch(
       viewportProvider.select(PlayerViewportBuildSnapshot.fromState),
     );
     final playbackShell = ref.watch(
-      playerPlaybackControllerProvider(sessionKey).select(
-        PlayerPlaybackShellSnapshot.fromState,
-      ),
+      playerPlaybackControllerProvider(
+        sessionKey,
+      ).select(PlayerPlaybackShellSnapshot.fromState),
     );
 
     final feedState = ref.read(feedProvider);
     final feedController = ref.read(feedProvider.notifier);
-    final viewportController = ref.read(viewportProvider.notifier);
+    final feedEngine = ref.read(engineProvider.notifier);
     final runtimeController = ref.read(runtimeProvider.notifier);
     final uiController = ref.read(uiProvider.notifier);
     final playbackController = ref.read(
@@ -289,68 +293,64 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       );
     }
 
-    ref.listen(viewportProvider.select(PlayerViewportSettledSnapshot.fromState), (
-      previous,
-      next,
-    ) {
-      if (next.itemId == null ||
-          (previous?.itemId == next.itemId &&
-              previous?.generation == next.generation)) {
-        return;
-      }
-      final latestFeedState = ref.read(feedProvider);
-      if (next.index < 0 || next.index >= latestFeedState.items.length) {
-        return;
-      }
-      final settledItem = latestFeedState.items[next.index];
-      if (settledItem.id != next.itemId) {
-        return;
-      }
-      unawaited(
-        runtimeController.onViewportSettled(
-          item: settledItem,
-          index: next.index,
-          previousItemId: previous?.itemId,
-          previousIndex: previous?.index,
-          playbackTrigger: _isAutoAdvancing
-              ? 'auto_next'
-              : previous != null && next.index > previous.index
-              ? 'swipe_next'
-              : 'swipe_previous',
-        ),
-      );
-      ref.read(overlayProvider.notifier).scheduleForSettledItem(
-        item: settledItem,
-        accessPresenter: ref.read(runtimeProvider).accessPresenter,
-        isModalOpen: _isModalOpen,
-        hasActiveCoinSheet: _activeCoinSheetItemId != null,
-        hasActiveRechargeSheet: _activeRechargeSheetItemId != null,
-        isPageScrolling: _isPageScrolling,
-        isCurrentFeedItem: runtimeController.isCurrentFeedItem,
-        isPageActivelyMoving: _isPageActivelyMovingForAutoSheet,
-      );
-    });
-
-    ref.listen(overlayProvider.select((state) => state.pendingAutoSheetItemId), (
-      previous,
-      next,
-    ) {
-      if (next == null || next == previous) {
-        return;
-      }
-      PlayerFeedItem? settledItem;
-      for (final candidate in ref.read(feedProvider).items) {
-        if (candidate.id == next) {
-          settledItem = candidate;
-          break;
+    ref.listen(
+      viewportProvider.select(PlayerViewportSettledSnapshot.fromState),
+      (previous, next) {
+        if (next.itemId == null ||
+            (previous?.itemId == next.itemId &&
+                previous?.generation == next.generation)) {
+          return;
         }
-      }
-      if (settledItem == null || !mounted) {
-        return;
-      }
-      ref.read(overlayProvider.notifier).clearPendingSheetRequest();
-      unawaited(_presentAutoUnlockSheetForItem(settledItem));
-    });
+        final latestFeedState = ref.read(feedProvider);
+        if (next.index < 0 || next.index >= latestFeedState.items.length) {
+          return;
+        }
+        final settledItem = latestFeedState.items[next.index];
+        if (settledItem.id != next.itemId) {
+          return;
+        }
+        unawaited(
+          feedEngine.onViewportSettled(
+            item: settledItem,
+            index: next.index,
+            previousItemId: previous?.itemId,
+            previousIndex: previous?.index,
+            playbackTrigger: _isAutoAdvancing
+                ? 'auto_next'
+                : previous != null && next.index > previous.index
+                ? 'swipe_next'
+                : 'swipe_previous',
+            isModalOpen: _isModalOpen,
+            hasActiveCoinSheet: _activeCoinSheetItemId != null,
+            hasActiveRechargeSheet: _activeRechargeSheetItemId != null,
+            isPageScrolling: _isPageScrolling,
+            isCurrentFeedItem: runtimeController.isCurrentFeedItem,
+            isPageActivelyMoving: _isPageActivelyMovingForAutoSheet,
+          ),
+        );
+      },
+    );
+
+    ref.listen(
+      overlayProvider.select((state) => state.pendingAutoSheetItemId),
+      (previous, next) {
+        if (next == null || next == previous) {
+          return;
+        }
+        PlayerFeedItem? settledItem;
+        for (final candidate in ref.read(feedProvider).items) {
+          if (candidate.id == next) {
+            settledItem = candidate;
+            break;
+          }
+        }
+        if (settledItem == null || !mounted) {
+          return;
+        }
+        ref.read(overlayProvider.notifier).clearPendingSheetRequest();
+        unawaited(_presentAutoUnlockSheetForItem(settledItem));
+      },
+    );
 
     ref.listen(feedProvider.select((state) => state.currentIndex), (
       previous,
@@ -380,11 +380,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     });
 
     ref.listen(
-      playerPlaybackControllerProvider(sessionKey).select(
-        (state) => (state.currentItemId, state.hasEnded),
-      ),
+      playerPlaybackControllerProvider(
+        sessionKey,
+      ).select((state) => (state.currentItemId, state.hasEnded)),
       (previous, next) {
-        if (!runtimeController.shouldHandlePlaybackEnded(
+        if (!feedEngine.shouldHandlePlaybackEnded(
           currentItemId: next.$1,
           hasEnded: next.$2,
           isSeekDragging: _isSeekDragging,
@@ -393,7 +393,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         )) {
           return;
         }
-        runtimeController.markEndedHandled(next.$1!);
+        feedEngine.markEndedHandled(next.$1!);
         if (feedSnapshot.$5) {
           unawaited(_advanceToNextFromCompletion());
         }
@@ -430,10 +430,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           items: feedSnapshot.$3,
           feedController: feedController,
           viewportState: viewportState,
-          viewportController: viewportController,
           playbackShell: playbackShell,
           playbackController: playbackController,
           runtimeController: runtimeController,
+          feedEngine: ref.read(engineProvider.notifier),
+          performancePolicy: performancePolicy,
         ),
       ),
     );
@@ -445,10 +446,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     required List<PlayerFeedItem> items,
     required PlayerFeedController feedController,
     required PlayerViewportBuildSnapshot viewportState,
-    required PlayerViewportController viewportController,
     required PlayerPlaybackShellSnapshot playbackShell,
     required PlayerPlaybackController playbackController,
     required PlayerRuntimeCoordinator runtimeController,
+    required PlayerFeedEngine feedEngine,
+    required PlayerPerformancePolicy performancePolicy,
   }) {
     if (isLoading) {
       return const Center(
@@ -477,11 +479,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final settledItem = settledIndex >= 0 && settledIndex < items.length
         ? items[settledIndex]
         : null;
-    final dimVideoDuringScroll =
-        viewportState.scrollPhase != PlayerViewportScrollPhase.idle;
+    final isViewportDragging =
+        viewportState.scrollPhase == PlayerViewportScrollPhase.dragging;
     final accessForSettled = settledItem == null
         ? null
-        : runtimeController.accessPresentationFor(settledItem);
+        : feedEngine.accessPresentationFor(settledItem);
     final canShowActiveVideoOverlay =
         settledItem != null &&
         accessForSettled == PlayerAccessPresentationState.playable;
@@ -495,10 +497,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         ActivePlaybackSurfaceOverlay(
           sessionKey: _sessionKey,
           itemId: activeVideoItemId,
-          currentIndex: activeVideoIndex == -1 ? settledIndex : activeVideoIndex,
+          currentIndex: activeVideoIndex == -1
+              ? settledIndex
+              : activeVideoIndex,
           pagePositionListenable: _pagePositionNotifier,
           canShowVideo: canShowActiveVideoOverlay,
-          dimDuringScroll: dimVideoDuringScroll,
+          policy: performancePolicy,
+          isViewportDragging: isViewportDragging,
           videoFit: settledItem == null
               ? BoxFit.cover
               : videoFitForEpisode(settledItem.episode),
@@ -518,7 +523,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   : const PageScrollPhysics(),
               scrollDirection: Axis.vertical,
               itemCount: items.length,
-              onPageChanged: viewportController.markPageChanged,
+              onPageChanged: feedEngine.onPageChanged,
               itemBuilder: (context, index) {
                 final item = items[index];
                 final isSettledPage = index == viewportState.settledIndex;
@@ -533,7 +538,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   index: index,
                   isSettledPage: isSettledPage,
                   forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
-                  overlayOpacityListenable: _overlayOpacityNotifier,
+                  allowPressChromeDimming:
+                      performancePolicy.allowPressChromeDimming,
+                  overlayOpacityListenable:
+                      performancePolicy.allowPressChromeDimming
+                      ? _overlayOpacityNotifier
+                      : null,
                   onTogglePlay: () {
                     unawaited(playbackController.togglePlay());
                   },
@@ -581,12 +591,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             ),
           ),
         ),
-        if (widget.feedMode == PlayerFeedMode.singleDrama && settledItem != null)
+        if (widget.feedMode == PlayerFeedMode.singleDrama &&
+            settledItem != null)
           PlayerTopBar(
             episodeNumber: settledItem.episode.number,
             playbackRate: playbackShell.playbackRate,
             overlayOpacity: 1,
-            overlayOpacityListenable: _overlayOpacityNotifier,
+            overlayOpacityListenable: performancePolicy.allowPressChromeDimming
+                ? _overlayOpacityNotifier
+                : null,
             onBackTap: () {
               unawaited(_goBackFromPlayer());
             },
@@ -597,6 +610,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   void _syncOverlayOpacity() {
+    final policy = ref.read(playerPerformancePolicyProvider);
+    if (!policy.allowPressChromeDimming) {
+      if (_overlayOpacityNotifier.value != 1.0) {
+        _overlayOpacityNotifier.value = 1.0;
+      }
+      return;
+    }
     final next = _isPressingPlaybackSurface || _isPageScrolling
         ? _dimmedOverlayOpacity
         : 1.0;
@@ -628,16 +648,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   bool _handlePageScrollNotification(ScrollNotification notification) {
-    final overlayController = ref.read(
-      playerOverlayOrchestratorProvider(_sessionKey).notifier,
-    );
+    final feedEngine = ref.read(playerFeedEngineProvider(_sessionKey).notifier);
     if (notification is ScrollStartNotification ||
         notification is ScrollUpdateNotification) {
       if (notification is ScrollStartNotification) {
-        overlayController.onScrollStart();
-        ref
-            .read(playerViewportControllerProvider(_sessionKey).notifier)
-            .markScrollStart();
+        feedEngine.onScrollStart();
         final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
         _playbackController.recordPlaybackUserAction(
           'PageView scroll start',
@@ -652,10 +667,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (notification is ScrollEndNotification) {
       _setPageScrolling(false);
       final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
-      final viewportController = ref.read(
-        playerViewportControllerProvider(_sessionKey).notifier,
-      );
-      viewportController.markScrollEnd();
+      feedEngine.onScrollEnd();
       if (feedState.items.isNotEmpty) {
         SchedulerBinding.instance.addPostFrameCallback((_) {
           if (!mounted || !_pageController.hasClients) {
@@ -665,11 +677,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           if (page == null) {
             return;
           }
-          final settledIndex = page
-              .round()
-              .clamp(0, feedState.items.length - 1);
+          final settledIndex = page.round().clamp(
+            0,
+            feedState.items.length - 1,
+          );
           final settledItem = feedState.items[settledIndex];
-          viewportController.settle(
+          feedEngine.settleViewport(
             index: settledIndex,
             itemId: settledItem.id,
           );
@@ -800,45 +813,73 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _retryPlaybackForItem(PlayerFeedItem item) async {
-    final runtime = ref.read(playerRuntimeCoordinatorProvider(_sessionKey).notifier);
-    final decision = ref.read(entitlementControllerProvider.notifier).evaluateAccess(
-      dramaId: item.content.id,
-      episodeId: item.episode.id,
-      itemId: item.id,
-      unlockType: item.episode.unlockType,
-      price: item.episode.requiredCoins,
-      isUnavailable: item.episode.isUnavailable,
+    final runtime = ref.read(
+      playerRuntimeCoordinatorProvider(_sessionKey).notifier,
     );
+    final decision = ref
+        .read(entitlementControllerProvider.notifier)
+        .evaluateAccess(
+          dramaId: item.content.id,
+          episodeId: item.episode.id,
+          itemId: item.id,
+          unlockType: item.episode.unlockType,
+          price: item.episode.requiredCoins,
+          isUnavailable: item.episode.isUnavailable,
+        );
     switch (decision.type) {
       case EpisodeAccessDecisionType.allowPlay:
-        await runtime.handleAccessDecision(item, decision, autoPresentSheet: false);
+        await runtime.handleAccessDecision(
+          item,
+          decision,
+          autoPresentSheet: false,
+        );
       case EpisodeAccessDecisionType.autoUnlockAndPlay:
       case EpisodeAccessDecisionType.showCoinUnlockDialog:
-        await runtime.handleAccessDecision(item, decision, autoPresentSheet: false);
+        await runtime.handleAccessDecision(
+          item,
+          decision,
+          autoPresentSheet: false,
+        );
         if (mounted && runtime.isCurrentFeedItem(item)) {
           await _showCoinUnlockSheetForItem(item);
         }
       case EpisodeAccessDecisionType.showRechargeDialog:
-        await runtime.handleAccessDecision(item, decision, autoPresentSheet: false);
+        await runtime.handleAccessDecision(
+          item,
+          decision,
+          autoPresentSheet: false,
+        );
         if (mounted && runtime.isCurrentFeedItem(item)) {
           await _showRechargeUnlockSheetForItem(item);
         }
       case EpisodeAccessDecisionType.goMembership:
-        await runtime.handleAccessDecision(item, decision, autoPresentSheet: false);
+        await runtime.handleAccessDecision(
+          item,
+          decision,
+          autoPresentSheet: false,
+        );
       case EpisodeAccessDecisionType.waitUnlock:
-        await runtime.handleAccessDecision(item, decision, autoPresentSheet: false);
+        await runtime.handleAccessDecision(
+          item,
+          decision,
+          autoPresentSheet: false,
+        );
     }
   }
 
   Future<void> _presentAutoUnlockSheetForItem(PlayerFeedItem item) async {
-    final runtime = ref.read(playerRuntimeCoordinatorProvider(_sessionKey).notifier);
+    final runtime = ref.read(
+      playerRuntimeCoordinatorProvider(_sessionKey).notifier,
+    );
     if (!runtime.isCurrentFeedItem(item) ||
         _isModalOpen ||
         _activeCoinSheetItemId != null ||
         _activeRechargeSheetItemId != null) {
       return;
     }
-    final presenter = ref.read(playerRuntimeCoordinatorProvider(_sessionKey)).accessPresenter;
+    final presenter = ref
+        .read(playerRuntimeCoordinatorProvider(_sessionKey))
+        .accessPresenter;
     if (!presenter.isLockedAutoSheetCandidate(item)) {
       return;
     }
@@ -857,7 +898,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
     switch (decision.type) {
       case EpisodeAccessDecisionType.allowPlay:
-        await runtime.handleAccessDecision(item, decision, autoPresentSheet: false);
+        await runtime.handleAccessDecision(
+          item,
+          decision,
+          autoPresentSheet: false,
+        );
       case EpisodeAccessDecisionType.autoUnlockAndPlay:
       case EpisodeAccessDecisionType.showCoinUnlockDialog:
         await _showCoinUnlockSheetForItem(item, launchedByAutoSheet: true);
@@ -964,28 +1009,43 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _showPendingUnlockActionSheet() async {
-    ref.read(playerOverlayOrchestratorProvider(_sessionKey).notifier).cancelPending();
+    ref
+        .read(playerOverlayOrchestratorProvider(_sessionKey).notifier)
+        .cancelPending();
     if (_isModalOpen) {
       return;
     }
-    final currentItem = ref.read(playerFeedControllerProvider(_sessionKey)).currentItem;
-    final runtime = ref.read(playerRuntimeCoordinatorProvider(_sessionKey).notifier);
+    final currentItem = ref
+        .read(playerFeedControllerProvider(_sessionKey))
+        .currentItem;
+    final runtime = ref.read(
+      playerRuntimeCoordinatorProvider(_sessionKey).notifier,
+    );
     if (currentItem == null ||
         !runtime.isCurrentFeedItem(currentItem) ||
-        !ref.read(playerRuntimeCoordinatorProvider(_sessionKey)).accessPresenter.isLockedAutoSheetCandidate(currentItem)) {
+        !ref
+            .read(playerRuntimeCoordinatorProvider(_sessionKey))
+            .accessPresenter
+            .isLockedAutoSheetCandidate(currentItem)) {
       return;
     }
-    final decision = ref.read(entitlementControllerProvider.notifier).evaluateAccess(
-      dramaId: currentItem.content.id,
-      episodeId: currentItem.episode.id,
-      itemId: currentItem.id,
-      unlockType: currentItem.episode.unlockType,
-      price: currentItem.episode.requiredCoins,
-      isUnavailable: currentItem.episode.isUnavailable,
-    );
+    final decision = ref
+        .read(entitlementControllerProvider.notifier)
+        .evaluateAccess(
+          dramaId: currentItem.content.id,
+          episodeId: currentItem.episode.id,
+          itemId: currentItem.id,
+          unlockType: currentItem.episode.unlockType,
+          price: currentItem.episode.requiredCoins,
+          isUnavailable: currentItem.episode.isUnavailable,
+        );
     switch (decision.type) {
       case EpisodeAccessDecisionType.allowPlay:
-        await runtime.handleAccessDecision(currentItem, decision, autoPresentSheet: false);
+        await runtime.handleAccessDecision(
+          currentItem,
+          decision,
+          autoPresentSheet: false,
+        );
       case EpisodeAccessDecisionType.autoUnlockAndPlay:
       case EpisodeAccessDecisionType.showCoinUnlockDialog:
         await _showCoinUnlockSheetForItem(currentItem);
@@ -1027,22 +1087,28 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _isModalOpen = false;
     _activeCoinSheetItemId = null;
     if (unlocked != true && launchedByAutoSheet) {
-      ref.read(playerOverlayOrchestratorProvider(_sessionKey).notifier).markDismissed(item.id);
+      ref
+          .read(playerOverlayOrchestratorProvider(_sessionKey).notifier)
+          .markDismissed(item.id);
     }
     if (!mounted || unlocked != true) {
       return;
     }
-    final runtime = ref.read(playerRuntimeCoordinatorProvider(_sessionKey).notifier);
+    final runtime = ref.read(
+      playerRuntimeCoordinatorProvider(_sessionKey).notifier,
+    );
     if (!runtime.isCurrentFeedItem(item)) {
       return;
     }
-    final decision = await ref.read(entitlementControllerProvider.notifier).unlockWithCoins(
-      dramaId: item.content.id,
-      episodeId: item.episode.id,
-      itemId: item.id,
-      price: item.episode.requiredCoins,
-      operationId: 'coin-unlock:${item.content.id}:${item.episode.id}',
-    );
+    final decision = await ref
+        .read(entitlementControllerProvider.notifier)
+        .unlockWithCoins(
+          dramaId: item.content.id,
+          episodeId: item.episode.id,
+          itemId: item.id,
+          price: item.episode.requiredCoins,
+          operationId: 'coin-unlock:${item.content.id}:${item.episode.id}',
+        );
     if (!mounted) {
       return;
     }
@@ -1084,7 +1150,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
     if (unlocked != true) {
       if (launchedByAutoSheet) {
-        ref.read(playerOverlayOrchestratorProvider(_sessionKey).notifier).markDismissed(item.id);
+        ref
+            .read(playerOverlayOrchestratorProvider(_sessionKey).notifier)
+            .markDismissed(item.id);
       }
       rechargeController.close();
       return;
@@ -1094,7 +1162,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
     final selectedCoinPackage = rechargeState.selectedCoinPackage;
     final selectedMembershipPackage = rechargeState.selectedMembershipPackage;
-    final entitlementController = ref.read(entitlementControllerProvider.notifier);
+    final entitlementController = ref.read(
+      entitlementControllerProvider.notifier,
+    );
     if (selectedCoinPackage != null) {
       await entitlementController.grantMockCoins(
         amount: selectedCoinPackage.totalCoins,
@@ -1109,7 +1179,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     rechargeController.close();
-    final runtime = ref.read(playerRuntimeCoordinatorProvider(_sessionKey).notifier);
+    final runtime = ref.read(
+      playerRuntimeCoordinatorProvider(_sessionKey).notifier,
+    );
     if (!runtime.isCurrentFeedItem(item)) {
       return;
     }
@@ -1119,9 +1191,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           ? 'recharge success awaiting coin confirmation'
           : 'membership purchase success awaiting user action',
     );
-    ref.read(playerUiControllerProvider(_sessionKey).notifier).showUnlockPaywall();
+    ref
+        .read(playerUiControllerProvider(_sessionKey).notifier)
+        .showUnlockPaywall();
     if (selectedCoinPackage != null) {
-      unawaited(_showCoinUnlockSheetForItem(item, launchedByAutoSheet: launchedByAutoSheet));
+      unawaited(
+        _showCoinUnlockSheetForItem(
+          item,
+          launchedByAutoSheet: launchedByAutoSheet,
+        ),
+      );
     }
   }
 

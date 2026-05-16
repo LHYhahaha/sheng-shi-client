@@ -7,7 +7,9 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../application/player_performance_policy_provider.dart';
 import '../../application/player_playback_controller.dart';
+import '../../domain/player_performance_policy.dart';
 import '../../application/player_rebuild_diagnostics.dart';
 import '../../application/player_viewport_controller.dart';
 import '../../domain/player_content.dart';
@@ -359,20 +361,22 @@ class ActivePlaybackSurfaceOverlay extends ConsumerStatefulWidget {
     required this.currentIndex,
     required this.pagePositionListenable,
     required this.canShowVideo,
-    required this.dimDuringScroll,
+    required this.policy,
+    required this.isViewportDragging,
     required this.videoFit,
     required this.forYouLayout,
   });
 
-  /// Opacity applied to the video surface while the user is dragging PageView.
-  static const scrollFollowOpacity = 0.88;
+  /// rich 模式拖动时 Video surface 压暗 opacity（仅测试/对照引用）。
+  static const richScrollFollowOpacity = 0.88;
 
   final String sessionKey;
   final String? itemId;
   final int currentIndex;
   final ValueListenable<double> pagePositionListenable;
   final bool canShowVideo;
-  final bool dimDuringScroll;
+  final PlayerPerformancePolicy policy;
+  final bool isViewportDragging;
   final BoxFit videoFit;
   final bool forYouLayout;
 
@@ -438,18 +442,70 @@ class ActivePlaybackSurfaceOverlayState
         source: snapshot.currentSource,
       );
     }
+    final hideDuringDrag =
+        widget.isViewportDragging &&
+        !widget.policy.allowVideoSurfaceFollowDuringDrag;
+    if (hideDuringDrag) {
+      _recordOverlayHidden(snapshot);
+      return const SizedBox.shrink();
+    }
+
     final showVideo =
         canShowVideoSurface &&
         (snapshot.hasFirstFrame || showVideoBeforeFirstFrame);
+    final dimDuringDrag =
+        widget.isViewportDragging &&
+        widget.policy.allowVideoSurfaceOpacityAnimationDuringDrag;
     final surfaceOpacity = showVideo
-        ? (widget.dimDuringScroll
-              ? ActivePlaybackSurfaceOverlay.scrollFollowOpacity
-              : 1.0)
+        ? (dimDuringDrag ? widget.policy.videoSurfaceDimOpacityDuringDrag : 1.0)
         : 0.0;
     final mediaQuery = MediaQuery.of(context);
     final bottomFrameHeight = widget.forYouLayout
         ? mediaQuery.padding.bottom
         : mediaQuery.padding.bottom + 79;
+
+    final videoChild = controller == null
+        ? const SizedBox.shrink()
+        : Video(
+            key: const ValueKey('active_playback_video_surface'),
+            controller: controller,
+            controls: NoVideoControls,
+            fit: widget.videoFit,
+          );
+
+    Widget buildOpacityChild(Widget child) {
+      final useAnimated =
+          widget.policy.allowVideoSurfaceOpacityAnimationDuringDrag ||
+          widget.policy.allowVideoSurfaceOpacityAnimationOnSettle;
+      if (!useAnimated) {
+        return Opacity(
+          key: const ValueKey('active_playback_surface_opacity'),
+          opacity: surfaceOpacity,
+          child: child,
+        );
+      }
+      return AnimatedOpacity(
+        key: const ValueKey('active_playback_surface_opacity'),
+        opacity: surfaceOpacity,
+        duration: dimDuringDrag
+            ? Duration.zero
+            : const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: child,
+      );
+    }
+
+    final opacityChild = buildOpacityChild(videoChild);
+
+    if (!widget.policy.allowVideoSurfaceFollowDuringDrag) {
+      return Positioned(
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: bottomFrameHeight,
+        child: IgnorePointer(child: opacityChild),
+      );
+    }
 
     return Positioned(
       left: 0,
@@ -473,22 +529,7 @@ class ActivePlaybackSurfaceOverlayState
               child: child,
             );
           },
-          child: AnimatedOpacity(
-            key: const ValueKey('active_playback_surface_opacity'),
-            opacity: surfaceOpacity,
-            duration: widget.dimDuringScroll
-                ? Duration.zero
-                : const Duration(milliseconds: 120),
-            curve: Curves.easeOut,
-            child: controller == null
-                ? const SizedBox.shrink()
-                : Video(
-                    key: const ValueKey('active_playback_video_surface'),
-                    controller: controller,
-                    controls: NoVideoControls,
-                    fit: widget.videoFit,
-                  ),
-          ),
+          child: opacityChild,
         ),
       ),
     );
@@ -659,14 +700,19 @@ class PlayerPlaybackControlsConsumerState
         widget.sessionKey,
       ).select(PlayerPlaybackRenderSnapshot.fromState),
     );
+    final allowScaleFeedback = ref
+        .read(playerPerformancePolicyProvider)
+        .allowPlayPauseScaleFeedback;
     if (snapshot.isPlaying) {
       _feedbackTimer?.cancel();
-      setState(() => _showPauseFeedback = true);
-      _feedbackTimer = Timer(const Duration(milliseconds: 420), () {
-        if (mounted) {
-          setState(() => _showPauseFeedback = false);
-        }
-      });
+      if (allowScaleFeedback) {
+        setState(() => _showPauseFeedback = true);
+        _feedbackTimer = Timer(const Duration(milliseconds: 420), () {
+          if (mounted) {
+            setState(() => _showPauseFeedback = false);
+          }
+        });
+      }
     }
     widget.onTogglePlay();
   }

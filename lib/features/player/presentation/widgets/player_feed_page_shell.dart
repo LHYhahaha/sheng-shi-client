@@ -19,7 +19,8 @@ class PlayerFeedPageShell extends ConsumerWidget {
     required this.index,
     required this.isSettledPage,
     required this.forYouLayout,
-    required this.overlayOpacityListenable,
+    required this.allowPressChromeDimming,
+    this.overlayOpacityListenable,
     required this.onTogglePlay,
     required this.onRetry,
     required this.onSeekStart,
@@ -41,7 +42,8 @@ class PlayerFeedPageShell extends ConsumerWidget {
   final int index;
   final bool isSettledPage;
   final bool forYouLayout;
-  final ValueListenable<double> overlayOpacityListenable;
+  final bool allowPressChromeDimming;
+  final ValueListenable<double>? overlayOpacityListenable;
   final VoidCallback onTogglePlay;
   final VoidCallback onRetry;
   final VoidCallback onSeekStart;
@@ -66,17 +68,19 @@ class PlayerFeedPageShell extends ConsumerWidget {
     );
     final playbackShell = isSettledPage
         ? ref.watch(
-            playerPlaybackControllerProvider(sessionKey).select(
-              PlayerPlaybackShellSnapshot.fromState,
-            ),
+            playerPlaybackControllerProvider(
+              sessionKey,
+            ).select(PlayerPlaybackShellSnapshot.fromState),
           )
         : null;
 
     final isLockedSettledPage =
         isSettledPage &&
         (accessPresentation == PlayerAccessPresentationState.lockedCoins ||
-            accessPresentation == PlayerAccessPresentationState.lockedRecharge ||
-            accessPresentation == PlayerAccessPresentationState.lockedMembership);
+            accessPresentation ==
+                PlayerAccessPresentationState.lockedRecharge ||
+            accessPresentation ==
+                PlayerAccessPresentationState.lockedMembership);
     final lockedActionLabel =
         accessPresentation == PlayerAccessPresentationState.lockedMembership
         ? context.l10n.playerMemberUnlock
@@ -96,7 +100,9 @@ class PlayerFeedPageShell extends ConsumerWidget {
       children: [
         PlayerChrome(
           content: item.content,
-          overlayOpacityListenable: overlayOpacityListenable,
+          overlayOpacityListenable: allowPressChromeDimming
+              ? overlayOpacityListenable
+              : null,
           showViewportBackdrop: !canHideViewportBackdrop,
           playbackLayer: canUsePlaybackSurface
               ? PlayerPlaybackControlsConsumer(
