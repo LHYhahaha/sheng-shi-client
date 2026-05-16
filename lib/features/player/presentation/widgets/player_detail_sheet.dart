@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../l10n/app_localizations.dart';
@@ -7,6 +9,8 @@ import '../../../../shared/widgets/app_sheet_handle.dart';
 import '../../domain/player_content.dart';
 
 enum PlayerDetailTab { synopsis, episodes }
+
+enum _DetailSheetMode { compact, expanded }
 
 class PlayerDetailSheet extends StatefulWidget {
   const PlayerDetailSheet({
@@ -27,21 +31,78 @@ class PlayerDetailSheet extends StatefulWidget {
 }
 
 class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
+  static const _sheetColor = Color(0xFF1F2022);
+  static const _compactSize = 0.53;
+  static const _expandedSize = 0.93;
+  static const _minSize = 0.42;
+  static const _maxSize = 0.95;
+  static const _topChromeHeight = 78.0;
+
+  late final DraggableScrollableController _sheetController;
   late PlayerDetailTab _selectedTab = widget.initialTab;
+  late _DetailSheetMode _mode = _DetailSheetMode.compact;
   int _rangeStart = 1;
 
   @override
+  void initState() {
+    super.initState();
+    _sheetController = DraggableScrollableController();
+    _sheetController.addListener(_syncModeFromSheetSize);
+  }
+
+  @override
+  void dispose() {
+    _sheetController.removeListener(_syncModeFromSheetSize);
+    _sheetController.dispose();
+    super.dispose();
+  }
+
+  void _syncModeFromSheetSize() {
+    if (!_sheetController.isAttached) {
+      return;
+    }
+    final midpoint = (_compactSize + _expandedSize) / 2;
+    final nextMode = _sheetController.size >= midpoint
+        ? _DetailSheetMode.expanded
+        : _DetailSheetMode.compact;
+    if (nextMode != _mode) {
+      setState(() => _mode = nextMode);
+    }
+  }
+
+  Future<void> _setMode(_DetailSheetMode mode) async {
+    if (_mode == mode) {
+      return;
+    }
+    setState(() => _mode = mode);
+    if (!_sheetController.isAttached) {
+      return;
+    }
+    final targetSize = mode == _DetailSheetMode.compact
+        ? _compactSize
+        : _expandedSize;
+    await _sheetController.animateTo(
+      targetSize,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
     return DraggableScrollableSheet(
+      controller: _sheetController,
       expand: false,
-      initialChildSize: 0.92,
-      minChildSize: 0.42,
-      maxChildSize: 0.95,
+      initialChildSize: _compactSize,
+      minChildSize: _minSize,
+      maxChildSize: _maxSize,
       snap: true,
-      snapSizes: const [0.42, 0.92],
+      snapSizes: const [_minSize, _compactSize, _expandedSize],
       builder: (context, scrollController) {
         return Material(
-          color: const Color(0xFF1F2022),
+          color: _sheetColor,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           clipBehavior: Clip.antiAlias,
           child: Stack(
@@ -56,9 +117,9 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: EdgeInsets.fromLTRB(
                     16,
-                    78,
+                    _topChromeHeight + 8,
                     16,
-                    24 + MediaQuery.paddingOf(context).bottom,
+                    bottomInset + 32,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -94,26 +155,91 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
                   ),
                 ),
               ),
-              const Positioned(
+              Positioned(
                 left: 0,
                 right: 0,
-                top: 8,
-                child: AppSheetHandle(),
-              ),
-              Positioned(
-                left: 16,
-                top: 22,
-                child: AppRoundIconButton(
-                  icon: Icons.open_in_full_rounded,
-                  onTap: () {},
+                top: _topChromeHeight,
+                height: 20,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [_sheetColor, _sheetColor.withValues(alpha: 0)],
+                      ),
+                    ),
+                  ),
                 ),
               ),
               Positioned(
-                right: 16,
-                top: 22,
-                child: AppRoundIconButton(
-                  icon: Icons.close_rounded,
-                  onTap: () => Navigator.of(context).pop(),
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: bottomInset + 40,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [_sheetColor, _sheetColor.withValues(alpha: 0)],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                key: const ValueKey('player_detail_sheet_top_chrome'),
+                left: 0,
+                right: 0,
+                top: 0,
+                height: _topChromeHeight,
+                child: DecoratedBox(
+                  decoration: const BoxDecoration(
+                    color: _sheetColor,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(28),
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      const Positioned(
+                        left: 0,
+                        right: 0,
+                        top: 8,
+                        child: AppSheetHandle(),
+                      ),
+                      Positioned(
+                        left: 16,
+                        top: 22,
+                        child: AppRoundIconButton(
+                          key: _mode == _DetailSheetMode.compact
+                              ? const ValueKey('player_detail_sheet_expand')
+                              : const ValueKey('player_detail_sheet_shrink'),
+                          icon: _mode == _DetailSheetMode.compact
+                              ? Icons.open_in_full_rounded
+                              : Icons.close_fullscreen_rounded,
+                          onTap: () {
+                            if (_mode == _DetailSheetMode.compact) {
+                              unawaited(_setMode(_DetailSheetMode.expanded));
+                            } else {
+                              unawaited(_setMode(_DetailSheetMode.compact));
+                            }
+                          },
+                        ),
+                      ),
+                      Positioned(
+                        right: 16,
+                        top: 22,
+                        child: AppRoundIconButton(
+                          key: const ValueKey('player_detail_sheet_close'),
+                          icon: Icons.close_rounded,
+                          onTap: () => Navigator.of(context).pop(),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],

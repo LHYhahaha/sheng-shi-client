@@ -19,6 +19,7 @@ import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/domain/player_playback_source.dart';
 import 'package:drama_client/features/player/presentation/pages/player_page.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_chrome.dart';
+import 'package:drama_client/features/player/presentation/widgets/player_detail_sheet.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_playback_layer.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
@@ -2013,6 +2014,7 @@ void main() {
 
     await tester.tap(find.text('Episodes').first);
     await tester.pumpAndSettle();
+    await _expandPlayerDetailSheet(tester);
     await tester.tap(find.text('2'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 80));
@@ -2042,6 +2044,7 @@ void main() {
 
     await tester.tap(find.text('Episodes').first);
     await tester.pumpAndSettle();
+    await _expandPlayerDetailSheet(tester);
     await tester.tap(find.text('2'));
     await _pumpAutoUnlockSheet(tester);
 
@@ -2066,6 +2069,7 @@ void main() {
 
     await tester.tap(find.text('Episodes').first);
     await tester.pumpAndSettle();
+    await _expandPlayerDetailSheet(tester);
     await tester.tap(find.text('2'));
     await _pumpAutoUnlockSheet(tester);
     final pauseCountAfterLock = playbackSession.pauseCount;
@@ -2245,6 +2249,7 @@ void main() {
 
     await tester.tap(find.text('Episodes').first);
     await tester.pumpAndSettle();
+    await _expandPlayerDetailSheet(tester);
     await tester.tap(find.text('2'));
     await _pumpAutoUnlockSheet(tester);
     expect(find.text('Unlock Now'), findsOneWidget);
@@ -2258,6 +2263,72 @@ void main() {
 
     expect(find.text('EP.02'), findsOneWidget);
     expect(find.text('A Life That Shines Again >'), findsOneWidget);
+  });
+
+  testWidgets('detail sheet opens compact and toggles expand/shrink', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Episodes').first);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('player_detail_sheet_expand')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('player_detail_sheet_shrink')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('player_detail_sheet_expand')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('player_detail_sheet_shrink')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('player_detail_sheet_shrink')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('player_detail_sheet_expand')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('player_detail_sheet_close')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PlayerDetailSheet), findsNothing);
+  });
+
+  testWidgets('More opens Synopsis tab and Episodes opens Episodes tab', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('More').first);
+    await tester.pumpAndSettle();
+    expect(find.text('More Like This'), findsOneWidget);
+    expect(find.text('1-30'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('player_detail_sheet_close')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Episodes').first);
+    await tester.pumpAndSettle();
+    expect(find.text('1-30'), findsOneWidget);
+    expect(find.text('More Like This'), findsNothing);
   });
 
   testWidgets('share and more sheets do not change current feed index', (
@@ -2314,6 +2385,13 @@ double _topBarOpacity(WidgetTester tester) {
     find.byKey(const ValueKey('player_top_bar_opacity')).first,
   );
   return opacity.opacity;
+}
+
+Future<void> _expandPlayerDetailSheet(WidgetTester tester) async {
+  await tester.tap(
+    find.byKey(const ValueKey('player_detail_sheet_expand')),
+  );
+  await tester.pumpAndSettle();
 }
 
 Future<void> _pumpAutoUnlockSheet(WidgetTester tester) async {
