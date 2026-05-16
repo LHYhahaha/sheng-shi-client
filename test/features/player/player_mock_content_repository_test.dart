@@ -97,6 +97,19 @@ void main() {
       );
     });
 
+    test(
+      'uses staged locked prices to cover coin and recharge sheets',
+      () async {
+        final content = await const MockPlayerContentRepository()
+            .getPlayerContent(dramaId: 'found-you');
+
+        expect(content.episodes[3].requiredCoins, 60);
+        expect(content.episodes[4].requiredCoins, 6000);
+        expect(content.episodes[5].requiredCoins, 8000);
+        expect(content.episodes[7].requiredCoins, 10000);
+      },
+    );
+
     test('default episode chain only cycles stable HLS fixtures', () async {
       final content = await const MockPlayerContentRepository()
           .getPlayerContent(dramaId: 'found-you');

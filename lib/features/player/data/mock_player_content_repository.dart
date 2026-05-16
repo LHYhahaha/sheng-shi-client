@@ -358,11 +358,13 @@ Duration _durationForEpisode(int number) {
 }
 
 int _requiredCoinsForEpisode(int number) {
+  // 默认 mock 账号有 4000 金币。这里保留 EP.04 低价用于验证“小解锁弹窗”，
+  // 后续金币集设置成高价，用于直接验证“余额不足 -> 充值抽屉”链路。
   return switch (number) {
-    4 => 30,
-    5 => 50,
-    6 => 80,
-    _ => 60,
+    4 => 60,
+    5 => 6000,
+    6 => 8000,
+    _ => 10000,
   };
 }
 
