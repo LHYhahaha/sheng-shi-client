@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
+import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/player_feed_controller.dart';
@@ -871,13 +872,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           launchedByAutoSheet: launchedByAutoSheet,
         );
       case PlayerOverlaySheetIntent.membership:
-        _openMembership();
+        await _showRechargeUnlockSheetForItem(item);
     }
   }
 
   Future<void> _presentAutoUnlockSheetForItem(PlayerFeedItem item) async {
     final engine = _feedEngine;
-    final intent = await engine.prepareAutoUnlockSheet(
+    final result = await engine.prepareAutoUnlockSheet(
       item: item,
       isModalOpen: _isModalOpen,
       hasActiveCoinSheet: _activeCoinSheetItemId != null,
@@ -886,7 +887,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!mounted) {
       return;
     }
-    await _presentSheetIntent(item, intent, launchedByAutoSheet: true);
+    if (result.didAutoUnlock) {
+      ref
+          .read(appToastProvider)
+          .success(context.l10n.playerUnlockedAutomatically);
+      return;
+    }
+    await _presentSheetIntent(
+      item,
+      result.sheetIntent,
+      launchedByAutoSheet: true,
+    );
   }
 
   // TODO(engine): 选集编程跳转仍由 Page 驱动 PageController。
@@ -1011,7 +1022,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
     _activeCoinSheetItemId = item.id;
     _isModalOpen = true;
-    final balance = ref.read(entitlementControllerProvider).coinBalance;
     final unlocked = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -1019,10 +1029,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       isDismissible: true,
       enableDrag: true,
       builder: (sheetContext) {
-        return PlayerCoinUnlockSheet(
-          price: item.episode.requiredCoins,
-          balance: balance,
-          onConfirm: () => Navigator.of(sheetContext).pop(true),
+        return Consumer(
+          builder: (context, ref, _) {
+            final balance = ref
+                .watch(entitlementControllerProvider)
+                .coinBalance;
+            return PlayerCoinUnlockSheet(
+              price: item.episode.requiredCoins,
+              balance: balance,
+              onConfirm: () => Navigator.of(sheetContext).pop(true),
+            );
+          },
         );
       },
     );
@@ -1036,9 +1053,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!mounted || unlocked != true) {
       return;
     }
-    await ref
+    final didUnlock = await ref
         .read(playerFeedEngineProvider(_sessionKey).notifier)
         .completeCoinUnlock(item);
+    if (!mounted || !didUnlock) {
+      return;
+    }
+    ref.read(appToastProvider).success(context.l10n.playerUnlockSuccessful);
   }
 
   Future<void> _showRechargeUnlockSheetForItem(
@@ -1097,7 +1118,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!mounted) {
       return;
     }
-    final nextIntent = await engine.continueAfterRechargeSuccess(
+    final result = await engine.continueAfterRechargeSuccess(
       item: item,
       grantedCoinPackage: selectedCoinPackage != null,
       grantedMembershipPackage: selectedMembershipPackage != null,
@@ -1105,9 +1126,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!mounted) {
       return;
     }
+    if (result.didActivateMembership) {
+      ref
+          .read(appToastProvider)
+          .success(context.l10n.playerMembershipActivated);
+      return;
+    }
     await _presentSheetIntent(
       item,
-      nextIntent,
+      result.sheetIntent,
       launchedByAutoSheet: launchedByAutoSheet,
     );
   }

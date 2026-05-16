@@ -223,7 +223,7 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
       case EpisodeAccessDecisionType.autoUnlockAndPlay:
         await _quiesceItemForAccessOverlay(
           item,
-          reason: 'auto unlock requires current confirmation',
+          reason: decision.reason ?? 'auto unlock pending',
         );
         _schedulePreloadAroundItem(item);
         _uiController.showUnlockPaywall();

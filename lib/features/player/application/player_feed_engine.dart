@@ -301,8 +301,8 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     return _sheetIntentForDecision(decision, item);
   }
 
-  /// 自动 dwell 弹窗：评估 settled locked 项并返回 sheet 意图。
-  Future<PlayerOverlaySheetIntent> prepareAutoUnlockSheet({
+  /// 自动 dwell 弹窗：评估 settled locked 项；auto unlock 开启时直接扣币播放。
+  Future<PlayerUnlockFlowResult> prepareAutoUnlockSheet({
     required PlayerFeedItem item,
     required bool isModalOpen,
     required bool hasActiveCoinSheet,
@@ -313,21 +313,30 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
         hasActiveCoinSheet ||
         hasActiveRechargeSheet ||
         !isLockedAutoSheetCandidate(item)) {
-      return PlayerOverlaySheetIntent.none;
+      return const PlayerUnlockFlowResult();
     }
     final decision = evaluateAccess(item);
     if (decision.type == EpisodeAccessDecisionType.allowPlay) {
       await handleAccessDecision(item, decision, autoPresentSheet: false);
-      return PlayerOverlaySheetIntent.none;
+      return const PlayerUnlockFlowResult();
     }
-    return _autoSheetIntentForDecision(decision);
+    if (decision.type == EpisodeAccessDecisionType.autoUnlockAndPlay) {
+      final unlocked = await completeCoinUnlock(item);
+      return PlayerUnlockFlowResult(didAutoUnlock: unlocked);
+    }
+    return PlayerUnlockFlowResult(
+      sheetIntent: _autoSheetIntentForDecision(decision),
+    );
   }
 
   /// Coin 确认后：扣币并走 runtime（不自动弹 sheet）。
-  Future<void> completeCoinUnlock(PlayerFeedItem item) async {
+  Future<bool> completeCoinUnlock(PlayerFeedItem item) async {
     if (!_canExecuteUserInitiatedRuntime(item)) {
-      return;
+      return false;
     }
+    final operationId =
+        ref.read(entitlementControllerProvider).pendingUnlock?.operationId ??
+        'coin-unlock:${item.content.id}:${item.episode.id}';
     final decision = await ref
         .read(entitlementControllerProvider.notifier)
         .unlockWithCoins(
@@ -335,34 +344,50 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
           episodeId: item.episode.id,
           itemId: item.id,
           price: item.episode.requiredCoins,
-          operationId: 'coin-unlock:${item.content.id}:${item.episode.id}',
+          operationId: operationId,
         );
     await handleAccessDecision(item, decision, autoPresentSheet: false);
+    return decision.type == EpisodeAccessDecisionType.allowPlay;
   }
 
-  /// Recharge sheet 成功：发放 mock 权益并决定下一步 sheet。
-  Future<PlayerOverlaySheetIntent> continueAfterRechargeSuccess({
+  /// Recharge sheet 成功：发放 mock 权益并决定下一步 sheet 或直接播放。
+  Future<PlayerUnlockFlowResult> continueAfterRechargeSuccess({
     required PlayerFeedItem item,
     required bool grantedCoinPackage,
     required bool grantedMembershipPackage,
   }) async {
     if (!_canExecuteUserInitiatedRuntime(item)) {
-      return PlayerOverlaySheetIntent.none;
+      return const PlayerUnlockFlowResult();
     }
     ref
         .read(playerRechargeUnlockControllerProvider(sessionKey).notifier)
         .close();
+    if (grantedMembershipPackage) {
+      final decision = evaluateAccess(item);
+      if (decision.type == EpisodeAccessDecisionType.allowPlay) {
+        await handleAccessDecision(item, decision, autoPresentSheet: false);
+        return const PlayerUnlockFlowResult(didActivateMembership: true);
+      }
+      await quiesceAfterRecharge(
+        item,
+        reason: decision.reason ?? 'membership purchase pending unlock',
+      );
+      _ui.showUnlockPaywall();
+      return PlayerUnlockFlowResult(
+        sheetIntent: _sheetIntentForDecision(decision, item),
+      );
+    }
     await quiesceAfterRecharge(
       item,
-      reason: grantedMembershipPackage
-          ? 'membership purchase success awaiting user action'
-          : 'recharge success awaiting coin confirmation',
+      reason: 'recharge success awaiting coin confirmation',
     );
     _ui.showUnlockPaywall();
     if (grantedCoinPackage) {
-      return PlayerOverlaySheetIntent.coinUnlock;
+      return const PlayerUnlockFlowResult(
+        sheetIntent: PlayerOverlaySheetIntent.coinUnlock,
+      );
     }
-    return PlayerOverlaySheetIntent.none;
+    return const PlayerUnlockFlowResult();
   }
 
   Future<void> grantRechargeSelection({
@@ -396,7 +421,7 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
       case EpisodeAccessDecisionType.showRechargeDialog:
         return PlayerOverlaySheetIntent.rechargeUnlock;
       case EpisodeAccessDecisionType.goMembership:
-        return PlayerOverlaySheetIntent.membership;
+        return PlayerOverlaySheetIntent.rechargeUnlock;
       case EpisodeAccessDecisionType.waitUnlock:
         if (item.episode.isUnavailable) {
           return PlayerOverlaySheetIntent.none;

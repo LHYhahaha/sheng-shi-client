@@ -1,3 +1,4 @@
+import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -26,6 +27,7 @@ import 'route_paths.dart';
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: RoutePaths.home,
+    observers: [BotToastNavigatorObserver()],
     routes: [
       // 底部四个主 tab 使用 indexedStack 保持页面状态。
       //

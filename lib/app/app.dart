@@ -1,3 +1,4 @@
+import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +20,8 @@ class DramaClientApp extends ConsumerWidget {
     final router = ref.watch(appRouterProvider);
     final locale = ref.watch(appLocaleControllerProvider);
 
+    final botToastBuilder = BotToastInit();
+
     return MaterialApp.router(
       onGenerateTitle: (context) => context.l10n.appTitle,
       debugShowCheckedModeBanner: false,
@@ -33,6 +36,7 @@ class DramaClientApp extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
       ],
+      builder: (context, child) => botToastBuilder(context, child),
       routerConfig: router,
     );
   }

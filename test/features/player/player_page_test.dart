@@ -17,7 +17,9 @@ import 'package:drama_client/features/player/domain/player_performance_policy.da
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/domain/player_playback_source.dart';
+import 'package:drama_client/core/toast/app_toast_provider.dart';
 import 'package:drama_client/features/player/presentation/pages/player_page.dart';
+import '../../core/toast/recording_app_toast_service.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_chrome.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_detail_sheet.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_playback_layer.dart';
@@ -1291,7 +1293,7 @@ void main() {
     expect(unavailableSession.playCount, 0);
   });
 
-  testWidgets('membership episode sends non-member to member paywall', (
+  testWidgets('membership episode sends non-member to recharge sheet', (
     tester,
   ) async {
     final playbackSession = _FakePlaybackSession();
@@ -1314,7 +1316,11 @@ void main() {
     await tester.tap(find.text('Member unlock'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Membership'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsOneWidget,
+    );
+    expect(find.text('Membership'), findsNothing);
     expect(playbackSession.playCount, 0);
   });
 
@@ -1368,10 +1374,11 @@ void main() {
     );
   });
 
-  testWidgets('coin episode auto unlock enabled still requires confirmation', (
+  testWidgets('coin episode auto unlock enabled auto deducts and plays', (
     tester,
   ) async {
     final playbackSession = _FakePlaybackSession();
+    final toast = RecordingAppToastService();
     await tester.pumpWidget(
       _buildPlayerApp(
         initialLocation: RoutePaths.playerLocation(
@@ -1382,24 +1389,30 @@ void main() {
         entitlementRepository:
             MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOn(),
         playbackSessionFactory: () => playbackSession,
+        toastService: toast,
       ),
     );
     await tester.pump(const Duration(seconds: 1));
+    await _pumpAutoUnlockSheet(tester);
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
     expect(
       find.byKey(const ValueKey('player_coin_unlock_confirm')),
+      findsNothing,
+    );
+    expect(toast.successes, contains('Unlocked automatically'));
+    expect(
+      find.byKey(const ValueKey('player_video_tap_layer')),
       findsOneWidget,
     );
-    expect(find.text('Unlock Now'), findsOneWidget);
-    expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
-    expect(playbackSession.playCount, 0);
   });
 
   testWidgets('coin episode enough balance with auto off shows coin dialog', (
     tester,
   ) async {
     final playbackSession = _FakePlaybackSession(emitWidthOnOpen: false);
+    final toast = RecordingAppToastService();
     await tester.pumpWidget(
       _buildPlayerApp(
         initialLocation: RoutePaths.playerLocation(
@@ -1410,6 +1423,7 @@ void main() {
         entitlementRepository:
             MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOff(),
         playbackSessionFactory: () => playbackSession,
+        toastService: toast,
       ),
     );
     await tester.pump(const Duration(seconds: 1));
@@ -1688,10 +1702,52 @@ void main() {
     },
   );
 
+  testWidgets('closing payment sheet returns to recharge drawer', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
+        ),
+        repository: _FakePlayerFeedRepository.normal(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await _pumpAutoUnlockSheet(tester);
+
+    await tester.tap(
+      find.byKey(const ValueKey('player_recharge_coin_coins_300')),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('player_recharge_payment_sheet')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byIcon(Icons.close_rounded).last);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('player_recharge_payment_sheet')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('player_recharge_unlock_close')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('player_recharge_coin_coins_300')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('coin package purchase continues to coin unlock confirmation', (
     tester,
   ) async {
     final playbackSession = _FakePlaybackSession();
+    final toast = RecordingAppToastService();
     await tester.pumpWidget(
       _buildPlayerApp(
         initialLocation: RoutePaths.playerLocation(
@@ -1700,6 +1756,7 @@ void main() {
         ),
         repository: _FakePlayerFeedRepository.normal(),
         playbackSessionFactory: () => playbackSession,
+        toastService: toast,
       ),
     );
     await tester.pump(const Duration(seconds: 1));
@@ -1747,6 +1804,7 @@ void main() {
       find.byKey(const ValueKey('player_coin_unlock_confirm')),
       findsNothing,
     );
+    expect(toast.successes, contains('Unlock successful'));
     expect(find.text('Unlock Now'), findsNothing);
     expect(
       find.byKey(const ValueKey('player_video_tap_layer')),
@@ -1794,25 +1852,27 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('membership package success from recharge sheet stays blocked', (
+  testWidgets('membership package success from recharge sheet plays episode', (
     tester,
   ) async {
+    final playbackSession = _FakePlaybackSession();
+    final toast = RecordingAppToastService();
     await tester.pumpWidget(
       _buildPlayerApp(
         initialLocation: RoutePaths.playerLocation(
           dramaId: 'drama-a',
           episodeId: '2',
         ),
-        repository: _FakePlayerFeedRepository.normal(),
+        repository: _FakePlayerFeedRepository.membershipLocked(),
+        playbackSessionFactory: () => playbackSession,
+        toastService: toast,
       ),
     );
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('player_recharge_unlock_close')),
-      findsOneWidget,
-    );
+    await tester.tap(find.text('Member unlock'));
+    await tester.pumpAndSettle();
 
     await tester.tap(
       find.byKey(const ValueKey('player_recharge_membership_weekly_vip_promo')),
@@ -1826,12 +1886,6 @@ void main() {
       find.byKey(const ValueKey('player_recharge_payment_buy_now')),
     );
     await tester.pump();
-
-    expect(
-      find.byKey(const ValueKey('player_recharge_payment_buy_now')),
-      findsOneWidget,
-    );
-
     await tester.pump(const Duration(milliseconds: 220));
     await tester.pumpAndSettle();
 
@@ -1839,8 +1893,11 @@ void main() {
       find.byKey(const ValueKey('player_recharge_unlock_close')),
       findsNothing,
     );
-    expect(find.text('Unlock Now'), findsOneWidget);
-    expect(find.byKey(const ValueKey('player_video_tap_layer')), findsNothing);
+    expect(toast.successes, contains('Membership activated'));
+    expect(
+      find.byKey(const ValueKey('player_video_tap_layer')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('unavailable episode remains blocked for member', (tester) async {
@@ -2512,6 +2569,10 @@ Future<void> _pumpAutoUnlockSheet(WidgetTester tester) async {
         find
             .byKey(const ValueKey('player_coin_unlock_confirm'))
             .evaluate()
+            .isNotEmpty ||
+        find
+            .byKey(const ValueKey('player_video_tap_layer'))
+            .evaluate()
             .isNotEmpty) {
       break;
     }
@@ -2539,7 +2600,9 @@ Widget _buildPlayerApp({
   MockEntitlementRepository? entitlementRepository,
   List<ProviderObserver> observers = const [],
   PlayerPerformancePolicy? performancePolicy,
+  RecordingAppToastService? toastService,
 }) {
+  final toast = toastService ?? RecordingAppToastService();
   final router = GoRouter(
     initialLocation: initialLocation,
     routes: [
@@ -2589,6 +2652,7 @@ Widget _buildPlayerApp({
         playerPerformancePolicyOverrideProvider.overrideWithValue(
           performancePolicy,
         ),
+      appToastProvider.overrideWithValue(toast),
     ],
     child: MaterialApp.router(
       localizationsDelegates: const [

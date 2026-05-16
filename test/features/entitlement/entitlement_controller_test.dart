@@ -138,7 +138,7 @@ void main() {
     );
 
     test(
-      'coin episode enough balance and auto on returns coin dialog',
+      'coin episode enough balance and auto on returns auto unlock and play',
       () async {
         final container = _containerWith(
           MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOn(),
@@ -153,10 +153,10 @@ void main() {
           mockEntitlementEpisodeFixture('found-you-ep-5'),
         );
 
-        expect(decision.type, EpisodeAccessDecisionType.showCoinUnlockDialog);
+        expect(decision.type, EpisodeAccessDecisionType.autoUnlockAndPlay);
         expect(decision.operationId, 'coin-unlock:found-you:found-you-ep-5');
         expect(decision.balance, 4000);
-        expect(decision.reason, 'auto_unlock_requires_current_confirmation');
+        expect(decision.reason, 'auto_unlock_enabled');
       },
     );
 
@@ -180,6 +180,22 @@ void main() {
         expect(decision.reason, 'auto_unlock_disabled');
       },
     );
+
+    test('coin episode auto unlock off returns coin dialog', () async {
+      final container = _containerWith(
+        MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOff(),
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(entitlementControllerProvider.notifier);
+      await controller.load();
+
+      final decision = controller.evaluateAccessFromFixture(
+        mockEntitlementEpisodeFixture('found-you-ep-5'),
+      );
+
+      expect(decision.type, EpisodeAccessDecisionType.showCoinUnlockDialog);
+      expect(decision.reason, 'auto_unlock_disabled');
+    });
 
     test('coin episode insufficient balance returns recharge dialog', () async {
       final container = _containerWith(

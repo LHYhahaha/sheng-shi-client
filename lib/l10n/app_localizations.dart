@@ -184,6 +184,12 @@ class AppLocalizations {
       _text(en: 'Processing mock purchase...', zh: '正在模拟购买...');
   String get playerUnlockFailed =>
       _text(en: 'Purchase failed. Please try again.', zh: '购买失败，请重试。');
+  String get playerUnlockSuccessful =>
+      _text(en: 'Unlock successful', zh: '解锁成功');
+  String get playerUnlockedAutomatically =>
+      _text(en: 'Unlocked automatically', zh: '已自动解锁');
+  String get playerMembershipActivated =>
+      _text(en: 'Membership activated', zh: '会员已开通');
   String get playerFeedEmpty =>
       _text(en: 'No episodes available yet.', zh: '暂无可播放剧集');
   String get playerFeedLoadFailed =>
