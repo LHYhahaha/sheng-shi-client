@@ -425,7 +425,7 @@ class ActivePlaybackSurfaceOverlayState
     }
     final hideDuringDrag =
         widget.isViewportDragging &&
-        !widget.policy.allowVideoSurfaceFollowDuringDrag;
+        !widget.policy.allowVideoSurfaceVisibleDuringDrag;
     if (hideDuringDrag) {
       _recordOverlayHidden(snapshot);
       return const SizedBox.shrink();
@@ -480,6 +480,7 @@ class ActivePlaybackSurfaceOverlayState
 
     if (!widget.policy.allowVideoSurfaceFollowDuringDrag) {
       return Positioned(
+        key: const ValueKey('active_playback_surface_static'),
         left: 0,
         top: 0,
         right: 0,
