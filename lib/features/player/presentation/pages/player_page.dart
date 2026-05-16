@@ -2437,11 +2437,14 @@ class _PlayerTopBar extends StatelessWidget {
             child: child,
           );
         },
-        child: _PlayerTopBarContent(
-          episodeNumber: episodeNumber,
-          playbackRate: playbackRate,
-          onBackTap: onBackTap,
-          onSpeedTap: onSpeedTap,
+        child: RepaintBoundary(
+          key: const ValueKey('player_top_bar_repaint_boundary'),
+          child: _PlayerTopBarContent(
+            episodeNumber: episodeNumber,
+            playbackRate: playbackRate,
+            onBackTap: onBackTap,
+            onSpeedTap: onSpeedTap,
+          ),
         ),
       );
     }
@@ -2450,11 +2453,14 @@ class _PlayerTopBar extends StatelessWidget {
       opacity: overlayOpacity,
       duration: const Duration(milliseconds: 140),
       curve: Curves.easeOut,
-      child: _PlayerTopBarContent(
-        episodeNumber: episodeNumber,
-        playbackRate: playbackRate,
-        onBackTap: onBackTap,
-        onSpeedTap: onSpeedTap,
+      child: RepaintBoundary(
+        key: const ValueKey('player_top_bar_repaint_boundary'),
+        child: _PlayerTopBarContent(
+          episodeNumber: episodeNumber,
+          playbackRate: playbackRate,
+          onBackTap: onBackTap,
+          onSpeedTap: onSpeedTap,
+        ),
       ),
     );
   }

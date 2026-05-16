@@ -359,6 +359,61 @@ void main() {
     expect(viewportRect.bottom, pageRect.bottom);
   });
 
+  testWidgets('player shell isolates static paint layers', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('player_poster_repaint_boundary')),
+      findsWidgets,
+    );
+    expect(
+      find.byKey(const ValueKey('player_gradient_repaint_boundary')),
+      findsWidgets,
+    );
+    expect(
+      find.byKey(const ValueKey('player_action_rail_repaint_boundary')),
+      findsWidgets,
+    );
+    expect(
+      find.byKey(const ValueKey('player_meta_repaint_boundary')),
+      findsWidgets,
+    );
+    expect(
+      find.byKey(const ValueKey('player_top_bar_repaint_boundary')),
+      findsWidgets,
+    );
+  });
+
+  testWidgets('locked overlay is isolated from poster repaint layer', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
+        ),
+        repository: _FakePlayerFeedRepository.normal(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('player_unlock_button')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_unlock_repaint_boundary')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('player_poster_repaint_boundary')),
+      findsWidgets,
+    );
+  });
+
   testWidgets('error state does not expose playable video surface', (
     tester,
   ) async {

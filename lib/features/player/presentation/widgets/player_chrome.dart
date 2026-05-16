@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
@@ -33,7 +32,6 @@ class PlayerChrome extends StatefulWidget {
     this.overlayOpacity = 1.0,
     this.overlayOpacityListenable,
     this.showViewportBackdrop = true,
-    this.showVideo = true,
     this.showLoading = false,
     this.playbackError = false,
     this.position = Duration.zero,
@@ -49,7 +47,6 @@ class PlayerChrome extends StatefulWidget {
     this.onSeekCancel,
     this.onRetry,
     this.onDownloadTap,
-    this.videoController,
     this.playbackLayer,
     this.seekBar,
     this.videoFit = BoxFit.cover,
@@ -71,7 +68,6 @@ class PlayerChrome extends StatefulWidget {
   final double overlayOpacity;
   final ValueListenable<double>? overlayOpacityListenable;
   final bool showViewportBackdrop;
-  final bool showVideo;
   final bool showLoading;
   final bool playbackError;
   final Duration position;
@@ -87,7 +83,6 @@ class PlayerChrome extends StatefulWidget {
   final VoidCallback? onSeekCancel;
   final VoidCallback? onRetry;
   final VoidCallback? onDownloadTap;
-  final VideoController? videoController;
   final Widget? playbackLayer;
   final Widget? seekBar;
   final BoxFit videoFit;
@@ -127,7 +122,6 @@ class _PlayerChromeState extends State<PlayerChrome> {
   ValueListenable<double>? get overlayOpacityListenable =>
       widget.overlayOpacityListenable;
   bool get showViewportBackdrop => widget.showViewportBackdrop;
-  bool get showVideo => widget.showVideo;
   bool get showLoading => widget.showLoading;
   bool get playbackError => widget.playbackError;
   Duration get position => widget.position;
@@ -143,7 +137,6 @@ class _PlayerChromeState extends State<PlayerChrome> {
   VoidCallback? get onSeekCancel => widget.onSeekCancel;
   VoidCallback? get onRetry => widget.onRetry;
   VoidCallback? get onDownloadTap => widget.onDownloadTap;
-  VideoController? get videoController => widget.videoController;
   Widget? get playbackLayer => widget.playbackLayer;
   Widget? get seekBar => widget.seekBar;
   BoxFit get videoFit => widget.videoFit;
@@ -167,72 +160,19 @@ class _PlayerChromeState extends State<PlayerChrome> {
       children: [
         if (showViewportBackdrop)
           const Positioned.fill(child: ColoredBox(color: AppColors.black)),
-        Positioned(
-          key: const ValueKey('player_video_viewport'),
-          left: 0,
-          top: 0,
-          right: 0,
-          bottom: bottomFrameHeight,
-          child: ClipRRect(
-            borderRadius: forYouLayout
-                ? const BorderRadius.vertical(bottom: Radius.circular(10))
-                : BorderRadius.zero,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (showViewportBackdrop)
-                  Image.asset(content.backgroundAssetPath, fit: BoxFit.cover),
-                ?playbackLayer,
-                if (videoController != null)
-                  IgnorePointer(
-                    child: AnimatedOpacity(
-                      opacity: showVideo ? 1 : 0,
-                      duration: const Duration(milliseconds: 120),
-                      curve: Curves.easeOut,
-                      child: Video(
-                        controller: videoController!,
-                        controls: NoVideoControls,
-                        fit: videoFit,
-                      ),
-                    ),
-                  ),
-                if (showLoading) const _PlaybackLoadingOverlay(),
-                if (playbackError) _PlaybackRetryOverlay(onRetry: onRetry),
-              ],
-            ),
-          ),
+        _PlayerPosterLayer(
+          content: content,
+          bottomFrameHeight: bottomFrameHeight,
+          forYouLayout: forYouLayout,
+          showViewportBackdrop: showViewportBackdrop,
+          playbackLayer: playbackLayer,
+          showLoading: showLoading,
+          playbackError: playbackError,
+          onRetry: onRetry,
         ),
-        Positioned(
-          left: 0,
-          top: 0,
-          right: 0,
-          bottom: bottomFrameHeight,
-          child: IgnorePointer(
-            child: ClipRRect(
-              borderRadius: forYouLayout
-                  ? const BorderRadius.vertical(bottom: Radius.circular(10))
-                  : BorderRadius.zero,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(
-                        alpha: forYouLayout ? 0.28 : 0.78,
-                      ),
-                      Colors.transparent,
-                      Colors.transparent,
-                      Colors.black.withValues(
-                        alpha: forYouLayout ? 0.58 : 0.72,
-                      ),
-                    ],
-                    stops: const [0, 0.2, 0.68, 1],
-                  ),
-                ),
-              ),
-            ),
-          ),
+        _PlayerGradientLayer(
+          bottomFrameHeight: bottomFrameHeight,
+          forYouLayout: forYouLayout,
         ),
         if (isPlaying || showCenterPlayButton)
           Positioned(
@@ -256,7 +196,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
           ),
         ],
         if (showUnlockButton)
-          _CenterUnlockButton(
+          _PlayerUnlockOverlay(
             label: unlockLabel ?? context.l10n.playerUnlockNow,
             bottomInset: bottomFrameHeight,
             onTap: onUnlockTap,
@@ -264,103 +204,91 @@ class _PlayerChromeState extends State<PlayerChrome> {
         else if (showCenterPlayButton)
           _CenterPlayButton(onTap: onTogglePlay),
         if (_showPauseFeedback) const _PauseFeedbackIcon(),
-        Positioned(
-          right: 17,
-          bottom:
-              bottomInset +
-              (forYouLayout
-                  ? _PlayerLayoutMetrics.forYouActionRailBottom
-                  : _PlayerLayoutMetrics.singleActionRailBottom),
-          child: _OverlayOpacity(
-            opacity: overlayOpacity,
-            opacityListenable: overlayOpacityListenable,
-            child: PlayerActionRail(
-              likeCountLabel: content.likeCountLabel,
-              onEpisodesTap: onEpisodesTap,
-              onShareTap: onShareTap,
-              onMoreTap: onMoreTap,
-            ),
-          ),
+        _PlayerActionRailLayer(
+          bottomInset: bottomInset,
+          forYouLayout: forYouLayout,
+          overlayOpacity: overlayOpacity,
+          overlayOpacityListenable: overlayOpacityListenable,
+          likeCountLabel: content.likeCountLabel,
+          onEpisodesTap: onEpisodesTap,
+          onShareTap: onShareTap,
+          onMoreTap: onMoreTap,
         ),
-        Positioned(
-          left: 16,
-          right: 91,
+        _PlayerMetaLayer(
+          content: content,
           bottom: forYouLayout ? forYouMetaBottom : bottomInset + 91,
-          child: _OverlayOpacity(
-            opacity: overlayOpacity,
-            opacityListenable: overlayOpacityListenable,
-            child: PlayerBottomMeta(
-              content: content,
-              showChevron: !forYouLayout,
-            ),
-          ),
+          forYouLayout: forYouLayout,
+          overlayOpacity: overlayOpacity,
+          overlayOpacityListenable: overlayOpacityListenable,
         ),
         if (forYouLayout) ...[
           if (!showUnlockButton)
-            Positioned(
-              left: 16,
-              right: 98,
+            _PlayerWatchNowLayer(
               bottom: forYouWatchNowBottom,
-              child: _OverlayOpacity(
-                opacity: overlayOpacity,
-                opacityListenable: overlayOpacityListenable,
-                child: _WatchNowButton(onTap: onWatchNowTap),
-              ),
+              overlayOpacity: overlayOpacity,
+              overlayOpacityListenable: overlayOpacityListenable,
+              onTap: onWatchNowTap,
             ),
         ] else ...[
           Positioned(
             left: 16,
             right: 16,
             bottom: bottomInset + 78,
-            child:
-                seekBar ??
-                (canSeek || duration > Duration.zero || showTrackLoading
-                    ? PlayerSeekBar(
-                        position: position,
-                        duration: duration,
-                        bufferedPosition: bufferedPosition,
-                        previewPosition: seekPreviewPosition,
-                        thumbnailAssetPath: content.posterAssetPath,
-                        isDragging: isSeeking,
-                        showTrackLoading: showTrackLoading,
-                        enabled: canSeek,
-                        onDragStart: onSeekStart,
-                        onDragUpdate: onSeekUpdate,
-                        onDragEnd: onSeekEnd,
-                        onDragCancel: onSeekCancel,
-                      )
-                    : const SizedBox.shrink()),
+            child: RepaintBoundary(
+              key: const ValueKey('player_seekbar_repaint_boundary'),
+              child:
+                  seekBar ??
+                  (canSeek || duration > Duration.zero || showTrackLoading
+                      ? PlayerSeekBar(
+                          position: position,
+                          duration: duration,
+                          bufferedPosition: bufferedPosition,
+                          previewPosition: seekPreviewPosition,
+                          thumbnailAssetPath: content.posterAssetPath,
+                          isDragging: isSeeking,
+                          showTrackLoading: showTrackLoading,
+                          enabled: canSeek,
+                          onDragStart: onSeekStart,
+                          onDragUpdate: onSeekUpdate,
+                          onDragEnd: onSeekEnd,
+                          onDragCancel: onSeekCancel,
+                        )
+                      : const SizedBox.shrink()),
+            ),
           ),
           if (!showUnlockButton)
             Positioned(
               left: 16,
               bottom:
                   bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
-              child: _OverlayOpacity(
-                opacity: overlayOpacity,
-                opacityListenable: overlayOpacityListenable,
-                child: GestureDetector(
-                  key: const ValueKey('player_member_button'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onUnlockTap,
-                  child: Container(
-                    constraints: const BoxConstraints(maxWidth: 168),
-                    height: 24,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.gold.withValues(alpha: 0.8),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      context.l10n.playerBecomeMember,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF4B2C0D),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        height: 16 / 12,
+              child: RepaintBoundary(
+                key: const ValueKey('player_member_repaint_boundary'),
+                child: _OverlayOpacity(
+                  opacity: overlayOpacity,
+                  opacityListenable: overlayOpacityListenable,
+                  child: GestureDetector(
+                    key: const ValueKey('player_member_button'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onUnlockTap,
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 168),
+                      height: 24,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.gold.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        context.l10n.playerBecomeMember,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF4B2C0D),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          height: 16 / 12,
+                        ),
                       ),
                     ),
                   ),
@@ -370,30 +298,33 @@ class _PlayerChromeState extends State<PlayerChrome> {
           Positioned(
             right: 31,
             bottom: bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
-            child: _OverlayOpacity(
-              opacity: overlayOpacity,
-              opacityListenable: overlayOpacityListenable,
-              child: GestureDetector(
-                key: const ValueKey('player_download_button'),
-                behavior: HitTestBehavior.opaque,
-                onTap: onDownloadTap,
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.download_rounded,
-                      color: Colors.white,
-                      size: 17,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      context.l10n.playerDownload,
-                      style: const TextStyle(
+            child: RepaintBoundary(
+              key: const ValueKey('player_download_repaint_boundary'),
+              child: _OverlayOpacity(
+                opacity: overlayOpacity,
+                opacityListenable: overlayOpacityListenable,
+                child: GestureDetector(
+                  key: const ValueKey('player_download_button'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onDownloadTap,
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.download_rounded,
                         color: Colors.white,
-                        fontSize: 12,
-                        height: 14 / 12,
+                        size: 17,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      Text(
+                        context.l10n.playerDownload,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          height: 14 / 12,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -420,6 +351,222 @@ class _PlayerChromeState extends State<PlayerChrome> {
   void dispose() {
     _feedbackTimer?.cancel();
     super.dispose();
+  }
+}
+
+class _PlayerPosterLayer extends StatelessWidget {
+  const _PlayerPosterLayer({
+    required this.content,
+    required this.bottomFrameHeight,
+    required this.forYouLayout,
+    required this.showViewportBackdrop,
+    required this.showLoading,
+    required this.playbackError,
+    this.playbackLayer,
+    this.onRetry,
+  });
+
+  final PlayerContent content;
+  final double bottomFrameHeight;
+  final bool forYouLayout;
+  final bool showViewportBackdrop;
+  final bool showLoading;
+  final bool playbackError;
+  final Widget? playbackLayer;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      key: const ValueKey('player_video_viewport'),
+      left: 0,
+      top: 0,
+      right: 0,
+      bottom: bottomFrameHeight,
+      child: ClipRRect(
+        borderRadius: forYouLayout
+            ? const BorderRadius.vertical(bottom: Radius.circular(10))
+            : BorderRadius.zero,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (showViewportBackdrop)
+              RepaintBoundary(
+                key: const ValueKey('player_poster_repaint_boundary'),
+                child: Image.asset(
+                  content.backgroundAssetPath,
+                  key: ValueKey<String>(
+                    'player_poster_${content.backgroundAssetPath}',
+                  ),
+                  fit: BoxFit.cover,
+                  filterQuality: FilterQuality.low,
+                ),
+              ),
+            ?playbackLayer,
+            if (showLoading)
+              const RepaintBoundary(child: _PlaybackLoadingOverlay()),
+            if (playbackError)
+              RepaintBoundary(child: _PlaybackRetryOverlay(onRetry: onRetry)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlayerGradientLayer extends StatelessWidget {
+  const _PlayerGradientLayer({
+    required this.bottomFrameHeight,
+    required this.forYouLayout,
+  });
+
+  final double bottomFrameHeight;
+  final bool forYouLayout;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: 0,
+      top: 0,
+      right: 0,
+      bottom: bottomFrameHeight,
+      child: IgnorePointer(
+        child: RepaintBoundary(
+          key: const ValueKey('player_gradient_repaint_boundary'),
+          child: ClipRRect(
+            borderRadius: forYouLayout
+                ? const BorderRadius.vertical(bottom: Radius.circular(10))
+                : BorderRadius.zero,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: forYouLayout ? 0.28 : 0.78),
+                    Colors.transparent,
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: forYouLayout ? 0.58 : 0.72),
+                  ],
+                  stops: const [0, 0.2, 0.68, 1],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlayerActionRailLayer extends StatelessWidget {
+  const _PlayerActionRailLayer({
+    required this.bottomInset,
+    required this.forYouLayout,
+    required this.overlayOpacity,
+    required this.overlayOpacityListenable,
+    required this.likeCountLabel,
+    required this.onEpisodesTap,
+    required this.onShareTap,
+    required this.onMoreTap,
+  });
+
+  final double bottomInset;
+  final bool forYouLayout;
+  final double overlayOpacity;
+  final ValueListenable<double>? overlayOpacityListenable;
+  final String likeCountLabel;
+  final VoidCallback onEpisodesTap;
+  final VoidCallback onShareTap;
+  final VoidCallback onMoreTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      right: 17,
+      bottom:
+          bottomInset +
+          (forYouLayout
+              ? _PlayerLayoutMetrics.forYouActionRailBottom
+              : _PlayerLayoutMetrics.singleActionRailBottom),
+      child: RepaintBoundary(
+        key: const ValueKey('player_action_rail_repaint_boundary'),
+        child: _OverlayOpacity(
+          opacity: overlayOpacity,
+          opacityListenable: overlayOpacityListenable,
+          child: PlayerActionRail(
+            likeCountLabel: likeCountLabel,
+            onEpisodesTap: onEpisodesTap,
+            onShareTap: onShareTap,
+            onMoreTap: onMoreTap,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlayerMetaLayer extends StatelessWidget {
+  const _PlayerMetaLayer({
+    required this.content,
+    required this.bottom,
+    required this.forYouLayout,
+    required this.overlayOpacity,
+    required this.overlayOpacityListenable,
+  });
+
+  final PlayerContent content;
+  final double bottom;
+  final bool forYouLayout;
+  final double overlayOpacity;
+  final ValueListenable<double>? overlayOpacityListenable;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: 16,
+      right: 91,
+      bottom: bottom,
+      child: RepaintBoundary(
+        key: const ValueKey('player_meta_repaint_boundary'),
+        child: _OverlayOpacity(
+          opacity: overlayOpacity,
+          opacityListenable: overlayOpacityListenable,
+          child: PlayerBottomMeta(content: content, showChevron: !forYouLayout),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlayerWatchNowLayer extends StatelessWidget {
+  const _PlayerWatchNowLayer({
+    required this.bottom,
+    required this.overlayOpacity,
+    required this.overlayOpacityListenable,
+    required this.onTap,
+  });
+
+  final double bottom;
+  final double overlayOpacity;
+  final ValueListenable<double>? overlayOpacityListenable;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: 16,
+      right: 98,
+      bottom: bottom,
+      child: RepaintBoundary(
+        key: const ValueKey('player_watch_now_repaint_boundary'),
+        child: _OverlayOpacity(
+          opacity: overlayOpacity,
+          opacityListenable: overlayOpacityListenable,
+          child: _WatchNowButton(onTap: onTap),
+        ),
+      ),
+    );
   }
 }
 
@@ -553,8 +700,8 @@ class _CenterPlayButton extends StatelessWidget {
   }
 }
 
-class _CenterUnlockButton extends StatelessWidget {
-  const _CenterUnlockButton({
+class _PlayerUnlockOverlay extends StatelessWidget {
+  const _PlayerUnlockOverlay({
     required this.label,
     required this.bottomInset,
     required this.onTap,
@@ -571,28 +718,31 @@ class _CenterUnlockButton extends StatelessWidget {
       top: 0,
       right: 0,
       bottom: bottomInset,
-      child: Center(
-        child: GestureDetector(
-          key: const ValueKey('player_unlock_button'),
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: Container(
-            width: 275,
-            height: 44,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                height: 18 / 14,
+      child: RepaintBoundary(
+        key: const ValueKey('player_unlock_repaint_boundary'),
+        child: Center(
+          child: GestureDetector(
+            key: const ValueKey('player_unlock_button'),
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: Container(
+              width: 275,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  height: 18 / 14,
+                ),
               ),
             ),
           ),
