@@ -789,6 +789,7 @@ void main() {
       _buildPlayerApp(
         repository: _FakePlayerFeedRepository.unlocked(),
         playbackSessionFactory: () => playbackSession,
+        performancePolicy: PlayerPerformancePolicy.rich,
       ),
     );
     await tester.pump(const Duration(seconds: 1));
@@ -826,6 +827,78 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
     expect(playbackSession.seekedPositions, isNotEmpty);
+  });
+
+  testWidgets('stable 策略拖动 seekbar 无缩略图但有轻量时间气泡', (tester) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+        performancePolicy: PlayerPerformancePolicy.stable,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    playbackSession.emitDuration(const Duration(seconds: 100));
+    await tester.pump();
+    playbackSession.emitPosition(const Duration(seconds: 25));
+    await tester.pump();
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('player_seek_bar'))),
+    );
+    await gesture.moveBy(const Offset(120, 0));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('player_seek_thumbnail_preview')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('player_seek_time_bubble')),
+      findsOneWidget,
+    );
+    expect(find.textContaining(' / 01:40'), findsOneWidget);
+
+    await gesture.up();
+    await tester.pump();
+  });
+
+  testWidgets('ultraStable 策略拖动 seekbar 无缩略图且无时间气泡', (tester) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+        performancePolicy: PlayerPerformancePolicy.ultraStable,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    playbackSession.emitDuration(const Duration(seconds: 100));
+    await tester.pump();
+    playbackSession.emitPosition(const Duration(seconds: 25));
+    await tester.pump();
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('player_seek_bar'))),
+    );
+    await gesture.moveBy(const Offset(120, 0));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('player_seek_thumbnail_preview')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey('player_seek_time_bubble')), findsNothing);
+
+    await gesture.up();
+    await tester.pump();
   });
 
   testWidgets('single drama seek bar stays visible before duration arrives', (

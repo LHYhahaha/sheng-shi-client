@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../domain/player_content.dart';
+import '../../domain/player_performance_policy.dart';
+import '../../domain/player_seek_preview_config.dart';
 
 abstract final class _PlayerLayoutMetrics {
   static const forYouActionRailBottom = 160.0;
@@ -245,6 +247,9 @@ class _PlayerChromeState extends State<PlayerChrome> {
                           bufferedPosition: bufferedPosition,
                           previewPosition: seekPreviewPosition,
                           thumbnailAssetPath: content.posterAssetPath,
+                          previewConfig: PlayerSeekPreviewConfig.fromPolicy(
+                            PlayerPerformancePolicy.stable,
+                          ),
                           isDragging: isSeeking,
                           showTrackLoading: showTrackLoading,
                           enabled: canSeek,
@@ -925,6 +930,7 @@ class PlayerSeekBar extends StatefulWidget {
     required this.isDragging,
     required this.showTrackLoading,
     required this.thumbnailAssetPath,
+    required this.previewConfig,
     this.previewPosition,
     this.onDragStart,
     this.onDragUpdate,
@@ -937,6 +943,7 @@ class PlayerSeekBar extends StatefulWidget {
   final Duration duration;
   final Duration bufferedPosition;
   final String thumbnailAssetPath;
+  final PlayerSeekPreviewConfig previewConfig;
   final Duration? previewPosition;
   final bool enabled;
   final bool isDragging;
@@ -955,15 +962,32 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
   Widget build(BuildContext context) {
     final progress = _ratio(widget.previewPosition ?? widget.position);
     final buffered = _ratio(widget.bufferedPosition);
+    final config = widget.previewConfig;
+    final showThumbnail =
+        widget.isDragging &&
+        config.allowThumbnailPreview &&
+        widget.thumbnailAssetPath.isNotEmpty;
+    final showTimeBubble =
+        widget.isDragging && config.allowTimeBubble && !showThumbnail;
     final barHeight = widget.isDragging ? 4.0 : 2.0;
+    final stackHeight = showThumbnail
+        ? 112.0
+        : showTimeBubble
+        ? 40.0
+        : 20.0;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final thumbnailWidth = 124.0;
+        const thumbnailWidth = 124.0;
         final thumbnailLeft = (progress * width - thumbnailWidth / 2).clamp(
           0.0,
           (width - thumbnailWidth).clamp(0.0, width),
+        );
+        const timeBubbleWidth = 108.0;
+        final timeBubbleLeft = (progress * width - timeBubbleWidth / 2).clamp(
+          0.0,
+          (width - timeBubbleWidth).clamp(0.0, width),
         );
 
         return GestureDetector(
@@ -991,17 +1015,28 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
                 }
               : null,
           child: SizedBox(
-            height: widget.isDragging ? 112 : 20,
+            height: stackHeight,
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                if (widget.isDragging)
+                if (showThumbnail)
                   Positioned(
                     left: thumbnailLeft,
                     bottom: 30,
                     width: thumbnailWidth,
                     child: _SeekThumbnailPreview(
                       assetPath: widget.thumbnailAssetPath,
+                      position: widget.previewPosition ?? widget.position,
+                      duration: widget.duration,
+                      useShadow: config.allowPreviewShadow,
+                    ),
+                  ),
+                if (showTimeBubble)
+                  Positioned(
+                    left: timeBubbleLeft,
+                    bottom: 22,
+                    width: timeBubbleWidth,
+                    child: _SeekTimeBubble(
                       position: widget.previewPosition ?? widget.position,
                       duration: widget.duration,
                     ),
@@ -1092,11 +1127,13 @@ class _SeekThumbnailPreview extends StatelessWidget {
     required this.assetPath,
     required this.position,
     required this.duration,
+    required this.useShadow,
   });
 
   final String assetPath;
   final Duration position;
   final Duration duration;
+  final bool useShadow;
 
   @override
   Widget build(BuildContext context) {
@@ -1107,52 +1144,57 @@ class _SeekThumbnailPreview extends StatelessWidget {
         color: Colors.black.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.white.withValues(alpha: 0.34)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.38),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        boxShadow: useShadow
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.38),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ]
+            : null,
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
         fit: StackFit.expand,
         children: [
           Image.asset(assetPath, fit: BoxFit.cover),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  Colors.black.withValues(alpha: 0.56),
-                ],
+          if (useShadow)
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.56),
+                  ],
+                ),
               ),
             ),
-          ),
           Positioned(
             left: 8,
             right: 8,
             bottom: 6,
             child: Text(
-              '${_format(position)} / ${_format(duration)}',
+              '${_SeekTimeLabel.format(position)} / ${_SeekTimeLabel.format(duration)}',
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 height: 13 / 11,
-                shadows: [
-                  Shadow(
-                    color: Colors.black54,
-                    blurRadius: 4,
-                    offset: Offset(0, 1),
-                  ),
-                ],
+                shadows: useShadow
+                    ? const [
+                        Shadow(
+                          color: Colors.black54,
+                          blurRadius: 4,
+                          offset: Offset(0, 1),
+                        ),
+                      ]
+                    : null,
               ),
             ),
           ),
@@ -1160,8 +1202,42 @@ class _SeekThumbnailPreview extends StatelessWidget {
       ),
     );
   }
+}
 
-  String _format(Duration value) {
+/// 轻量拖动时间气泡（stable）：无图、无阴影，仅半透明底 + 文本。
+class _SeekTimeBubble extends StatelessWidget {
+  const _SeekTimeBubble({required this.position, required this.duration});
+
+  final Duration position;
+  final Duration duration;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('player_seek_time_bubble'),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        '${_SeekTimeLabel.format(position)} / ${_SeekTimeLabel.format(duration)}',
+        textAlign: TextAlign.center,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          height: 13 / 11,
+        ),
+      ),
+    );
+  }
+}
+
+abstract final class _SeekTimeLabel {
+  static String format(Duration value) {
     final totalSeconds = value.inSeconds;
     final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
     final seconds = (totalSeconds % 60).toString().padLeft(2, '0');

@@ -37,6 +37,9 @@ class PlayerPerformancePolicy {
     required this.preparedForwardSessionCount,
     required this.retainedBackwardSessionCount,
     required this.skipPreloadWhenCurrentItemLocked,
+    required this.allowSeekThumbnailPreview,
+    required this.allowSeekTimeBubble,
+    required this.allowSeekPreviewShadow,
     this.videoSurfaceDimOpacityDuringDrag = 0.88,
   });
 
@@ -117,6 +120,19 @@ class PlayerPerformancePolicy {
   /// rich 模式拖动时 Video surface 压暗 opacity。
   final double videoSurfaceDimOpacityDuringDrag;
 
+  /// 拖动进度条时是否显示海报缩略图预览（单剧 seek）。
+  ///
+  /// 开启会绘制 Image + 圆角卡片；服务端 sprite/VTT 未来也受此门控。
+  final bool allowSeekThumbnailPreview;
+
+  /// 拖动进度条时是否显示轻量时间气泡（无图）。
+  ///
+  /// ultraStable 关闭时仅加粗轨道，减少阴影/渐变/文案重绘。
+  final bool allowSeekTimeBubble;
+
+  /// 缩略图预览是否使用阴影与底部渐变（仅 thumbnail 开启时生效）。
+  final bool allowSeekPreviewShadow;
+
   /// iOS / 高性能默认可视策略；HLS/session 与 stable 同级（仍为保守 cap）。
   static const rich = PlayerPerformancePolicy(
     mode: PlayerPerformanceMode.rich,
@@ -134,6 +150,9 @@ class PlayerPerformancePolicy {
     preparedForwardSessionCount: 1,
     retainedBackwardSessionCount: 1,
     skipPreloadWhenCurrentItemLocked: false,
+    allowSeekThumbnailPreview: true,
+    allowSeekTimeBubble: true,
+    allowSeekPreviewShadow: true,
   );
 
   /// 普通 Android 默认。
@@ -153,6 +172,9 @@ class PlayerPerformancePolicy {
     preparedForwardSessionCount: 1,
     retainedBackwardSessionCount: 1,
     skipPreloadWhenCurrentItemLocked: false,
+    allowSeekThumbnailPreview: false,
+    allowSeekTimeBubble: true,
+    allowSeekPreviewShadow: false,
   );
 
   /// 低端 Android：视觉同 stable，HLS/session 更保守。
@@ -172,6 +194,9 @@ class PlayerPerformancePolicy {
     preparedForwardSessionCount: 0,
     retainedBackwardSessionCount: 0,
     skipPreloadWhenCurrentItemLocked: true,
+    allowSeekThumbnailPreview: false,
+    allowSeekTimeBubble: false,
+    allowSeekPreviewShadow: false,
   );
 
   /// 按平台选择默认档位（不含低端机识别；低端机请 override [ultraStable]）。

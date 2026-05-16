@@ -214,6 +214,23 @@ void main() {
     expect(policy.retainedBackwardSessionCount, 0);
   });
 
+  test('各档位 seek 预览策略', () {
+    expect(PlayerPerformancePolicy.rich.allowSeekThumbnailPreview, isTrue);
+    expect(PlayerPerformancePolicy.rich.allowSeekTimeBubble, isTrue);
+    expect(PlayerPerformancePolicy.rich.allowSeekPreviewShadow, isTrue);
+
+    expect(PlayerPerformancePolicy.stable.allowSeekThumbnailPreview, isFalse);
+    expect(PlayerPerformancePolicy.stable.allowSeekTimeBubble, isTrue);
+    expect(PlayerPerformancePolicy.stable.allowSeekPreviewShadow, isFalse);
+
+    expect(
+      PlayerPerformancePolicy.ultraStable.allowSeekThumbnailPreview,
+      isFalse,
+    );
+    expect(PlayerPerformancePolicy.ultraStable.allowSeekTimeBubble, isFalse);
+    expect(PlayerPerformancePolicy.ultraStable.allowSeekPreviewShadow, isFalse);
+  });
+
   test('ultraStable 派生保守 PlayerPreloadConfig', () {
     final config = PlayerPerformancePolicy.ultraStable.toPreloadConfig();
     expect(config.effectivePreparedForwardSessionCount, 0);

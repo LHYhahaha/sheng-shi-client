@@ -9,6 +9,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/player_performance_policy_provider.dart';
 import '../../application/player_playback_controller.dart';
+import '../../domain/player_seek_preview_config.dart';
 import '../../domain/player_performance_policy.dart';
 import '../../application/player_rebuild_diagnostics.dart';
 import '../../application/player_viewport_controller.dart';
@@ -724,6 +725,9 @@ class PlayerSeekBarConsumer extends ConsumerWidget {
         sessionKey,
       ).select(PlayerSeekBarSnapshot.fromState),
     );
+    final previewConfig = PlayerSeekPreviewConfig.fromPolicy(
+      ref.watch(playerPerformancePolicyProvider),
+    );
     final showTrackLoading = snapshot.isLoading && !snapshot.isSeeking;
     final canSeek =
         snapshot.isSeekAllowed && !showTrackLoading && !snapshot.isError;
@@ -739,6 +743,7 @@ class PlayerSeekBarConsumer extends ConsumerWidget {
       bufferedPosition: snapshot.bufferedPosition,
       previewPosition: snapshot.seekPreviewPosition,
       thumbnailAssetPath: thumbnailAssetPath,
+      previewConfig: previewConfig,
       isDragging: snapshot.isSeeking,
       showTrackLoading: showTrackLoading,
       enabled: canSeek,
