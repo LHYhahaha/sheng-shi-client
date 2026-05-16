@@ -2,7 +2,12 @@ import 'package:drama_client/core/runtime/app_runtime_config.dart';
 import 'package:drama_client/core/runtime/app_runtime_config_provider.dart';
 import 'package:drama_client/core/runtime/device_capability.dart';
 import 'package:drama_client/core/runtime/device_capability_provider.dart';
+import 'package:drama_client/core/runtime/runtime_feature_flag_config.dart';
+import 'package:drama_client/core/runtime/runtime_localization_config.dart';
+import 'package:drama_client/core/runtime/runtime_performance_mode.dart';
+import 'package:drama_client/core/runtime/runtime_player_config.dart';
 import 'package:drama_client/features/player/application/player_performance_policy_provider.dart';
+import 'package:drama_client/features/player/application/runtime_performance_mode_mapper.dart';
 import 'package:drama_client/features/player/data/player_preload_config_provider.dart';
 import 'package:drama_client/features/player/domain/player_performance_policy.dart';
 import 'package:flutter/foundation.dart';
@@ -97,6 +102,27 @@ void main() {
     );
   });
 
+  test('RuntimePerformanceMode 映射到 PlayerPerformancePolicy', () {
+    expect(
+      PlayerPerformancePolicy.forMode(
+        playerPerformanceModeFromRuntime(RuntimePerformanceMode.rich),
+      ).mode,
+      PlayerPerformanceMode.rich,
+    );
+    expect(
+      PlayerPerformancePolicy.forMode(
+        playerPerformanceModeFromRuntime(RuntimePerformanceMode.stable),
+      ).mode,
+      PlayerPerformanceMode.stable,
+    );
+    expect(
+      PlayerPerformancePolicy.forMode(
+        playerPerformanceModeFromRuntime(RuntimePerformanceMode.ultraStable),
+      ).mode,
+      PlayerPerformanceMode.ultraStable,
+    );
+  });
+
   test('runtime config 覆盖播放器档位', () {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
@@ -105,7 +131,11 @@ void main() {
       overrides: [
         appRuntimeConfigOverrideProvider.overrideWithValue(
           const AppRuntimeConfig(
-            playerPerformanceModeOverride: PlayerPerformanceMode.rich,
+            player: RuntimePlayerConfig(
+              performanceModeOverride: RuntimePerformanceMode.rich,
+            ),
+            localization: RuntimeLocalizationConfig.defaults,
+            featureFlags: RuntimeFeatureFlagConfig.defaults,
           ),
         ),
       ],
@@ -123,7 +153,11 @@ void main() {
       overrides: [
         appRuntimeConfigOverrideProvider.overrideWithValue(
           const AppRuntimeConfig(
-            playerPerformanceModeOverride: PlayerPerformanceMode.rich,
+            player: RuntimePlayerConfig(
+              performanceModeOverride: RuntimePerformanceMode.rich,
+            ),
+            localization: RuntimeLocalizationConfig.defaults,
+            featureFlags: RuntimeFeatureFlagConfig.defaults,
           ),
         ),
         playerPerformancePolicyOverrideProvider.overrideWithValue(
@@ -144,7 +178,11 @@ void main() {
       overrides: [
         appRuntimeConfigOverrideProvider.overrideWithValue(
           const AppRuntimeConfig(
-            playerPerformanceModeOverride: PlayerPerformanceMode.rich,
+            player: RuntimePlayerConfig(
+              performanceModeOverride: RuntimePerformanceMode.rich,
+            ),
+            localization: RuntimeLocalizationConfig.defaults,
+            featureFlags: RuntimeFeatureFlagConfig.defaults,
           ),
         ),
         playerPerformanceModeOverrideProvider.overrideWithValue(

@@ -2,6 +2,9 @@ import 'package:drama_client/core/runtime/app_runtime_config.dart';
 import 'package:drama_client/core/runtime/app_runtime_config_provider.dart';
 import 'package:drama_client/core/runtime/device_capability.dart';
 import 'package:drama_client/core/runtime/device_capability_provider.dart';
+import 'package:drama_client/core/runtime/runtime_feature_flag_config.dart';
+import 'package:drama_client/core/runtime/runtime_localization_config.dart';
+import 'package:drama_client/core/runtime/runtime_player_config.dart';
 import 'package:drama_client/features/player/application/player_performance_policy_provider.dart';
 import 'package:drama_client/features/player/data/player_preload_config_provider.dart';
 import 'package:drama_client/features/player/domain/player_performance_policy.dart';
@@ -19,11 +22,15 @@ void main() {
         devicePerformanceTierOverrideProvider.overrideWithValue(
           DevicePerformanceTier.low,
         ),
-        appRuntimeConfigOverrideProvider.overrideWithValue(
+        appRuntimeRemoteConfigProvider.overrideWithValue(
           const AppRuntimeConfig(
-            homeStartupPreloadCount: 3,
-            singleDramaForwardPreloadCount: 2,
-            forYouForwardPreloadCount: 2,
+            player: RuntimePlayerConfig(
+              homeStartupHlsPreloadCount: 5,
+              singleDramaForwardHlsPreloadCount: 2,
+              forYouForwardHlsPreloadCount: 2,
+            ),
+            localization: RuntimeLocalizationConfig.defaults,
+            featureFlags: RuntimeFeatureFlagConfig.defaults,
           ),
         ),
       ],
@@ -37,7 +44,7 @@ void main() {
     expect(config.homeStartupPreloadCount, 0);
   });
 
-  test('stable 档可接受 runtime 覆盖 HLS 数量', () {
+  test('stable 档可接受 runtime 覆盖 HLS 数量与字节/超时', () {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
 
@@ -45,8 +52,13 @@ void main() {
       overrides: [
         appRuntimeConfigOverrideProvider.overrideWithValue(
           const AppRuntimeConfig(
-            singleDramaForwardPreloadCount: 0,
-            hlsMaxPreloadBytes: 1024,
+            player: RuntimePlayerConfig(
+              singleDramaForwardHlsPreloadCount: 0,
+              hlsMaxPreloadBytes: 1024,
+              hlsPlaylistTimeout: Duration(seconds: 8),
+            ),
+            localization: RuntimeLocalizationConfig.defaults,
+            featureFlags: RuntimeFeatureFlagConfig.defaults,
           ),
         ),
       ],
@@ -60,6 +72,7 @@ void main() {
     );
     expect(config.forwardHlsPreloadCountFor(false), 0);
     expect(config.maxPreloadBytes, 1024);
+    expect(config.preloadTimeout, const Duration(seconds: 8));
     expect(config.effectivePreparedForwardSessionCount, 1);
   });
 
@@ -70,7 +83,11 @@ void main() {
           PlayerPerformancePolicy.stable,
         ),
         appRuntimeConfigOverrideProvider.overrideWithValue(
-          const AppRuntimeConfig(homeStartupPreloadCount: 0),
+          const AppRuntimeConfig(
+            player: RuntimePlayerConfig(homeStartupHlsPreloadCount: 0),
+            localization: RuntimeLocalizationConfig.defaults,
+            featureFlags: RuntimeFeatureFlagConfig.defaults,
+          ),
         ),
       ],
     );

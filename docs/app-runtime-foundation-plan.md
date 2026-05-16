@@ -27,11 +27,33 @@ Implemented skeleton (no UI / no player flow changes / no real API):
 | --- | --- |
 | `DeviceCapability` + `DevicePerformanceTier` | `lib/core/runtime/device_capability.dart` |
 | Device providers + test overrides | `lib/core/runtime/device_capability_provider.dart` |
-| `AppRuntimeConfig` + merge rules | `lib/core/runtime/app_runtime_config.dart` |
+| Grouped `AppRuntimeConfig` | `lib/core/runtime/app_runtime_config.dart` |
+| `RuntimePlayerConfig` | `lib/core/runtime/runtime_player_config.dart` |
+| `RuntimeLocalizationConfig` | `lib/core/runtime/runtime_localization_config.dart` |
+| `RuntimeFeatureFlagConfig` + keys | `lib/core/runtime/runtime_feature_flag_config.dart` |
+| `RuntimePerformanceMode` (feature-neutral) | `lib/core/runtime/runtime_performance_mode.dart` |
 | Config providers (defaults / remote stub / test override) | `lib/core/runtime/app_runtime_config_provider.dart` |
-| Player mode from tier | `lib/core/runtime/player_performance_mode_for_device.dart` |
+| Player tier mapping | `lib/features/player/application/runtime_performance_mode_mapper.dart` |
 | `playerPerformanceModeFromDeviceProvider` | `player_performance_policy_provider.dart` |
-| `playerPreloadConfigProvider` runtime merge + ultraStable clamp | `player_preload_config_provider.dart` |
+| `playerPreloadConfigProvider` (final preload entry) | `player_preload_config_provider.dart` |
+| Architecture boundary test | `test/architecture/runtime_boundary_test.dart` |
+
+## Phase A.1 Status (2026-05-16) — Done
+
+**Structured runtime config** — `core/runtime` has **no** `features/` imports.
+
+```text
+AppRuntimeConfig
+  ├─ player: RuntimePlayerConfig      # HLS preload, performance mode, timing logs
+  ├─ localization: RuntimeLocalizationConfig
+  └─ featureFlags: RuntimeFeatureFlagConfig
+```
+
+Player consumes runtime via application-layer mapping:
+
+`RuntimePerformanceMode` → `PlayerPerformanceMode` → `PlayerPerformancePolicy`
+
+`playerPreloadConfigProvider` remains the **single entry** for HLS preloader / startup / playback preload.
 
 **Priority (production path):**
 
@@ -40,7 +62,7 @@ Player: full policy override > mode override > AppRuntimeConfig.playerPerformanc
 AppRuntimeConfig: test override > remote merge > device rules > defaults
 ```
 
-**Still deferred (Phase B+):** real RAM/model via `device_info_plus` / platform channel, `package_info` for app version, secure local config cache, remote config fetch/repository, startup `AppRuntimeController`, localization bundle download.
+**Still deferred (Phase B+):** real RAM/model via `device_info_plus` / platform channel, `package_info` for app version, secure local config cache, remote config fetch/repository, startup `AppRuntimeController`, localization bundle download, `RuntimeExperimentConfig`.
 
 Remote config fetch failure must not block app boot — Phase A remote provider is always `null`.
 

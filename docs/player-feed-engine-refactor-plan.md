@@ -396,7 +396,7 @@ Last updated: 2026-05-16 (mainline seal / code-quality pass).
 **Done (minimal):**
 
 - `PlayerPerformanceMode.ultraStable`：视觉同 stable；HLS preload 0；prepared/retained 0；locked 落位跳过 preloadAround。
-- Provider 链：`playerPerformancePolicyOverrideProvider` / `playerPerformanceModeOverrideProvider` / `playerPerformanceModeFromDeviceProvider`（接 `deviceCapabilityProvider`，见 App Runtime Phase A）。
+- Provider 链：`playerPerformancePolicyOverrideProvider` / `playerPerformanceModeOverrideProvider` / `AppRuntimeConfig.player` / `deviceCapabilityProvider` → `RuntimePerformanceMode` 映射（见 App Runtime Phase A.1）。
 - `playerPreloadConfigProvider` 从 policy 派生，playback controller 尊重 prepared/retained cap。
 
 **不做的：**

@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/runtime/app_runtime_config_provider.dart';
 import '../../../core/runtime/device_capability_provider.dart';
-import '../../../core/runtime/player_performance_mode_for_device.dart';
 import '../domain/player_performance_policy.dart';
+import 'runtime_performance_mode_mapper.dart';
 
 /// 测试或远程配置：直接覆盖完整 [PlayerPerformancePolicy]（最高）。
 final playerPerformancePolicyOverrideProvider =
@@ -19,10 +19,11 @@ final playerPerformanceModeOverrideProvider = Provider<PlayerPerformanceMode?>(
 final playerPerformanceModeFromDeviceProvider =
     Provider<PlayerPerformanceMode?>((ref) {
       final device = ref.watch(deviceCapabilityProvider);
-      return playerPerformanceModeForTier(
+      final runtimeMode = runtimePerformanceModeForTier(
         tier: device.performanceTier,
         platform: device.platform,
       );
+      return playerPerformanceModeFromRuntime(runtimeMode);
     });
 
 /// 当前播放体验性能策略。
@@ -30,7 +31,7 @@ final playerPerformanceModeFromDeviceProvider =
 /// 优先级（低 → 高）：
 /// 1. 平台默认 [PlayerPerformancePolicy.forPlatform]
 /// 2. [playerPerformanceModeFromDeviceProvider]（设备档位）
-/// 3. [appRuntimeConfigProvider.playerPerformanceModeOverride]（runtime 配置）
+/// 3. [appRuntimeConfigProvider].player.performanceModeOverride（runtime 配置）
 /// 4. [playerPerformanceModeOverrideProvider]（测试 / debug 档位）
 /// 5. [playerPerformancePolicyOverrideProvider]（测试 / debug 完整 policy）
 final playerPerformancePolicyProvider = Provider<PlayerPerformancePolicy>((
@@ -48,9 +49,12 @@ final playerPerformancePolicyProvider = Provider<PlayerPerformancePolicy>((
 
   final runtimeMode = ref
       .watch(appRuntimeConfigProvider)
-      .playerPerformanceModeOverride;
+      .player
+      .performanceModeOverride;
   if (runtimeMode != null) {
-    return PlayerPerformancePolicy.forMode(runtimeMode);
+    return PlayerPerformancePolicy.forMode(
+      playerPerformanceModeFromRuntime(runtimeMode),
+    );
   }
 
   final deviceMode = ref.watch(playerPerformanceModeFromDeviceProvider);

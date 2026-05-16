@@ -239,7 +239,8 @@ drag path and moving real runtime commands to the settled phase.
 - `playerPerformancePolicyOverrideProvider` — full policy object
 - `playerPerformanceModeOverrideProvider` — `rich` / `stable` / `ultraStable`
 - `deviceCapabilityProvider` / `devicePerformanceTierOverrideProvider` — global tier (Phase A fallback; Phase B real device info)
-- `appRuntimeConfigProvider` — runtime preload / mode overrides (remote stub null in Phase A)
-- `playerPerformanceModeFromDeviceProvider` — maps tier → `PlayerPerformanceMode`
+- `appRuntimeConfigProvider.player` — grouped `RuntimePlayerConfig` (remote stub null in Phase A)
+- `runtime_performance_mode_mapper.dart` — `RuntimePerformanceMode` → `PlayerPerformanceMode`
+- `playerPreloadConfigProvider` — player preload **统一入口**（HLS + policy cap）
 
 Do not scatter `Platform.isAndroid` or model checks in UI or runtime code.

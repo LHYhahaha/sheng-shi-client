@@ -1,0 +1,53 @@
+import 'package:flutter/foundation.dart';
+
+/// 远程功能开关 key 常量（避免 magic string 散落 feature 模块）。
+abstract final class RuntimeFeatureFlagKeys {
+  /// 播放器本地 HLS proxy/cache（当前产品明确不做，默认 false）。
+  static const playerLocalHlsProxy = 'player_local_hls_proxy';
+
+  /// 远程 UI 语言包。
+  static const remoteLocalization = 'remote_localization';
+
+  /// 按 locale 自动选字幕轨。
+  static const subtitleByLocale = 'subtitle_by_locale';
+
+  /// 新解锁 sheet 实验 UI。
+  static const newUnlockSheet = 'new_unlock_sheet';
+
+  /// 剧集列表走远程 API（与 `--dart-define` 并存，不替代业务状态）。
+  static const apiRemoteDrama = 'api_remote_drama';
+}
+
+/// 远程灰度 / 实验开关表（默认全 false，显式 true 才开启）。
+class RuntimeFeatureFlagConfig {
+  const RuntimeFeatureFlagConfig({this.flags = const {}});
+
+  /// 空表：所有 [isEnabled] 走 defaultValue（默认 false）。
+  static const defaults = RuntimeFeatureFlagConfig();
+
+  /// 开关表。不应存放 token、用户 id 等敏感信息；不替代会员/钱包等业务状态。
+  ///
+  /// 来源：remote `featureFlags` map（Phase D）。缺失 key 视为未开启。
+  final Map<String, bool> flags;
+
+  /// 查询开关；[defaultValue] 默认 false，保证远程缺失时行为安全。
+  bool isEnabled(String key, {bool defaultValue = false}) {
+    return flags[key] ?? defaultValue;
+  }
+
+  RuntimeFeatureFlagConfig mergeRemote(RuntimeFeatureFlagConfig remote) {
+    return RuntimeFeatureFlagConfig(flags: {...flags, ...remote.flags});
+  }
+
+  RuntimeFeatureFlagConfig copyWith({Map<String, bool>? flags}) {
+    return RuntimeFeatureFlagConfig(flags: flags ?? this.flags);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is RuntimeFeatureFlagConfig && mapEquals(other.flags, flags);
+  }
+
+  @override
+  int get hashCode => Object.hashAll(flags.entries);
+}

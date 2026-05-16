@@ -1,27 +1,30 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/runtime/app_runtime_config.dart';
 import '../../../core/runtime/app_runtime_config_provider.dart';
+import '../../../core/runtime/runtime_player_config.dart';
 import '../application/player_performance_policy_provider.dart';
 import '../domain/player_preload_config.dart';
 
-/// 相邻预热与 session 窗口配置。
+/// 播放器预加载与 session 窗口的**最终统一入口**。
+///
+/// HLS preloader、startup preload、playback preload 均从此 provider 读取。
 ///
 /// 基础值来自 [playerPerformancePolicyProvider]（含 ultraStable 的 0 session / 0 HLS）。
-/// [appRuntimeConfigProvider] 可在**安全范围**内覆盖 HLS 数量与超时；**不会**把
-/// ultraStable / low 档意外放大为高性能 preload 或 prepared/retained session。
+/// [appRuntimeConfigProvider].player 可在安全范围内覆盖 HLS 数量与超时；
+/// prepared/retained 仍仅由 policy cap，runtime 不能扩大 session window。
 ///
-/// 完整 [playerPerformancePolicyOverrideProvider] 仍最高，可显式放开（仅测试）。
+/// ultraStable / low 档：普通 remote 不能把 HLS 或 session 撑大。
+/// 完整 [playerPerformancePolicyOverrideProvider] 仍最高（仅测试）。
 final playerPreloadConfigProvider = Provider<PlayerPreloadConfig>((ref) {
   final policy = ref.watch(playerPerformancePolicyProvider);
   final base = policy.toPreloadConfig();
-  final runtime = ref.watch(appRuntimeConfigProvider);
-  return _mergePreloadConfig(base: base, runtime: runtime);
+  final runtimePlayer = ref.watch(appRuntimeConfigProvider).player;
+  return _mergePreloadConfig(base: base, runtimePlayer: runtimePlayer);
 });
 
 PlayerPreloadConfig _mergePreloadConfig({
   required PlayerPreloadConfig base,
-  required AppRuntimeConfig runtime,
+  required RuntimePlayerConfig runtimePlayer,
 }) {
   final isUltraStable =
       base.effectivePreparedForwardSessionCount == 0 &&
@@ -33,7 +36,17 @@ PlayerPreloadConfig _mergePreloadConfig({
       return baseValue;
     }
     if (isUltraStable) {
-      // 低端 ultraStable：禁止普通 runtime 把 HLS 预加载或 session 窗口撑大。
+      // 低端 ultraStable：禁止普通 runtime 把 HLS 预加载撑大。
+      return baseValue < runtimeValue ? baseValue : runtimeValue;
+    }
+    return runtimeValue;
+  }
+
+  int mergeBytes(int baseValue, int? runtimeValue) {
+    if (runtimeValue == null) {
+      return baseValue;
+    }
+    if (isUltraStable) {
       return baseValue < runtimeValue ? baseValue : runtimeValue;
     }
     return runtimeValue;
@@ -42,27 +55,30 @@ PlayerPreloadConfig _mergePreloadConfig({
   return PlayerPreloadConfig(
     homeStartupPreloadCount: mergeCount(
       base.homeStartupPreloadCount,
-      runtime.homeStartupPreloadCount,
+      runtimePlayer.homeStartupHlsPreloadCount,
     ),
     singleDramaForwardHlsPreloadCount: mergeCount(
       base.singleDramaForwardHlsPreloadCount,
-      runtime.singleDramaForwardPreloadCount,
+      runtimePlayer.singleDramaForwardHlsPreloadCount,
     ),
     singleDramaBackwardHlsPreloadCount: mergeCount(
       base.singleDramaBackwardHlsPreloadCount,
-      runtime.singleDramaBackwardPreloadCount,
+      runtimePlayer.singleDramaBackwardHlsPreloadCount,
     ),
     forYouForwardHlsPreloadCount: mergeCount(
       base.forYouForwardHlsPreloadCount,
-      runtime.forYouForwardPreloadCount,
+      runtimePlayer.forYouForwardHlsPreloadCount,
     ),
     forYouBackwardHlsPreloadCount: mergeCount(
       base.forYouBackwardHlsPreloadCount,
-      runtime.forYouBackwardPreloadCount,
+      runtimePlayer.forYouBackwardHlsPreloadCount,
     ),
     maxConcurrentHlsPreloads: base.maxConcurrentHlsPreloads,
-    maxPreloadBytes: runtime.hlsMaxPreloadBytes ?? base.maxPreloadBytes,
-    preloadTimeout: runtime.hlsPlaylistTimeout ?? base.preloadTimeout,
+    maxPreloadBytes: mergeBytes(
+      base.maxPreloadBytes,
+      runtimePlayer.hlsMaxPreloadBytes,
+    ),
+    preloadTimeout: runtimePlayer.hlsPlaylistTimeout ?? base.preloadTimeout,
     preparedForwardSessionCount: base.preparedForwardSessionCount,
     retainedBackwardSessionCount: base.retainedBackwardSessionCount,
   );

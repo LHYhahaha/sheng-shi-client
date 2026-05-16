@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
-/// 设备性能档位（全局 runtime 使用，与播放器档位映射见 [playerPerformanceModeForTier]）。
+/// 设备性能档位（全局 runtime 使用；播放器映射见 player feature
+/// `runtime_performance_mode_mapper.dart`）。
 enum DevicePerformanceTier {
   /// 低端机：播放器倾向 ultraStable，preload/session 保守。
   low,
