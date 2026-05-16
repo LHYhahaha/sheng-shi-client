@@ -259,6 +259,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final showsPaywall = ref.watch(
       uiProvider.select((state) => state.showsPaywall),
     );
+    final showsChromeOverlays = ref.watch(
+      uiProvider.select((state) => state.showsChromeOverlays),
+    );
+    final chromeOverlayFadeDuration = performancePolicy.allowRichTransitions
+        ? const Duration(milliseconds: 200)
+        : Duration.zero;
     final viewportState = ref.watch(
       viewportProvider.select(PlayerViewportBuildSnapshot.fromState),
     );
@@ -307,6 +313,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         final settledItem = latestFeedState.items[next.index];
         if (settledItem.id != next.itemId) {
           return;
+        }
+        if (previous?.itemId != null && previous!.itemId != next.itemId) {
+          uiController.showDefaultChrome();
         }
         unawaited(
           feedEngine.onViewportSettled(
@@ -434,6 +443,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           playbackController: playbackController,
           feedEngine: feedEngine,
           performancePolicy: performancePolicy,
+          showsChromeOverlays: showsChromeOverlays,
+          chromeOverlayFadeDuration: chromeOverlayFadeDuration,
+          uiController: uiController,
         ),
       ),
     );
@@ -449,6 +461,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     required PlayerPlaybackController playbackController,
     required PlayerFeedEngine feedEngine,
     required PlayerPerformancePolicy performancePolicy,
+    required bool showsChromeOverlays,
+    required Duration chromeOverlayFadeDuration,
+    required PlayerUiController uiController,
   }) {
     if (isLoading) {
       return const Center(
@@ -584,6 +599,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   onDownloadTap: widget.feedMode == PlayerFeedMode.singleDrama
                       ? () {}
                       : null,
+                  showChromeOverlays: widget.feedMode == PlayerFeedMode.forYou
+                      ? true
+                      : showsChromeOverlays,
+                  chromeOverlayFadeDuration: chromeOverlayFadeDuration,
+                  useSingleDramaChromeTap:
+                      widget.feedMode == PlayerFeedMode.singleDrama,
+                  onToggleChromeVisibility:
+                      widget.feedMode == PlayerFeedMode.singleDrama
+                      ? uiController.toggleChromeDisplayMode
+                      : null,
                 );
               },
             ),
@@ -591,17 +616,27 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         ),
         if (widget.feedMode == PlayerFeedMode.singleDrama &&
             settledItem != null)
-          PlayerTopBar(
-            episodeNumber: settledItem.episode.number,
-            playbackRate: playbackShell.playbackRate,
-            overlayOpacity: 1,
-            overlayOpacityListenable: performancePolicy.allowPressChromeDimming
-                ? _overlayOpacityNotifier
-                : null,
-            onBackTap: () {
-              unawaited(_goBackFromPlayer());
-            },
-            onSpeedTap: _showSpeedSheet,
+          AnimatedOpacity(
+            key: const ValueKey('player_top_bar_chrome_visibility'),
+            opacity: showsChromeOverlays ? 1 : 0,
+            duration: chromeOverlayFadeDuration,
+            curve: Curves.easeOut,
+            child: IgnorePointer(
+              ignoring: !showsChromeOverlays,
+              child: PlayerTopBar(
+                episodeNumber: settledItem.episode.number,
+                playbackRate: playbackShell.playbackRate,
+                overlayOpacity: 1,
+                overlayOpacityListenable:
+                    performancePolicy.allowPressChromeDimming
+                    ? _overlayOpacityNotifier
+                    : null,
+                onBackTap: () {
+                  unawaited(_goBackFromPlayer());
+                },
+                onSpeedTap: _showSpeedSheet,
+              ),
+            ),
           ),
       ],
     );

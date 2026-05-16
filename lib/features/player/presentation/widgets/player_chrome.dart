@@ -53,6 +53,8 @@ class PlayerChrome extends StatefulWidget {
     this.seekBar,
     this.videoFit = BoxFit.cover,
     this.forYouLayout = false,
+    this.showChromeOverlays = true,
+    this.chromeOverlayFadeDuration = Duration.zero,
     super.key,
   });
 
@@ -89,6 +91,12 @@ class PlayerChrome extends StatefulWidget {
   final Widget? seekBar;
   final BoxFit videoFit;
   final bool forYouLayout;
+
+  /// 是否显示非必要 chrome（action/meta/Download/渐变等）；false 为沉浸模式。
+  final bool showChromeOverlays;
+
+  /// chrome 显隐过渡；stable/ultraStable 应为 [Duration.zero] 或极短。
+  final Duration chromeOverlayFadeDuration;
 
   @visibleForTesting
   static double videoViewportBottomInset({
@@ -143,6 +151,8 @@ class _PlayerChromeState extends State<PlayerChrome> {
   Widget? get seekBar => widget.seekBar;
   BoxFit get videoFit => widget.videoFit;
   bool get forYouLayout => widget.forYouLayout;
+  bool get showChromeOverlays => widget.showChromeOverlays;
+  Duration get chromeOverlayFadeDuration => widget.chromeOverlayFadeDuration;
 
   @override
   Widget build(BuildContext context) {
@@ -172,10 +182,11 @@ class _PlayerChromeState extends State<PlayerChrome> {
           playbackError: playbackError,
           onRetry: onRetry,
         ),
-        _PlayerGradientLayer(
-          bottomFrameHeight: bottomFrameHeight,
-          forYouLayout: forYouLayout,
-        ),
+        if (showChromeOverlays)
+          _PlayerGradientLayer(
+            bottomFrameHeight: bottomFrameHeight,
+            forYouLayout: forYouLayout,
+          ),
         if (isPlaying || showCenterPlayButton)
           Positioned(
             left: 0,
@@ -215,6 +226,8 @@ class _PlayerChromeState extends State<PlayerChrome> {
           onEpisodesTap: onEpisodesTap,
           onShareTap: onShareTap,
           onMoreTap: onMoreTap,
+          showChromeOverlays: showChromeOverlays,
+          chromeOverlayFadeDuration: chromeOverlayFadeDuration,
         ),
         _PlayerMetaLayer(
           content: content,
@@ -222,6 +235,8 @@ class _PlayerChromeState extends State<PlayerChrome> {
           forYouLayout: forYouLayout,
           overlayOpacity: overlayOpacity,
           overlayOpacityListenable: overlayOpacityListenable,
+          showChromeOverlays: showChromeOverlays,
+          chromeOverlayFadeDuration: chromeOverlayFadeDuration,
         ),
         if (forYouLayout) ...[
           if (!showUnlockButton)
@@ -261,79 +276,82 @@ class _PlayerChromeState extends State<PlayerChrome> {
                       : const SizedBox.shrink()),
             ),
           ),
-          if (!showUnlockButton)
-            Positioned(
-              left: 16,
-              bottom:
-                  bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
-              child: RepaintBoundary(
-                key: const ValueKey('player_member_repaint_boundary'),
-                child: _OverlayOpacity(
-                  opacity: overlayOpacity,
-                  opacityListenable: overlayOpacityListenable,
-                  child: GestureDetector(
-                    key: const ValueKey('player_member_button'),
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onUnlockTap,
-                    child: Container(
-                      constraints: const BoxConstraints(maxWidth: 168),
-                      height: 24,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: AppColors.gold.withValues(alpha: 0.8),
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        context.l10n.playerBecomeMember,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF4B2C0D),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          height: 16 / 12,
+          if (showChromeOverlays) ...[
+            if (!showUnlockButton)
+              Positioned(
+                left: 16,
+                bottom:
+                    bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
+                child: RepaintBoundary(
+                  key: const ValueKey('player_member_repaint_boundary'),
+                  child: _OverlayOpacity(
+                    opacity: overlayOpacity,
+                    opacityListenable: overlayOpacityListenable,
+                    child: GestureDetector(
+                      key: const ValueKey('player_member_button'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onUnlockTap,
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 168),
+                        height: 24,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.gold.withValues(alpha: 0.8),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          context.l10n.playerBecomeMember,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF4B2C0D),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            height: 16 / 12,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          Positioned(
-            right: 31,
-            bottom: bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
-            child: RepaintBoundary(
-              key: const ValueKey('player_download_repaint_boundary'),
-              child: _OverlayOpacity(
-                opacity: overlayOpacity,
-                opacityListenable: overlayOpacityListenable,
-                child: GestureDetector(
-                  key: const ValueKey('player_download_button'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onDownloadTap,
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.download_rounded,
-                        color: Colors.white,
-                        size: 17,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        context.l10n.playerDownload,
-                        style: const TextStyle(
+            Positioned(
+              right: 31,
+              bottom:
+                  bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
+              child: RepaintBoundary(
+                key: const ValueKey('player_download_repaint_boundary'),
+                child: _OverlayOpacity(
+                  opacity: overlayOpacity,
+                  opacityListenable: overlayOpacityListenable,
+                  child: GestureDetector(
+                    key: const ValueKey('player_download_button'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onDownloadTap,
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.download_rounded,
                           color: Colors.white,
-                          fontSize: 12,
-                          height: 14 / 12,
+                          size: 17,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        Text(
+                          context.l10n.playerDownload,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            height: 14 / 12,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
+          ],
         ],
       ],
     );
@@ -467,6 +485,8 @@ class _PlayerActionRailLayer extends StatelessWidget {
     required this.onEpisodesTap,
     required this.onShareTap,
     required this.onMoreTap,
+    required this.showChromeOverlays,
+    required this.chromeOverlayFadeDuration,
   });
 
   final double bottomInset;
@@ -477,6 +497,8 @@ class _PlayerActionRailLayer extends StatelessWidget {
   final VoidCallback onEpisodesTap;
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
+  final bool showChromeOverlays;
+  final Duration chromeOverlayFadeDuration;
 
   @override
   Widget build(BuildContext context) {
@@ -487,16 +509,25 @@ class _PlayerActionRailLayer extends StatelessWidget {
           (forYouLayout
               ? _PlayerLayoutMetrics.forYouActionRailBottom
               : _PlayerLayoutMetrics.singleActionRailBottom),
-      child: RepaintBoundary(
-        key: const ValueKey('player_action_rail_repaint_boundary'),
-        child: _OverlayOpacity(
-          opacity: overlayOpacity,
-          opacityListenable: overlayOpacityListenable,
-          child: PlayerActionRail(
-            likeCountLabel: likeCountLabel,
-            onEpisodesTap: onEpisodesTap,
-            onShareTap: onShareTap,
-            onMoreTap: onMoreTap,
+      child: AnimatedOpacity(
+        key: const ValueKey('player_chrome_visibility_action_rail'),
+        opacity: showChromeOverlays ? 1 : 0,
+        duration: chromeOverlayFadeDuration,
+        curve: Curves.easeOut,
+        child: IgnorePointer(
+          ignoring: !showChromeOverlays,
+          child: RepaintBoundary(
+            key: const ValueKey('player_action_rail_repaint_boundary'),
+            child: _OverlayOpacity(
+              opacity: overlayOpacity,
+              opacityListenable: overlayOpacityListenable,
+              child: PlayerActionRail(
+                likeCountLabel: likeCountLabel,
+                onEpisodesTap: onEpisodesTap,
+                onShareTap: onShareTap,
+                onMoreTap: onMoreTap,
+              ),
+            ),
           ),
         ),
       ),
@@ -511,6 +542,8 @@ class _PlayerMetaLayer extends StatelessWidget {
     required this.forYouLayout,
     required this.overlayOpacity,
     required this.overlayOpacityListenable,
+    required this.showChromeOverlays,
+    required this.chromeOverlayFadeDuration,
   });
 
   final PlayerContent content;
@@ -518,6 +551,8 @@ class _PlayerMetaLayer extends StatelessWidget {
   final bool forYouLayout;
   final double overlayOpacity;
   final ValueListenable<double>? overlayOpacityListenable;
+  final bool showChromeOverlays;
+  final Duration chromeOverlayFadeDuration;
 
   @override
   Widget build(BuildContext context) {
@@ -525,12 +560,24 @@ class _PlayerMetaLayer extends StatelessWidget {
       left: 16,
       right: 91,
       bottom: bottom,
-      child: RepaintBoundary(
-        key: const ValueKey('player_meta_repaint_boundary'),
-        child: _OverlayOpacity(
-          opacity: overlayOpacity,
-          opacityListenable: overlayOpacityListenable,
-          child: PlayerBottomMeta(content: content, showChevron: !forYouLayout),
+      child: AnimatedOpacity(
+        key: const ValueKey('player_chrome_visibility_meta'),
+        opacity: showChromeOverlays ? 1 : 0,
+        duration: chromeOverlayFadeDuration,
+        curve: Curves.easeOut,
+        child: IgnorePointer(
+          ignoring: !showChromeOverlays,
+          child: RepaintBoundary(
+            key: const ValueKey('player_meta_repaint_boundary'),
+            child: _OverlayOpacity(
+              opacity: overlayOpacity,
+              opacityListenable: overlayOpacityListenable,
+              child: PlayerBottomMeta(
+                content: content,
+                showChevron: !forYouLayout,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -931,6 +978,8 @@ class PlayerSeekBar extends StatefulWidget {
     required this.showTrackLoading,
     required this.thumbnailAssetPath,
     required this.previewConfig,
+    this.isPassiveTrack = false,
+    this.trackFadeDuration = Duration.zero,
     this.previewPosition,
     this.onDragStart,
     this.onDragUpdate,
@@ -944,6 +993,8 @@ class PlayerSeekBar extends StatefulWidget {
   final Duration bufferedPosition;
   final String thumbnailAssetPath;
   final PlayerSeekPreviewConfig previewConfig;
+  final bool isPassiveTrack;
+  final Duration trackFadeDuration;
   final Duration? previewPosition;
   final bool enabled;
   final bool isDragging;
@@ -970,6 +1021,7 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
     final showTimeBubble =
         widget.isDragging && config.allowTimeBubble && !showThumbnail;
     final barHeight = widget.isDragging ? 4.0 : 2.0;
+    final trackOpacity = widget.isPassiveTrack ? 0.42 : 1.0;
     final stackHeight = showThumbnail
         ? 112.0
         : showTimeBubble
@@ -1045,33 +1097,40 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
                   left: 0,
                   right: 0,
                   bottom: 6,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: SizedBox(
-                      height: barHeight,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          ColoredBox(
-                            color: Colors.white.withValues(alpha: 0.25),
-                          ),
-                          FractionallySizedBox(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: buffered,
-                            child: ColoredBox(
-                              color: Colors.white.withValues(alpha: 0.28),
+                  child: AnimatedOpacity(
+                    key: const ValueKey('player_seek_track_shell'),
+                    opacity: trackOpacity,
+                    duration: widget.trackFadeDuration,
+                    curve: Curves.easeOut,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: SizedBox(
+                        height: barHeight,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            ColoredBox(
+                              color: Colors.white.withValues(alpha: 0.25),
                             ),
-                          ),
-                          FractionallySizedBox(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: progress,
-                            child: ColoredBox(
-                              color: Colors.white.withValues(alpha: 0.78),
+                            if (!widget.isPassiveTrack)
+                              FractionallySizedBox(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: buffered,
+                                child: ColoredBox(
+                                  color: Colors.white.withValues(alpha: 0.28),
+                                ),
+                              ),
+                            FractionallySizedBox(
+                              alignment: Alignment.centerLeft,
+                              widthFactor: widget.isPassiveTrack ? 0 : progress,
+                              child: ColoredBox(
+                                color: Colors.white.withValues(alpha: 0.78),
+                              ),
                             ),
-                          ),
-                          if (widget.showTrackLoading && !widget.isDragging)
-                            const _SeekTrackLoadingAnimation(),
-                        ],
+                            if (widget.showTrackLoading && !widget.isDragging)
+                              const _SeekTrackLoadingAnimation(),
+                          ],
+                        ),
                       ),
                     ),
                   ),

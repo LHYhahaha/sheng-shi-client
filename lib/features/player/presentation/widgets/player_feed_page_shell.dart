@@ -36,6 +36,10 @@ class PlayerFeedPageShell extends ConsumerWidget {
     required this.onUnlockTap,
     required this.onOpenMembership,
     this.onDownloadTap,
+    this.showChromeOverlays = true,
+    this.chromeOverlayFadeDuration = Duration.zero,
+    this.useSingleDramaChromeTap = false,
+    this.onToggleChromeVisibility,
     super.key,
   });
 
@@ -59,6 +63,10 @@ class PlayerFeedPageShell extends ConsumerWidget {
   final VoidCallback onUnlockTap;
   final VoidCallback onOpenMembership;
   final VoidCallback? onDownloadTap;
+  final bool showChromeOverlays;
+  final Duration chromeOverlayFadeDuration;
+  final bool useSingleDramaChromeTap;
+  final VoidCallback? onToggleChromeVisibility;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -107,12 +115,16 @@ class PlayerFeedPageShell extends ConsumerWidget {
               ? overlayOpacityListenable
               : null,
           showViewportBackdrop: !canHideViewportBackdrop,
+          showChromeOverlays: showChromeOverlays,
+          chromeOverlayFadeDuration: chromeOverlayFadeDuration,
           playbackLayer: canUsePlaybackSurface
               ? PlayerPlaybackControlsConsumer(
                   sessionKey: sessionKey,
                   itemId: item.id,
                   onTogglePlay: onTogglePlay,
                   onRetry: onRetry,
+                  useSingleDramaChromeTap: useSingleDramaChromeTap,
+                  onToggleChromeVisibility: onToggleChromeVisibility,
                 )
               : null,
           videoFit: videoFitForEpisode(item.episode),

@@ -16,17 +16,28 @@ final playerUiControllerProvider =
 ///
 /// 这里只保存 paywall、当前展示集数等 UI 选择，不保存真实播放状态。播放/缓冲/错误
 /// 以 PlayerPlaybackState 为准，避免两个状态机互相覆盖。
+/// 单剧播放器 chrome 显示模式（非播放真相，仅 UI 层）。
+enum PlayerChromeDisplayMode {
+  /// 顶栏、侧栏 action、标题/简介、Download/Unlock 等非视频 overlay。
+  defaultChrome,
+
+  /// 仅保留视频与底部进度条；locked/unavailable/error/loading 反馈仍显示。
+  immersive,
+}
+
 class PlayerUiState {
   const PlayerUiState({
     required this.episodeNumber,
     required this.isPlaying,
     required this.paywall,
+    required this.chromeDisplayMode,
   });
 
   const PlayerUiState.initial()
     : episodeNumber = 1,
       isPlaying = false,
-      paywall = PlayerPaywallState.hidden;
+      paywall = PlayerPaywallState.hidden,
+      chromeDisplayMode = PlayerChromeDisplayMode.defaultChrome;
 
   /// 当前 UI 展示的集数。
   ///
@@ -44,17 +55,25 @@ class PlayerUiState {
   /// hidden/unlock/memberUnlock 只影响遮罩和弹层，不代表服务端授权结果。
   final PlayerPaywallState paywall;
 
+  /// 单剧 chrome 默认/沉浸；For You 不使用沉浸切换。
+  final PlayerChromeDisplayMode chromeDisplayMode;
+
   bool get showsPaywall => paywall != PlayerPaywallState.hidden;
+
+  bool get showsChromeOverlays =>
+      chromeDisplayMode == PlayerChromeDisplayMode.defaultChrome;
 
   PlayerUiState copyWith({
     int? episodeNumber,
     bool? isPlaying,
     PlayerPaywallState? paywall,
+    PlayerChromeDisplayMode? chromeDisplayMode,
   }) {
     return PlayerUiState(
       episodeNumber: episodeNumber ?? this.episodeNumber,
       isPlaying: isPlaying ?? this.isPlaying,
       paywall: paywall ?? this.paywall,
+      chromeDisplayMode: chromeDisplayMode ?? this.chromeDisplayMode,
     );
   }
 }
@@ -80,7 +99,24 @@ class PlayerUiController extends Notifier<PlayerUiState> {
       episodeNumber: episodeNumber,
       isPlaying: false,
       paywall: PlayerPaywallState.hidden,
+      chromeDisplayMode: PlayerChromeDisplayMode.defaultChrome,
     );
+  }
+
+  void toggleChromeDisplayMode() {
+    state = state.copyWith(
+      chromeDisplayMode: state.showsChromeOverlays
+          ? PlayerChromeDisplayMode.immersive
+          : PlayerChromeDisplayMode.defaultChrome,
+    );
+  }
+
+  void showDefaultChrome() {
+    if (!state.showsChromeOverlays) {
+      state = state.copyWith(
+        chromeDisplayMode: PlayerChromeDisplayMode.defaultChrome,
+      );
+    }
   }
 
   void togglePlay() {

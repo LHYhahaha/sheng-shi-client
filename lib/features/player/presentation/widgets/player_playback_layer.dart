@@ -604,12 +604,18 @@ class PlayerPlaybackControlsConsumer extends ConsumerStatefulWidget {
     required this.itemId,
     required this.onTogglePlay,
     required this.onRetry,
+    this.useSingleDramaChromeTap = false,
+    this.onToggleChromeVisibility,
   });
 
   final String sessionKey;
   final String itemId;
   final VoidCallback onTogglePlay;
   final VoidCallback onRetry;
+
+  /// 单剧：单击切换默认/沉浸 chrome；双击切换播放/暂停。
+  final bool useSingleDramaChromeTap;
+  final VoidCallback? onToggleChromeVisibility;
 
   @override
   ConsumerState<PlayerPlaybackControlsConsumer> createState() =>
@@ -620,10 +626,13 @@ class PlayerPlaybackControlsConsumerState
     extends ConsumerState<PlayerPlaybackControlsConsumer> {
   bool _showPauseFeedback = false;
   Timer? _feedbackTimer;
+  Timer? _pendingSingleTap;
+  DateTime? _lastTapAt;
 
   @override
   void dispose() {
     _feedbackTimer?.cancel();
+    _pendingSingleTap?.cancel();
     super.dispose();
   }
 
@@ -677,6 +686,59 @@ class PlayerPlaybackControlsConsumerState
   }
 
   void _handleVideoTap() {
+    if (widget.useSingleDramaChromeTap) {
+      _handleSingleDramaVideoTap();
+      return;
+    }
+    _togglePlayWithFeedback();
+  }
+
+  void _handleSingleDramaVideoTap() {
+    final snapshot = ref.read(
+      playerPlaybackControllerProvider(
+        widget.sessionKey,
+      ).select(PlayerPlaybackRenderSnapshot.fromState),
+    );
+    if (!snapshot.canTogglePlayback) {
+      return;
+    }
+
+    final now = DateTime.now();
+    if (_lastTapAt != null &&
+        now.difference(_lastTapAt!) < const Duration(milliseconds: 320)) {
+      _pendingSingleTap?.cancel();
+      _pendingSingleTap = null;
+      _lastTapAt = null;
+      if (snapshot.isPlaying) {
+        _togglePlayWithFeedback();
+      }
+      return;
+    }
+
+    _lastTapAt = now;
+    _pendingSingleTap?.cancel();
+    _pendingSingleTap = Timer(const Duration(milliseconds: 280), () {
+      _pendingSingleTap = null;
+      if (!mounted) {
+        return;
+      }
+      final latest = ref.read(
+        playerPlaybackControllerProvider(
+          widget.sessionKey,
+        ).select(PlayerPlaybackRenderSnapshot.fromState),
+      );
+      if (!latest.canTogglePlayback) {
+        return;
+      }
+      if (latest.isPlaying) {
+        widget.onToggleChromeVisibility?.call();
+        return;
+      }
+      widget.onTogglePlay();
+    });
+  }
+
+  void _togglePlayWithFeedback() {
     final snapshot = ref.read(
       playerPlaybackControllerProvider(
         widget.sessionKey,
@@ -731,12 +793,14 @@ class PlayerSeekBarConsumer extends ConsumerWidget {
     final showTrackLoading = snapshot.isLoading && !snapshot.isSeeking;
     final canSeek =
         snapshot.isSeekAllowed && !showTrackLoading && !snapshot.isError;
-    if (!canSeek &&
-        snapshot.duration <= Duration.zero &&
-        !showTrackLoading &&
-        !snapshot.canShowPassiveTrack) {
+    final shouldShowShell = snapshot.currentSource != null && !snapshot.isError;
+    if (!shouldShowShell) {
       return const SizedBox.shrink();
     }
+    final policy = ref.watch(playerPerformancePolicyProvider);
+    final trackFadeDuration = policy.allowRichTransitions
+        ? const Duration(milliseconds: 150)
+        : Duration.zero;
     return PlayerSeekBar(
       position: snapshot.position,
       duration: snapshot.duration,
@@ -744,6 +808,8 @@ class PlayerSeekBarConsumer extends ConsumerWidget {
       previewPosition: snapshot.seekPreviewPosition,
       thumbnailAssetPath: thumbnailAssetPath,
       previewConfig: previewConfig,
+      isPassiveTrack: snapshot.duration <= Duration.zero,
+      trackFadeDuration: trackFadeDuration,
       isDragging: snapshot.isSeeking,
       showTrackLoading: showTrackLoading,
       enabled: canSeek,

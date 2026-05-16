@@ -581,7 +581,7 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.byKey(const ValueKey('player_video_tap_layer')));
+    await _doubleTapVideo(tester);
     await tester.pumpAndSettle();
 
     expect(playbackSession.pauseCount, 1);
@@ -613,7 +613,7 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('player_video_tap_layer')));
+    await _doubleTapVideo(tester);
     await tester.pump();
 
     expect(find.byKey(const ValueKey('player_pause_feedback')), findsOneWidget);
@@ -901,6 +901,142 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('single drama default mode shows chrome overlays', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => _FakePlaybackSession(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
+    expect(chrome.showChromeOverlays, isTrue);
+    expect(
+      find.byKey(const ValueKey('player_top_bar_repaint_boundary')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('player_download_button')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('player_action_rail_repaint_boundary')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('player_seek_bar')), findsOneWidget);
+  });
+
+  testWidgets('single drama tap toggles immersive chrome while playing', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => _FakePlaybackSession(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('player_video_tap_layer')));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
+    expect(chrome.showChromeOverlays, isFalse);
+    expect(find.byKey(const ValueKey('player_download_button')), findsNothing);
+    expect(find.byKey(const ValueKey('player_seek_bar')), findsOneWidget);
+    final hiddenChromeShells = tester
+        .widgetList<AnimatedOpacity>(
+          find.byKey(const ValueKey('player_chrome_visibility_action_rail')),
+        )
+        .where((widget) => widget.opacity == 0);
+    expect(hiddenChromeShells, hasLength(1));
+
+    final topBarVisibility = tester.widget<AnimatedOpacity>(
+      find.byKey(const ValueKey('player_top_bar_chrome_visibility')),
+    );
+    expect(topBarVisibility.opacity, 0);
+  });
+
+  testWidgets('single drama immersive mode seek bar remains draggable', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    playbackSession.emitDuration(const Duration(seconds: 100));
+    await tester.pump();
+    playbackSession.emitPosition(const Duration(seconds: 10));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('player_video_tap_layer')));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('player_seek_bar'))),
+    );
+    await gesture.moveBy(const Offset(80, 0));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(playbackSession.seekedPositions, isNotEmpty);
+  });
+
+  testWidgets('PlayerChrome keeps unlock affordance when overlays hidden', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: PlayerChrome(
+          content: _content(const [
+            PlayerEpisode(
+              id: 'ep-1',
+              number: 1,
+              isLocked: true,
+              videoUrl: _mockVideoUrl,
+            ),
+          ]),
+          isPlaying: false,
+          showCenterPlayButton: false,
+          showChromeOverlays: false,
+          showUnlockButton: true,
+          unlockLabel: 'Unlock Now',
+          onTogglePlay: () {},
+          onWatchNowTap: () {},
+          onEpisodesTap: () {},
+          onShareTap: () {},
+          onMoreTap: () {},
+          onUnlockTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('player_unlock_button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_download_button')), findsNothing);
+  });
+
   testWidgets('single drama seek bar stays visible before duration arrives', (
     tester,
   ) async {
@@ -922,10 +1058,21 @@ void main() {
     );
     expect(seekBarWidget.duration, Duration.zero);
     expect(seekBarWidget.enabled, isFalse);
+    expect(seekBarWidget.isPassiveTrack, isTrue);
     expect(
       find.byKey(const ValueKey('player_seek_track_loading')),
       findsNothing,
     );
+
+    playbackSession.emitDuration(const Duration(seconds: 100));
+    await tester.pump(const Duration(milliseconds: 200));
+
+    final seekBarAfter = tester.widget<PlayerSeekBar>(
+      find.byType(PlayerSeekBar),
+    );
+    expect(seekBarAfter.isPassiveTrack, isFalse);
+    expect(seekBarAfter.duration, const Duration(seconds: 100));
+    expect(find.byKey(const ValueKey('player_seek_bar')), findsOneWidget);
   });
 
   testWidgets('progress updates do not rebuild PlayerChrome shell', (
@@ -2036,6 +2183,13 @@ Future<void> _pumpAutoUnlockSheet(WidgetTester tester) async {
     }
   }
   await tester.pumpAndSettle();
+}
+
+Future<void> _doubleTapVideo(WidgetTester tester) async {
+  final tapTarget = find.byKey(const ValueKey('player_video_tap_layer'));
+  await tester.tap(tapTarget);
+  await tester.pump(const Duration(milliseconds: 40));
+  await tester.tap(tapTarget);
 }
 
 const _mockVideoUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
