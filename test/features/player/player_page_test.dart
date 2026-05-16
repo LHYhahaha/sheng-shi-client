@@ -1711,7 +1711,21 @@ void main() {
     await tester.pump();
 
     expect(
-      find.byKey(const ValueKey('player_recharge_unlock_processing')),
+      find.byKey(const ValueKey('player_recharge_payment_sheet')),
+      findsOneWidget,
+    );
+    expect(find.text('Payment method'), findsOneWidget);
+    expect(find.text('Google Pay'), findsOneWidget);
+    expect(find.text('300 Coins'), findsOneWidget);
+    expect(find.text(r'$2.99'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('player_recharge_payment_buy_now')),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('player_recharge_payment_buy_now')),
       findsOneWidget,
     );
 
@@ -1761,7 +1775,18 @@ void main() {
     await tester.pump();
 
     expect(
-      find.byKey(const ValueKey('player_recharge_unlock_processing')),
+      find.byKey(const ValueKey('player_recharge_payment_sheet')),
+      findsOneWidget,
+    );
+    expect(find.text('Weekly VIP'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('player_recharge_payment_buy_now')),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('player_recharge_payment_buy_now')),
       findsOneWidget,
     );
 
@@ -1794,7 +1819,16 @@ void main() {
     );
     await tester.pump();
     expect(
-      find.byKey(const ValueKey('player_recharge_unlock_processing')),
+      find.byKey(const ValueKey('player_recharge_payment_sheet')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('player_recharge_payment_buy_now')),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('player_recharge_payment_buy_now')),
       findsOneWidget,
     );
 
