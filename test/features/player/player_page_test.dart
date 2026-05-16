@@ -71,7 +71,9 @@ void main() {
     expect(find.text('Unlock Now'), findsNothing);
   });
 
-  testWidgets('shows poster loading before playback is ready', (tester) async {
+  testWidgets('shows loading over blank viewport before playback is ready', (
+    tester,
+  ) async {
     final openCompleter = Completer<void>();
     final playbackSession = _FakePlaybackSession(openCompleter: openCompleter);
 
@@ -83,7 +85,10 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.byType(Image), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('player_poster_repaint_boundary')),
+      findsWidgets,
+    );
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(
       find.byKey(const ValueKey('player_seek_track_loading')),

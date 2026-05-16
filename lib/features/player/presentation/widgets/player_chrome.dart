@@ -391,16 +391,9 @@ class _PlayerPosterLayer extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (showViewportBackdrop)
-              RepaintBoundary(
-                key: const ValueKey('player_poster_repaint_boundary'),
-                child: Image.asset(
-                  content.backgroundAssetPath,
-                  key: ValueKey<String>(
-                    'player_poster_${content.backgroundAssetPath}',
-                  ),
-                  fit: BoxFit.cover,
-                  filterQuality: FilterQuality.low,
-                ),
+              const RepaintBoundary(
+                key: ValueKey('player_poster_repaint_boundary'),
+                child: ColoredBox(color: AppColors.black),
               ),
             ?playbackLayer,
             if (showLoading)
