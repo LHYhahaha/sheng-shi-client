@@ -596,9 +596,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                     unawaited(_showPendingUnlockActionSheet());
                   },
                   onOpenMembership: _openMembership,
-                  onDownloadTap: widget.feedMode == PlayerFeedMode.singleDrama
-                      ? () {}
-                      : null,
                   showChromeOverlays: widget.feedMode == PlayerFeedMode.forYou
                       ? true
                       : showsChromeOverlays,

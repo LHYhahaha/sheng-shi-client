@@ -35,7 +35,6 @@ class PlayerFeedPageShell extends ConsumerWidget {
     required this.onMoreTap,
     required this.onUnlockTap,
     required this.onOpenMembership,
-    this.onDownloadTap,
     this.showChromeOverlays = true,
     this.chromeOverlayFadeDuration = Duration.zero,
     this.useSingleDramaChromeTap = false,
@@ -62,7 +61,6 @@ class PlayerFeedPageShell extends ConsumerWidget {
   final VoidCallback onMoreTap;
   final VoidCallback onUnlockTap;
   final VoidCallback onOpenMembership;
-  final VoidCallback? onDownloadTap;
   final bool showChromeOverlays;
   final Duration chromeOverlayFadeDuration;
   final bool useSingleDramaChromeTap;
@@ -141,7 +139,6 @@ class PlayerFeedPageShell extends ConsumerWidget {
                   onSeekCancel: onSeekCancel,
                 )
               : null,
-          onDownloadTap: onDownloadTap,
           isPlaying: false,
           showCenterPlayButton: false,
           onTogglePlay: () {},

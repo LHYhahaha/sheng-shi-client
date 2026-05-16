@@ -14,8 +14,8 @@ abstract final class _PlayerLayoutMetrics {
   static const singleActionRailBottom = 161.0;
   static const forYouWatchNowBottom = 24.0;
   static const forYouMetaGap = 58.0;
-  static const singleBottomFrameHeight = 79.0;
-  static const singleBottomActionBottom = 41.0;
+  static const singleBottomFrameHeight = 32.0;
+  static const singleSeekBarBottom = 10.0;
 }
 
 class PlayerChrome extends StatefulWidget {
@@ -48,7 +48,6 @@ class PlayerChrome extends StatefulWidget {
     this.onSeekEnd,
     this.onSeekCancel,
     this.onRetry,
-    this.onDownloadTap,
     this.playbackLayer,
     this.seekBar,
     this.videoFit = BoxFit.cover,
@@ -86,13 +85,12 @@ class PlayerChrome extends StatefulWidget {
   final VoidCallback? onSeekEnd;
   final VoidCallback? onSeekCancel;
   final VoidCallback? onRetry;
-  final VoidCallback? onDownloadTap;
   final Widget? playbackLayer;
   final Widget? seekBar;
   final BoxFit videoFit;
   final bool forYouLayout;
 
-  /// 是否显示非必要 chrome（action/meta/Download/渐变等）；false 为沉浸模式。
+  /// 是否显示非必要 chrome（action/meta/渐变等）；false 为沉浸模式。
   final bool showChromeOverlays;
 
   /// chrome 显隐过渡；stable/ultraStable 应为 [Duration.zero] 或极短。
@@ -146,7 +144,6 @@ class _PlayerChromeState extends State<PlayerChrome> {
   VoidCallback? get onSeekEnd => widget.onSeekEnd;
   VoidCallback? get onSeekCancel => widget.onSeekCancel;
   VoidCallback? get onRetry => widget.onRetry;
-  VoidCallback? get onDownloadTap => widget.onDownloadTap;
   Widget? get playbackLayer => widget.playbackLayer;
   Widget? get seekBar => widget.seekBar;
   BoxFit get videoFit => widget.videoFit;
@@ -250,7 +247,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
           Positioned(
             left: 16,
             right: 16,
-            bottom: bottomInset + 78,
+            bottom: bottomInset + _PlayerLayoutMetrics.singleSeekBarBottom,
             child: RepaintBoundary(
               key: const ValueKey('player_seekbar_repaint_boundary'),
               child:
@@ -276,82 +273,6 @@ class _PlayerChromeState extends State<PlayerChrome> {
                       : const SizedBox.shrink()),
             ),
           ),
-          if (showChromeOverlays) ...[
-            if (!showUnlockButton)
-              Positioned(
-                left: 16,
-                bottom:
-                    bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
-                child: RepaintBoundary(
-                  key: const ValueKey('player_member_repaint_boundary'),
-                  child: _OverlayOpacity(
-                    opacity: overlayOpacity,
-                    opacityListenable: overlayOpacityListenable,
-                    child: GestureDetector(
-                      key: const ValueKey('player_member_button'),
-                      behavior: HitTestBehavior.opaque,
-                      onTap: onUnlockTap,
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 168),
-                        height: 24,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: AppColors.gold.withValues(alpha: 0.8),
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          context.l10n.playerBecomeMember,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF4B2C0D),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            height: 16 / 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            Positioned(
-              right: 31,
-              bottom:
-                  bottomInset + _PlayerLayoutMetrics.singleBottomActionBottom,
-              child: RepaintBoundary(
-                key: const ValueKey('player_download_repaint_boundary'),
-                child: _OverlayOpacity(
-                  opacity: overlayOpacity,
-                  opacityListenable: overlayOpacityListenable,
-                  child: GestureDetector(
-                    key: const ValueKey('player_download_button'),
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onDownloadTap,
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.download_rounded,
-                          color: Colors.white,
-                          size: 17,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          context.l10n.playerDownload,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            height: 14 / 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
         ],
       ],
     );

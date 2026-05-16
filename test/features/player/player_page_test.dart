@@ -458,7 +458,9 @@ void main() {
     expect(chrome.videoFit, BoxFit.contain);
   });
 
-  testWidgets('single drama viewport excludes bottom controls', (tester) async {
+  testWidgets('single drama viewport extends after hiding bottom actions', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
     );
@@ -471,7 +473,7 @@ void main() {
     final pageRect = tester.getRect(find.byType(PlayerPage));
 
     expect(viewportRect.top, pageRect.top);
-    expect(viewportRect.bottom, pageRect.bottom - 79);
+    expect(viewportRect.bottom, pageRect.bottom - 32);
   });
 
   testWidgets('for you viewport keeps bottom safe-area-only policy', (
@@ -658,7 +660,7 @@ void main() {
     expect(find.text('1.5x'), findsOneWidget);
   });
 
-  testWidgets('single drama shows Download placeholder instead of Next', (
+  testWidgets('single drama hides commerce placeholders for current version', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -668,19 +670,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Next'), findsNothing);
-    expect(find.text('Download'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('player_download_button')),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('player_download_button')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('EP.01'), findsOneWidget);
+    expect(find.text('Download'), findsNothing);
+    expect(find.byKey(const ValueKey('player_download_button')), findsNothing);
+    expect(find.byKey(const ValueKey('player_member_button')), findsNothing);
   });
 
-  testWidgets('last episode still shows Download placeholder', (tester) async {
+  testWidgets('last episode still hides commerce placeholders', (tester) async {
     await tester.pumpWidget(
       _buildPlayerApp(
         repository: _FakePlayerFeedRepository._(items: [_items().last]),
@@ -691,7 +686,9 @@ void main() {
 
     expect(find.text('EP.03'), findsOneWidget);
     expect(find.text('Next'), findsNothing);
-    expect(find.text('Download'), findsOneWidget);
+    expect(find.text('Download'), findsNothing);
+    expect(find.byKey(const ValueKey('player_download_button')), findsNothing);
+    expect(find.byKey(const ValueKey('player_member_button')), findsNothing);
   });
 
   testWidgets('single drama back button returns home', (tester) async {
@@ -935,10 +932,8 @@ void main() {
     expect(find.byKey(const ValueKey('player_episode_label')), findsOneWidget);
     expect(find.byKey(const ValueKey('player_speed_button')), findsOneWidget);
     expect(find.byKey(const ValueKey('player_more_button')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('player_download_button')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('player_download_button')), findsNothing);
+    expect(find.byKey(const ValueKey('player_member_button')), findsNothing);
     expect(
       find.byKey(const ValueKey('player_action_rail_repaint_boundary')),
       findsOneWidget,
