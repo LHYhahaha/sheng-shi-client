@@ -35,6 +35,16 @@ Flutter short drama client.
 
 - [App Runtime System（全局运行时系统）](docs/app-runtime-system.md)
 
+## App Runtime / Global Overlay / Modal System
+
+全局弹窗系统是封板后的架构优化任务，用来统一登录、解锁、充值、支付确认、会员购买、确认弹窗、活动弹窗和强更弹窗等跨页面浮层。目标是避免业务弹窗被底部 tab、局部 Stack、播放器层级或安全区遮挡，并通过 typed request/result 让业务拿到明确的成功、取消、关闭或失败结果。
+
+当前 release QA 期间不迁移业务弹窗；如 For You 解锁/充值抽屉被底部 tab 遮挡且影响支付或关闭，只做最小 safe-area/root-navigator 修复。完整系统设计与迁移计划见：
+
+- [Global Overlay / Modal System Plan（全局弹窗/浮层系统规划）](docs/global-overlay-modal-system-plan.md)
+- [App Runtime Foundation Plan（全局运行时基础）](docs/app-runtime-foundation-plan.md)
+- [Player Feed Engine Refactor Plan（播放器引擎封板结论）](docs/player-feed-engine-refactor-plan.md)
+
 ## Player Device Performance Policy
 
 播放器使用同一套 Feed/Video 架构，通过 `PlayerPerformancePolicy` 按设备能力切换体验，不维护 Android/iOS 两套播放器实现。
