@@ -5,41 +5,33 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
 import '../../../../l10n/app_localizations.dart';
-import '../../../../shared/theme/app_colors.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../../entitlement/domain/episode_access_decision.dart';
-import '../../../entitlement/domain/episode_unlock_type.dart';
 import '../../application/player_feed_controller.dart';
+import '../../application/player_overlay_orchestrator.dart';
 import '../../application/player_playback_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
 import '../../application/player_rebuild_diagnostics.dart';
+import '../../application/player_runtime_coordinator.dart';
 import '../../application/player_ui_controller.dart';
 import '../../application/player_viewport_controller.dart';
-import '../../domain/player_feed.dart';
+import '../../domain/player_access_presentation.dart';
 import '../../domain/player_content.dart';
+import '../../domain/player_feed.dart';
 import '../widgets/player_action_sheets.dart';
-import '../widgets/player_chrome.dart';
 import '../widgets/player_detail_sheet.dart';
+import '../widgets/player_feed_page_shell.dart';
+import '../widgets/player_playback_layer.dart';
 import '../widgets/player_recharge_unlock_sheet.dart';
 
-enum PlayerAccessPresentationState {
-  playable,
-  lockedCoins,
-  lockedRecharge,
-  lockedMembership,
-  unavailable,
-}
-
-/// 播放器页面。
+/// 播放器页面：纵向 [PageView] feed + 顶层单例视频 surface。
 ///
-/// 页面负责手势、PageView、弹层和 shell chrome；真正的播放 source、preload、
-/// prepared session window 和错误分类都交给 PlayerPlaybackController。这样 UI 可以
-/// 随 feed 切换而重建，但播放器资源生命周期仍由同一个状态机保护。
+/// 手势与落位由 [PlayerViewportController] 管理；权益/播放/预加载仅在 settled 后由
+/// [PlayerRuntimeCoordinator] 执行；自动解锁弹窗由 [PlayerOverlayOrchestrator] 调度。
 class PlayerPage extends ConsumerStatefulWidget {
   const PlayerPage({
     required this.dramaId,
@@ -74,17 +66,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     with WidgetsBindingObserver {
   static const _autoAdvanceDuration = Duration(milliseconds: 300);
   static const _pageTransitionDuration = Duration(milliseconds: 260);
-  static const _topBarHorizontal = 16.0;
-  static const _topBarTop = 8.0;
-  static const _topBarHeight = 40.0;
-  static const _topBarBackIconSize = 28.0;
-  static const _topBarMoreIconSize = 24.0;
   static const _dimmedOverlayOpacity = 0.64;
-  static const _autoUnlockSheetDwellDelay = Duration(milliseconds: 900);
 
   late final PageController _pageController;
   late final String _sessionKey;
   late final PlayerPlaybackController _playbackController;
+  late final PlayerOverlayOrchestrator _overlayOrchestrator;
   AppShellBottomNavigationVisible? _shellChrome;
   bool _isSeekDragging = false;
   bool _isModalOpen = false;
@@ -92,22 +79,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isPressingPlaybackSurface = false;
   bool _isPageScrolling = false;
   bool _didRecordFirstBuild = false;
-  int _preloadRequestGeneration = 0;
-  int _autoUnlockSheetGeneration = 0;
+  String? _activeCoinSheetItemId;
+  String? _activeRechargeSheetItemId;
   final ValueNotifier<double> _overlayOpacityNotifier = ValueNotifier<double>(
     1.0,
   );
   final ValueNotifier<double> _pagePositionNotifier = ValueNotifier<double>(
     0.0,
   );
-  String? _handledEndedItemId;
-  final Set<String> _entitlementPlayableItemIds = <String>{};
-  final Set<String> _autoUnlockSheetDismissedItemIds = <String>{};
-  String? _activeCoinSheetItemId;
-  String? _activeRechargeSheetItemId;
-  String? _pendingAutoUnlockSheetItemId;
-  DateTime? _pendingAutoUnlockSheetScheduledAt;
-  Duration? _pendingAutoUnlockSheetFrameStartedAt;
 
   String _createSessionKey() {
     return switch (widget.feedMode) {
@@ -130,6 +109,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _playbackController = ref.read(
       playerPlaybackControllerProvider(_sessionKey).notifier,
     );
+    _overlayOrchestrator = ref.read(
+      playerOverlayOrchestratorProvider(_sessionKey).notifier,
+    );
     _playbackController.recordPlaybackTiming(
       'player page init',
       details: [
@@ -146,10 +128,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       occurredAt: widget.initialUserActionAt,
     );
     if (widget.hideShellNavigation) {
-      final shellChrome = ref.read(
+      _shellChrome = ref.read(
         appShellBottomNavigationVisibleProvider.notifier,
       );
-      _shellChrome = shellChrome;
     }
     Future<void>.microtask(() async {
       _shellChrome?.hide();
@@ -167,10 +148,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _cancelPendingAutoUnlockSheet();
-    // 真正销毁页面实例时释放 session。底部 tab 切换不会 dispose For You 页面，它走
-    // AppShell 的 pauseForVisibility；这里覆盖的是 app/test teardown 或 route 树销毁，
-    // 不能只 pause，否则 Android VideoController 可能在树释放后仍收到 native callback。
+    _overlayOrchestrator.cancelPending();
     _playbackController.detachVideoSurfaceForTeardown();
     unawaited(
       _playbackController.disposeSession(
@@ -193,8 +171,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (state == AppLifecycleState.resumed) {
       return;
     }
-    // 进入后台/非活跃时统一走 visibility pause，释放相邻预热和 prepared window。
-    // 不直接 dispose，避免用户回到 app 时 For You tab provider 已被意外清空。
     unawaited(_playbackController.pauseForVisibility());
   }
 
@@ -239,6 +215,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             index: feedState.currentIndex,
             itemId: feedState.currentItem!.id,
           );
+      if (_pageController.hasClients &&
+          feedState.currentIndex != _pageController.page?.round()) {
+        _pageController.jumpToPage(feedState.currentIndex);
+      }
     }
     _playbackController.recordPlaybackTiming(
       'feed load end',
@@ -260,19 +240,39 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final feedProvider = playerFeedControllerProvider(sessionKey);
     final uiProvider = playerUiControllerProvider(sessionKey);
     final viewportProvider = playerViewportControllerProvider(sessionKey);
-    final feedState = ref.watch(feedProvider);
-    final feedController = ref.read(feedProvider.notifier);
+    final runtimeProvider = playerRuntimeCoordinatorProvider(sessionKey);
+    final overlayProvider = playerOverlayOrchestratorProvider(sessionKey);
+
+    final feedSnapshot = ref.watch(
+      feedProvider.select(
+        (state) => (
+          state.isLoading,
+          state.error,
+          state.items,
+          state.currentIndex,
+          state.canGoNext,
+        ),
+      ),
+    );
+    final showsPaywall = ref.watch(uiProvider.select((state) => state.showsPaywall));
     final viewportState = ref.watch(
-      viewportProvider.select(_ViewportBuildSnapshot.fromState),
+      viewportProvider.select(PlayerViewportBuildSnapshot.fromState),
     );
-    final viewportController = ref.read(viewportProvider.notifier);
-    final uiState = ref.watch(uiProvider);
-    final uiController = ref.read(uiProvider.notifier);
-    final playbackProvider = playerPlaybackControllerProvider(sessionKey);
     final playbackShell = ref.watch(
-      playbackProvider.select(_PlayerPlaybackShellSnapshot.fromState),
+      playerPlaybackControllerProvider(sessionKey).select(
+        PlayerPlaybackShellSnapshot.fromState,
+      ),
     );
-    final playbackController = ref.read(playbackProvider.notifier);
+
+    final feedState = ref.read(feedProvider);
+    final feedController = ref.read(feedProvider.notifier);
+    final viewportController = ref.read(viewportProvider.notifier);
+    final runtimeController = ref.read(runtimeProvider.notifier);
+    final uiController = ref.read(uiProvider.notifier);
+    final playbackController = ref.read(
+      playerPlaybackControllerProvider(sessionKey).notifier,
+    );
+
     PlayerRebuildDiagnostics.recordPlayerPageBuild(
       sessionKey: sessionKey,
       itemId: feedState.currentItem?.id,
@@ -283,13 +283,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         'player page first build',
         details: [
           'feedMode=${widget.feedMode.name}',
-          'feedLoading=${feedState.isLoading}',
-          'itemCount=${feedState.items.length}',
+          'feedLoading=${feedSnapshot.$1}',
+          'itemCount=${feedSnapshot.$3.length}',
         ].join(' '),
       );
     }
 
-    ref.listen(viewportProvider.select(_ViewportSettledSnapshot.fromState), (
+    ref.listen(viewportProvider.select(PlayerViewportSettledSnapshot.fromState), (
       previous,
       next,
     ) {
@@ -298,7 +298,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               previous?.generation == next.generation)) {
         return;
       }
-
       final latestFeedState = ref.read(feedProvider);
       if (next.index < 0 || next.index >= latestFeedState.items.length) {
         return;
@@ -307,81 +306,50 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (settledItem.id != next.itemId) {
         return;
       }
-      if (latestFeedState.currentIndex != next.index) {
-        ref.read(feedProvider.notifier).setCurrentIndex(next.index);
-      }
-      ref.read(uiProvider.notifier).selectEpisode(settledItem.episode);
-      if (previous?.itemId != null) {
-        final previousIndex = previous!.index;
-        final direction = next.index > previousIndex ? 'next' : 'previous';
-        playbackController.recordPlaybackUserAction(
-          'PageView settled',
-          trigger: _isAutoAdvancing
+      unawaited(
+        runtimeController.onViewportSettled(
+          item: settledItem,
+          index: next.index,
+          previousItemId: previous?.itemId,
+          previousIndex: previous?.index,
+          playbackTrigger: _isAutoAdvancing
               ? 'auto_next'
-              : direction == 'previous'
-              ? 'swipe_previous'
-              : 'swipe_next',
-          fromItemId: previous.itemId,
-          toItemId: settledItem.id,
-          direction: direction,
-          fromIndex: previousIndex,
-          toIndex: next.index,
-        );
+              : previous != null && next.index > previous.index
+              ? 'swipe_next'
+              : 'swipe_previous',
+        ),
+      );
+      ref.read(overlayProvider.notifier).scheduleForSettledItem(
+        item: settledItem,
+        accessPresenter: ref.read(runtimeProvider).accessPresenter,
+        isModalOpen: _isModalOpen,
+        hasActiveCoinSheet: _activeCoinSheetItemId != null,
+        hasActiveRechargeSheet: _activeRechargeSheetItemId != null,
+        isPageScrolling: _isPageScrolling,
+        isCurrentFeedItem: runtimeController.isCurrentFeedItem,
+        isPageActivelyMoving: _isPageActivelyMovingForAutoSheet,
+      );
+    });
+
+    ref.listen(overlayProvider.select((state) => state.pendingAutoSheetItemId), (
+      previous,
+      next,
+    ) {
+      if (next == null || next == previous) {
+        return;
       }
-      // viewport settledItem 是播放链路入口。拖动和 page threshold 变化只更新视觉状态，
-      // 真正 access/playback/preload/sheet 都等最终落位后再执行。
-      unawaited(() async {
-        final accessStopwatch = Stopwatch()..start();
-        PlayerRebuildDiagnostics.recordTiming(
-          'settledAccessEvaluateStart',
-          itemId: settledItem.id,
-        );
-        await _handleEntitlementDecisionForItem(
-          settledItem,
-          autoPresentSheet: false,
-        );
-        accessStopwatch.stop();
-        final accessPresentationState = _accessPresentationStateFor(
-          settledItem,
-        );
-        PlayerRebuildDiagnostics.recordTiming(
-          'settledAccessEvaluateEnd',
-          itemId: settledItem.id,
-          elapsed: accessStopwatch.elapsed,
-          details: 'mode=${accessPresentationState.name}',
-        );
-        PlayerRebuildDiagnostics.recordTiming(
-          'currentItemAccessMode',
-          itemId: settledItem.id,
-          details: 'mode=${accessPresentationState.name}',
-        );
-        PlayerRebuildDiagnostics.recordTiming(
-          'postSettledPlaybackCommand',
-          itemId: settledItem.id,
-          elapsed: accessStopwatch.elapsed,
-          details: 'mode=${accessPresentationState.name}',
-        );
-        if (_isLockedAutoSheetCandidate(settledItem)) {
-          PlayerRebuildDiagnostics.recordTiming(
-            'currentItemChangeToUnlockNow',
-            itemId: settledItem.id,
-            elapsed: accessStopwatch.elapsed,
-          );
-          playbackController.recordPlaybackTiming(
-            'current item to unlock now',
-            itemId: settledItem.id,
-            elapsed: accessStopwatch.elapsed,
-          );
+      PlayerFeedItem? settledItem;
+      for (final candidate in ref.read(feedProvider).items) {
+        if (candidate.id == next) {
+          settledItem = candidate;
+          break;
         }
-        if (!mounted) {
-          return;
-        }
-        PlayerRebuildDiagnostics.recordTiming(
-          'postSettledSheetSchedule',
-          itemId: settledItem.id,
-        );
-        _scheduleAutoUnlockSheetForItem(settledItem);
-      }());
+      }
+      if (settledItem == null || !mounted) {
+        return;
+      }
+      ref.read(overlayProvider.notifier).clearPendingSheetRequest();
+      unawaited(_presentAutoUnlockSheetForItem(settledItem));
     });
 
     ref.listen(feedProvider.select((state) => state.currentIndex), (
@@ -391,39 +359,46 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (!_pageController.hasClients) {
         return;
       }
-
       final currentPage = _pageController.page?.round();
       if (currentPage != next) {
-        _pageController.animateToPage(
-          next,
-          duration: _isAutoAdvancing
-              ? _autoAdvanceDuration
-              : _pageTransitionDuration,
-          curve: Curves.easeOutCubic,
-        );
-      }
-    });
-
-    ref.listen(playbackProvider.select(_PlaybackEndedSnapshot.fromState), (
-      previous,
-      next,
-    ) {
-      if (!next.hasEnded ||
-          previous?.hasEnded == true ||
-          next.currentItemId == null ||
-          _handledEndedItemId == next.currentItemId ||
-          _isSeekDragging ||
-          _isModalOpen ||
-          uiState.showsPaywall ||
-          feedState.currentItem?.id != next.currentItemId) {
+        unawaited(() async {
+          await _pageController.animateToPage(
+            next,
+            duration: _isAutoAdvancing
+                ? _autoAdvanceDuration
+                : _pageTransitionDuration,
+            curve: Curves.easeOutCubic,
+          );
+          if (!mounted) {
+            return;
+          }
+          _settleViewportAtIndex(next);
+        }());
         return;
       }
-
-      _handledEndedItemId = next.currentItemId;
-      if (feedState.canGoNext) {
-        unawaited(_advanceToNextFromCompletion());
-      }
+      _settleViewportAtIndex(next);
     });
+
+    ref.listen(
+      playerPlaybackControllerProvider(sessionKey).select(
+        (state) => (state.currentItemId, state.hasEnded),
+      ),
+      (previous, next) {
+        if (!runtimeController.shouldHandlePlaybackEnded(
+          currentItemId: next.$1,
+          hasEnded: next.$2,
+          isSeekDragging: _isSeekDragging,
+          isModalOpen: _isModalOpen,
+          showsPaywall: showsPaywall,
+        )) {
+          return;
+        }
+        runtimeController.markEndedHandled(next.$1!);
+        if (feedSnapshot.$5) {
+          unawaited(_advanceToNextFromCompletion());
+        }
+      },
+    );
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -432,51 +407,50 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         canPop:
             widget.feedMode == PlayerFeedMode.forYou &&
             !widget.hideShellNavigation &&
-            !uiState.showsPaywall,
+            !showsPaywall,
         onPopInvokedWithResult: (didPop, result) {
           if (didPop) {
             return;
           }
-
-          if (uiState.showsPaywall) {
+          if (showsPaywall) {
             uiController.hidePaywall();
             return;
           }
-
           if (widget.hideShellNavigation) {
             _exitForYouFeed();
             return;
           }
-
           if (widget.feedMode == PlayerFeedMode.singleDrama) {
             unawaited(_goBackFromPlayer());
           }
         },
         child: _buildBody(
-          feedState,
-          feedController,
-          viewportState,
-          viewportController,
-          uiState,
-          uiController,
-          playbackShell,
-          playbackController,
+          isLoading: feedSnapshot.$1,
+          error: feedSnapshot.$2,
+          items: feedSnapshot.$3,
+          feedController: feedController,
+          viewportState: viewportState,
+          viewportController: viewportController,
+          playbackShell: playbackShell,
+          playbackController: playbackController,
+          runtimeController: runtimeController,
         ),
       ),
     );
   }
 
-  Widget _buildBody(
-    PlayerFeedState feedState,
-    PlayerFeedController feedController,
-    _ViewportBuildSnapshot viewportState,
-    PlayerViewportController viewportController,
-    PlayerUiState uiState,
-    PlayerUiController uiController,
-    _PlayerPlaybackShellSnapshot playbackShell,
-    PlayerPlaybackController playbackController,
-  ) {
-    if (feedState.isLoading) {
+  Widget _buildBody({
+    required bool isLoading,
+    required Object? error,
+    required List<PlayerFeedItem> items,
+    required PlayerFeedController feedController,
+    required PlayerViewportBuildSnapshot viewportState,
+    required PlayerViewportController viewportController,
+    required PlayerPlaybackShellSnapshot playbackShell,
+    required PlayerPlaybackController playbackController,
+    required PlayerRuntimeCoordinator runtimeController,
+  }) {
+    if (isLoading) {
       return const Center(
         child: SizedBox.square(
           dimension: 22,
@@ -484,54 +458,50 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         ),
       );
     }
-
-    if (feedState.error != null) {
-      return _PlayerStateMessage(
+    if (error != null) {
+      return PlayerStateMessage(
         icon: Icons.refresh_rounded,
         message: context.l10n.playerFeedLoadFailed,
         actionLabel: context.l10n.retry,
         onAction: feedController.retry,
       );
     }
-
-    if (feedState.items.isEmpty) {
-      return _PlayerStateMessage(
+    if (items.isEmpty) {
+      return PlayerStateMessage(
         icon: Icons.movie_filter_rounded,
         message: context.l10n.playerFeedEmpty,
       );
     }
 
-    final currentItem = feedState.currentItem;
-    final isPlaybackSurfaceFrozen =
+    final settledIndex = viewportState.settledIndex;
+    final settledItem = settledIndex >= 0 && settledIndex < items.length
+        ? items[settledIndex]
+        : null;
+    final dimVideoDuringScroll =
         viewportState.scrollPhase != PlayerViewportScrollPhase.idle;
+    final accessForSettled = settledItem == null
+        ? null
+        : runtimeController.accessPresentationFor(settledItem);
     final canShowActiveVideoOverlay =
-        currentItem != null &&
-        _accessPresentationStateFor(currentItem) ==
-            PlayerAccessPresentationState.playable;
-    final activeVideoItemId = playbackShell.currentItemId ?? currentItem?.id;
+        settledItem != null &&
+        accessForSettled == PlayerAccessPresentationState.playable;
+    final activeVideoItemId = playbackShell.currentItemId ?? settledItem?.id;
     final activeVideoIndex = activeVideoItemId == null
-        ? feedState.currentIndex
-        : feedState.items.indexWhere(
-            (candidate) => candidate.id == activeVideoItemId,
-          );
-    final activeVideoItem = activeVideoIndex == -1
-        ? currentItem
-        : feedState.items[activeVideoIndex];
+        ? settledIndex
+        : items.indexWhere((candidate) => candidate.id == activeVideoItemId);
 
     return Stack(
       children: [
-        _ActivePlaybackSurfaceOverlay(
+        ActivePlaybackSurfaceOverlay(
           sessionKey: _sessionKey,
           itemId: activeVideoItemId,
-          currentIndex: activeVideoIndex == -1
-              ? feedState.currentIndex
-              : activeVideoIndex,
+          currentIndex: activeVideoIndex == -1 ? settledIndex : activeVideoIndex,
           pagePositionListenable: _pagePositionNotifier,
           canShowVideo: canShowActiveVideoOverlay,
-          freezeForScroll: isPlaybackSurfaceFrozen,
-          videoFit: activeVideoItem == null
+          dimDuringScroll: dimVideoDuringScroll,
+          videoFit: settledItem == null
               ? BoxFit.cover
-              : _videoFitFor(activeVideoItem.episode),
+              : videoFitForEpisode(settledItem.episode),
           forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
         ),
         Listener(
@@ -547,157 +517,81 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   ? const NeverScrollableScrollPhysics()
                   : const PageScrollPhysics(),
               scrollDirection: Axis.vertical,
-              itemCount: feedState.items.length,
+              itemCount: items.length,
               onPageChanged: viewportController.markPageChanged,
               itemBuilder: (context, index) {
-                final item = feedState.items[index];
-                final isCurrentItem = index == viewportState.currentIndex;
-                final accessPresentationState = _accessPresentationStateFor(
-                  item,
-                );
+                final item = items[index];
+                final isSettledPage = index == viewportState.settledIndex;
                 PlayerRebuildDiagnostics.recordPageViewItemBuild(
                   itemId: item.id,
-                  isCurrent: isCurrentItem,
+                  isCurrent: isSettledPage,
                 );
-                final isLockedCurrentItem =
-                    isCurrentItem &&
-                    (accessPresentationState ==
-                            PlayerAccessPresentationState.lockedCoins ||
-                        accessPresentationState ==
-                            PlayerAccessPresentationState.lockedRecharge ||
-                        accessPresentationState ==
-                            PlayerAccessPresentationState.lockedMembership);
-                final lockedActionLabel =
-                    accessPresentationState ==
-                        PlayerAccessPresentationState.lockedMembership
-                    ? context.l10n.playerMemberUnlock
-                    : context.l10n.playerUnlockNow;
-                final canUsePlaybackSurface =
-                    isCurrentItem &&
-                    accessPresentationState ==
-                        PlayerAccessPresentationState.playable &&
-                    playbackShell.shouldAttachVideoSurface &&
-                    playbackShell.currentItemId == item.id &&
-                    playbackShell.currentSource != null;
-                final canHideViewportBackdrop =
-                    canUsePlaybackSurface &&
-                    playbackShell.hasVideoController &&
-                    !isPlaybackSurfaceFrozen;
-                return Stack(
-                  children: [
-                    PlayerChrome(
-                      content: item.content,
-                      overlayOpacityListenable: _overlayOpacityNotifier,
-                      showViewportBackdrop: !canHideViewportBackdrop,
-                      playbackLayer: canUsePlaybackSurface
-                          ? _PlayerPlaybackControlsConsumer(
-                              sessionKey: _sessionKey,
-                              itemId: item.id,
-                              onTogglePlay: () {
-                                unawaited(playbackController.togglePlay());
-                              },
-                              onRetry: () {
-                                final playbackState = ref.read(
-                                  playerPlaybackControllerProvider(_sessionKey),
-                                );
-                                playbackController.recordPlaybackUserAction(
-                                  'retry tap',
-                                  trigger: 'retry',
-                                  fromItemId: playbackState.currentItemId,
-                                  toItemId: item.id,
-                                );
-                                unawaited(
-                                  _handleEntitlementDecisionForItem(
-                                    item,
-                                    autoPresentSheet: true,
-                                  ),
-                                );
-                              },
-                            )
-                          : null,
-                      videoFit: _videoFitFor(item.episode),
-                      seekBar:
-                          widget.feedMode != PlayerFeedMode.forYou &&
-                              isCurrentItem &&
-                              accessPresentationState ==
-                                  PlayerAccessPresentationState.playable
-                          ? _PlayerSeekBarConsumer(
-                              sessionKey: _sessionKey,
-                              thumbnailAssetPath: item.content.posterAssetPath,
-                              onSeekStart: () {
-                                _setSeekDragging(true);
-                                playbackController.beginSeek();
-                              },
-                              onSeekUpdate:
-                                  playbackController.updateSeekPreview,
-                              onSeekEnd: () {
-                                _setSeekDragging(false);
-                                unawaited(playbackController.endSeek());
-                              },
-                              onSeekCancel: () {
-                                _setSeekDragging(false);
-                                playbackController.cancelSeek();
-                              },
-                            )
-                          : null,
-                      onDownloadTap:
-                          widget.feedMode == PlayerFeedMode.singleDrama
-                          ? () {}
-                          : null,
-                      isPlaying: false,
-                      showCenterPlayButton: false,
-                      onTogglePlay: () {},
-                      onWatchNowTap:
-                          playbackShell.canTogglePlayback &&
-                              playbackShell.status ==
-                                  PlayerPlaybackStatus.paused
-                          ? () {
-                              unawaited(playbackController.togglePlay());
-                            }
-                          : () {},
-                      onEpisodesTap: () {
-                        _showDetailSheet(
-                          item.content,
-                          initialTab: PlayerDetailTab.episodes,
-                        );
-                      },
-                      onShareTap: _showShareSheet,
-                      onMoreTap: () {
-                        _showDetailSheet(
-                          item.content,
-                          initialTab: PlayerDetailTab.synopsis,
-                        );
-                      },
-                      showUnlockButton: isLockedCurrentItem,
-                      unlockLabel: lockedActionLabel,
-                      onUnlockTap: isLockedCurrentItem
-                          ? () {
-                              unawaited(_showPendingUnlockActionSheet());
-                            }
-                          : _openMembership,
-                      forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
-                    ),
-                    if (item.episode.isUnavailable)
-                      _UnavailableEpisodeOverlay(
-                        message: context.l10n.playerEpisodeUnavailable,
-                      ),
-                    if (widget.feedMode == PlayerFeedMode.singleDrama)
-                      _PlayerTopBar(
-                        episodeNumber: item.episode.number,
-                        playbackRate: playbackShell.playbackRate,
-                        overlayOpacity: 1,
-                        overlayOpacityListenable: _overlayOpacityNotifier,
-                        onBackTap: () {
-                          unawaited(_goBackFromPlayer());
-                        },
-                        onSpeedTap: _showSpeedSheet,
-                      ),
-                  ],
+                return PlayerFeedPageShell(
+                  key: ValueKey('player_feed_page_${item.id}'),
+                  sessionKey: _sessionKey,
+                  item: item,
+                  index: index,
+                  isSettledPage: isSettledPage,
+                  forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
+                  overlayOpacityListenable: _overlayOpacityNotifier,
+                  onTogglePlay: () {
+                    unawaited(playbackController.togglePlay());
+                  },
+                  onRetry: () {
+                    unawaited(_retryPlaybackForItem(item));
+                  },
+                  onSeekStart: () {
+                    _setSeekDragging(true);
+                    playbackController.beginSeek();
+                  },
+                  onSeekUpdate: playbackController.updateSeekPreview,
+                  onSeekEnd: () {
+                    _setSeekDragging(false);
+                    unawaited(playbackController.endSeek());
+                  },
+                  onSeekCancel: () {
+                    _setSeekDragging(false);
+                    playbackController.cancelSeek();
+                  },
+                  onWatchNowTap: () {
+                    unawaited(playbackController.togglePlay());
+                  },
+                  onEpisodesTap: () {
+                    _showDetailSheet(
+                      item.content,
+                      initialTab: PlayerDetailTab.episodes,
+                    );
+                  },
+                  onShareTap: _showShareSheet,
+                  onMoreTap: () {
+                    _showDetailSheet(
+                      item.content,
+                      initialTab: PlayerDetailTab.synopsis,
+                    );
+                  },
+                  onUnlockTap: () {
+                    unawaited(_showPendingUnlockActionSheet());
+                  },
+                  onOpenMembership: _openMembership,
+                  onDownloadTap: widget.feedMode == PlayerFeedMode.singleDrama
+                      ? () {}
+                      : null,
                 );
               },
             ),
           ),
         ),
+        if (widget.feedMode == PlayerFeedMode.singleDrama && settledItem != null)
+          PlayerTopBar(
+            episodeNumber: settledItem.episode.number,
+            playbackRate: playbackShell.playbackRate,
+            overlayOpacity: 1,
+            overlayOpacityListenable: _overlayOpacityNotifier,
+            onBackTap: () {
+              unawaited(_goBackFromPlayer());
+            },
+            onSpeedTap: _showSpeedSheet,
+          ),
       ],
     );
   }
@@ -712,6 +606,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _overlayOpacityNotifier.value = next;
   }
 
+  void _settleViewportAtIndex(int index) {
+    final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+    if (index < 0 || index >= feedState.items.length) {
+      return;
+    }
+    ref
+        .read(playerViewportControllerProvider(_sessionKey).notifier)
+        .settle(index: index, itemId: feedState.items[index].id);
+  }
+
   void _syncActiveVideoPagePosition() {
     if (!_pageController.hasClients) {
       return;
@@ -724,10 +628,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   bool _handlePageScrollNotification(ScrollNotification notification) {
+    final overlayController = ref.read(
+      playerOverlayOrchestratorProvider(_sessionKey).notifier,
+    );
     if (notification is ScrollStartNotification ||
         notification is ScrollUpdateNotification) {
       if (notification is ScrollStartNotification) {
-        _cancelPendingAutoUnlockSheet();
+        overlayController.onScrollStart();
         ref
             .read(playerViewportControllerProvider(_sessionKey).notifier)
             .markScrollStart();
@@ -742,7 +649,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       _setPageScrolling(true);
       return false;
     }
-
     if (notification is ScrollEndNotification) {
       _setPageScrolling(false);
       final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
@@ -751,12 +657,23 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       );
       viewportController.markScrollEnd();
       if (feedState.items.isNotEmpty) {
-        final page = _pageController.hasClients ? _pageController.page : null;
-        final settledIndex = (page ?? feedState.currentIndex.toDouble())
-            .round()
-            .clamp(0, feedState.items.length - 1);
-        final settledItem = feedState.items[settledIndex];
-        viewportController.settle(index: settledIndex, itemId: settledItem.id);
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_pageController.hasClients) {
+            return;
+          }
+          final page = _pageController.page;
+          if (page == null) {
+            return;
+          }
+          final settledIndex = page
+              .round()
+              .clamp(0, feedState.items.length - 1);
+          final settledItem = feedState.items[settledIndex];
+          viewportController.settle(
+            index: settledIndex,
+            itemId: settledItem.id,
+          );
+        });
       }
     }
     return false;
@@ -782,9 +699,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (_isSeekDragging == isDragging || !mounted) {
       return;
     }
-    // 拖动取消可能发生在 route teardown 的 widget tree lock 阶段。此时直接 setState 会
-    // 让测试和真机退出链路变成非确定性，因此延后一帧做 UI 标记收口；播放控制器仍会
-    // 立即收到 cancel/end，不影响真实 seek 状态。
     final phase = SchedulerBinding.instance.schedulerPhase;
     if (phase == SchedulerPhase.idle ||
         phase == SchedulerPhase.postFrameCallbacks) {
@@ -801,56 +715,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         _isSeekDragging = isDragging;
       });
     });
-  }
-
-  void _exitForYouFeed() {
-    _shellChrome?.show();
-    context.go(RoutePaths.home);
-  }
-
-  bool _isEntitlementPlayable(PlayerFeedItem item) {
-    return !item.episode.isLocked ||
-        _entitlementPlayableItemIds.contains(item.id);
-  }
-
-  PlayerAccessPresentationState _accessPresentationStateFor(
-    PlayerFeedItem item,
-  ) {
-    if (item.episode.isUnavailable) {
-      return PlayerAccessPresentationState.unavailable;
-    }
-    if (_isEntitlementPlayable(item)) {
-      return PlayerAccessPresentationState.playable;
-    }
-    if (item.episode.unlockType == EpisodeUnlockType.membership) {
-      return PlayerAccessPresentationState.lockedMembership;
-    }
-    final entitlementState = ref.read(entitlementControllerProvider);
-    if (entitlementState.coinBalance >= item.episode.requiredCoins) {
-      return PlayerAccessPresentationState.lockedCoins;
-    }
-    return PlayerAccessPresentationState.lockedRecharge;
-  }
-
-  PlayerFeedItem _playableCopy(PlayerFeedItem item) {
-    if (!item.episode.isLocked) {
-      return item;
-    }
-    return item.copyWith(episode: item.episode.copyWith(isLocked: false));
-  }
-
-  bool _isCurrentFeedItem(PlayerFeedItem item) {
-    return ref
-            .read(playerFeedControllerProvider(_sessionKey))
-            .currentItem
-            ?.id ==
-        item.id;
-  }
-
-  bool _isLockedAutoSheetCandidate(PlayerFeedItem item) {
-    return item.episode.isLocked &&
-        !item.episode.isUnavailable &&
-        !_isEntitlementPlayable(item);
   }
 
   bool _isPageActivelyMovingForAutoSheet(PlayerFeedItem item) {
@@ -871,381 +735,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     return (page - itemIndex).abs() > 0.01;
   }
 
-  void _cancelPendingAutoUnlockSheet() {
-    final itemId = _pendingAutoUnlockSheetItemId;
-    final scheduledAt = _pendingAutoUnlockSheetScheduledAt;
-    _pendingAutoUnlockSheetItemId = null;
-    _pendingAutoUnlockSheetScheduledAt = null;
-    _pendingAutoUnlockSheetFrameStartedAt = null;
-    _autoUnlockSheetGeneration += 1;
-    if (itemId != null) {
-      PlayerRebuildDiagnostics.recordTiming(
-        'dwellAutoSheetCancel',
-        itemId: itemId,
-        elapsed: scheduledAt == null
-            ? null
-            : DateTime.now().difference(scheduledAt),
-      );
-    }
-  }
-
-  void _markAutoUnlockSheetDismissed(String itemId) {
-    _cancelPendingAutoUnlockSheet();
-    if (!_autoUnlockSheetDismissedItemIds.add(itemId)) {
-      return;
-    }
-    PlayerRebuildDiagnostics.recordTiming(
-      'autoUnlockSheetDismissed',
-      itemId: itemId,
-    );
-    _playbackController.recordPlaybackTiming(
-      'auto unlock sheet dismissed',
-      itemId: itemId,
-    );
-  }
-
-  void _scheduleAutoUnlockSheetForItem(PlayerFeedItem item) {
-    if (_pendingAutoUnlockSheetItemId == item.id) {
-      return;
-    }
-    _pendingAutoUnlockSheetItemId = null;
-    _pendingAutoUnlockSheetScheduledAt = null;
-    _pendingAutoUnlockSheetFrameStartedAt = null;
-
-    if (!mounted ||
-        _isModalOpen ||
-        _activeCoinSheetItemId != null ||
-        _activeRechargeSheetItemId != null ||
-        _isPageScrolling ||
-        _autoUnlockSheetDismissedItemIds.contains(item.id) ||
-        !_isLockedAutoSheetCandidate(item)) {
-      return;
-    }
-
-    _pendingAutoUnlockSheetItemId = item.id;
-    _pendingAutoUnlockSheetScheduledAt = DateTime.now();
-    _pendingAutoUnlockSheetFrameStartedAt = null;
-    final generation = ++_autoUnlockSheetGeneration;
-    PlayerRebuildDiagnostics.recordTiming(
-      'dwellAutoSheetSchedule',
-      itemId: item.id,
-      details: 'delayMs=${_autoUnlockSheetDwellDelay.inMilliseconds}',
-    );
-
-    _queueDwellAutoUnlockSheetFrame(item, generation: generation);
-  }
-
-  void _queueDwellAutoUnlockSheetFrame(
-    PlayerFeedItem item, {
-    required int generation,
-  }) {
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          generation != _autoUnlockSheetGeneration ||
-          _pendingAutoUnlockSheetItemId != item.id) {
-        return;
-      }
-      final frameTime = SchedulerBinding.instance.currentFrameTimeStamp;
-      final startedAt = _pendingAutoUnlockSheetFrameStartedAt;
-      if (startedAt == null) {
-        _pendingAutoUnlockSheetFrameStartedAt = frameTime;
-        SchedulerBinding.instance.scheduleFrame();
-        _queueDwellAutoUnlockSheetFrame(item, generation: generation);
-        return;
-      }
-      final elapsed = frameTime - startedAt;
-      if (elapsed < _autoUnlockSheetDwellDelay) {
-        SchedulerBinding.instance.scheduleFrame();
-        _queueDwellAutoUnlockSheetFrame(item, generation: generation);
-        return;
-      }
-      unawaited(_showAutoUnlockSheetForItem(item, generation: generation));
-    });
-    SchedulerBinding.instance.scheduleFrame();
-  }
-
-  Future<void> _showAutoUnlockSheetForItem(
-    PlayerFeedItem item, {
-    required int generation,
-  }) async {
-    if (!mounted ||
-        generation != _autoUnlockSheetGeneration ||
-        !_isCurrentFeedItem(item) ||
-        !_isLockedAutoSheetCandidate(item) ||
-        _isModalOpen ||
-        _activeCoinSheetItemId != null ||
-        _activeRechargeSheetItemId != null ||
-        _autoUnlockSheetDismissedItemIds.contains(item.id)) {
-      return;
-    }
-
-    if (_isPageActivelyMovingForAutoSheet(item)) {
-      PlayerRebuildDiagnostics.recordTiming(
-        'dwellAutoSheetWaitForSettle',
-        itemId: item.id,
-      );
-      _queueDwellAutoUnlockSheetFrame(item, generation: generation);
-      return;
-    }
-
-    final scheduledAt = _pendingAutoUnlockSheetScheduledAt;
-    _pendingAutoUnlockSheetItemId = null;
-    _pendingAutoUnlockSheetScheduledAt = null;
-    _pendingAutoUnlockSheetFrameStartedAt = null;
-    if (scheduledAt != null) {
-      final elapsed = DateTime.now().difference(scheduledAt);
-      PlayerRebuildDiagnostics.recordTiming(
-        'dwellAutoSheetFire',
-        itemId: item.id,
-        elapsed: elapsed,
-      );
-      _playbackController.recordPlaybackTiming(
-        'dwell auto sheet scheduling',
-        itemId: item.id,
-        elapsed: elapsed,
-      );
-    }
-
-    final decision = ref
-        .read(entitlementControllerProvider.notifier)
-        .evaluateAccess(
-          dramaId: item.content.id,
-          episodeId: item.episode.id,
-          itemId: item.id,
-          unlockType: item.episode.unlockType,
-          price: item.episode.requiredCoins,
-          isUnavailable: item.episode.isUnavailable,
-        );
-
-    if (!mounted ||
-        generation != _autoUnlockSheetGeneration ||
-        !_isCurrentFeedItem(item) ||
-        (!_isLockedAutoSheetCandidate(item)) ||
-        _isModalOpen ||
-        _autoUnlockSheetDismissedItemIds.contains(item.id)) {
-      return;
-    }
-
-    switch (decision.type) {
-      case EpisodeAccessDecisionType.allowPlay:
-        await _handleAccessDecision(item, decision, autoPresentSheet: false);
-      case EpisodeAccessDecisionType.autoUnlockAndPlay:
-      case EpisodeAccessDecisionType.showCoinUnlockDialog:
-        await _showCoinUnlockSheetForItem(item, launchedByAutoSheet: true);
-      case EpisodeAccessDecisionType.showRechargeDialog:
-        await _showRechargeUnlockSheetForItem(item, launchedByAutoSheet: true);
-      case EpisodeAccessDecisionType.goMembership:
-      case EpisodeAccessDecisionType.waitUnlock:
-        return;
-    }
-  }
-
-  Future<void> _handleEntitlementDecisionForItem(
-    PlayerFeedItem item, {
-    required bool autoPresentSheet,
-  }) async {
-    if (!mounted) {
-      return;
-    }
-
-    final uiController = ref.read(
-      playerUiControllerProvider(_sessionKey).notifier,
-    );
-    uiController.selectEpisode(item.episode);
-
-    final entitlementController = ref.read(
-      entitlementControllerProvider.notifier,
-    );
-    final decision = entitlementController.evaluateAccess(
-      dramaId: item.content.id,
-      episodeId: item.episode.id,
-      itemId: item.id,
-      unlockType: item.episode.unlockType,
-      price: item.episode.requiredCoins,
-      isUnavailable: item.episode.isUnavailable,
-    );
-
-    await _handleAccessDecision(
-      item,
-      decision,
-      autoPresentSheet: autoPresentSheet,
-    );
-  }
-
-  Future<void> _handleAccessDecision(
-    PlayerFeedItem item,
-    EpisodeAccessDecision decision, {
-    required bool autoPresentSheet,
-  }) async {
-    final uiController = ref.read(
-      playerUiControllerProvider(_sessionKey).notifier,
-    );
-    final playbackController = ref.read(
-      playerPlaybackControllerProvider(_sessionKey).notifier,
-    );
-
-    switch (decision.type) {
-      case EpisodeAccessDecisionType.allowPlay:
-        if (!_isCurrentFeedItem(item)) {
-          return;
-        }
-        _entitlementPlayableItemIds.add(item.id);
-        _autoUnlockSheetDismissedItemIds.remove(item.id);
-        uiController.unlockPaywallAndPlay();
-        _schedulePreloadAroundItem(item);
-        await playbackController.playItem(
-          _playableCopy(item),
-          resumeIfCurrentSource: true,
-        );
-      case EpisodeAccessDecisionType.autoUnlockAndPlay:
-        await _quiesceItemForAccessOverlay(
-          playbackController,
-          item,
-          reason: 'auto unlock requires current confirmation',
-        );
-        _schedulePreloadAroundItem(item);
-        uiController.showUnlockPaywall();
-        if (autoPresentSheet) {
-          unawaited(
-            _showCoinUnlockSheetForItem(item, launchedByAutoSheet: true),
-          );
-        }
-      case EpisodeAccessDecisionType.goMembership:
-        await _quiesceItemForAccessOverlay(
-          playbackController,
-          item,
-          reason: decision.reason ?? 'membership required',
-        );
-        _schedulePreloadAroundItem(item);
-        uiController.showMemberPaywall();
-      case EpisodeAccessDecisionType.showCoinUnlockDialog:
-        await _quiesceItemForAccessOverlay(
-          playbackController,
-          item,
-          reason: decision.reason ?? 'coin unlock required',
-        );
-        _schedulePreloadAroundItem(item);
-        uiController.showUnlockPaywall();
-        if (autoPresentSheet) {
-          unawaited(
-            _showCoinUnlockSheetForItem(item, launchedByAutoSheet: true),
-          );
-        }
-      case EpisodeAccessDecisionType.showRechargeDialog:
-        await _quiesceItemForAccessOverlay(
-          playbackController,
-          item,
-          reason: decision.reason ?? 'recharge required',
-        );
-        _schedulePreloadAroundItem(item);
-        uiController.showUnlockPaywall();
-        if (autoPresentSheet) {
-          unawaited(
-            _showRechargeUnlockSheetForItem(item, launchedByAutoSheet: true),
-          );
-        }
-      case EpisodeAccessDecisionType.waitUnlock:
-        if (item.episode.isUnavailable) {
-          await _blockItemForAccess(
-            playbackController,
-            item,
-            status: PlayerPlaybackStatus.unavailable,
-            reason: decision.reason ?? 'wait unlock',
-          );
-        } else {
-          await _quiesceItemForAccessOverlay(
-            playbackController,
-            item,
-            reason: decision.reason ?? 'wait unlock',
-          );
-        }
-        _schedulePreloadAroundItem(item);
-        if (item.episode.isUnavailable) {
-          uiController.hidePaywall();
-        } else {
-          uiController.showUnlockPaywall();
-        }
-    }
-  }
-
-  void _schedulePreloadAroundItem(PlayerFeedItem item) {
-    final requestGeneration = ++_preloadRequestGeneration;
-    unawaited(() async {
-      // Let the current item/index state settle for this frame, then start HLS
-      // preload independently from media open. A slow or stuck current source
-      // should not block the next candidates from warming.
-      await Future<void>.delayed(Duration.zero);
-      if (!mounted || requestGeneration != _preloadRequestGeneration) {
-        return;
-      }
-
-      final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
-      if (feedState.currentItem?.id != item.id || feedState.items.isEmpty) {
-        return;
-      }
-
-      await ref
-          .read(playerPlaybackControllerProvider(_sessionKey).notifier)
-          .preloadAround(feedState.items, feedState.currentIndex);
-    }());
-  }
-
-  Future<void> _blockItemForAccess(
-    PlayerPlaybackController playbackController,
-    PlayerFeedItem item, {
-    required PlayerPlaybackStatus status,
-    required String reason,
-  }) async {
-    final stopwatch = Stopwatch()..start();
-    await playbackController.blockItem(item, status: status, reason: reason);
-    stopwatch.stop();
-    PlayerRebuildDiagnostics.recordTiming(
-      'blockItem',
-      itemId: item.id,
-      elapsed: stopwatch.elapsed,
-      details: 'status=${status.name} reason=$reason',
-    );
-    playbackController.recordPlaybackTiming(
-      'block item elapsed',
-      itemId: item.id,
-      elapsed: stopwatch.elapsed,
-      details: 'status=${status.name} reason=$reason',
-    );
-  }
-
-  Future<void> _quiesceItemForAccessOverlay(
-    PlayerPlaybackController playbackController,
-    PlayerFeedItem item, {
-    required String reason,
-  }) async {
-    final stopwatch = Stopwatch()..start();
-    await playbackController.quiesceForAccessOverlay(item, reason: reason);
-    stopwatch.stop();
-    PlayerRebuildDiagnostics.recordTiming(
-      'quiesceForAccessOverlay',
-      itemId: item.id,
-      elapsed: stopwatch.elapsed,
-      details: 'reason=$reason',
-    );
-    playbackController.recordPlaybackTiming(
-      'access overlay quiesce elapsed',
-      itemId: item.id,
-      elapsed: stopwatch.elapsed,
-      details: 'reason=$reason',
-    );
+  void _exitForYouFeed() {
+    _shellChrome?.show();
+    context.go(RoutePaths.home);
   }
 
   Future<void> _advanceToNextFromCompletion() async {
     if (_isAutoAdvancing || !mounted) {
       return;
     }
-
     final feedProvider = playerFeedControllerProvider(_sessionKey);
     final feedState = ref.read(feedProvider);
     if (!feedState.canGoNext) {
       return;
     }
-
     final nextIndex = feedState.currentIndex + 1;
     _isAutoAdvancing = true;
     try {
@@ -1265,27 +768,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           curve: Curves.easeOutCubic,
         );
       }
-
       if (!mounted) {
         return;
       }
-
+      ref.read(feedProvider.notifier).setCurrentIndex(nextIndex);
       ref
           .read(playerViewportControllerProvider(_sessionKey).notifier)
           .settle(index: nextIndex, itemId: feedState.items[nextIndex].id);
-      final latestFeedState = ref.read(feedProvider);
-      if (latestFeedState.currentIndex != nextIndex) {
-        ref.read(feedProvider.notifier).setCurrentIndex(nextIndex);
-      }
-      _playbackController.recordPlaybackUserAction(
-        'auto next animation end',
-        trigger: 'auto_next',
-        fromItemId: feedState.currentItem?.id,
-        toItemId: feedState.items[nextIndex].id,
-        direction: 'next',
-        fromIndex: feedState.currentIndex,
-        toIndex: nextIndex,
-      );
     } finally {
       _isAutoAdvancing = false;
     }
@@ -1293,9 +782,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   Future<void> _goBackFromPlayer() async {
     await _playbackController.detachSurfaceForDispose();
-    // 给 Flutter 树一个 frame 先卸载 Video widget，再 pop route 触发 media session
-    // dispose。这个顺序专门规避 Android native resize callback 晚于 Widget dispose 的
-    // integration test teardown 问题，不改变播放器业务状态。
     await WidgetsBinding.instance.endOfFrame;
     _playbackController.markSurfaceDetached();
     if (PlayerPlaybackController.shouldDelayVideoSurfaceTeardown) {
@@ -1313,6 +799,76 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
   }
 
+  Future<void> _retryPlaybackForItem(PlayerFeedItem item) async {
+    final runtime = ref.read(playerRuntimeCoordinatorProvider(_sessionKey).notifier);
+    final decision = ref.read(entitlementControllerProvider.notifier).evaluateAccess(
+      dramaId: item.content.id,
+      episodeId: item.episode.id,
+      itemId: item.id,
+      unlockType: item.episode.unlockType,
+      price: item.episode.requiredCoins,
+      isUnavailable: item.episode.isUnavailable,
+    );
+    switch (decision.type) {
+      case EpisodeAccessDecisionType.allowPlay:
+        await runtime.handleAccessDecision(item, decision, autoPresentSheet: false);
+      case EpisodeAccessDecisionType.autoUnlockAndPlay:
+      case EpisodeAccessDecisionType.showCoinUnlockDialog:
+        await runtime.handleAccessDecision(item, decision, autoPresentSheet: false);
+        if (mounted && runtime.isCurrentFeedItem(item)) {
+          await _showCoinUnlockSheetForItem(item);
+        }
+      case EpisodeAccessDecisionType.showRechargeDialog:
+        await runtime.handleAccessDecision(item, decision, autoPresentSheet: false);
+        if (mounted && runtime.isCurrentFeedItem(item)) {
+          await _showRechargeUnlockSheetForItem(item);
+        }
+      case EpisodeAccessDecisionType.goMembership:
+        await runtime.handleAccessDecision(item, decision, autoPresentSheet: false);
+      case EpisodeAccessDecisionType.waitUnlock:
+        await runtime.handleAccessDecision(item, decision, autoPresentSheet: false);
+    }
+  }
+
+  Future<void> _presentAutoUnlockSheetForItem(PlayerFeedItem item) async {
+    final runtime = ref.read(playerRuntimeCoordinatorProvider(_sessionKey).notifier);
+    if (!runtime.isCurrentFeedItem(item) ||
+        _isModalOpen ||
+        _activeCoinSheetItemId != null ||
+        _activeRechargeSheetItemId != null) {
+      return;
+    }
+    final presenter = ref.read(playerRuntimeCoordinatorProvider(_sessionKey)).accessPresenter;
+    if (!presenter.isLockedAutoSheetCandidate(item)) {
+      return;
+    }
+    final decision = ref
+        .read(entitlementControllerProvider.notifier)
+        .evaluateAccess(
+          dramaId: item.content.id,
+          episodeId: item.episode.id,
+          itemId: item.id,
+          unlockType: item.episode.unlockType,
+          price: item.episode.requiredCoins,
+          isUnavailable: item.episode.isUnavailable,
+        );
+    if (!mounted || !runtime.isCurrentFeedItem(item)) {
+      return;
+    }
+    switch (decision.type) {
+      case EpisodeAccessDecisionType.allowPlay:
+        await runtime.handleAccessDecision(item, decision, autoPresentSheet: false);
+      case EpisodeAccessDecisionType.autoUnlockAndPlay:
+      case EpisodeAccessDecisionType.showCoinUnlockDialog:
+        await _showCoinUnlockSheetForItem(item, launchedByAutoSheet: true);
+      case EpisodeAccessDecisionType.showRechargeDialog:
+        await _showRechargeUnlockSheetForItem(item, launchedByAutoSheet: true);
+      case EpisodeAccessDecisionType.goMembership:
+      case EpisodeAccessDecisionType.waitUnlock:
+        return;
+    }
+  }
+
   void _closeSheetAndSelectEpisode(
     BuildContext sheetContext,
     PlayerEpisode episode,
@@ -1321,13 +877,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!mounted) {
       return;
     }
-
     final targetIndex = ref
         .read(playerFeedControllerProvider(_sessionKey).notifier)
         .selectEpisode(episode);
     ref
         .read(playerUiControllerProvider(_sessionKey).notifier)
         .selectEpisode(episode);
+    _settleViewportAtIndex(targetIndex);
     if (_pageController.hasClients) {
       _pageController.animateToPage(
         targetIndex,
@@ -1408,42 +964,29 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _showPendingUnlockActionSheet() async {
-    _cancelPendingAutoUnlockSheet();
+    ref.read(playerOverlayOrchestratorProvider(_sessionKey).notifier).cancelPending();
     if (_isModalOpen) {
       return;
     }
-    final currentItem = ref
-        .read(playerFeedControllerProvider(_sessionKey))
-        .currentItem;
+    final currentItem = ref.read(playerFeedControllerProvider(_sessionKey)).currentItem;
+    final runtime = ref.read(playerRuntimeCoordinatorProvider(_sessionKey).notifier);
     if (currentItem == null ||
-        !_isCurrentFeedItem(currentItem) ||
-        !_isLockedAutoSheetCandidate(currentItem)) {
+        !runtime.isCurrentFeedItem(currentItem) ||
+        !ref.read(playerRuntimeCoordinatorProvider(_sessionKey)).accessPresenter.isLockedAutoSheetCandidate(currentItem)) {
       return;
     }
-    PlayerRebuildDiagnostics.recordTiming(
-      'manualUnlockNowTap',
+    final decision = ref.read(entitlementControllerProvider.notifier).evaluateAccess(
+      dramaId: currentItem.content.id,
+      episodeId: currentItem.episode.id,
       itemId: currentItem.id,
+      unlockType: currentItem.episode.unlockType,
+      price: currentItem.episode.requiredCoins,
+      isUnavailable: currentItem.episode.isUnavailable,
     );
-
-    final decision = ref
-        .read(entitlementControllerProvider.notifier)
-        .evaluateAccess(
-          dramaId: currentItem.content.id,
-          episodeId: currentItem.episode.id,
-          itemId: currentItem.id,
-          unlockType: currentItem.episode.unlockType,
-          price: currentItem.episode.requiredCoins,
-          isUnavailable: currentItem.episode.isUnavailable,
-        );
     switch (decision.type) {
       case EpisodeAccessDecisionType.allowPlay:
-        await _handleAccessDecision(
-          currentItem,
-          decision,
-          autoPresentSheet: false,
-        );
+        await runtime.handleAccessDecision(currentItem, decision, autoPresentSheet: false);
       case EpisodeAccessDecisionType.autoUnlockAndPlay:
-        await _showCoinUnlockSheetForItem(currentItem);
       case EpisodeAccessDecisionType.showCoinUnlockDialog:
         await _showCoinUnlockSheetForItem(currentItem);
       case EpisodeAccessDecisionType.showRechargeDialog:
@@ -1483,28 +1026,27 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
     _isModalOpen = false;
     _activeCoinSheetItemId = null;
-
     if (unlocked != true && launchedByAutoSheet) {
-      _markAutoUnlockSheetDismissed(item.id);
+      ref.read(playerOverlayOrchestratorProvider(_sessionKey).notifier).markDismissed(item.id);
     }
-
-    if (!mounted || unlocked != true || !_isCurrentFeedItem(item)) {
+    if (!mounted || unlocked != true) {
       return;
     }
-
-    final decision = await ref
-        .read(entitlementControllerProvider.notifier)
-        .unlockWithCoins(
-          dramaId: item.content.id,
-          episodeId: item.episode.id,
-          itemId: item.id,
-          price: item.episode.requiredCoins,
-          operationId: 'coin-unlock:${item.content.id}:${item.episode.id}',
-        );
+    final runtime = ref.read(playerRuntimeCoordinatorProvider(_sessionKey).notifier);
+    if (!runtime.isCurrentFeedItem(item)) {
+      return;
+    }
+    final decision = await ref.read(entitlementControllerProvider.notifier).unlockWithCoins(
+      dramaId: item.content.id,
+      episodeId: item.episode.id,
+      itemId: item.id,
+      price: item.episode.requiredCoins,
+      operationId: 'coin-unlock:${item.content.id}:${item.episode.id}',
+    );
     if (!mounted) {
       return;
     }
-    await _handleAccessDecision(item, decision, autoPresentSheet: false);
+    await runtime.handleAccessDecision(item, decision, autoPresentSheet: false);
   }
 
   Future<void> _showRechargeUnlockSheetForItem(
@@ -1537,27 +1079,22 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
     _isModalOpen = false;
     _activeRechargeSheetItemId = null;
-
     if (!mounted) {
       return;
     }
-
     if (unlocked != true) {
       if (launchedByAutoSheet) {
-        _markAutoUnlockSheetDismissed(item.id);
+        ref.read(playerOverlayOrchestratorProvider(_sessionKey).notifier).markDismissed(item.id);
       }
       rechargeController.close();
       return;
     }
-
     final rechargeState = ref.read(
       playerRechargeUnlockControllerProvider(_sessionKey),
     );
     final selectedCoinPackage = rechargeState.selectedCoinPackage;
     final selectedMembershipPackage = rechargeState.selectedMembershipPackage;
-    final entitlementController = ref.read(
-      entitlementControllerProvider.notifier,
-    );
+    final entitlementController = ref.read(entitlementControllerProvider.notifier);
     if (selectedCoinPackage != null) {
       await entitlementController.grantMockCoins(
         amount: selectedCoinPackage.totalCoins,
@@ -1572,1095 +1109,23 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     rechargeController.close();
-    if (!_isCurrentFeedItem(item)) {
+    final runtime = ref.read(playerRuntimeCoordinatorProvider(_sessionKey).notifier);
+    if (!runtime.isCurrentFeedItem(item)) {
       return;
     }
-    await _quiesceItemForAccessOverlay(
-      ref.read(playerPlaybackControllerProvider(_sessionKey).notifier),
+    await runtime.quiesceAfterRecharge(
       item,
       reason: selectedMembershipPackage == null
           ? 'recharge success awaiting coin confirmation'
           : 'membership purchase success awaiting user action',
     );
-    ref
-        .read(playerUiControllerProvider(_sessionKey).notifier)
-        .showUnlockPaywall();
+    ref.read(playerUiControllerProvider(_sessionKey).notifier).showUnlockPaywall();
     if (selectedCoinPackage != null) {
-      unawaited(
-        _showCoinUnlockSheetForItem(
-          item,
-          launchedByAutoSheet: launchedByAutoSheet,
-        ),
-      );
+      unawaited(_showCoinUnlockSheetForItem(item, launchedByAutoSheet: launchedByAutoSheet));
     }
   }
 
   void _openMembership() {
     context.push(RoutePaths.membership);
-  }
-}
-
-BoxFit _videoFitFor(PlayerEpisode episode) {
-  final aspectRatio = episode.videoAspectRatio;
-  if (aspectRatio == null || aspectRatio <= 0) {
-    return BoxFit.cover;
-  }
-  const verticalAspectRatio = 9 / 16;
-  const tolerance = 0.18;
-  if ((aspectRatio - verticalAspectRatio).abs() <= tolerance ||
-      aspectRatio < 0.72) {
-    return BoxFit.cover;
-  }
-  return BoxFit.contain;
-}
-
-class _ViewportBuildSnapshot {
-  const _ViewportBuildSnapshot({
-    required this.currentIndex,
-    required this.candidateIndex,
-    required this.settledIndex,
-    required this.settledItemId,
-    required this.scrollPhase,
-    required this.generation,
-  });
-
-  factory _ViewportBuildSnapshot.fromState(PlayerViewportState state) {
-    return _ViewportBuildSnapshot(
-      currentIndex: state.currentIndex,
-      candidateIndex: state.candidateIndex,
-      settledIndex: state.settledIndex,
-      settledItemId: state.settledItemId,
-      scrollPhase: state.scrollPhase,
-      generation: state.generation,
-    );
-  }
-
-  final int currentIndex;
-  final int candidateIndex;
-  final int settledIndex;
-  final String? settledItemId;
-  final PlayerViewportScrollPhase scrollPhase;
-  final int generation;
-
-  @override
-  bool operator ==(Object other) {
-    return other is _ViewportBuildSnapshot &&
-        other.currentIndex == currentIndex &&
-        other.candidateIndex == candidateIndex &&
-        other.settledIndex == settledIndex &&
-        other.settledItemId == settledItemId &&
-        other.scrollPhase == scrollPhase &&
-        other.generation == generation;
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    currentIndex,
-    candidateIndex,
-    settledIndex,
-    settledItemId,
-    scrollPhase,
-    generation,
-  );
-}
-
-class _ViewportSettledSnapshot {
-  const _ViewportSettledSnapshot({
-    required this.index,
-    required this.itemId,
-    required this.generation,
-  });
-
-  factory _ViewportSettledSnapshot.fromState(PlayerViewportState state) {
-    return _ViewportSettledSnapshot(
-      index: state.settledIndex,
-      itemId: state.settledItemId,
-      generation: state.generation,
-    );
-  }
-
-  final int index;
-  final String? itemId;
-  final int generation;
-
-  @override
-  bool operator ==(Object other) {
-    return other is _ViewportSettledSnapshot &&
-        other.index == index &&
-        other.itemId == itemId &&
-        other.generation == generation;
-  }
-
-  @override
-  int get hashCode => Object.hash(index, itemId, generation);
-}
-
-class _PlayerPlaybackShellSnapshot {
-  const _PlayerPlaybackShellSnapshot({
-    required this.currentItemId,
-    required this.currentSource,
-    required this.status,
-    required this.surfaceLifecycle,
-    required this.hasVideoController,
-    required this.playbackRate,
-  });
-
-  factory _PlayerPlaybackShellSnapshot.fromState(PlayerPlaybackState state) {
-    return _PlayerPlaybackShellSnapshot(
-      currentItemId: state.currentItemId,
-      currentSource: state.currentSource,
-      status: state.status,
-      surfaceLifecycle: state.surfaceLifecycle,
-      hasVideoController: state.videoController != null,
-      playbackRate: state.playbackRate,
-    );
-  }
-
-  final String? currentItemId;
-  final String? currentSource;
-  final PlayerPlaybackStatus status;
-  final PlayerVideoSurfaceLifecycle surfaceLifecycle;
-  final bool hasVideoController;
-  final double playbackRate;
-
-  bool get shouldAttachVideoSurface =>
-      surfaceLifecycle == PlayerVideoSurfaceLifecycle.attached;
-
-  bool get canTogglePlayback =>
-      status == PlayerPlaybackStatus.playing ||
-      status == PlayerPlaybackStatus.paused;
-
-  @override
-  bool operator ==(Object other) {
-    return other is _PlayerPlaybackShellSnapshot &&
-        other.currentItemId == currentItemId &&
-        other.currentSource == currentSource &&
-        other.status == status &&
-        other.surfaceLifecycle == surfaceLifecycle &&
-        other.hasVideoController == hasVideoController &&
-        other.playbackRate == playbackRate;
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    currentItemId,
-    currentSource,
-    status,
-    surfaceLifecycle,
-    hasVideoController,
-    playbackRate,
-  );
-}
-
-class _PlaybackEndedSnapshot {
-  const _PlaybackEndedSnapshot({
-    required this.currentItemId,
-    required this.hasEnded,
-  });
-
-  factory _PlaybackEndedSnapshot.fromState(PlayerPlaybackState state) {
-    return _PlaybackEndedSnapshot(
-      currentItemId: state.currentItemId,
-      hasEnded: state.hasEnded,
-    );
-  }
-
-  final String? currentItemId;
-  final bool hasEnded;
-
-  @override
-  bool operator ==(Object other) {
-    return other is _PlaybackEndedSnapshot &&
-        other.currentItemId == currentItemId &&
-        other.hasEnded == hasEnded;
-  }
-
-  @override
-  int get hashCode => Object.hash(currentItemId, hasEnded);
-}
-
-class _PlayerPlaybackRenderSnapshot {
-  const _PlayerPlaybackRenderSnapshot({
-    required this.videoController,
-    required this.currentItemId,
-    required this.currentSource,
-    required this.status,
-    required this.surfaceLifecycle,
-    required this.hasFirstFrame,
-    required this.isBuffering,
-    required this.isPlaybackAdvancing,
-  });
-
-  factory _PlayerPlaybackRenderSnapshot.fromState(PlayerPlaybackState state) {
-    return _PlayerPlaybackRenderSnapshot(
-      videoController: state.videoController,
-      currentItemId: state.currentItemId,
-      currentSource: state.currentSource,
-      status: state.status,
-      surfaceLifecycle: state.surfaceLifecycle,
-      hasFirstFrame: state.hasFirstFrame,
-      isBuffering: state.isBuffering,
-      isPlaybackAdvancing: state.position > Duration.zero,
-    );
-  }
-
-  final VideoController? videoController;
-  final String? currentItemId;
-  final String? currentSource;
-  final PlayerPlaybackStatus status;
-  final PlayerVideoSurfaceLifecycle surfaceLifecycle;
-  final bool hasFirstFrame;
-  final bool isBuffering;
-  final bool isPlaybackAdvancing;
-
-  bool get shouldAttachVideoSurface =>
-      surfaceLifecycle == PlayerVideoSurfaceLifecycle.attached;
-  bool get canMountVideoSurface =>
-      shouldAttachVideoSurface && videoController != null;
-  bool get isError => status == PlayerPlaybackStatus.error;
-  bool get isOpening => status == PlayerPlaybackStatus.opening;
-  bool get isLoading =>
-      currentSource != null &&
-      !isError &&
-      (isOpening || isBuffering || !hasFirstFrame);
-  bool get isPlaying => status == PlayerPlaybackStatus.playing;
-  bool get canTogglePlayback =>
-      status == PlayerPlaybackStatus.playing ||
-      status == PlayerPlaybackStatus.paused;
-
-  @override
-  bool operator ==(Object other) {
-    return other is _PlayerPlaybackRenderSnapshot &&
-        other.videoController == videoController &&
-        other.currentItemId == currentItemId &&
-        other.currentSource == currentSource &&
-        other.status == status &&
-        other.surfaceLifecycle == surfaceLifecycle &&
-        other.hasFirstFrame == hasFirstFrame &&
-        other.isBuffering == isBuffering &&
-        other.isPlaybackAdvancing == isPlaybackAdvancing;
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    videoController,
-    currentItemId,
-    currentSource,
-    status,
-    surfaceLifecycle,
-    hasFirstFrame,
-    isBuffering,
-    isPlaybackAdvancing,
-  );
-}
-
-class _PlayerSeekBarSnapshot {
-  const _PlayerSeekBarSnapshot({
-    required this.currentSource,
-    required this.status,
-    required this.hasFirstFrame,
-    required this.isBuffering,
-    required this.position,
-    required this.duration,
-    required this.bufferedPosition,
-    required this.isSeeking,
-    required this.seekPreviewPosition,
-  });
-
-  factory _PlayerSeekBarSnapshot.fromState(PlayerPlaybackState state) {
-    return _PlayerSeekBarSnapshot(
-      currentSource: state.currentSource,
-      status: state.status,
-      hasFirstFrame: state.hasFirstFrame,
-      isBuffering: state.isBuffering,
-      position: state.position,
-      duration: state.duration,
-      bufferedPosition: state.bufferedPosition,
-      isSeeking: state.isSeeking,
-      seekPreviewPosition: state.seekPreviewPosition,
-    );
-  }
-
-  final String? currentSource;
-  final PlayerPlaybackStatus status;
-  final bool hasFirstFrame;
-  final bool isBuffering;
-  final Duration position;
-  final Duration duration;
-  final Duration bufferedPosition;
-  final bool isSeeking;
-  final Duration? seekPreviewPosition;
-
-  bool get isError => status == PlayerPlaybackStatus.error;
-  bool get isOpening => status == PlayerPlaybackStatus.opening;
-  bool get isLoading =>
-      currentSource != null &&
-      !isError &&
-      (isOpening || isBuffering || !hasFirstFrame);
-  bool get isSeekAllowed =>
-      currentSource != null &&
-      duration > Duration.zero &&
-      (status == PlayerPlaybackStatus.playing ||
-          status == PlayerPlaybackStatus.paused);
-
-  @override
-  bool operator ==(Object other) {
-    return other is _PlayerSeekBarSnapshot &&
-        other.currentSource == currentSource &&
-        other.status == status &&
-        other.hasFirstFrame == hasFirstFrame &&
-        other.isBuffering == isBuffering &&
-        other.position == position &&
-        other.duration == duration &&
-        other.bufferedPosition == bufferedPosition &&
-        other.isSeeking == isSeeking &&
-        other.seekPreviewPosition == seekPreviewPosition;
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    currentSource,
-    status,
-    hasFirstFrame,
-    isBuffering,
-    position,
-    duration,
-    bufferedPosition,
-    isSeeking,
-    seekPreviewPosition,
-  );
-}
-
-class _ActivePlaybackSurfaceOverlay extends ConsumerStatefulWidget {
-  const _ActivePlaybackSurfaceOverlay({
-    required this.sessionKey,
-    required this.itemId,
-    required this.currentIndex,
-    required this.pagePositionListenable,
-    required this.canShowVideo,
-    required this.freezeForScroll,
-    required this.videoFit,
-    required this.forYouLayout,
-  });
-
-  final String sessionKey;
-  final String? itemId;
-  final int currentIndex;
-  final ValueListenable<double> pagePositionListenable;
-  final bool canShowVideo;
-  final bool freezeForScroll;
-  final BoxFit videoFit;
-  final bool forYouLayout;
-
-  @override
-  ConsumerState<_ActivePlaybackSurfaceOverlay> createState() =>
-      _ActivePlaybackSurfaceOverlayState();
-}
-
-class _ActivePlaybackSurfaceOverlayState
-    extends ConsumerState<_ActivePlaybackSurfaceOverlay> {
-  VideoController? _mountedController;
-  String? _visibleItemId;
-  double? _lastLoggedPage;
-  double? _lastLoggedTranslateY;
-
-  @override
-  void dispose() {
-    final controller = _mountedController;
-    if (controller != null) {
-      PlayerRebuildDiagnostics.recordVideoUnmounted(
-        itemId: _visibleItemId ?? widget.itemId ?? 'null',
-        controller: controller,
-      );
-    }
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final playbackProvider = playerPlaybackControllerProvider(
-      widget.sessionKey,
-    );
-    final snapshot = ref.watch(
-      playbackProvider.select(_PlayerPlaybackRenderSnapshot.fromState),
-    );
-    final playbackController = ref.read(playbackProvider.notifier);
-    final canRender =
-        widget.canShowVideo &&
-        !widget.freezeForScroll &&
-        snapshot.shouldAttachVideoSurface &&
-        widget.itemId != null &&
-        snapshot.currentItemId == widget.itemId &&
-        snapshot.currentSource != null;
-    final controller = canRender && snapshot.canMountVideoSurface
-        ? snapshot.videoController
-        : null;
-    _recordControllerLifecycle(controller, snapshot.currentItemId);
-
-    if (!canRender) {
-      _recordOverlayHidden(snapshot);
-      return const SizedBox.shrink();
-    }
-
-    _recordOverlayShown(snapshot);
-    final canShowVideoSurface = !snapshot.isError;
-    final showVideoBeforeFirstFrame =
-        canShowVideoSurface &&
-        !snapshot.hasFirstFrame &&
-        (snapshot.status == PlayerPlaybackStatus.playing ||
-            snapshot.isPlaybackAdvancing);
-    if (showVideoBeforeFirstFrame) {
-      playbackController.recordVideoSurfaceShownBeforeFirstFrame(
-        itemId: widget.itemId!,
-        source: snapshot.currentSource,
-      );
-    }
-    final showVideo =
-        canShowVideoSurface &&
-        (snapshot.hasFirstFrame || showVideoBeforeFirstFrame);
-    final mediaQuery = MediaQuery.of(context);
-    final bottomFrameHeight = widget.forYouLayout
-        ? mediaQuery.padding.bottom
-        : mediaQuery.padding.bottom + 79;
-
-    return Positioned(
-      left: 0,
-      top: 0,
-      right: 0,
-      bottom: bottomFrameHeight,
-      child: IgnorePointer(
-        child: ValueListenableBuilder<double>(
-          valueListenable: widget.pagePositionListenable,
-          builder: (context, page, child) {
-            final viewportHeight = MediaQuery.sizeOf(context).height;
-            final translateY = (widget.currentIndex - page) * viewportHeight;
-            _recordOverlayTranslated(
-              page: page,
-              translateY: translateY,
-              viewportHeight: viewportHeight,
-            );
-            return Transform.translate(
-              key: const ValueKey('active_playback_surface_follow_scroll'),
-              offset: Offset(0, translateY),
-              child: child,
-            );
-          },
-          child: AnimatedOpacity(
-            opacity: showVideo ? 1 : 0,
-            duration: const Duration(milliseconds: 120),
-            curve: Curves.easeOut,
-            child: controller == null
-                ? const SizedBox.shrink()
-                : Video(
-                    key: const ValueKey('active_playback_video_surface'),
-                    controller: controller,
-                    controls: NoVideoControls,
-                    fit: widget.videoFit,
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _recordControllerLifecycle(
-    VideoController? controller,
-    String? currentItemId,
-  ) {
-    if (controller == _mountedController) {
-      return;
-    }
-    final previous = _mountedController;
-    if (previous != null && controller != null) {
-      PlayerRebuildDiagnostics.recordVideoControllerReplaced(
-        itemId: currentItemId ?? widget.itemId ?? 'null',
-        previous: previous,
-        next: controller,
-      );
-    } else if (previous == null && controller != null) {
-      PlayerRebuildDiagnostics.recordVideoMounted(
-        itemId: currentItemId ?? widget.itemId ?? 'null',
-        controller: controller,
-      );
-    } else if (previous != null && controller == null) {
-      PlayerRebuildDiagnostics.recordVideoUnmounted(
-        itemId: _visibleItemId ?? widget.itemId ?? 'null',
-        controller: previous,
-      );
-    }
-    _mountedController = controller;
-  }
-
-  void _recordOverlayShown(_PlayerPlaybackRenderSnapshot snapshot) {
-    if (_visibleItemId == snapshot.currentItemId) {
-      return;
-    }
-    _visibleItemId = snapshot.currentItemId;
-    PlayerRebuildDiagnostics.recordTiming(
-      'ActiveVideoSurface.show',
-      itemId: snapshot.currentItemId,
-      details: 'status=${snapshot.status.name}',
-    );
-  }
-
-  void _recordOverlayHidden(_PlayerPlaybackRenderSnapshot snapshot) {
-    final previous = _visibleItemId;
-    if (previous == null) {
-      return;
-    }
-    _visibleItemId = null;
-    PlayerRebuildDiagnostics.recordTiming(
-      'ActiveVideoSurface.hide',
-      itemId: previous,
-      details:
-          'status=${snapshot.status.name} current=${snapshot.currentItemId ?? 'null'} canShow=${widget.canShowVideo}',
-    );
-  }
-
-  void _recordOverlayTranslated({
-    required double page,
-    required double translateY,
-    required double viewportHeight,
-  }) {
-    if (!PlayerRebuildDiagnostics.enabled) {
-      return;
-    }
-    final lastPage = _lastLoggedPage;
-    final lastTranslateY = _lastLoggedTranslateY;
-    if (lastPage != null &&
-        lastTranslateY != null &&
-        (lastPage - page).abs() < 0.25 &&
-        (lastTranslateY - translateY).abs() < 80) {
-      return;
-    }
-    _lastLoggedPage = page;
-    _lastLoggedTranslateY = translateY;
-    PlayerRebuildDiagnostics.recordTiming(
-      'ActiveVideoSurface.translate',
-      itemId: widget.itemId,
-      details:
-          'currentIndex=${widget.currentIndex} page=${page.toStringAsFixed(3)} translateY=${translateY.toStringAsFixed(1)} viewportHeight=${viewportHeight.toStringAsFixed(1)}',
-    );
-  }
-}
-
-class _PlayerPlaybackControlsConsumer extends ConsumerStatefulWidget {
-  const _PlayerPlaybackControlsConsumer({
-    required this.sessionKey,
-    required this.itemId,
-    required this.onTogglePlay,
-    required this.onRetry,
-  });
-
-  final String sessionKey;
-  final String itemId;
-  final VoidCallback onTogglePlay;
-  final VoidCallback onRetry;
-
-  @override
-  ConsumerState<_PlayerPlaybackControlsConsumer> createState() =>
-      _PlayerPlaybackControlsConsumerState();
-}
-
-class _PlayerPlaybackControlsConsumerState
-    extends ConsumerState<_PlayerPlaybackControlsConsumer> {
-  bool _showPauseFeedback = false;
-  Timer? _feedbackTimer;
-
-  @override
-  void dispose() {
-    _feedbackTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final snapshot = ref.watch(
-      playerPlaybackControllerProvider(
-        widget.sessionKey,
-      ).select(_PlayerPlaybackRenderSnapshot.fromState),
-    );
-    final canRender =
-        snapshot.shouldAttachVideoSurface &&
-        snapshot.currentItemId == widget.itemId &&
-        snapshot.currentSource != null;
-
-    if (!canRender) {
-      return const SizedBox.shrink();
-    }
-
-    final showVideoBeforeFirstFrame =
-        !snapshot.isError &&
-        !snapshot.hasFirstFrame &&
-        (snapshot.status == PlayerPlaybackStatus.playing ||
-            snapshot.isPlaybackAdvancing);
-    final showLoading =
-        canRender && (snapshot.isLoading || showVideoBeforeFirstFrame);
-    final canTogglePlayback = snapshot.canTogglePlayback;
-    final showCenterPlayButton =
-        canTogglePlayback &&
-        snapshot.status == PlayerPlaybackStatus.paused &&
-        snapshot.hasFirstFrame &&
-        !snapshot.isBuffering;
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (showLoading) const _PlaybackLoadingOverlay(),
-        if (snapshot.isError) _PlaybackRetryOverlay(onRetry: widget.onRetry),
-        if (canTogglePlayback)
-          Positioned.fill(
-            child: GestureDetector(
-              key: const ValueKey('player_video_tap_layer'),
-              behavior: HitTestBehavior.translucent,
-              onTap: _handleVideoTap,
-            ),
-          ),
-        if (showCenterPlayButton) _CenterPlayButton(onTap: widget.onTogglePlay),
-        if (_showPauseFeedback) const _PauseFeedbackIcon(),
-      ],
-    );
-  }
-
-  void _handleVideoTap() {
-    final snapshot = ref.read(
-      playerPlaybackControllerProvider(
-        widget.sessionKey,
-      ).select(_PlayerPlaybackRenderSnapshot.fromState),
-    );
-    if (snapshot.isPlaying) {
-      _feedbackTimer?.cancel();
-      setState(() => _showPauseFeedback = true);
-      _feedbackTimer = Timer(const Duration(milliseconds: 420), () {
-        if (mounted) {
-          setState(() => _showPauseFeedback = false);
-        }
-      });
-    }
-    widget.onTogglePlay();
-  }
-}
-
-class _PlayerSeekBarConsumer extends ConsumerWidget {
-  const _PlayerSeekBarConsumer({
-    required this.sessionKey,
-    required this.thumbnailAssetPath,
-    required this.onSeekStart,
-    required this.onSeekUpdate,
-    required this.onSeekEnd,
-    required this.onSeekCancel,
-  });
-
-  final String sessionKey;
-  final String thumbnailAssetPath;
-  final VoidCallback onSeekStart;
-  final ValueChanged<Duration> onSeekUpdate;
-  final VoidCallback onSeekEnd;
-  final VoidCallback onSeekCancel;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final snapshot = ref.watch(
-      playerPlaybackControllerProvider(
-        sessionKey,
-      ).select(_PlayerSeekBarSnapshot.fromState),
-    );
-    final showTrackLoading = snapshot.isLoading && !snapshot.isSeeking;
-    final canSeek =
-        snapshot.isSeekAllowed && !showTrackLoading && !snapshot.isError;
-    if (!canSeek && snapshot.duration <= Duration.zero && !showTrackLoading) {
-      return const SizedBox.shrink();
-    }
-    return PlayerSeekBar(
-      position: snapshot.position,
-      duration: snapshot.duration,
-      bufferedPosition: snapshot.bufferedPosition,
-      previewPosition: snapshot.seekPreviewPosition,
-      thumbnailAssetPath: thumbnailAssetPath,
-      isDragging: snapshot.isSeeking,
-      showTrackLoading: showTrackLoading,
-      enabled: canSeek,
-      onDragStart: onSeekStart,
-      onDragUpdate: onSeekUpdate,
-      onDragEnd: onSeekEnd,
-      onDragCancel: onSeekCancel,
-    );
-  }
-}
-
-class _PlaybackLoadingOverlay extends StatelessWidget {
-  const _PlaybackLoadingOverlay();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.36),
-          shape: BoxShape.circle,
-        ),
-        padding: const EdgeInsets.all(10),
-        child: const CircularProgressIndicator(
-          strokeWidth: 2,
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-        ),
-      ),
-    );
-  }
-}
-
-class _PlaybackRetryOverlay extends StatelessWidget {
-  const _PlaybackRetryOverlay({required this.onRetry});
-
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 38),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.56),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              context.l10n.playerFeedLoadFailed,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                height: 18 / 13,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextButton(onPressed: onRetry, child: Text(context.l10n.retry)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CenterPlayButton extends StatelessWidget {
-  const _CenterPlayButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: GestureDetector(
-        key: const ValueKey('player_center_play_button'),
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          width: 70,
-          height: 70,
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.48),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.play_arrow_rounded,
-            color: Colors.white,
-            size: 46,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PauseFeedbackIcon extends StatelessWidget {
-  const _PauseFeedbackIcon();
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Center(
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.92, end: 1),
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOutCubic,
-          builder: (context, scale, child) {
-            return Transform.scale(scale: scale, child: child);
-          },
-          child: Container(
-            key: const ValueKey('player_pause_feedback'),
-            width: 70,
-            height: 70,
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.48),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.pause_rounded,
-              color: Colors.white,
-              size: 42,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PlayerTopBar extends StatelessWidget {
-  const _PlayerTopBar({
-    required this.episodeNumber,
-    required this.playbackRate,
-    required this.overlayOpacity,
-    this.overlayOpacityListenable,
-    required this.onBackTap,
-    required this.onSpeedTap,
-  });
-
-  final int episodeNumber;
-  final double playbackRate;
-  final double overlayOpacity;
-  final ValueListenable<double>? overlayOpacityListenable;
-  final VoidCallback onBackTap;
-  final VoidCallback onSpeedTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final listenable = overlayOpacityListenable;
-    if (listenable != null) {
-      return ValueListenableBuilder<double>(
-        valueListenable: listenable,
-        builder: (context, value, child) {
-          return AnimatedOpacity(
-            key: const ValueKey('player_top_bar_opacity'),
-            opacity: value,
-            duration: const Duration(milliseconds: 140),
-            curve: Curves.easeOut,
-            child: child,
-          );
-        },
-        child: RepaintBoundary(
-          key: const ValueKey('player_top_bar_repaint_boundary'),
-          child: _PlayerTopBarContent(
-            episodeNumber: episodeNumber,
-            playbackRate: playbackRate,
-            onBackTap: onBackTap,
-            onSpeedTap: onSpeedTap,
-          ),
-        ),
-      );
-    }
-    return AnimatedOpacity(
-      key: const ValueKey('player_top_bar_opacity'),
-      opacity: overlayOpacity,
-      duration: const Duration(milliseconds: 140),
-      curve: Curves.easeOut,
-      child: RepaintBoundary(
-        key: const ValueKey('player_top_bar_repaint_boundary'),
-        child: _PlayerTopBarContent(
-          episodeNumber: episodeNumber,
-          playbackRate: playbackRate,
-          onBackTap: onBackTap,
-          onSpeedTap: onSpeedTap,
-        ),
-      ),
-    );
-  }
-}
-
-class _PlayerTopBarContent extends StatelessWidget {
-  const _PlayerTopBarContent({
-    required this.episodeNumber,
-    required this.playbackRate,
-    required this.onBackTap,
-    required this.onSpeedTap,
-  });
-
-  final int episodeNumber;
-  final double playbackRate;
-  final VoidCallback onBackTap;
-  final VoidCallback onSpeedTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          _PlayerPageState._topBarHorizontal,
-          _PlayerPageState._topBarTop,
-          _PlayerPageState._topBarHorizontal,
-          0,
-        ),
-        child: SizedBox(
-          key: const ValueKey('player_single_top_bar'),
-          height: _PlayerPageState._topBarHeight,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              GestureDetector(
-                key: const ValueKey('player_back_button'),
-                behavior: HitTestBehavior.opaque,
-                onTap: onBackTap,
-                child: const SizedBox.square(
-                  dimension: _PlayerPageState._topBarHeight,
-                  child: Center(
-                    child: Icon(
-                      Icons.chevron_left,
-                      color: Colors.white,
-                      size: _PlayerPageState._topBarBackIconSize,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                key: const ValueKey('player_episode_label'),
-                'EP.${episodeNumber.toString().padLeft(2, '0')}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  height: 18 / 14,
-                ),
-              ),
-              const Spacer(),
-              GestureDetector(
-                key: const ValueKey('player_speed_button'),
-                behavior: HitTestBehavior.opaque,
-                onTap: onSpeedTap,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 6,
-                  ),
-                  child: Text(
-                    _formatRate(context, playbackRate),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      height: 18 / 14,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              const Icon(
-                key: ValueKey('player_more_button'),
-                Icons.more_horiz,
-                color: Colors.white,
-                size: _PlayerPageState._topBarMoreIconSize,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _formatRate(BuildContext context, double rate) {
-    if ((rate - 1.0).abs() < 0.01) {
-      return context.l10n.playerSpeed;
-    }
-    return '${rate.toStringAsFixed(1)}x';
-  }
-}
-
-class _PlayerStateMessage extends StatelessWidget {
-  const _PlayerStateMessage({
-    required this.icon,
-    required this.message,
-    this.actionLabel,
-    this.onAction,
-  });
-
-  final IconData icon;
-  final String message;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: AppColors.textPrimary, size: 32),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppColors.textPrimary.withValues(alpha: 0.82),
-                fontSize: 14,
-                height: 18 / 14,
-              ),
-            ),
-            if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 16),
-              TextButton(onPressed: onAction, child: Text(actionLabel!)),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _UnavailableEpisodeOverlay extends StatelessWidget {
-  const _UnavailableEpisodeOverlay({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: ColoredBox(
-          color: Colors.black.withValues(alpha: 0.32),
-          child: Center(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 42),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.58),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.block_rounded,
-                    color: AppColors.textPrimary,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      message,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        height: 18 / 13,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

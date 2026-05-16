@@ -17,6 +17,7 @@ import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/domain/player_playback_source.dart';
 import 'package:drama_client/features/player/presentation/pages/player_page.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_chrome.dart';
+import 'package:drama_client/features/player/presentation/widgets/player_playback_layer.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -214,7 +215,7 @@ void main() {
     },
   );
 
-  testWidgets('active video surface freezes while PageView drags', (
+  testWidgets('active video surface follows PageView drag with dimmed opacity', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -230,22 +231,41 @@ void main() {
     final before = tester.widget<Transform>(followSurface);
     expect(before.transform.getTranslation().y, 0);
 
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.byKey(const ValueKey('player_page_view_surface'))),
+    await tester.drag(find.byType(PageView), const Offset(0, -420));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(followSurface, findsOneWidget);
+    final duringDrag = tester.widget<Transform>(followSurface);
+    expect(duringDrag.transform.getTranslation().y, isNot(0.0));
+    final dragOpacity = tester.widget<AnimatedOpacity>(
+      find.descendant(
+        of: followSurface,
+        matching: find.byKey(
+          const ValueKey('active_playback_surface_opacity'),
+        ),
+      ),
     );
-    await gesture.moveBy(const Offset(0, -220));
-    await tester.pump(const Duration(milliseconds: 16));
+    expect(
+      dragOpacity.opacity,
+      ActivePlaybackSurfaceOverlay.scrollFollowOpacity,
+    );
 
-    expect(followSurface, findsNothing);
-
-    await gesture.up();
     await tester.pumpAndSettle();
 
     expect(followSurface, findsOneWidget);
+    final settledOpacity = tester.widget<AnimatedOpacity>(
+      find.descendant(
+        of: followSurface,
+        matching: find.byKey(
+          const ValueKey('active_playback_surface_opacity'),
+        ),
+      ),
+    );
+    expect(settledOpacity.opacity, 1);
   });
 
   testWidgets(
-    'drag page offset freezes active surface without viewport state churn',
+    'drag page offset follows scroll without viewport state churn',
     (tester) async {
       final observer = _ViewportUpdateObserver();
 
@@ -271,10 +291,11 @@ void main() {
       final chromeAfterScrollStart = tester.widget<PlayerChrome>(
         find.byType(PlayerChrome).first,
       );
-      expect(
-        find.byKey(const ValueKey('active_playback_surface_follow_scroll')),
-        findsNothing,
+      final followSurface = find.byKey(
+        const ValueKey('active_playback_surface_follow_scroll'),
       );
+      expect(followSurface, findsOneWidget);
+      final transformAfterFirstMove = tester.widget<Transform>(followSurface);
 
       await gesture.moveBy(const Offset(0, -80));
       await tester.pump(const Duration(milliseconds: 16));
@@ -282,9 +303,14 @@ void main() {
       final chromeAfterPageOffset = tester.widget<PlayerChrome>(
         find.byType(PlayerChrome).first,
       );
+      final transformAfterSecondMove = tester.widget<Transform>(followSurface);
 
       expect(observer.updateCount, updatesAfterScrollStart);
       expect(identical(chromeAfterScrollStart, chromeAfterPageOffset), isTrue);
+      expect(
+        transformAfterFirstMove.transform.getTranslation().y,
+        isNot(transformAfterSecondMove.transform.getTranslation().y),
+      );
 
       await gesture.up();
       await tester.pumpAndSettle();
@@ -575,12 +601,13 @@ void main() {
     expect(find.byKey(const ValueKey('player_episode_label')), findsOneWidget);
     expect(find.byKey(const ValueKey('player_speed_button')), findsOneWidget);
     expect(find.byKey(const ValueKey('player_more_button')), findsOneWidget);
+    // Top bar lives above PageView so playback progress does not rebuild feed pages.
     expect(
       find.ancestor(
         of: find.byKey(const ValueKey('player_single_top_bar')),
         matching: find.byType(PageView),
       ),
-      findsOneWidget,
+      findsNothing,
     );
 
     await tester.tap(find.byKey(const ValueKey('player_back_button')));

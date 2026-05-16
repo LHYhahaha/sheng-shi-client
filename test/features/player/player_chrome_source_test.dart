@@ -17,7 +17,7 @@ void main() {
     'active playback surface remains the only named player Video surface',
     () {
       final source = File(
-        'lib/features/player/presentation/pages/player_page.dart',
+        'lib/features/player/presentation/widgets/player_playback_layer.dart',
       ).readAsStringSync();
 
       expect(source, contains("ValueKey('active_playback_video_surface')"));
