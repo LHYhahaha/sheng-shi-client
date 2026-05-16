@@ -937,7 +937,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
     _syncPreloadState();
 
-    if (state.currentItemId != null && state.currentSource != null) {
+    if (state.currentItemId != null &&
+        state.currentSource != null &&
+        config.effectivePreparedForwardSessionCount > 0) {
       final nextItem = forwardCandidates.isEmpty
           ? null
           : forwardCandidates.first;
@@ -1740,7 +1742,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _currentPlaybackItemId = prepared.itemId;
     _attachSessionStreams(_session);
     await previousSession.pause();
-    if (previousSource != null && previousItemId != null) {
+    final preloadConfig = ref.read(playerPreloadConfigProvider);
+    if (previousSource != null &&
+        previousItemId != null &&
+        preloadConfig.effectiveRetainedBackwardSessionCount > 0) {
       // next prepared 被接管后，旧 current 变成 previous retained。这个窗口最多保留
       // previous/current/next，目的是覆盖自然回滑，不是缓存任意历史播放页。
       _logTiming(
@@ -1798,6 +1803,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   Future<bool> _retainCurrentBeforeNormalOpen(String nextItemId) async {
     if (_prepareManager is NoopPlayerPlaybackPrepareManager) {
+      return false;
+    }
+    if (ref
+            .read(playerPreloadConfigProvider)
+            .effectiveRetainedBackwardSessionCount ==
+        0) {
       return false;
     }
     final previousSession = _session;

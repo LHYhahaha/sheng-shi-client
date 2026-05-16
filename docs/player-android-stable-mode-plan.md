@@ -51,6 +51,7 @@ Introduce a typed player performance policy:
 enum PlayerPerformanceMode {
   rich,
   stable,
+  ultraStable,
 }
 ```
 
@@ -58,6 +59,7 @@ Default behavior:
 
 - Android: `stable`
 - iOS: `rich`
+- Low-end Android: `ultraStable` via override / future device tier (not auto-detected yet)
 - Tests: overrideable provider
 
 The policy must be consumed by presentation/runtime glue only. Playback truth
@@ -201,3 +203,34 @@ richness, choose stability for Android stable mode.
 
 Do not add more timing delays to hide symptoms. Prefer removing work from the
 drag path and moving real runtime commands to the settled phase.
+
+## Ultra-stable Tier (Low-end Android, 2026-05)
+
+`PlayerFeedEngine` refactor is complete. Further work on low-end devices uses
+**policy only**, not another engine rewrite.
+
+### Ultra-stable vs stable
+
+| Capability | stable | ultraStable |
+| --- | --- | --- |
+| Video follow / opacity / chrome dim / pause scale | off | off |
+| HLS forward/back preload count | 1 | 0 |
+| prepared forward session | 1 (cap) | 0 |
+| retained backward session | 1 (cap) | 0 |
+| preload on settled locked item | allowed | skipped |
+
+### Device observations
+
+- **ELS AN00**: stable mode already feels noticeably smoother than A14-class
+  devices; validates settled runtime + single Video architecture.
+- **Samsung A14**: may still feel heavy on stable; enable `ultraStable` via
+  `playerPerformanceModeOverrideProvider` for field tests before automatic
+  device tier detection ships.
+
+### Provider entry points
+
+- `playerPerformancePolicyOverrideProvider` — full policy object
+- `playerPerformanceModeOverrideProvider` — `rich` / `stable` / `ultraStable`
+- `playerPerformanceModeFromDeviceProvider` — reserved for RAM/API/brand/model
+
+Do not scatter `Platform.isAndroid` or model checks in UI or runtime code.

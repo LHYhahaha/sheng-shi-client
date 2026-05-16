@@ -1,9 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../application/player_performance_policy_provider.dart';
 import '../domain/player_preload_config.dart';
 
+/// 相邻预热与 session 窗口配置，由 [playerPerformancePolicyProvider] 派生。
+///
+/// 不要在 controller 内硬编码数量，避免与低端策略分叉。
 final playerPreloadConfigProvider = Provider<PlayerPreloadConfig>((ref) {
-  // 预热策略统一从这里读取，方便后续替换为远程配置。不要在 controller 里硬编码
-  // 具体数量，否则 HLS preload 和 session prepare 的 cap 很容易被改散。
-  return const PlayerPreloadConfig();
+  return ref.watch(playerPerformancePolicyProvider).toPreloadConfig();
 });

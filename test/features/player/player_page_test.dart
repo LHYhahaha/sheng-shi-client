@@ -317,6 +317,33 @@ void main() {
     expect(find.byKey(const ValueKey('player_pause_feedback')), findsNothing);
   });
 
+  testWidgets('ultraStable 策略下拖动隐藏 Video 且无 chrome 渐隐', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        performancePolicy: PlayerPerformancePolicy.ultraStable,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('active_playback_surface_follow_scroll')),
+      findsNothing,
+    );
+
+    await tester.drag(find.byType(PageView), const Offset(0, -420));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(
+      find.byKey(const ValueKey('active_playback_video_surface')),
+      findsNothing,
+    );
+
+    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome).first);
+    expect(chrome.overlayOpacityListenable, isNull);
+  });
+
   testWidgets('stable 策略下按压不触发 chrome 渐隐', (tester) async {
     await tester.pumpWidget(
       _buildPlayerApp(

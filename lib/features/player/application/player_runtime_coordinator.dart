@@ -11,6 +11,7 @@ import 'player_feed_controller.dart';
 import 'player_playback_controller.dart';
 import 'player_rebuild_diagnostics.dart';
 import 'player_overlay_orchestrator.dart';
+import 'player_performance_policy_provider.dart';
 import 'player_ui_controller.dart';
 import 'player_viewport_controller.dart';
 
@@ -290,6 +291,10 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
   }
 
   void _schedulePreloadAroundItem(PlayerFeedItem item) {
+    final policy = ref.read(playerPerformancePolicyProvider);
+    if (policy.skipPreloadWhenCurrentItemLocked && item.episode.isLocked) {
+      return;
+    }
     final requestGeneration = state.preloadRequestGeneration + 1;
     state = state.copyWith(preloadRequestGeneration: requestGeneration);
     unawaited(() async {

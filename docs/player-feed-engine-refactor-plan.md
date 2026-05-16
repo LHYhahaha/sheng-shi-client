@@ -331,7 +331,7 @@ Metrics/logs:
 
 ## Implementation Status Checklist
 
-Last updated: 2026-05-16 (PlayerFeedEngine completion pass).
+Last updated: 2026-05-16 (Low-end Android Player Policy pass).
 
 | Area | Status | Notes |
 | --- | --- | --- |
@@ -339,7 +339,7 @@ Last updated: 2026-05-16 (PlayerFeedEngine completion pass).
 | Drag page offset no high-frequency Riverpod write | **Done** | `_pagePositionNotifier` + viewport phase. |
 | `PlayerFeedEngine` facade | **Done** | Viewport, settled runtime, overlay schedule, access/sheet flow entry. |
 | Runtime waits for settled item | **Done** | Drag 不 evaluate/play/preload/sheet；`PlayerRuntimeCoordinator` drag guard. |
-| `PlayerPerformancePolicy` | **Done** | Android stable / iOS rich / test override. |
+| `PlayerPerformancePolicy` | **Done** | rich / stable / ultraStable 三档；`playerPreloadConfigProvider` 派生。 |
 | Android stable enforcement | **Done** | No video transform/opacity on drag; no press dim; no pause scale. |
 | iOS rich policy | **Done** | Rich follow/dim/scale behind policy + test override. |
 | Access presentation in shell | **Done** | `PlayerAccessPresenter` + engine `accessPresentationFor`. |
@@ -366,8 +366,8 @@ Last updated: 2026-05-16 (PlayerFeedEngine completion pass).
 
 | Device | Observation |
 | --- | --- |
-| Samsung Galaxy A14 (`R58WC02B69R`) | 低端机仍可能感到滑动偏重；**不继续为全 Android 大改 rich 行为**。后续仅 **Low-end Android Player Policy** 优化线（更激进 stable / 减动画），不另起播放器架构。 |
-| Huawei / Honor ELS AN00 (`8MY0221119007507`) | 新 Android 机滑动明显好于 A14；说明 **settled runtime + 单 Video + stable policy** 方向有效。 |
+| Samsung Galaxy A14 (`R58WC02B69R`) | 低端机仍可能卡；通过 `playerPerformanceModeOverrideProvider` / 未来设备分级启用 **ultraStable**，不继续大拆引擎。 |
+| Huawei / Honor ELS AN00 (`8MY0221119007507`) | 新 Android 在 **stable** 下滑动明显更好；主架构方向有效。 |
 
 ### Explicitly Deferred (next optimization line only)
 
@@ -377,9 +377,18 @@ Last updated: 2026-05-16 (PlayerFeedEngine completion pass).
 - 独立 `PlaybackCoordinator` / `AccessCoordinator` 文件拆分（当前 engine + 现有 coordinator 已够用）。
 - HLS cache/proxy、扩大 prepared window、多 Video 回 PageView：**不做**。
 
-### Follow-up: Low-end Android Player Policy (only)
+### Low-end Android Player Policy (2026-05)
 
-Do not re-open a full player rewrite. If A14-class devices still feel heavy, add a **low-end** policy tier (stricter than default Android stable) rather than changing iOS rich or the core engine shape.
+**Done (minimal):**
+
+- `PlayerPerformanceMode.ultraStable`：视觉同 stable；HLS preload 0；prepared/retained 0；locked 落位跳过 preloadAround。
+- Provider 链：`playerPerformancePolicyOverrideProvider` / `playerPerformanceModeOverrideProvider` / 预留 `playerPerformanceModeFromDeviceProvider`。
+- `playerPreloadConfigProvider` 从 policy 派生，playback controller 尊重 prepared/retained cap。
+
+**不做的：**
+
+- 不扩大 session window；不增加 PageView 内 Video；不大改 `PlayerFeedEngine`。
+- 复杂 RAM/机型识别留 TODO，真机 A14 可先手动 override ultraStable 观测。
 
 ## Files Expected To Change
 

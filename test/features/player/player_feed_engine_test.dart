@@ -18,7 +18,7 @@ void main() {
     final state = container.read(
       playerFeedEngineProvider(PlayerPlaybackSessionKeys.forYouTab),
     );
-    expect(state.policy, PlayerPerformancePolicy.stable);
+    expect(state.policy.mode, PlayerPerformanceMode.stable);
     expect(state.policy.allowVideoSurfaceFollowDuringDrag, isFalse);
   });
 
@@ -32,7 +32,7 @@ void main() {
     final state = container.read(
       playerFeedEngineProvider(PlayerPlaybackSessionKeys.forYouTab),
     );
-    expect(state.policy, PlayerPerformancePolicy.rich);
+    expect(state.policy.mode, PlayerPerformanceMode.rich);
     expect(state.policy.allowPressChromeDimming, isTrue);
   });
 
