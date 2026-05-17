@@ -163,6 +163,48 @@ void main() {
     );
   });
 
+  test(
+    'auth required without token fails fast and does not call adapter',
+    () async {
+      final adapter = _FakeHttpClientAdapter(
+        responseData: {'code': 0, 'message': 'success', 'data': null},
+      );
+      final dio = Dio()..httpClientAdapter = adapter;
+      final client = ApiClient(
+        dio: dio,
+        requestContextReader: () => const ApiRequestContext(
+          deviceId: 'device-1',
+          lang: 'en',
+          platform: 'android',
+          appVersion: '1.0.0',
+        ),
+      );
+
+      await expectLater(
+        client.get<void>(
+          '/me/profile',
+          authPolicy: ApiAuthPolicy.required,
+          decoder: (_) {},
+        ),
+        throwsA(
+          isA<ApiException>()
+              .having(
+                (error) => error.code,
+                'code',
+                ApiErrorCode.sessionRequired,
+              )
+              .having(
+                (error) => error.isSessionRequired,
+                'isSessionRequired',
+                isTrue,
+              ),
+        ),
+      );
+
+      expect(adapter.lastOptions, isNull);
+    },
+  );
+
   test('http 401 still maps to unauthorized', () async {
     final adapter = _FakeHttpClientAdapter(
       statusCode: 401,

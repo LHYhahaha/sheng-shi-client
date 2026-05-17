@@ -1,6 +1,6 @@
 # API Integration Readiness Plan
 
-日期：2026-05-15
+日期：2026-05-17
 
 本文记录真实 API 联调前准备任务。当前 API skeleton 已覆盖主要业务域，但默认仍走
 mock repository；本阶段不接真实服务端、不打开 remote 默认开关、不改 UI。
@@ -28,8 +28,14 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
   - 补充 refresh failure 测试，确认失败后 in-flight 状态会释放，后续请求可重新触发 refresh。
   - 确认所有 `USE_REMOTE_XXX_API` 开关默认仍为 false。
   - 确认 Phase F 仍只提供基础设施骨架，不自动调用真实 refresh API，不打开 remote 默认路径。
+- **Post-RC Track A1–A3**（2026-05-17）：
+  - A1：`AuthTokenStorage` 抽象、`AuthTokenSnapshot`、`AuthTokenStore` 读写/清理；默认 in-memory。
+  - A2：`ApiClient` 401 → `ApiSessionAuthHandler` 单飞 refresh + 重试一次；失败 cleanup。
+  - A3：`required` 空 token → `ApiErrorCode.sessionRequired` fail-fast。
+  - 测试：`auth_token_storage_test`、`api_client_session_auth_test`、`auth_runtime_boundary_test`。
+  - 仍 defer：真实 refresh endpoint、`authRefreshExecutorProvider` 生产实现、secure storage 默认、A7 hooks。
 
-下一步进入真实 API 联调前的分域验证，仍保持 remote 默认关闭。
+下一步进入真实 API 联调前的分域验证（A4+），仍保持 remote 默认关闭。
 
 ## Phase F 目标
 
@@ -66,23 +72,23 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
 
 要求：feature 不能自己拼 header，只能通过 `ApiClient` / request context。
 
-### 3. Token Storage Skeleton
+### 3. Token Storage Skeleton ✅（A1）
 
-- 已新增 `AuthTokenStore`。
-- 当前使用 in-memory implementation。
-- 为未来 secure storage 留实现入口。
-- `accessToken` / `refreshToken` 不允许进入 presentation。
+- `AuthTokenStore` 委托 `AuthTokenStorage`（`read`/`write`/`clear`）。
+- 默认 `InMemoryAuthTokenStorage`；`FlutterSecureAuthTokenStorage` 已实现，provider 未切换。
+- `accessToken` / `refreshToken` / `expiresAt` 在 `AuthTokenSnapshot`；不进入 presentation。
 
-### 4. Refresh Queue Skeleton
+### 4. Refresh Queue Skeleton ✅（A2，无真实 API）
 
-本轮不要求完整真实 refresh，但需要准备边界：
+- `AuthRefreshCoordinator` 单飞 in-flight refresh。
+- `ApiClient` 对 `required` 请求的 HTTP 401（含 Dio 默认 validateStatus 路径）统一走
+  `ApiSessionAuthHandler`；成功重试 **1 次**；refresh 请求不递归（`apiSkipAuthRefreshExtraKey`）。
+- refresh 失败 / 无 refresh token → `SessionCleanupCoordinator.cleanup` 清 token + hook。
+- `authRefreshExecutorProvider` 默认 stub；真实 `POST /auth/refresh` 联调时再注入。
 
-- 已新增 `AuthRefreshCoordinator`，提供 refresh in-flight 去重边界。
-- 401 捕获仍由 `ApiClient` 抛 `ApiException.unauthorized`，尚未自动 refresh/retry。
-- refresh 成功后重试原请求的策略留到真实 token 接入。
-- refresh 失败后应调用 `SessionCleanupCoordinator`，本轮只准备入口。
+### 4b. Required 空 token ✅（A3）
 
-如果实现风险高，可以先以文档 + fake 测试方式落地，不影响现有 mock。
+- `ApiAuthPolicy.required` 且无 access token：拦截器 fail-fast，`ApiErrorCode.sessionRequired`，不发 HTTP。
 
 ### 5. Session Cleanup
 
@@ -111,9 +117,10 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
 - token store 支持 read/write/clear。已测。
 - auth required 请求可从 token source 取 token。已测。
 - token 缺失时行为和现有设计一致，不导致 mock 业务崩溃。已测。
-- 401 refresh skeleton 已有并发去重测试。
-- refresh failure 后会释放 in-flight 状态，不会把后续 refresh 永久挡住。已测。
-- session cleanup skeleton 已覆盖 token 清理和 hook 调用。
+- 401 refresh：单飞、重试一次、并发 401 单测、refresh 失败 cleanup、refresh 不递归。已测（`api_client_session_auth_test.dart`）。
+- refresh failure 后释放 in-flight。已测。
+- `sessionRequired` fail-fast 不发 HTTP。已测。
+- session cleanup：token clear + hook。已测。
 - 所有 remote 开关仍默认 false。已测。
 - token / refresh / cleanup runtime 边界未泄漏到 UI 或 feature controller。已测。
 
@@ -142,7 +149,7 @@ Phase F 完成后，建议进入：
 
 - package info 插件接入真实 app version。
 - stable install id / device id 持久化。
-- secure storage 实现。
-- ApiClient 自动 refresh/retry 队列。
-- logout/delete 后真实 feature cache 和 player session cleanup hooks。
+- secure storage **作为生产默认**（实现已有）。
+- `authRefreshExecutorProvider` 接真实 refresh API。
+- A7：logout/delete/refresh 失败后 entitlement、wallet、my list、player session cleanup hooks。
 - 远程语言包、内容多语言和字幕语言。

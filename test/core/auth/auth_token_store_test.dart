@@ -1,11 +1,31 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:drama_client/core/auth/api_session_auth_handler.dart';
 import 'package:drama_client/core/auth/auth_refresh_coordinator.dart';
+import 'package:drama_client/core/auth/auth_token_storage_provider.dart';
 import 'package:drama_client/core/auth/auth_token_store.dart';
+import 'package:drama_client/core/auth/in_memory_auth_token_storage.dart';
 import 'package:drama_client/core/auth/session_cleanup_coordinator.dart';
 
 void main() {
+  test('token store writes through storage abstraction', () async {
+    final storage = InMemoryAuthTokenStorage();
+    final container = ProviderContainer(
+      overrides: [authTokenStorageProvider.overrideWithValue(storage)],
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(authTokenStoreProvider.notifier)
+        .save(
+          const AuthTokenSnapshot(accessToken: 'persisted', refreshToken: 'r1'),
+        );
+
+    expect(await storage.read(), isNotNull);
+    expect((await storage.read())!.accessToken, 'persisted');
+  });
+
   test('in-memory token store saves and clears token snapshot', () async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
@@ -66,6 +86,39 @@ void main() {
     await expectLater(coordinator.refresh(refresh), throwsStateError);
 
     expect(calls, 2);
+  });
+
+  test('api session auth handler refreshes tokens on unauthorized', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await container
+        .read(authTokenStoreProvider.notifier)
+        .save(
+          const AuthTokenSnapshot(
+            accessToken: 'access-old',
+            refreshToken: 'refresh-1',
+          ),
+        );
+
+    final handler = ApiSessionAuthHandler(
+      refreshCoordinator: AuthRefreshCoordinator(),
+      tokenStore: container.read(authTokenStoreProvider.notifier),
+      readToken: () => container.read(authTokenStoreProvider),
+      sessionCleanup: container.read(sessionCleanupCoordinatorProvider),
+      refreshExecutor: (refreshToken) async {
+        return AuthTokenSnapshot(
+          accessToken: 'access-refreshed',
+          refreshToken: refreshToken,
+        );
+      },
+    );
+
+    expect(await handler.handleUnauthorized(), isTrue);
+    expect(
+      container.read(authTokenStoreProvider).accessToken,
+      'access-refreshed',
+    );
   });
 
   test('session cleanup clears token and invokes registered hooks', () async {

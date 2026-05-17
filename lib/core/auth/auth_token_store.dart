@@ -1,51 +1,50 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Auth token 的内存快照。
-///
-/// 这是网络层读取 Authorization 的唯一 token 来源。token 不进入
-/// presentation/application，也不放进 AuthSession。真实阶段替换为 secure storage 时，
-/// 仍应保持这个快照边界，让 ApiRequestContext 只读取脱敏后的当前状态。
-class AuthTokenSnapshot {
-  const AuthTokenSnapshot({
-    this.accessToken,
-    this.refreshToken,
-    this.tokenType = 'Bearer',
-    this.expiresAt,
-    this.refreshExpiresAt,
-  });
+import 'auth_token_snapshot.dart';
+import 'auth_token_storage.dart';
+import 'auth_token_storage_provider.dart';
 
-  const AuthTokenSnapshot.empty()
-    : accessToken = null,
-      refreshToken = null,
-      tokenType = 'Bearer',
-      expiresAt = null,
-      refreshExpiresAt = null;
-
-  final String? accessToken;
-  final String? refreshToken;
-  final String tokenType;
-  final DateTime? expiresAt;
-  final DateTime? refreshExpiresAt;
-
-  bool get hasAccessToken => accessToken != null && accessToken!.isNotEmpty;
-}
+export 'auth_token_snapshot.dart';
 
 final authTokenStoreProvider =
     NotifierProvider<AuthTokenStore, AuthTokenSnapshot>(AuthTokenStore.new);
 
-/// Token storage skeleton。
+/// Token 应用层唯一读写入口。
 ///
-/// 当前只做 in-memory store，满足远程骨架和测试。后续接 secure storage 时应在这里
-/// hydrate/persist/clear，不要让 feature repository 或 UI 自己保存 token。
+/// 内部委托 [AuthTokenStorage] 持久化；当前默认 in-memory，真实阶段替换 storage
+/// provider 即可，无需改 UI 或 feature repository。
 class AuthTokenStore extends Notifier<AuthTokenSnapshot> {
+  bool _hydrateFinished = false;
+
   @override
-  AuthTokenSnapshot build() => const AuthTokenSnapshot.empty();
+  AuthTokenSnapshot build() {
+    Future.microtask(_hydrateFromStorage);
+    return const AuthTokenSnapshot.empty();
+  }
+
+  AuthTokenStorage get _storage => ref.read(authTokenStorageProvider);
+
+  Future<void> _hydrateFromStorage() async {
+    if (_hydrateFinished) {
+      return;
+    }
+    _hydrateFinished = true;
+
+    final stored = await _storage.read();
+    if (stored != null && !stored.isEmpty) {
+      state = stored;
+    }
+  }
 
   Future<void> save(AuthTokenSnapshot token) async {
+    _hydrateFinished = true;
+    await _storage.write(token);
     state = token;
   }
 
   Future<void> clear() async {
+    _hydrateFinished = true;
+    await _storage.clear();
     state = const AuthTokenSnapshot.empty();
   }
 }

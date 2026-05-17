@@ -11,6 +11,7 @@ import 'package:drama_client/core/device/api_device_context_provider.dart';
 import 'package:drama_client/core/locale/app_locale_controller.dart';
 import 'package:drama_client/core/network/api_client.dart';
 import 'package:drama_client/core/network/api_client_provider.dart';
+import 'package:drama_client/core/network/api_exception.dart';
 
 void main() {
   test(
@@ -63,7 +64,7 @@ void main() {
           final dio = Dio()..httpClientAdapter = adapter;
           return ApiClient(
             dio: dio,
-            requestContext: ref.watch(apiRequestContextProvider),
+            requestContextReader: () => ref.read(apiRequestContextProvider),
           );
         }),
       ],
@@ -88,39 +89,42 @@ void main() {
     );
   });
 
-  test(
-    'auth required request without token keeps current non-blocking behavior',
-    () async {
-      final adapter = _FakeHttpClientAdapter(
-        responseData: {'code': 0, 'message': 'success', 'data': null},
-      );
-      final container = ProviderContainer(
-        overrides: [
-          apiClientProvider.overrideWith((ref) {
-            final dio = Dio()..httpClientAdapter = adapter;
-            return ApiClient(
-              dio: dio,
-              requestContext: ref.watch(apiRequestContextProvider),
-            );
-          }),
-        ],
-      );
-      addTearDown(container.dispose);
+  test('auth required request without token fails fast locally', () async {
+    final adapter = _FakeHttpClientAdapter(
+      responseData: {'code': 0, 'message': 'success', 'data': null},
+    );
+    final container = ProviderContainer(
+      overrides: [
+        apiClientProvider.overrideWith((ref) {
+          final dio = Dio()..httpClientAdapter = adapter;
+          return ApiClient(
+            dio: dio,
+            requestContextReader: () => ref.read(apiRequestContextProvider),
+          );
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
 
-      await container
+    await expectLater(
+      container
           .read(apiClientProvider)
           .get<void>(
             '/profile',
             authPolicy: ApiAuthPolicy.required,
             decoder: (_) {},
-          );
+          ),
+      throwsA(
+        isA<ApiException>().having(
+          (error) => error.code,
+          'code',
+          ApiErrorCode.sessionRequired,
+        ),
+      ),
+    );
 
-      expect(
-        adapter.lastOptions?.headers.containsKey('Authorization'),
-        isFalse,
-      );
-    },
-  );
+    expect(adapter.lastOptions, isNull);
+  });
 }
 
 class _FakeHttpClientAdapter implements HttpClientAdapter {

@@ -81,8 +81,10 @@ final result = await apiClient.get<MyDto>(
 - Phase F 已把 `ApiRequestContext` 接到统一 provider：`Device-Id` / `App-Version`
   当前来自可替换 provider 和 dart-define fallback，`Lang` 来自当前 locale controller，
   `Platform` 自动识别，`accessToken` 来自 `AuthTokenStore` snapshot。
-- 当前 token store 仍是 in-memory skeleton；真实 secure storage、401 自动 refresh/retry
-  和 refresh 失败后的全局登出策略后续再接。
+- Post-RC Track A1–A3 已落地：`AuthTokenStore` + storage 抽象（默认 in-memory）、
+  `ApiAuthPolicy.required` 空 token 客户端 fail-fast、`ApiClient` 401 单飞 refresh + 重试一次。
+  仍 defer：生产默认 secure storage、`authRefreshExecutorProvider` 接真实 refresh API、
+  各 feature 完整 cleanup hook。
 
 ## 异常类型
 
@@ -98,6 +100,7 @@ catch (error) {
 
 错误码：
 
+- `sessionRequired`（**客户端本地**：`required` 且无 access token，未发 HTTP）
 - `cancelled`
 - `timeout`
 - `network`
@@ -165,10 +168,9 @@ package info，仍通过 provider 注入，不允许各 feature 自己拼 header
 
 ## 后续待补
 
-等登录模块接入后，再增加：
-
-- secure storage 实现替换 in-memory `AuthTokenStore`
-- `ApiClient` 401 自动 refresh/retry 队列
+- 生产环境默认启用 `FlutterSecureAuthTokenStorage`（实现已存在，provider 仍 in-memory）
+- `authRefreshExecutorProvider` 接真实 `POST /auth/refresh`（当前默认 stub 返回 null）
+- A7：logout/refresh 失败后 entitlement、wallet、my list、player session 等 cleanup hook
 - request id header
 - 网络日志脱敏
 - Sentry breadcrumb
@@ -187,29 +189,23 @@ API Skeleton Phase E 已补 Auth / Profile 远程骨架，但仍不做真实 tok
   `ApiAuthPolicy.required`。如果后续服务端需要无 token 的游客 bootstrap，应新增或明确
   public bootstrap 语义，而不是让同一个接口同时承担两种策略。
 
-Phase F 已新增 `AuthTokenStore`、`AuthRefreshCoordinator` 和
-`SessionCleanupCoordinator`：
+Post-RC Track A1–A3 已新增/扩展 `AuthTokenStore`、`AuthRefreshCoordinator`、
+`ApiSessionAuthHandler`、`SessionCleanupCoordinator`：
 
-- `AuthTokenStore` 是 token ownership 的唯一 skeleton。当前 in-memory，后续由
-  secure storage implementation 替换；UI 不应持有或展示 access token。
-- `AuthRefreshCoordinator` 只负责 refresh in-flight 去重边界。本轮不在 `ApiClient`
-  中自动拦截 401，也不重试原请求，避免在没有真实 refresh API 时引入隐藏状态机。
-- `SessionCleanupCoordinator` 是 logout/delete/refresh failed 后的统一清理入口。当前
-  先清 token，并允许 feature 注册 cache / playback cleanup hook。
+- `AuthTokenStore` 委托 `AuthTokenStorage`（默认 `InMemoryAuthTokenStorage`）；UI 不持有
+  access/refresh token。可选 `FlutterSecureAuthTokenStorage` 通过 provider 切换，**未改默认**。
+- `ApiAuthPolicy.required` 且无 access token：`ApiClient` 拦截器 **fail-fast**，抛
+  `ApiErrorCode.sessionRequired`，不伪造 HTTP 401。
+- `ApiAuthPolicy.none`：不带 `Authorization`（login/oauth/refresh）。
+- `POST /auth/refresh`：`none` + `Options(extra: {apiSkipAuthRefreshExtraKey: true})`，避免
+  refresh 请求自身 401 时递归 refresh。
+- HTTP 401 + `required`：`ApiSessionAuthHandler` → `AuthRefreshCoordinator` 单飞 refresh →
+  成功则原请求 **重试 1 次**；失败则 `SessionCleanupCoordinator` 清 token 并调用已注册 hook。
+- `authRefreshExecutorProvider` 默认 stub（返回 null），测试可注入 fake executor；**未接真实服务端**。
 
-后续接真实登录时，应该让 `apiRequestContextProvider` 继续只从 token store 读取
-access token，并在 `ApiClient` 层接统一 refresh queue。不要让页面、controller 或
-feature repository 自己保存 access token；否则 401 刷新、logout 清理和并发请求会变得不可控。
+约束（仍有效）：
 
-logout / delete account 成功后，还需要统一清理 secure token、各 feature cache 和播放器
-session/window。Phase F 已准备 cleanup coordinator，但尚未把 AuthController、feature caches
-和 Player session/window 挂到真实 cleanup hook，避免在 mock 阶段误伤已经验收的页面状态。
-
-Phase F Review 额外确认：
-
-- token store / refresh coordinator / cleanup coordinator 不应被 presentation、feature
-  controller 或 app shell 直接 import；这些运行时边界只服务网络/session 基础设施。
-- refresh coordinator 失败后必须释放 in-flight 状态，避免一次失败把后续所有 401 refresh
-  永久挡住。
-- 本阶段仍不在 `ApiClient` 中自动执行 refresh/retry。真实 refresh API、secure storage、
-  logout cleanup hook 都接好后，再把 401 自动恢复放进网络层。
+- feature presentation/controller **不得**直接 import token storage 实现或调用 refresh coordinator；
+  401 恢复只经 `ApiClient`。
+- refresh 失败后 coordinator 必须释放 in-flight，避免永久挡住后续 401。
+- logout/delete/各 feature cache/player cleanup hook 仍待 A7 逐模块接入。

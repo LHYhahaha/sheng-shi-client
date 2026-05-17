@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'auth_token_store.dart';
+import 'auth_token_snapshot.dart';
 
 typedef AuthRefreshCallback = Future<AuthTokenSnapshot?> Function();
 
@@ -12,9 +12,9 @@ final authRefreshCoordinatorProvider = Provider<AuthRefreshCoordinator>((ref) {
 
 /// Token refresh queue 的最小骨架。
 ///
-/// 本阶段不接真实 `/auth/refresh`，但先固定“同一时间只有一次 refresh in-flight”的
-/// 协调语义。后续 ApiClient 遇到 401 时应通过这里刷新 token，并在成功后重试原请求；
-/// refresh 失败则交给 session cleanup 清理本地会话。
+/// 固定“同一时间只有一次 refresh in-flight”的协调语义。
+/// ApiClient 遇到 401 时通过 [ApiSessionAuthHandler] 调用这里；成功后重试原请求一次；
+/// refresh 失败则交给 [SessionCleanupCoordinator] 清理本地会话。
 class AuthRefreshCoordinator {
   Future<AuthTokenSnapshot?>? _inFlight;
 

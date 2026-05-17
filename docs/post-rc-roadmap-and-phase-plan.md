@@ -240,34 +240,36 @@ flowchart TB
 
 ### 4.2 子阶段拆分
 
-#### A1 — secure token storage
+#### A1 — secure token storage ✅（2026-05-17，客户端骨架）
 
 | 项 | 内容 |
 | --- | --- |
 | **目标** | access/refresh token 加密存储；启动恢复 session |
-| **文件影响** | 新增 `lib/core/auth/token_storage.dart`；`auth_repository`；`api_request_context_provider` |
+| **已完成** | `AuthTokenSnapshot`、`AuthTokenStorage` 接口、`InMemoryAuthTokenStorage`（默认）、`FlutterSecureAuthTokenStorage`（可选实现，未默认启用）、`AuthTokenStore` 委托 storage 读写/清理 |
+| **仍 defer** | 生产默认切到 secure storage；login 后真实持久化联调 |
 | **禁止项** | 不把 token 放 SharedPreferences 明文；不在 UI 层读 storage |
-| **测试** | storage fake；login 后 header 带 Bearer |
+| **测试** | `test/core/auth/auth_token_storage_test.dart`、`auth_token_store_test.dart`；架构边界 `auth_runtime_boundary_test.dart` |
 | **依赖** | 无 |
 
-#### A2 — 401 refresh queue / retry / logout cleanup
+#### A2 — 401 refresh queue / retry / logout cleanup ✅（2026-05-17，客户端骨架）
 
 | 项 | 内容 |
 | --- | --- |
-| **目标** | 单飞 refresh；失败清 session；重放排队请求 |
-| **文件影响** | `lib/core/network/api_client.dart`、拦截器；`auth_repository.refresh` |
+| **目标** | 单飞 refresh；失败清 session；原请求重试一次 |
+| **已完成** | `AuthRefreshCoordinator` 单飞；`ApiSessionAuthHandler` + `ApiClient` 统一 401 恢复（含 Dio 默认 `validateStatus` 抛出的 401）；refresh 成功重试一次；失败 `SessionCleanupCoordinator` 清 token + hook；refresh 请求 `apiSkipAuthRefreshExtraKey` 防递归 |
+| **仍 defer** | `authRefreshExecutorProvider` 接真实 `POST /auth/refresh`；各 feature entitlement/wallet/player cleanup hook 完整接入（A7） |
 | **禁止项** | 不在各 feature 自行 refresh |
-| **测试** | 并发 401 单测；refresh 失败 → guest |
+| **测试** | `test/core/network/api_client_session_auth_test.dart` |
 | **依赖** | **A1** |
 
-#### A3 — ApiAuthPolicy.required 空 token 策略
+#### A3 — ApiAuthPolicy.required 空 token 策略 ✅（2026-05-17）
 
 | 项 | 内容 |
 | --- | --- |
-| **目标** | required 且无 token → 不发起请求或走统一 `SessionRequired` 错误 |
-| **文件影响** | `ApiClient`、`ApiAuthPolicy`、各 remote data source 调用点 |
-| **禁止项** | 禁止 slient 发空 Authorization |
-| **测试** | skeleton test 扩展空 token 用例 |
+| **目标** | required 且无 token → 客户端 fail-fast，不发起 HTTP |
+| **已完成** | 拦截器本地 `ApiException.sessionRequired`（`ApiErrorCode.sessionRequired`）；`none` 仍不带 token；refresh 用 `none` + `apiSkipAuthRefreshExtraKey` |
+| **禁止项** | 禁止 silent 发空 Authorization |
+| **测试** | `api_client_test.dart`、`api_client_session_auth_test.dart`、`api_request_context_provider_test.dart` |
 | **依赖** | A1 |
 
 #### A4 — Device-Id / App-Version / Lang / Platform 真实值
@@ -339,10 +341,20 @@ flowchart TB
 
 ### 4.5 测试计划（Track A）
 
-- 单元：`api_client_test`、mapper strict、token storage fake
-- 集成：staging `USE_REMOTE_DRAMA_API=true` 手工 + 可选 integration_test
-- 架构：`architecture/network_boundary_test`、`session_cleanup_test`
-- 回归：mock 默认路径仍全绿（开关默认 false）
+- 单元：`api_client_test`、`api_client_session_auth_test`、token storage / token store、mapper strict
+- 集成：staging `USE_REMOTE_DRAMA_API=true` 手工 + 可选 integration_test（A1–A3 后仍 defer）
+- 架构：`architecture/auth_runtime_boundary_test.dart`（token storage / refresh / cleanup 不进 presentation）
+- 回归：mock 默认路径仍全绿（`USE_REMOTE_*` 默认 false）
+
+### 4.6 A1–A3 行为摘要（联调门禁）
+
+| 场景 | 行为 |
+| --- | --- |
+| `ApiAuthPolicy.required` + 无 access token | **不发 HTTP**；抛 `ApiErrorCode.sessionRequired`（客户端本地拦截，非伪造后端 401） |
+| `ApiAuthPolicy.none` | 不带 `Authorization`，可无 token 正常请求 |
+| `POST /auth/refresh` | `none` + `apiSkipAuthRefreshExtraKey`；refresh 自身 401 不进入 refresh 队列 |
+| 业务接口 HTTP 401 + `required` | `ApiSessionAuthHandler` 单飞 refresh → 成功则 **原请求重试 1 次** |
+| refresh 失败 / 无 refresh token | `SessionCleanupCoordinator.cleanup` 清 token；注册 hook 待 A7 扩展；请求以 `unauthorized` / Session expired 结束 |
 
 ---
 
@@ -645,9 +657,9 @@ P6 + O4 + A7 ──► BIZ-4/5/7
 
 ### 架构 / 网络
 
-- [ ] A1 secure token
-- [ ] A2 401 refresh 单飞 + logout cleanup
-- [ ] A3 required 空 token 策略
+- [x] A1 secure token（storage 抽象 + in-memory 默认；secure 实现已备未默认）
+- [x] A2 401 refresh 单飞 + retry 一次 + cleanup 骨架
+- [x] A3 required 空 token fail-fast（`sessionRequired`）
 - [ ] A6 strict DTO（auth、entitlement、order、playback source）
 - [ ] A7 session cleanup
 - [ ] 生产 remote repository 无 `grantMock*`
@@ -715,7 +727,8 @@ flutter test
 | 子阶段 | 状态 |
 | --- | --- |
 | O1–O5 | Planned |
-| A1–A7 | Planned |
+| A1–A3 | **Done**（客户端 session/network 骨架；见 §4.6） |
+| A4–A7 | Planned |
 | P1–P7 | Planned |
 | L1–L6 | Planned |
 | R1–R6 | Planned |

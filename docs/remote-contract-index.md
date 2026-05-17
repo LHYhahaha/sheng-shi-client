@@ -1,6 +1,6 @@
 # Remote Contract Index
 
-日期：2026-05-15
+日期：2026-05-17（Post-RC Track A1–A3 已落地）
 
 本文是当前 API skeleton 的总索引，只记录远程契约、开关、分层边界和真实联调前的
 defer 项。不接真实服务端，不替换 mock 默认实现，不改变 UI。
@@ -8,7 +8,9 @@ defer 项。不接真实服务端，不替换 mock 默认实现，不改变 UI�
 ## Release 封板前提（Current）
 
 - 所有 `USE_REMOTE_*` 默认 `false`；UI 默认 mock repository / mock payment / mock entitlement（`grantMock*`）。
-- 若开启任一 remote 开关或真实 IAP，须先处理：401 refresh + session cleanup、secure token、`ApiAuthPolicy` 与端点矩阵、订单验单、strict DTO（见下文 DTO Strict vs Display Fallback）。
+- 客户端 session/network 门禁（A1–A3）已就绪：storage 抽象、401 单飞 refresh + 重试一次、
+  `required` 空 token fail-fast。开启 remote 前仍须：生产 secure storage 默认、真实 refresh API、
+  A7 feature cleanup hook、订单验单、strict DTO（见下文）。
 
 ## 总体约束
 
@@ -34,7 +36,7 @@ defer 项。不接真实服务端，不替换 mock 默认实现，不改变 UI�
 
 | 模块 | Remote 开关 | 默认 | Remote repository | Remote datasource | DTO / Mapper | Endpoint skeleton | Auth policy | 测试 | 主要 defer |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Network / ApiClient | 无 | 统一启用 | 不适用 | `lib/core/network/api_client.dart` | `ApiRequestContext`、`ApiPage`、`ApiException` | 所有 remote skeleton 共用 | 调用方显式传 `none/required` | `test/core/network/api_client_test.dart`、`test/core/network/api_request_context_provider_test.dart` | 真实持久化 device id、package info app version、secure storage、自动 401 refresh/retry、网络日志脱敏 |
+| Network / ApiClient | 无 | 统一启用 | 不适用 | `lib/core/network/api_client.dart` | `ApiRequestContext`、`ApiPage`、`ApiException`（含 `sessionRequired`） | 所有 remote skeleton 共用 | 调用方显式传 `none/required`；`required` 无 token **不发 HTTP** | `api_client_test.dart`、`api_client_session_auth_test.dart`、`api_request_context_provider_test.dart` | 真实 device id/package info；**默认仍 in-memory token**；`authRefreshExecutorProvider` 真实 refresh；A7 cleanup hooks；网络日志脱敏 |
 | Home / Drama | `USE_REMOTE_DRAMA_API`，兼容旧 `USE_REMOTE_API` | mock | `lib/features/drama/data/remote_drama_repository.dart` | `lib/features/drama/data/remote/drama_remote_data_source.dart` | `lib/features/drama/data/dto/`、`lib/features/drama/data/mapper/drama_mapper.dart` | `GET /home/categories`、`GET /home/feed` | `none`，公共首页内容假设 | `test/features/drama/drama_mapper_test.dart`、`test/features/drama/remote_drama_repository_test.dart` | 真实分页字段、内容 locale/region、推荐策略、图片 CDN 策略 |
 | MediaResource | 无 | domain/shared model | 不适用 | 不适用 | `lib/shared/media/media_resource.dart` | 不适用 | 不适用 | Home/Drama/My list/Profile mapper tests | 图片缓存、占位图、错误图、CDN resize、全站图片字段迁移 |
 | Player / Drama detail / For You | `USE_REMOTE_PLAYER_API` | mock | `remote_player_content_repository.dart`、`remote_player_feed_repository.dart` | `remote/player_remote_data_source.dart` | `player_content_dto.dart`、`player_episode_dto.dart`、`player_feed_item_dto.dart`、`player_feed_page_dto.dart`；`player_content_mapper.dart`、`player_feed_mapper.dart` | `GET /dramas/{dramaId}`、`GET /dramas/{dramaId}/episodes`、`GET /feed/for-you` | `none`，内容详情/feed 当前按公共内容假设；真实个性化可改 required | `test/features/player/player_remote_api_skeleton_test.dart` | 真实个性化 feed auth 策略、详情分页、内容多语言、真实 access 对象 |
@@ -44,7 +46,7 @@ defer 项。不接真实服务端，不替换 mock 默认实现，不改变 UI�
 | Store / Recharge | `USE_REMOTE_STORE_API` | mock | `lib/features/store/data/remote_store_repository.dart` | `lib/features/store/data/remote/store_remote_data_source.dart` | `lib/features/store/data/dto/`、`lib/features/store/data/mapper/store_mapper.dart` | `GET /store/recharge-products`、`POST /orders` | 商品列表 `none`，创建订单 `required` | `test/features/commerce_remote_api_skeleton_test.dart` | IAP SDK、订单状态机、验单、退款/撤销、商品是否必须登录、地区/平台定价 |
 | Membership | `USE_REMOTE_MEMBERSHIP_API` | mock | `lib/features/membership/data/remote_membership_repository.dart` | `lib/features/membership/data/remote/membership_remote_data_source.dart` | `lib/features/membership/data/dto/`、`lib/features/membership/data/mapper/membership_mapper.dart` | `GET /membership/products`、`GET /membership/status` | 商品列表 `none`，会员状态 `required` | `test/features/commerce_remote_api_skeleton_test.dart` | 订阅 SDK、base plan/offer 真实映射、验单、会员状态刷新、Profile 会员卡聚合 |
 | Entitlement | `USE_REMOTE_ENTITLEMENT_API` | mock | `lib/features/entitlement/data/remote_entitlement_repository.dart` | `lib/features/entitlement/data/remote/entitlement_remote_data_source.dart` | `lib/features/entitlement/data/dto/`、`lib/features/entitlement/data/mapper/entitlement_mapper.dart` | `GET /entitlements`、`POST /entitlements/unlock-episode`、`PATCH /entitlements/settings/auto-unlock` | `required` | `test/features/commerce_remote_api_skeleton_test.dart`、`test/features/entitlement/entitlement_controller_test.dart` | 真实 access 接口、服务端幂等码、购买后权益刷新、跨设备同步、失败重试策略 |
-| Auth / Session | `USE_REMOTE_AUTH_API` | mock | `lib/features/auth/data/remote_auth_repository.dart` | `lib/features/auth/data/remote/auth_remote_data_source.dart` | `lib/features/auth/data/dto/`、`lib/features/auth/data/mapper/auth_mapper.dart` | `POST /auth/login/device`、`POST /auth/login/oauth`、`POST /auth/refresh`、`GET /auth/session`、`POST /auth/logout`、`DELETE /account` | login / oauth / refresh 为 `none`；session / logout / delete 为 `required` | `test/features/auth/auth_remote_api_skeleton_test.dart` | Google/Facebook SDK、secure storage、token refresh queue、401 并发刷新、logout/delete 本地清理 |
+| Auth / Session | `USE_REMOTE_AUTH_API` | mock | `lib/features/auth/data/remote_auth_repository.dart` | `lib/features/auth/data/remote/auth_remote_data_source.dart` | `lib/features/auth/data/dto/`、`lib/features/auth/data/mapper/auth_mapper.dart` | 同上 | login / oauth / refresh 为 `none`（refresh 带 `apiSkipAuthRefreshExtraKey`）；session / logout / delete 为 `required` | `auth_remote_api_skeleton_test.dart`、`test/core/auth/*`、`api_client_session_auth_test.dart` | Google/Facebook SDK；**secure storage 未默认**；真实 refresh executor；logout/delete 各 feature cache/player cleanup（A7） |
 | Profile Summary | `USE_REMOTE_PROFILE_API` | mock | `lib/features/profile/data/remote_profile_repository.dart` | `lib/features/profile/data/remote/profile_remote_data_source.dart` | `profile_summary_dto.dart`、`profile_mapper.dart` | `GET /profile` | `required` | `test/features/auth/auth_remote_api_skeleton_test.dart` | Profile 会员卡/金币卡真实聚合、Profile 与 Wallet/Entitlement refresh 时机、头像真实图片渲染 |
 
 ## Auth Policy 总览
@@ -98,31 +100,21 @@ public bootstrap 语义，不要让同一个接口同时承担两种策略。
 所有开关默认 false。测试通过 provider override 或默认路径断言 mock/remote 切换；不要在页面中读取
 dart-define。
 
-## Phase F Runtime Context
-
-Phase F 已补真实 API 联调前的 runtime context 骨架：
+## Phase F + Post-RC Track A1–A3 Runtime Context
 
 - `AppConfig` 统一管理 dev / staging / prod baseUrl，并支持 `API_BASE_URL` 临时覆盖。
-- `apiRequestContextProvider` 统一组合 `Device-Id`、`Lang`、`Platform`、`App-Version`
-  和 `accessToken`；feature 不允许自己拼 header。
-- `Lang` 来自当前 `AppLocaleController`，语言切换后后续请求会带新语言。
-- `Platform` 由 Flutter 平台自动识别为 `android` / `ios` / `web` 等。
-- `AuthTokenStore` 当前是 in-memory skeleton；后续 secure storage 替换这个边界即可。
-- `AuthRefreshCoordinator` 只提供 refresh in-flight 去重骨架，暂不自动重试 401 请求。
-- `SessionCleanupCoordinator` 是 logout / delete / refresh failed 后的统一清理入口，当前先清
-  token 并支持 feature 注册 hook。
+- `apiRequestContextProvider` 统一组合 header 与 `accessToken`（来自 `AuthTokenStore`）。
+- `AuthTokenStorage` 抽象 + 默认 `InMemoryAuthTokenStorage`；可选 `FlutterSecureAuthTokenStorage`（未默认）。
+- `ApiAuthPolicy.required` 且无 access token：`ApiClient` 本地 `sessionRequired`，**不伪造 HTTP 401**。
+- `ApiSessionAuthHandler` + `AuthRefreshCoordinator`：`required` 接口 HTTP 401 时单飞 refresh，成功 **重试原请求 1 次**；失败 `SessionCleanupCoordinator` 清 token + hook。
+- `POST /auth/refresh`：`none` + `apiSkipAuthRefreshExtraKey`，避免 refresh 递归。
+- `authRefreshExecutorProvider` 默认 stub（未接真实服务端）。
 
-仍 defer：真实安装 ID 持久化、package info 插件、secure storage、401 自动 refresh/retry、
-logout/delete 后清 feature caches 和播放器 session/window。
+仍 defer：安装 ID 持久化、package info、**生产默认 secure storage**、真实 refresh API、
+A7 各 feature cache / player session cleanup hook 完整接入。
 
-Phase F Review 已收口：
-
-- 架构测试覆盖 token store / refresh coordinator / cleanup coordinator 不进入
-  presentation、feature application controller 或 app shell。
-- refresh coordinator 覆盖成功去重和失败释放 in-flight 两种路径。
-- session cleanup 覆盖 token clear 和 fake hook 调用，不接当前 AuthPage / AccountPage
-  行为，避免在 mock 阶段误清已验收状态。
-- remote switch default 测试覆盖所有 scoped `USE_REMOTE_XXX_API`，默认仍为 mock。
+架构测试：`auth_runtime_boundary_test.dart`；网络会话测试：`api_client_session_auth_test.dart`。
+`USE_REMOTE_*` 仍默认 false。
 
 ## 分层边界检查结果
 

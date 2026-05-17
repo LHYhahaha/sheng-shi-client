@@ -8,12 +8,20 @@ void main() {
     final roots = [Directory('lib/features'), Directory('lib/app')];
     const forbiddenTokens = [
       'core/auth/auth_token_store.dart',
+      'core/auth/auth_token_storage.dart',
+      'core/auth/in_memory_auth_token_storage.dart',
+      'core/auth/flutter_secure_auth_token_storage.dart',
       'core/auth/auth_refresh_coordinator.dart',
+      'core/auth/api_session_auth_handler.dart',
       'core/auth/session_cleanup_coordinator.dart',
       'authTokenStoreProvider',
+      'authTokenStorageProvider',
       'AuthTokenStore',
+      'AuthTokenStorage',
       'AuthRefreshCoordinator',
       'authRefreshCoordinatorProvider',
+      'ApiSessionAuthHandler',
+      'apiSessionAuthHandlerProvider',
       'SessionCleanupCoordinator',
       'sessionCleanupCoordinatorProvider',
     ];

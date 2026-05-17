@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import '../../../../core/network/api_client.dart';
 import '../dto/auth_session_dto.dart';
 import '../dto/auth_token_dto.dart';
@@ -40,6 +42,7 @@ class AuthRemoteDataSource {
       '/auth/refresh',
       data: request.toJson(),
       authPolicy: ApiAuthPolicy.none,
+      options: Options(extra: {apiSkipAuthRefreshExtraKey: true}),
       decoder: AuthTokenDto.fromJson,
     );
   }

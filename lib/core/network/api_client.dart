@@ -1,35 +1,38 @@
 import 'package:dio/dio.dart';
 
+import '../auth/api_session_auth_handler.dart';
 import '../config/app_environment.dart';
 import 'api_exception.dart';
 import 'api_request_context.dart';
 
 /// API 鉴权策略。
 ///
-/// 登录、第三方登录、刷新 token 必须显式使用 none；登录后的业务接口使用 required。
-/// 当前 skeleton 不强制 token 存在，避免破坏 mock 和远程骨架测试。
-enum ApiAuthPolicy {
-  /// 不带 Authorization。
-  none,
+/// - [none]：不带 Authorization（登录、OAuth、refresh 等）。
+/// - [required]：必须有 access token；缺失时客户端 fail-fast，不发起 HTTP。
+enum ApiAuthPolicy { none, required }
 
-  /// 如果 request context 有 token，则带 `Authorization: Bearer <token>`。
-  required,
-}
+typedef ApiRequestContextReader = ApiRequestContext Function();
 
-/// API client 的最小网络入口。
+/// API client 的网络入口。
 ///
-/// 这里集中 Dio 配置、headers 和异常映射。feature/UI 不应直接 new Dio；否则
-/// token、requestId、重试和错误码策略会散落到业务层，后续接真实接口很难统一治理。
+/// - 统一 header、envelope、401 refresh（单飞 + 重试一次）、required 空 token 拦截。
+/// - feature/UI 不应直接 new Dio。
 class ApiClient {
   ApiClient({
     Dio? dio,
-    ApiRequestContext requestContext = const ApiRequestContext.mock(),
+    ApiRequestContext? requestContext,
+    ApiRequestContextReader? requestContextReader,
+    ApiSessionAuthHandler? sessionAuthHandler,
   }) : _dio = dio ?? Dio(_defaultOptions),
-       _requestContext = requestContext {
+       _requestContextReader =
+           requestContextReader ??
+           (() => requestContext ?? const ApiRequestContext.mock()),
+       _sessionAuthHandler = sessionAuthHandler {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          options.headers.addAll(_requestContext.toBaseHeaders());
+          final context = _readRequestContext();
+          options.headers.addAll(context.toBaseHeaders());
 
           if (_hasJsonBody(options)) {
             options.headers.putIfAbsent(
@@ -39,10 +42,18 @@ class ApiClient {
           }
 
           final authPolicy = _authPolicyFromOptions(options);
-          final token = _requestContext.accessToken;
-          if (authPolicy == ApiAuthPolicy.required &&
-              token != null &&
-              token.isNotEmpty) {
+          if (authPolicy == ApiAuthPolicy.required) {
+            final token = context.accessToken;
+            if (token == null || token.isEmpty) {
+              handler.reject(
+                DioException(
+                  requestOptions: options,
+                  type: DioExceptionType.unknown,
+                  error: ApiException.sessionRequired(path: options.path),
+                ),
+              );
+              return;
+            }
             options.headers['Authorization'] = 'Bearer $token';
           } else {
             options.headers.remove('Authorization');
@@ -53,13 +64,13 @@ class ApiClient {
     );
   }
 
-  /// 底层 Dio 实例。
-  ///
-  /// 暴露 getter 只用于底层扩展和测试；feature 层优先使用 ApiClient 的 get/post/put/delete。
   final Dio _dio;
-  final ApiRequestContext _requestContext;
+  final ApiRequestContextReader _requestContextReader;
+  final ApiSessionAuthHandler? _sessionAuthHandler;
 
   Dio get dio => _dio;
+
+  ApiRequestContext _readRequestContext() => _requestContextReader();
 
   Future<T> get<T>(
     String path, {
@@ -76,6 +87,7 @@ class ApiClient {
         cancelToken: cancelToken,
         options: _optionsWithAuthPolicy(options, authPolicy),
       ),
+      authPolicy: authPolicy,
       decoder: decoder,
     );
   }
@@ -97,6 +109,7 @@ class ApiClient {
         cancelToken: cancelToken,
         options: _optionsWithAuthPolicy(options, authPolicy),
       ),
+      authPolicy: authPolicy,
       decoder: decoder,
     );
   }
@@ -118,6 +131,7 @@ class ApiClient {
         cancelToken: cancelToken,
         options: _optionsWithAuthPolicy(options, authPolicy),
       ),
+      authPolicy: authPolicy,
       decoder: decoder,
     );
   }
@@ -139,6 +153,7 @@ class ApiClient {
         cancelToken: cancelToken,
         options: _optionsWithAuthPolicy(options, authPolicy),
       ),
+      authPolicy: authPolicy,
       decoder: decoder,
     );
   }
@@ -160,29 +175,98 @@ class ApiClient {
         cancelToken: cancelToken,
         options: _optionsWithAuthPolicy(options, authPolicy),
       ),
+      authPolicy: authPolicy,
       decoder: decoder,
     );
   }
 
   Future<T> _request<T>(
-    Future<Response<Object?>> Function() request, {
+    Future<Response<Object?>> Function() send, {
+    required ApiAuthPolicy authPolicy,
     required T Function(Object? data) decoder,
   }) async {
-    try {
-      final response = await request();
-      return _decode(response, decoder);
-    } on ApiException {
-      rethrow;
-    } on DioException catch (error) {
-      throw ApiException.fromDio(error);
-    } catch (error, stackTrace) {
-      throw ApiException(
-        code: ApiErrorCode.unknown,
-        message: 'Unexpected client error.',
-        cause: error,
-        stackTrace: stackTrace,
-      );
+    var hasRetriedAfterRefresh = false;
+
+    while (true) {
+      try {
+        final response = await send();
+        return _decode(response, decoder);
+      } on ApiException catch (error) {
+        if (await _recoverFromUnauthorized(
+          error,
+          hasRetriedAfterRefresh,
+          authPolicy,
+        )) {
+          hasRetriedAfterRefresh = true;
+          continue;
+        }
+        rethrow;
+      } on DioException catch (error) {
+        final apiError = error.error is ApiException
+            ? error.error! as ApiException
+            : ApiException.fromDio(error);
+        if (await _recoverFromUnauthorized(
+          apiError,
+          hasRetriedAfterRefresh,
+          authPolicy,
+        )) {
+          hasRetriedAfterRefresh = true;
+          continue;
+        }
+        throw apiError;
+      } catch (error, stackTrace) {
+        throw ApiException(
+          code: ApiErrorCode.unknown,
+          message: 'Unexpected client error.',
+          cause: error,
+          stackTrace: stackTrace,
+        );
+      }
     }
+  }
+
+  /// 401 时尝试 refresh；成功返回 true 以便外层重试原请求一次。
+  Future<bool> _recoverFromUnauthorized(
+    ApiException error,
+    bool hasRetriedAfterRefresh,
+    ApiAuthPolicy authPolicy,
+  ) async {
+    if (!_shouldAttemptRefresh(error, hasRetriedAfterRefresh, authPolicy)) {
+      return false;
+    }
+
+    final recovered = await _sessionAuthHandler!.handleUnauthorized();
+    if (recovered) {
+      return true;
+    }
+
+    throw ApiException(
+      code: ApiErrorCode.unauthorized,
+      message: 'Session expired.',
+      statusCode: error.statusCode,
+      requestId: error.requestId,
+      cause: error,
+    );
+  }
+
+  bool _shouldAttemptRefresh(
+    ApiException error,
+    bool hasRetriedAfterRefresh,
+    ApiAuthPolicy authPolicy,
+  ) {
+    if (_sessionAuthHandler == null) {
+      return false;
+    }
+    if (authPolicy != ApiAuthPolicy.required) {
+      return false;
+    }
+    if (hasRetriedAfterRefresh) {
+      return false;
+    }
+    if (error.isSessionRequired) {
+      return false;
+    }
+    return error.code == ApiErrorCode.unauthorized;
   }
 
   T _decode<T>(Response<Object?> response, T Function(Object? data) decoder) {
@@ -299,3 +383,6 @@ class ApiClient {
 
   static const _authPolicyExtraKey = 'apiAuthPolicy';
 }
+
+/// 标记 refresh 请求，避免 refresh 自身 401 时再次进入 refresh 死循环。
+const String apiSkipAuthRefreshExtraKey = 'apiSkipAuthRefresh';

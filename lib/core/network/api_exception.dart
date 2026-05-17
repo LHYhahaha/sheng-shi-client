@@ -7,6 +7,9 @@ enum ApiErrorCode {
   cancelled,
   timeout,
   network,
+
+  /// 客户端本地拦截：`ApiAuthPolicy.required` 且无 access token，未发起 HTTP。
+  sessionRequired,
   unauthorized,
   forbidden,
   notFound,
@@ -68,7 +71,20 @@ class ApiException implements Exception {
   /// 原始堆栈。
   final StackTrace? stackTrace;
 
-  bool get isAuthFailure => code == ApiErrorCode.unauthorized;
+  bool get isAuthFailure =>
+      code == ApiErrorCode.unauthorized || code == ApiErrorCode.sessionRequired;
+
+  bool get isSessionRequired => code == ApiErrorCode.sessionRequired;
+
+  /// 客户端本地 fail-fast：required 接口缺少 access token，未发送网络请求。
+  factory ApiException.sessionRequired({String? path}) {
+    return ApiException(
+      code: ApiErrorCode.sessionRequired,
+      message: path == null
+          ? 'Access token is required for this request.'
+          : 'Access token is required for $path.',
+    );
+  }
 
   bool get canRetry {
     return switch (code) {

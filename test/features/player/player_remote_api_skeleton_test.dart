@@ -387,7 +387,16 @@ void main() {
       final adapter = _FakeHttpClientAdapter(
         responseData: {'code': 3001, 'message': 'source expired', 'data': null},
       );
-      final client = ApiClient(dio: Dio()..httpClientAdapter = adapter);
+      final client = ApiClient(
+        dio: Dio()..httpClientAdapter = adapter,
+        requestContext: const ApiRequestContext(
+          deviceId: 'device-1',
+          lang: 'en',
+          platform: 'android',
+          appVersion: '1.0.0',
+          accessToken: 'token-1',
+        ),
+      );
       final dataSource = PlaybackSourceRemoteDataSource(apiClient: client);
 
       final future = dataSource.getPlaybackSource(episodeId: 'ep-1');

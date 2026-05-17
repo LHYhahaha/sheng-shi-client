@@ -307,7 +307,16 @@ void main() {
       responseData: {'code': 2001, 'message': 'login required', 'data': null},
     );
     final dataSource = MyListRemoteDataSource(
-      apiClient: ApiClient(dio: Dio()..httpClientAdapter = adapter),
+      apiClient: ApiClient(
+        dio: Dio()..httpClientAdapter = adapter,
+        requestContext: const ApiRequestContext(
+          deviceId: 'device-1',
+          lang: 'en',
+          platform: 'android',
+          appVersion: '1.0.0',
+          accessToken: 'token-1',
+        ),
+      ),
     );
 
     final future = dataSource.listPlayHistory();
