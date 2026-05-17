@@ -28,6 +28,36 @@ void main() {
       expect(find.text('Join Now'), findsNothing);
     });
 
+    testWidgets('scroll body is clipped below hero title area', (tester) async {
+      await tester.pumpWidget(_buildMembershipPage());
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      final scrollBody = tester.widget<Positioned>(
+        find.byKey(const Key('membership_scroll_body')),
+      );
+      expect(scrollBody.top, MembershipLayout.scrollContentTop);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('membership_scroll_body')),
+          matching: find.byType(ListView),
+        ),
+        findsOneWidget,
+      );
+
+      final titleTop = tester.getTopLeft(find.text('Join Membership')).dy;
+      expect(titleTop, lessThan(MembershipLayout.scrollContentTop));
+
+      await tester.drag(find.byType(ListView), const Offset(0, -400));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.getTopLeft(find.text('Join Membership')).dy,
+        closeTo(titleTop, 1),
+      );
+      expect(find.text('Join Membership'), findsOneWidget);
+    });
+
     testWidgets('plan cards align to figma at 375 width', (tester) async {
       await tester.binding.setSurfaceSize(const Size(375, 812));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -55,6 +85,34 @@ void main() {
         final expectedLeft = (width - MembershipLayout.planCardGroupWidth) / 2;
         expect(_weeklyCardLeft(tester), closeTo(expectedLeft, 1));
       }
+    });
+
+    testWidgets('plan cards stay centered after loading and selection', (
+      tester,
+    ) async {
+      const width = 430.0;
+      await tester.binding.setSurfaceSize(const Size(width, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_buildMembershipPage());
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      final expectedLeft = (width - MembershipLayout.planCardGroupWidth) / 2;
+      expect(_weeklyCardLeft(tester), closeTo(expectedLeft, 1));
+
+      await tester.tap(find.byKey(MembershipPlanCard.planKey('monthly_vip')));
+      await tester.pumpAndSettle();
+      expect(_weeklyCardLeft(tester), closeTo(expectedLeft, 1));
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(MembershipPlanCard.planKey('yearly_vip')));
+      await tester.pumpAndSettle();
+      expect(_weeklyCardLeft(tester), closeTo(expectedLeft, 1));
     });
 
     testWidgets('weekly is selected by default', (tester) async {

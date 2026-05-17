@@ -11,6 +11,10 @@ abstract final class MembershipLayout {
   static const heroTitleTop = 127.0;
   static const heroSubtitleTop = 168.0;
   static const planCardsTop = 213.0;
+
+  /// 可滚动区域顶部（与套餐卡 Figma Y 对齐）；其上 hero/标题不被滚动内容覆盖。
+  static const scrollContentTop = planCardsTop;
+
   static const planDescriptionTop = 390.0;
   static const benefitsPanelTop = 411.0;
 

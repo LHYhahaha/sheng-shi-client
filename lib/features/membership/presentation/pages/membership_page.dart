@@ -86,12 +86,12 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
         body: Stack(
           children: [
             _MembershipHeroBackground(topInset: topInset),
+            _MembershipBody(state: state, controller: controller),
             if (state.hasContent)
               _MembershipHeroContent(
                 title: state.heroTitle,
                 subtitle: state.heroSubtitle,
               ),
-            _MembershipBody(state: state, controller: controller),
             Positioned(
               top: topInset,
               left: MembershipLayout.navButtonLeft,
@@ -130,22 +130,34 @@ class _MembershipBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (state.isLoading) {
-      return const Center(
-        child: SizedBox.square(
-          dimension: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: AppColors.primary,
+      return Positioned(
+        left: 0,
+        right: 0,
+        top: MembershipLayout.scrollContentTop,
+        bottom: 0,
+        child: const Center(
+          child: SizedBox.square(
+            dimension: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.primary,
+            ),
           ),
         ),
       );
     }
 
     if (state.error != null) {
-      return Center(
-        child: TextButton(
-          onPressed: controller.retry,
-          child: Text(context.l10n.feedLoadFailed),
+      return Positioned(
+        left: 0,
+        right: 0,
+        top: MembershipLayout.scrollContentTop,
+        bottom: 0,
+        child: Center(
+          child: TextButton(
+            onPressed: controller.retry,
+            child: Text(context.l10n.feedLoadFailed),
+          ),
         ),
       );
     }
@@ -153,52 +165,58 @@ class _MembershipBody extends StatelessWidget {
     final selectedPlan = state.selectedPlan;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
-    return Positioned.fill(
-      child: ListView(
-        padding: EdgeInsets.only(bottom: bottomInset + 24),
-        physics: const ClampingScrollPhysics(),
-        children: [
-          SizedBox(height: MembershipLayout.planCardsTop),
-          _MembershipPlanCardsRow(
-            plans: state.plans,
-            selectedPlanId: state.selectedPlanId,
-            onPlanTap: controller.selectPlanAndConfirm,
-          ),
-          SizedBox(
-            height:
-                MembershipLayout.planDescriptionTop -
-                MembershipLayout.planCardsTop -
-                MembershipLayout.planCardHeight,
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: MembershipLayout.horizontalPadding,
+    return Positioned(
+      key: const Key('membership_scroll_body'),
+      left: 0,
+      right: 0,
+      top: MembershipLayout.scrollContentTop,
+      bottom: 0,
+      child: ClipRect(
+        child: ListView(
+          padding: EdgeInsets.only(bottom: bottomInset + 24),
+          physics: const ClampingScrollPhysics(),
+          children: [
+            _MembershipPlanCardsRow(
+              plans: state.plans,
+              selectedPlanId: state.selectedPlanId,
+              onPlanTap: controller.selectPlanAndConfirm,
             ),
-            child: SizedBox(
-              height: 18,
-              child: Center(
-                child: Text(
-                  selectedPlan?.description ?? '',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: const Color(0xFF767676),
-                    fontSize: 12,
-                    height: 1.5,
+            SizedBox(
+              height:
+                  MembershipLayout.planDescriptionTop -
+                  MembershipLayout.planCardsTop -
+                  MembershipLayout.planCardHeight,
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: MembershipLayout.horizontalPadding,
+              ),
+              child: SizedBox(
+                height: 18,
+                child: Center(
+                  child: Text(
+                    selectedPlan?.description ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: const Color(0xFF767676),
+                      fontSize: 12,
+                      height: 1.5,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          SizedBox(
-            height:
-                MembershipLayout.benefitsPanelTop -
-                MembershipLayout.planDescriptionTop -
-                18,
-          ),
-          MembershipBenefitsPanel(benefits: state.benefits, tips: state.tips),
-        ],
+            SizedBox(
+              height:
+                  MembershipLayout.benefitsPanelTop -
+                  MembershipLayout.planDescriptionTop -
+                  18,
+            ),
+            MembershipBenefitsPanel(benefits: state.benefits, tips: state.tips),
+          ],
+        ),
       ),
     );
   }
@@ -217,38 +235,44 @@ class _MembershipPlanCardsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
     const groupWidth = MembershipLayout.planCardGroupWidth;
-    final needsHorizontalScroll =
-        screenWidth < groupWidth + MembershipLayout.horizontalPadding * 2;
 
-    final row = SizedBox(
-      width: groupWidth,
-      child: Row(
-        children: [
-          for (var index = 0; index < plans.length; index++) ...[
-            if (index > 0) const SizedBox(width: MembershipLayout.planCardGap),
-            MembershipPlanCard(
-              plan: plans[index],
-              selected: selectedPlanId == plans[index].id,
-              onTap: () => onPlanTap(plans[index].id),
-            ),
-          ],
-        ],
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth;
+        final useCenteredGroup =
+            maxWidth >= groupWidth + MembershipLayout.horizontalPadding * 2;
+
+        final group = SizedBox(
+          width: groupWidth,
+          child: Row(
+            children: [
+              for (var index = 0; index < plans.length; index++) ...[
+                if (index > 0)
+                  const SizedBox(width: MembershipLayout.planCardGap),
+                MembershipPlanCard(
+                  plan: plans[index],
+                  selected: selectedPlanId == plans[index].id,
+                  onTap: () => onPlanTap(plans[index].id),
+                ),
+              ],
+            ],
+          ),
+        );
+
+        if (useCenteredGroup) {
+          return Align(alignment: Alignment.center, child: group);
+        }
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(
+            horizontal: MembershipLayout.horizontalPadding,
+          ),
+          child: group,
+        );
+      },
     );
-
-    if (needsHorizontalScroll) {
-      return SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(
-          horizontal: MembershipLayout.horizontalPadding,
-        ),
-        child: row,
-      );
-    }
-
-    return Center(child: row);
   }
 }
 
