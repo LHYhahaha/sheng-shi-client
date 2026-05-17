@@ -6,6 +6,7 @@ import '../../../../app/router/route_paths.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/membership_controller.dart';
+import '../../domain/membership_plan.dart';
 import '../membership_layout.dart';
 import '../widgets/membership_benefits_panel.dart';
 import '../widgets/membership_confirmation_sheet.dart';
@@ -158,24 +159,10 @@ class _MembershipBody extends StatelessWidget {
         physics: const ClampingScrollPhysics(),
         children: [
           SizedBox(height: MembershipLayout.planCardsTop),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: MembershipLayout.horizontalPadding,
-            ),
-            child: Row(
-              children: [
-                for (var index = 0; index < state.plans.length; index++) ...[
-                  if (index > 0)
-                    const SizedBox(width: MembershipLayout.planCardGap),
-                  MembershipPlanCard(
-                    plan: state.plans[index],
-                    selected: state.selectedPlanId == state.plans[index].id,
-                    onTap: () =>
-                        controller.selectPlanAndConfirm(state.plans[index].id),
-                  ),
-                ],
-              ],
-            ),
+          _MembershipPlanCardsRow(
+            plans: state.plans,
+            selectedPlanId: state.selectedPlanId,
+            onPlanTap: controller.selectPlanAndConfirm,
           ),
           SizedBox(
             height:
@@ -214,6 +201,54 @@ class _MembershipBody extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _MembershipPlanCardsRow extends StatelessWidget {
+  const _MembershipPlanCardsRow({
+    required this.plans,
+    required this.selectedPlanId,
+    required this.onPlanTap,
+  });
+
+  final List<MembershipPlan> plans;
+  final String? selectedPlanId;
+  final void Function(String planId) onPlanTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    const groupWidth = MembershipLayout.planCardGroupWidth;
+    final needsHorizontalScroll =
+        screenWidth < groupWidth + MembershipLayout.horizontalPadding * 2;
+
+    final row = SizedBox(
+      width: groupWidth,
+      child: Row(
+        children: [
+          for (var index = 0; index < plans.length; index++) ...[
+            if (index > 0) const SizedBox(width: MembershipLayout.planCardGap),
+            MembershipPlanCard(
+              plan: plans[index],
+              selected: selectedPlanId == plans[index].id,
+              onTap: () => onPlanTap(plans[index].id),
+            ),
+          ],
+        ],
+      ),
+    );
+
+    if (needsHorizontalScroll) {
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(
+          horizontal: MembershipLayout.horizontalPadding,
+        ),
+        child: row,
+      );
+    }
+
+    return Center(child: row);
   }
 }
 

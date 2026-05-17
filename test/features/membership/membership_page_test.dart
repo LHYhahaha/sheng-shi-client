@@ -1,3 +1,4 @@
+import 'package:drama_client/features/membership/presentation/membership_layout.dart';
 import 'package:drama_client/features/membership/presentation/pages/membership_page.dart';
 import 'package:drama_client/features/membership/presentation/widgets/membership_plan_card.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
@@ -25,6 +26,35 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Join Now'), findsNothing);
+    });
+
+    testWidgets('plan cards align to figma at 375 width', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(375, 812));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_buildMembershipPage());
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Weekly VIP'), findsOneWidget);
+      expect(
+        _weeklyCardLeft(tester),
+        closeTo(MembershipLayout.horizontalPadding, 1),
+      );
+    });
+
+    testWidgets('plan cards are centered on wide screens', (tester) async {
+      for (final width in [430.0, 480.0]) {
+        await tester.binding.setSurfaceSize(Size(width, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(_buildMembershipPage());
+        await tester.pump(const Duration(seconds: 1));
+        await tester.pumpAndSettle();
+
+        final expectedLeft = (width - MembershipLayout.planCardGroupWidth) / 2;
+        expect(_weeklyCardLeft(tester), closeTo(expectedLeft, 1));
+      }
     });
 
     testWidgets('weekly is selected by default', (tester) async {
@@ -125,6 +155,12 @@ void main() {
       expect(find.text('Confirm membership'), findsNothing);
     });
   });
+}
+
+double _weeklyCardLeft(WidgetTester tester) {
+  return tester
+      .getTopLeft(find.byKey(MembershipPlanCard.planKey('weekly_vip')))
+      .dx;
 }
 
 Color _planBorderColor(WidgetTester tester, String planId) {

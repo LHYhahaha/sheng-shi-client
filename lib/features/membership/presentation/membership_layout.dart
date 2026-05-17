@@ -20,6 +20,9 @@ abstract final class MembershipLayout {
   static const planCardGap = 8.0;
   static const planCardRadius = 12.0;
 
+  /// 三张套餐卡 + 间距总宽（375 屏下左右各 16 边距）。
+  static const planCardGroupWidth = planCardWidth * 3 + planCardGap * 2;
+
   static const navButtonSize = 44.0;
   static const navButtonLeft = 16.0;
 
