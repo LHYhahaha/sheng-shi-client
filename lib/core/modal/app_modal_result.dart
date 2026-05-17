@@ -72,3 +72,27 @@ final class PaymentModalResult extends AppModalResult {
 
   const PaymentModalResult.failed() : super(AppModalResultKind.failed);
 }
+
+/// Store 购买确认弹窗结果（O4）。
+final class StorePurchaseModalResult extends AppModalResult {
+  const StorePurchaseModalResult.completed()
+    : super(AppModalResultKind.completed);
+
+  const StorePurchaseModalResult.cancelled()
+    : super(AppModalResultKind.cancelled);
+
+  const StorePurchaseModalResult.dismissed()
+    : super(AppModalResultKind.dismissed);
+}
+
+/// Membership 购买确认弹窗结果（O4）。
+final class MembershipPurchaseModalResult extends AppModalResult {
+  const MembershipPurchaseModalResult.completed()
+    : super(AppModalResultKind.completed);
+
+  const MembershipPurchaseModalResult.cancelled()
+    : super(AppModalResultKind.cancelled);
+
+  const MembershipPurchaseModalResult.dismissed()
+    : super(AppModalResultKind.dismissed);
+}

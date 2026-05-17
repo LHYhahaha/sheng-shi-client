@@ -24,7 +24,7 @@
 | P2 | Theme tokens | 部分页面仍可能散落 magic number 和局部颜色 | 抽查核心页面，沉淀颜色、间距、圆角、文本样式 | In Review |
 | P2 | Network | Remote skeleton done; integration blocked on backend | 401 refresh、验单、strict DTO 后再默认开 remote | In Review |
 | P2 | Player domain | 当前播放页仍以 mock 和 UI 状态为主 | 接入真实播放器 session、解锁状态、自动下一集、错误恢复 | Todo |
-| P1 | Global Modal (Track O) | Store/Membership/Auth 等后续仍有局部阻塞弹窗；Player 已迁移 root modal | O1：`AppModalService` + `AppModalHost` skeleton；O2：Player unlock/recharge/payment；O3–O4 迁移剩余业务 | O2 Done |
+| P1 | Global Modal (Track O) | Auth 登录弹窗仍待迁移；Player/Store/Membership 阻塞确认已走 root modal | O1 skeleton；O2 Player；O4 Store/Membership；O3 Auth；O5 queue/analytics | O4 Done |
 
 ## 3. 已完成记录
 
@@ -35,7 +35,20 @@
 - 新增 `lib/core/modal/*`（typed request/result、`AppModalService`、`AppModalHost`、`AppModalQueue` 骨架）
 - `DramaClientApp` 挂载 `AppModalHost`；`GoRouter` 使用 `appRootNavigatorKey`
 - `test/helpers/recording_app_modal_service.dart`、`test/architecture/modal_boundary_test.dart`
-- 未迁移 Player unlock/recharge/payment、Auth、Store/Membership/Wallet 现有弹窗
+- 未迁移 Auth、Store/Membership/Wallet 现有弹窗
+
+验证：`flutter analyze`、`flutter test` 通过。
+
+### 2026-05-17 Track O4：Store / Membership modal migration
+
+完成内容：
+
+- Store / Membership 购买确认迁移到 `AppModalService`（`StoreModalCoordinator` / `MembershipModalCoordinator`）
+- 新增 feature modal channels、payloads、results、presenters；`StorePurchaseModalResult` / `MembershipPurchaseModalResult` 在 core
+- `StoreConfirmationSheet` / `MembershipConfirmationSheet` 仍由 presenter 复用；mock purchase 逻辑仍在 controller
+- Wallet：**no-op**（无阻塞确认弹窗；restore → toast）
+- 页面 dispose 时 `dismissForSource(AppModalSource.store|membership)`
+- `modal_boundary_test` 收紧：Store/Membership 页面不再允许 `showModalBottomSheet`
 
 验证：`flutter analyze`、`flutter test` 通过。
 

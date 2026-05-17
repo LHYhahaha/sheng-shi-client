@@ -1,11 +1,10 @@
 import 'package:drama_client/features/membership/presentation/membership_layout.dart';
 import 'package:drama_client/features/membership/presentation/pages/membership_page.dart';
 import 'package:drama_client/features/membership/presentation/widgets/membership_plan_card.dart';
-import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../helpers/app_modal_test_harness.dart';
 
 void main() {
   group('membership page layout', () {
@@ -152,6 +151,19 @@ void main() {
   });
 
   group('membership purchase flow', () {
+    testWidgets('membership confirmation opens via AppModalService channel', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_buildMembershipPage());
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Monthly VIP'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Confirm membership'), findsOneWidget);
+    });
+
     testWidgets('membership purchase success closes and reopens idle', (
       tester,
     ) async {
@@ -242,16 +254,5 @@ Color _planDailyBarColor(WidgetTester tester, String planId) {
 }
 
 Widget _buildMembershipPage() {
-  return const ProviderScope(
-    child: MaterialApp(
-      localizationsDelegates: [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ],
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: MembershipPage(),
-    ),
-  );
+  return buildAppModalTestApp(home: const MembershipPage());
 }

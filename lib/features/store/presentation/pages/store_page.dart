@@ -1,16 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/modal/app_modal_provider.dart';
+import '../../../../core/modal/app_modal_service.dart';
+import '../../../../core/modal/app_modal_source.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_primary_button.dart';
 import '../../application/store_controller.dart';
+import '../../application/store_modal_coordinator.dart';
 import '../widgets/store_coin_package_card.dart';
-import '../widgets/store_confirmation_sheet.dart';
 import '../widgets/store_tips.dart';
 import '../widgets/store_vip_package_card.dart';
 
@@ -22,12 +27,20 @@ class StorePage extends ConsumerStatefulWidget {
 }
 
 class _StorePageState extends ConsumerState<StorePage> {
-  bool _sheetOpen = false;
+  bool _modalOpen = false;
+  late final AppModalService _modalService;
 
   @override
   void initState() {
     super.initState();
+    _modalService = ref.read(appModalServiceProvider);
     Future.microtask(() => ref.read(storeControllerProvider.notifier).load());
+  }
+
+  @override
+  void dispose() {
+    _modalService.dismissForSource(AppModalSource.store);
+    super.dispose();
   }
 
   @override
@@ -36,40 +49,27 @@ class _StorePageState extends ConsumerState<StorePage> {
     final state = ref.watch(storeControllerProvider);
     final controller = ref.read(storeControllerProvider.notifier);
 
+    ref.watch(storeModalCoordinatorProvider);
+
     ref.listen(
       storeControllerProvider.select((state) => state.confirmationPackage),
       (previous, next) {
-        if (next == null || _sheetOpen) {
+        if (next == null || _modalOpen) {
           return;
         }
 
-        _sheetOpen = true;
-        showModalBottomSheet<void>(
-          context: context,
-          isScrollControlled: true,
-          builder: (context) {
-            return Consumer(
-              builder: (context, ref, child) {
-                final sheetState = ref.watch(storeControllerProvider);
-                final sheetController = ref.read(
-                  storeControllerProvider.notifier,
-                );
-                return StoreConfirmationSheet(
-                  package: next,
-                  status: sheetState.purchaseStatus,
-                  onConfirm: sheetController.confirmMockPurchase,
-                  onCancel: sheetController.cancelMockPurchase,
-                  onClose: () => Navigator.of(context).pop(),
-                );
-              },
-            );
-          },
-        ).whenComplete(() {
-          _sheetOpen = false;
-          if (mounted) {
-            controller.hideConfirmation();
-          }
-        });
+        _modalOpen = true;
+        unawaited(
+          ref
+              .read(storeModalCoordinatorProvider)
+              .presentPurchaseConfirmation(context)
+              .whenComplete(() {
+                _modalOpen = false;
+                if (mounted) {
+                  ref.read(storeControllerProvider.notifier).hideConfirmation();
+                }
+              }),
+        );
       },
     );
 

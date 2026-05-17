@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:drama_client/app/app.dart';
 import 'package:drama_client/app/router/route_paths.dart';
 import 'package:drama_client/features/auth/data/auth_repository_provider.dart';
 import 'package:drama_client/features/auth/domain/auth_repository.dart';
@@ -29,9 +28,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'helpers/app_modal_test_harness.dart';
+
 void main() {
   testWidgets('shows the app shell', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
     expect(find.text('KillgBox'), findsOneWidget);
@@ -46,7 +47,7 @@ void main() {
   testWidgets('switches between bottom navigation destinations', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -63,7 +64,7 @@ void main() {
   });
 
   testWidgets('opens wallet from profile coins card', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -83,7 +84,7 @@ void main() {
   testWidgets('opens wallet transaction history from wallet page', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -102,7 +103,7 @@ void main() {
   });
 
   testWidgets('wallet shows corrected auto unlock copy', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -118,7 +119,7 @@ void main() {
   testWidgets('wallet keeps auto unlock toggle after opening history', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -144,7 +145,7 @@ void main() {
   testWidgets('store top up updates wallet balance through entitlement', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -181,7 +182,7 @@ void main() {
   testWidgets('consumption history shows segmented poster rows', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -208,7 +209,7 @@ void main() {
   testWidgets('record coins shows check in buttons and disabled state', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -227,7 +228,7 @@ void main() {
   testWidgets('opens auth from profile and logs in with mock provider', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -249,7 +250,7 @@ void main() {
   });
 
   testWidgets('opens account from logged-in profile header', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -272,7 +273,7 @@ void main() {
   testWidgets('account page logs out and confirms delete account', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -310,7 +311,7 @@ void main() {
   testWidgets('opens membership from profile and confirms mock purchase', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -343,7 +344,7 @@ void main() {
   testWidgets('returns from membership to profile with top back button', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -365,7 +366,7 @@ void main() {
   testWidgets('returns from home VIP membership entry back to home', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -700,7 +701,7 @@ void main() {
   });
 
   testWidgets('opens language settings from profile', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -715,7 +716,7 @@ void main() {
   });
 
   testWidgets('opens settings placeholder from profile', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -734,7 +735,7 @@ void main() {
   });
 
   testWidgets('changes app locale from language settings', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -970,7 +971,7 @@ void main() {
   testWidgets('enters collection edit mode from the header menu', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -993,13 +994,12 @@ void main() {
 
   testWidgets('my list empty CTA returns home', (tester) async {
     await tester.pumpWidget(
-      ProviderScope(
+      buildDramaClientAppForTest(
         overrides: [
           myListRepositoryProvider.overrideWithValue(
             const _EmptyMyListRepository(),
           ),
         ],
-        child: const DramaClientApp(),
       ),
     );
     await tester.pump(const Duration(seconds: 1));
@@ -1021,7 +1021,7 @@ void main() {
   testWidgets('reveals play list delete action before deleting', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -1049,7 +1049,7 @@ void main() {
   testWidgets('closes play list delete action when tapping elsewhere', (
     tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: DramaClientApp()));
+    await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -1074,20 +1074,7 @@ void main() {
   testWidgets('store page shows packages and confirmation sheet', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
-          localizationsDelegates: [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-          ],
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: StorePage(),
-        ),
-      ),
-    );
+    await tester.pumpWidget(buildAppModalTestApp(home: const StorePage()));
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
@@ -1146,7 +1133,7 @@ Widget _buildAppWithFakePlayback({
   List<_FakePlaybackSession>? sessions,
   MockEntitlementRepository? entitlementRepository,
 }) {
-  return ProviderScope(
+  return buildDramaClientAppForTest(
     overrides: [
       if (entitlementRepository != null)
         entitlementRepositoryProvider.overrideWithValue(entitlementRepository),
@@ -1162,7 +1149,6 @@ Widget _buildAppWithFakePlayback({
         NoopPlayerPlaybackPrepareManager.new,
       ),
     ],
-    child: const DramaClientApp(),
   );
 }
 

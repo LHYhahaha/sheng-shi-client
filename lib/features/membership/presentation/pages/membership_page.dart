@@ -1,15 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/modal/app_modal_provider.dart';
+import '../../../../core/modal/app_modal_service.dart';
+import '../../../../core/modal/app_modal_source.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/membership_controller.dart';
+import '../../application/membership_modal_coordinator.dart';
 import '../../domain/membership_plan.dart';
 import '../membership_layout.dart';
 import '../widgets/membership_benefits_panel.dart';
-import '../widgets/membership_confirmation_sheet.dart';
 import '../widgets/membership_plan_card.dart';
 
 class MembershipPage extends ConsumerStatefulWidget {
@@ -20,14 +25,22 @@ class MembershipPage extends ConsumerStatefulWidget {
 }
 
 class _MembershipPageState extends ConsumerState<MembershipPage> {
-  bool _sheetOpen = false;
+  bool _modalOpen = false;
+  late final AppModalService _modalService;
 
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
-      ref.read(membershipControllerProvider.notifier).load();
-    });
+    _modalService = ref.read(appModalServiceProvider);
+    Future.microtask(
+      () => ref.read(membershipControllerProvider.notifier).load(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _modalService.dismissForSource(AppModalSource.membership);
+    super.dispose();
   }
 
   @override
@@ -36,40 +49,29 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
     final controller = ref.read(membershipControllerProvider.notifier);
     final topInset = MediaQuery.paddingOf(context).top;
 
+    ref.watch(membershipModalCoordinatorProvider);
+
     ref.listen(
       membershipControllerProvider.select((state) => state.confirmationPlan),
       (previous, next) {
-        if (next == null || _sheetOpen) {
+        if (next == null || _modalOpen) {
           return;
         }
 
-        _sheetOpen = true;
-        showModalBottomSheet<void>(
-          context: context,
-          isScrollControlled: true,
-          builder: (context) {
-            return Consumer(
-              builder: (context, ref, child) {
-                final sheetState = ref.watch(membershipControllerProvider);
-                final sheetController = ref.read(
-                  membershipControllerProvider.notifier,
-                );
-                return MembershipConfirmationSheet(
-                  plan: next,
-                  status: sheetState.purchaseStatus,
-                  onConfirm: sheetController.confirmMockPurchase,
-                  onCancel: sheetController.cancelMockPurchase,
-                  onClose: () => Navigator.of(context).pop(),
-                );
-              },
-            );
-          },
-        ).whenComplete(() {
-          _sheetOpen = false;
-          if (mounted) {
-            controller.hideConfirmation();
-          }
-        });
+        _modalOpen = true;
+        unawaited(
+          ref
+              .read(membershipModalCoordinatorProvider)
+              .presentPurchaseConfirmation(context)
+              .whenComplete(() {
+                _modalOpen = false;
+                if (mounted) {
+                  ref
+                      .read(membershipControllerProvider.notifier)
+                      .hideConfirmation();
+                }
+              }),
+        );
       },
     );
 

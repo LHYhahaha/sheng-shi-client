@@ -1,12 +1,15 @@
+import 'package:drama_client/core/modal/app_modal_provider.dart';
+import 'package:drama_client/core/modal/app_modal_request.dart';
+import 'package:drama_client/core/modal/app_modal_source.dart';
 import 'package:drama_client/core/toast/app_toast_provider.dart';
+import 'package:drama_client/features/store/presentation/modal/store_modal_channels.dart';
 import 'package:drama_client/features/store/presentation/pages/store_page.dart';
-import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../core/toast/recording_app_toast_service.dart';
+import '../../helpers/app_modal_test_harness.dart';
+import '../../helpers/recording_app_modal_service.dart';
 
 void main() {
   testWidgets('store purchase success closes and reopens idle', (tester) async {
@@ -63,6 +66,27 @@ void main() {
     expect(find.text('Mock purchase completed.'), findsNothing);
   });
 
+  testWidgets('store confirmation opens via AppModalService channel', (
+    tester,
+  ) async {
+    final modal = RecordingAppModalService();
+    await tester.pumpWidget(_buildStorePage(modalService: modal));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Buy Now'));
+    await tester.pumpAndSettle();
+
+    expect(modal.requests, isNotEmpty);
+    final request = modal.requests.last;
+    expect(request, isA<FeatureAppModalRequest>());
+    expect(
+      (request as FeatureAppModalRequest).channel,
+      StoreModalChannels.purchaseConfirmation,
+    );
+    expect(request.source, AppModalSource.store);
+  });
+
   testWidgets('store restore uses app toast not snackbar', (tester) async {
     final toast = RecordingAppToastService();
     await tester.pumpWidget(_buildStorePage(toastService: toast));
@@ -106,19 +130,17 @@ void main() {
   });
 }
 
-Widget _buildStorePage({RecordingAppToastService? toastService}) {
+Widget _buildStorePage({
+  RecordingAppToastService? toastService,
+  RecordingAppModalService? modalService,
+}) {
   final toast = toastService ?? RecordingAppToastService();
-  return ProviderScope(
-    overrides: [appToastProvider.overrideWithValue(toast)],
-    child: const MaterialApp(
-      localizationsDelegates: [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ],
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: StorePage(),
-    ),
+  return buildAppModalTestApp(
+    home: const StorePage(),
+    overrides: [
+      appToastProvider.overrideWithValue(toast),
+      if (modalService != null)
+        appModalServiceProvider.overrideWithValue(modalService),
+    ],
   );
 }

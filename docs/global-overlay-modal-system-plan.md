@@ -1,6 +1,6 @@
 # Global Overlay / Modal System Plan
 
-> Status: **O1 skeleton + O2 Player migration done** (2026-05-17). `AppModalService` / `AppModalHost` / typed confirm API / `RecordingAppModalService` / `modal_boundary_test` are in place. Player unlock/recharge/payment now use the global modal host; Store / Membership / Wallet remain planned for O3–O4.
+> Status: **O1 + O2 + O4 done** (2026-05-17). Player unlock/recharge/payment and Store/Membership purchase confirmation use the global modal host. Wallet has no blocking confirmation modal (restore → toast; auto unlock → in-page switch). Auth login modal remains O3.
 
 ## Why This Exists
 
@@ -23,7 +23,8 @@ The long-term goal is an app-level modal system that owns the host layer, safe-a
 For the current release:
 
 - Player unlock/recharge/payment uses the global root modal host because For You and bottom-tab layering can cover local sheets.
-- Store / Membership / Wallet can remain local until O3–O4 unless QA finds a blocking overlay issue.
+- Store / Membership purchase confirmation uses the global root modal host (O4).
+- Wallet has no blocking confirmation sheet in MVP; restore uses toast only (O4 no-op).
 - Do not connect real IAP or real API as part of this modal migration.
 
 This document records the target design and migration plan for the first post-release architecture optimization round.
@@ -242,7 +243,8 @@ README should explain:
 - [x] `AppModalQueue` skeleton + serial present in `AppModalController`
 - [x] `test/architecture/modal_boundary_test.dart` (core/modal ↔ features, toast boundary, legacy sheet whitelist)
 - [x] Player business flow migration — O2
-- [ ] Store / Membership / Wallet business flow migration — deferred to O3–O4
+- [x] Store / Membership purchase confirmation — O4
+- [x] Wallet — O4 no-op (no blocking confirmation modal)
 
 ### Phase O2: Player Unlock / Recharge / Payment — Done
 
@@ -257,10 +259,13 @@ README should explain:
 - Move login prompt and session-expired prompt into the global modal system.
 - Define login result and cancellation semantics.
 
-### Phase O4: Store / Membership / Wallet
+### Phase O4: Store / Membership / Wallet — Done
 
-- Move Store confirmation, Membership purchase confirmation, Wallet restore/confirm dialogs.
-- Keep payment/IAP logic outside the modal host.
+- Store purchase confirmation (`store.purchase_confirmation` / `AppModalSource.store`).
+- Membership purchase confirmation (`membership.purchase_confirmation` / `AppModalSource.membership`).
+- Wallet: **no-op** — restore uses `AppToastService.info`; auto unlock is an in-page switch (no `showModalBottomSheet`).
+- Presenters reuse `StoreConfirmationSheet` / `MembershipConfirmationSheet`; controllers still own mock purchase / `hideConfirmation`.
+- Page dispose calls `dismissForSource` for store/membership source.
 
 ### Phase O5: Queue, Priority, Analytics, Runtime Config
 

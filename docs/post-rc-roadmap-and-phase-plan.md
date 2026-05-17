@@ -183,9 +183,21 @@ flowchart TB
 | **目标** | Player coin unlock、recharge、payment confirmation 通过 `AppModalService` 展示，避免 For You / bottom tab / Player Stack 层级遮挡 |
 | **文件影响** | `player_unlock_modal_coordinator.dart`、`features/player/presentation/modal/*`、`player_page.dart`、`player_recharge_unlock_sheet.dart`、`core/modal/*` |
 | **完成内容** | Player request/result 类型、Player modal presenter、root sheet、source dismiss、Player dispose 时 `dismissForSource(AppModalSource.player)` |
-| **保留项** | Player 详情、分享、倍速等局部 sheet 仍可用 `showModalBottomSheet`；Store/Membership/Wallet 尚未迁移 |
+| **保留项** | Player 详情、分享、倍速等局部 sheet 仍可用 `showModalBottomSheet` |
 | **测试** | `player_page_test`、`test/core/modal/*`、`app_modal_integration_test`、`modal_boundary_test` |
 | **依赖** | O1；A7 完成后可继续加强 session cleanup 时关闭 modal |
+
+#### O4 — 迁移 Store / Membership / Wallet confirmation — **Done**
+
+| 项 | 内容 |
+| --- | --- |
+| **目标** | Store/Membership 购买确认走 `AppModalService`；Wallet 记录 no-op |
+| **文件影响** | `store_page.dart`、`membership_page.dart`、`features/*/presentation/modal/*`、`features/*/application/*_modal_coordinator.dart`、`app_modal_registry_bootstrap.dart` |
+| **完成内容** | `store.purchase_confirmation` / `membership.purchase_confirmation` channels；root sheet presenters；dispose dismiss by source |
+| **Wallet** | 无阻塞确认弹窗；restore 仍 toast；auto unlock 页面 Switch |
+| **禁止项** | 未接真实 IAP/API；未改 catalog；未改 mock purchase 结果 |
+| **测试** | `store_page_test`、`membership_page_test`、`recording_app_modal_service_test`、`modal_boundary_test` |
+| **依赖** | O1 |
 
 #### O3 — 迁移 Auth login / session expired
 
@@ -196,16 +208,6 @@ flowchart TB
 | **禁止项** | 不接真实 OAuth SDK（可 mock）；不在 modal 内持 token |
 | **测试** | auth skeleton + modal fake；401 集成测试 |
 | **依赖** | O1、**A2**（401 refresh 失败路径） |
-
-#### O4 — 迁移 Store / Membership / Wallet confirmation
-
-| 项 | 内容 |
-| --- | --- |
-| **目标** | 购买确认、restore 阻塞确认（若产品要求）统一 modal |
-| **文件影响** | `store_page.dart`、`membership_page.dart`、`store_confirmation_sheet.dart` |
-| **禁止项** | 不接真实 IAP；不合并三套 catalog（属 P1） |
-| **测试** | `store_page_test`、membership controller test |
-| **依赖** | O1；**P2** 若支付确认需等待验单 UI |
 
 #### O5 — queue / priority / analytics / runtime config
 

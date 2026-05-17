@@ -40,13 +40,15 @@ Flutter short drama client.
 
 全局弹窗系统是封板后的架构优化任务，用来统一登录、解锁、充值、支付确认、会员购买、确认弹窗、活动弹窗和强更弹窗等跨页面浮层。目标是避免业务弹窗被底部 tab、局部 Stack、播放器层级或安全区遮挡，并通过 typed request/result 让业务拿到明确的成功、取消、关闭或失败结果。
 
-**当前状态（O1–O2 已落地）：**
+**当前状态（O1–O2 + O4 已落地）：**
 
 - 阻塞式弹窗：`appModalServiceProvider` → `AppModalService`（`showConfirm` / `show` / `dismiss*`）
 - 根宿主：`AppModalHost` 挂在 `DramaClientApp` builder（与 `BotToastInit` 共存）；展示使用 `appRootNavigatorKey`
-- Player 解锁 / 充值 / 支付确认已迁移到全局 modal，避免 For You / bottom tab / Player Stack 层级遮挡
+- Player 解锁 / 充值 / 支付确认已迁移到全局 modal（O2）
+- Store / Membership 购买确认已迁移到全局 modal（O4）；复用 `StoreConfirmationSheet` / `MembershipConfirmationSheet`
+- Wallet 无阻塞式确认弹窗：restore 仍走 toast；auto unlock 为页面内 Switch（O4 no-op）
 - 瞬态反馈仍用 `appToastProvider` → `AppToastService`，不要用 modal 替代 toast
-- 测试：`RecordingAppModalService`（`test/helpers/recording_app_modal_service.dart`）记录请求并返回预设 `ConfirmResult`
+- 测试：`RecordingAppModalService`（`test/helpers/recording_app_modal_service.dart`）记录请求并返回预设 result
 
 ```dart
 final result = await ref.read(appModalServiceProvider).showConfirm(
@@ -62,7 +64,7 @@ final result = await ref.read(appModalServiceProvider).showConfirm(
 if (result.isConfirmed) { /* ... */ }
 ```
 
-Store / Membership 等非 Player 业务弹窗仍在迁移计划中（见 O3–O4）。Player 页面内的详情、分享、倍速等局部 sheet 仍可保留局部实现；跨页面阻塞式业务弹窗应走 `AppModalService`。
+Auth 登录 / session expired 仍在 O3。Player 页面内的详情、分享、倍速等局部 sheet 仍可保留局部实现；跨页面阻塞式业务弹窗应走 `AppModalService`。
 
 - [Global Overlay / Modal System Plan（全局弹窗/浮层系统规划）](docs/global-overlay-modal-system-plan.md)
 - [App Runtime Foundation Plan（全局运行时基础）](docs/app-runtime-foundation-plan.md)

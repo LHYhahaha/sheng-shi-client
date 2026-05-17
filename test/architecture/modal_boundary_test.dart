@@ -60,24 +60,29 @@ void main() {
     expect(source, contains('showModalBottomSheet'));
   });
 
-  test('legacy showModalBottomSheet whitelist for store and membership', () {
-    const whitelist = <String>[
+  test('store purchase confirmation uses AppModal coordinator', () {
+    final source = File(
       'lib/features/store/presentation/pages/store_page.dart',
-      'lib/features/membership/presentation/pages/membership_page.dart',
-    ];
+    ).readAsStringSync();
+    expect(source, isNot(contains('StoreConfirmationSheet')));
+    expect(source, isNot(contains('showModalBottomSheet')));
+    expect(source, contains('storeModalCoordinatorProvider'));
+  });
 
-    for (final path in whitelist) {
-      final file = File(path);
-      expect(
-        file.existsSync(),
-        isTrue,
-        reason: 'missing whitelist file: $path',
-      );
-      expect(
-        file.readAsStringSync(),
-        contains('showModalBottomSheet'),
-        reason: '$path expected to keep legacy sheet until O4',
-      );
-    }
+  test('membership purchase confirmation uses AppModal coordinator', () {
+    final source = File(
+      'lib/features/membership/presentation/pages/membership_page.dart',
+    ).readAsStringSync();
+    expect(source, isNot(contains('MembershipConfirmationSheet')));
+    expect(source, isNot(contains('showModalBottomSheet')));
+    expect(source, contains('membershipModalCoordinatorProvider'));
+  });
+
+  test('wallet page has no blocking purchase confirmation sheet', () {
+    final source = File(
+      'lib/features/wallet/presentation/pages/wallet_page.dart',
+    ).readAsStringSync();
+    expect(source, isNot(contains('showModalBottomSheet')));
+    expect(source, isNot(contains('showDialog')));
   });
 }

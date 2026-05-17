@@ -2,6 +2,8 @@ import 'package:drama_client/core/modal/app_modal_policy.dart';
 import 'package:drama_client/core/modal/app_modal_request.dart';
 import 'package:drama_client/core/modal/app_modal_result.dart';
 import 'package:drama_client/core/modal/app_modal_source.dart';
+import 'package:drama_client/features/membership/presentation/modal/membership_modal_channels.dart';
+import 'package:drama_client/features/store/presentation/modal/store_modal_channels.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../helpers/recording_app_modal_service.dart';
@@ -51,6 +53,47 @@ void main() {
 
       expect(service.requests, hasLength(2));
       expect(service.requests.map((r) => r.requestId), ['a', 'b']);
+    });
+
+    test('records store and membership feature modal requests', () async {
+      await service.show(
+        FeatureAppModalRequest(
+          requestId: 'store_1',
+          source: AppModalSource.store,
+          channel: StoreModalChannels.purchaseConfirmation,
+          type: AppModalType.storeConfirm,
+        ),
+      );
+      await service.show(
+        FeatureAppModalRequest(
+          requestId: 'membership_1',
+          source: AppModalSource.membership,
+          channel: MembershipModalChannels.purchaseConfirmation,
+          type: AppModalType.membershipPurchase,
+        ),
+      );
+
+      expect(service.requests, hasLength(2));
+      expect(service.requests[0], isA<FeatureAppModalRequest>());
+      expect(service.requests[1], isA<FeatureAppModalRequest>());
+      service.presetResultsByRequestId['store_1'] =
+          const StorePurchaseModalResult.completed();
+      service.presetResultsByRequestId['membership_1'] =
+          const MembershipPurchaseModalResult.cancelled();
+
+      final storeResult = await service.show(service.requests[0]);
+      final membershipResult = await service.show(service.requests[1]);
+
+      expect(storeResult, isA<StorePurchaseModalResult>());
+      expect(
+        (storeResult as StorePurchaseModalResult).kind,
+        AppModalResultKind.completed,
+      );
+      expect(membershipResult, isA<MembershipPurchaseModalResult>());
+      expect(
+        (membershipResult as MembershipPurchaseModalResult).kind,
+        AppModalResultKind.cancelled,
+      );
     });
   });
 }
