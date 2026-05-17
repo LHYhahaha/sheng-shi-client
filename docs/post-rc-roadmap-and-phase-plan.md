@@ -165,15 +165,16 @@ flowchart TB
 
 ### 3.5 子阶段拆分
 
-#### O1 — AppModalService + AppModalHost skeleton
+#### O1 — AppModalService + AppModalHost skeleton — **Done**
 
 | 项 | 内容 |
 | --- | --- |
 | **目标** | 根 host、typed API 空壳、`RecordingAppModalService`、队列接口占位 |
-| **文件影响** | 新增 `lib/core/modal/*`；`lib/app/app.dart` 挂 host；`test/architecture/modal_boundary_test.dart` |
+| **文件影响** | 新增 `lib/core/modal/*`；`lib/app/app.dart` + `app_root_navigator_key.dart`；`test/architecture/modal_boundary_test.dart` |
 | **禁止项** | 不迁移 Player/Store；不改 unlock 逻辑；不接 API/IAP |
-| **测试** | fake service 单测；architecture：features 不 `showModalBottomSheet` 于跨路由场景（先记录 baseline） |
+| **测试** | `app_modal_host_test`、`recording_app_modal_service_test`、`modal_boundary_test`、`app_modal_integration_test` |
 | **依赖** | 无；可与 A1 并行 |
+| **状态** | 已完成；现有 Player/Store/Membership 仍用 `showModalBottomSheet`（白名单记录在 boundary test） |
 
 #### O2 — 迁移 Player unlock / recharge / payment
 
@@ -769,7 +770,8 @@ flutter test
 
 | 子阶段 | 状态 |
 | --- | --- |
-| O1–O5 | Planned |
+| O1 | Done |
+| O2–O5 | Planned |
 | A1–A3 | **Done**（客户端 session/network 骨架；见 §4.6） |
 | A1.5 | **Design + skeleton**（guest bootstrap / account link；见 §4.2 A1.5） |
 | A4 | **Done**（真实 Device-Id / App-Version / Lang / Platform；见 §4.2 A4） |

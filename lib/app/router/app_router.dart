@@ -2,6 +2,7 @@ import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../app_root_navigator_key.dart';
 import '../shell/app_shell.dart';
 import '../../features/auth/presentation/pages/account_page.dart';
 import '../../features/auth/presentation/pages/auth_page.dart';
@@ -26,6 +27,7 @@ import 'route_paths.dart';
 /// hide/show bottom navigation。
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
+    navigatorKey: appRootNavigatorKey,
     initialLocation: RoutePaths.home,
     observers: [BotToastNavigatorObserver()],
     routes: [

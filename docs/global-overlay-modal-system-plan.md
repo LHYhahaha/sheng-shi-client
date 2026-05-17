@@ -1,6 +1,6 @@
 # Global Overlay / Modal System Plan
 
-> Status: Planned architecture work after the current release QA. Do not implement during the release freeze unless QA marks an overlay issue as P0/P1.
+> Status: **O1 skeleton done** (2026-05-17). `AppModalService` / `AppModalHost` / typed confirm API / `RecordingAppModalService` / `modal_boundary_test` are in place. Business sheets (Player / Store / Membership) still use legacy `showModalBottomSheet` until O2–O4.
 
 ## Why This Exists
 
@@ -233,14 +233,15 @@ README should explain:
 
 ## Migration Plan
 
-### Phase O1: Design And Skeleton
+### Phase O1: Design And Skeleton — **Done**
 
-- Add `AppModalService` interface.
-- Add typed request/result models.
-- Add root-level host skeleton.
-- Add fake modal service for tests.
-- Do not migrate business flows yet.
-- Add README/docs entry.
+- [x] `AppModalService` interface + `AppModalServiceImpl`
+- [x] Typed request/result models (`ConfirmModalRequest`, `ConfirmResult`, reserved `LoginModalResult` / `PaymentModalResult` / …)
+- [x] Root-level `AppModalHost` in `DramaClientApp` builder + `appRootNavigatorKey`
+- [x] `RecordingAppModalService` for tests (`test/helpers/recording_app_modal_service.dart`)
+- [x] `AppModalQueue` skeleton + serial present in `AppModalController`
+- [x] `test/architecture/modal_boundary_test.dart` (core/modal ↔ features, toast boundary, legacy sheet whitelist)
+- [ ] Business flow migration — deferred to O2–O4
 
 ### Phase O2: Player Unlock / Recharge / Payment
 

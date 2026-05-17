@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../bootstrap/feature_session_cleanup.dart';
 import '../core/locale/app_locale_controller.dart';
+import '../core/modal/app_modal_host.dart';
 import '../l10n/app_localizations.dart';
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
@@ -38,7 +39,11 @@ class DramaClientApp extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
       ],
-      builder: (context, child) => botToastBuilder(context, child),
+      builder: (context, child) {
+        // BotToast 负责瞬态 toast；AppModalHost 负责阻塞式全局弹窗（O1 skeleton）。
+        final wrapped = botToastBuilder(context, child);
+        return AppModalHost(child: wrapped);
+      },
       routerConfig: router,
     );
   }

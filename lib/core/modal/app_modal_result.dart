@@ -1,0 +1,74 @@
+/// 通用弹窗结果类型。
+enum AppModalResultKind { completed, cancelled, dismissed, failed }
+
+/// 所有全局弹窗结果的基类；业务应使用具体子类型而非裸 bool/String。
+sealed class AppModalResult {
+  const AppModalResult(this.kind);
+
+  final AppModalResultKind kind;
+}
+
+/// 通用确认弹窗结果。
+sealed class ConfirmResult extends AppModalResult {
+  const ConfirmResult(super.kind);
+
+  static const ConfirmResult confirmed = _ConfirmResultConfirmed();
+
+  static const ConfirmResult cancelled = _ConfirmResultCancelled();
+
+  static const ConfirmResult dismissed = _ConfirmResultDismissed();
+
+  bool get isConfirmed => kind == AppModalResultKind.completed;
+
+  bool get isCancelled => kind == AppModalResultKind.cancelled;
+
+  bool get isDismissed => kind == AppModalResultKind.dismissed;
+}
+
+final class _ConfirmResultConfirmed extends ConfirmResult {
+  const _ConfirmResultConfirmed() : super(AppModalResultKind.completed);
+}
+
+final class _ConfirmResultCancelled extends ConfirmResult {
+  const _ConfirmResultCancelled() : super(AppModalResultKind.cancelled);
+}
+
+final class _ConfirmResultDismissed extends ConfirmResult {
+  const _ConfirmResultDismissed() : super(AppModalResultKind.dismissed);
+}
+
+/// 预留：登录弹窗结果（O3）。
+final class LoginModalResult extends AppModalResult {
+  const LoginModalResult.completed() : super(AppModalResultKind.completed);
+
+  const LoginModalResult.cancelled() : super(AppModalResultKind.cancelled);
+
+  const LoginModalResult.dismissed() : super(AppModalResultKind.dismissed);
+
+  const LoginModalResult.failed() : super(AppModalResultKind.failed);
+}
+
+/// 预留：金币解锁结果（O2）。
+final class CoinUnlockModalResult extends AppModalResult {
+  const CoinUnlockModalResult.completed() : super(AppModalResultKind.completed);
+
+  const CoinUnlockModalResult.cancelled() : super(AppModalResultKind.cancelled);
+
+  const CoinUnlockModalResult.dismissed() : super(AppModalResultKind.dismissed);
+}
+
+/// 预留：充值结果（O2）。
+final class RechargeModalResult extends AppModalResult {
+  const RechargeModalResult.completed() : super(AppModalResultKind.completed);
+
+  const RechargeModalResult.cancelled() : super(AppModalResultKind.cancelled);
+}
+
+/// 预留：支付确认结果（O2）。
+final class PaymentModalResult extends AppModalResult {
+  const PaymentModalResult.completed() : super(AppModalResultKind.completed);
+
+  const PaymentModalResult.cancelled() : super(AppModalResultKind.cancelled);
+
+  const PaymentModalResult.failed() : super(AppModalResultKind.failed);
+}

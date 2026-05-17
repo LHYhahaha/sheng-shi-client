@@ -40,7 +40,28 @@ Flutter short drama client.
 
 全局弹窗系统是封板后的架构优化任务，用来统一登录、解锁、充值、支付确认、会员购买、确认弹窗、活动弹窗和强更弹窗等跨页面浮层。目标是避免业务弹窗被底部 tab、局部 Stack、播放器层级或安全区遮挡，并通过 typed request/result 让业务拿到明确的成功、取消、关闭或失败结果。
 
-当前 release QA 期间不迁移业务弹窗；如 For You 解锁/充值抽屉被底部 tab 遮挡且影响支付或关闭，只做最小 safe-area/root-navigator 修复。完整系统设计与迁移计划见：
+**O1 skeleton（已落地）：**
+
+- 阻塞式弹窗：`appModalServiceProvider` → `AppModalService`（`showConfirm` / `show` / `dismiss*`）
+- 根宿主：`AppModalHost` 挂在 `DramaClientApp` builder（与 `BotToastInit` 共存）；展示使用 `appRootNavigatorKey`
+- 瞬态反馈仍用 `appToastProvider` → `AppToastService`，不要用 modal 替代 toast
+- 测试：`RecordingAppModalService`（`test/helpers/recording_app_modal_service.dart`）记录请求并返回预设 `ConfirmResult`
+
+```dart
+final result = await ref.read(appModalServiceProvider).showConfirm(
+  ConfirmModalRequest(
+    requestId: ref.read(appModalControllerProvider).nextRequestId(),
+    source: AppModalSource.player,
+    title: 'Confirm',
+    message: 'Continue?',
+    confirmLabel: 'OK',
+    cancelLabel: 'Cancel',
+  ),
+);
+if (result.isConfirmed) { /* ... */ }
+```
+
+Player / Store / Membership 等业务弹窗 **尚未迁移**（仍用原有 `showModalBottomSheet`），见 O2–O4 计划。
 
 - [Global Overlay / Modal System Plan（全局弹窗/浮层系统规划）](docs/global-overlay-modal-system-plan.md)
 - [App Runtime Foundation Plan（全局运行时基础）](docs/app-runtime-foundation-plan.md)
