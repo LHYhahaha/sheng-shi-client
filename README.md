@@ -10,6 +10,7 @@ Flutter short drama client.
 - [Mock Data & API Readiness Review（mock 与真实 API 迁移评估）](docs/mock-data-and-api-readiness-review.md)
 - [App Runtime Foundation Plan（全局运行时基础）](docs/app-runtime-foundation-plan.md)
 - [Player Feed Engine Refactor Plan（播放器引擎封板结论）](docs/player-feed-engine-refactor-plan.md)
+- [Post-RC Roadmap & Phase Plan（封板后路线图与阶段拆分）](docs/post-rc-roadmap-and-phase-plan.md)
 
 **当前 release 封板前提：** 所有 `USE_REMOTE_*` 开关默认 `false`；支付与权益走 mock（`grantMock*` / mock purchase delay）。若开启 remote 或真实 IAP，须先处理 401 refresh、secure token、订单验单、strict DTO 等项（见上述文档）。
 
