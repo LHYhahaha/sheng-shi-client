@@ -29,6 +29,9 @@ class PlayerRechargeUnlockSheet extends ConsumerStatefulWidget {
 
 class _PlayerRechargeUnlockSheetState
     extends ConsumerState<PlayerRechargeUnlockSheet> {
+  static const _sheetTransitionDuration = Duration(milliseconds: 220);
+  static const _sheetReverseTransitionDuration = Duration(milliseconds: 160);
+
   static Duration get _promotionDuration => _isTestEnvironment
       ? const Duration(seconds: 1)
       : const Duration(hours: 1);
@@ -89,75 +92,99 @@ class _PlayerRechargeUnlockSheetState
     final sheetHeight = _pendingPayment == null
         ? math.min(654.0, screenHeight - 72)
         : math.min(210.0, screenHeight - 72);
+    final content = state.offer == null
+        ? KeyedSubtree(
+            key: const ValueKey('player_recharge_loading_sheet'),
+            child: _LoadingOrError(state: state),
+          )
+        : _pendingPayment != null
+        ? _PaymentContent(
+            selection: _pendingPayment!,
+            isProcessing: state.isProcessing,
+            onClose: () {
+              setState(() => _pendingPayment = null);
+            },
+            onBuyNow: () {
+              final selection = _pendingPayment!;
+              if (selection.coinPackage != null) {
+                unawaited(
+                  ref
+                      .read(provider.notifier)
+                      .selectCoinPackage(selection.coinPackage!.id),
+                );
+              } else if (selection.membershipPackage != null) {
+                unawaited(
+                  ref
+                      .read(provider.notifier)
+                      .selectMembershipPackage(selection.membershipPackage!.id),
+                );
+              }
+            },
+          )
+        : KeyedSubtree(
+            key: const ValueKey('player_recharge_offer_sheet'),
+            child: _OfferContent(
+              state: state,
+              promotionRemaining: _promotionRemaining,
+              onClose: () {
+                ref.read(provider.notifier).close();
+                Navigator.of(context).pop(false);
+              },
+              onCoinTap: (id) {
+                final package = state.offer!.coinPackages
+                    .where((package) => package.id == id)
+                    .firstOrNull;
+                if (package != null) {
+                  setState(() {
+                    _pendingPayment = _PendingPaymentSelection.coin(package);
+                  });
+                }
+              },
+              onMembershipTap: (id) {
+                final package = state.offer!.membershipPackages
+                    .where((package) => package.id == id)
+                    .firstOrNull;
+                if (package != null) {
+                  setState(() {
+                    _pendingPayment = _PendingPaymentSelection.membership(
+                      package,
+                    );
+                  });
+                }
+              },
+            ),
+          );
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
       child: Material(
         color: const Color(0xFF1D1D20),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         clipBehavior: Clip.antiAlias,
-        child: SizedBox(
+        child: AnimatedContainer(
+          duration: _sheetTransitionDuration,
+          curve: Curves.easeOutCubic,
           height: sheetHeight,
           width: double.infinity,
-          child: state.offer == null
-              ? _LoadingOrError(state: state)
-              : _pendingPayment != null
-              ? _PaymentContent(
-                  selection: _pendingPayment!,
-                  isProcessing: state.isProcessing,
-                  onClose: () {
-                    setState(() => _pendingPayment = null);
-                  },
-                  onBuyNow: () {
-                    final selection = _pendingPayment!;
-                    if (selection.coinPackage != null) {
-                      unawaited(
-                        ref
-                            .read(provider.notifier)
-                            .selectCoinPackage(selection.coinPackage!.id),
-                      );
-                    } else if (selection.membershipPackage != null) {
-                      unawaited(
-                        ref
-                            .read(provider.notifier)
-                            .selectMembershipPackage(
-                              selection.membershipPackage!.id,
-                            ),
-                      );
-                    }
-                  },
-                )
-              : _OfferContent(
-                  state: state,
-                  promotionRemaining: _promotionRemaining,
-                  onClose: () {
-                    ref.read(provider.notifier).close();
-                    Navigator.of(context).pop(false);
-                  },
-                  onCoinTap: (id) {
-                    final package = state.offer!.coinPackages
-                        .where((package) => package.id == id)
-                        .firstOrNull;
-                    if (package != null) {
-                      setState(() {
-                        _pendingPayment = _PendingPaymentSelection.coin(
-                          package,
-                        );
-                      });
-                    }
-                  },
-                  onMembershipTap: (id) {
-                    final package = state.offer!.membershipPackages
-                        .where((package) => package.id == id)
-                        .firstOrNull;
-                    if (package != null) {
-                      setState(() {
-                        _pendingPayment = _PendingPaymentSelection.membership(
-                          package,
-                        );
-                      });
-                    }
-                  },
-                ),
+          child: AnimatedSwitcher(
+            duration: _sheetTransitionDuration,
+            reverseDuration: _sheetReverseTransitionDuration,
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            layoutBuilder: (currentChild, previousChildren) {
+              return currentChild ?? const SizedBox.shrink();
+            },
+            transitionBuilder: (child, animation) {
+              final offset = Tween<Offset>(
+                begin: const Offset(0, 0.04),
+                end: Offset.zero,
+              ).animate(animation);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(position: offset, child: child),
+              );
+            },
+            child: content,
+          ),
         ),
       ),
     );
