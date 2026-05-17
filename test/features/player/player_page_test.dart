@@ -1753,6 +1753,46 @@ void main() {
     },
   );
 
+  testWidgets(
+    'coin tap keeps recharge drawer and stacks payment method sheet',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          initialLocation: RoutePaths.playerLocation(
+            dramaId: 'drama-a',
+            episodeId: '2',
+          ),
+          repository: _FakePlayerFeedRepository.normal(),
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await _pumpAutoUnlockSheet(tester);
+
+      await tester.tap(
+        find.byKey(const ValueKey('player_recharge_coin_coins_300')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('player_recharge_offer_sheet')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('player_recharge_unlock_close')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('player_recharge_payment_sheet')),
+        findsOneWidget,
+      );
+      expect(find.text('Payment method'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('player_recharge_coin_coins_300')),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('closing payment sheet returns to recharge drawer', (
     tester,
   ) async {
@@ -1771,13 +1811,15 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey('player_recharge_coin_coins_300')),
     );
-    await tester.pump();
+    await _pumpPaymentMethodSheet(tester);
     expect(
       find.byKey(const ValueKey('player_recharge_payment_sheet')),
       findsOneWidget,
     );
 
-    await tester.tap(find.byIcon(Icons.close_rounded).last);
+    await tester.tap(
+      find.byKey(const ValueKey('player_recharge_payment_close')),
+    );
     await tester.pumpAndSettle();
 
     expect(
@@ -1816,7 +1858,7 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey('player_recharge_coin_coins_300')),
     );
-    await tester.pump();
+    await _pumpPaymentMethodSheet(tester);
 
     expect(
       find.byKey(const ValueKey('player_recharge_payment_sheet')),
@@ -1824,8 +1866,14 @@ void main() {
     );
     expect(find.text('Payment method'), findsOneWidget);
     expect(find.text('Google Pay'), findsOneWidget);
-    expect(find.text('300 Coins'), findsOneWidget);
-    expect(find.text(r'$2.99'), findsOneWidget);
+    expect(find.text('300 Coins'), findsWidgets);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('player_recharge_payment_sheet')),
+        matching: find.text(r'$2.99'),
+      ),
+      findsOneWidget,
+    );
     final paymentSheetRect = tester.getRect(
       find.byKey(const ValueKey('player_recharge_payment_sheet')),
     );
@@ -1894,13 +1942,19 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey('player_recharge_membership_weekly_vip_promo')),
     );
-    await tester.pump();
+    await _pumpPaymentMethodSheet(tester);
 
     expect(
       find.byKey(const ValueKey('player_recharge_payment_sheet')),
       findsOneWidget,
     );
-    expect(find.text('Weekly VIP'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('player_recharge_payment_sheet')),
+        matching: find.text('Weekly VIP'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(
       find.byKey(const ValueKey('player_recharge_payment_buy_now')),
@@ -1941,7 +1995,7 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey('player_recharge_membership_weekly_vip_promo')),
     );
-    await tester.pump();
+    await _pumpPaymentMethodSheet(tester);
     expect(
       find.byKey(const ValueKey('player_recharge_payment_sheet')),
       findsOneWidget,
@@ -2642,6 +2696,12 @@ Future<void> _pumpAutoUnlockSheet(WidgetTester tester) async {
     }
   }
   await tester.pumpAndSettle();
+}
+
+Future<void> _pumpPaymentMethodSheet(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 260));
+  await tester.pump(Duration.zero);
 }
 
 Future<void> _doubleTapVideo(WidgetTester tester) async {

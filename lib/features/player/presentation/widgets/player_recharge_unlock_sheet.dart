@@ -6,11 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../app/app_modal_context.dart';
+import '../../../../app/app_root_navigator_key.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
 import '../../domain/player_recharge_unlock_offer.dart';
+import 'player_payment_method_sheet.dart';
 
 /// 播放器内充值解锁弹窗。
 ///
@@ -29,9 +32,6 @@ class PlayerRechargeUnlockSheet extends ConsumerStatefulWidget {
 
 class _PlayerRechargeUnlockSheetState
     extends ConsumerState<PlayerRechargeUnlockSheet> {
-  static const _sheetTransitionDuration = Duration(milliseconds: 220);
-  static const _sheetReverseTransitionDuration = Duration(milliseconds: 160);
-
   static Duration get _promotionDuration => _isTestEnvironment
       ? const Duration(seconds: 1)
       : const Duration(hours: 1);
@@ -49,8 +49,8 @@ class _PlayerRechargeUnlockSheetState
 
   late Duration _promotionRemaining;
   Timer? _timer;
-  bool _didPopSuccess = false;
-  _PendingPaymentSelection? _pendingPayment;
+  OverlayEntry? _paymentOverlay;
+  GlobalKey<_PaymentMethodOverlayState>? _paymentOverlayKey;
 
   @override
   void initState() {
@@ -70,56 +70,78 @@ class _PlayerRechargeUnlockSheetState
   @override
   void dispose() {
     _timer?.cancel();
+    _removePaymentOverlayImmediately();
     super.dispose();
+  }
+
+  void _removePaymentOverlay() {
+    final overlayState = _paymentOverlayKey?.currentState;
+    if (overlayState != null) {
+      unawaited(overlayState.dismiss());
+      return;
+    }
+    _removePaymentOverlayImmediately();
+  }
+
+  void _removePaymentOverlayImmediately() {
+    _paymentOverlay?.remove();
+    _paymentOverlay = null;
+    _paymentOverlayKey = null;
+  }
+
+  void _presentPaymentMethod(PlayerPaymentSelection selection) {
+    if (!mounted) {
+      return;
+    }
+    _removePaymentOverlay();
+
+    final rechargeContext = context;
+    final modalContext = resolveAppModalPresentationContext(rechargeContext);
+    final overlay =
+        appRootNavigatorKey.currentState?.overlay ??
+        Overlay.maybeOf(modalContext);
+    if (overlay == null) {
+      return;
+    }
+
+    late OverlayEntry entry;
+    final overlayKey = GlobalKey<_PaymentMethodOverlayState>();
+    entry = OverlayEntry(
+      builder: (overlayContext) {
+        return MediaQuery(
+          data: MediaQuery.of(modalContext),
+          child: _PaymentMethodOverlay(
+            key: overlayKey,
+            sessionKey: widget.sessionKey,
+            selection: selection,
+            onDismissed: _removePaymentOverlayImmediately,
+            onPurchaseSuccess: () {
+              _removePaymentOverlayImmediately();
+              if (rechargeContext.mounted) {
+                Navigator.of(rechargeContext).pop(true);
+              }
+            },
+          ),
+        );
+      },
+    );
+    _paymentOverlay = entry;
+    _paymentOverlayKey = overlayKey;
+    overlay.insert(entry);
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = playerRechargeUnlockControllerProvider(widget.sessionKey);
-    ref.listen(provider.select((state) => state.status), (previous, next) {
-      if (next != PlayerRechargeUnlockStatus.success ||
-          _didPopSuccess ||
-          !context.mounted) {
-        return;
-      }
-      _didPopSuccess = true;
-      Navigator.of(context).pop(true);
-    });
     final state = ref.watch(provider);
 
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final sheetHeight = _pendingPayment == null
-        ? math.min(654.0, screenHeight - 72)
-        : math.min(210.0, screenHeight - 72);
+    final sheetHeight = math.min(654.0, screenHeight - 72);
     final content = state.offer == null
         ? KeyedSubtree(
             key: const ValueKey('player_recharge_loading_sheet'),
             child: _LoadingOrError(state: state),
-          )
-        : _pendingPayment != null
-        ? _PaymentContent(
-            selection: _pendingPayment!,
-            isProcessing: state.isProcessing,
-            onClose: () {
-              setState(() => _pendingPayment = null);
-            },
-            onBuyNow: () {
-              final selection = _pendingPayment!;
-              if (selection.coinPackage != null) {
-                unawaited(
-                  ref
-                      .read(provider.notifier)
-                      .selectCoinPackage(selection.coinPackage!.id),
-                );
-              } else if (selection.membershipPackage != null) {
-                unawaited(
-                  ref
-                      .read(provider.notifier)
-                      .selectMembershipPackage(selection.membershipPackage!.id),
-                );
-              }
-            },
           )
         : KeyedSubtree(
             key: const ValueKey('player_recharge_offer_sheet'),
@@ -135,9 +157,7 @@ class _PlayerRechargeUnlockSheetState
                     .where((package) => package.id == id)
                     .firstOrNull;
                 if (package != null) {
-                  setState(() {
-                    _pendingPayment = _PendingPaymentSelection.coin(package);
-                  });
+                  _presentPaymentMethod(PlayerPaymentSelection.coin(package));
                 }
               },
               onMembershipTap: (id) {
@@ -145,11 +165,9 @@ class _PlayerRechargeUnlockSheetState
                     .where((package) => package.id == id)
                     .firstOrNull;
                 if (package != null) {
-                  setState(() {
-                    _pendingPayment = _PendingPaymentSelection.membership(
-                      package,
-                    );
-                  });
+                  _presentPaymentMethod(
+                    PlayerPaymentSelection.membership(package),
+                  );
                 }
               },
             ),
@@ -160,61 +178,112 @@ class _PlayerRechargeUnlockSheetState
         color: const Color(0xFF1D1D20),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         clipBehavior: Clip.antiAlias,
-        child: AnimatedContainer(
-          duration: _sheetTransitionDuration,
-          curve: Curves.easeOutCubic,
+        child: SizedBox(
           height: sheetHeight,
           width: double.infinity,
-          child: AnimatedSwitcher(
-            duration: _sheetTransitionDuration,
-            reverseDuration: _sheetReverseTransitionDuration,
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            layoutBuilder: (currentChild, previousChildren) {
-              return currentChild ?? const SizedBox.shrink();
-            },
-            transitionBuilder: (child, animation) {
-              final offset = Tween<Offset>(
-                begin: const Offset(0, 0.04),
-                end: Offset.zero,
-              ).animate(animation);
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(position: offset, child: child),
-              );
-            },
-            child: content,
-          ),
+          child: content,
         ),
       ),
     );
   }
 }
 
-class _PendingPaymentSelection {
-  const _PendingPaymentSelection.coin(this.coinPackage)
-    : membershipPackage = null;
+class _PaymentMethodOverlay extends StatefulWidget {
+  const _PaymentMethodOverlay({
+    required this.sessionKey,
+    required this.selection,
+    required this.onDismissed,
+    required this.onPurchaseSuccess,
+    super.key,
+  });
 
-  const _PendingPaymentSelection.membership(this.membershipPackage)
-    : coinPackage = null;
+  final String sessionKey;
+  final PlayerPaymentSelection selection;
+  final VoidCallback onDismissed;
+  final VoidCallback onPurchaseSuccess;
 
-  final PlayerRechargeCoinPackage? coinPackage;
-  final PlayerRechargeMembershipPackage? membershipPackage;
+  @override
+  State<_PaymentMethodOverlay> createState() => _PaymentMethodOverlayState();
+}
 
-  String get title {
-    final coin = coinPackage;
-    if (coin != null) {
-      return '${coin.baseCoins} Coins';
-    }
-    return membershipPackage!.title;
+class _PaymentMethodOverlayState extends State<_PaymentMethodOverlay>
+    with SingleTickerProviderStateMixin {
+  static const _duration = Duration(milliseconds: 240);
+  static const _reverseDuration = Duration(milliseconds: 180);
+
+  late final AnimationController _controller;
+  late final Animation<double> _barrierOpacity;
+  late final Animation<Offset> _sheetOffset;
+  var _isDismissing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: _duration,
+      reverseDuration: _reverseDuration,
+    );
+    final curved = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    _barrierOpacity = Tween<double>(begin: 0, end: 1).animate(curved);
+    _sheetOffset = Tween<Offset>(
+      begin: const Offset(0, 1),
+      end: Offset.zero,
+    ).animate(curved);
+    unawaited(_controller.forward());
   }
 
-  String get priceLabel {
-    final coin = coinPackage;
-    if (coin != null) {
-      return coin.googlePriceLabel;
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> dismiss() async {
+    if (_isDismissing) {
+      return;
     }
-    return membershipPackage!.googlePriceLabel;
+    _isDismissing = true;
+    await _controller.reverse();
+    if (mounted) {
+      widget.onDismissed();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: FadeTransition(
+            opacity: _barrierOpacity,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: dismiss,
+              child: const ColoredBox(color: Color(0x73000000)),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: SlideTransition(
+            position: _sheetOffset,
+            child: PlayerPaymentMethodSheet(
+              sessionKey: widget.sessionKey,
+              selection: widget.selection,
+              onDismiss: dismiss,
+              onPurchaseSuccess: widget.onPurchaseSuccess,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -241,257 +310,6 @@ class _LoadingOrError extends StatelessWidget {
           color: AppColors.primary,
         ),
       ),
-    );
-  }
-}
-
-class _PaymentContent extends StatelessWidget {
-  const _PaymentContent({
-    required this.selection,
-    required this.isProcessing,
-    required this.onClose,
-    required this.onBuyNow,
-  });
-
-  final _PendingPaymentSelection selection;
-  final bool isProcessing;
-  final VoidCallback onClose;
-  final VoidCallback onBuyNow;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      key: const ValueKey('player_recharge_payment_sheet'),
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(28, 14, 28, 20),
-          child: Column(
-            children: [
-              SizedBox(
-                height: 31,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    const Center(
-                      child: Text(
-                        'Payment method',
-                        key: ValueKey('player_recharge_payment_method'),
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          height: 18 / 14,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: isProcessing ? null : onClose,
-                        child: Container(
-                          key: const ValueKey('player_recharge_payment_close'),
-                          width: 30,
-                          height: 30,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.08),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.1),
-                            ),
-                          ),
-                          child: const Icon(
-                            Icons.close_rounded,
-                            color: AppColors.textPrimary,
-                            size: 18,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Divider(height: 18, color: Colors.white.withValues(alpha: 0.08)),
-              Row(
-                children: [
-                  const _PaymentRadio(),
-                  const SizedBox(width: 8),
-                  const _GooglePayMark(),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Google Pay',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.82),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      height: 16 / 12,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 17),
-              _PaymentDetailRow(
-                label: 'Order details:',
-                value: selection.title,
-                valueKey: const ValueKey('player_recharge_payment_order_title'),
-              ),
-              const SizedBox(height: 12),
-              _PaymentDetailRow(label: 'Total:', value: selection.priceLabel),
-              const Spacer(),
-              SizedBox(
-                width: 196,
-                height: 39,
-                child: FilledButton(
-                  key: const ValueKey('player_recharge_payment_buy_now'),
-                  onPressed: isProcessing ? null : onBuyNow,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    disabledBackgroundColor: AppColors.primary.withValues(
-                      alpha: 0.48,
-                    ),
-                    foregroundColor: AppColors.textPrimary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                  child: isProcessing
-                      ? const SizedBox.square(
-                          dimension: 15,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.textPrimary,
-                          ),
-                        )
-                      : const Text(
-                          'Buy now',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            height: 16 / 12,
-                          ),
-                        ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PaymentRadio extends StatelessWidget {
-  const _PaymentRadio();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 12,
-      height: 12,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: AppColors.primary,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
-      ),
-      alignment: Alignment.center,
-      child: Container(
-        width: 5,
-        height: 5,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.textPrimary,
-        ),
-      ),
-    );
-  }
-}
-
-class _GooglePayMark extends StatelessWidget {
-  const _GooglePayMark();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 18,
-      height: 18,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: 16,
-            height: 16,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: SweepGradient(
-                colors: [
-                  Color(0xFF4285F4),
-                  Color(0xFF34A853),
-                  Color(0xFFFBBC05),
-                  Color(0xFFEA4335),
-                  Color(0xFF4285F4),
-                ],
-              ),
-            ),
-          ),
-          Container(
-            width: 9,
-            height: 9,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Color(0xFF1D1D20),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PaymentDetailRow extends StatelessWidget {
-  const _PaymentDetailRow({
-    required this.label,
-    required this.value,
-    this.valueKey,
-  });
-
-  final String label;
-  final String value;
-  final Key? valueKey;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.45),
-              fontSize: 11,
-              height: 14 / 11,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Flexible(
-          child: Text(
-            value,
-            key: valueKey,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.right,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              height: 14 / 11,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
