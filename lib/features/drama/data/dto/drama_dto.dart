@@ -1,7 +1,7 @@
+import '../../../../core/network/api_mapping_exception.dart';
+import '../../../../core/network/json_field_parser.dart';
+
 /// 首页剧卡远程 DTO。
-///
-/// 这里保留 raw/display 两类字段：例如 `viewCount` 用于后续排序/埋点，
-/// `viewCountLabel` 只用于展示。mapper 负责转换到当前 Home domain model。
 class DramaDto {
   const DramaDto({
     required this.dramaId,
@@ -19,7 +19,7 @@ class DramaDto {
   });
 
   final String dramaId;
-  final String title;
+  final String? title;
   final String? description;
   final String? coverUrl;
   final String? posterUrl;
@@ -32,15 +32,27 @@ class DramaDto {
   final double? coverAspectRatio;
 
   factory DramaDto.fromJson(Map<String, Object?> json) {
+    const dtoName = 'DramaDto';
+    final dramaId =
+        JsonFieldParser.optionalString(json, 'dramaId') ??
+        JsonFieldParser.optionalString(json, 'id');
+    if (dramaId == null) {
+      throw const ApiMappingException(
+        dtoName: dtoName,
+        field: 'dramaId',
+        reason: 'required drama id',
+      );
+    }
+
     return DramaDto(
-      dramaId: _stringValue(json['dramaId']) ?? _stringValue(json['id']) ?? '',
-      title: _stringValue(json['title']) ?? '',
-      description: _stringValue(json['description']),
-      coverUrl: _stringValue(json['coverUrl']),
-      posterUrl: _stringValue(json['posterUrl']),
-      viewCount: _intValue(json['viewCount']),
-      viewCountLabel: _stringValue(json['viewCountLabel']),
-      episodeCount: _intValue(json['episodeCount']) ?? 0,
+      dramaId: dramaId,
+      title: JsonFieldParser.optionalString(json, 'title'),
+      description: JsonFieldParser.optionalString(json, 'description'),
+      coverUrl: JsonFieldParser.optionalString(json, 'coverUrl'),
+      posterUrl: JsonFieldParser.optionalString(json, 'posterUrl'),
+      viewCount: JsonFieldParser.optionalInt(json, 'viewCount'),
+      viewCountLabel: JsonFieldParser.optionalString(json, 'viewCountLabel'),
+      episodeCount: JsonFieldParser.optionalInt(json, 'episodeCount') ?? 0,
       tags: _stringList(json['tags']),
       badges: _stringList(json['badges']),
       categoryIds: _stringList(json['categoryIds']),
@@ -48,40 +60,15 @@ class DramaDto {
     );
   }
 
-  static String? _stringValue(Object? value) {
-    return value is String ? value : null;
-  }
-
-  static int? _intValue(Object? value) {
-    if (value is int) {
-      return value;
-    }
-    if (value is num) {
-      return value.toInt();
-    }
-    if (value is String) {
-      return int.tryParse(value);
-    }
-    return null;
-  }
-
   static double? _doubleValue(Object? value) {
-    if (value is double) {
-      return value;
-    }
-    if (value is num) {
-      return value.toDouble();
-    }
-    if (value is String) {
-      return double.tryParse(value);
-    }
+    if (value is double) return value;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
     return null;
   }
 
   static List<String> _stringList(Object? value) {
-    if (value is! List) {
-      return const <String>[];
-    }
+    if (value is! List) return const <String>[];
     return value.whereType<String>().toList(growable: false);
   }
 }

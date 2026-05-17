@@ -40,6 +40,9 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
 - **Post-RC Track A4**（2026-05-17）：真实 `Device-Id`（install id 持久化）、`Lang`、`Platform`、
   `App-Version`（`package_info_plus`）；`apiRequestContextProvider` 统一注入；测试覆盖 install id /
   lang fallback / platform / version override。
+- **Post-RC Track A6**（2026-05-17）：`JsonFieldParser` / `ApiMappingException`；高风险 remote DTO
+  strict（Auth/Player/Drama/Entitlement/Wallet/Store/Membership/Order/MyList）；unknown enum 与
+  非 map payload 不再伪装成功。
 
 下一步进入真实 API 联调前的分域验证（A5+、A1.5 真实 bootstrap），仍保持 remote 默认关闭。
 

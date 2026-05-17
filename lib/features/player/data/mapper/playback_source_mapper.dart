@@ -1,11 +1,9 @@
+import '../../../../core/network/api_mapping_exception.dart';
 import '../../domain/player_feed.dart';
 import '../../domain/player_playback_source.dart';
 import '../dto/playback_source_dto.dart';
 
 /// 播放源 DTO mapper。
-///
-/// subtitleTracks、preview sprite、cache/preload policy 目前只作为接口 contract 保留；
-/// 当前播放器 domain 尚未消费这些字段。后续扩展时应继续从这里映射，不要让 UI 读 DTO。
 class PlaybackSourceMapper {
   const PlaybackSourceMapper();
 
@@ -15,27 +13,35 @@ class PlaybackSourceMapper {
     required PlaybackSourceStatus status,
   }) {
     if (!_isAccessAllowed(dto)) {
-      throw StateError(
-        'Playback source unavailable: ${dto.reasonCode ?? dto.accessStatus ?? 'unknown'}.',
+      throw ApiMappingException(
+        dtoName: 'PlaybackSourceDto',
+        field: 'accessStatus',
+        reason: dto.reasonCode ?? dto.accessStatus ?? 'unavailable',
       );
     }
 
-    final expiresAt = dto.expiresAt;
-    if (expiresAt != null && !expiresAt.isAfter(DateTime.now())) {
-      throw StateError('Playback source expired.');
+    if (!dto.expiresAt.isAfter(DateTime.now())) {
+      throw const ApiMappingException(
+        dtoName: 'PlaybackSourceDto',
+        field: 'expiresAt',
+        reason: 'playback source expired',
+      );
     }
 
-    final hlsUrl = dto.hlsUrl;
-    if (hlsUrl == null || hlsUrl.isEmpty) {
-      throw StateError('Playback source missing hlsUrl.');
+    if (dto.hlsUrl.isEmpty) {
+      throw const ApiMappingException(
+        dtoName: 'PlaybackSourceDto',
+        field: 'hlsUrl',
+        reason: 'missing hlsUrl',
+      );
     }
 
     return PlaybackSource(
       itemId: item.id,
-      remoteUrl: hlsUrl,
-      playableSource: hlsUrl,
+      remoteUrl: dto.hlsUrl,
+      playableSource: dto.hlsUrl,
       cacheKey: _cacheKey(dto, item),
-      expiresAt: expiresAt ?? DateTime.now().add(const Duration(minutes: 5)),
+      expiresAt: dto.expiresAt,
       codecHint: dto.codec ?? 'hls',
       status: status,
     );

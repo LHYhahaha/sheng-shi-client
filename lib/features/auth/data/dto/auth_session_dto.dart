@@ -1,3 +1,5 @@
+import '../../../../core/network/api_mapping_exception.dart';
+import '../../../../core/network/json_field_parser.dart';
 import 'auth_token_dto.dart';
 import 'auth_user_dto.dart';
 
@@ -17,18 +19,45 @@ class AuthSessionDto {
   final bool isNewUser;
 
   factory AuthSessionDto.fromJson(Object? json) {
-    final map = json is Map<String, Object?> ? json : const <String, Object?>{};
+    final map = JsonFieldParser.requireMap(json, dtoName: 'AuthSessionDto');
+    final isAuthenticated = JsonFieldParser.requireBool(
+      map,
+      'isAuthenticated',
+      dtoName: 'AuthSessionDto',
+    );
+    final user = map['user'] == null ? null : AuthUserDto.fromJson(map['user']);
+    final token = map['token'] == null
+        ? null
+        : AuthTokenDto.fromJson(map['token']);
+
+    if (isAuthenticated && token == null) {
+      throw const ApiMappingException(
+        dtoName: 'AuthSessionDto',
+        field: 'token',
+        reason: 'authenticated session requires token',
+      );
+    }
+    if (isAuthenticated &&
+        user != null &&
+        !user.isGuest &&
+        user.userId.isEmpty) {
+      throw const ApiMappingException(
+        dtoName: 'AuthSessionDto',
+        field: 'user.userId',
+        reason: 'authenticated user requires userId',
+      );
+    }
+
     return AuthSessionDto(
-      isAuthenticated: map['isAuthenticated'] == true,
-      user: map['user'] == null ? null : AuthUserDto.fromJson(map['user']),
-      token: map['token'] == null ? null : AuthTokenDto.fromJson(map['token']),
-      serverTime: _date(map['serverTime']),
-      isNewUser: map['isNewUser'] == true,
+      isAuthenticated: isAuthenticated,
+      user: user,
+      token: token,
+      serverTime: JsonFieldParser.optionalDateTime(map, 'serverTime'),
+      isNewUser: JsonFieldParser.requireBool(
+        map,
+        'isNewUser',
+        dtoName: 'AuthSessionDto',
+      ),
     );
   }
-}
-
-DateTime? _date(Object? value) {
-  if (value is String && value.isNotEmpty) return DateTime.tryParse(value);
-  return null;
 }

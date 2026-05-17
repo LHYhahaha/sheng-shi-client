@@ -11,11 +11,13 @@ import '../dto/play_history_item_dto.dart';
 class MyListMapper {
   const MyListMapper();
 
+  static const _displayTitleFallback = 'Untitled';
+
   MyListItem mapFavorite(FavoriteItemDto dto) {
     final fallbackAsset = MyListItem.fallbackCoverAssetPath;
     return MyListItem(
       id: _favoriteId(dto),
-      title: dto.title,
+      title: dto.title ?? _displayTitleFallback,
       introduction: dto.description ?? '',
       coverAssetPath: fallbackAsset,
       coverResource: _coverResource(dto.coverUrl, dto.coverAspectRatio),
@@ -28,7 +30,7 @@ class MyListMapper {
     final fallbackAsset = MyListItem.fallbackCoverAssetPath;
     return MyListItem(
       id: _historyId(dto),
-      title: dto.title,
+      title: dto.title ?? _displayTitleFallback,
       introduction: dto.description ?? '',
       coverAssetPath: fallbackAsset,
       coverResource: _coverResource(dto.coverUrl, dto.coverAspectRatio),

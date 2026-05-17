@@ -1,11 +1,11 @@
 import '../../../../core/network/api_client.dart';
+import '../../../../core/network/api_mapping_exception.dart';
+import '../../../../core/network/json_field_parser.dart';
 import '../dto/player_content_dto.dart';
 import '../dto/player_episode_dto.dart';
 import '../dto/player_feed_page_dto.dart';
 
 /// Player 内容/Feed 远程数据源骨架。
-///
-/// 只负责 API 调用和 DTO 解析，不返回 domain model，也不创建播放器 session。
 class PlayerRemoteDataSource {
   const PlayerRemoteDataSource({required ApiClient apiClient})
     : _apiClient = apiClient;
@@ -15,24 +15,9 @@ class PlayerRemoteDataSource {
   Future<PlayerContentDto> getDramaDetail({required String dramaId}) {
     return _apiClient.get<PlayerContentDto>(
       '/dramas/$dramaId',
-      decoder: (data) {
-        if (data is Map<String, Object?>) {
-          return PlayerContentDto.fromJson(data);
-        }
-        return const PlayerContentDto(
-          dramaId: '',
-          title: '',
-          description: null,
-          posterUrl: null,
-          backgroundUrl: null,
-          totalEpisodes: 0,
-          tags: [],
-          viewCount: null,
-          viewCountLabel: null,
-          likeCountLabel: null,
-          episodes: [],
-        );
-      },
+      decoder: (data) => PlayerContentDto.fromJson(
+        JsonFieldParser.requireMap(data, dtoName: 'PlayerContentDto'),
+      ),
     );
   }
 
@@ -40,7 +25,7 @@ class PlayerRemoteDataSource {
     return _apiClient.get<List<PlayerEpisodeDto>>(
       '/dramas/$dramaId/episodes',
       decoder: (data) {
-        final items = _extractItems(data);
+        final items = _extractItems(data, dtoName: 'PlayerEpisodeDto');
         return items
             .whereType<Map<String, Object?>>()
             .map(PlayerEpisodeDto.fromJson)
@@ -54,20 +39,21 @@ class PlayerRemoteDataSource {
       '/feed/for-you',
       queryParameters: <String, Object?>{'pageToken': pageToken}
         ..removeWhere((_, value) => value == null),
-      decoder: (data) {
-        if (data is Map<String, Object?>) {
-          return PlayerFeedPageDto.fromJson(data);
-        }
-        return const PlayerFeedPageDto(items: [], nextPageToken: null);
-      },
+      decoder: (data) => PlayerFeedPageDto.fromJson(
+        JsonFieldParser.requireMap(data, dtoName: 'PlayerFeedPageDto'),
+      ),
     );
   }
 
-  List<Object?> _extractItems(Object? data) {
+  List<Object?> _extractItems(Object? data, {required String dtoName}) {
     if (data is List) return data;
     if (data is Map<String, Object?> && data['items'] is List) {
       return data['items']! as List<Object?>;
     }
-    return const <Object?>[];
+    throw ApiMappingException(
+      dtoName: dtoName,
+      field: 'items',
+      reason: 'expected array payload',
+    );
   }
 }

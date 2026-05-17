@@ -5,12 +5,10 @@ import '../dto/drama_dto.dart';
 import '../dto/drama_feed_page_dto.dart';
 
 /// Home/Drama 远程 DTO 到 domain model 的映射层。
-///
-/// mapper 是 mock 到真实 API 迁移的隔离带：接口字段可以变化，但 HomeFeedController
-/// 和页面仍只依赖稳定的 domain model。后续引入 MediaImage/MediaResource 时，也应在
-/// 这里完成 coverUrl 到可渲染资源的转换。
 class DramaMapper {
   const DramaMapper();
+
+  static const _displayTitleFallback = 'Untitled';
 
   DramaCategory mapCategory(DramaCategoryDto dto) {
     return DramaCategory(id: dto.id, title: dto.title);
@@ -22,7 +20,7 @@ class DramaMapper {
 
     return Drama(
       id: dto.dramaId,
-      title: dto.title,
+      title: dto.title ?? _displayTitleFallback,
       coverAssetPath: Drama.fallbackCoverAssetPath,
       coverResource: coverUrl == null || coverUrl.isEmpty
           ? MediaResource.asset(

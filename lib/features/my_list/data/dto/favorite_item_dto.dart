@@ -1,7 +1,6 @@
+import '../../../../core/network/json_field_parser.dart';
+
 /// 收藏条目远程 DTO。
-///
-/// 只存在 data 层。收藏删除接口以后仍以 dramaId 为主，favoriteId 只是服务端收藏记录
-/// id，不能替代剧集业务 id。
 class FavoriteItemDto {
   const FavoriteItemDto({
     required this.favoriteId,
@@ -19,7 +18,7 @@ class FavoriteItemDto {
 
   final String? favoriteId;
   final String dramaId;
-  final String title;
+  final String? title;
   final String? description;
   final String? coverUrl;
   final double? coverAspectRatio;
@@ -30,43 +29,32 @@ class FavoriteItemDto {
   final DateTime? createdAt;
 
   factory FavoriteItemDto.fromJson(Map<String, Object?> json) {
+    const dtoName = 'FavoriteItemDto';
     return FavoriteItemDto(
-      favoriteId: _stringValue(json['favoriteId']),
-      dramaId: _stringValue(json['dramaId']) ?? '',
-      title: _stringValue(json['title']) ?? '',
+      favoriteId: JsonFieldParser.optionalString(json, 'favoriteId'),
+      dramaId: JsonFieldParser.requireString(json, 'dramaId', dtoName: dtoName),
+      title: JsonFieldParser.optionalString(json, 'title'),
       description:
-          _stringValue(json['description']) ??
-          _stringValue(json['introduction']),
-      coverUrl: _stringValue(json['coverUrl']),
+          JsonFieldParser.optionalString(json, 'description') ??
+          JsonFieldParser.optionalString(json, 'introduction'),
+      coverUrl: JsonFieldParser.optionalString(json, 'coverUrl'),
       coverAspectRatio: _doubleValue(json['coverAspectRatio']),
-      totalEpisodes: _intValue(json['totalEpisodes']) ?? 0,
-      latestEpisodeNumber: _intValue(json['latestEpisodeNumber']),
+      totalEpisodes: JsonFieldParser.optionalInt(json, 'totalEpisodes') ?? 0,
+      latestEpisodeNumber: JsonFieldParser.optionalInt(
+        json,
+        'latestEpisodeNumber',
+      ),
       tags: _stringList(json['tags']),
       badges: _stringList(json['badges']),
-      createdAt: _dateTimeValue(json['createdAt']),
+      createdAt: JsonFieldParser.optionalDateTime(json, 'createdAt'),
     );
   }
-}
-
-String? _stringValue(Object? value) => value is String ? value : null;
-
-int? _intValue(Object? value) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  if (value is String) return int.tryParse(value);
-  return null;
 }
 
 double? _doubleValue(Object? value) {
   if (value is double) return value;
   if (value is num) return value.toDouble();
   if (value is String) return double.tryParse(value);
-  return null;
-}
-
-DateTime? _dateTimeValue(Object? value) {
-  if (value is DateTime) return value;
-  if (value is String) return DateTime.tryParse(value);
   return null;
 }
 

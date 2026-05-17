@@ -1,6 +1,5 @@
 import 'package:drama_client/core/auth/guest_session_bootstrap.dart';
 import 'package:drama_client/core/auth/session_cleanup_coordinator.dart';
-import 'package:drama_client/core/auth/session_cleanup_types.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

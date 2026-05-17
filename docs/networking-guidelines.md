@@ -89,6 +89,10 @@ final result = await apiClient.get<MyDto>(
   - feature **不得**自行拼上述 header；测试 override 各 runtime provider。
 - Post-RC Track A1–A3 已落地：`AuthTokenStore` + storage 抽象（默认 in-memory）、
   `ApiAuthPolicy.required` 空 token 客户端 fail-fast、`ApiClient` 401 单飞 refresh + 重试一次。
+- **A6**（2026-05-17）：远程 DTO 使用 `JsonFieldParser` strict 解析；失败抛
+  `ApiMappingException`（含 `dtoName`/`field`）。展示字段（title/cover）在 mapper fallback；
+  业务字段（id/token/hlsUrl/price/orderStatus/unlockType）缺失即错误。remote data source 对
+  单对象响应使用 `requireMap`，禁止非 map 返回 empty DTO。
 - A1.5 / A7：游客 session 模型与 cleanup → `GuestSessionBootstrap`（stub，无网络）。
   guest bootstrap 真实 HTTP 将复用 `ApiClient` + install id 作为 `Device-Id`。
   仍 defer：生产 guest bootstrap API、account link 登录、生产 secure storage、真实 refresh、

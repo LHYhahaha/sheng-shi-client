@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:drama_client/core/network/api_client.dart';
 import 'package:drama_client/core/network/api_exception.dart';
+import 'package:drama_client/core/network/api_mapping_exception.dart';
 import 'package:drama_client/core/network/api_request_context.dart';
 import 'package:drama_client/features/auth/data/auth_repository_provider.dart';
 import 'package:drama_client/features/auth/data/dto/auth_session_dto.dart';
@@ -66,7 +67,7 @@ void main() {
       expect(session.user?.avatarResource?.isNetwork, isTrue);
     });
 
-    test('guest and malformed session payloads map to guest state', () {
+    test('guest session maps to guest; malformed payload fails fast', () {
       final mapper = const AuthMapper();
 
       expect(
@@ -76,8 +77,8 @@ void main() {
         isFalse,
       );
       expect(
-        mapper.mapSession(AuthSessionDto.fromJson('malformed')).isLoggedIn,
-        isFalse,
+        () => AuthSessionDto.fromJson('malformed'),
+        throwsA(isA<ApiMappingException>()),
       );
     });
 

@@ -1,9 +1,7 @@
+import '../../../../core/network/json_field_parser.dart';
 import 'subtitle_track_dto.dart';
 
 /// 播放源远程 DTO。
-///
-/// 这里保留 subtitle/preview/cache/preload 合约字段，即使当前 domain 暂未消费，也避免
-/// 后续接真实接口时把字段散落到播放器 UI。
 class PlaybackSourceDto {
   const PlaybackSourceDto({
     required this.episodeId,
@@ -21,16 +19,16 @@ class PlaybackSourceDto {
     required this.subtitleTracks,
     required this.previewSpriteUrl,
     required this.previewVttUrl,
-    this.isAvailable = true,
+    required this.isAvailable,
     this.accessStatus,
     this.reasonCode,
   });
 
   final String episodeId;
   final String sourceId;
-  final String? hlsUrl;
+  final String hlsUrl;
   final List<String> backupHlsUrls;
-  final DateTime? expiresAt;
+  final DateTime expiresAt;
   final int? durationMs;
   final int? width;
   final int? height;
@@ -41,38 +39,36 @@ class PlaybackSourceDto {
   final List<SubtitleTrackDto> subtitleTracks;
   final String? previewSpriteUrl;
   final String? previewVttUrl;
-
-  /// 服务端判定该播放源是否当前可用。
-  ///
-  /// 这个字段只承载 contract，不在 DTO 层做 UI 决策。mapper 会把不可用 source
-  /// 收敛为 resolve error，避免播放器打开一个已经被服务端拒绝的 HLS URL。
   final bool isAvailable;
-
-  /// 服务端返回的访问状态，例如 `allowed`、`denied`、`blocked`、`unavailable`。
-  ///
-  /// 真实接口可把会员/金币/下架/地区限制等原因折叠到这个字段，再配合 reasonCode
-  /// 给 application 层做更细的错误或权益刷新处理。
   final String? accessStatus;
-
-  /// 服务端拒播或不可用原因码。
-  ///
-  /// 当前只透传到 mapper error；后续可映射到 entitlement refresh、source refresh 或
-  /// 内容不可用提示，不要让 presentation 直接读取 DTO。
   final String? reasonCode;
 
   factory PlaybackSourceDto.fromJson(Map<String, Object?> json) {
+    const dtoName = 'PlaybackSourceDto';
     final rawSubtitles = json['subtitleTracks'];
     return PlaybackSourceDto(
-      episodeId: _stringValue(json['episodeId']) ?? '',
-      sourceId: _stringValue(json['sourceId']) ?? '',
-      hlsUrl: _stringValue(json['hlsUrl']),
+      episodeId: JsonFieldParser.requireString(
+        json,
+        'episodeId',
+        dtoName: dtoName,
+      ),
+      sourceId: JsonFieldParser.requireString(
+        json,
+        'sourceId',
+        dtoName: dtoName,
+      ),
+      hlsUrl: JsonFieldParser.requireString(json, 'hlsUrl', dtoName: dtoName),
       backupHlsUrls: _stringList(json['backupHlsUrls']),
-      expiresAt: _dateTimeValue(json['expiresAt']),
-      durationMs: _intValue(json['durationMs']),
-      width: _intValue(json['width']),
-      height: _intValue(json['height']),
+      expiresAt: JsonFieldParser.requireDateTime(
+        json,
+        'expiresAt',
+        dtoName: dtoName,
+      ),
+      durationMs: JsonFieldParser.optionalInt(json, 'durationMs'),
+      width: JsonFieldParser.optionalInt(json, 'width'),
+      height: JsonFieldParser.optionalInt(json, 'height'),
       aspectRatio: _doubleValue(json['aspectRatio']),
-      codec: _stringValue(json['codec']),
+      codec: JsonFieldParser.optionalString(json, 'codec'),
       cachePolicy: _mapValue(json['cachePolicy']),
       preloadPolicy: _mapValue(json['preloadPolicy']),
       subtitleTracks: rawSubtitles is List
@@ -81,20 +77,23 @@ class PlaybackSourceDto {
                 .map(SubtitleTrackDto.fromJson)
                 .toList(growable: false)
           : const <SubtitleTrackDto>[],
-      previewSpriteUrl: _stringValue(json['previewSpriteUrl']),
-      previewVttUrl: _stringValue(json['previewVttUrl']),
-      isAvailable: _boolValue(json['isAvailable']) ?? true,
-      accessStatus:
-          _stringValue(json['accessStatus']) ??
-          _stringValue(_mapValue(json['access'])['status']),
-      reasonCode:
-          _stringValue(json['reasonCode']) ??
-          _stringValue(_mapValue(json['access'])['reasonCode']),
+      previewSpriteUrl: JsonFieldParser.optionalString(
+        json,
+        'previewSpriteUrl',
+      ),
+      previewVttUrl: JsonFieldParser.optionalString(json, 'previewVttUrl'),
+      isAvailable: JsonFieldParser.requireBool(
+        json,
+        'isAvailable',
+        dtoName: dtoName,
+      ),
+      accessStatus: _accessStatus(json),
+      reasonCode: _reasonCode(json),
     );
   }
 
   bool get hasPlayableHls =>
-      isAvailable && hlsUrl != null && hlsUrl!.isNotEmpty && _isAccessAllowed;
+      isAvailable && hlsUrl.isNotEmpty && _isAccessAllowed;
 
   bool get _isAccessAllowed {
     final status = accessStatus?.toLowerCase();
@@ -105,38 +104,10 @@ class PlaybackSourceDto {
     };
   }
 
-  static String? _stringValue(Object? value) => value is String ? value : null;
-
-  static int? _intValue(Object? value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    if (value is String) return int.tryParse(value);
-    return null;
-  }
-
   static double? _doubleValue(Object? value) {
     if (value is double) return value;
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value);
-    return null;
-  }
-
-  static bool? _boolValue(Object? value) {
-    if (value is bool) return value;
-    if (value is num) return value != 0;
-    if (value is String) {
-      return switch (value.toLowerCase()) {
-        'true' || '1' => true,
-        'false' || '0' => false,
-        _ => null,
-      };
-    }
-    return null;
-  }
-
-  static DateTime? _dateTimeValue(Object? value) {
-    if (value is DateTime) return value;
-    if (value is String) return DateTime.tryParse(value);
     return null;
   }
 
@@ -148,5 +119,20 @@ class PlaybackSourceDto {
   static Map<String, Object?> _mapValue(Object? value) {
     if (value is Map<String, Object?>) return value;
     return const <String, Object?>{};
+  }
+
+  static String? _accessStatus(Map<String, Object?> json) {
+    final direct = JsonFieldParser.optionalString(json, 'accessStatus');
+    if (direct != null) return direct;
+    return JsonFieldParser.optionalString(_mapValue(json['access']), 'status');
+  }
+
+  static String? _reasonCode(Map<String, Object?> json) {
+    final direct = JsonFieldParser.optionalString(json, 'reasonCode');
+    if (direct != null) return direct;
+    return JsonFieldParser.optionalString(
+      _mapValue(json['access']),
+      'reasonCode',
+    );
   }
 }

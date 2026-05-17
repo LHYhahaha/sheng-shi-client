@@ -1,3 +1,5 @@
+import '../../../../core/network/json_field_parser.dart';
+
 class StoreRechargeProductDto {
   const StoreRechargeProductDto({
     required this.productId,
@@ -34,8 +36,8 @@ class StoreRechargeProductDto {
   final int baseCoins;
   final int bonusCoins;
   final int totalCoins;
-  final int? priceMicros;
-  final String? currencyCode;
+  final int priceMicros;
+  final String currencyCode;
   final String localizedPrice;
   final int? originalPriceMicros;
   final String? localizedOriginalPrice;
@@ -48,29 +50,67 @@ class StoreRechargeProductDto {
   final List<StoreRechargeProductBenefitDto> benefits;
 
   factory StoreRechargeProductDto.fromJson(Object? json) {
-    final map = json is Map<String, Object?> ? json : const <String, Object?>{};
+    final map = JsonFieldParser.requireMap(
+      json,
+      dtoName: 'StoreRechargeProductDto',
+    );
+    const dtoName = 'StoreRechargeProductDto';
     return StoreRechargeProductDto(
-      productId: _string(map['productId']),
-      platformProductId: _string(map['platformProductId']),
-      basePlanId: _nullableString(map['basePlanId']),
-      offerId: _nullableString(map['offerId']),
-      productType: _nullableString(map['productType']),
-      kind: _string(map['kind'], fallback: 'coins'),
-      title: _string(map['title']),
-      baseCoins: _int(map['baseCoins']),
-      bonusCoins: _int(map['bonusCoins']),
-      totalCoins: _int(map['totalCoins']),
-      priceMicros: _nullableInt(map['priceMicros']),
-      currencyCode: _nullableString(map['currencyCode']),
-      localizedPrice: _string(map['localizedPrice']),
-      originalPriceMicros: _nullableInt(map['originalPriceMicros']),
-      localizedOriginalPrice: _nullableString(map['localizedOriginalPrice']),
-      promotionId: _nullableString(map['promotionId']),
-      promotionExpiresAt: _date(map['promotionExpiresAt']),
-      sortOrder: _int(map['sortOrder']),
-      enabled: map['enabled'] != false,
-      subtitle: _nullableString(map['subtitle']),
-      footnote: _nullableString(map['footnote']),
+      productId: JsonFieldParser.requireString(
+        map,
+        'productId',
+        dtoName: dtoName,
+      ),
+      platformProductId: JsonFieldParser.requireString(
+        map,
+        'platformProductId',
+        dtoName: dtoName,
+      ),
+      basePlanId: JsonFieldParser.optionalString(map, 'basePlanId'),
+      offerId: JsonFieldParser.optionalString(map, 'offerId'),
+      productType: JsonFieldParser.optionalString(map, 'productType'),
+      kind: JsonFieldParser.optionalString(map, 'kind') ?? 'coins',
+      title: JsonFieldParser.optionalString(map, 'title') ?? '',
+      baseCoins: JsonFieldParser.requireInt(map, 'baseCoins', dtoName: dtoName),
+      bonusCoins: JsonFieldParser.requireInt(
+        map,
+        'bonusCoins',
+        dtoName: dtoName,
+      ),
+      totalCoins: JsonFieldParser.requireInt(
+        map,
+        'totalCoins',
+        dtoName: dtoName,
+      ),
+      priceMicros: JsonFieldParser.requireInt(
+        map,
+        'priceMicros',
+        dtoName: dtoName,
+      ),
+      currencyCode: JsonFieldParser.requireString(
+        map,
+        'currencyCode',
+        dtoName: dtoName,
+      ),
+      localizedPrice:
+          JsonFieldParser.optionalString(map, 'localizedPrice') ?? '',
+      originalPriceMicros: JsonFieldParser.optionalInt(
+        map,
+        'originalPriceMicros',
+      ),
+      localizedOriginalPrice: JsonFieldParser.optionalString(
+        map,
+        'localizedOriginalPrice',
+      ),
+      promotionId: JsonFieldParser.optionalString(map, 'promotionId'),
+      promotionExpiresAt: JsonFieldParser.optionalDateTime(
+        map,
+        'promotionExpiresAt',
+      ),
+      sortOrder: JsonFieldParser.optionalInt(map, 'sortOrder') ?? 0,
+      enabled: JsonFieldParser.requireBool(map, 'enabled', dtoName: dtoName),
+      subtitle: JsonFieldParser.optionalString(map, 'subtitle'),
+      footnote: JsonFieldParser.optionalString(map, 'footnote'),
       benefits: _list(map['benefits'], StoreRechargeProductBenefitDto.fromJson),
     );
   }
@@ -86,35 +126,15 @@ class StoreRechargeProductBenefitDto {
   final String label;
 
   factory StoreRechargeProductBenefitDto.fromJson(Object? json) {
-    final map = json is Map<String, Object?> ? json : const <String, Object?>{};
+    final map = JsonFieldParser.requireMap(
+      json,
+      dtoName: 'StoreRechargeProductBenefitDto',
+    );
     return StoreRechargeProductBenefitDto(
-      icon: _string(map['icon'], fallback: 'drama'),
-      label: _string(map['label']),
+      icon: JsonFieldParser.optionalString(map, 'icon') ?? 'drama',
+      label: JsonFieldParser.optionalString(map, 'label') ?? '',
     );
   }
-}
-
-String _string(Object? value, {String fallback = ''}) =>
-    value is String ? value : fallback;
-
-String? _nullableString(Object? value) =>
-    value is String && value.isNotEmpty ? value : null;
-
-int _int(Object? value, {int fallback = 0}) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  return fallback;
-}
-
-int? _nullableInt(Object? value) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  return null;
-}
-
-DateTime? _date(Object? value) {
-  if (value is String && value.isNotEmpty) return DateTime.tryParse(value);
-  return null;
 }
 
 List<T> _list<T>(Object? value, T Function(Object? json) mapper) {

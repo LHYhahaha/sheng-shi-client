@@ -1,3 +1,5 @@
+import '../../../../core/network/json_field_parser.dart';
+
 class UserEntitlementStateDto {
   const UserEntitlementStateDto({
     required this.isGuest,
@@ -24,37 +26,45 @@ class UserEntitlementStateDto {
   final String? refreshReason;
 
   factory UserEntitlementStateDto.fromJson(Object? json) {
-    final map = json is Map<String, Object?> ? json : const <String, Object?>{};
+    final map = JsonFieldParser.requireMap(
+      json,
+      dtoName: 'UserEntitlementStateDto',
+    );
+    const dtoName = 'UserEntitlementStateDto';
     return UserEntitlementStateDto(
-      isGuest: map['isGuest'] == true,
-      isMember: map['isMember'] == true,
-      membershipExpiresAt: _date(map['membershipExpiresAt']),
-      coinBalance: _int(map['coinBalance']),
-      bonusBalance: _int(map['bonusBalance']),
-      autoUnlockEnabled: map['autoUnlockEnabled'] == true,
+      isGuest: JsonFieldParser.requireBool(map, 'isGuest', dtoName: dtoName),
+      isMember: JsonFieldParser.requireBool(map, 'isMember', dtoName: dtoName),
+      membershipExpiresAt: JsonFieldParser.optionalDateTime(
+        map,
+        'membershipExpiresAt',
+      ),
+      coinBalance: JsonFieldParser.requireInt(
+        map,
+        'coinBalance',
+        dtoName: dtoName,
+      ),
+      bonusBalance: JsonFieldParser.requireInt(
+        map,
+        'bonusBalance',
+        dtoName: dtoName,
+      ),
+      autoUnlockEnabled: JsonFieldParser.requireBool(
+        map,
+        'autoUnlockEnabled',
+        dtoName: dtoName,
+      ),
       unlockedEpisodeIds: _stringList(map['unlockedEpisodeIds']),
-      pendingOperationId: _nullableString(map['pendingOperationId']),
-      serverTime: _date(map['serverTime']),
-      refreshReason: _nullableString(map['refreshReason']),
+      pendingOperationId: JsonFieldParser.optionalString(
+        map,
+        'pendingOperationId',
+      ),
+      serverTime: JsonFieldParser.optionalDateTime(map, 'serverTime'),
+      refreshReason: JsonFieldParser.optionalString(map, 'refreshReason'),
     );
   }
 }
 
-int _int(Object? value, {int fallback = 0}) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  return fallback;
-}
-
-String? _nullableString(Object? value) =>
-    value is String && value.isNotEmpty ? value : null;
-
 List<String> _stringList(Object? value) {
   if (value is List) return value.whereType<String>().toList(growable: false);
   return const <String>[];
-}
-
-DateTime? _date(Object? value) {
-  if (value is String && value.isNotEmpty) return DateTime.tryParse(value);
-  return null;
 }

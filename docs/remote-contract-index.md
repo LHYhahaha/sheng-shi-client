@@ -23,14 +23,27 @@ defer 项。不接真实服务端，不替换 mock 默认实现，不改变 UI�
   透传。
 - `MediaResource.network` 用于表达远程图片 URL，不再把 URL 伪装成本地 asset path。
 
-## DTO Strict vs Display Fallback（Record Only）
+## DTO Strict vs Display Fallback ✅（A6，2026-05-17）
 
-封板阶段 **不收紧** mapper。真实联调前须区分：
+统一工具：`lib/core/network/json_field_parser.dart`、`ApiMappingException`。
 
-- **Strict**：`id`、`sourceId`、`hlsUrl`、金额 raw、`accessStatus`、`orderId`、商品 id 等 — 缺失即错误。
-- **Display fallback**：标题、副标题、tips、封面占位、描述等 — 可空 + UI 占位。
+- **Strict required**（缺失/类型错误 → `ApiMappingException`）：`id`/`dramaId`/`episodeId`、
+  `sourceId`、`hlsUrl`、`expiresAt`、`accessToken`/`refreshToken`、`unlockType`、
+  `priceMicros`/`currencyCode`/`productId`、`orderId`/`status`、`enabled`、
+  entitlement `type`/`coinBalance`、decision `price`（coin unlock）等。
+- **Display fallback**（mapper 占位）：`title`、`description`、`coverUrl`/`posterUrl`、
+  `localizedPrice` 展示文案、`viewCountLabel` 等。
+- **Unknown enum**：`unlockType` 不得默认 `free`；`order status` 不得默认 `paid/created`；
+  `enabled` 不得 `!= false` 隐式 true；entitlement `type`/`result` unknown → error。
+- **Payload 类型**：单对象 decoder 非 `map` 不返回 empty DTO（`JsonFieldParser.requireMap`）。
 
-详见 `docs/mock-data-and-api-readiness-review.md` § DTO Strict vs Display Fallback。本轮仅记录，不改解析行为。
+**已加固（remote DTO）**：Auth、Player/PlaybackSource、Drama、Entitlement、Wallet、
+Store/Membership/Order、MyList。
+
+**仍 defer**：Profile DTO、Wallet 子记录 transaction status、FavoriteMutation success 默认、
+Subtitle/PreviewSprite 全量 strict、全站 DTO 迁移。
+
+详见 `docs/mock-data-and-api-readiness-review.md` § DTO Strict vs Display Fallback。
 
 ## 全局索引
 

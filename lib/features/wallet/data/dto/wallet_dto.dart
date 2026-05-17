@@ -1,3 +1,4 @@
+import '../../../../core/network/json_field_parser.dart';
 import 'wallet_consumption_record_dto.dart';
 import 'wallet_reward_coin_record_dto.dart';
 import 'wallet_transaction_record_dto.dart';
@@ -20,11 +21,24 @@ class WalletDto {
   final List<WalletRewardCoinRecordDto> rewardCoinRecords;
 
   factory WalletDto.fromJson(Object? json) {
-    final map = json is Map<String, Object?> ? json : const <String, Object?>{};
+    final map = JsonFieldParser.requireMap(json, dtoName: 'WalletDto');
+    const dtoName = 'WalletDto';
     return WalletDto(
-      coinBalance: _int(map['coinBalance']),
-      bonusBalance: _int(map['bonusBalance']),
-      autoUnlockEnabled: map['autoUnlockEnabled'] == true,
+      coinBalance: JsonFieldParser.requireInt(
+        map,
+        'coinBalance',
+        dtoName: dtoName,
+      ),
+      bonusBalance: JsonFieldParser.requireInt(
+        map,
+        'bonusBalance',
+        dtoName: dtoName,
+      ),
+      autoUnlockEnabled: JsonFieldParser.requireBool(
+        map,
+        'autoUnlockEnabled',
+        dtoName: dtoName,
+      ),
       transactionRecords: _list(
         map['transactionRecords'],
         WalletTransactionRecordDto.fromJson,
@@ -41,15 +55,7 @@ class WalletDto {
   }
 }
 
-int _int(Object? value, {int fallback = 0}) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  return fallback;
-}
-
 List<T> _list<T>(Object? value, T Function(Object? json) mapper) {
-  if (value is List) {
-    return value.map(mapper).toList(growable: false);
-  }
+  if (value is List) return value.map(mapper).toList(growable: false);
   return <T>[];
 }

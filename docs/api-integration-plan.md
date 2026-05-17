@@ -871,6 +871,8 @@ Phase F status:
 - `AppConfig` supports dev/staging/prod and `API_BASE_URL` override.
 - `ApiRequestContext` is composed by `apiRequestContextProvider` from `installIdProvider`,
   `apiLangProvider`, `apiPlatformProvider`, `apiAppVersionProvider`, and `AuthTokenStore` (A4).
+- Remote DTO strict parsing via `JsonFieldParser` / `ApiMappingException` (A6); display fields
+  fallback in mappers only.
 - `AuthTokenStore` is an in-memory skeleton; secure storage remains deferred.
 - `AuthRefreshCoordinator` establishes refresh in-flight dedupe; automatic 401 retry remains deferred.
 - `SessionCleanupCoordinator` establishes the cleanup entry; feature cache and Player hooks remain deferred.

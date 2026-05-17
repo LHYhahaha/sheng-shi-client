@@ -1,3 +1,4 @@
+import '../../../../core/network/api_mapping_exception.dart';
 import '../../domain/episode_access_decision.dart';
 import '../../domain/episode_unlock_type.dart';
 import '../../domain/user_entitlement_state.dart';
@@ -6,9 +7,6 @@ import '../dto/unlock_episode_response_dto.dart';
 import '../dto/user_entitlement_state_dto.dart';
 
 /// Entitlement 远程 DTO 到 domain 的 mapper。
-///
-/// 真实权益状态必须以后端为准。mapper 只负责字段转换，不在客户端重新解释支付成功、
-/// 会员有效期或金币扣费结果。
 class EntitlementMapper {
   const EntitlementMapper();
 
@@ -50,12 +48,16 @@ class EntitlementMapper {
   }) {
     if (dto.decision != null) return mapDecision(dto.decision!);
 
-    final type = switch (dto.result) {
-      'success' || 'alreadyUnlocked' => EpisodeAccessDecisionType.allowPlay,
-      'insufficientCoins' => EpisodeAccessDecisionType.showRechargeDialog,
-      'membershipRequired' => EpisodeAccessDecisionType.goMembership,
+    final type = switch (dto.result.toLowerCase()) {
+      'success' || 'alreadyunlocked' => EpisodeAccessDecisionType.allowPlay,
+      'insufficientcoins' => EpisodeAccessDecisionType.showRechargeDialog,
+      'membershiprequired' => EpisodeAccessDecisionType.goMembership,
       'unavailable' => EpisodeAccessDecisionType.waitUnlock,
-      _ => EpisodeAccessDecisionType.waitUnlock,
+      _ => throw ApiMappingException(
+        dtoName: 'UnlockEpisodeResponseDto',
+        field: 'result',
+        reason: 'unknown unlock result at mapper',
+      ),
     };
 
     return EpisodeAccessDecision(
@@ -71,32 +73,31 @@ class EntitlementMapper {
   }
 
   EpisodeAccessDecisionType _decisionType(String value) {
-    switch (value) {
-      case 'allowPlay':
-        return EpisodeAccessDecisionType.allowPlay;
-      case 'goMembership':
-        return EpisodeAccessDecisionType.goMembership;
-      case 'showCoinUnlockDialog':
-        return EpisodeAccessDecisionType.showCoinUnlockDialog;
-      case 'showRechargeDialog':
-        return EpisodeAccessDecisionType.showRechargeDialog;
-      case 'autoUnlockAndPlay':
-        return EpisodeAccessDecisionType.autoUnlockAndPlay;
-      case 'waitUnlock':
-      default:
-        return EpisodeAccessDecisionType.waitUnlock;
-    }
+    return switch (value) {
+      'allowPlay' => EpisodeAccessDecisionType.allowPlay,
+      'goMembership' => EpisodeAccessDecisionType.goMembership,
+      'showCoinUnlockDialog' => EpisodeAccessDecisionType.showCoinUnlockDialog,
+      'showRechargeDialog' => EpisodeAccessDecisionType.showRechargeDialog,
+      'autoUnlockAndPlay' => EpisodeAccessDecisionType.autoUnlockAndPlay,
+      'waitUnlock' => EpisodeAccessDecisionType.waitUnlock,
+      _ => throw ApiMappingException(
+        dtoName: 'EpisodeAccessDecisionDto',
+        field: 'type',
+        reason: 'unknown decision type at mapper',
+      ),
+    };
   }
 
   EpisodeUnlockType _unlockType(String value) {
-    switch (value) {
-      case 'free':
-        return EpisodeUnlockType.free;
-      case 'membership':
-        return EpisodeUnlockType.membership;
-      case 'coins':
-      default:
-        return EpisodeUnlockType.coins;
-    }
+    return switch (value.toLowerCase()) {
+      'free' => EpisodeUnlockType.free,
+      'membership' || 'member' || 'vip' => EpisodeUnlockType.membership,
+      'coins' || 'coin' => EpisodeUnlockType.coins,
+      _ => throw ApiMappingException(
+        dtoName: 'EpisodeAccessDecisionDto',
+        field: 'unlockType',
+        reason: 'unknown unlockType at mapper',
+      ),
+    };
   }
 }

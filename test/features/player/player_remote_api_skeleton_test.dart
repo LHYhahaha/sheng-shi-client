@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:drama_client/core/network/api_client.dart';
 import 'package:drama_client/core/network/api_exception.dart';
+import 'package:drama_client/core/network/api_mapping_exception.dart';
 import 'package:drama_client/core/network/api_request_context.dart';
 import 'package:drama_client/features/entitlement/domain/episode_unlock_type.dart';
 import 'package:drama_client/features/player/data/dto/playback_source_dto.dart';
@@ -65,11 +66,9 @@ void main() {
     final item = _feedItem();
     final expiresAt = DateTime.now().add(const Duration(minutes: 10));
     final source = sourceMapper.mapSource(
-      PlaybackSourceDto(
-        episodeId: 'ep-1',
+      _playbackSource(
         sourceId: 'source-a',
         hlsUrl: 'https://cdn.example.com/a.m3u8',
-        backupHlsUrls: const [],
         expiresAt: expiresAt,
         durationMs: 60000,
         width: 1080,
@@ -78,7 +77,6 @@ void main() {
         codec: 'hls',
         cachePolicy: const {'ttl': 300},
         preloadPolicy: const {'level': 'playlist'},
-        subtitleTracks: const [],
         previewSpriteUrl: 'https://cdn.example.com/sprite.jpg',
         previewVttUrl: 'https://cdn.example.com/sprite.vtt',
       ),
@@ -97,44 +95,12 @@ void main() {
   test('same HLS url with different sourceId gets different cache keys', () {
     final item = _feedItem();
     final sourceA = sourceMapper.mapSource(
-      const PlaybackSourceDto(
-        episodeId: 'ep-1',
-        sourceId: 'source-a',
-        hlsUrl: 'https://cdn.example.com/shared.m3u8',
-        backupHlsUrls: [],
-        expiresAt: null,
-        durationMs: null,
-        width: null,
-        height: null,
-        aspectRatio: null,
-        codec: null,
-        cachePolicy: {},
-        preloadPolicy: {},
-        subtitleTracks: [],
-        previewSpriteUrl: null,
-        previewVttUrl: null,
-      ),
+      _playbackSource(sourceId: 'source-a'),
       item: item,
       status: PlaybackSourceStatus.resolved,
     );
     final sourceB = sourceMapper.mapSource(
-      const PlaybackSourceDto(
-        episodeId: 'ep-1',
-        sourceId: 'source-b',
-        hlsUrl: 'https://cdn.example.com/shared.m3u8',
-        backupHlsUrls: [],
-        expiresAt: null,
-        durationMs: null,
-        width: null,
-        height: null,
-        aspectRatio: null,
-        codec: null,
-        cachePolicy: {},
-        preloadPolicy: {},
-        subtitleTracks: [],
-        previewSpriteUrl: null,
-        previewVttUrl: null,
-      ),
+      _playbackSource(sourceId: 'source-b'),
       item: item,
       status: PlaybackSourceStatus.resolved,
     );
@@ -148,27 +114,11 @@ void main() {
 
     expect(
       () => sourceMapper.mapSource(
-        const PlaybackSourceDto(
-          episodeId: 'ep-1',
-          sourceId: 'source-a',
-          hlsUrl: null,
-          backupHlsUrls: [],
-          expiresAt: null,
-          durationMs: null,
-          width: null,
-          height: null,
-          aspectRatio: null,
-          codec: null,
-          cachePolicy: {},
-          preloadPolicy: {},
-          subtitleTracks: [],
-          previewSpriteUrl: null,
-          previewVttUrl: null,
-        ),
+        _playbackSource(hlsUrl: ''),
         item: item,
         status: PlaybackSourceStatus.resolved,
       ),
-      throwsStateError,
+      throwsA(isA<ApiMappingException>()),
     );
   });
 
@@ -180,27 +130,15 @@ void main() {
 
       expect(
         () => sourceMapper.mapSource(
-          PlaybackSourceDto(
-            episodeId: 'ep-1',
+          _playbackSource(
             sourceId: 'expired-source',
             hlsUrl: 'https://cdn.example.com/expired.m3u8',
-            backupHlsUrls: const [],
             expiresAt: expiredAt,
-            durationMs: null,
-            width: null,
-            height: null,
-            aspectRatio: null,
-            codec: null,
-            cachePolicy: const {},
-            preloadPolicy: const {},
-            subtitleTracks: const [],
-            previewSpriteUrl: null,
-            previewVttUrl: null,
           ),
           item: item,
           status: PlaybackSourceStatus.resolved,
         ),
-        throwsStateError,
+        throwsA(isA<ApiMappingException>()),
       );
     },
   );
@@ -210,22 +148,9 @@ void main() {
 
     expect(
       () => sourceMapper.mapSource(
-        const PlaybackSourceDto(
-          episodeId: 'ep-1',
+        _playbackSource(
           sourceId: 'blocked-source',
           hlsUrl: 'https://cdn.example.com/blocked.m3u8',
-          backupHlsUrls: [],
-          expiresAt: null,
-          durationMs: null,
-          width: null,
-          height: null,
-          aspectRatio: null,
-          codec: null,
-          cachePolicy: {},
-          preloadPolicy: {},
-          subtitleTracks: [],
-          previewSpriteUrl: null,
-          previewVttUrl: null,
           isAvailable: false,
           accessStatus: 'denied',
           reasonCode: 'ENTITLEMENT_REQUIRED',
@@ -233,15 +158,20 @@ void main() {
         item: item,
         status: PlaybackSourceStatus.resolved,
       ),
-      throwsStateError,
+      throwsA(isA<ApiMappingException>()),
     );
   });
 
   test('playback source dto parses nested access contract', () {
-    final dto = PlaybackSourceDto.fromJson(const {
+    final dto = PlaybackSourceDto.fromJson({
       'episodeId': 'ep-1',
       'sourceId': 'source-a',
       'hlsUrl': 'https://cdn.example.com/a.m3u8',
+      'expiresAt': DateTime.now()
+          .add(const Duration(hours: 1))
+          .toUtc()
+          .toIso8601String(),
+      'isAvailable': true,
       'access': {'status': 'denied', 'reasonCode': 'REGION_BLOCKED'},
     });
 
@@ -320,22 +250,9 @@ void main() {
       );
       final repository = RemotePlayerPlaybackSourceRepository(
         remoteDataSource: _FakePlaybackSourceRemoteDataSource(
-          source: const PlaybackSourceDto(
-            episodeId: 'ep-1',
-            sourceId: 'source-a',
+          source: _playbackSource(
             hlsUrl: 'https://cdn.example.com/a.m3u8',
-            backupHlsUrls: [],
-            expiresAt: null,
-            durationMs: null,
-            width: null,
-            height: null,
-            aspectRatio: null,
             codec: 'hls',
-            cachePolicy: {},
-            preloadPolicy: {},
-            subtitleTracks: [],
-            previewSpriteUrl: null,
-            previewVttUrl: null,
           ),
         ),
         preloadManager: preloadManager,
@@ -360,6 +277,8 @@ void main() {
           'episodeId': 'ep-1',
           'sourceId': 'source-a',
           'hlsUrl': 'https://cdn.example.com/a.m3u8',
+          'expiresAt': '2026-12-31T00:00:00Z',
+          'isAvailable': true,
         },
       },
     );
@@ -449,6 +368,46 @@ void main() {
       isA<RemotePlayerPlaybackSourceRepository>(),
     );
   });
+}
+
+PlaybackSourceDto _playbackSource({
+  String episodeId = 'ep-1',
+  String sourceId = 'source-a',
+  String hlsUrl = 'https://cdn.example.com/shared.m3u8',
+  DateTime? expiresAt,
+  int? durationMs,
+  int? width,
+  int? height,
+  double? aspectRatio,
+  String? codec,
+  Map<String, Object?> cachePolicy = const {},
+  Map<String, Object?> preloadPolicy = const {},
+  String? previewSpriteUrl,
+  String? previewVttUrl,
+  bool isAvailable = true,
+  String? accessStatus,
+  String? reasonCode,
+}) {
+  return PlaybackSourceDto(
+    episodeId: episodeId,
+    sourceId: sourceId,
+    hlsUrl: hlsUrl,
+    backupHlsUrls: const [],
+    expiresAt: expiresAt ?? DateTime.now().add(const Duration(hours: 1)),
+    durationMs: durationMs,
+    width: width,
+    height: height,
+    aspectRatio: aspectRatio,
+    codec: codec,
+    cachePolicy: cachePolicy,
+    preloadPolicy: preloadPolicy,
+    subtitleTracks: const [],
+    previewSpriteUrl: previewSpriteUrl,
+    previewVttUrl: previewVttUrl,
+    isAvailable: isAvailable,
+    accessStatus: accessStatus,
+    reasonCode: reasonCode,
+  );
 }
 
 PlayerContentDto _detailDto({List<PlayerEpisodeDto> episodes = const []}) {

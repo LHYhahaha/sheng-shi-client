@@ -1,3 +1,5 @@
+import '../../../../core/network/json_field_parser.dart';
+
 class AuthUserDto {
   const AuthUserDto({
     required this.userId,
@@ -16,25 +18,22 @@ class AuthUserDto {
   final DateTime? createdAt;
 
   factory AuthUserDto.fromJson(Object? json) {
-    final map = json is Map<String, Object?> ? json : const <String, Object?>{};
+    final map = JsonFieldParser.requireMap(json, dtoName: 'AuthUserDto');
     return AuthUserDto(
-      userId: _string(map['userId']),
-      nickname: _string(map['nickname']),
-      avatarUrl: _nullableString(map['avatarUrl']),
-      provider: _string(map['provider'], fallback: 'device'),
-      isGuest: map['isGuest'] == true,
-      createdAt: _date(map['createdAt']),
+      userId: JsonFieldParser.requireString(
+        map,
+        'userId',
+        dtoName: 'AuthUserDto',
+      ),
+      nickname: JsonFieldParser.optionalString(map, 'nickname') ?? '',
+      avatarUrl: JsonFieldParser.optionalString(map, 'avatarUrl'),
+      provider: JsonFieldParser.optionalString(map, 'provider') ?? 'device',
+      isGuest: JsonFieldParser.requireBool(
+        map,
+        'isGuest',
+        dtoName: 'AuthUserDto',
+      ),
+      createdAt: JsonFieldParser.optionalDateTime(map, 'createdAt'),
     );
   }
-}
-
-String _string(Object? value, {String fallback = ''}) =>
-    value is String ? value : fallback;
-
-String? _nullableString(Object? value) =>
-    value is String && value.isNotEmpty ? value : null;
-
-DateTime? _date(Object? value) {
-  if (value is String && value.isNotEmpty) return DateTime.tryParse(value);
-  return null;
 }

@@ -1,9 +1,7 @@
 import 'dart:async';
 
-import 'package:drama_client/core/auth/auth_token_snapshot.dart';
 import 'package:drama_client/core/auth/auth_token_store.dart';
 import 'package:drama_client/core/auth/session_cleanup_coordinator.dart';
-import 'package:drama_client/core/auth/session_cleanup_types.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

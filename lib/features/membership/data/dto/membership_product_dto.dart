@@ -1,3 +1,4 @@
+import '../../../../core/network/json_field_parser.dart';
 import 'membership_benefit_dto.dart';
 
 class MembershipProductDto {
@@ -30,8 +31,8 @@ class MembershipProductDto {
   final String? productType;
   final String period;
   final String title;
-  final int? priceMicros;
-  final String? currencyCode;
+  final int priceMicros;
+  final String currencyCode;
   final String localizedPrice;
   final int? originalPriceMicros;
   final String? localizedOriginalPrice;
@@ -44,46 +45,59 @@ class MembershipProductDto {
   final String? description;
 
   factory MembershipProductDto.fromJson(Object? json) {
-    final map = json is Map<String, Object?> ? json : const <String, Object?>{};
+    final map = JsonFieldParser.requireMap(
+      json,
+      dtoName: 'MembershipProductDto',
+    );
+    const dtoName = 'MembershipProductDto';
     return MembershipProductDto(
-      productId: _string(map['productId']),
-      platformProductId: _string(map['platformProductId']),
-      basePlanId: _nullableString(map['basePlanId']),
-      offerId: _nullableString(map['offerId']),
-      productType: _nullableString(map['productType']),
-      period: _string(map['period'], fallback: 'weekly'),
-      title: _string(map['title']),
-      priceMicros: _nullableInt(map['priceMicros']),
-      currencyCode: _nullableString(map['currencyCode']),
-      localizedPrice: _string(map['localizedPrice']),
-      originalPriceMicros: _nullableInt(map['originalPriceMicros']),
-      localizedOriginalPrice: _nullableString(map['localizedOriginalPrice']),
-      promotionId: _nullableString(map['promotionId']),
-      promotionExpiresAt: _date(map['promotionExpiresAt']),
+      productId: JsonFieldParser.requireString(
+        map,
+        'productId',
+        dtoName: dtoName,
+      ),
+      platformProductId: JsonFieldParser.requireString(
+        map,
+        'platformProductId',
+        dtoName: dtoName,
+      ),
+      basePlanId: JsonFieldParser.optionalString(map, 'basePlanId'),
+      offerId: JsonFieldParser.optionalString(map, 'offerId'),
+      productType: JsonFieldParser.optionalString(map, 'productType'),
+      period: JsonFieldParser.requireString(map, 'period', dtoName: dtoName),
+      title: JsonFieldParser.optionalString(map, 'title') ?? '',
+      priceMicros: JsonFieldParser.requireInt(
+        map,
+        'priceMicros',
+        dtoName: dtoName,
+      ),
+      currencyCode: JsonFieldParser.requireString(
+        map,
+        'currencyCode',
+        dtoName: dtoName,
+      ),
+      localizedPrice:
+          JsonFieldParser.optionalString(map, 'localizedPrice') ?? '',
+      originalPriceMicros: JsonFieldParser.optionalInt(
+        map,
+        'originalPriceMicros',
+      ),
+      localizedOriginalPrice: JsonFieldParser.optionalString(
+        map,
+        'localizedOriginalPrice',
+      ),
+      promotionId: JsonFieldParser.optionalString(map, 'promotionId'),
+      promotionExpiresAt: JsonFieldParser.optionalDateTime(
+        map,
+        'promotionExpiresAt',
+      ),
       benefits: _list(map['benefits'], MembershipBenefitDto.fromJson),
       tips: _stringList(map['tips']),
-      enabled: map['enabled'] != false,
-      dailyPriceLabel: _nullableString(map['dailyPriceLabel']),
-      description: _nullableString(map['description']),
+      enabled: JsonFieldParser.requireBool(map, 'enabled', dtoName: dtoName),
+      dailyPriceLabel: JsonFieldParser.optionalString(map, 'dailyPriceLabel'),
+      description: JsonFieldParser.optionalString(map, 'description'),
     );
   }
-}
-
-String _string(Object? value, {String fallback = ''}) =>
-    value is String ? value : fallback;
-
-String? _nullableString(Object? value) =>
-    value is String && value.isNotEmpty ? value : null;
-
-int? _nullableInt(Object? value) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  return null;
-}
-
-DateTime? _date(Object? value) {
-  if (value is String && value.isNotEmpty) return DateTime.tryParse(value);
-  return null;
 }
 
 List<T> _list<T>(Object? value, T Function(Object? json) mapper) {

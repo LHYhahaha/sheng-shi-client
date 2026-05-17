@@ -1,20 +1,20 @@
+import '../../../../core/network/api_mapping_exception.dart';
 import '../../../entitlement/domain/episode_unlock_type.dart';
 import '../../domain/player_content.dart';
 import '../dto/player_content_dto.dart';
 import '../dto/player_episode_dto.dart';
 
 /// 播放详情 DTO 到 domain 的 mapper。
-///
-/// 目前 PlayerContent 仍使用 asset path 字段渲染背景/海报，remote URL 暂不直接接入 UI。
-/// 真正播放 HLS URL 仍通过 PlaybackSourceRepository 解析，不能从 episode DTO 透传。
 class PlayerContentMapper {
   const PlayerContentMapper();
+
+  static const _displayTitleFallback = 'Untitled';
 
   PlayerContent mapContent(PlayerContentDto dto) {
     return PlayerContent(
       id: dto.dramaId,
-      title: dto.title,
-      playTitle: dto.title,
+      title: dto.title ?? _displayTitleFallback,
+      playTitle: dto.title ?? _displayTitleFallback,
       synopsis: dto.description ?? '',
       viewCountLabel: dto.viewCountLabel ?? _formatViewCount(dto.viewCount),
       likeCountLabel: dto.likeCountLabel ?? '',
@@ -50,7 +50,12 @@ class PlayerContentMapper {
     return switch (value.toLowerCase()) {
       'coins' || 'coin' => EpisodeUnlockType.coins,
       'membership' || 'member' || 'vip' => EpisodeUnlockType.membership,
-      _ => EpisodeUnlockType.free,
+      'free' => EpisodeUnlockType.free,
+      _ => throw ApiMappingException(
+        dtoName: 'PlayerEpisodeDto',
+        field: 'unlockType',
+        reason: 'unknown unlockType at mapper',
+      ),
     };
   }
 

@@ -1,3 +1,5 @@
+import '../../../../core/network/api_mapping_exception.dart';
+import '../../../../core/network/json_field_parser.dart';
 import 'player_episode_dto.dart';
 
 /// 播放器剧详情远程 DTO。
@@ -17,7 +19,7 @@ class PlayerContentDto {
   });
 
   final String dramaId;
-  final String title;
+  final String? title;
   final String? description;
   final String? posterUrl;
   final String? backgroundUrl;
@@ -29,18 +31,30 @@ class PlayerContentDto {
   final List<PlayerEpisodeDto> episodes;
 
   factory PlayerContentDto.fromJson(Map<String, Object?> json) {
+    const dtoName = 'PlayerContentDto';
     final rawEpisodes = json['episodes'];
+    final dramaId =
+        JsonFieldParser.optionalString(json, 'dramaId') ??
+        JsonFieldParser.optionalString(json, 'id');
+    if (dramaId == null) {
+      throw ApiMappingException(
+        dtoName: dtoName,
+        field: 'dramaId',
+        reason: 'required drama id',
+      );
+    }
+
     return PlayerContentDto(
-      dramaId: _stringValue(json['dramaId']) ?? _stringValue(json['id']) ?? '',
-      title: _stringValue(json['title']) ?? '',
-      description: _stringValue(json['description']),
-      posterUrl: _stringValue(json['posterUrl']),
-      backgroundUrl: _stringValue(json['backgroundUrl']),
-      totalEpisodes: _intValue(json['totalEpisodes']) ?? 0,
+      dramaId: dramaId,
+      title: JsonFieldParser.optionalString(json, 'title'),
+      description: JsonFieldParser.optionalString(json, 'description'),
+      posterUrl: JsonFieldParser.optionalString(json, 'posterUrl'),
+      backgroundUrl: JsonFieldParser.optionalString(json, 'backgroundUrl'),
+      totalEpisodes: JsonFieldParser.optionalInt(json, 'totalEpisodes') ?? 0,
       tags: _stringList(json['tags']),
-      viewCount: _intValue(json['viewCount']),
-      viewCountLabel: _stringValue(json['viewCountLabel']),
-      likeCountLabel: _stringValue(json['likeCountLabel']),
+      viewCount: JsonFieldParser.optionalInt(json, 'viewCount'),
+      viewCountLabel: JsonFieldParser.optionalString(json, 'viewCountLabel'),
+      likeCountLabel: JsonFieldParser.optionalString(json, 'likeCountLabel'),
       episodes: rawEpisodes is List
           ? rawEpisodes
                 .whereType<Map<String, Object?>>()
@@ -48,15 +62,6 @@ class PlayerContentDto {
                 .toList(growable: false)
           : const <PlayerEpisodeDto>[],
     );
-  }
-
-  static String? _stringValue(Object? value) => value is String ? value : null;
-
-  static int? _intValue(Object? value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    if (value is String) return int.tryParse(value);
-    return null;
   }
 
   static List<String> _stringList(Object? value) {

@@ -315,14 +315,15 @@ refresh failed: clear auth token → cleanup → guest bootstrap → reload gues
 | **测试** | provider 默认 false；staging 集成配置测试 |
 | **依赖** | A4 |
 
-#### A6 — strict DTO / required field policy
+#### A6 — strict DTO / required field policy ✅（2026-05-17）
 
 | 项 | 内容 |
 | --- | --- |
 | **目标** | strict 字段 fail-fast；display 字段可 fallback |
-| **文件影响** | 各 `data/mapper/*`；`docs/remote-contract-index.md` 逐模块表 |
+| **已完成** | `JsonFieldParser` + `ApiMappingException`；Auth/Player/Drama/Entitlement/Commerce/MyList remote DTO strict；remote decoder 非 map fail-fast；mapper unknown enum 不再默认危险值 |
 | **禁止项** | 不用空 title 冒充成功订单/权益 |
-| **测试** | 每 mapper 增加 missing strict 负例 |
+| **测试** | `json_field_parser_test`、`auth/player/drama/entitlement/commerce/my_list_dto_strict_test`、`dto_strict_policy_test` |
+| **仍 defer** | Profile DTO、FavoriteMutation、Wallet 子记录、Subtitle/Sprite 全量 |
 | **依赖** | 后端 schema 冻结（见 §4.4） |
 
 #### A7 — session cleanup（feature cache + player session）✅（2026-05-17，客户端骨架）
@@ -759,7 +760,8 @@ flutter test
 | A1–A3 | **Done**（客户端 session/network 骨架；见 §4.6） |
 | A1.5 | **Design + skeleton**（guest bootstrap / account link；见 §4.2 A1.5） |
 | A4 | **Done**（真实 Device-Id / App-Version / Lang / Platform；见 §4.2 A4） |
-| A5–A6 | Planned |
+| A5 | Planned |
+| A6 | **Done**（strict DTO；见 §4.2 A6） |
 | A7 | **Done**（见 §4.2 A7） |
 | P1–P7 | Planned |
 | L1–L6 | Planned |

@@ -1,3 +1,5 @@
+import '../../../../core/network/json_field_parser.dart';
+
 /// 远程 token 契约 DTO。
 ///
 /// token 只允许停留在 data/core session 边界。不要把这个 DTO 或字段映射进
@@ -19,21 +21,24 @@ class AuthTokenDto {
   final DateTime? refreshExpiresAt;
 
   factory AuthTokenDto.fromJson(Object? json) {
-    final map = json is Map<String, Object?> ? json : const <String, Object?>{};
+    final map = JsonFieldParser.requireMap(json, dtoName: 'AuthTokenDto');
     return AuthTokenDto(
-      accessToken: _string(map['accessToken']),
-      refreshToken: _string(map['refreshToken']),
-      tokenType: _string(map['tokenType'], fallback: 'Bearer'),
-      expiresAt: _date(map['expiresAt']),
-      refreshExpiresAt: _date(map['refreshExpiresAt']),
+      accessToken: JsonFieldParser.requireString(
+        map,
+        'accessToken',
+        dtoName: 'AuthTokenDto',
+      ),
+      refreshToken: JsonFieldParser.requireString(
+        map,
+        'refreshToken',
+        dtoName: 'AuthTokenDto',
+      ),
+      tokenType: JsonFieldParser.optionalString(map, 'tokenType') ?? 'Bearer',
+      expiresAt: JsonFieldParser.optionalDateTime(map, 'expiresAt'),
+      refreshExpiresAt: JsonFieldParser.optionalDateTime(
+        map,
+        'refreshExpiresAt',
+      ),
     );
   }
-}
-
-String _string(Object? value, {String fallback = ''}) =>
-    value is String ? value : fallback;
-
-DateTime? _date(Object? value) {
-  if (value is String && value.isNotEmpty) return DateTime.tryParse(value);
-  return null;
 }

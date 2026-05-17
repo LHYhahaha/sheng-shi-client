@@ -1,7 +1,7 @@
+import '../../../../core/network/api_mapping_exception.dart';
+import '../../../../core/network/json_field_parser.dart';
+
 /// 播放历史远程 DTO。
-///
-/// 这里预留 progressMs/durationMs/progressPercent，当前 My list UI 暂不展示精确进度，
-/// 但后续继续观看和播放进度同步会依赖这些字段。
 class PlayHistoryItemDto {
   const PlayHistoryItemDto({
     required this.historyId,
@@ -22,7 +22,7 @@ class PlayHistoryItemDto {
   final String? historyId;
   final String dramaId;
   final String episodeId;
-  final String title;
+  final String? title;
   final String? description;
   final String? coverUrl;
   final double? coverAspectRatio;
@@ -34,44 +34,48 @@ class PlayHistoryItemDto {
   final DateTime? updatedAt;
 
   factory PlayHistoryItemDto.fromJson(Map<String, Object?> json) {
+    const dtoName = 'PlayHistoryItemDto';
+    final historyId = JsonFieldParser.optionalString(json, 'historyId');
+    final dramaId = JsonFieldParser.optionalString(json, 'dramaId');
+    final episodeId = JsonFieldParser.optionalString(json, 'episodeId');
+    if (dramaId == null) {
+      throw const ApiMappingException(
+        dtoName: dtoName,
+        field: 'dramaId',
+        reason: 'required drama id',
+      );
+    }
+    if (historyId == null && (episodeId == null || episodeId.isEmpty)) {
+      throw const ApiMappingException(
+        dtoName: dtoName,
+        field: 'historyId',
+        reason: 'historyId or episodeId required',
+      );
+    }
+
     return PlayHistoryItemDto(
-      historyId: _stringValue(json['historyId']),
-      dramaId: _stringValue(json['dramaId']) ?? '',
-      episodeId: _stringValue(json['episodeId']) ?? '',
-      title: _stringValue(json['title']) ?? '',
+      historyId: historyId,
+      dramaId: dramaId,
+      episodeId: episodeId ?? '',
+      title: JsonFieldParser.optionalString(json, 'title'),
       description:
-          _stringValue(json['description']) ??
-          _stringValue(json['introduction']),
-      coverUrl: _stringValue(json['coverUrl']),
+          JsonFieldParser.optionalString(json, 'description') ??
+          JsonFieldParser.optionalString(json, 'introduction'),
+      coverUrl: JsonFieldParser.optionalString(json, 'coverUrl'),
       coverAspectRatio: _doubleValue(json['coverAspectRatio']),
-      episodeNumber: _intValue(json['episodeNumber']) ?? 0,
-      totalEpisodes: _intValue(json['totalEpisodes']) ?? 0,
-      progressMs: _intValue(json['progressMs']),
-      durationMs: _intValue(json['durationMs']),
+      episodeNumber: JsonFieldParser.optionalInt(json, 'episodeNumber') ?? 0,
+      totalEpisodes: JsonFieldParser.optionalInt(json, 'totalEpisodes') ?? 0,
+      progressMs: JsonFieldParser.optionalInt(json, 'progressMs'),
+      durationMs: JsonFieldParser.optionalInt(json, 'durationMs'),
       progressPercent: _doubleValue(json['progressPercent']),
-      updatedAt: _dateTimeValue(json['updatedAt']),
+      updatedAt: JsonFieldParser.optionalDateTime(json, 'updatedAt'),
     );
   }
-}
-
-String? _stringValue(Object? value) => value is String ? value : null;
-
-int? _intValue(Object? value) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  if (value is String) return int.tryParse(value);
-  return null;
 }
 
 double? _doubleValue(Object? value) {
   if (value is double) return value;
   if (value is num) return value.toDouble();
   if (value is String) return double.tryParse(value);
-  return null;
-}
-
-DateTime? _dateTimeValue(Object? value) {
-  if (value is DateTime) return value;
-  if (value is String) return DateTime.tryParse(value);
   return null;
 }

@@ -50,11 +50,8 @@ class AuthUser {
 /// - [deviceId]：由 [ApiRequestContext] 的 Device-Id header 承载，不在此重复存储。
 /// - refresh/access token：仅在 [AuthTokenStore] / [AuthTokenSnapshot]，不进 UI。
 class AuthSession {
-  const AuthSession({
-    required this.user,
-    this.sessionId,
-    this.guestId,
-  }) : kind = AuthSessionKind.authenticated;
+  const AuthSession({required this.user, this.sessionId, this.guestId})
+    : kind = AuthSessionKind.authenticated;
 
   const AuthSession.guest({this.sessionId, this.guestId})
     : user = null,

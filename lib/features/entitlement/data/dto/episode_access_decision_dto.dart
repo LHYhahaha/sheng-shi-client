@@ -1,3 +1,6 @@
+import '../../../../core/network/api_mapping_exception.dart';
+import '../../../../core/network/json_field_parser.dart';
+
 class EpisodeAccessDecisionDto {
   const EpisodeAccessDecisionDto({
     required this.type,
@@ -22,29 +25,36 @@ class EpisodeAccessDecisionDto {
   final String? operationId;
 
   factory EpisodeAccessDecisionDto.fromJson(Object? json) {
-    final map = json is Map<String, Object?> ? json : const <String, Object?>{};
+    final map = JsonFieldParser.requireMap(
+      json,
+      dtoName: 'EpisodeAccessDecisionDto',
+    );
+    const dtoName = 'EpisodeAccessDecisionDto';
+    final unlockType = JsonFieldParser.parseUnlockType(map, dtoName: dtoName);
+    final type = JsonFieldParser.parseDecisionType(map, dtoName: dtoName);
+    final price = JsonFieldParser.optionalInt(map, 'price');
+    if (type == 'showCoinUnlockDialog' && price == null) {
+      throw ApiMappingException(
+        dtoName: dtoName,
+        field: 'price',
+        reason: 'coin unlock decision requires price',
+      );
+    }
+
     return EpisodeAccessDecisionDto(
-      type: _string(map['type'], fallback: 'waitUnlock'),
-      dramaId: _string(map['dramaId']),
-      episodeId: _string(map['episodeId']),
-      itemId: _string(map['itemId']),
-      unlockType: _string(map['unlockType'], fallback: 'coins'),
-      price: _nullableInt(map['price']),
-      balance: _nullableInt(map['balance']),
-      reason: _nullableString(map['reason']),
-      operationId: _nullableString(map['operationId']),
+      type: type,
+      dramaId: JsonFieldParser.requireString(map, 'dramaId', dtoName: dtoName),
+      episodeId: JsonFieldParser.requireString(
+        map,
+        'episodeId',
+        dtoName: dtoName,
+      ),
+      itemId: JsonFieldParser.requireString(map, 'itemId', dtoName: dtoName),
+      unlockType: unlockType,
+      price: price,
+      balance: JsonFieldParser.optionalInt(map, 'balance'),
+      reason: JsonFieldParser.optionalString(map, 'reason'),
+      operationId: JsonFieldParser.optionalString(map, 'operationId'),
     );
   }
-}
-
-String _string(Object? value, {String fallback = ''}) =>
-    value is String ? value : fallback;
-
-String? _nullableString(Object? value) =>
-    value is String && value.isNotEmpty ? value : null;
-
-int? _nullableInt(Object? value) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  return null;
 }
