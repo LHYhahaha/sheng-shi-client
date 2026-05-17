@@ -258,7 +258,7 @@ class _PaymentContent extends StatelessWidget {
                       ),
                     ),
                     Positioned(
-                      right: -10,
+                      right: 0,
                       top: 0,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,

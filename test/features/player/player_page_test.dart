@@ -1826,6 +1826,15 @@ void main() {
     expect(find.text('Google Pay'), findsOneWidget);
     expect(find.text('300 Coins'), findsOneWidget);
     expect(find.text(r'$2.99'), findsOneWidget);
+    final paymentSheetRect = tester.getRect(
+      find.byKey(const ValueKey('player_recharge_payment_sheet')),
+    );
+    final paymentCloseRect = tester.getRect(
+      find.byKey(const ValueKey('player_recharge_payment_close')),
+    );
+    expect(paymentCloseRect.left, greaterThanOrEqualTo(paymentSheetRect.left));
+    expect(paymentCloseRect.right, lessThanOrEqualTo(paymentSheetRect.right));
+    expect(paymentCloseRect.top, greaterThanOrEqualTo(paymentSheetRect.top));
 
     await tester.tap(
       find.byKey(const ValueKey('player_recharge_payment_buy_now')),
