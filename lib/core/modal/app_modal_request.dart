@@ -56,3 +56,20 @@ final class ConfirmModalRequest extends AppModalRequest {
   final String confirmLabel;
   final String cancelLabel;
 }
+
+/// Feature 弹窗信封：payload 在 feature 层定义类型，core 不 import feature。
+final class FeatureAppModalRequest extends AppModalRequest {
+  FeatureAppModalRequest({
+    required super.requestId,
+    required super.source,
+    required this.channel,
+    this.payload,
+    super.priority = AppModalPriority.normal,
+    super.dismissPolicy = AppModalDismissPolicy.standard,
+    DateTime? createdAt,
+    super.type = AppModalType.unknown,
+  }) : super(createdAt: createdAt ?? DateTime.now());
+
+  final String channel;
+  final Object? payload;
+}

@@ -15,6 +15,8 @@ abstract class AppModalService {
   void dismissCurrent({AppModalResult? result});
 
   void dismissByRequestId(String requestId, {AppModalResult? result});
+
+  void dismissForSource(AppModalSource source, {AppModalResult? result});
 }
 
 /// 默认实现：委托 [AppModalController] 由 [AppModalHost] 展示。
@@ -43,6 +45,14 @@ class AppModalServiceImpl implements AppModalService {
   void dismissByRequestId(String requestId, {AppModalResult? result}) {
     _controller.dismissByRequestId(
       requestId,
+      result: result ?? ConfirmResult.dismissed,
+    );
+  }
+
+  @override
+  void dismissForSource(AppModalSource source, {AppModalResult? result}) {
+    _controller.dismissForSource(
+      source,
       result: result ?? ConfirmResult.dismissed,
     );
   }

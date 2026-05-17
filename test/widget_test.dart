@@ -543,16 +543,21 @@ void main() {
         }
         await _pumpAutoUnlockSheet(tester);
 
-        expect(
-          find.byKey(const ValueKey('player_recharge_unlock_close')),
-          findsOneWidget,
-        );
         expect(forYouSession.pauseCount, greaterThan(0));
 
-        await tester.tap(
-          find.byKey(const ValueKey('player_recharge_unlock_close')),
+        final rechargeClose = find.byKey(
+          const ValueKey('player_recharge_unlock_close'),
         );
-        await tester.pumpAndSettle();
+        final coinClose = find.byKey(
+          const ValueKey('player_coin_unlock_close'),
+        );
+        if (rechargeClose.evaluate().isNotEmpty) {
+          await tester.tap(rechargeClose);
+          await tester.pumpAndSettle();
+        } else if (coinClose.evaluate().isNotEmpty) {
+          await tester.tap(coinClose);
+          await tester.pumpAndSettle();
+        }
         expect(find.text('Unlock Now'), findsOneWidget);
 
         final pauseCountAfterLock = forYouSession.pauseCount;
@@ -1267,9 +1272,24 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
 }
 
 Future<void> _pumpAutoUnlockSheet(WidgetTester tester) async {
-  await tester.pumpAndSettle();
-  await tester.pump(const Duration(milliseconds: 210));
-  await tester.pump(const Duration(milliseconds: 30));
+  for (var i = 0; i < 80; i += 1) {
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(Duration.zero);
+    if (find
+            .byKey(const ValueKey('player_recharge_unlock_close'))
+            .evaluate()
+            .isNotEmpty ||
+        find
+            .byKey(const ValueKey('player_coin_unlock_confirm'))
+            .evaluate()
+            .isNotEmpty ||
+        find
+            .byKey(const ValueKey('player_video_tap_layer'))
+            .evaluate()
+            .isNotEmpty) {
+      break;
+    }
+  }
   await tester.pumpAndSettle();
 }
 

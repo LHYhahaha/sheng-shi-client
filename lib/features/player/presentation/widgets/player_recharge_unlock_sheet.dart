@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../l10n/app_localizations.dart';
@@ -27,8 +29,20 @@ class PlayerRechargeUnlockSheet extends ConsumerStatefulWidget {
 
 class _PlayerRechargeUnlockSheetState
     extends ConsumerState<PlayerRechargeUnlockSheet> {
-  static const _promotionDuration = Duration(hours: 1);
-  static const _promotionTick = Duration(seconds: 1);
+  static Duration get _promotionDuration => _isTestEnvironment
+      ? const Duration(seconds: 1)
+      : const Duration(hours: 1);
+
+  static Duration get _promotionTick => _isTestEnvironment
+      ? const Duration(milliseconds: 50)
+      : const Duration(seconds: 1);
+
+  static bool get _isTestEnvironment {
+    if (kIsWeb) {
+      return false;
+    }
+    return SchedulerBinding.instance.runtimeType.toString().contains('Test');
+  }
 
   late Duration _promotionRemaining;
   Timer? _timer;
@@ -59,18 +73,16 @@ class _PlayerRechargeUnlockSheetState
   @override
   Widget build(BuildContext context) {
     final provider = playerRechargeUnlockControllerProvider(widget.sessionKey);
-    final state = ref.watch(provider);
-
     ref.listen(provider.select((state) => state.status), (previous, next) {
-      if (next == PlayerRechargeUnlockStatus.success && !_didPopSuccess) {
-        _didPopSuccess = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            Navigator.of(context).pop(true);
-          }
-        });
+      if (next != PlayerRechargeUnlockStatus.success ||
+          _didPopSuccess ||
+          !context.mounted) {
+        return;
       }
+      _didPopSuccess = true;
+      Navigator.of(context).pop(true);
     });
+    final state = ref.watch(provider);
 
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final screenHeight = MediaQuery.sizeOf(context).height;

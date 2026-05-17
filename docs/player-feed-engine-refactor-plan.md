@@ -364,7 +364,7 @@ Metrics/logs:
 
 ## Implementation Status Checklist
 
-Last updated: 2026-05-16 (mainline seal / code-quality pass).
+Last updated: 2026-05-17 (O2 Player modal migration).
 
 | Area | Status | Notes |
 | --- | --- | --- |
@@ -373,11 +373,11 @@ Last updated: 2026-05-16 (mainline seal / code-quality pass).
 | `PlayerFeedEngine` facade | **Done** | Viewport, settled runtime, overlay schedule, access/sheet flow entry. |
 | Runtime waits for settled item | **Done** | Drag 不 evaluate/play/preload/sheet；`PlayerRuntimeCoordinator` drag guard. |
 | `PlayerPerformancePolicy` | **Done** | rich / stable / ultraStable 三档；`playerPreloadConfigProvider` 派生。 |
-| Android stable enforcement | **Done** | No video transform/opacity on drag; no press dim; no pause scale. |
+| Android stable enforcement | **Done** | Video surface follows PageView, but no opacity dim / press dim / pause scale / rich transition. |
 | iOS rich policy | **Done** | Rich follow/dim/scale behind policy + test override. |
 | Access presentation in shell | **Done** | `PlayerAccessPresenter` + engine `accessPresentationFor`. |
 | Overlay dwell / dismissed | **Done** | `PlayerOverlayOrchestrator`; engine `prepareAutoUnlockSheet` / `markAutoSheetDismissed`. |
-| Manual unlock / retry / recharge flow | **Done** | Engine `prepareManualUnlock`, `retryPlayback`, `completeCoinUnlock`, `continueAfterRechargeSuccess`; Page 只 `showModalBottomSheet`. |
+| Manual unlock / retry / recharge flow | **Done** | Engine `prepareManualUnlock`, `retryPlayback`, `completeCoinUnlock`, `continueAfterRechargeSuccess`; Player blocking sheets now go through `AppModalService` / Player modal coordinator. |
 | PlaybackCoordinator split | **Defer** | `PlayerRuntimeCoordinator` + `PlayerPlaybackController` 仍承担 play/preload/quiesce；未单独 `PlaybackCoordinator` 文件。 |
 | AccessCoordinator split | **Defer** | 逻辑在 `PlayerAccessPresenter` + runtime；未单独 coordinator 文件。 |
 | Open-source reference decision | **Done** | 参考 `video_pool` pool/reconcile；不替换 PageView/业务 UI。 |

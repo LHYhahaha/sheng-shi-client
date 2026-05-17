@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'app_modal_queue.dart';
 import 'app_modal_request.dart';
 import 'app_modal_result.dart';
+import 'app_modal_source.dart';
 
 /// 当前正在展示的弹窗会话。
 class AppModalPresentation {
@@ -80,6 +81,25 @@ class AppModalController extends ChangeNotifier {
 
   void dismissCurrent({AppModalResult result = ConfirmResult.dismissed}) {
     completeCurrent(result);
+  }
+
+  void dismissForSource(
+    AppModalSource source, {
+    AppModalResult result = ConfirmResult.dismissed,
+  }) {
+    if (_current?.request.source == source) {
+      dismissCurrent(result: result);
+    }
+    _pending.removeWhere((pending) {
+      if (pending.request.source == source) {
+        if (!pending.completer.isCompleted) {
+          pending.completer.complete(result);
+        }
+        _queue.removeByRequestId(pending.request.requestId);
+        return true;
+      }
+      return false;
+    });
   }
 
   void dismissByRequestId(

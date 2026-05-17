@@ -1,6 +1,6 @@
 # Global Overlay / Modal System Plan
 
-> Status: **O1 skeleton done** (2026-05-17). `AppModalService` / `AppModalHost` / typed confirm API / `RecordingAppModalService` / `modal_boundary_test` are in place. Business sheets (Player / Store / Membership) still use legacy `showModalBottomSheet` until O2–O4.
+> Status: **O1 skeleton + O2 Player migration done** (2026-05-17). `AppModalService` / `AppModalHost` / typed confirm API / `RecordingAppModalService` / `modal_boundary_test` are in place. Player unlock/recharge/payment now use the global modal host; Store / Membership / Wallet remain planned for O3–O4.
 
 ## Why This Exists
 
@@ -22,9 +22,9 @@ The long-term goal is an app-level modal system that owns the host layer, safe-a
 
 For the current release:
 
-- Do not migrate existing sheets unless QA reports a blocking issue.
-- If For You sheet coverage blocks payment or close actions, apply a minimal fix first: root navigator, safe-area padding, or bottom inset adjustment.
-- Do not replace Player unlock/recharge/payment business flow during release QA.
+- Player unlock/recharge/payment uses the global root modal host because For You and bottom-tab layering can cover local sheets.
+- Store / Membership / Wallet can remain local until O3–O4 unless QA finds a blocking overlay issue.
+- Do not connect real IAP or real API as part of this modal migration.
 
 This document records the target design and migration plan for the first post-release architecture optimization round.
 
@@ -241,14 +241,16 @@ README should explain:
 - [x] `RecordingAppModalService` for tests (`test/helpers/recording_app_modal_service.dart`)
 - [x] `AppModalQueue` skeleton + serial present in `AppModalController`
 - [x] `test/architecture/modal_boundary_test.dart` (core/modal ↔ features, toast boundary, legacy sheet whitelist)
-- [ ] Business flow migration — deferred to O2–O4
+- [x] Player business flow migration — O2
+- [ ] Store / Membership / Wallet business flow migration — deferred to O3–O4
 
-### Phase O2: Player Unlock / Recharge / Payment
+### Phase O2: Player Unlock / Recharge / Payment — Done
 
-- Route Player unlock, recharge, and payment confirmation through `AppModalService`.
-- Keep existing sheet widgets as content.
-- Confirm For You is not covered by bottom tab.
-- Preserve current unlock/payment business behavior.
+- Player coin unlock, recharge, and payment confirmation route through `AppModalService`.
+- Existing Player sheet widgets are reused as content inside root-hosted modal sheets.
+- `AppModalSource.player` can be dismissed as a group when Player route is disposed.
+- Player detail/share/speed sheets remain local because they are page-local UI, not cross-tab blocking business flows.
+- Unlock/payment behavior is unchanged: coin enough -> Play sheet; coin insufficient -> recharge -> payment -> Play; membership purchase -> unlock/play according to existing mock flow.
 
 ### Phase O3: Auth And Login
 
@@ -297,4 +299,3 @@ During the current release QA:
 - Do not start this migration.
 - Only apply a minimal For You sheet coverage fix if QA marks the issue as blocking.
 - Treat this document as the queued architecture plan for the next development cycle.
-

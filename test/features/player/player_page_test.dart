@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:drama_client/app/app_root_navigator_key.dart';
 import 'package:drama_client/app/router/route_paths.dart';
+import 'package:drama_client/bootstrap/app_modal_registry_bootstrap.dart';
+import 'package:drama_client/core/modal/app_modal_host.dart';
 import 'package:drama_client/features/entitlement/application/entitlement_controller.dart';
 import 'package:drama_client/features/entitlement/data/entitlement_repository_provider.dart';
 import 'package:drama_client/features/entitlement/data/mock_entitlement_repository.dart';
@@ -1271,6 +1274,8 @@ void main() {
     expect(lockedSession.playCount, 0);
 
     final unavailableSession = _FakePlaybackSession();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
     await tester.pumpWidget(
       _buildPlayerApp(
         initialLocation: RoutePaths.playerLocation(
@@ -2654,6 +2659,7 @@ Widget _buildPlayerApp({
 }) {
   final toast = toastService ?? RecordingAppToastService();
   final router = GoRouter(
+    navigatorKey: appRootNavigatorKey,
     initialLocation: initialLocation,
     routes: [
       GoRoute(
@@ -2703,8 +2709,10 @@ Widget _buildPlayerApp({
           performancePolicy,
         ),
       appToastProvider.overrideWithValue(toast),
+      ...appModalRegistryOverrides,
     ],
     child: MaterialApp.router(
+      builder: (context, child) => AppModalHost(child: child),
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,

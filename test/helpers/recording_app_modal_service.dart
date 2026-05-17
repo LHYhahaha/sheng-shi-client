@@ -1,6 +1,7 @@
 import 'package:drama_client/core/modal/app_modal_request.dart';
 import 'package:drama_client/core/modal/app_modal_result.dart';
 import 'package:drama_client/core/modal/app_modal_service.dart';
+import 'package:drama_client/core/modal/app_modal_source.dart';
 
 /// 测试用弹窗记录器：不展示 UI，记录请求并返回预设结果。
 class RecordingAppModalService implements AppModalService {
@@ -27,6 +28,9 @@ class RecordingAppModalService implements AppModalService {
 
   @override
   void dismissByRequestId(String requestId, {AppModalResult? result}) {}
+
+  @override
+  void dismissForSource(AppModalSource source, {AppModalResult? result}) {}
 
   ConfirmResult _resolveConfirm(String requestId) {
     final preset = presetResultsByRequestId[requestId];

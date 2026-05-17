@@ -174,17 +174,18 @@ flowchart TB
 | **禁止项** | 不迁移 Player/Store；不改 unlock 逻辑；不接 API/IAP |
 | **测试** | `app_modal_host_test`、`recording_app_modal_service_test`、`modal_boundary_test`、`app_modal_integration_test` |
 | **依赖** | 无；可与 A1 并行 |
-| **状态** | 已完成；现有 Player/Store/Membership 仍用 `showModalBottomSheet`（白名单记录在 boundary test） |
+| **状态** | 已完成；Player 业务弹窗已在 O2 迁移，Store/Membership 仍在后续阶段 |
 
-#### O2 — 迁移 Player unlock / recharge / payment
+#### O2 — 迁移 Player unlock / recharge / payment — **Done**
 
 | 项 | 内容 |
 | --- | --- |
-| **目标** | `PlayerFeedEngine` 发 modal intent；结果回传 `PlayerUnlockFlowResult` |
-| **文件影响** | `player_feed_engine.dart`、`player_page.dart`、`player_action_sheets.dart`、`player_recharge_unlock_sheet.dart`；复用现有 widget 作 content |
-| **禁止项** | 不改 `evaluateAccess` / `unlockWithCoins`；不改 FeedEngine settled 策略 |
-| **测试** | 既有 `player_page_test` 改 provider override；For You tab 遮挡回归 |
-| **依赖** | O1；建议 A7 设计评审（session 切换时 dismiss modal） |
+| **目标** | Player coin unlock、recharge、payment confirmation 通过 `AppModalService` 展示，避免 For You / bottom tab / Player Stack 层级遮挡 |
+| **文件影响** | `player_unlock_modal_coordinator.dart`、`features/player/presentation/modal/*`、`player_page.dart`、`player_recharge_unlock_sheet.dart`、`core/modal/*` |
+| **完成内容** | Player request/result 类型、Player modal presenter、root sheet、source dismiss、Player dispose 时 `dismissForSource(AppModalSource.player)` |
+| **保留项** | Player 详情、分享、倍速等局部 sheet 仍可用 `showModalBottomSheet`；Store/Membership/Wallet 尚未迁移 |
+| **测试** | `player_page_test`、`test/core/modal/*`、`app_modal_integration_test`、`modal_boundary_test` |
+| **依赖** | O1；A7 完成后可继续加强 session cleanup 时关闭 modal |
 
 #### O3 — 迁移 Auth login / session expired
 

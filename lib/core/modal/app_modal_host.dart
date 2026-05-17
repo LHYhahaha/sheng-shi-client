@@ -1,10 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/app_modal_context.dart';
 import '../../app/app_root_navigator_key.dart';
 import 'app_modal_controller.dart';
 import 'app_modal_provider.dart';
-import 'app_modal_request.dart';
 import 'app_modal_result.dart';
 
 /// 根级弹窗宿主：在 [MaterialApp] builder 中包裹路由子树，从 root overlay 展示弹窗。
@@ -41,6 +43,9 @@ class _AppModalHostState extends ConsumerState<AppModalHost> {
   void _onControllerChanged() {
     final presentation = _controller?.current;
     if (presentation == null) {
+      if (_presentingRequestId != null) {
+        _popRootModalRouteIfOpen();
+      }
       _presentingRequestId = null;
       return;
     }
@@ -48,12 +53,18 @@ class _AppModalHostState extends ConsumerState<AppModalHost> {
       return;
     }
     _presentingRequestId = presentation.request.requestId;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _present(presentation);
-    });
+    unawaited(_presentWhenReady(presentation));
+  }
+
+  void _popRootModalRouteIfOpen() {
+    if (!mounted) {
+      return;
+    }
+    final navigator = appRootNavigatorKey.currentState;
+    if (navigator == null || !navigator.canPop()) {
+      return;
+    }
+    navigator.pop();
   }
 
   @override
@@ -62,80 +73,46 @@ class _AppModalHostState extends ConsumerState<AppModalHost> {
     return widget.child ?? const SizedBox.shrink();
   }
 
-  Future<void> _present(AppModalPresentation presentation) async {
+  Future<void> _presentWhenReady(AppModalPresentation presentation) async {
+    for (var attempt = 0; attempt < 20; attempt += 1) {
+      if (!mounted) {
+        return;
+      }
+      final navContext = resolveAppModalPresentationContext(context);
+      if (navContext.mounted) {
+        await _present(presentation, navContext);
+        return;
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+  }
+
+  Future<void> _present(
+    AppModalPresentation presentation,
+    BuildContext navContext,
+  ) async {
     final controller = ref.read(appModalControllerProvider);
     if (controller.current?.request.requestId !=
         presentation.request.requestId) {
       return;
     }
 
-    final AppModalResult result;
-    switch (presentation.request) {
-      case ConfirmModalRequest confirm:
-        result = await _showConfirmDialog(context, confirm);
-    }
+    final registry = ref.read(appModalPresenterRegistryProvider);
+    final requestId = presentation.request.requestId;
+    AppModalResult result;
+    result = await registry.present(
+      context: navContext,
+      request: presentation.request,
+    );
 
     if (!mounted) {
       return;
     }
-    if (controller.current?.request.requestId ==
-        presentation.request.requestId) {
+    if (_presentingRequestId == requestId) {
+      _presentingRequestId = null;
+    }
+    if (controller.current?.request.requestId == requestId) {
       controller.completeCurrent(result);
     }
-  }
-
-  Future<ConfirmResult> _showConfirmDialog(
-    BuildContext context,
-    ConfirmModalRequest request,
-  ) async {
-    final navContext = appRootNavigatorKey.currentContext ?? context;
-    final policy = request.dismissPolicy;
-    final barrierDismissible =
-        policy.barrierDismissible && !policy.requiresExplicitChoice;
-
-    final result = await showDialog<ConfirmResult>(
-      context: navContext,
-      useRootNavigator: true,
-      barrierDismissible: barrierDismissible,
-      builder: (dialogContext) {
-        return PopScope(
-          canPop: policy.backButtonAllowed && !policy.requiresExplicitChoice,
-          onPopInvokedWithResult: (didPop, popResult) {
-            if (didPop) {
-              return;
-            }
-            if (policy.backButtonAllowed && !policy.requiresExplicitChoice) {
-              Navigator.of(dialogContext).pop(ConfirmResult.dismissed);
-            }
-          },
-          child: AlertDialog(
-            key: ValueKey('app_modal_confirm_${request.requestId}'),
-            title: Text(request.title),
-            content: Text(request.message),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop(ConfirmResult.cancelled);
-                },
-                child: Text(request.cancelLabel),
-              ),
-              FilledButton(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop(ConfirmResult.confirmed);
-                },
-                child: Text(request.confirmLabel),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    if (result != null) {
-      return result;
-    }
-    return barrierDismissible
-        ? ConfirmResult.dismissed
-        : ConfirmResult.cancelled;
   }
 }

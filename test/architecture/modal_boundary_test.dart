@@ -49,9 +49,19 @@ void main() {
     expect(result, isNot(isA<bool>()));
   });
 
-  test('legacy showModalBottomSheet whitelist is documented', () {
-    const whitelist = <String>[
+  test('player unlock sheets use AppModal not local showModalBottomSheet', () {
+    final source = File(
       'lib/features/player/presentation/pages/player_page.dart',
+    ).readAsStringSync();
+    expect(source, isNot(contains('PlayerCoinUnlockSheet')));
+    expect(source, isNot(contains('PlayerRechargeUnlockSheet')));
+    expect(source, contains('playerUnlockModalCoordinatorProvider'));
+    expect(source, contains('PlayerDetailSheet'));
+    expect(source, contains('showModalBottomSheet'));
+  });
+
+  test('legacy showModalBottomSheet whitelist for store and membership', () {
+    const whitelist = <String>[
       'lib/features/store/presentation/pages/store_page.dart',
       'lib/features/membership/presentation/pages/membership_page.dart',
     ];
@@ -66,7 +76,7 @@ void main() {
       expect(
         file.readAsStringSync(),
         contains('showModalBottomSheet'),
-        reason: '$path expected to keep legacy sheet until O2/O4',
+        reason: '$path expected to keep legacy sheet until O4',
       );
     }
   });

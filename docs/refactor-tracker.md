@@ -24,7 +24,7 @@
 | P2 | Theme tokens | 部分页面仍可能散落 magic number 和局部颜色 | 抽查核心页面，沉淀颜色、间距、圆角、文本样式 | In Review |
 | P2 | Network | Remote skeleton done; integration blocked on backend | 401 refresh、验单、strict DTO 后再默认开 remote | In Review |
 | P2 | Player domain | 当前播放页仍以 mock 和 UI 状态为主 | 接入真实播放器 session、解锁状态、自动下一集、错误恢复 | Todo |
-| P1 | Global Modal (Track O) | Player/For You 弹窗可能被 tab 遮挡；各 feature 散落 `showModalBottomSheet` | O1：`AppModalService` + `AppModalHost` skeleton；O2–O4 迁移业务 | O1 Done |
+| P1 | Global Modal (Track O) | Store/Membership/Auth 等后续仍有局部阻塞弹窗；Player 已迁移 root modal | O1：`AppModalService` + `AppModalHost` skeleton；O2：Player unlock/recharge/payment；O3–O4 迁移剩余业务 | O2 Done |
 
 ## 3. 已完成记录
 
@@ -36,6 +36,18 @@
 - `DramaClientApp` 挂载 `AppModalHost`；`GoRouter` 使用 `appRootNavigatorKey`
 - `test/helpers/recording_app_modal_service.dart`、`test/architecture/modal_boundary_test.dart`
 - 未迁移 Player unlock/recharge/payment、Auth、Store/Membership/Wallet 现有弹窗
+
+验证：`flutter analyze`、`flutter test` 通过。
+
+### 2026-05-17 Track O2：Player modal migration
+
+完成内容：
+
+- Player coin unlock、recharge、payment confirmation 迁移到全局 `AppModalService`
+- 新增 Player modal presenter / payload / result / coordinator，复用现有 sheet 内容
+- Player route dispose 时按 `AppModalSource.player` 关闭当前 Player modal，避免离开页面后残留
+- 架构测试继续禁止 `core/modal` 反向依赖 features，并收紧 Player 业务弹窗的 `showModalBottomSheet` 使用
+- Player 详情、分享、倍速等页面局部 sheet 暂时保留本地实现
 
 验证：`flutter analyze`、`flutter test` 通过。
 

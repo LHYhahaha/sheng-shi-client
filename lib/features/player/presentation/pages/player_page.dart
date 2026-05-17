@@ -7,6 +7,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
+import '../../../../core/modal/app_modal_provider.dart';
+import '../../../../core/modal/app_modal_service.dart';
+import '../../../../core/modal/app_modal_source.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
@@ -16,7 +19,7 @@ import '../../application/player_feed_engine_access_flow.dart';
 import '../../application/player_overlay_orchestrator.dart';
 import '../../application/player_performance_policy_provider.dart';
 import '../../application/player_playback_controller.dart';
-import '../../application/player_recharge_unlock_controller.dart';
+import '../../application/player_unlock_modal_coordinator.dart';
 import '../../application/player_rebuild_diagnostics.dart';
 import '../../application/player_ui_controller.dart';
 import '../../application/player_viewport_controller.dart';
@@ -28,12 +31,11 @@ import '../widgets/player_action_sheets.dart';
 import '../widgets/player_detail_sheet.dart';
 import '../widgets/player_feed_page_shell.dart';
 import '../widgets/player_playback_layer.dart';
-import '../widgets/player_recharge_unlock_sheet.dart';
 
 /// 播放器 UI 宿主：纵向 [PageView] + 顶层单例 Video surface + sheet。
 ///
 /// 职责边界：
-/// - 本文件：布局、手势转发、`showModalBottomSheet`、生命周期里 detach surface。
+/// - 本文件：布局、手势转发、局部 sheet（详情/分享/倍速）、解锁弹窗委托 AppModal。
 /// - [PlayerFeedEngine]：viewport settled、权益/播放/预加载/弹窗调度（不在 drag 路径调用）。
 /// - [PlayerPlaybackController]：media_kit 真实状态（position/play/source），不含 sheet 业务。
 class PlayerPage extends ConsumerStatefulWidget {
@@ -76,6 +78,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   late final String _sessionKey;
   late final PlayerPlaybackController _playbackController;
   late final PlayerOverlayOrchestrator _overlayOrchestrator;
+  late final AppModalService _modalService;
   AppShellBottomNavigationVisible? _shellChrome;
   bool _isSeekDragging = false;
   bool _isModalOpen = false;
@@ -94,6 +97,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   PlayerFeedEngine get _feedEngine =>
       ref.read(playerFeedEngineProvider(_sessionKey).notifier);
+
+  PlayerUnlockModalCoordinator get _unlockModalCoordinator =>
+      ref.read(playerUnlockModalCoordinatorProvider(_sessionKey));
 
   String _createSessionKey() {
     return switch (widget.feedMode) {
@@ -119,6 +125,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _overlayOrchestrator = ref.read(
       playerOverlayOrchestratorProvider(_sessionKey).notifier,
     );
+    _modalService = ref.read(appModalServiceProvider);
     _playbackController.recordPlaybackTiming(
       'player page init',
       details: [
@@ -153,6 +160,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _modalService.dismissForSource(AppModalSource.player);
     _overlayOrchestrator.cancelPending();
     _playbackController.detachVideoSurfaceForTeardown();
     unawaited(
@@ -240,6 +248,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   @override
   Widget build(BuildContext context) {
     final sessionKey = _sessionKey;
+    ref.watch(playerUnlockModalCoordinatorProvider(sessionKey));
     final feedProvider = playerFeedControllerProvider(sessionKey);
     final uiProvider = playerUiControllerProvider(sessionKey);
     final viewportProvider = playerViewportControllerProvider(sessionKey);
@@ -846,33 +855,32 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!mounted) {
       return;
     }
-    await _presentSheetIntent(item, intent);
+    await _presentSheetIntent(context, item, intent);
   }
 
   Future<void> _presentSheetIntent(
+    BuildContext context,
     PlayerFeedItem item,
     PlayerOverlaySheetIntent intent, {
     bool launchedByAutoSheet = false,
   }) async {
-    final engine = _feedEngine;
-    if (!mounted || !engine.isCurrentFeedItem(item)) {
+    if (!mounted) {
       return;
     }
-    switch (intent) {
-      case PlayerOverlaySheetIntent.none:
-        return;
-      case PlayerOverlaySheetIntent.coinUnlock:
-        await _showCoinUnlockSheetForItem(
-          item,
-          launchedByAutoSheet: launchedByAutoSheet,
-        );
-      case PlayerOverlaySheetIntent.rechargeUnlock:
-        await _showRechargeUnlockSheetForItem(
-          item,
-          launchedByAutoSheet: launchedByAutoSheet,
-        );
-      case PlayerOverlaySheetIntent.membership:
-        await _showRechargeUnlockSheetForItem(item);
+    _isModalOpen = true;
+    try {
+      await _unlockModalCoordinator.presentSheetIntent(
+        context,
+        item,
+        intent,
+        launchedByAutoSheet: launchedByAutoSheet,
+      );
+    } finally {
+      if (mounted) {
+        _isModalOpen = false;
+        _activeCoinSheetItemId = null;
+        _activeRechargeSheetItemId = null;
+      }
     }
   }
 
@@ -894,6 +902,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     await _presentSheetIntent(
+      context,
       item,
       result.sheetIntent,
       launchedByAutoSheet: true,
@@ -1010,133 +1019,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!mounted) {
       return;
     }
-    await _presentSheetIntent(currentItem, intent);
-  }
-
-  Future<void> _showCoinUnlockSheetForItem(
-    PlayerFeedItem item, {
-    bool launchedByAutoSheet = false,
-  }) async {
-    if (_activeCoinSheetItemId == item.id) {
+    if (_activeRechargeSheetItemId == currentItem.id ||
+        _activeCoinSheetItemId == currentItem.id) {
       return;
     }
-    _activeCoinSheetItemId = item.id;
-    _isModalOpen = true;
-    final unlocked = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.7),
-      isDismissible: true,
-      enableDrag: true,
-      builder: (sheetContext) {
-        return Consumer(
-          builder: (context, ref, _) {
-            final balance = ref
-                .watch(entitlementControllerProvider)
-                .coinBalance;
-            return PlayerCoinUnlockSheet(
-              price: item.episode.requiredCoins,
-              balance: balance,
-              onConfirm: () => Navigator.of(sheetContext).pop(true),
-            );
-          },
-        );
-      },
-    );
-    _isModalOpen = false;
-    _activeCoinSheetItemId = null;
-    if (unlocked != true && launchedByAutoSheet) {
-      ref
-          .read(playerFeedEngineProvider(_sessionKey).notifier)
-          .markAutoSheetDismissed(item.id);
+    if (intent == PlayerOverlaySheetIntent.coinUnlock) {
+      _activeCoinSheetItemId = currentItem.id;
+    } else if (intent == PlayerOverlaySheetIntent.rechargeUnlock ||
+        intent == PlayerOverlaySheetIntent.membership) {
+      _activeRechargeSheetItemId = currentItem.id;
     }
-    if (!mounted || unlocked != true) {
-      return;
-    }
-    final didUnlock = await ref
-        .read(playerFeedEngineProvider(_sessionKey).notifier)
-        .completeCoinUnlock(item);
-    if (!mounted || !didUnlock) {
-      return;
-    }
-    ref.read(appToastProvider).success(context.l10n.playerUnlockSuccessful);
-  }
-
-  Future<void> _showRechargeUnlockSheetForItem(
-    PlayerFeedItem item, {
-    bool launchedByAutoSheet = false,
-  }) async {
-    if (_activeRechargeSheetItemId == item.id) {
-      return;
-    }
-    _activeRechargeSheetItemId = item.id;
-    _isModalOpen = true;
-    final rechargeController = ref.read(
-      playerRechargeUnlockControllerProvider(_sessionKey).notifier,
-    );
-    await rechargeController.open(
-      itemId: item.id,
-      requiredCoins: item.episode.requiredCoins,
-    );
-    if (!mounted) {
-      return;
-    }
-    final unlocked = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.7),
-      isDismissible: true,
-      enableDrag: true,
-      isScrollControlled: true,
-      builder: (context) => PlayerRechargeUnlockSheet(sessionKey: _sessionKey),
-    );
-    _isModalOpen = false;
-    _activeRechargeSheetItemId = null;
-    if (!mounted) {
-      return;
-    }
-    if (unlocked != true) {
-      if (launchedByAutoSheet) {
-        ref
-            .read(playerFeedEngineProvider(_sessionKey).notifier)
-            .markAutoSheetDismissed(item.id);
-      }
-      rechargeController.close();
-      return;
-    }
-    final rechargeState = ref.read(
-      playerRechargeUnlockControllerProvider(_sessionKey),
-    );
-    final selectedCoinPackage = rechargeState.selectedCoinPackage;
-    final selectedMembershipPackage = rechargeState.selectedMembershipPackage;
-    final engine = _feedEngine;
-    await engine.grantRechargeSelection(
-      selectedCoinPackage: selectedCoinPackage != null,
-      selectedMembershipPackage: selectedMembershipPackage != null,
-      coinPackageTotalCoins: selectedCoinPackage?.totalCoins,
-    );
-    if (!mounted) {
-      return;
-    }
-    final result = await engine.continueAfterRechargeSuccess(
-      item: item,
-      grantedCoinPackage: selectedCoinPackage != null,
-      grantedMembershipPackage: selectedMembershipPackage != null,
-    );
-    if (!mounted) {
-      return;
-    }
-    if (result.didActivateMembership) {
-      ref
-          .read(appToastProvider)
-          .success(context.l10n.playerMembershipActivated);
-      return;
-    }
-    await _presentSheetIntent(
-      item,
-      result.sheetIntent,
-      launchedByAutoSheet: launchedByAutoSheet,
-    );
+    await _presentSheetIntent(context, currentItem, intent);
   }
 
   void _openMembership() {
