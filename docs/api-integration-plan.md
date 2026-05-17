@@ -73,7 +73,7 @@ Required request headers:
 
 All requests, including login, third-party login, and refresh token:
 
-- `Device-Id`: stable install/device identifier.
+- `Device-Id`: stable **install id** (persisted per app install, not hardware ID; see A4).
 - `Lang`: app/content language, currently `en`, `es`, `pt`, or `hi`.
 - `Platform`: `ios`, `android`, or `web`.
 - `App-Version`: native app version, for example `1.0.0`.
@@ -869,8 +869,8 @@ Phase F: API integration readiness
 Phase F status:
 
 - `AppConfig` supports dev/staging/prod and `API_BASE_URL` override.
-- `ApiRequestContext` is now composed by provider from device/app-version providers,
-  `AppLocaleController`, platform detection, and `AuthTokenStore`.
+- `ApiRequestContext` is composed by `apiRequestContextProvider` from `installIdProvider`,
+  `apiLangProvider`, `apiPlatformProvider`, `apiAppVersionProvider`, and `AuthTokenStore` (A4).
 - `AuthTokenStore` is an in-memory skeleton; secure storage remains deferred.
 - `AuthRefreshCoordinator` establishes refresh in-flight dedupe; automatic 401 retry remains deferred.
 - `SessionCleanupCoordinator` establishes the cleanup entry; feature cache and Player hooks remain deferred.

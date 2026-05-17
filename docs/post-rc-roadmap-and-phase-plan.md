@@ -292,15 +292,18 @@ refresh failed: clear auth token → cleanup → guest bootstrap → reload gues
 | **测试** | `api_client_test.dart`、`api_client_session_auth_test.dart`、`api_request_context_provider_test.dart` |
 | **依赖** | A1 |
 
-#### A4 — Device-Id / App-Version / Lang / Platform 真实值
+#### A4 — Device-Id / App-Version / Lang / Platform 真实值 ✅（2026-05-17）
 
 | 项 | 内容 |
 | --- | --- |
-| **目标** | 安装级 device id；`package_info` version；locale → Lang |
-| **文件影响** | `api_request_context_provider`、`device_capability_probe` |
+| **目标** | 安装级 install id → `Device-Id`；`package_info_plus` → `App-Version`；locale → `Lang`（en/es/pt/hi，否则 en）；`Platform`（android/ios/web，桌面 debug 有 fallback） |
+| **已完成** | `lib/core/runtime/install_id_*`、`app_version_provider`、`api_lang_provider`、`api_platform_provider`；`apiRequestContextProvider` 统一注入；`main` 绑定 `SharedPreferences` install id |
+| **Device-Id** | **install id**（UUID 持久化），非硬件唯一 ID；logout 不清；清 App 数据可重生；**delete account 是否清 install id：待产品/合规** |
+| **与 A1.5** | guest bootstrap 网络阶段通过 `ApiClient`（`none`）自动带 `Device-Id`（同 install id）及 Lang/Platform/App-Version |
 | **禁止项** | 不在 feature 手写 header |
-| **测试** | `api_request_context_provider_test` |
-| **依赖** | 可与 A1 并行；**guest bootstrap 依赖稳定 Device-Id（A1.5 门禁）** |
+| **测试** | `install_id_provider_test`、`api_lang/platform/app_version_provider_test`、`api_request_context_provider_test` |
+| **仍 defer** | delete account 清 install id；远程语言包替换 `apiLangProvider` 来源；真机 device model / RAM 完整 probe |
+| **依赖** | 可与 A1 并行；**guest bootstrap 依赖稳定 Device-Id（A1.5 门禁）— 客户端侧已满足** |
 
 #### A5 — remote switch 环境策略 dev/staging/prod
 
@@ -755,7 +758,8 @@ flutter test
 | O1–O5 | Planned |
 | A1–A3 | **Done**（客户端 session/network 骨架；见 §4.6） |
 | A1.5 | **Design + skeleton**（guest bootstrap / account link；见 §4.2 A1.5） |
-| A4–A6 | Planned |
+| A4 | **Done**（真实 Device-Id / App-Version / Lang / Platform；见 §4.2 A4） |
+| A5–A6 | Planned |
 | A7 | **Done**（见 §4.2 A7） |
 | P1–P7 | Planned |
 | L1–L6 | Planned |

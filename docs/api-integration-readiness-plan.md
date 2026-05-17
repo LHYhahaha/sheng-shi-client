@@ -37,8 +37,11 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
 
 - **Guest Session Bootstrap & Account Link（A1.5）**（2026-05-17）：设计文档 + `AuthSessionKind` /
   `AuthTokenSessionKind` / `GuestSessionBootstrap` skeleton；**真实 API 联调前门禁**之一。
+- **Post-RC Track A4**（2026-05-17）：真实 `Device-Id`（install id 持久化）、`Lang`、`Platform`、
+  `App-Version`（`package_info_plus`）；`apiRequestContextProvider` 统一注入；测试覆盖 install id /
+  lang fallback / platform / version override。
 
-下一步进入真实 API 联调前的分域验证（A4+、A1.5 真实 bootstrap），仍保持 remote 默认关闭。
+下一步进入真实 API 联调前的分域验证（A5+、A1.5 真实 bootstrap），仍保持 remote 默认关闭。
 
 ## Phase F 目标
 
@@ -67,10 +70,11 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
 
 统一 `ApiRequestContext` 的真实来源：
 
-- `Device-Id`：稳定设备/安装 ID provider，当前可保留 mock fallback。
-- `Lang`：已来自当前 locale / language controller，切换语言后 request context 更新。
-- `Platform`：自动识别 `ios` / `android` / `web`。
-- `App-Version`：当前来自可替换 provider / dart-define fallback，未来可接 package info。
+- `Device-Id`：**install id**（`installIdProvider` + `SharedPreferences`）；非硬件 ID；logout 不清；
+  delete account 是否清：**待产品/合规**。
+- `Lang`：`apiLangProvider` ← locale；API 支持 `en`/`es`/`pt`/`hi`，否则 `en`；远程语言包阶段可换来源。
+- `Platform`：`apiPlatformProvider` → `android` / `ios` / `web`（桌面 debug 有 fallback）。
+- `App-Version`：`package_info_plus` version；`APP_VERSION` dart-define override；不含 build number。
 - `accessToken`：来自 token store snapshot，不进 UI 层。
 
 要求：feature 不能自己拼 header，只能通过 `ApiClient` / request context。
@@ -150,8 +154,9 @@ Phase F 完成后，建议进入：
 
 继续 defer：
 
-- package info 插件接入真实 app version。
-- stable install id / device id 持久化。
+- delete account 是否清除 install id（合规/产品确认）。
+- 远程语言包替换 `apiLangProvider` 来源。
+- 真机 device model / RAM 完整 probe（`device_capability_probe`）。
 - secure storage **作为生产默认**（实现已有）。
 - `authRefreshExecutorProvider` 接真实 refresh API。
 - A7（2026-05-17）：logout/delete/refreshFailed/sessionExpired 已接 feature cleanup hooks；Toast/Modal defer。

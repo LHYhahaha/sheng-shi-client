@@ -78,13 +78,21 @@ final result = await apiClient.get<MyDto>(
 - 业务 envelope 中 `code: 0` 是唯一成功码，失败返回 4 位业务错误码。
 - Network Contract Phase B 已把这些 header、auth policy、business code 映射落到
   `ApiClient`。
-- Phase F 已把 `ApiRequestContext` 接到统一 provider：`Device-Id` / `App-Version`
-  当前来自可替换 provider 和 dart-define fallback，`Lang` 来自当前 locale controller，
-  `Platform` 自动识别，`accessToken` 来自 `AuthTokenStore` snapshot。
+- Post-RC **A4**（2026-05-17）：`ApiRequestContext` 基础 header 真实来源：
+  - `Device-Id`：`installIdProvider` → 持久化 **install id**（`SharedPreferences`，首次 UUID）；
+    非硬件 ID；`dart-define=API_DEVICE_ID` 仅联调/测试 override；logout 不清 install id。
+  - `Lang`：`apiLangProvider` ← locale，支持 `en`/`es`/`pt`/`hi`，否则 fallback `en`（UI 可用 zh 等）。
+  - `Platform`：`apiPlatformProvider` → `android` / `ios` / `web`（桌面 debug：`macos` 等）。
+  - `App-Version`：`apiAppVersionProvider` ← `package_info_plus`（version 字符串，不含 build）；
+    `dart-define=APP_VERSION` override；加载失败 fallback `1.0.0`。
+  - `accessToken`：`AuthTokenStore` snapshot。
+  - feature **不得**自行拼上述 header；测试 override 各 runtime provider。
 - Post-RC Track A1–A3 已落地：`AuthTokenStore` + storage 抽象（默认 in-memory）、
   `ApiAuthPolicy.required` 空 token 客户端 fail-fast、`ApiClient` 401 单飞 refresh + 重试一次。
 - A1.5 / A7：游客 session 模型与 cleanup → `GuestSessionBootstrap`（stub，无网络）。
-  仍 defer：生产 guest bootstrap API、account link 登录、生产 secure storage、真实 refresh。
+  guest bootstrap 真实 HTTP 将复用 `ApiClient` + install id 作为 `Device-Id`。
+  仍 defer：生产 guest bootstrap API、account link 登录、生产 secure storage、真实 refresh、
+  delete account 是否清 install id、远程语言包接入 `apiLangProvider`。
 
 ## 异常类型
 

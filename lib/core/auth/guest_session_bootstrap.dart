@@ -20,7 +20,9 @@ class GuestSessionBootstrap {
   /// 新 guest session**（同一 deviceId），不保留已失效的 authenticated token。
   /// 客户端随后以 guest token 拉取 guest-safe 的 entitlement / feed 等数据。
   Future<void> bootstrapAfterSessionCleanup(SessionCleanupReason reason) async {
-    // TODO(real-api): POST guest bootstrap with Device-Id (+ optional prior guestId).
+    // TODO(real-api): POST guest bootstrap via ApiClient (authPolicy=none); headers 含
+    // Device-Id（[installIdProvider] 持久化 install id，非硬件 ID）、Lang、Platform、
+    // App-Version。Body 可带 deviceId / platform / lang / appVersion；可选 prior guestId。
     // TODO(real-api): persist guest AuthTokenSnapshot (sessionKind=guest).
     // TODO(real-api): AuthController -> AuthSession.guest(sessionId, guestId).
     // TODO(real-api): reload entitlement / wallet / profile / my list / progress.

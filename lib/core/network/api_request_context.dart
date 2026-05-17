@@ -1,10 +1,7 @@
-import 'package:flutter/foundation.dart';
-
 /// API 请求上下文。
 ///
-/// 这里集中所有接口都要带的基础 header。当前值是本地 mock/default，后续接真实
-/// device id、app version、token storage 时，只替换 provider，不要让 feature 自己拼
-/// header。
+/// 基础 header（Device-Id / Lang / Platform / App-Version）由 runtime provider 注入，
+/// 见 [apiRequestContextProvider]。feature 不得自行拼装这些 header。
 class ApiRequestContext {
   const ApiRequestContext({
     required this.deviceId,
@@ -14,32 +11,30 @@ class ApiRequestContext {
     this.accessToken,
   });
 
-  const ApiRequestContext.mock()
-    : deviceId = 'mock-device-id',
-      lang = 'en',
-      platform = 'flutter',
-      appVersion = '1.0.0',
-      accessToken = null;
+  /// 仅用于单元测试；生产路径使用 [apiRequestContextProvider]。
+  const ApiRequestContext.test({
+    this.deviceId = 'test-install-id',
+    this.lang = 'en',
+    this.platform = 'android',
+    this.appVersion = '1.0.0',
+    this.accessToken,
+  });
 
-  /// 稳定设备/安装标识。
+  /// 安装级 install id，映射为 `Device-Id` header。
   ///
-  /// 真实阶段应由设备标识服务或安装 id 提供，不能在各 feature 中临时生成。
+  /// 不是硬件唯一 ID；清 App 数据后会重新生成。guest bootstrap / account link 依赖此值。
   final String deviceId;
 
-  /// 当前接口语言。
-  ///
-  /// 固定 UI 文案、内容语言、字幕语言后续会进一步拆分；网络层只负责透传当前请求语言。
+  /// 接口语言（en / es / pt / hi）；由 [apiLangProvider] 映射，不支持语言 fallback en。
   final String lang;
 
-  /// 运行平台。
+  /// 运行平台：android / ios / web 等。
   final String platform;
 
-  /// App 版本。
+  /// 应用版本号（如 1.0.0）。
   final String appVersion;
 
-  /// 当前访问 token。
-  ///
-  /// 登录、第三方登录、刷新 token 等接口应使用 ApiAuthPolicy.none，不带 Authorization。
+  /// 当前 access token；refresh token 不在此暴露。
   final String? accessToken;
 
   Map<String, String> toBaseHeaders() {
@@ -51,18 +46,4 @@ class ApiRequestContext {
       'Accept': 'application/json',
     };
   }
-}
-
-String defaultApiPlatform() {
-  if (kIsWeb) {
-    return 'web';
-  }
-  return switch (defaultTargetPlatform) {
-    TargetPlatform.android => 'android',
-    TargetPlatform.iOS => 'ios',
-    TargetPlatform.macOS => 'macos',
-    TargetPlatform.windows => 'windows',
-    TargetPlatform.linux => 'linux',
-    TargetPlatform.fuchsia => 'fuchsia',
-  };
 }

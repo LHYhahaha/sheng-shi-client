@@ -33,7 +33,7 @@ class ApiClient {
   }) : _dio = dio ?? Dio(_defaultOptions),
        _requestContextReader =
            requestContextReader ??
-           (() => requestContext ?? const ApiRequestContext.mock()),
+           (() => requestContext ?? const ApiRequestContext.test()),
        _sessionAuthHandler = sessionAuthHandler {
     _dio.interceptors.add(
       InterceptorsWrapper(

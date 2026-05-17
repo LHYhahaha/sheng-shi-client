@@ -170,7 +170,8 @@ A7 feature cleanup hooks 已接入（bootstrap）；Toast/Modal 与真实 reposi
 P0 联调前必须确认：
 
 - `APP_ENV` / `API_BASE_URL` 对应真实 dev/staging/prod 域名。
-- 真实 `Device-Id` 持久化来源和 `App-Version` package info 接入。
+- ~~真实 `Device-Id` 持久化来源和 `App-Version` package info 接入。~~ **A4 Done**：install id +
+  `package_info_plus`；guest bootstrap 使用同一 `Device-Id` header。
 - secure storage 实现替换 in-memory `AuthTokenStore`。
 - 401 自动 refresh/retry、并发刷新和 refresh 失败后的 logout 策略。
 - logout / delete account 后清理 feature caches、playback sessions/window。
