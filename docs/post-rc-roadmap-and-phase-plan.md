@@ -185,22 +185,21 @@ flowchart TB
 | **目标** | Player coin unlock、recharge 通过 `AppModalService` 展示，避免 For You / bottom tab / Player Stack 层级遮挡 |
 | **文件影响** | `player_unlock_modal_coordinator.dart`、`features/player/presentation/modal/*`、`player_page.dart`、`player_recharge_unlock_sheet.dart`、`core/modal/*` |
 | **完成内容** | Player request/result 类型、Player modal presenter、root sheet、source dismiss、Player dispose 时 `dismissForSource(AppModalSource.player)` |
-| **Payment Method 当前状态** | 作为 `PlayerRechargeUnlockSheet` 上方的局部 root `OverlayEntry`；已具备独立进出场动画，当前版本接受 |
+| **Payment Method（O2.1 Done）** | `player.payment_method` + `stackOnCurrent`；`PaymentModalResult`；`PlayerPaymentMethodModalLayer` 保留进出场动画 |
 | **保留项** | Player 详情、分享、倍速等局部 sheet 仍可用 `showModalBottomSheet` |
 | **测试** | `player_page_test`、`test/core/modal/*`、`app_modal_integration_test`、`modal_boundary_test` |
 | **依赖** | O1；A7 完成后可继续加强 session cleanup 时关闭 modal |
 
-#### O2.1 — Player Payment Method AppModal 收口 — **Defer**
+#### O2.1 — Player Payment Method AppModal 收口 — **Done**
 
 | 项 | 内容 |
 | --- | --- |
-| **目标** | 将 Player `Payment Method` 从播放器内 root `OverlayEntry` 迁入 AppModal / Payment channel |
-| **动机** | 统一 modal queue、dismiss policy、session cleanup、typed result 和后续真实支付接入边界 |
-| **建议 channel** | `player.payment_method` 或 `payment.method` |
-| **建议 result** | `PaymentMethodModalResult.completed / cancelled / dismissed` |
-| **要求** | 保留现有 UI、进出场动画、mock payment 业务结果；不接真实 IAP |
-| **清理** | 删除 `PlayerRechargeUnlockSheet` 内部 `_paymentOverlay` / `_PaymentMethodOverlay` |
-| **优先级** | P2 / post-RC cleanup；不阻塞当前 mock release |
+| **目标** | 将 Player `Payment Method` 迁入 AppModal / Payment channel |
+| **完成** | `player.payment_method`；`PlayerPaymentMethodModalPayload`；`PaymentModalResult`；`stackOnCurrent` 叠层；`PlayerPaymentMethodModalCoordinator` |
+| **清理** | 删除 `PlayerRechargeUnlockSheet` 内 `OverlayEntry` / `_PaymentMethodOverlay` |
+| **核心** | `AppModalController.stackedPresentations` + `AppModalHost` 并行 present stacked 请求 |
+| **测试** | `app_modal_stack_test`、`player_page_test`、`modal_boundary_test` |
+| **不做** | 不接真实 IAP |
 
 #### O4 — 迁移 Store / Membership / Wallet confirmation — **Done**
 

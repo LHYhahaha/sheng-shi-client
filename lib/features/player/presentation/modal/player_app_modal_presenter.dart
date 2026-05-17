@@ -8,6 +8,7 @@ import '../../../../core/modal/app_modal_result.dart';
 import '../../../../core/modal/app_modal_root_sheet.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../widgets/player_action_sheets.dart';
+import '../widgets/player_payment_method_modal_layer.dart';
 import '../widgets/player_recharge_unlock_sheet.dart';
 import 'player_modal_channels.dart';
 import 'player_modal_payloads.dart';
@@ -20,7 +21,8 @@ class PlayerAppModalPresenter implements AppModalPresenter {
   bool handles(AppModalRequest request) {
     return request is FeatureAppModalRequest &&
         (request.channel == PlayerModalChannels.coinUnlock ||
-            request.channel == PlayerModalChannels.rechargeUnlock);
+            request.channel == PlayerModalChannels.rechargeUnlock ||
+            request.channel == PlayerModalChannels.paymentMethod);
   }
 
   @override
@@ -35,6 +37,10 @@ class PlayerAppModalPresenter implements AppModalPresenter {
         featureRequest,
       ),
       PlayerModalChannels.rechargeUnlock => _presentRechargeUnlock(
+        context,
+        featureRequest,
+      ),
+      PlayerModalChannels.paymentMethod => _presentPaymentMethod(
         context,
         featureRequest,
       ),
@@ -101,5 +107,46 @@ class PlayerAppModalPresenter implements AppModalPresenter {
       return const RechargeModalResult.cancelled();
     }
     return const RechargeModalResult.cancelled();
+  }
+
+  Future<AppModalResult> _presentPaymentMethod(
+    BuildContext context,
+    FeatureAppModalRequest request,
+  ) async {
+    final payload = request.payload as PlayerPaymentMethodModalPayload?;
+
+    if (payload == null) {
+      return const PaymentModalResult.cancelled();
+    }
+
+    final modalContext = resolveAppModalPresentationContext(context);
+    final purchased = await showGeneralDialog<bool>(
+      context: modalContext,
+      barrierDismissible: request.dismissPolicy.barrierDismissible,
+      barrierLabel: MaterialLocalizations.of(
+        modalContext,
+      ).modalBarrierDismissLabel,
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 240),
+      pageBuilder: (dialogContext, _, _) {
+        return MediaQuery(
+          data: MediaQuery.of(modalContext),
+          child: PlayerPaymentMethodModalLayer(
+            sessionKey: payload.sessionKey,
+            selection: payload.selection,
+            onDismissed: () => Navigator.of(dialogContext).pop(false),
+            onPurchaseSuccess: () => Navigator.of(dialogContext).pop(true),
+          ),
+        );
+      },
+    );
+
+    if (purchased == true) {
+      return const PaymentModalResult.completed();
+    }
+    if (request.dismissPolicy.barrierDismissible && purchased == null) {
+      return const PaymentModalResult.dismissed();
+    }
+    return const PaymentModalResult.cancelled();
   }
 }

@@ -205,8 +205,7 @@ flutter run \
 
 当前特殊项：
 
-- Player `Payment Method` 支付确认层已从充值大抽屉中拆出，但当前仍是播放器内 root `OverlayEntry`，不是独立 AppModal channel。
-- 后续小重构 `O2.1` 会把 `Payment Method` 收进 AppModal / Payment channel，统一队列、关闭和 cleanup 策略。
+- Player `Payment Method`（O2.1 Done）已迁入 AppModal：`player.payment_method` channel + `stackOnCurrent` 叠于充值大抽屉；`PaymentModalResult` typed result；`dismissForSource(player)` 可一并关闭。
 
 仍保留本地弹窗的局部 UI：
 

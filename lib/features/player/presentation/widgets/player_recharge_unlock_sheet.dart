@@ -6,13 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../app/app_modal_context.dart';
-import '../../../../app/app_root_navigator_key.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
 import '../../domain/player_recharge_unlock_offer.dart';
+import '../modal/player_modal_results.dart';
+import '../modal/player_payment_method_modal_coordinator.dart';
 import 'player_payment_method_sheet.dart';
 
 /// 播放器内充值解锁弹窗。
@@ -49,8 +49,6 @@ class _PlayerRechargeUnlockSheetState
 
   late Duration _promotionRemaining;
   Timer? _timer;
-  OverlayEntry? _paymentOverlay;
-  GlobalKey<_PaymentMethodOverlayState>? _paymentOverlayKey;
 
   @override
   void initState() {
@@ -70,64 +68,22 @@ class _PlayerRechargeUnlockSheetState
   @override
   void dispose() {
     _timer?.cancel();
-    _removePaymentOverlayImmediately();
     super.dispose();
   }
 
-  void _removePaymentOverlay() {
-    final overlayState = _paymentOverlayKey?.currentState;
-    if (overlayState != null) {
-      unawaited(overlayState.dismiss());
-      return;
-    }
-    _removePaymentOverlayImmediately();
-  }
-
-  void _removePaymentOverlayImmediately() {
-    _paymentOverlay?.remove();
-    _paymentOverlay = null;
-    _paymentOverlayKey = null;
-  }
-
-  void _presentPaymentMethod(PlayerPaymentSelection selection) {
+  Future<void> _presentPaymentMethod(PlayerPaymentSelection selection) async {
     if (!mounted) {
       return;
     }
-    _removePaymentOverlay();
-
-    final rechargeContext = context;
-    final modalContext = resolveAppModalPresentationContext(rechargeContext);
-    final overlay =
-        appRootNavigatorKey.currentState?.overlay ??
-        Overlay.maybeOf(modalContext);
-    if (overlay == null) {
+    final result = await ref
+        .read(playerPaymentMethodModalCoordinatorProvider(widget.sessionKey))
+        .showPaymentMethod(sessionKey: widget.sessionKey, selection: selection);
+    if (!mounted) {
       return;
     }
-
-    late OverlayEntry entry;
-    final overlayKey = GlobalKey<_PaymentMethodOverlayState>();
-    entry = OverlayEntry(
-      builder: (overlayContext) {
-        return MediaQuery(
-          data: MediaQuery.of(modalContext),
-          child: _PaymentMethodOverlay(
-            key: overlayKey,
-            sessionKey: widget.sessionKey,
-            selection: selection,
-            onDismissed: _removePaymentOverlayImmediately,
-            onPurchaseSuccess: () {
-              _removePaymentOverlayImmediately();
-              if (rechargeContext.mounted) {
-                Navigator.of(rechargeContext).pop(true);
-              }
-            },
-          ),
-        );
-      },
-    );
-    _paymentOverlay = entry;
-    _paymentOverlayKey = overlayKey;
-    overlay.insert(entry);
+    if (PlayerModalResults.isPaymentCompleted(result)) {
+      Navigator.of(context).pop(true);
+    }
   }
 
   @override
@@ -157,7 +113,9 @@ class _PlayerRechargeUnlockSheetState
                     .where((package) => package.id == id)
                     .firstOrNull;
                 if (package != null) {
-                  _presentPaymentMethod(PlayerPaymentSelection.coin(package));
+                  unawaited(
+                    _presentPaymentMethod(PlayerPaymentSelection.coin(package)),
+                  );
                 }
               },
               onMembershipTap: (id) {
@@ -165,8 +123,10 @@ class _PlayerRechargeUnlockSheetState
                     .where((package) => package.id == id)
                     .firstOrNull;
                 if (package != null) {
-                  _presentPaymentMethod(
-                    PlayerPaymentSelection.membership(package),
+                  unawaited(
+                    _presentPaymentMethod(
+                      PlayerPaymentSelection.membership(package),
+                    ),
                   );
                 }
               },
@@ -184,105 +144,6 @@ class _PlayerRechargeUnlockSheetState
           child: content,
         ),
       ),
-    );
-  }
-}
-
-class _PaymentMethodOverlay extends StatefulWidget {
-  const _PaymentMethodOverlay({
-    required this.sessionKey,
-    required this.selection,
-    required this.onDismissed,
-    required this.onPurchaseSuccess,
-    super.key,
-  });
-
-  final String sessionKey;
-  final PlayerPaymentSelection selection;
-  final VoidCallback onDismissed;
-  final VoidCallback onPurchaseSuccess;
-
-  @override
-  State<_PaymentMethodOverlay> createState() => _PaymentMethodOverlayState();
-}
-
-class _PaymentMethodOverlayState extends State<_PaymentMethodOverlay>
-    with SingleTickerProviderStateMixin {
-  static const _duration = Duration(milliseconds: 240);
-  static const _reverseDuration = Duration(milliseconds: 180);
-
-  late final AnimationController _controller;
-  late final Animation<double> _barrierOpacity;
-  late final Animation<Offset> _sheetOffset;
-  var _isDismissing = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: _duration,
-      reverseDuration: _reverseDuration,
-    );
-    final curved = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
-    );
-    _barrierOpacity = Tween<double>(begin: 0, end: 1).animate(curved);
-    _sheetOffset = Tween<Offset>(
-      begin: const Offset(0, 1),
-      end: Offset.zero,
-    ).animate(curved);
-    unawaited(_controller.forward());
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> dismiss() async {
-    if (_isDismissing) {
-      return;
-    }
-    _isDismissing = true;
-    await _controller.reverse();
-    if (mounted) {
-      widget.onDismissed();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: FadeTransition(
-            opacity: _barrierOpacity,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: dismiss,
-              child: const ColoredBox(color: Color(0x73000000)),
-            ),
-          ),
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: SlideTransition(
-            position: _sheetOffset,
-            child: PlayerPaymentMethodSheet(
-              sessionKey: widget.sessionKey,
-              selection: widget.selection,
-              onDismiss: dismiss,
-              onPurchaseSuccess: widget.onPurchaseSuccess,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

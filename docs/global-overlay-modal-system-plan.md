@@ -1,6 +1,6 @@
 # Global Overlay / Modal System Plan
 
-> Status: **O1–O5 complete** (2026-05-17). Player unlock/recharge, Auth login/login-required, and Store/Membership purchase confirmation use the global modal host. Player `Payment Method` is currently a local root `OverlayEntry` layered above the recharge drawer; migrate it to AppModal in follow-up **O2.1**. Wallet has no blocking confirmation modal (restore → toast; auto unlock → in-page switch). O5 finalized queue/priority/dismiss/observer/runtime config; no Modal Ops / analytics / remote kill switch in this track.
+> Status: **O1–O5 + O2.1 complete** (2026-05-17). Player unlock/recharge/payment-method, Auth login/login-required, and Store/Membership purchase confirmation use the global modal host. Player `Payment Method` uses `player.payment_method` with `stackOnCurrent` above the recharge drawer. Wallet has no blocking confirmation modal (restore → toast; auto unlock → in-page switch). O5 finalized queue/priority/dismiss/observer/runtime config; no Modal Ops / analytics / remote kill switch in this track.
 
 ## Why This Exists
 
@@ -8,7 +8,7 @@ The current app already has several cross-feature overlay flows:
 
 - Player coin unlock sheet.
 - Player recharge sheet.
-- Player payment confirmation sheet（当前局部 root Overlay，O2.1 迁入 AppModal）.
+- Player payment confirmation sheet（O2.1：`player.payment_method` AppModal + stackOnCurrent）.
 - Membership purchase entry.
 - Store confirmation and restore feedback.
 - Login / auth prompts planned for later.
@@ -23,7 +23,7 @@ The long-term goal is an app-level modal system that owns the host layer, safe-a
 For the current release:
 
 - Player unlock/recharge uses the global root modal host because For You and bottom-tab layering can cover local sheets.
-- Player `Payment Method` is a local root `OverlayEntry` above the recharge drawer. It is accepted for the current release because it is scoped to Player recharge, has test coverage, and fixes the two-level payment UX without reworking the modal queue.
+- Player `Payment Method` stacks on the recharge drawer via `FeatureAppModalRequest.stackOnCurrent` and `PaymentModalResult`, preserving the two-level UX without shrinking the recharge drawer.
 - Store / Membership purchase confirmation uses the global root modal host (O4).
 - Wallet has no blocking confirmation sheet in MVP; restore uses toast only (O4 no-op).
 - Do not connect real IAP or real API as part of this modal migration.
@@ -252,7 +252,7 @@ README should explain:
 ### Phase O2: Player Unlock / Recharge — Done
 
 - Player coin unlock and recharge route through `AppModalService`.
-- Player `Payment Method` is currently a local root overlay above the recharge sheet; O2.1 will move it into AppModal.
+- Player `Payment Method` uses AppModal `stackOnCurrent` above the recharge sheet (O2.1 Done).
 - Existing Player sheet widgets are reused as content inside root-hosted modal sheets.
 - `AppModalSource.player` can be dismissed as a group when Player route is disposed.
 - Player detail/share/speed sheets remain local because they are page-local UI, not cross-tab blocking business flows.
@@ -308,7 +308,7 @@ After Phase O1/O2:
 
 - Features cannot import third-party modal packages directly.
 - Player unlock/recharge must go through `AppModalService`.
-- Follow-up O2.1: migrate Player `Payment Method` from local root `OverlayEntry` into an AppModal / Payment channel.
+- O2.1 Done: Player `Payment Method` uses `player.payment_method` + `PaymentModalResult` + `stackOnCurrent`.
 - Modal request/result models are not raw `bool` or `String`.
 - Global business modal usage does not bypass the service from presentation pages.
 

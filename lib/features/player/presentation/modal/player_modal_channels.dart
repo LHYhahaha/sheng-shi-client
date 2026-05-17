@@ -2,4 +2,5 @@
 abstract final class PlayerModalChannels {
   static const coinUnlock = 'player.coin_unlock';
   static const rechargeUnlock = 'player.recharge_unlock';
+  static const paymentMethod = 'player.payment_method';
 }

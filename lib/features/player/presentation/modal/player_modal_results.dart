@@ -14,6 +14,11 @@ abstract final class PlayerModalResults {
         result.kind == AppModalResultKind.completed;
   }
 
+  static bool isPaymentCompleted(AppModalResult result) {
+    return result is PaymentModalResult &&
+        result.kind == AppModalResultKind.completed;
+  }
+
   static bool isDismissed(AppModalResult result) {
     return result.kind == AppModalResultKind.dismissed;
   }
@@ -28,4 +33,7 @@ extension PlayerFeatureAppModalRequestX on FeatureAppModalRequest {
 
   bool get isPlayerRechargeUnlock =>
       channel == PlayerModalChannels.rechargeUnlock;
+
+  bool get isPlayerPaymentMethod =>
+      channel == PlayerModalChannels.paymentMethod;
 }

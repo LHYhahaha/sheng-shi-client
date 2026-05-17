@@ -68,8 +68,12 @@ final class FeatureAppModalRequest extends AppModalRequest {
     super.dismissPolicy = AppModalDismissPolicy.standard,
     DateTime? createdAt,
     super.type = AppModalType.unknown,
+    this.stackOnCurrent = false,
   }) : super(createdAt: createdAt ?? DateTime.now());
 
   final String channel;
   final Object? payload;
+
+  /// 在已有 current 展示时叠层（如充值大抽屉上的 Payment Method），不入 pending 队列。
+  final bool stackOnCurrent;
 }

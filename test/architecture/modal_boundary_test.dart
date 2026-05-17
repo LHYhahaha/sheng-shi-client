@@ -133,6 +133,29 @@ void main() {
     expect(offenders, isEmpty, reason: offenders.join('\n'));
   });
 
+  test('player recharge sheet does not use root OverlayEntry for payment', () {
+    final source = File(
+      'lib/features/player/presentation/widgets/player_recharge_unlock_sheet.dart',
+    ).readAsStringSync();
+    expect(source, isNot(contains('OverlayEntry')));
+    expect(source, isNot(contains('_PaymentMethodOverlay')));
+    expect(source, contains('playerPaymentMethodModalCoordinatorProvider'));
+    expect(source, contains('PlayerModalResults.isPaymentCompleted'));
+  });
+
+  test('player payment method uses AppModal channel', () {
+    final channels = File(
+      'lib/features/player/presentation/modal/player_modal_channels.dart',
+    ).readAsStringSync();
+    expect(channels, contains("paymentMethod = 'player.payment_method'"));
+
+    final presenter = File(
+      'lib/features/player/presentation/modal/player_app_modal_presenter.dart',
+    ).readAsStringSync();
+    expect(presenter, contains('PlayerModalChannels.paymentMethod'));
+    expect(presenter, contains('PaymentModalResult'));
+  });
+
   test('business modal presenters register only via bootstrap', () {
     final bootstrap = File(
       'lib/bootstrap/app_modal_registry_bootstrap.dart',

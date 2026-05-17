@@ -108,6 +108,8 @@ final class PaymentModalResult extends AppModalResult {
 
   const PaymentModalResult.cancelled() : super(AppModalResultKind.cancelled);
 
+  const PaymentModalResult.dismissed() : super(AppModalResultKind.dismissed);
+
   const PaymentModalResult.failed() : super(AppModalResultKind.failed);
 }
 

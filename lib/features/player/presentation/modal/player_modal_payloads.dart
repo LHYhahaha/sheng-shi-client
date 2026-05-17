@@ -1,3 +1,5 @@
+import '../widgets/player_payment_method_sheet.dart';
+
 /// Coin unlock 弹窗 payload。
 class PlayerCoinUnlockModalPayload {
   const PlayerCoinUnlockModalPayload({
@@ -11,7 +13,18 @@ class PlayerCoinUnlockModalPayload {
   final int price;
 }
 
-/// Recharge 大抽屉 payload（payment 确认仍在 sheet 内嵌，随 drawer 一起在 root 层展示）。
+/// Payment Method 叠层 payload（O2.1：stackOnCurrent 于充值大抽屉之上）。
+class PlayerPaymentMethodModalPayload {
+  const PlayerPaymentMethodModalPayload({
+    required this.sessionKey,
+    required this.selection,
+  });
+
+  final String sessionKey;
+  final PlayerPaymentSelection selection;
+}
+
+/// Recharge 大抽屉 payload。
 class PlayerRechargeUnlockModalPayload {
   const PlayerRechargeUnlockModalPayload({
     required this.sessionKey,

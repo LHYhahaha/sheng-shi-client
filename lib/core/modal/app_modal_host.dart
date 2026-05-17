@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_modal_context.dart';
-import '../../app/app_root_navigator_key.dart';
 import 'app_modal_controller.dart';
 import 'app_modal_provider.dart';
+import 'app_modal_result.dart';
 
 /// 根级弹窗宿主：在 [MaterialApp] builder 中包裹路由子树，从 root overlay 展示弹窗。
 ///
@@ -22,7 +22,8 @@ class AppModalHost extends ConsumerStatefulWidget {
 
 class _AppModalHostState extends ConsumerState<AppModalHost> {
   AppModalController? _controller;
-  String? _presentingRequestId;
+  String? _presentingCurrentRequestId;
+  final Set<String> _presentingStackedRequestIds = {};
 
   @override
   void dispose() {
@@ -40,30 +41,32 @@ class _AppModalHostState extends ConsumerState<AppModalHost> {
   }
 
   void _onControllerChanged() {
-    final presentation = _controller?.current;
-    if (presentation == null) {
-      if (_presentingRequestId != null) {
-        _popRootModalRouteIfOpen();
-      }
-      _presentingRequestId = null;
+    final controller = _controller;
+    if (controller == null) {
       return;
     }
-    if (_presentingRequestId == presentation.request.requestId) {
-      return;
-    }
-    _presentingRequestId = presentation.request.requestId;
-    unawaited(_presentWhenReady(presentation));
-  }
 
-  void _popRootModalRouteIfOpen() {
-    if (!mounted) {
+    for (final presentation in controller.stackedPresentations) {
+      final requestId = presentation.request.requestId;
+      if (_presentingStackedRequestIds.contains(requestId)) {
+        continue;
+      }
+      _presentingStackedRequestIds.add(requestId);
+      unawaited(_presentStacked(presentation));
+    }
+
+    final presentation = controller.current;
+    if (presentation == null) {
+      _presentingCurrentRequestId = null;
       return;
     }
-    final navigator = appRootNavigatorKey.currentState;
-    if (navigator == null || !navigator.canPop()) {
+
+    final requestId = presentation.request.requestId;
+    if (_presentingCurrentRequestId == requestId) {
       return;
     }
-    navigator.pop();
+    _presentingCurrentRequestId = requestId;
+    unawaited(_presentCurrent(presentation));
   }
 
   @override
@@ -86,24 +89,38 @@ class _AppModalHostState extends ConsumerState<AppModalHost> {
     }
   }
 
+  Future<void> _presentCurrent(AppModalPresentation presentation) async {
+    await _presentWhenReady(presentation);
+    if (_presentingCurrentRequestId == presentation.request.requestId) {
+      _presentingCurrentRequestId = null;
+    }
+  }
+
+  Future<void> _presentStacked(AppModalPresentation presentation) async {
+    await _presentWhenReady(presentation);
+    _presentingStackedRequestIds.remove(presentation.request.requestId);
+  }
+
   Future<void> _present(
     AppModalPresentation presentation,
     BuildContext navContext,
   ) async {
     final controller = ref.read(appModalControllerProvider);
-    if (controller.current?.request.requestId !=
-        presentation.request.requestId) {
+    final requestId = presentation.request.requestId;
+    if (!controller.containsPresentation(requestId)) {
       return;
     }
 
     final registry = ref.read(appModalPresenterRegistryProvider);
-    final requestId = presentation.request.requestId;
     controller.markPresented(requestId);
 
     final presenter = registry.resolve(presentation.request);
     if (presenter == null) {
-      if (controller.current?.request.requestId == requestId) {
-        controller.failCurrentPresentation();
+      if (controller.containsPresentation(requestId)) {
+        controller.completePresentation(
+          requestId,
+          const AppModalPresentFailedResult(),
+        );
       }
       return;
     }
@@ -116,11 +133,8 @@ class _AppModalHostState extends ConsumerState<AppModalHost> {
     if (!mounted) {
       return;
     }
-    if (_presentingRequestId == requestId) {
-      _presentingRequestId = null;
-    }
-    if (controller.current?.request.requestId == requestId) {
-      controller.completeCurrent(result);
+    if (controller.containsPresentation(requestId)) {
+      controller.completePresentation(requestId, result);
     }
   }
 }
