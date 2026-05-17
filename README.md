@@ -220,6 +220,8 @@ if (result.isConfirmed) {
 
 文档：[Global Overlay / Modal System Plan](docs/global-overlay-modal-system-plan.md)。
 
+已支持弹窗清单、用途和接入方式见 [AppModal Supported Modals](docs/app-modal-supported-modals.md)。
+
 ### Toast
 
 瞬态反馈使用 `AppToastService`，不要用 modal 替代 toast。
@@ -344,6 +346,7 @@ API / 联调：
 - [Project Structure And Conventions](docs/project-structure-and-conventions.md)
 - [Technical Architecture](docs/technical-architecture.md)
 - [Bottom Navigation Assets](docs/bottom-navigation-assets.md)
+- [AppModal Supported Modals](docs/app-modal-supported-modals.md)
 
 历史计划和决策：
 

@@ -27,6 +27,8 @@ For the current release:
 - Wallet has no blocking confirmation sheet in MVP; restore uses toast only (O4 no-op).
 - Do not connect real IAP or real API as part of this modal migration.
 
+当前已接入的弹窗、channel、payload/result 和使用方式见 [AppModal Supported Modals](app-modal-supported-modals.md)。
+
 This document records the target design and migration plan for the first post-release architecture optimization round.
 
 ## Goals
