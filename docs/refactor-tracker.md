@@ -24,7 +24,7 @@
 | P2 | Theme tokens | 部分页面仍可能散落 magic number 和局部颜色 | 抽查核心页面，沉淀颜色、间距、圆角、文本样式 | In Review |
 | P2 | Network | Remote skeleton done; integration blocked on backend | 401 refresh、验单、strict DTO 后再默认开 remote | In Review |
 | P2 | Player domain | 当前播放页仍以 mock 和 UI 状态为主 | 接入真实播放器 session、解锁状态、自动下一集、错误恢复 | Todo |
-| P1 | Global Modal (Track O) | **O1–O5 Done**；业务 login gate 按需接 `showLoginRequired`；Modal Ops（活动/强更）另开 | O1–O5 complete | O5 Done |
+| P1 | Global Modal (Track O) | **O1–O5 Done**；业务 login gate 按需接 `showLoginRequired`；Payment Method 当前为 Player 局部 root Overlay，后续 O2.1 收进 AppModal；Modal Ops（活动/强更）另开 | O1–O5 complete；O2.1 deferred | O5 Done |
 
 ## 3. 已完成记录
 
@@ -56,11 +56,12 @@
 
 完成内容：
 
-- Player coin unlock、recharge、payment confirmation 迁移到全局 `AppModalService`
+- Player coin unlock、recharge 迁移到全局 `AppModalService`
 - 新增 Player modal presenter / payload / result / coordinator，复用现有 sheet 内容
 - Player route dispose 时按 `AppModalSource.player` 关闭当前 Player modal，避免离开页面后残留
 - 架构测试继续禁止 `core/modal` 反向依赖 features，并收紧 Player 业务弹窗的 `showModalBottomSheet` 使用
 - Player 详情、分享、倍速等页面局部 sheet 暂时保留本地实现
+- Player `Payment Method` 已从充值抽屉内部切换改为独立局部 root Overlay；当前未进入 AppModal，O2.1 再收口到 AppModal / Payment channel
 
 验证：`flutter analyze`、`flutter test` 通过。
 

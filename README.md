@@ -17,6 +17,17 @@
 - [Remote API Staging Checklist](docs/remote-api-staging-checklist.md)：真实接口联调时如何安全打开 staging。
 - [Post-RC Roadmap & Phase Plan](docs/post-rc-roadmap-and-phase-plan.md)：后续阶段规划。
 
+## 文档导航
+
+新成员建议按这个顺序阅读：
+
+1. 本文档：了解项目状态、运行、测试、打包和公共能力入口。
+2. [Release Seal Checklist](docs/release-seal-checklist.md)：了解当前 RC / release 的封板边界。
+3. [AppModal Supported Modals](docs/app-modal-supported-modals.md)：了解全局弹窗支持范围和使用方式。
+4. [App Runtime System](docs/app-runtime-system.md)：了解设备分级、播放器策略和运行时配置。
+5. [Remote Contract Index](docs/remote-contract-index.md)：了解未来真实 API 的模块开关和接口契约。
+6. [Project Structure And Conventions](docs/project-structure-and-conventions.md)：了解目录和分层规范。
+
 ## 环境要求
 
 Flutter:
@@ -187,10 +198,15 @@ flutter run \
 
 已迁移到 AppModal 的业务：
 
-- Player 解锁、充值、支付确认
+- Player 金币解锁小弹窗、充值大抽屉
 - Auth 登录、login required、session expired 登录入口
 - Store 购买确认
 - Membership 购买确认
+
+当前特殊项：
+
+- Player `Payment Method` 支付确认层已从充值大抽屉中拆出，但当前仍是播放器内 root `OverlayEntry`，不是独立 AppModal channel。
+- 后续小重构 `O2.1` 会把 `Payment Method` 收进 AppModal / Payment channel，统一队列、关闭和 cleanup 策略。
 
 仍保留本地弹窗的局部 UI：
 

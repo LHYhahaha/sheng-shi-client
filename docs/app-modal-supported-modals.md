@@ -72,7 +72,8 @@ final result = await ref.read(appModalServiceProvider).show(request);
 | --- | --- | --- | --- | --- |
 | 通用确认弹窗 | `AppModalType.confirm` | 调用方指定 | `ConfirmAppModalPresenter` | `ConfirmResult` |
 | Player 金币解锁小弹窗 | `player.coin_unlock` / `coinUnlock` | `player` | `PlayerAppModalPresenter` | `CoinUnlockModalResult` |
-| Player 充值/支付抽屉 | `player.recharge_unlock` / `recharge` | `player` | `PlayerAppModalPresenter` | `RechargeModalResult` |
+| Player 充值大抽屉 | `player.recharge_unlock` / `recharge` | `player` | `PlayerAppModalPresenter` | `RechargeModalResult` |
+| Player Payment Method 支付确认 | 当前局部 root `OverlayEntry`；后续 O2.1 迁移 | `player` | 当前不走 AppModal presenter | 当前由 `PlayerRechargeUnlockSheet` 管理 |
 | Auth 登录弹窗 | `auth.login` / `login` | `auth` / 触发来源 | `AuthAppModalPresenter` | `LoginModalResult` / `AuthLoginModalResult` |
 | Store 购买确认 | `store.purchase_confirmation` / `storeConfirm` | `store` | `StoreAppModalPresenter` | `StorePurchaseModalResult` |
 | Membership 购买确认 | `membership.purchase_confirmation` / `membershipPurchase` | `membership` | `MembershipAppModalPresenter` | `MembershipPurchaseModalResult` |
@@ -179,13 +180,13 @@ Result:
 - 弹窗不直接播放。
 - 弹窗不读取或修改播放器 session。
 
-## 6. Player 充值/支付抽屉
+## 6. Player 充值大抽屉
 
 用途：
 
 - 金币不足时展示充值大抽屉。
 - 会员剧非会员时展示会员购买入口。
-- 充值抽屉内包含 payment confirmation 内页。
+- 用户点击金币包 / VIP 包后，会弹出独立的 `Payment Method` 支付确认层。
 
 入口：
 
@@ -217,7 +218,7 @@ Result:
 行为：
 
 - 弹窗打开前调用 `PlayerRechargeUnlockController.open(...)`。
-- 用户选择金币包 / 会员包后，在抽屉内进入 payment confirmation。
+- 用户选择金币包 / 会员包后，充值大抽屉保持不变，并在 root overlay 上展示 `PlayerPaymentMethodSheet`。
 - 金币包成功后：
   - `PlayerFeedEngine.grantRechargeSelection(...)`
   - `continueAfterRechargeSuccess(...)`
@@ -233,7 +234,43 @@ Result:
 注意：
 
 - 该弹窗使用 root modal host，避免 For You / bottom tab 遮挡。
-- payment confirmation 目前属于充值抽屉内部状态，不是单独的 AppModal channel。
+- `Payment Method` 当前是播放器内局部 root `OverlayEntry`，有独立进出场动画。
+- 后续 O2.1 应迁移为 AppModal / Payment channel，统一队列、dismiss、session cleanup 和 typed result。
+
+### 6.1 Player Payment Method 支付确认层（当前局部 Overlay）
+
+用途：
+
+- 在充值大抽屉上方展示支付方式、订单信息和 `Buy now`。
+- 避免把大充值抽屉内部内容缩放成小支付弹窗。
+
+当前入口：
+
+```dart
+PlayerRechargeUnlockSheet._presentPaymentMethod(...)
+```
+
+当前 UI：
+
+```dart
+PlayerPaymentMethodSheet
+```
+
+当前行为：
+
+- 点击充值大抽屉中的金币包 / VIP 包后，从屏幕底部滑入。
+- 点击遮罩或关闭按钮后，先播放退场动画，再移除 overlay。
+- `Buy now` 后继续调用 `PlayerRechargeUnlockController.selectCoinPackage(...)`
+  或 `selectMembershipPackage(...)`。
+- mock 支付成功后关闭 payment overlay 和充值大抽屉，后续流程仍由
+  `PlayerUnlockModalCoordinator` / `PlayerFeedEngine` 接管。
+
+后续 O2.1：
+
+- 新增 channel，例如 `player.payment_method` 或 `payment.method`。
+- 新增 typed result，例如 `PaymentMethodModalResult.completed / cancelled / dismissed`。
+- 删除播放器内部手写 `_paymentOverlay` / `_PaymentMethodOverlay`。
+- 保留现有 UI 和业务结果，不改 mock payment / entitlement 逻辑。
 
 ## 7. Auth 登录弹窗
 
@@ -543,4 +580,3 @@ session cleanup 中会关闭来源：
 | Wallet auto unlock switch | 页面内设置，不是弹窗 |
 
 如未来这些流程变成跨页面阻塞式业务流程，应迁移到 AppModal。
-
