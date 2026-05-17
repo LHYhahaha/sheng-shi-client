@@ -227,6 +227,12 @@ class MembershipController extends Notifier<MembershipState> {
     state = state.copyWith(selectedPlanId: id);
   }
 
+  /// 选中套餐并打开 mock 购买确认（Figma：无底部固定 Join Now，点卡片即购买入口）。
+  void selectPlanAndConfirm(String id) {
+    selectPlan(id);
+    showConfirmation();
+  }
+
   void showConfirmation() {
     final selectedPlan = state.selectedPlan;
     if (selectedPlan == null) {

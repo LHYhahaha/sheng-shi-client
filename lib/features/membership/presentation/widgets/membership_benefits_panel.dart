@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../l10n/app_localizations.dart';
-import '../../../../shared/theme/app_spacing.dart';
+import '../membership_layout.dart';
 import '../../domain/membership_plan.dart';
 
 class MembershipBenefitsPanel extends StatelessWidget {
@@ -19,61 +19,92 @@ class MembershipBenefitsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
 
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: Image.asset(
-            'assets/images/membership/membership_benefits_panel_bg.png',
-            fit: BoxFit.fill,
-            errorBuilder: (context, error, stackTrace) {
-              return const DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Color(0xFF131314),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
-                ),
-              );
-            },
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const _BenefitTitleLine(reverse: true),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                    ),
-                    child: Text(
-                      context.l10n.membershipBenefits,
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: _gold,
-                        fontWeight: FontWeight.w600,
-                        height: 1.5,
+    return Container(
+      key: const Key('membership_benefits_panel'),
+      width: double.infinity,
+      constraints: BoxConstraints(
+        minHeight:
+            MediaQuery.sizeOf(context).height -
+            MembershipLayout.benefitsPanelTop +
+            bottomInset,
+      ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(40),
+              ),
+              child: Image.asset(
+                'assets/images/membership/membership_benefits_panel_bg.png',
+                fit: BoxFit.fill,
+                alignment: Alignment.topCenter,
+                errorBuilder: (context, error, stackTrace) {
+                  return DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          const Color(0xFF1A1816),
+                          MembershipLayout.background,
+                        ],
+                      ),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(40),
                       ),
                     ),
-                  ),
-                  const _BenefitTitleLine(),
-                ],
+                  );
+                },
               ),
-              const SizedBox(height: 28),
-              for (final benefit in benefits) ...[
-                _BenefitRow(benefit: benefit),
-                const SizedBox(height: 20),
-              ],
-              if (tips != null) ...[
-                const SizedBox(height: 4),
-                _MembershipTips(tips: tips!),
-              ],
-            ],
+            ),
           ),
-        ),
-      ],
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              MembershipLayout.horizontalPadding,
+              MembershipLayout.benefitsTitlePaddingTop,
+              MembershipLayout.horizontalPadding,
+              28 + bottomInset,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const _BenefitTitleLine(reverse: true),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        context.l10n.membershipBenefits,
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: _gold,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                    const _BenefitTitleLine(),
+                  ],
+                ),
+                const SizedBox(height: 28),
+                for (var index = 0; index < benefits.length; index++) ...[
+                  _BenefitRow(benefit: benefits[index]),
+                  if (index < benefits.length - 1)
+                    const SizedBox(height: MembershipLayout.benefitsRowGap),
+                ],
+                if (tips != null) ...[
+                  const SizedBox(height: 28),
+                  _MembershipTips(tips: tips!),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -91,7 +122,7 @@ class _BenefitTitleLine extends StatelessWidget {
         : [gold.withValues(alpha: 0.22), Colors.transparent];
 
     return SizedBox(
-      width: 52,
+      width: MembershipLayout.benefitsTitleLineWidth,
       height: 1,
       child: DecoratedBox(
         decoration: BoxDecoration(gradient: LinearGradient(colors: colors)),
@@ -115,8 +146,8 @@ class _BenefitRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 30,
-          height: 30,
+          width: MembershipLayout.benefitsIconSize,
+          height: MembershipLayout.benefitsIconSize,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
@@ -124,12 +155,14 @@ class _BenefitRow extends StatelessWidget {
               end: Alignment.bottomRight,
               colors: [Color(0xFF4B3C31), Color(0x004B3C31)],
             ),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(
+              MembershipLayout.benefitsIconRadius,
+            ),
             border: Border.all(color: const Color(0x3DFFEAC4)),
           ),
           child: Icon(_iconFor(benefit.icon), color: _gold, size: 18),
         ),
-        const SizedBox(width: AppSpacing.sm),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -153,16 +186,19 @@ class _BenefitRow extends StatelessWidget {
                   ],
                 ),
               ),
-              if (benefit.description != null)
+              if (benefit.description != null) ...[
+                const SizedBox(height: 2),
                 Text(
                   benefit.description!,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: textTheme.labelMedium?.copyWith(
                     color: _gold.withValues(alpha: 0.4),
+                    fontSize: 12,
                     height: 1.3,
                   ),
                 ),
+              ],
             ],
           ),
         ),
@@ -192,6 +228,7 @@ class _MembershipTips extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final style = textTheme.labelMedium?.copyWith(
       color: Colors.white.withValues(alpha: 0.4),
+      fontSize: 12,
       height: 1.5,
     );
 

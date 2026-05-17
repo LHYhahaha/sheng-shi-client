@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../shared/theme/app_radii.dart';
-import '../../../../shared/theme/app_spacing.dart';
+import '../membership_layout.dart';
 import '../../domain/membership_plan.dart';
 
 class MembershipPlanCard extends StatelessWidget {
@@ -19,6 +18,8 @@ class MembershipPlanCard extends StatelessWidget {
   static const _gold = Color(0xFFD6BE94);
   static const _goldText = Color(0xFFFADEB7);
 
+  static Key planKey(String planId) => Key('membership_plan_$planId');
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -27,16 +28,19 @@ class MembershipPlanCard extends StatelessWidget {
       button: true,
       selected: selected,
       child: GestureDetector(
+        key: planKey(plan.id),
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          width: 109,
-          height: 156,
+          width: MembershipLayout.planCardWidth,
+          height: MembershipLayout.planCardHeight,
           decoration: BoxDecoration(
             color: const Color(0xFF1B1B1C),
-            borderRadius: BorderRadius.circular(AppRadii.md),
+            borderRadius: BorderRadius.circular(
+              MembershipLayout.planCardRadius,
+            ),
             border: Border.all(
               color: selected ? _gold : Colors.white.withValues(alpha: 0.24),
             ),
@@ -45,33 +49,35 @@ class MembershipPlanCard extends StatelessWidget {
           child: Stack(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(10, 25, 10, 31),
+                padding: const EdgeInsets.fromLTRB(8, 28, 8, 25),
                 child: Column(
                   children: [
                     Text(
                       plan.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
                       style: textTheme.bodyMedium?.copyWith(
                         color: Colors.white,
                         fontSize: 14,
-                        height: 1.5,
+                        height: 1.2,
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
                     if (plan.originalPriceLabel != null)
                       Text(
                         plan.originalPriceLabel!,
                         style: textTheme.labelMedium?.copyWith(
                           color: Colors.white.withValues(alpha: 0.5),
+                          fontSize: 12,
                           decoration: TextDecoration.lineThrough,
                           decorationColor: Colors.white.withValues(alpha: 0.5),
-                          height: 1.3,
+                          height: 1.2,
                         ),
                       )
                     else
-                      const SizedBox(height: 16),
-                    const SizedBox(height: 2),
+                      const SizedBox(height: 14),
+                    const SizedBox(height: 4),
                     _PlanPriceText(
                       priceLabel: plan.priceLabel,
                       color: selected ? _goldText : Colors.white,
@@ -98,7 +104,7 @@ class MembershipPlanCard extends StatelessWidget {
                             ? const Color(0xFF5A280A)
                             : Colors.white.withValues(alpha: 0.7),
                         fontSize: 10,
-                        height: 1.3,
+                        height: 1.2,
                       ),
                     ),
                   ),
@@ -109,24 +115,24 @@ class MembershipPlanCard extends StatelessWidget {
                   top: 0,
                   right: 0,
                   child: Container(
+                    width: 65,
                     height: 19,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: 2,
-                    ),
+                    alignment: Alignment.center,
                     decoration: const BoxDecoration(
                       color: Color(0xFFFE3273),
                       borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(AppRadii.sm),
+                        bottomLeft: Radius.circular(8),
                       ),
                     ),
                     child: Text(
                       plan.badgeLabel!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: textTheme.labelSmall?.copyWith(
                         color: Colors.white,
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
-                        height: 1.5,
+                        height: 1.2,
                       ),
                     ),
                   ),
@@ -155,12 +161,8 @@ class _PlanPriceText extends StatelessWidget {
       fit: BoxFit.scaleDown,
       child: RichText(
         maxLines: 1,
+        textAlign: TextAlign.center,
         text: TextSpan(
-          style: textTheme.headlineSmall?.copyWith(
-            color: color,
-            fontWeight: FontWeight.w800,
-            height: 1.5,
-          ),
           children: [
             if (hasDollarPrefix)
               TextSpan(
@@ -168,10 +170,19 @@ class _PlanPriceText extends StatelessWidget {
                 style: textTheme.bodyMedium?.copyWith(
                   color: color,
                   fontSize: 14,
-                  height: 1.5,
+                  fontWeight: FontWeight.w600,
+                  height: 1.2,
                 ),
               ),
-            TextSpan(text: price),
+            TextSpan(
+              text: price,
+              style: textTheme.headlineSmall?.copyWith(
+                color: color,
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                height: 1.1,
+              ),
+            ),
           ],
         ),
       ),

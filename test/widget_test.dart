@@ -326,8 +326,6 @@ void main() {
 
     await tester.tap(find.text('Monthly VIP'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Join Now'));
-    await tester.pumpAndSettle();
 
     expect(find.text('Confirm membership'), findsOneWidget);
     expect(

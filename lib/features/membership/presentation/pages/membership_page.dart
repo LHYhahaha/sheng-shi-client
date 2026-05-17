@@ -5,9 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router/route_paths.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
-import '../../../../shared/theme/app_spacing.dart';
-import '../../../../shared/widgets/app_primary_button.dart';
 import '../../application/membership_controller.dart';
+import '../membership_layout.dart';
 import '../widgets/membership_benefits_panel.dart';
 import '../widgets/membership_confirmation_sheet.dart';
 import '../widgets/membership_plan_card.dart';
@@ -79,11 +78,10 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
         if (didPop) {
           return;
         }
-
         _goBack();
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF0F0F10),
+        backgroundColor: MembershipLayout.background,
         body: Stack(
           children: [
             _MembershipHeroBackground(topInset: topInset),
@@ -91,44 +89,24 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
               _MembershipHeroContent(
                 title: state.heroTitle,
                 subtitle: state.heroSubtitle,
-                topInset: topInset,
               ),
-            _MembershipBody(
-              state: state,
-              controller: controller,
-              topInset: topInset,
-            ),
+            _MembershipBody(state: state, controller: controller),
             Positioned(
-              top: topInset + 4,
-              left: 6,
-              child: IconButton(
-                onPressed: _goBack,
-                icon: const Icon(Icons.chevron_left_rounded, size: 20),
-                color: AppColors.textPrimary,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints.tightFor(
-                  width: 40,
-                  height: 40,
+              top: topInset,
+              left: MembershipLayout.navButtonLeft,
+              child: SizedBox(
+                width: MembershipLayout.navButtonSize,
+                height: MembershipLayout.navButtonSize,
+                child: IconButton(
+                  onPressed: _goBack,
+                  icon: const Icon(Icons.chevron_left_rounded, size: 22),
+                  color: AppColors.textPrimary,
+                  padding: EdgeInsets.zero,
                 ),
               ),
             ),
           ],
         ),
-        bottomNavigationBar: state.hasContent
-            ? SafeArea(
-                top: false,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-                  color: const Color(0xFF151515),
-                  child: AppPrimaryButton(
-                    label: context.l10n.membershipBuyNow,
-                    onPressed: state.selectedPlan == null
-                        ? null
-                        : controller.showConfirmation,
-                  ),
-                ),
-              )
-            : null,
       ),
     );
   }
@@ -138,21 +116,15 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
       context.pop();
       return;
     }
-
     context.go(RoutePaths.profile);
   }
 }
 
 class _MembershipBody extends StatelessWidget {
-  const _MembershipBody({
-    required this.state,
-    required this.controller,
-    required this.topInset,
-  });
+  const _MembershipBody({required this.state, required this.controller});
 
   final MembershipState state;
   final MembershipController controller;
-  final double topInset;
 
   @override
   Widget build(BuildContext context) {
@@ -178,53 +150,66 @@ class _MembershipBody extends StatelessWidget {
     }
 
     final selectedPlan = state.selectedPlan;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Positioned.fill(
-      top: topInset + 169,
       child: ListView(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.paddingOf(context).bottom + 92,
-        ),
+        padding: EdgeInsets.only(bottom: bottomInset + 24),
+        physics: const ClampingScrollPhysics(),
         children: [
-          DecoratedBox(
-            decoration: const BoxDecoration(color: Color(0xFF0F0F10)),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      for (final plan in state.plans)
-                        MembershipPlanCard(
-                          plan: plan,
-                          selected: state.selectedPlanId == plan.id,
-                          onTap: () => controller.selectPlan(plan.id),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 18,
-                    child: Center(
-                      child: Text(
-                        selectedPlan?.description ?? '',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(
-                              color: const Color(0xFF767676),
-                              height: 1.5,
-                            ),
-                      ),
-                    ),
+          SizedBox(height: MembershipLayout.planCardsTop),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: MembershipLayout.horizontalPadding,
+            ),
+            child: Row(
+              children: [
+                for (var index = 0; index < state.plans.length; index++) ...[
+                  if (index > 0)
+                    const SizedBox(width: MembershipLayout.planCardGap),
+                  MembershipPlanCard(
+                    plan: state.plans[index],
+                    selected: state.selectedPlanId == state.plans[index].id,
+                    onTap: () =>
+                        controller.selectPlanAndConfirm(state.plans[index].id),
                   ),
                 ],
+              ],
+            ),
+          ),
+          SizedBox(
+            height:
+                MembershipLayout.planDescriptionTop -
+                MembershipLayout.planCardsTop -
+                MembershipLayout.planCardHeight,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: MembershipLayout.horizontalPadding,
+            ),
+            child: SizedBox(
+              height: 18,
+              child: Center(
+                child: Text(
+                  selectedPlan?.description ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: const Color(0xFF767676),
+                    fontSize: 12,
+                    height: 1.5,
+                  ),
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(
+            height:
+                MembershipLayout.benefitsPanelTop -
+                MembershipLayout.planDescriptionTop -
+                18,
+          ),
           MembershipBenefitsPanel(benefits: state.benefits, tips: state.tips),
         ],
       ),
@@ -233,27 +218,21 @@ class _MembershipBody extends StatelessWidget {
 }
 
 class _MembershipHeroContent extends StatelessWidget {
-  const _MembershipHeroContent({
-    required this.title,
-    required this.subtitle,
-    required this.topInset,
-  });
+  const _MembershipHeroContent({required this.title, required this.subtitle});
 
   final String title;
   final String subtitle;
-  final double topInset;
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      left: 16,
-      right: 16,
-      top: topInset + 83,
-      child: IgnorePointer(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ShaderMask(
+    return Stack(
+      children: [
+        Positioned(
+          left: MembershipLayout.horizontalPadding,
+          right: MembershipLayout.horizontalPadding,
+          top: MembershipLayout.heroTitleTop,
+          child: IgnorePointer(
+            child: ShaderMask(
               shaderCallback: (rect) {
                 return const LinearGradient(
                   colors: [Color(0xFFFDF5D8), Color(0xFFF2C588)],
@@ -261,21 +240,27 @@ class _MembershipHeroContent extends StatelessWidget {
               },
               child: Text(
                 title,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: Colors.white,
                   fontSize: 26,
                   fontWeight: FontWeight.w800,
-                  height: 1.5,
+                  height: 1.2,
                 ),
               ),
             ),
-            const SizedBox(height: AppSpacing.xs),
-            Row(
+          ),
+        ),
+        Positioned(
+          left: MembershipLayout.horizontalPadding,
+          right: MembershipLayout.horizontalPadding,
+          top: MembershipLayout.heroSubtitleTop,
+          child: IgnorePointer(
+            child: Row(
               children: [
                 const _AvatarDots(),
-                const SizedBox(width: AppSpacing.sm),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     subtitle,
@@ -283,15 +268,16 @@ class _MembershipHeroContent extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: Colors.white,
+                      fontSize: 11,
                       height: 1.5,
                     ),
                   ),
                 ),
               ],
             ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -307,33 +293,27 @@ class _MembershipHeroBackground extends StatelessWidget {
       left: 0,
       right: 0,
       top: 0,
-      height: topInset + 167,
+      height: topInset + MembershipLayout.heroBackgroundHeight,
       child: ClipRect(
         child: Stack(
+          fit: StackFit.expand,
           children: [
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              bottom: 0,
-              child: Image.asset(
-                'assets/images/membership/membership_hero_bg.png',
-                fit: BoxFit.cover,
-              ),
+            Image.asset(
+              'assets/images/membership/membership_hero_bg.png',
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
             ),
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: const [0, 0.41, 1],
-                    colors: [
-                      const Color(0xFF0F0F10).withValues(alpha: 0.06),
-                      const Color(0xFF0F0F10).withValues(alpha: 0.2),
-                      const Color(0xFF0F0F10),
-                    ],
-                  ),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: const [0, 0.55, 1],
+                  colors: [
+                    MembershipLayout.background.withValues(alpha: 0.08),
+                    MembershipLayout.background.withValues(alpha: 0.35),
+                    MembershipLayout.background,
+                  ],
                 ),
               ),
             ),
@@ -358,14 +338,14 @@ class _AvatarDots extends StatelessWidget {
         children: [
           for (var index = 0; index < colors.length; index++)
             Positioned(
-              left: index * 10,
+              left: index * 10.0,
               child: Container(
                 width: 16,
                 height: 16,
                 decoration: BoxDecoration(
                   color: colors[index],
                   shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF0F0F10)),
+                  border: Border.all(color: MembershipLayout.background),
                 ),
               ),
             ),
