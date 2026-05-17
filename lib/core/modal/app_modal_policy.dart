@@ -20,9 +20,20 @@ class AppModalDismissPolicy {
 
   static const AppModalDismissPolicy standard = AppModalDismissPolicy();
 
+  /// 阻塞式：不可点遮罩关闭；返回键可关闭（与 standard 体验区分）。
   static const AppModalDismissPolicy blocking = AppModalDismissPolicy(
+    barrierDismissible: false,
+    backButtonAllowed: true,
+    requiresExplicitChoice: false,
+  );
+
+  /// 不可通过遮罩/返回关闭，仅明确按钮或 dismiss API。
+  static const AppModalDismissPolicy nonDismissible = AppModalDismissPolicy(
     barrierDismissible: false,
     backButtonAllowed: false,
     requiresExplicitChoice: true,
   );
+
+  /// 与 [nonDismissible] 相同，用于强更/风控等关键弹窗预留。
+  static const AppModalDismissPolicy critical = nonDismissible;
 }

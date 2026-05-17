@@ -68,7 +68,10 @@ void main() {
       final result = await coordinator.showLogin(context);
       expect(result.isSuccess, isTrue);
       expect(result, isA<AuthLoginModalSuccess>());
-      expect((result as AuthLoginModalSuccess).provider, AuthProviderType.google);
+      expect(
+        (result as AuthLoginModalSuccess).provider,
+        AuthProviderType.google,
+      );
     });
 
     testWidgets('showLoginRequired sets loginRequired intent in payload', (

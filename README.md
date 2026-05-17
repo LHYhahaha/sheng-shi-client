@@ -64,7 +64,11 @@ final result = await ref.read(appModalServiceProvider).showConfirm(
 if (result.isConfirmed) { /* ... */ }
 ```
 
-Auth 登录 / login required / session expired 提示已走 O3 全局 modal（`auth.login` / `AuthModalCoordinator`）。`RoutePaths.auth` 全屏页保留给深链与测试。refresh failed 后不自动弹登录，由用户操作或 `showLoginRequired` 触发。Player 页面内的详情、分享、倍速等局部 sheet 仍可保留局部实现；跨页面阻塞式业务弹窗应走 `AppModalService`。
+Auth 登录 / login required / session expired 提示已走 O3 全局 modal（`auth.login` / `AuthModalCoordinator`）。`RoutePaths.auth` 全屏页保留给深链与测试。refresh failed 后不自动弹登录，由用户操作或 `showLoginRequired` 触发。
+
+**O5 中控封板（Track O1–O5 Done）**：`AppModalController` 按 priority + FIFO 排队；`maxQueueLength`（默认 5）；`AppModalDismissPolicy`（standard / blocking / nonDismissible）；`AppModalObserver` + `AppModalRuntimeConfig`（本地预留，不接 remote/analytics）。仍保留局部 UI：`PlayerPage` detail/share/speed sheet、`AccountPage` delete `showDialog`。运营活动/强更弹窗另开 Modal Ops。
+
+Player 页面内的详情、分享、倍速等局部 sheet 仍可保留局部实现；跨页面阻塞式业务弹窗应走 `AppModalService`。
 
 ```dart
 // Profile 主动登录

@@ -25,7 +25,7 @@ class AppModalPresenterRegistry {
   }) async {
     final presenter = resolve(request);
     if (presenter == null) {
-      return ConfirmResult.dismissed;
+      return const AppModalPresentFailedResult();
     }
     return presenter.present(context: context, request: request);
   }

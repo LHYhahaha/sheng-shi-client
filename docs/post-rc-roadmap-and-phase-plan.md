@@ -211,15 +211,15 @@ flowchart TB
 | **Defer** | 401 拦截器自动弹窗；各业务 login gate 接入 |
 | **依赖** | O1、A2（cleanup 路径已存在） |
 
-#### O5 — queue / priority / analytics / runtime config
+#### O5 — AppModal control center finalization — Done
 
 | 项 | 内容 |
 | --- | --- |
-| **目标** | 优先级：强更 > session > 支付 > 解锁 > 活动；dedupe；source 打点 |
-| **文件影响** | `lib/core/modal/app_modal_queue.dart`；`RuntimeFeatureFlagConfig` 开关 |
-| **禁止项** | 不通过 remote 默认可关闭支付确认 |
-| **测试** | queue 单测；并发 show 集成测试 |
-| **依赖** | O2–O4；**R2** 可选接入 kill switch |
+| **目标** | 队列 priority + FIFO；dismiss policy；`AppModalObserver`；`AppModalRuntimeConfig` 本地预留 |
+| **完成** | 不打断 current；`maxQueueLength=5`；`dismissForSource` 先清 pending；presenter 缺失不堵队列 |
+| **不做** | 运营弹窗 / analytics SDK / remote config / 抢占 current |
+| **测试** | `app_modal_queue_test`、`app_modal_controller_test`、`app_modal_policy_test`、`modal_boundary` 白名单 |
+| **依赖** | O1–O4 |
 
 ### 3.6 README / 文档更新（Track O）
 

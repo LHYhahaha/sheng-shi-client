@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app_modal_dismiss.dart';
 import '../app_modal_presenter.dart';
 import '../app_modal_request.dart';
 import '../app_modal_result.dart';
@@ -21,8 +22,8 @@ class ConfirmAppModalPresenter implements AppModalPresenter {
     ConfirmModalRequest request,
   ) async {
     final policy = request.dismissPolicy;
-    final barrierDismissible =
-        policy.barrierDismissible && !policy.requiresExplicitChoice;
+    final barrierDismissible = appModalBarrierDismissible(policy);
+    final backAllowed = appModalBackButtonAllowed(policy);
 
     final result = await showDialog<ConfirmResult>(
       context: context,
@@ -30,12 +31,12 @@ class ConfirmAppModalPresenter implements AppModalPresenter {
       barrierDismissible: barrierDismissible,
       builder: (dialogContext) {
         return PopScope(
-          canPop: policy.backButtonAllowed && !policy.requiresExplicitChoice,
+          canPop: backAllowed,
           onPopInvokedWithResult: (didPop, popResult) {
             if (didPop) {
               return;
             }
-            if (policy.backButtonAllowed && !policy.requiresExplicitChoice) {
+            if (backAllowed) {
               Navigator.of(dialogContext).pop(ConfirmResult.dismissed);
             }
           },

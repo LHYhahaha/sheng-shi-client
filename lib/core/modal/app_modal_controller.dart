@@ -2,38 +2,46 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'app_modal_observer.dart';
 import 'app_modal_queue.dart';
 import 'app_modal_request.dart';
 import 'app_modal_result.dart';
+import 'app_modal_runtime_config.dart';
 import 'app_modal_source.dart';
 
 /// 当前正在展示的弹窗会话。
 class AppModalPresentation {
-  AppModalPresentation({required this.request, required this.completer});
+  AppModalPresentation({
+    required this.request,
+    required this.completer,
+    required this.presentedAt,
+  });
 
   final AppModalRequest request;
   final Completer<AppModalResult> completer;
+  final DateTime presentedAt;
 }
 
-class _PendingModal {
-  _PendingModal({required this.request, required this.completer});
-
-  final AppModalRequest request;
-  final Completer<AppModalResult> completer;
-}
-
-/// Host 与 Service 之间的协调器；O1 串行展示，队列骨架已接入。
+/// Host 与 Service 之间的协调器：串行展示 + 优先级队列（O5）。
 class AppModalController extends ChangeNotifier {
-  AppModalController({AppModalQueue? queue})
-    : _queue = queue ?? AppModalQueue();
+  AppModalController({
+    AppModalQueue? queue,
+    AppModalObserver? observer,
+    AppModalRuntimeConfig? runtimeConfig,
+  }) : _queue = queue ?? AppModalQueue(),
+       _observer = observer ?? const NoOpAppModalObserver(),
+       _runtimeConfig = runtimeConfig ?? AppModalRuntimeConfig.defaults;
 
   final AppModalQueue _queue;
-  final List<_PendingModal> _pending = [];
+  final AppModalObserver _observer;
+  final AppModalRuntimeConfig _runtimeConfig;
 
   AppModalPresentation? _current;
   int _requestCounter = 0;
 
   AppModalQueue get queue => _queue;
+
+  AppModalRuntimeConfig get runtimeConfig => _runtimeConfig;
 
   AppModalPresentation? get current => _current;
 
@@ -45,23 +53,74 @@ class AppModalController extends ChangeNotifier {
   }
 
   Future<AppModalResult> present(AppModalRequest request) {
+    if (!_runtimeConfig.enableGlobalModalSystem) {
+      _emit(
+        AppModalObserverEvent(
+          kind: AppModalObserverEventKind.queueRejected,
+          requestId: request.requestId,
+          source: request.source,
+          type: request.type,
+          priority: request.priority,
+          channel: appModalChannelFor(request),
+          rejectReason: AppModalRejectReason.systemDisabled.name,
+        ),
+      );
+      return Future<AppModalResult>.value(
+        const AppModalRejectedResult(AppModalRejectReason.systemDisabled),
+      );
+    }
+
     final completer = Completer<AppModalResult>();
-    final pending = _PendingModal(request: request, completer: completer);
+    final entry = AppModalQueueEntry(request: request, completer: completer);
 
     if (_current == null) {
-      _activate(pending);
+      _activate(entry);
     } else {
-      _pending.add(pending);
-      _queue.enqueue(request);
+      if (_queue.length >= _runtimeConfig.maxQueueLength) {
+        _emit(
+          AppModalObserverEvent(
+            kind: AppModalObserverEventKind.queueRejected,
+            requestId: request.requestId,
+            source: request.source,
+            type: request.type,
+            priority: request.priority,
+            channel: appModalChannelFor(request),
+            rejectReason: AppModalRejectReason.queueFull.name,
+          ),
+        );
+        completer.complete(
+          const AppModalRejectedResult(AppModalRejectReason.queueFull),
+        );
+        return completer.future;
+      }
+      _queue.insert(entry);
+      _emitQueued(request);
     }
 
     return completer.future;
   }
 
-  void _activate(_PendingModal pending) {
+  void markPresented(String requestId) {
+    if (_current?.request.requestId != requestId) {
+      return;
+    }
+    _emit(
+      AppModalObserverEvent(
+        kind: AppModalObserverEventKind.presented,
+        requestId: requestId,
+        source: _current!.request.source,
+        type: _current!.request.type,
+        priority: _current!.request.priority,
+        channel: appModalChannelFor(_current!.request),
+      ),
+    );
+  }
+
+  void _activate(AppModalQueueEntry entry) {
     _current = AppModalPresentation(
-      request: pending.request,
-      completer: pending.completer,
+      request: entry.request,
+      completer: entry.completer,
+      presentedAt: DateTime.now(),
     );
     notifyListeners();
   }
@@ -71,9 +130,7 @@ class AppModalController extends ChangeNotifier {
     if (presentation == null) {
       return;
     }
-    if (!presentation.completer.isCompleted) {
-      presentation.completer.complete(result);
-    }
+    _completePresentation(presentation, result);
     _current = null;
     notifyListeners();
     _activateNext();
@@ -87,19 +144,14 @@ class AppModalController extends ChangeNotifier {
     AppModalSource source, {
     AppModalResult result = ConfirmResult.dismissed,
   }) {
+    final removed = _queue.removeBySource(source);
+    for (final entry in removed) {
+      _completeEntry(entry, result);
+      _emitDismissed(entry.request, result);
+    }
     if (_current?.request.source == source) {
       dismissCurrent(result: result);
     }
-    _pending.removeWhere((pending) {
-      if (pending.request.source == source) {
-        if (!pending.completer.isCompleted) {
-          pending.completer.complete(result);
-        }
-        _queue.removeByRequestId(pending.request.requestId);
-        return true;
-      }
-      return false;
-    });
   }
 
   void dismissByRequestId(
@@ -111,40 +163,116 @@ class AppModalController extends ChangeNotifier {
       return;
     }
 
-    _pending.removeWhere((pending) {
-      if (pending.request.requestId == requestId) {
-        if (!pending.completer.isCompleted) {
-          pending.completer.complete(result);
-        }
-        return true;
-      }
-      return false;
-    });
-    _queue.removeByRequestId(requestId);
+    final removed = _queue.removeByRequestId(requestId);
+    for (final entry in removed) {
+      _completeEntry(entry, result);
+      _emitDismissed(entry.request, result);
+    }
+  }
+
+  void failCurrentPresentation() {
+    completeCurrent(const AppModalPresentFailedResult());
   }
 
   void _activateNext() {
-    if (_pending.isEmpty) {
+    final next = _queue.dequeue();
+    if (next == null) {
       return;
     }
-    final next = _pending.removeAt(0);
-    _queue.dequeue();
     _activate(next);
+  }
+
+  void _completePresentation(
+    AppModalPresentation presentation,
+    AppModalResult result,
+  ) {
+    if (!presentation.completer.isCompleted) {
+      presentation.completer.complete(result);
+    }
+    final elapsedMs = DateTime.now()
+        .difference(presentation.presentedAt)
+        .inMilliseconds;
+    _emitCompleted(presentation.request, result, elapsedMs);
+  }
+
+  void _completeEntry(AppModalQueueEntry entry, AppModalResult result) {
+    if (!entry.completer.isCompleted) {
+      entry.completer.complete(result);
+    }
+  }
+
+  void _emitQueued(AppModalRequest request) {
+    _emit(
+      AppModalObserverEvent(
+        kind: AppModalObserverEventKind.queued,
+        requestId: request.requestId,
+        source: request.source,
+        type: request.type,
+        priority: request.priority,
+        channel: appModalChannelFor(request),
+      ),
+    );
+  }
+
+  void _emitCompleted(
+    AppModalRequest request,
+    AppModalResult result,
+    int elapsedMs,
+  ) {
+    final kind = switch (result.kind) {
+      AppModalResultKind.completed => AppModalObserverEventKind.completed,
+      AppModalResultKind.cancelled => AppModalObserverEventKind.cancelled,
+      AppModalResultKind.dismissed => AppModalObserverEventKind.dismissed,
+      AppModalResultKind.failed =>
+        result is AppModalPresentFailedResult
+            ? AppModalObserverEventKind.failedToPresent
+            : AppModalObserverEventKind.dismissed,
+    };
+    _emit(
+      AppModalObserverEvent(
+        kind: kind,
+        requestId: request.requestId,
+        source: request.source,
+        type: request.type,
+        priority: request.priority,
+        channel: appModalChannelFor(request),
+        resultKind: result.kind,
+        elapsedMs: elapsedMs,
+      ),
+    );
+  }
+
+  void _emitDismissed(AppModalRequest request, AppModalResult result) {
+    _emit(
+      AppModalObserverEvent(
+        kind: AppModalObserverEventKind.dismissed,
+        requestId: request.requestId,
+        source: request.source,
+        type: request.type,
+        priority: request.priority,
+        channel: appModalChannelFor(request),
+        resultKind: result.kind,
+      ),
+    );
+  }
+
+  void _emit(AppModalObserverEvent event) {
+    if (!_runtimeConfig.enableModalDiagnostics) {
+      return;
+    }
+    _observer.onEvent(event);
   }
 
   @override
   void dispose() {
-    if (_current != null && !_current!.completer.isCompleted) {
-      _current!.completer.complete(ConfirmResult.dismissed);
+    if (_current != null) {
+      _completePresentation(_current!, ConfirmResult.dismissed);
+      _current = null;
     }
-    for (final pending in _pending) {
-      if (!pending.completer.isCompleted) {
-        pending.completer.complete(ConfirmResult.dismissed);
-      }
+    while (_queue.isNotEmpty) {
+      final entry = _queue.dequeue()!;
+      _completeEntry(entry, ConfirmResult.dismissed);
     }
-    _current = null;
-    _pending.clear();
-    _queue.clear();
     super.dispose();
   }
 }

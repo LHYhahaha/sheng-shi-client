@@ -109,12 +109,12 @@ void main() {
           ),
         );
 
-      service.presetResultsByRequestId['auth_1'] =
-          const LoginModalResult.cancelled();
-      final result = await service.show(service.requests.last);
+        service.presetResultsByRequestId['auth_1'] =
+            const LoginModalResult.cancelled();
+        final result = await service.show(service.requests.last);
 
-      expect(result, isA<LoginModalResult>());
-      expect((result as LoginModalResult).isCancelled, isTrue);
+        expect(result, isA<LoginModalResult>());
+        expect((result as LoginModalResult).isCancelled, isTrue);
       },
     );
   });

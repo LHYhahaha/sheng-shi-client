@@ -7,7 +7,6 @@ import '../../app/app_modal_context.dart';
 import '../../app/app_root_navigator_key.dart';
 import 'app_modal_controller.dart';
 import 'app_modal_provider.dart';
-import 'app_modal_result.dart';
 
 /// 根级弹窗宿主：在 [MaterialApp] builder 中包裹路由子树，从 root overlay 展示弹窗。
 ///
@@ -99,8 +98,17 @@ class _AppModalHostState extends ConsumerState<AppModalHost> {
 
     final registry = ref.read(appModalPresenterRegistryProvider);
     final requestId = presentation.request.requestId;
-    AppModalResult result;
-    result = await registry.present(
+    controller.markPresented(requestId);
+
+    final presenter = registry.resolve(presentation.request);
+    if (presenter == null) {
+      if (controller.current?.request.requestId == requestId) {
+        controller.failCurrentPresentation();
+      }
+      return;
+    }
+
+    final result = await presenter.present(
       context: navContext,
       request: presentation.request,
     );

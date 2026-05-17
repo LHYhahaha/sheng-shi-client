@@ -1,6 +1,6 @@
 # Global Overlay / Modal System Plan
 
-> Status: **O1 + O2 + O3 + O4 done** (2026-05-17). Player unlock/recharge/payment, Auth login/login-required, and Store/Membership purchase confirmation use the global modal host. Wallet has no blocking confirmation modal (restore → toast; auto unlock → in-page switch). O5 (queue priority / analytics) remains.
+> Status: **O1–O5 complete** (2026-05-17). Player unlock/recharge/payment, Auth login/login-required, and Store/Membership purchase confirmation use the global modal host. Wallet has no blocking confirmation modal (restore → toast; auto unlock → in-page switch). O5 finalized queue/priority/dismiss/observer/runtime config; no Modal Ops / analytics / remote kill switch in this track.
 
 ## Why This Exists
 
@@ -274,12 +274,15 @@ README should explain:
 - Presenters reuse `StoreConfirmationSheet` / `MembershipConfirmationSheet`; controllers still own mock purchase / `hideConfirmation`.
 - Page dispose calls `dismissForSource` for store/membership source.
 
-### Phase O5: Queue, Priority, Analytics, Runtime Config
+### Phase O5: Control Center Finalization — Done
 
-- Add modal queue and preemption.
-- Add request id and source diagnostics.
-- Add analytics hooks.
-- Add runtime config only after behavior is stable.
+- **Queue**: `AppModalQueue` inserts by priority (desc), then `createdAt` (asc); current modal is never preempted (`allowPreemption` default false).
+- **Dismiss**: `standard` / `blocking` (no barrier, back OK) / `nonDismissible` & `critical` (explicit action or dismiss API only); `app_modal_dismiss.dart` shared by confirm + root sheets.
+- **Diagnostics**: `AppModalObserver` + `RecordingAppModalObserver`; events queued / presented / completed / dismissed / cancelled / failedToPresent / queueRejected; gated by `enableModalDiagnostics`.
+- **Runtime**: `AppModalRuntimeConfig` (`enableGlobalModalSystem`, `maxQueueLength`, …); feature flag keys reserved in `RuntimeFeatureFlagKeys`; no remote/analytics in O5.
+- **Reject**: `AppModalRejectedResult` (queue full / system disabled); `AppModalPresentFailedResult` when presenter missing — queue continues.
+- **Local whitelist** (architecture test): `player_page` local sheets; `account_page` delete dialog.
+- **Defer (Modal Ops track)**: campaign popups, force upgrade, risk prompts, analytics, remote kill switch.
 
 ## Testing Plan
 

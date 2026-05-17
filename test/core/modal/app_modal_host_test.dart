@@ -67,6 +67,36 @@ void main() {
       expect(captured!.isDismissed, isTrue);
     });
 
+    testWidgets('blocking policy ignores barrier tap', (tester) async {
+      ConfirmResult? captured;
+      await pumpAndShowConfirm(
+        tester,
+        dismissPolicy: AppModalDismissPolicy.blocking,
+        onResult: (result) => captured = result,
+      );
+
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+
+      expect(captured, isNull);
+      expect(find.text('Confirm title'), findsOneWidget);
+    });
+
+    testWidgets('nonDismissible policy ignores barrier tap', (tester) async {
+      ConfirmResult? captured;
+      await pumpAndShowConfirm(
+        tester,
+        dismissPolicy: AppModalDismissPolicy.nonDismissible,
+        onResult: (result) => captured = result,
+      );
+
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+
+      expect(captured, isNull);
+      expect(find.text('Not now'), findsOneWidget);
+    });
+
     testWidgets('records request metadata on confirm', (tester) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);

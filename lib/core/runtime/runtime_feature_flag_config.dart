@@ -17,6 +17,12 @@ abstract final class RuntimeFeatureFlagKeys {
 
   /// 剧集列表走远程 API（与 `--dart-define` 并存，不替代业务状态）。
   static const apiRemoteDrama = 'api_remote_drama';
+
+  /// 全局弹窗诊断（O5 预留；真实 remote 阶段再接）。
+  static const modalDiagnostics = 'modal_diagnostics';
+
+  /// 全局弹窗系统总开关（O5 预留；默认不通过 remote 关闭已迁移业务）。
+  static const globalModalSystem = 'global_modal_system';
 }
 
 /// 远程灰度 / 实验开关表（默认全 false，显式 true 才开启）。

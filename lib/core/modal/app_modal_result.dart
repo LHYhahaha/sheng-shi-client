@@ -1,6 +1,9 @@
 /// 通用弹窗结果类型。
 enum AppModalResultKind { completed, cancelled, dismissed, failed }
 
+/// 队列拒绝原因（O5）。
+enum AppModalRejectReason { queueFull, systemDisabled }
+
 /// 所有全局弹窗结果的基类；业务应使用具体子类型而非裸 bool/String。
 sealed class AppModalResult {
   const AppModalResult(this.kind);
@@ -130,4 +133,20 @@ final class MembershipPurchaseModalResult extends AppModalResult {
 
   const MembershipPurchaseModalResult.dismissed()
     : super(AppModalResultKind.dismissed);
+}
+
+/// 队列或系统策略拒绝展示（O5）。
+final class AppModalRejectedResult extends AppModalResult {
+  const AppModalRejectedResult(this.reason) : super(AppModalResultKind.failed);
+
+  final AppModalRejectReason reason;
+
+  bool get isQueueFull => reason == AppModalRejectReason.queueFull;
+
+  bool get isSystemDisabled => reason == AppModalRejectReason.systemDisabled;
+}
+
+/// Presenter 未注册或展示失败（O5）；不阻塞后续队列。
+final class AppModalPresentFailedResult extends AppModalResult {
+  const AppModalPresentFailedResult() : super(AppModalResultKind.failed);
 }

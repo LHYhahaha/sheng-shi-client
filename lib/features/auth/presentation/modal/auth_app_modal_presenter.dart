@@ -34,19 +34,18 @@ class AuthAppModalPresenter implements AppModalPresenter {
     final modalContext = resolveAppModalPresentationContext(context);
     final container = ProviderScope.containerOf(modalContext, listen: false);
 
-    final sheetResult =
-        await showAppModalRootBottomSheet<LoginModalResult?>(
-          context: modalContext,
-          isScrollControlled: true,
-          isDismissible: featureRequest.dismissPolicy.barrierDismissible,
-          enableDrag: featureRequest.dismissPolicy.barrierDismissible,
-          builder: (sheetContext) {
-            return UncontrolledProviderScope(
-              container: container,
-              child: AuthLoginModalSheet(payload: payload),
-            );
-          },
+    final sheetResult = await showAppModalRootBottomSheet<LoginModalResult?>(
+      context: modalContext,
+      isScrollControlled: true,
+      isDismissible: featureRequest.dismissPolicy.barrierDismissible,
+      enableDrag: featureRequest.dismissPolicy.barrierDismissible,
+      builder: (sheetContext) {
+        return UncontrolledProviderScope(
+          container: container,
+          child: AuthLoginModalSheet(payload: payload),
         );
+      },
+    );
 
     return sheetResult ??
         (featureRequest.dismissPolicy.barrierDismissible

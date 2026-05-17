@@ -98,6 +98,68 @@ void main() {
     }
   });
 
+  test('feature pages do not patch root navigator for business modals', () {
+    final featuresDir = Directory('lib/features');
+    final offenders = <String>[];
+    for (final entity in featuresDir.listSync(recursive: true)) {
+      if (entity is! File || !entity.path.endsWith('.dart')) {
+        continue;
+      }
+      final source = entity.readAsStringSync();
+      if (source.contains('rootNavigator: true') ||
+          source.contains('rootNavigator:true')) {
+        offenders.add(entity.path);
+      }
+    }
+    expect(offenders, isEmpty, reason: offenders.join('\n'));
+  });
+
+  test('business modal presenters register only via bootstrap', () {
+    final bootstrap = File(
+      'lib/bootstrap/app_modal_registry_bootstrap.dart',
+    ).readAsStringSync();
+    expect(bootstrap, contains('AuthAppModalPresenter'));
+    expect(bootstrap, contains('PlayerAppModalPresenter'));
+    expect(bootstrap, contains('StoreAppModalPresenter'));
+    expect(bootstrap, contains('MembershipAppModalPresenter'));
+  });
+
+  /// 允许局部 [showModalBottomSheet] / [showDialog] 的页面（O5 白名单）。
+  test('showModalBottomSheet whitelist for page-local sheets only', () {
+    const allowed = {
+      'lib/features/player/presentation/pages/player_page.dart':
+          'Player detail / share / speed sheets',
+      'lib/features/auth/presentation/pages/account_page.dart':
+          'Account delete confirmation dialog',
+    };
+
+    final featuresDir = Directory('lib/features');
+    final offenders = <String>[];
+    for (final entity in featuresDir.listSync(recursive: true)) {
+      if (entity is! File || !entity.path.endsWith('.dart')) {
+        continue;
+      }
+      if (!entity.path.contains('/presentation/pages/')) {
+        continue;
+      }
+      final source = entity.readAsStringSync();
+      if (!source.contains('showModalBottomSheet') &&
+          !source.contains('showDialog')) {
+        continue;
+      }
+      final relative = entity.path.replaceAll('\\', '/');
+      if (!allowed.containsKey(relative)) {
+        offenders.add(relative);
+      }
+    }
+
+    expect(
+      offenders,
+      isEmpty,
+      reason: 'Add to whitelist: ${offenders.join(', ')}',
+    );
+  });
+
   test('wallet page has no blocking purchase confirmation sheet', () {
     final source = File(
       'lib/features/wallet/presentation/pages/wallet_page.dart',
