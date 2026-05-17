@@ -1,13 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client_provider.dart';
+import '../../../core/network/remote_api_switches.dart';
 import '../domain/entitlement_repository.dart';
 import 'mock_entitlement_repository.dart';
 import 'remote/entitlement_remote_data_source.dart';
 import 'remote_entitlement_repository.dart';
 
 final useRemoteEntitlementApiProvider = Provider<bool>((ref) {
-  return const bool.fromEnvironment('USE_REMOTE_ENTITLEMENT_API');
+  return RemoteApiSwitches.fromEnvironment().entitlement;
 });
 
 /// Entitlement repository provider。

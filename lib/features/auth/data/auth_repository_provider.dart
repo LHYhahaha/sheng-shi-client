@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/session_cleanup_coordinator.dart';
 import '../../../core/network/api_client_provider.dart';
+import '../../../core/network/remote_api_switches.dart';
 import '../domain/auth_repository.dart';
 import 'mock_auth_repository.dart';
 import 'remote/auth_remote_data_source.dart';
@@ -9,7 +10,7 @@ import 'remote_auth_repository.dart';
 import 'session_cleanup_auth_repository.dart';
 
 final useRemoteAuthApiProvider = Provider<bool>((ref) {
-  return const bool.fromEnvironment('USE_REMOTE_AUTH_API');
+  return RemoteApiSwitches.fromEnvironment().auth;
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {

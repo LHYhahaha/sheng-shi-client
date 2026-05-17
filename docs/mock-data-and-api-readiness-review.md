@@ -7,6 +7,7 @@
 ## Release 封板前提（Current）
 
 - 封板默认：`USE_REMOTE_*=false`，mock payment / mock entitlement（含 Store/Player 充值成功后的 `grantMock*`）。
+- **A8**：`RemoteApiSwitches` + `RemoteApiReadinessGuard` + [remote-api-staging-checklist.md](remote-api-staging-checklist.md)；高风险模块任何环境 fail-closed。
 - 开启 remote 或真实支付前：须完成 401 refresh、订单验单、strict DTO、auth 端点矩阵等（见 `docs/remote-contract-index.md`）。
 
 ## 总体结论

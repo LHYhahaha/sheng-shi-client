@@ -169,5 +169,6 @@ Phase F 完成后，建议进入：
 - secure storage **作为生产默认**（实现已有）。
 - `authRefreshExecutorProvider` 接真实 refresh API。
 - **A7（2026-05-17）**：feature cleanup hooks + `dismissAllBlockingBusinessModals` + Auth/Entitlement/Wallet/Profile/MyList/Player/Store/Membership reset；`autoUnlockEnabled` 保留；真实 guest reload defer。
+- **A8（2026-05-17）**：`RemoteApiSwitches` / `RemoteApiReadinessGuard` / staging checklist；高风险 remote 任何环境 block；第一阶段仅 Drama staging smoke。
 - Guest session 是联调门禁：生产须有 bootstrap；login 须 account link；cleanup 后不得保留正式用户 feature 态。
 - 远程语言包、内容多语言和字幕语言。

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client_provider.dart';
+import '../../../core/network/remote_api_switches.dart';
 import '../domain/drama_repository.dart';
 import 'mock_drama_repository.dart';
 import 'remote/drama_remote_data_source.dart';
@@ -12,11 +13,7 @@ import 'remote_drama_repository.dart';
 /// mock 数据链路。需要本地验证远程实现时，优先使用
 /// `--dart-define=USE_REMOTE_DRAMA_API=true`。
 final useRemoteDramaApiProvider = Provider<bool>((ref) {
-  const scoped = bool.fromEnvironment('USE_REMOTE_DRAMA_API');
-  // 兼容 Phase A 早期使用的通用开关。后续真实联调时应迁移到 scoped 命名，
-  // 避免一个开关误切多个业务域。
-  const legacy = bool.fromEnvironment('USE_REMOTE_API');
-  return scoped || legacy;
+  return RemoteApiSwitches.fromEnvironment().dramaEnabled;
 });
 
 final dramaRepositoryProvider = Provider<DramaRepository>((ref) {

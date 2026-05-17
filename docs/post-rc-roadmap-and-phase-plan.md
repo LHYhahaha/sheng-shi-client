@@ -321,6 +321,17 @@ refresh failed: clear auth token → cleanup → guest bootstrap → reload gues
 | **测试** | provider 默认 false；staging 集成配置测试 |
 | **依赖** | A4 |
 
+#### A8 — Remote integration guard & staging readiness — Done
+
+| 项 | 内容 |
+| --- | --- |
+| **目标** | 统一 `RemoteApiSwitches` + `RemoteApiReadinessGuard`；staging smoke 文档；默认仍 mock |
+| **完成** | 风险分级；prod/staging/dev guard；`effective` fail-closed；legacy `USE_REMOTE_API` → drama |
+| **文档** | [remote-api-staging-checklist.md](remote-api-staging-checklist.md) |
+| **不做** | 不接真实 API；不改 provider 默认选型为 effective（可选下一步） |
+| **测试** | `remote_api_readiness_guard_test.dart`、`remote_api_guard_boundary_test.dart` |
+| **依赖** | A4、A6、A7 |
+
 #### A6 — strict DTO / required field policy ✅（2026-05-17）
 
 | 项 | 内容 |

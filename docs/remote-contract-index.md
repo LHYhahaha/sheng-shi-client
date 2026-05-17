@@ -10,8 +10,9 @@ defer 项。不接真实服务端，不替换 mock 默认实现，不改变 UI�
 - 所有 `USE_REMOTE_*` 默认 `false`；UI 默认 mock repository / mock payment / mock entitlement（`grantMock*`）。
 - **O3 Auth modal**：`auth.login` 全局弹窗 + mock provider 登录；真实 OAuth/login API defer。
 - 客户端 session/network 门禁（A1–A3）已就绪：storage 抽象、401 单飞 refresh + 重试一次、
-  `required` 空 token fail-fast。开启 remote 前仍须：生产 secure storage 默认、真实 refresh API、
-  A7 feature cleanup hook、订单验单、strict DTO（见下文）。
+  `required` 空 token fail-fast。A7 feature cleanup、A8 `RemoteApiReadinessGuard` 已就绪。
+  开启 remote 前仍须：生产 secure storage 默认、真实 refresh API、订单验单、真实 staging host。
+- **Staging checklist**：[remote-api-staging-checklist.md](remote-api-staging-checklist.md)
 
 ## 总体约束
 
@@ -135,6 +136,17 @@ flutter run \
 `required`。如果服务端需要无 token 的游客 bootstrap，应新增明确的 public endpoint 或
 public bootstrap 语义，不要让同一个接口同时承担两种策略。
 
+## Remote API Guard（A8，2026-05-17）
+
+- **统一读取**：`RemoteApiSwitches.fromEnvironment()`（`lib/core/network/remote_api_switches.dart`）。
+- **校验**：`RemoteApiReadinessGuard.validate(config, switches)` → `RemoteApiReadinessReport`
+  （`enabledModules` / `blockedModules` / `warnings` / `errors` / `effective` fail-closed）。
+- **风险**：低 = Drama；中 = Player/MyList/Profile；高 = Auth/Entitlement/Wallet/Store/Membership（**任何环境 effective 均为 false**）。
+- **prod**：仅低危 Drama 可在真实 `API_BASE_URL` 下 effective；中危 block；高危 block。
+- **staging**：Drama OK；中危 warning；高危 error。
+- Feature provider **默认仍读** 编译期 `fromEnvironment()`；可选改用 `remoteApiEffectiveSwitchesProvider`。
+- 详见 [remote-api-staging-checklist.md](remote-api-staging-checklist.md)。
+
 ## Provider Switch 总览
 
 - `APP_ENV`：`dev` / `staging` / `prod`，决定 `AppConfig.current.apiBaseUrl`。
@@ -151,8 +163,8 @@ public bootstrap 语义，不要让同一个接口同时承担两种策略。
 - `USE_REMOTE_AUTH_API`：Auth / Session。
 - `USE_REMOTE_PROFILE_API`：Profile summary。
 
-所有开关默认 false。测试通过 provider override 或默认路径断言 mock/remote 切换；不要在页面中读取
-dart-define。
+所有开关默认 false。统一经 `RemoteApiSwitches` 读取；测试见 `remote_api_readiness_guard_test.dart`、
+`remote_switch_default_test.dart`。不要在页面中读取 dart-define。
 
 ## Phase F + Post-RC Track A1–A3 Runtime Context
 

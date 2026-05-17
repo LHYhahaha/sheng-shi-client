@@ -884,6 +884,7 @@ Phase F status:
 - `AuthTokenStore` is an in-memory skeleton; secure storage remains deferred.
 - `AuthRefreshCoordinator` establishes refresh in-flight dedupe; automatic 401 retry remains deferred.
 - **A7 Done**：`SessionCleanupCoordinator` + `feature_session_cleanup` hooks；modal/player/auth/entitlement 等 guest-safe reset；真实 API 后仍需 guest bootstrap 与各 feature refetch。
+- **A8 Done**：`RemoteApiReadinessGuard` 风险分级与 staging checklist；`RemoteApiSwitches` 统一读取；provider 默认行为不变。
 - All `USE_REMOTE_XXX_API` switches remain false by default.
 
 Phase F review:

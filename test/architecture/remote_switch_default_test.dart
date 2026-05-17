@@ -1,3 +1,4 @@
+import 'package:drama_client/core/network/remote_api_switches.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,6 +13,12 @@ import 'package:drama_client/features/store/data/store_repository_provider.dart'
 import 'package:drama_client/features/wallet/data/wallet_repository_provider.dart';
 
 void main() {
+  test('RemoteApiSwitches.fromEnvironment defaults to all disabled', () {
+    final switches = RemoteApiSwitches.fromEnvironment();
+    expect(switches.anyEnabled, isFalse);
+    expect(switches.legacyUseRemoteApi, isFalse);
+  });
+
   test('all remote API switches default to false', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);
