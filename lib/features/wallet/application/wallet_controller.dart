@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/session_cleanup_types.dart';
 import '../../entitlement/application/entitlement_controller.dart';
 import '../data/wallet_repository_provider.dart';
 import '../domain/wallet_record.dart';
@@ -148,6 +149,12 @@ class WalletController extends Notifier<WalletState> {
 
   @override
   WalletState build() => const WalletState.initial();
+
+  /// 会话失效后清空钱包展示，避免仍显示旧余额/流水。
+  void resetForSessionCleanup(SessionCleanupReason reason) {
+    ++_generation;
+    state = const WalletState.initial();
+  }
 
   Future<void> load() async {
     final generation = ++_generation;

@@ -16,6 +16,7 @@ import 'player_playback_prepare_manager.dart';
 import 'player_playback_timing_trace.dart';
 import 'player_rebuild_diagnostics.dart';
 import 'player_session_controller.dart';
+import 'player_session_registry.dart';
 import 'player_startup_preload_controller.dart';
 
 final playerPlaybackSessionFactoryProvider =
@@ -514,6 +515,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
 
+    ref.read(playerSessionRegistryProvider.notifier).register(sessionKey);
     _startPlaybackTrace(item);
 
     _logTiming(

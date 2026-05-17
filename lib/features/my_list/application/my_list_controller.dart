@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/session_cleanup_types.dart';
 import '../data/my_list_repository_provider.dart';
 import '../domain/my_list_item.dart';
 
@@ -114,6 +115,12 @@ class MyListController extends Notifier<MyListState> {
 
   @override
   MyListState build() => const MyListState.initial();
+
+  /// 清空登录态片单缓存，下次进入 tab 会重新 load。
+  void resetForSessionCleanup(SessionCleanupReason reason) {
+    ++_generation;
+    state = const MyListState.initial();
+  }
 
   Future<void> load() async {
     final generation = ++_generation;

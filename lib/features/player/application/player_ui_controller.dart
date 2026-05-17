@@ -139,6 +139,11 @@ class PlayerUiController extends Notifier<PlayerUiState> {
     state = state.copyWith(isPlaying: true, paywall: PlayerPaywallState.hidden);
   }
 
+  /// session cleanup 时隐藏 paywall 并停止 UI 播放意图。
+  void resetForSessionCleanup() {
+    state = const PlayerUiState.initial();
+  }
+
   void selectEpisode(PlayerEpisode episode) {
     if (episode.isUnavailable) {
       state = state.copyWith(

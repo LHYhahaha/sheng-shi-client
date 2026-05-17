@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/session_cleanup_types.dart';
 import '../data/entitlement_repository_provider.dart';
 import '../domain/entitlement_feature_config.dart';
 import '../domain/episode_access_decision.dart';
@@ -32,6 +33,14 @@ final entitlementControllerProvider =
 class EntitlementController extends Notifier<UserEntitlementState> {
   @override
   UserEntitlementState build() => const UserEntitlementState.guest();
+
+  /// logout / refresh 失败后重置为游客权益；保留 [autoUnlockEnabled] 用户偏好。
+  void resetForSessionCleanup(SessionCleanupReason reason) {
+    final autoUnlockEnabled = state.autoUnlockEnabled;
+    state = const UserEntitlementState.guest().copyWith(
+      autoUnlockEnabled: autoUnlockEnabled,
+    );
+  }
 
   Future<void> load() async {
     state = await ref.read(entitlementRepositoryProvider).fetchState();

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/session_cleanup_types.dart';
 import '../../auth/domain/auth_session.dart';
 
 final profileControllerProvider =
@@ -18,6 +19,7 @@ class ProfileState {
     required this.membership,
     required this.coins,
     required this.language,
+    this.needsSessionReload = false,
   });
 
   const ProfileState.mock()
@@ -27,7 +29,8 @@ class ProfileState {
       avatarAssetPath = authDefaultAvatarAssetPath,
       membership = const ProfileMembershipState.mock(),
       coins = const ProfileCoinsState.mock(),
-      language = const ProfileLanguageState.enabled();
+      language = const ProfileLanguageState.enabled(),
+      needsSessionReload = false;
 
   /// 展示层登录态。
   ///
@@ -65,6 +68,9 @@ class ProfileState {
   /// 控制入口可用性；实际 Locale 由 AppLocaleController 管理。
   final ProfileLanguageState language;
 
+  /// session cleanup 后标记需要重新拉取资料（真实 API 阶段由 repository reload）。
+  final bool needsSessionReload;
+
   bool get canOpenMembership => membership.entryEnabled;
 
   bool get canOpenTopUp => coins.topUpEnabled;
@@ -76,6 +82,7 @@ class ProfileState {
     String? userId,
     String? nickname,
     String? avatarAssetPath,
+    bool? needsSessionReload,
   }) {
     return ProfileState(
       isLoggedIn: isLoggedIn ?? this.isLoggedIn,
@@ -85,6 +92,7 @@ class ProfileState {
       membership: membership,
       coins: coins,
       language: language,
+      needsSessionReload: needsSessionReload ?? this.needsSessionReload,
     );
   }
 }
@@ -173,4 +181,9 @@ class ProfileLanguageState {
 class ProfileController extends Notifier<ProfileState> {
   @override
   ProfileState build() => const ProfileState.mock();
+
+  /// 回到 mock 游客资料摘要，并标记下次进入我的页应重新加载。
+  void resetForSessionCleanup(SessionCleanupReason reason) {
+    state = const ProfileState.mock().copyWith(needsSessionReload: true);
+  }
 }

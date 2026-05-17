@@ -203,6 +203,12 @@ class PlayerRechargeUnlockController
     );
   }
 
+  void resetForSessionCleanup() {
+    ++_generation;
+    ++_purchaseGeneration;
+    state = const PlayerRechargeUnlockState.initial();
+  }
+
   Future<void> _startMockPurchase() async {
     final purchaseGeneration = ++_purchaseGeneration;
     state = state.copyWith(status: PlayerRechargeUnlockStatus.processing);

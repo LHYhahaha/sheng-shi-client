@@ -16,6 +16,7 @@ import 'package:drama_client/features/auth/data/dto/auth_user_dto.dart';
 import 'package:drama_client/features/auth/data/dto/refresh_token_request_dto.dart';
 import 'package:drama_client/features/auth/data/mapper/auth_mapper.dart';
 import 'package:drama_client/features/auth/data/mock_auth_repository.dart';
+import 'package:drama_client/features/auth/data/session_cleanup_auth_repository.dart';
 import 'package:drama_client/features/auth/data/remote/auth_remote_data_source.dart';
 import 'package:drama_client/features/auth/data/remote_auth_repository.dart';
 import 'package:drama_client/features/auth/domain/auth_session.dart';
@@ -172,8 +173,10 @@ void main() {
       final mockContainer = ProviderContainer();
       addTearDown(mockContainer.dispose);
 
+      final mockRepository = mockContainer.read(authRepositoryProvider);
+      expect(mockRepository, isA<SessionCleanupAuthRepository>());
       expect(
-        mockContainer.read(authRepositoryProvider),
+        (mockRepository as SessionCleanupAuthRepository).delegate,
         isA<MockAuthRepository>(),
       );
 
@@ -182,8 +185,10 @@ void main() {
       );
       addTearDown(remoteContainer.dispose);
 
+      final remoteRepository = remoteContainer.read(authRepositoryProvider);
+      expect(remoteRepository, isA<SessionCleanupAuthRepository>());
       expect(
-        remoteContainer.read(authRepositoryProvider),
+        (remoteRepository as SessionCleanupAuthRepository).delegate,
         isA<RemoteAuthRepository>(),
       );
     });

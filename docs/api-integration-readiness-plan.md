@@ -151,5 +151,5 @@ Phase F 完成后，建议进入：
 - stable install id / device id 持久化。
 - secure storage **作为生产默认**（实现已有）。
 - `authRefreshExecutorProvider` 接真实 refresh API。
-- A7：logout/delete/refresh 失败后 entitlement、wallet、my list、player session cleanup hooks。
+- A7（2026-05-17）：logout/delete/refreshFailed/sessionExpired 已接 feature cleanup hooks；Toast/Modal defer。
 - 远程语言包、内容多语言和字幕语言。

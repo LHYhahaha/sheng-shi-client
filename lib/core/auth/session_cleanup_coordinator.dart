@@ -1,10 +1,12 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'auth_token_store.dart';
+import 'session_cleanup_types.dart';
 
-typedef SessionCleanupHook = Future<void> Function(SessionCleanupReason reason);
-
-enum SessionCleanupReason { logout, deleteAccount, refreshFailed, unauthorized }
+export 'session_cleanup_types.dart';
 
 final sessionCleanupCoordinatorProvider = Provider<SessionCleanupCoordinator>((
   ref,
@@ -16,23 +18,64 @@ final sessionCleanupCoordinatorProvider = Provider<SessionCleanupCoordinator>((
 
 /// 统一 session 清理入口。
 ///
-/// 真实 logout/delete/refresh 失败后需要清理 token、feature cache 和播放器资源。本轮先
-/// 提供 coordinator 和 hook 机制，不主动接入现有 UI，避免破坏 mock 流程。
+/// 真实 API 阶段在 logout / refresh 失败 / session 失效后必须清理 token 与各 feature
+/// 缓存。feature hook 在 [featureSessionCleanupRegistrationProvider] 注册，core 不得
+/// import features。
 class SessionCleanupCoordinator {
   SessionCleanupCoordinator({required AuthTokenStore tokenStore})
     : _tokenStore = tokenStore;
 
   final AuthTokenStore _tokenStore;
   final List<SessionCleanupHook> _hooks = [];
+  Future<void>? _inFlight;
+  var _featureHooksRegistered = false;
 
   void register(SessionCleanupHook hook) {
     _hooks.add(hook);
   }
 
+  void registerFeatureHooks(Iterable<SessionCleanupHook> hooks) {
+    if (_featureHooksRegistered) {
+      return;
+    }
+    _featureHooksRegistered = true;
+    _hooks.addAll(hooks);
+  }
+
   Future<void> cleanup(SessionCleanupReason reason) async {
+    final running = _inFlight;
+    if (running != null) {
+      return running;
+    }
+
+    late final Future<void> future;
+    future = _runCleanup(reason).whenComplete(() {
+      if (identical(_inFlight, future)) {
+        _inFlight = null;
+      }
+    });
+    _inFlight = future;
+    return future;
+  }
+
+  Future<void> _runCleanup(SessionCleanupReason reason) async {
     await _tokenStore.clear();
+
     for (final hook in List<SessionCleanupHook>.of(_hooks)) {
-      await hook(reason);
+      try {
+        await hook(reason);
+      } catch (error, stackTrace) {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stackTrace,
+            library: 'session_cleanup_coordinator',
+            context: ErrorDescription(
+              'Session cleanup hook failed for reason=$reason',
+            ),
+          ),
+        );
+      }
     }
   }
 }

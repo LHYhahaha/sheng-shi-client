@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/session_cleanup_types.dart';
 import '../../entitlement/application/entitlement_controller.dart';
 import '../data/membership_repository_provider.dart';
 import '../domain/membership_plan.dart';
@@ -173,6 +174,12 @@ class MembershipController extends Notifier<MembershipState> {
 
   @override
   MembershipState build() => const MembershipState.initial();
+
+  void resetForSessionCleanup(SessionCleanupReason reason) {
+    ++_generation;
+    ++_purchaseGeneration;
+    state = const MembershipState.initial();
+  }
 
   Future<void> load() async {
     final generation = ++_generation;

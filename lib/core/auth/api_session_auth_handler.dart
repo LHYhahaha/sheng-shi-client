@@ -42,7 +42,7 @@ class ApiSessionAuthHandler {
     final current = _readToken();
     final refreshToken = current.refreshToken;
     if (refreshToken == null || refreshToken.isEmpty) {
-      await _sessionCleanup.cleanup(SessionCleanupReason.unauthorized);
+      await _sessionCleanup.cleanup(SessionCleanupReason.sessionExpired);
       return false;
     }
 

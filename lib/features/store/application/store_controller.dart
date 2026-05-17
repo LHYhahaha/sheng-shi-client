@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/session_cleanup_types.dart';
 import '../../entitlement/application/entitlement_controller.dart';
 import '../data/store_repository_provider.dart';
 import '../domain/store_package.dart';
@@ -159,6 +160,13 @@ class StoreController extends Notifier<StoreState> {
 
   @override
   StoreState build() => const StoreState.initial();
+
+  /// 清除 mock 购买进行中状态，避免 logout 后仍显示“购买中”。
+  void resetForSessionCleanup(SessionCleanupReason reason) {
+    ++_generation;
+    ++_purchaseGeneration;
+    state = const StoreState.initial();
+  }
 
   Future<void> load() async {
     final generation = ++_generation;

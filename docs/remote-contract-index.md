@@ -111,7 +111,7 @@ dart-define。
 - `authRefreshExecutorProvider` 默认 stub（未接真实服务端）。
 
 仍 defer：安装 ID 持久化、package info、**生产默认 secure storage**、真实 refresh API、
-A7 各 feature cache / player session cleanup hook 完整接入。
+A7 feature cleanup hooks 已接入（bootstrap）；Toast/Modal 与真实 repository reload defer。
 
 架构测试：`auth_runtime_boundary_test.dart`；网络会话测试：`api_client_session_auth_test.dart`。
 `USE_REMOTE_*` 仍默认 false。

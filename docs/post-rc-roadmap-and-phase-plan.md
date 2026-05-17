@@ -257,7 +257,7 @@ flowchart TB
 | --- | --- |
 | **目标** | 单飞 refresh；失败清 session；原请求重试一次 |
 | **已完成** | `AuthRefreshCoordinator` 单飞；`ApiSessionAuthHandler` + `ApiClient` 统一 401 恢复（含 Dio 默认 `validateStatus` 抛出的 401）；refresh 成功重试一次；失败 `SessionCleanupCoordinator` 清 token + hook；refresh 请求 `apiSkipAuthRefreshExtraKey` 防递归 |
-| **仍 defer** | `authRefreshExecutorProvider` 接真实 `POST /auth/refresh`；各 feature entitlement/wallet/player cleanup hook 完整接入（A7） |
+| **仍 defer** | `authRefreshExecutorProvider` 接真实 `POST /auth/refresh` |
 | **禁止项** | 不在各 feature 自行 refresh |
 | **测试** | `test/core/network/api_client_session_auth_test.dart` |
 | **依赖** | **A1** |
@@ -302,14 +302,15 @@ flowchart TB
 | **测试** | 每 mapper 增加 missing strict 负例 |
 | **依赖** | 后端 schema 冻结（见 §4.4） |
 
-#### A7 — session cleanup（feature cache + player session）
+#### A7 — session cleanup（feature cache + player session）✅（2026-05-17，客户端骨架）
 
 | 项 | 内容 |
 | --- | --- |
-| **目标** | logout / 401 永久失败时清：entitlement、wallet、my list、player playback |
-| **文件影响** | `AppSessionCoordinator`（新建）；各 controller `invalidate` |
-| **禁止项** | 不在 PlayerPage dispose 里散落清理 |
-| **测试** | logout 后 entitlement guest；player session 隔离 |
+| **目标** | logout / refresh failed / session expired 时清 feature 缓存与播放器 |
+| **已完成** | `SessionCleanupCoordinator` 单飞 + hook 隔离失败；`lib/bootstrap/feature_session_cleanup.dart` 注册；Entitlement/Wallet/Profile/MyList/Store/Membership reset；Player pause/dispose/overlay/recharge；`SessionCleanupAuthRepository` 包装 logout/delete |
+| **仍 defer** | Toast/Modal 统一关闭（仅文档策略）；真实 API 后各 repository reload；AuthController 外其他入口显式 cleanup |
+| **禁止项** | core 不 import features；UI 不直接调 coordinator（logout/delete 经 repository） |
+| **测试** | `session_cleanup_coordinator_test`、`feature_session_cleanup_test`、`player_session_cleanup_test` |
 | **依赖** | **A2** |
 
 ### 4.3 接口联调顺序
@@ -354,7 +355,7 @@ flowchart TB
 | `ApiAuthPolicy.none` | 不带 `Authorization`，可无 token 正常请求 |
 | `POST /auth/refresh` | `none` + `apiSkipAuthRefreshExtraKey`；refresh 自身 401 不进入 refresh 队列 |
 | 业务接口 HTTP 401 + `required` | `ApiSessionAuthHandler` 单飞 refresh → 成功则 **原请求重试 1 次** |
-| refresh 失败 / 无 refresh token | `SessionCleanupCoordinator.cleanup` 清 token；注册 hook 待 A7 扩展；请求以 `unauthorized` / Session expired 结束 |
+| refresh 失败 / 无 refresh token | `SessionCleanupCoordinator.cleanup` 清 token + feature hooks（A7）；请求以 `unauthorized` / Session expired 结束 |
 
 ---
 
@@ -661,7 +662,7 @@ P6 + O4 + A7 ──► BIZ-4/5/7
 - [x] A2 401 refresh 单飞 + retry 一次 + cleanup 骨架
 - [x] A3 required 空 token fail-fast（`sessionRequired`）
 - [ ] A6 strict DTO（auth、entitlement、order、playback source）
-- [ ] A7 session cleanup
+- [x] A7 session cleanup（feature hooks + player pause/dispose；modal/toast defer）
 - [ ] 生产 remote repository 无 `grantMock*`
 
 ### 商业 / 权益
@@ -728,7 +729,8 @@ flutter test
 | --- | --- |
 | O1–O5 | Planned |
 | A1–A3 | **Done**（客户端 session/network 骨架；见 §4.6） |
-| A4–A7 | Planned |
+| A4–A6 | Planned |
+| A7 | **Done**（见 §4.2 A7） |
 | P1–P7 | Planned |
 | L1–L6 | Planned |
 | R1–R6 | Planned |

@@ -208,4 +208,4 @@ Post-RC Track A1–A3 已新增/扩展 `AuthTokenStore`、`AuthRefreshCoordinato
 - feature presentation/controller **不得**直接 import token storage 实现或调用 refresh coordinator；
   401 恢复只经 `ApiClient`。
 - refresh 失败后 coordinator 必须释放 in-flight，避免永久挡住后续 401。
-- logout/delete/各 feature cache/player cleanup hook 仍待 A7 逐模块接入。
+- A7 已接入 feature cleanup hook（bootstrap 注册）；Toast/Modal 关闭策略仍 defer。
