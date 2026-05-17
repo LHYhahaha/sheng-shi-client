@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../auth/application/auth_controller.dart';
+import '../../../auth/application/auth_modal_coordinator.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/profile_controller.dart';
@@ -25,6 +26,7 @@ class ProfilePage extends ConsumerWidget {
     final l10n = context.l10n;
     final profileState = ref.watch(profileControllerProvider);
     final authState = ref.watch(authControllerProvider);
+    final authModalCoordinator = ref.read(authModalCoordinatorProvider);
     final authUser = authState.user;
     // 这里只做展示层合成，不写回 profileState。Auth 是登录态源头；Profile 是资料
     // mock 源头。把合成结果回写会让退出登录后的旧昵称/头像残留在资料状态里。
@@ -45,7 +47,7 @@ class ProfilePage extends ConsumerWidget {
           children: [
             ProfileHeader(
               state: state,
-              onLoginTap: () => context.push(RoutePaths.auth),
+              onLoginTap: () => authModalCoordinator.showLogin(context),
               onAccountTap: () => context.push(RoutePaths.account),
             ),
             const SizedBox(height: 21),

@@ -64,7 +64,19 @@ final result = await ref.read(appModalServiceProvider).showConfirm(
 if (result.isConfirmed) { /* ... */ }
 ```
 
-Auth 登录 / session expired 仍在 O3。Player 页面内的详情、分享、倍速等局部 sheet 仍可保留局部实现；跨页面阻塞式业务弹窗应走 `AppModalService`。
+Auth 登录 / login required / session expired 提示已走 O3 全局 modal（`auth.login` / `AuthModalCoordinator`）。`RoutePaths.auth` 全屏页保留给深链与测试。refresh failed 后不自动弹登录，由用户操作或 `showLoginRequired` 触发。Player 页面内的详情、分享、倍速等局部 sheet 仍可保留局部实现；跨页面阻塞式业务弹窗应走 `AppModalService`。
+
+```dart
+// Profile 主动登录
+await ref.read(authModalCoordinatorProvider).showLogin(context);
+
+// 业务需要正式用户
+final result = await ref.read(authModalCoordinatorProvider).showLoginRequired(
+  context,
+  reason: AuthLoginRequiredReason.wallet,
+);
+if (result.isSuccess) { /* continue */ }
+```
 
 - [Global Overlay / Modal System Plan（全局弹窗/浮层系统规划）](docs/global-overlay-modal-system-plan.md)
 - [App Runtime Foundation Plan（全局运行时基础）](docs/app-runtime-foundation-plan.md)

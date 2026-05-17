@@ -224,7 +224,9 @@ Post-RC Track A1–A3 已新增/扩展 `AuthTokenStore`、`AuthRefreshCoordinato
   401 恢复只经 `ApiClient`。
 - refresh 失败后 coordinator 必须释放 in-flight，避免永久挡住后续 401。
 - A7 已接入 feature cleanup hook；cleanup 后调用 `GuestSessionBootstrap`（stub）。
-- Toast/Modal 关闭策略仍 defer。
+- Auth 登录弹窗（O3）：`refresh failed` / logout cleanup 时 `dismissForSource(auth)`；
+  不在 401/启动自动 `showLogin`（业务用 `AuthModalCoordinator.showLoginRequired`）。
+- 其他 Toast/Modal 关闭策略仍 defer。
 
 ### ApiAuthPolicy 阶段性语义与未来扩展
 

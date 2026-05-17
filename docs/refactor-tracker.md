@@ -24,7 +24,7 @@
 | P2 | Theme tokens | 部分页面仍可能散落 magic number 和局部颜色 | 抽查核心页面，沉淀颜色、间距、圆角、文本样式 | In Review |
 | P2 | Network | Remote skeleton done; integration blocked on backend | 401 refresh、验单、strict DTO 后再默认开 remote | In Review |
 | P2 | Player domain | 当前播放页仍以 mock 和 UI 状态为主 | 接入真实播放器 session、解锁状态、自动下一集、错误恢复 | Todo |
-| P1 | Global Modal (Track O) | Auth 登录弹窗仍待迁移；Player/Store/Membership 阻塞确认已走 root modal | O1 skeleton；O2 Player；O4 Store/Membership；O3 Auth；O5 queue/analytics | O4 Done |
+| P1 | Global Modal (Track O) | O5 queue/analytics 待做；业务 login gate（My List/Wallet 等）按需接 `showLoginRequired` | O1 skeleton；O2 Player；O3 Auth；O4 Store/Membership；O5 queue/analytics | O3 Done |
 
 ## 3. 已完成记录
 

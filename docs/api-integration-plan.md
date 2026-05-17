@@ -190,6 +190,14 @@ App **不是**「未登录 = 无用户」。默认是 **游客账户 session**�
 
 Skeleton（无真实网络）：`GuestSessionBootstrap`、`AuthSessionKind`、`AuthTokenSessionKind`。
 
+**Post-RC Track O3（2026-05-17）**：全局登录弹窗 `auth.login` + `AuthModalCoordinator`
+（`showLogin` / `showLoginRequired` / `showSessionExpiredLogin`）。Mock 登录仍经
+`AuthController` → `AuthRepository`；modal 不写 token。登录成功后由 repository/controller
+刷新 session；真实阶段再 reload entitlement / wallet / profile / my list / progress。
+`refresh failed` → cleanup → guest bootstrap；**不**在启动或 401 路径自动弹登录（defer 到业务
+或用户操作）。Account link：mock `login` 已保留 prior `guestId`；真实 `POST login/*` 须带
+`guestId` + device headers。
+
 Future endpoints:
 
 - `POST /auth/guest/session`（或等价 bootstrap，**待后端命名**）

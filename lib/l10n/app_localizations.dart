@@ -91,6 +91,12 @@ class AppLocalizations {
   );
   String get authLoadFailed =>
       _text(en: 'Login failed. Please try again.', zh: '登录失败，请重试。');
+  String get authLoginRequiredMessage =>
+      _text(en: 'Sign in to continue with this action.', zh: '登录后即可继续此操作。');
+  String get authSessionExpiredMessage => _text(
+    en: 'Your session has expired. Sign in again to continue.',
+    zh: '会话已过期，请重新登录后继续。',
+  );
   String get authLogoutFailed =>
       _text(en: 'Logout failed. Please try again.', zh: '退出登录失败，请重试。');
   String get authDeleteAccountFailed =>

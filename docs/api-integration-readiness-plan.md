@@ -46,6 +46,9 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
 
 - **Home/Drama Remote Dry Run**（2026-05-17）：`drama_remote_dry_run_test` + `RecordingHttpAdapter` 验证只读
   categories/feed 链路（headers、envelope、strict DTO、provider 切换）；默认仍 mock。
+- **Post-RC Track O3**（2026-05-17）：`AuthModalCoordinator` + `auth.login` AppModal；Profile 入口；
+  typed `AuthLoginModalResult`；session cleanup dismiss auth modals；无自动 login on refresh failed。
+  Defer：真实 login API、401→modal、各业务 `showLoginRequired` 接入。
 
 下一步进入真实 API 联调前的分域验证（A5+、staging Home/Drama、A1.5 真实 bootstrap），仍保持 remote 默认关闭。
 

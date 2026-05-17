@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:drama_client/app/app_root_navigator_key.dart';
 import 'package:drama_client/app/router/route_paths.dart';
+import 'package:drama_client/bootstrap/app_modal_registry_bootstrap.dart';
+import 'package:drama_client/core/modal/app_modal_host.dart';
 import 'package:drama_client/features/auth/data/auth_repository_provider.dart';
 import 'package:drama_client/features/auth/domain/auth_repository.dart';
 import 'package:drama_client/features/auth/domain/auth_session.dart';
@@ -203,6 +206,7 @@ Widget _buildRouterApp({
   required AuthRepository repository,
 }) {
   final router = GoRouter(
+    navigatorKey: appRootNavigatorKey,
     initialLocation: initialLocation,
     routes: [
       GoRoute(
@@ -221,7 +225,10 @@ Widget _buildRouterApp({
   );
 
   return ProviderScope(
-    overrides: [authRepositoryProvider.overrideWithValue(repository)],
+    overrides: [
+      authRepositoryProvider.overrideWithValue(repository),
+      ...appModalRegistryOverrides,
+    ],
     child: MaterialApp.router(
       localizationsDelegates: const [
         AppLocalizations.delegate,
@@ -231,6 +238,8 @@ Widget _buildRouterApp({
       ],
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: router,
+      builder: (context, child) =>
+          AppModalHost(child: child ?? const SizedBox.shrink()),
     ),
   );
 }

@@ -199,15 +199,17 @@ flowchart TB
 | **测试** | `store_page_test`、`membership_page_test`、`recording_app_modal_service_test`、`modal_boundary_test` |
 | **依赖** | O1 |
 
-#### O3 — 迁移 Auth login / session expired
+#### O3 — 迁移 Auth login / session expired — Done
 
 | 项 | 内容 |
 | --- | --- |
-| **目标** | 401 / logout 触发 `showLogin`；typed `LoginResult` |
-| **文件影响** | `lib/features/auth/*`、`lib/core/network` 401 拦截器回调 |
-| **禁止项** | 不接真实 OAuth SDK（可 mock）；不在 modal 内持 token |
-| **测试** | auth skeleton + modal fake；401 集成测试 |
-| **依赖** | O1、**A2**（401 refresh 失败路径） |
+| **目标** | 全局 Login modal；`AuthLoginModalResult`；`AuthModalCoordinator.showLogin` / `showLoginRequired` |
+| **完成** | `auth.login` channel；Profile → modal；session cleanup dismiss auth modals；mock account link `guestId` |
+| **策略** | refresh failed → cleanup → guest bootstrap；**不**启动自动弹登录；session expired 由 `showSessionExpiredLogin` 在用户操作时调用 |
+| **禁止项** | 未接真实 OAuth / login API；modal 不写 token |
+| **测试** | `auth_modal_coordinator_test`、`auth_login_modal_widget_test`、`app_modal_registry_test`、session cleanup dismiss |
+| **Defer** | 401 拦截器自动弹窗；各业务 login gate 接入 |
+| **依赖** | O1、A2（cleanup 路径已存在） |
 
 #### O5 — queue / priority / analytics / runtime config
 

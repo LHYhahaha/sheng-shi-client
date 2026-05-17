@@ -37,15 +37,50 @@ final class _ConfirmResultDismissed extends ConfirmResult {
   const _ConfirmResultDismissed() : super(AppModalResultKind.dismissed);
 }
 
-/// 预留：登录弹窗结果（O3）。
+/// 登录弹窗结果（O3）。成功态携带 primitive 元数据，避免 core import auth feature。
 final class LoginModalResult extends AppModalResult {
-  const LoginModalResult.completed() : super(AppModalResultKind.completed);
+  const LoginModalResult.success({
+    required this.provider,
+    required this.userId,
+    required this.userNickname,
+    this.accountLinked = false,
+  }) : super(AppModalResultKind.completed);
 
-  const LoginModalResult.cancelled() : super(AppModalResultKind.cancelled);
+  const LoginModalResult.cancelled()
+    : provider = null,
+      userId = null,
+      userNickname = null,
+      accountLinked = false,
+      super(AppModalResultKind.cancelled);
 
-  const LoginModalResult.dismissed() : super(AppModalResultKind.dismissed);
+  const LoginModalResult.dismissed()
+    : provider = null,
+      userId = null,
+      userNickname = null,
+      accountLinked = false,
+      super(AppModalResultKind.dismissed);
 
-  const LoginModalResult.failed() : super(AppModalResultKind.failed);
+  const LoginModalResult.failed()
+    : provider = null,
+      userId = null,
+      userNickname = null,
+      accountLinked = false,
+      super(AppModalResultKind.failed);
+
+  /// [AuthProviderType.name] when login succeeded.
+  final String? provider;
+
+  final String? userId;
+  final String? userNickname;
+  final bool accountLinked;
+
+  bool get isSuccess => kind == AppModalResultKind.completed;
+
+  bool get isCancelled => kind == AppModalResultKind.cancelled;
+
+  bool get isDismissed => kind == AppModalResultKind.dismissed;
+
+  bool get isFailed => kind == AppModalResultKind.failed;
 }
 
 /// 预留：金币解锁结果（O2）。

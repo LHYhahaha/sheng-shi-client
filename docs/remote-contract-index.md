@@ -8,6 +8,7 @@ defer 项。不接真实服务端，不替换 mock 默认实现，不改变 UI�
 ## Release 封板前提（Current）
 
 - 所有 `USE_REMOTE_*` 默认 `false`；UI 默认 mock repository / mock payment / mock entitlement（`grantMock*`）。
+- **O3 Auth modal**：`auth.login` 全局弹窗 + mock provider 登录；真实 OAuth/login API defer。
 - 客户端 session/network 门禁（A1–A3）已就绪：storage 抽象、401 单飞 refresh + 重试一次、
   `required` 空 token fail-fast。开启 remote 前仍须：生产 secure storage 默认、真实 refresh API、
   A7 feature cleanup hook、订单验单、strict DTO（见下文）。

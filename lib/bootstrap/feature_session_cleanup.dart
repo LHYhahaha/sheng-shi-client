@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/auth/session_cleanup_coordinator.dart';
+import '../features/auth/application/auth_modal_coordinator.dart';
 import '../features/entitlement/application/entitlement_controller.dart';
 import '../features/membership/application/membership_controller.dart';
 import '../features/my_list/application/my_list_controller.dart';
@@ -15,6 +16,9 @@ import '../features/wallet/application/wallet_controller.dart';
 final featureSessionCleanupRegistrationProvider = Provider<void>((ref) {
   final coordinator = ref.read(sessionCleanupCoordinatorProvider);
   coordinator.registerFeatureHooks([
+    (reason) async {
+      ref.read(authModalCoordinatorProvider).dismissAuthModals();
+    },
     (reason) async {
       ref
           .read(entitlementControllerProvider.notifier)

@@ -2,6 +2,7 @@ import 'package:drama_client/core/modal/app_modal_policy.dart';
 import 'package:drama_client/core/modal/app_modal_request.dart';
 import 'package:drama_client/core/modal/app_modal_result.dart';
 import 'package:drama_client/core/modal/app_modal_source.dart';
+import 'package:drama_client/features/auth/presentation/modal/auth_modal_channels.dart';
 import 'package:drama_client/features/membership/presentation/modal/membership_modal_channels.dart';
 import 'package:drama_client/features/store/presentation/modal/store_modal_channels.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -95,5 +96,26 @@ void main() {
         AppModalResultKind.cancelled,
       );
     });
+
+    test(
+      'records auth login modal and returns preset LoginModalResult',
+      () async {
+        await service.show(
+          FeatureAppModalRequest(
+            requestId: 'auth_1',
+            source: AppModalSource.auth,
+            channel: AuthModalChannels.login,
+            type: AppModalType.login,
+          ),
+        );
+
+      service.presetResultsByRequestId['auth_1'] =
+          const LoginModalResult.cancelled();
+      final result = await service.show(service.requests.last);
+
+      expect(result, isA<LoginModalResult>());
+      expect((result as LoginModalResult).isCancelled, isTrue);
+      },
+    );
   });
 }

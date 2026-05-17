@@ -10,6 +10,7 @@ class RecordingAppModalService implements AppModalService {
 
   ConfirmResult defaultConfirmResult = ConfirmResult.confirmed;
   AppModalResult defaultGenericResult = ConfirmResult.dismissed;
+  final List<AppModalSource> dismissForSourceCalls = [];
 
   @override
   Future<ConfirmResult> showConfirm(ConfirmModalRequest request) async {
@@ -30,7 +31,9 @@ class RecordingAppModalService implements AppModalService {
   void dismissByRequestId(String requestId, {AppModalResult? result}) {}
 
   @override
-  void dismissForSource(AppModalSource source, {AppModalResult? result}) {}
+  void dismissForSource(AppModalSource source, {AppModalResult? result}) {
+    dismissForSourceCalls.add(source);
+  }
 
   ConfirmResult _resolveConfirm(String requestId) {
     final preset = presetResultsByRequestId[requestId];
@@ -53,5 +56,6 @@ class RecordingAppModalService implements AppModalService {
     presetResultsByRequestId.clear();
     defaultConfirmResult = ConfirmResult.confirmed;
     defaultGenericResult = ConfirmResult.dismissed;
+    dismissForSourceCalls.clear();
   }
 }

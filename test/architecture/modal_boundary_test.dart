@@ -78,6 +78,26 @@ void main() {
     expect(source, contains('membershipModalCoordinatorProvider'));
   });
 
+  test('profile login uses auth modal coordinator not auth route push', () {
+    final source = File(
+      'lib/features/profile/presentation/pages/profile_page.dart',
+    ).readAsStringSync();
+    expect(source, contains('authModalCoordinatorProvider'));
+    expect(source, isNot(contains('RoutePaths.auth')));
+  });
+
+  test('auth login modal does not import bot_toast', () {
+    final dir = Directory('lib/features/auth/presentation/modal');
+    for (final entity in dir.listSync()) {
+      if (entity is! File || !entity.path.endsWith('.dart')) {
+        continue;
+      }
+      final source = entity.readAsStringSync();
+      expect(source, isNot(contains('bot_toast')));
+      expect(source, isNot(contains('AuthTokenStore')));
+    }
+  });
+
   test('wallet page has no blocking purchase confirmation sheet', () {
     final source = File(
       'lib/features/wallet/presentation/pages/wallet_page.dart',

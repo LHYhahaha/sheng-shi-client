@@ -8,7 +8,10 @@ import '../domain/auth_session.dart';
 class MockAuthRepository implements AuthRepository {
   MockAuthRepository();
 
-  AuthSession _session = const AuthSession.guest();
+  AuthSession _session = const AuthSession.guest(
+    sessionId: 'guest-sess-mock',
+    guestId: 'guest-mock',
+  );
 
   @override
   Future<AuthSession> fetchSession() async {
@@ -19,6 +22,7 @@ class MockAuthRepository implements AuthRepository {
   @override
   Future<AuthSession> login(AuthProviderType provider) async {
     await Future<void>.delayed(const Duration(milliseconds: 80));
+    final linkGuestId = _session.guestId ?? _session.sessionId;
     _session = AuthSession(
       user: AuthUser(
         id: '15589299',
@@ -30,6 +34,8 @@ class MockAuthRepository implements AuthRepository {
         avatarAssetPath: authDefaultAvatarAssetPath,
         provider: provider,
       ),
+      sessionId: 'sess-${provider.name}',
+      guestId: linkGuestId,
     );
     return _session;
   }
@@ -37,14 +43,20 @@ class MockAuthRepository implements AuthRepository {
   @override
   Future<AuthSession> logout() async {
     await Future<void>.delayed(const Duration(milliseconds: 50));
-    _session = const AuthSession.guest();
+    _session = const AuthSession.guest(
+      sessionId: 'guest-sess-mock',
+      guestId: 'guest-mock',
+    );
     return _session;
   }
 
   @override
   Future<AuthSession> deleteAccount() async {
     await Future<void>.delayed(const Duration(milliseconds: 50));
-    _session = const AuthSession.guest();
+    _session = const AuthSession.guest(
+      sessionId: 'guest-sess-mock',
+      guestId: 'guest-mock',
+    );
     return _session;
   }
 }

@@ -1,6 +1,6 @@
 # Global Overlay / Modal System Plan
 
-> Status: **O1 + O2 + O4 done** (2026-05-17). Player unlock/recharge/payment and Store/Membership purchase confirmation use the global modal host. Wallet has no blocking confirmation modal (restore → toast; auto unlock → in-page switch). Auth login modal remains O3.
+> Status: **O1 + O2 + O3 + O4 done** (2026-05-17). Player unlock/recharge/payment, Auth login/login-required, and Store/Membership purchase confirmation use the global modal host. Wallet has no blocking confirmation modal (restore → toast; auto unlock → in-page switch). O5 (queue priority / analytics) remains.
 
 ## Why This Exists
 
@@ -254,10 +254,17 @@ README should explain:
 - Player detail/share/speed sheets remain local because they are page-local UI, not cross-tab blocking business flows.
 - Unlock/payment behavior is unchanged: coin enough -> Play sheet; coin insufficient -> recharge -> payment -> Play; membership purchase -> unlock/play according to existing mock flow.
 
-### Phase O3: Auth And Login
+### Phase O3: Auth And Login — Done
 
-- Move login prompt and session-expired prompt into the global modal system.
-- Define login result and cancellation semantics.
+- Channel `auth.login` via `AuthAppModalPresenter` + `AuthLoginModalSheet` (reuses `AuthLoginModalContent`).
+- Typed `AuthLoginModalPayload` / `AuthLoginModalResult` (success / cancelled / dismissed / failed); success carries `provider`, `AuthUser`, `accountLinked`.
+- `AuthModalCoordinator`: `showLogin`, `showLoginRequired(reason)`, `showSessionExpiredLogin`; Profile 入口走 modal 而非 push `/auth`.
+- Mock login stays on `AuthController` → `AuthRepository` (modal does not write `AuthTokenStore`).
+- Account link prep: mock `login` preserves `guestId` from prior guest session; real API will send `guestId` / `deviceId` / guest token in login body.
+- Session policy: **refresh failed → token cleanup → guest bootstrap**; login modal **not** auto-shown at startup. Use `showSessionExpiredLogin` on user action only.
+- `featureSessionCleanup` dismisses `AppModalSource.auth` modals on logout/cleanup.
+- Deferred: real OAuth SDK, real login API, auto-login on 401 interceptor, My List / Wallet / Store restore login gates (call `showLoginRequired` when needed).
+- `RoutePaths.auth` full-page route kept for deep links and widget tests.
 
 ### Phase O4: Store / Membership / Wallet — Done
 
