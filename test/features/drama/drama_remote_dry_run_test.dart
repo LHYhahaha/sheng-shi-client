@@ -10,8 +10,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../helpers/drama_remote_dry_run_harness.dart';
-import '../../helpers/fake_api_envelope.dart';
-import '../../helpers/recording_http_adapter.dart';
 
 bool _hasMappingCause(Object? error) =>
     error is ApiMappingException ||
@@ -133,24 +131,27 @@ void main() {
       );
     });
 
-    test('network error propagates as ApiException without mock fallback', () async {
-      final harness = DramaRemoteDryRunHarness();
-      harness.adapter.fetchException = DioException(
-        requestOptions: RequestOptions(path: '/home/categories'),
-        type: DioExceptionType.connectionTimeout,
-      );
+    test(
+      'network error propagates as ApiException without mock fallback',
+      () async {
+        final harness = DramaRemoteDryRunHarness();
+        harness.adapter.fetchException = DioException(
+          requestOptions: RequestOptions(path: '/home/categories'),
+          type: DioExceptionType.connectionTimeout,
+        );
 
-      await expectLater(
-        harness.repository.listHomeCategories(),
-        throwsA(
-          isA<ApiException>().having(
-            (error) => error.code,
-            'code',
-            ApiErrorCode.timeout,
+        await expectLater(
+          harness.repository.listHomeCategories(),
+          throwsA(
+            isA<ApiException>().having(
+              (error) => error.code,
+              'code',
+              ApiErrorCode.timeout,
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   });
 
   group('strict DTO', () {

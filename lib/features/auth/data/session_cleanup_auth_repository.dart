@@ -8,10 +8,9 @@ import '../domain/auth_session.dart';
 /// mock 与 remote repository 行为一致。
 class SessionCleanupAuthRepository implements AuthRepository {
   SessionCleanupAuthRepository({
-    required AuthRepository delegate,
+    required this.delegate,
     required SessionCleanupCoordinator sessionCleanup,
-  }) : delegate = delegate,
-       _sessionCleanup = sessionCleanup;
+  }) : _sessionCleanup = sessionCleanup;
 
   final AuthRepository delegate;
   final SessionCleanupCoordinator _sessionCleanup;

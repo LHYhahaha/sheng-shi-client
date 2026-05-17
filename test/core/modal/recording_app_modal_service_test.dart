@@ -14,7 +14,7 @@ void main() {
       service = RecordingAppModalService();
     });
 
-    ConfirmModalRequest _request(String id) {
+    ConfirmModalRequest request(String id) {
       return ConfirmModalRequest(
         requestId: id,
         source: AppModalSource.player,
@@ -27,7 +27,7 @@ void main() {
     }
 
     test('records requests and returns default confirm result', () async {
-      final result = await service.showConfirm(_request('r1'));
+      final result = await service.showConfirm(request('r1'));
 
       expect(result, isA<ConfirmResult>());
       expect(result.isConfirmed, isTrue);
@@ -40,14 +40,14 @@ void main() {
     test('returns preset result by request id', () async {
       service.presetResultsByRequestId['r2'] = ConfirmResult.cancelled;
 
-      final result = await service.showConfirm(_request('r2'));
+      final result = await service.showConfirm(request('r2'));
 
       expect(result.isCancelled, isTrue);
     });
 
     test('records multiple generic show calls', () async {
-      await service.show(_request('a'));
-      await service.show(_request('b'));
+      await service.show(request('a'));
+      await service.show(request('b'));
 
       expect(service.requests, hasLength(2));
       expect(service.requests.map((r) => r.requestId), ['a', 'b']);

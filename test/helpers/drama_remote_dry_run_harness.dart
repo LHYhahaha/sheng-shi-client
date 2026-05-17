@@ -63,7 +63,7 @@ class DramaRemoteDryRunHarness {
       RecordingHttpResponse(
         body: apiEnvelopeSuccess({
           'items': items,
-          if (nextPageToken != null) 'nextPageToken': nextPageToken,
+          'nextPageToken': ?nextPageToken,
         }),
       ),
     );
@@ -99,8 +99,8 @@ Map<String, Object?> validDramaItemJson({
   int episodeCount = 52,
 }) => {
   'dramaId': dramaId,
-  if (title != null) 'title': title,
-  if (coverUrl != null) 'coverUrl': coverUrl,
+  'title': ?title,
+  'coverUrl': ?coverUrl,
   'episodeCount': episodeCount,
   'tags': <String>[],
   'badges': <String>[],

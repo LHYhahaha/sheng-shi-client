@@ -1,7 +1,6 @@
 import 'package:drama_client/app/app.dart';
 import 'package:drama_client/core/modal/app_modal_host.dart';
 import 'package:drama_client/core/toast/app_toast_provider.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

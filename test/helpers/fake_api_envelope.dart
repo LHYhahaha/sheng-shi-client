@@ -9,8 +9,4 @@ Map<String, Object?> apiEnvelopeError(
   int code, {
   String message = 'error',
   Object? data,
-}) => {
-  'code': code,
-  'message': message,
-  'data': data,
-};
+}) => {'code': code, 'message': message, 'data': data};

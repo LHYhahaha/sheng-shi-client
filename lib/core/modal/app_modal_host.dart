@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_root_navigator_key.dart';
 import 'app_modal_controller.dart';
-import 'app_modal_policy.dart';
 import 'app_modal_provider.dart';
 import 'app_modal_request.dart';
 import 'app_modal_result.dart';
@@ -74,8 +73,6 @@ class _AppModalHostState extends ConsumerState<AppModalHost> {
     switch (presentation.request) {
       case ConfirmModalRequest confirm:
         result = await _showConfirmDialog(context, confirm);
-      default:
-        result = ConfirmResult.dismissed;
     }
 
     if (!mounted) {
