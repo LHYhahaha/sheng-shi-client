@@ -1,8 +1,8 @@
 import 'package:drama_client/bootstrap/feature_session_cleanup.dart';
 import 'package:drama_client/core/auth/auth_token_store.dart';
 import 'package:drama_client/core/auth/session_cleanup_coordinator.dart';
+import 'package:drama_client/core/modal/app_modal_business_cleanup.dart';
 import 'package:drama_client/core/modal/app_modal_provider.dart';
-import 'package:drama_client/core/modal/app_modal_source.dart';
 import 'package:drama_client/features/entitlement/application/entitlement_controller.dart';
 import 'package:drama_client/features/auth/application/auth_controller.dart';
 import 'package:drama_client/features/entitlement/domain/episode_unlock_type.dart';
@@ -17,7 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../helpers/recording_app_modal_service.dart';
 
 void main() {
-  test('session cleanup dismisses auth source modals', () async {
+  test('session cleanup dismisses all blocking business modals', () async {
     final modal = RecordingAppModalService();
     final container = ProviderContainer(
       overrides: [appModalServiceProvider.overrideWithValue(modal)],
@@ -29,7 +29,28 @@ void main() {
         .read(sessionCleanupCoordinatorProvider)
         .cleanup(SessionCleanupReason.logout);
 
-    expect(modal.dismissForSourceCalls, contains(AppModalSource.auth));
+    expect(modal.dismissAllBlockingBusinessModalsCalls, 1);
+    for (final source in blockingBusinessModalSources) {
+      expect(modal.dismissForSourceCalls, contains(source));
+    }
+  });
+
+  test('entitlement keeps autoUnlockEnabled after cleanup', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container.read(featureSessionCleanupRegistrationProvider);
+
+    final entitlement = container.read(entitlementControllerProvider.notifier);
+    entitlement.state = entitlement.state.copyWith(autoUnlockEnabled: true);
+    await entitlement.grantMockMembership(source: 'test');
+
+    await container
+        .read(sessionCleanupCoordinatorProvider)
+        .cleanup(SessionCleanupReason.sessionExpired);
+
+    final state = container.read(entitlementControllerProvider);
+    expect(state.isGuest, isTrue);
+    expect(state.autoUnlockEnabled, isTrue);
   });
 
   test('feature hooks reset guest-facing state after refresh failed', () async {

@@ -4,6 +4,25 @@ import 'package:drama_client/core/modal/app_modal_result.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('core/auth must not import features', () {
+    final authDir = Directory('lib/core/auth');
+    expect(authDir.existsSync(), isTrue);
+
+    final offenders = <String>[];
+    for (final entity in authDir.listSync(recursive: true)) {
+      if (entity is! File || !entity.path.endsWith('.dart')) {
+        continue;
+      }
+      final source = entity.readAsStringSync();
+      if (source.contains('features/') ||
+          source.contains("package:drama_client/features")) {
+        offenders.add(entity.path);
+      }
+    }
+
+    expect(offenders, isEmpty, reason: offenders.join('\n'));
+  });
+
   test('core/modal must not import features', () {
     final modalDir = Directory('lib/core/modal');
     expect(modalDir.existsSync(), isTrue);

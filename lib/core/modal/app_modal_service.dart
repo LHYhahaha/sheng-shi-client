@@ -17,6 +17,9 @@ abstract class AppModalService {
   void dismissByRequestId(String requestId, {AppModalResult? result});
 
   void dismissForSource(AppModalSource source, {AppModalResult? result});
+
+  /// Session cleanup：清空 pending 并关闭 current，且不激活队列下一项。
+  void dismissAllBlockingBusinessModals({AppModalResult? result});
 }
 
 /// 默认实现：委托 [AppModalController] 由 [AppModalHost] 展示。
@@ -53,6 +56,13 @@ class AppModalServiceImpl implements AppModalService {
   void dismissForSource(AppModalSource source, {AppModalResult? result}) {
     _controller.dismissForSource(
       source,
+      result: result ?? ConfirmResult.dismissed,
+    );
+  }
+
+  @override
+  void dismissAllBlockingBusinessModals({AppModalResult? result}) {
+    _controller.dismissAllBlockingBusinessModals(
       result: result ?? ConfirmResult.dismissed,
     );
   }

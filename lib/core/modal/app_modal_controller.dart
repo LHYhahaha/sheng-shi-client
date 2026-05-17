@@ -154,6 +154,24 @@ class AppModalController extends ChangeNotifier {
     }
   }
 
+  /// 清空全部 pending 并关闭 current；**不** dequeue 展示下一项（session cleanup 用）。
+  void dismissAllBlockingBusinessModals({
+    AppModalResult result = ConfirmResult.dismissed,
+  }) {
+    while (_queue.isNotEmpty) {
+      final entry = _queue.dequeue()!;
+      _completeEntry(entry, result);
+      _emitDismissed(entry.request, result);
+    }
+    final presentation = _current;
+    if (presentation == null) {
+      return;
+    }
+    _completePresentation(presentation, result);
+    _current = null;
+    notifyListeners();
+  }
+
   void dismissByRequestId(
     String requestId, {
     AppModalResult result = ConfirmResult.dismissed,

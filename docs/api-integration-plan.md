@@ -883,7 +883,7 @@ Phase F status:
   fallback in mappers only.
 - `AuthTokenStore` is an in-memory skeleton; secure storage remains deferred.
 - `AuthRefreshCoordinator` establishes refresh in-flight dedupe; automatic 401 retry remains deferred.
-- `SessionCleanupCoordinator` establishes the cleanup entry; feature cache and Player hooks remain deferred.
+- **A7 Done**：`SessionCleanupCoordinator` + `feature_session_cleanup` hooks；modal/player/auth/entitlement 等 guest-safe reset；真实 API 后仍需 guest bootstrap 与各 feature refetch。
 - All `USE_REMOTE_XXX_API` switches remain false by default.
 
 Phase F review:

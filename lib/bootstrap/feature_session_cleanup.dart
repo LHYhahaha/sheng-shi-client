@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/auth/session_cleanup_coordinator.dart';
-import '../features/auth/application/auth_modal_coordinator.dart';
+import '../core/modal/app_modal_business_cleanup.dart';
+import '../core/modal/app_modal_provider.dart';
+import '../features/auth/application/auth_controller.dart';
 import '../features/entitlement/application/entitlement_controller.dart';
 import '../features/membership/application/membership_controller.dart';
 import '../features/my_list/application/my_list_controller.dart';
@@ -10,45 +12,52 @@ import '../features/profile/application/profile_controller.dart';
 import '../features/store/application/store_controller.dart';
 import '../features/wallet/application/wallet_controller.dart';
 
-/// 在应用启动时注册各 feature 的 session cleanup hook。
+/// 在应用启动时注册各 feature 的 session cleanup hook（A7）。
 ///
 /// 放在 bootstrap 层，避免 feature application 直接依赖 [SessionCleanupCoordinator]。
+/// Hook 注册时捕获 notifier / service，避免 async cleanup 后再读已 dispose 的 [Ref]。
 final featureSessionCleanupRegistrationProvider = Provider<void>((ref) {
   final coordinator = ref.read(sessionCleanupCoordinatorProvider);
+  final modalService = ref.read(appModalServiceProvider);
+  final authController = ref.read(authControllerProvider.notifier);
+  final entitlementController = ref.read(
+    entitlementControllerProvider.notifier,
+  );
+  final walletController = ref.read(walletControllerProvider.notifier);
+  final profileController = ref.read(profileControllerProvider.notifier);
+  final myListController = ref.read(myListControllerProvider.notifier);
+  final storeController = ref.read(storeControllerProvider.notifier);
+  final membershipController = ref.read(membershipControllerProvider.notifier);
   coordinator.registerFeatureHooks([
-    (reason) async {
-      ref.read(authModalCoordinatorProvider).dismissAuthModals();
+    (_) async {
+      dismissAllBlockingBusinessModals(modalService);
     },
     (reason) async {
-      ref
-          .read(entitlementControllerProvider.notifier)
-          .resetForSessionCleanup(reason);
+      authController.resetForSessionCleanup(reason);
     },
     (reason) async {
-      ref
-          .read(walletControllerProvider.notifier)
-          .resetForSessionCleanup(reason);
+      entitlementController.resetForSessionCleanup(reason);
     },
     (reason) async {
-      ref
-          .read(profileControllerProvider.notifier)
-          .resetForSessionCleanup(reason);
+      walletController.resetForSessionCleanup(reason);
     },
     (reason) async {
-      ref
-          .read(myListControllerProvider.notifier)
-          .resetForSessionCleanup(reason);
+      profileController.resetForSessionCleanup(reason);
     },
     (reason) async {
-      await runPlayerSessionCleanup(ref);
+      myListController.resetForSessionCleanup(reason);
+    },
+    (_) async {
+      await runPlayerSessionCleanupWith(
+        read: <T>(dynamic provider) => ref.read(provider),
+        invalidate: (dynamic provider) => ref.invalidate(provider),
+      );
     },
     (reason) async {
-      ref.read(storeControllerProvider.notifier).resetForSessionCleanup(reason);
+      storeController.resetForSessionCleanup(reason);
     },
     (reason) async {
-      ref
-          .read(membershipControllerProvider.notifier)
-          .resetForSessionCleanup(reason);
+      membershipController.resetForSessionCleanup(reason);
     },
   ]);
 });

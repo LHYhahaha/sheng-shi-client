@@ -5,6 +5,7 @@ import 'player_overlay_orchestrator.dart';
 import 'player_playback_controller.dart';
 import 'player_recharge_unlock_controller.dart';
 import 'player_session_registry.dart';
+import 'player_startup_preload_controller.dart';
 import 'player_ui_controller.dart';
 
 /// 暂停并释放所有已注册播放器 session，取消 overlay/preload/pending unlock 上下文。
@@ -20,6 +21,12 @@ Future<void> runPlayerSessionCleanupWith({
   required T Function<T>(dynamic provider) read,
   required void Function(dynamic provider) invalidate,
 }) async {
+  try {
+    await read(
+      playerStartupPreloadControllerProvider.notifier,
+    ).cancel(reason: 'session_cleanup');
+  } catch (_) {}
+
   final keys = <String>{
     PlayerPlaybackSessionKeys.forYouTab,
     ...read(playerSessionRegistryProvider),

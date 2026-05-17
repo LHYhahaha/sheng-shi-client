@@ -160,7 +160,7 @@ dart-define。
 - `apiRequestContextProvider` 统一组合 header 与 `accessToken`（来自 `AuthTokenStore`）。
 - `AuthTokenStorage` 抽象 + 默认 `InMemoryAuthTokenStorage`；可选 `FlutterSecureAuthTokenStorage`（未默认）。
 - `ApiAuthPolicy.required` 且无 access token：`ApiClient` 本地 `sessionRequired`，**不伪造 HTTP 401**。
-- `ApiSessionAuthHandler` + `AuthRefreshCoordinator`：`required` 接口 HTTP 401 时单飞 refresh，成功 **重试原请求 1 次**；失败 `SessionCleanupCoordinator` 清 token + hook。
+- `ApiSessionAuthHandler` + `AuthRefreshCoordinator`：`required` 接口 HTTP 401 时单飞 refresh，成功 **重试原请求 1 次**；失败 `SessionCleanupCoordinator` 清 token + A7 feature hooks（含 `dismissAllBlockingBusinessModals`）。
 - `POST /auth/refresh`：`none` + `apiSkipAuthRefreshExtraKey`，避免 refresh 递归。
 - `authRefreshExecutorProvider` 默认 stub（未接真实服务端）。
 

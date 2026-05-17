@@ -33,7 +33,7 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
   - A2：`ApiClient` 401 → `ApiSessionAuthHandler` 单飞 refresh + 重试一次；失败 cleanup。
   - A3：`required` 空 token → `ApiErrorCode.sessionRequired` fail-fast。
   - 测试：`auth_token_storage_test`、`api_client_session_auth_test`、`auth_runtime_boundary_test`。
-  - 仍 defer：真实 refresh endpoint、`authRefreshExecutorProvider` 生产实现、secure storage 默认、A7 hooks。
+  - 仍 defer：真实 refresh endpoint、`authRefreshExecutorProvider` 生产实现、secure storage 默认。
 
 - **Guest Session Bootstrap & Account Link（A1.5）**（2026-05-17）：设计文档 + `AuthSessionKind` /
   `AuthTokenSessionKind` / `GuestSessionBootstrap` skeleton；**真实 API 联调前门禁**之一。
@@ -168,6 +168,6 @@ Phase F 完成后，建议进入：
 - 真机 device model / RAM 完整 probe（`device_capability_probe`）。
 - secure storage **作为生产默认**（实现已有）。
 - `authRefreshExecutorProvider` 接真实 refresh API。
-- A7（2026-05-17）：logout/delete/refreshFailed/sessionExpired 已接 feature cleanup hooks；Toast/Modal defer。
+- **A7（2026-05-17）**：feature cleanup hooks + `dismissAllBlockingBusinessModals` + Auth/Entitlement/Wallet/Profile/MyList/Player/Store/Membership reset；`autoUnlockEnabled` 保留；真实 guest reload defer。
 - Guest session 是联调门禁：生产须有 bootstrap；login 须 account link；cleanup 后不得保留正式用户 feature 态。
 - 远程语言包、内容多语言和字幕语言。

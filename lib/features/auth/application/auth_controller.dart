@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/session_cleanup_types.dart';
 import '../data/auth_repository_provider.dart';
 import '../domain/auth_session.dart';
 
@@ -101,6 +102,21 @@ class AuthController extends Notifier<AuthState> {
 
   @override
   AuthState build() => const AuthState.initial();
+
+  /// refresh failed / session expired 后回到 guest-safe UI 态（不直接写 token）。
+  ///
+  /// logout/delete 经 [SessionCleanupAuthRepository] 也会触发 cleanup；此处与 repository
+  /// 返回的 guest session 对齐，并清除 pending login/logout/delete 过程态。
+  void resetForSessionCleanup(SessionCleanupReason reason) {
+    _generation += 1;
+    state = const AuthState(
+      isLoading: false,
+      session: AuthSession.guest(
+        sessionId: 'guest-sess-mock',
+        guestId: 'guest-mock',
+      ),
+    );
+  }
 
   Future<void> load() async {
     final generation = ++_generation;

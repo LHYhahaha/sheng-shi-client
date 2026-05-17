@@ -11,6 +11,7 @@ class RecordingAppModalService implements AppModalService {
   ConfirmResult defaultConfirmResult = ConfirmResult.confirmed;
   AppModalResult defaultGenericResult = ConfirmResult.dismissed;
   final List<AppModalSource> dismissForSourceCalls = [];
+  int dismissAllBlockingBusinessModalsCalls = 0;
 
   @override
   Future<ConfirmResult> showConfirm(ConfirmModalRequest request) async {
@@ -35,6 +36,20 @@ class RecordingAppModalService implements AppModalService {
     dismissForSourceCalls.add(source);
   }
 
+  @override
+  void dismissAllBlockingBusinessModals({AppModalResult? result}) {
+    dismissAllBlockingBusinessModalsCalls += 1;
+    for (final source in [
+      AppModalSource.player,
+      AppModalSource.store,
+      AppModalSource.membership,
+      AppModalSource.auth,
+    ]) {
+      dismissForSource(source, result: result);
+    }
+    dismissCurrent(result: result);
+  }
+
   ConfirmResult _resolveConfirm(String requestId) {
     final preset = presetResultsByRequestId[requestId];
     if (preset is ConfirmResult) {
@@ -57,5 +72,6 @@ class RecordingAppModalService implements AppModalService {
     defaultConfirmResult = ConfirmResult.confirmed;
     defaultGenericResult = ConfirmResult.dismissed;
     dismissForSourceCalls.clear();
+    dismissAllBlockingBusinessModalsCalls = 0;
   }
 }

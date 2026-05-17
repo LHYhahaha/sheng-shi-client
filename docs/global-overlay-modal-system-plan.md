@@ -262,7 +262,7 @@ README should explain:
 - Mock login stays on `AuthController` → `AuthRepository` (modal does not write `AuthTokenStore`).
 - Account link prep: mock `login` preserves `guestId` from prior guest session; real API will send `guestId` / `deviceId` / guest token in login body.
 - Session policy: **refresh failed → token cleanup → guest bootstrap**; login modal **not** auto-shown at startup. Use `showSessionExpiredLogin` on user action only.
-- `featureSessionCleanup` dismisses `AppModalSource.auth` modals on logout/cleanup.
+- A7 `featureSessionCleanup` calls `dismissAllBlockingBusinessModals` (player/store/membership/auth) and drains the modal queue without presenting the next item.
 - Deferred: real OAuth SDK, real login API, auto-login on 401 interceptor, My List / Wallet / Store restore login gates (call `showLoginRequired` when needed).
 - `RoutePaths.auth` full-page route kept for deep links and widget tests.
 

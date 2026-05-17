@@ -345,17 +345,19 @@ refresh failed: clear auth token → cleanup → guest bootstrap → reload gues
 | **不包含** | Player playback source、Entitlement、Wallet/Store/Membership、真实 IAP |
 | **错误策略** | remote 失败抛 `ApiException` / wrapped `ApiMappingException`；**不静默 fallback mock** |
 
-#### A7 — session cleanup（feature cache + player session）✅（2026-05-17，客户端骨架）
+#### A7 — session cleanup（feature cache + player session）— Done
 
 | 项 | 内容 |
 | --- | --- |
-| **目标** | logout / refresh failed / session expired 时清 feature 缓存与播放器 |
-| **已完成** | `SessionCleanupCoordinator` 单飞 + hook 隔离失败；`lib/bootstrap/feature_session_cleanup.dart` 注册；Entitlement/Wallet/Profile/MyList/Store/Membership reset；Player pause/dispose/overlay/recharge；`SessionCleanupAuthRepository` 包装 logout/delete |
-| **仍 defer** | Toast/Modal 统一关闭；真实 guest bootstrap 网络；login 后 feature 全量 reload |
-| **后续** | cleanup 后走 A1.5 `GuestSessionBootstrap`（当前 stub） |
+| **目标** | refresh failed / logout / deleteAccount / sessionExpired 后 guest-safe 一致态 |
+| **已完成** | 清 token → `dismissAllBlockingBusinessModals`（player/store/membership/auth + 清空 queue）→ `AuthController.resetForSessionCleanup` → Entitlement/Wallet/Profile/MyList/Store/Membership reset → Player pause/dispose/preload/startup cancel → `GuestSessionBootstrap` stub |
+| **Reason** | `refreshFailed` / `sessionExpired` / `unauthorized`：ApiSessionAuthHandler；`logout` / `deleteAccount`：SessionCleanupAuthRepository |
+| **autoUnlock** | Entitlement cleanup **保留** `autoUnlockEnabled` 本地偏好 |
+| **no-op** | Home/Drama mock feed（无用户态缓存）；Toast 自然消失 |
+| **仍 defer** | 真实 guest bootstrap API；cleanup 后各 feature guest 数据 refetch |
 | **禁止项** | core 不 import features；UI 不直接调 coordinator（logout/delete 经 repository） |
-| **测试** | `session_cleanup_coordinator_test`、`feature_session_cleanup_test`、`player_session_cleanup_test` |
-| **依赖** | **A2** |
+| **测试** | `session_cleanup_coordinator_test`、`feature_session_cleanup_test`、`auth_session_cleanup_test`、`app_modal_business_cleanup_test`、`player_session_cleanup_test`、`session_cleanup_boundary_test` |
+| **依赖** | **A2**、O5 modal dismiss |
 
 ### 4.3 接口联调顺序
 
