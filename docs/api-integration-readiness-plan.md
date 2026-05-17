@@ -35,7 +35,10 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
   - 测试：`auth_token_storage_test`、`api_client_session_auth_test`、`auth_runtime_boundary_test`。
   - 仍 defer：真实 refresh endpoint、`authRefreshExecutorProvider` 生产实现、secure storage 默认、A7 hooks。
 
-下一步进入真实 API 联调前的分域验证（A4+），仍保持 remote 默认关闭。
+- **Guest Session Bootstrap & Account Link（A1.5）**（2026-05-17）：设计文档 + `AuthSessionKind` /
+  `AuthTokenSessionKind` / `GuestSessionBootstrap` skeleton；**真实 API 联调前门禁**之一。
+
+下一步进入真实 API 联调前的分域验证（A4+、A1.5 真实 bootstrap），仍保持 remote 默认关闭。
 
 ## Phase F 目标
 
@@ -152,4 +155,5 @@ Phase F 完成后，建议进入：
 - secure storage **作为生产默认**（实现已有）。
 - `authRefreshExecutorProvider` 接真实 refresh API。
 - A7（2026-05-17）：logout/delete/refreshFailed/sessionExpired 已接 feature cleanup hooks；Toast/Modal defer。
+- Guest session 是联调门禁：生产须有 bootstrap；login 须 account link；cleanup 后不得保留正式用户 feature 态。
 - 远程语言包、内容多语言和字幕语言。

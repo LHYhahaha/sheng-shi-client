@@ -6,6 +6,13 @@ import '../../../shared/media/media_resource.dart';
 /// SDK 字段变化应在 auth repository 内部适配。
 enum AuthProviderType { device, google, facebook }
 
+/// 客户端感知的 session 种类（展示与流程分支，不含 token）。
+///
+/// - [guest]：游客账户 session（可有 guest access token，不是“无 session”）。
+/// - [authenticated]：account link 后的正式用户。
+/// - [recovering]：cleanup 之后、guest bootstrap 完成前的过渡态。
+enum AuthSessionKind { guest, authenticated, recovering }
+
 const authDefaultAvatarAssetPath =
     'assets/images/profile/profile_avatar_figma.png';
 
@@ -22,46 +29,55 @@ class AuthUser {
     this.avatarResource,
   });
 
-  /// 用户 id。
-  ///
-  /// 用于展示和账号页识别，不应承载 token 或设备标识。
+  /// 用户 id（正式账号）。游客展示 id 见 [AuthSession.guestId] / [AuthSession.sessionId]。
   final String id;
 
-  /// 用户昵称。
-  ///
-  /// ProfilePage 展示时从 AuthState 合成，不写回 ProfileState。
   final String nickname;
-
-  /// 头像 asset 路径。
-  ///
-  /// 当前为 mock 本地资源；远程头像接入时仍应保持 UI 只读这个归一化字段。
   final String avatarAssetPath;
-
-  /// 头像统一资源身份。
-  ///
-  /// 远程 profile/auth 会把 avatarUrl 映射为 network resource；当前 UI 仍使用
-  /// avatarAssetPath，后续切网络头像时优先读此字段，不要把 URL 伪装成 asset path。
   final MediaResource? avatarResource;
-
-  /// 登录来源渠道。
-  ///
-  /// 用于账号信息和排查登录问题，不用于权限判断。
   final AuthProviderType provider;
 }
 
-/// 认证会话。
+/// 认证会话（UI / application 可见层）。
 ///
-/// guest 和 logged-in 都用同一模型表达，便于 logout/delete 后原子切回游客态。页面
-/// 不要自行用 nullable user 推断全部账号状态，应通过 AuthState/AuthSession 读取。
+/// 产品模型：App 启动后默认 **游客 session**；主动登录是 guest → 正式账号的 **account
+/// link**，不是从无用户变为有用户。logout / refresh 失败后应回到 guest bootstrap，
+/// 而不是“完全空用户”。
+///
+/// 边界：
+/// - [sessionId]：服务端 session 标识（游客或正式均可）。
+/// - [guestId]：游客身份锚点，account link 时随登录请求带给服务端做数据合并。
+/// - [deviceId]：由 [ApiRequestContext] 的 Device-Id header 承载，不在此重复存储。
+/// - refresh/access token：仅在 [AuthTokenStore] / [AuthTokenSnapshot]，不进 UI。
 class AuthSession {
-  const AuthSession({required this.user});
+  const AuthSession({
+    required this.user,
+    this.sessionId,
+    this.guestId,
+  }) : kind = AuthSessionKind.authenticated;
 
-  const AuthSession.guest() : user = null;
+  const AuthSession.guest({this.sessionId, this.guestId})
+    : user = null,
+      kind = AuthSessionKind.guest;
 
-  /// 当前用户。
-  ///
-  /// null 表示游客 session，而不是“尚未加载”；是否加载中由 AuthState.isLoading 表达。
+  const AuthSession.recovering({this.sessionId, this.guestId})
+    : user = null,
+      kind = AuthSessionKind.recovering;
+
   final AuthUser? user;
+  final AuthSessionKind kind;
 
-  bool get isLoggedIn => user != null;
+  /// 服务端 session id（游客或正式用户）。
+  final String? sessionId;
+
+  /// 游客 id，account link 时传给服务端；正式登录后是否保留由服务端策略决定。
+  final String? guestId;
+
+  bool get isLoggedIn => kind == AuthSessionKind.authenticated && user != null;
+
+  bool get isGuest => kind == AuthSessionKind.guest;
+
+  bool get isRecovering => kind == AuthSessionKind.recovering;
+
+  bool get hasLinkedAccount => isLoggedIn;
 }

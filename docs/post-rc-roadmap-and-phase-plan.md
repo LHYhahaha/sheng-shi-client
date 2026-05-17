@@ -240,6 +240,26 @@ flowchart TB
 
 ### 4.2 子阶段拆分
 
+#### A1.5 — Guest Session Bootstrap & Account Link（设计 + skeleton，2026-05-17）
+
+| 项 | 内容 |
+| --- | --- |
+| **目标** | 把「游客也是 session」写入 API/session 设计；登录 = account link，不是简单换 token |
+| **产品模型** | 首次启动 → device/install id → **guest bootstrap** → guest token；主动登录携带 guestId/deviceId → 服务端合并游客数据 → authenticated token；logout/refresh 失败 → cleanup → **重新 guest bootstrap**（推荐），非空 logged-out |
+| **已完成** | 文档（本计划、`api-integration-plan`、`networking-guidelines`、`remote-contract-index`）；`AuthSessionKind`、`AuthTokenSessionKind` 字段注释；`GuestSessionBootstrap` cleanup 后 hook（stub，无网络） |
+| **仍 defer** | 真实 `POST /auth/guest/session`（名称待定）；account link 登录 API；logout 后 guest 是否复用同一 guestId（服务端确认）；login 成功后 entitlement/wallet/profile/my list/progress 全量 refresh |
+| **依赖** | A1（token storage）；**A4 提前**：Device-Id / install id 是 guest identity 基础 |
+| **与 A7** | cleanup feature hooks 后调用 `GuestSessionBootstrap`；mock 阶段 entitlement 等回到 **guest-like default**，非保留正式用户态 |
+
+**流程摘要：**
+
+```text
+首次启动: install/device id → guest bootstrap → guest token → Home/For You 以游客浏览
+主动登录: login(guestId, deviceId, guestSession) → server link → authenticated token → refresh 各 feature
+logout: cleanup hooks → guest bootstrap（推荐新 guest session，同 device）
+refresh failed: clear auth token → cleanup → guest bootstrap → reload guest-safe 数据
+```
+
 #### A1 — secure token storage ✅（2026-05-17，客户端骨架）
 
 | 项 | 内容 |
@@ -280,7 +300,7 @@ flowchart TB
 | **文件影响** | `api_request_context_provider`、`device_capability_probe` |
 | **禁止项** | 不在 feature 手写 header |
 | **测试** | `api_request_context_provider_test` |
-| **依赖** | 可与 A1 并行 |
+| **依赖** | 可与 A1 并行；**guest bootstrap 依赖稳定 Device-Id（A1.5 门禁）** |
 
 #### A5 — remote switch 环境策略 dev/staging/prod
 
@@ -308,7 +328,8 @@ flowchart TB
 | --- | --- |
 | **目标** | logout / refresh failed / session expired 时清 feature 缓存与播放器 |
 | **已完成** | `SessionCleanupCoordinator` 单飞 + hook 隔离失败；`lib/bootstrap/feature_session_cleanup.dart` 注册；Entitlement/Wallet/Profile/MyList/Store/Membership reset；Player pause/dispose/overlay/recharge；`SessionCleanupAuthRepository` 包装 logout/delete |
-| **仍 defer** | Toast/Modal 统一关闭（仅文档策略）；真实 API 后各 repository reload；AuthController 外其他入口显式 cleanup |
+| **仍 defer** | Toast/Modal 统一关闭；真实 guest bootstrap 网络；login 后 feature 全量 reload |
+| **后续** | cleanup 后走 A1.5 `GuestSessionBootstrap`（当前 stub） |
 | **禁止项** | core 不 import features；UI 不直接调 coordinator（logout/delete 经 repository） |
 | **测试** | `session_cleanup_coordinator_test`、`feature_session_cleanup_test`、`player_session_cleanup_test` |
 | **依赖** | **A2** |
@@ -334,7 +355,9 @@ flowchart TB
 | --- | --- | --- |
 | 1 | 空 token 调 required 接口 | A3 |
 | 2 | 401 并发刷新风暴 | A2 单飞队列 |
-| 3 | refresh 失败后旧 entitlement 仍显示 | A7 |
+| 3 | refresh 失败后旧 entitlement 仍显示 | A7 + A1.5 guest bootstrap |
+| 3b | 生产无 guest bootstrap，首次启动/ logout 后无有效 session | **A1.5（P0）** |
+| 3c | logout 后仍展示正式用户会员/余额 | A7 cleanup + A1.5 |
 | 4 | strict 字段 fallback 导致假成功 | A6 |
 | 5 | staging/prod baseUrl 混用 | A5 + CI guard |
 | 6 | `grantMock*` 误留在 remote repository | code review + architecture test |
@@ -663,6 +686,8 @@ P6 + O4 + A7 ──► BIZ-4/5/7
 - [x] A3 required 空 token fail-fast（`sessionRequired`）
 - [ ] A6 strict DTO（auth、entitlement、order、playback source）
 - [x] A7 session cleanup（feature hooks + player pause/dispose；modal/toast defer）
+- [ ] A1.5 guest bootstrap 真实 API + account link 登录（设计/skeleton 已完成）
+- [ ] 生产环境 guest bootstrap 策略（P0）
 - [ ] 生产 remote repository 无 `grantMock*`
 
 ### 商业 / 权益
@@ -729,6 +754,7 @@ flutter test
 | --- | --- |
 | O1–O5 | Planned |
 | A1–A3 | **Done**（客户端 session/network 骨架；见 §4.6） |
+| A1.5 | **Design + skeleton**（guest bootstrap / account link；见 §4.2 A1.5） |
 | A4–A6 | Planned |
 | A7 | **Done**（见 §4.2 A7） |
 | P1–P7 | Planned |

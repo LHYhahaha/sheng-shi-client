@@ -83,8 +83,8 @@ final result = await apiClient.get<MyDto>(
   `Platform` 自动识别，`accessToken` 来自 `AuthTokenStore` snapshot。
 - Post-RC Track A1–A3 已落地：`AuthTokenStore` + storage 抽象（默认 in-memory）、
   `ApiAuthPolicy.required` 空 token 客户端 fail-fast、`ApiClient` 401 单飞 refresh + 重试一次。
-  仍 defer：生产默认 secure storage、`authRefreshExecutorProvider` 接真实 refresh API、
-  各 feature 完整 cleanup hook。
+- A1.5 / A7：游客 session 模型与 cleanup → `GuestSessionBootstrap`（stub，无网络）。
+  仍 defer：生产 guest bootstrap API、account link 登录、生产 secure storage、真实 refresh。
 
 ## 异常类型
 
@@ -208,4 +208,25 @@ Post-RC Track A1–A3 已新增/扩展 `AuthTokenStore`、`AuthRefreshCoordinato
 - feature presentation/controller **不得**直接 import token storage 实现或调用 refresh coordinator；
   401 恢复只经 `ApiClient`。
 - refresh 失败后 coordinator 必须释放 in-flight，避免永久挡住后续 401。
-- A7 已接入 feature cleanup hook（bootstrap 注册）；Toast/Modal 关闭策略仍 defer。
+- A7 已接入 feature cleanup hook；cleanup 后调用 `GuestSessionBootstrap`（stub）。
+- Toast/Modal 关闭策略仍 defer。
+
+### ApiAuthPolicy 阶段性语义与未来扩展
+
+**当前 enum（不变）：** `none` | `required`
+
+| 策略 | 当前行为 |
+| --- | --- |
+| `none` | 不带 `Authorization`。用于 guest bootstrap、login/account link、refresh。 |
+| `required` | 必须有 **任意有效 session access token**（游客或正式均可）。无 token → `sessionRequired`，不发 HTTP。 |
+
+**不等于**「必须正式登录用户」。游客 bootstrap 后拿到的 guest access token 同样满足 `required`。
+
+**未来可能扩展（文档先行，接 API 时再改 enum + 全量测试）：**
+
+| 未来策略 | 含义 |
+| --- | --- |
+| `none` | 完全公开 |
+| `guestOrUser` | 游客或正式 token 均可（与当前 `required` 接近） |
+| `userRequired` | 必须正式账号 token（钱包、片单、会员订单等） |
+| refresh 专用 | 继续 `none` + `apiSkipAuthRefreshExtraKey`，避免 401 递归 refresh |

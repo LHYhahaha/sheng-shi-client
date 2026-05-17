@@ -57,6 +57,7 @@ void main() {
         .cleanup(SessionCleanupReason.refreshFailed);
 
     final entitlement = container.read(entitlementControllerProvider);
+    expect(entitlement.isGuest, isTrue);
     expect(entitlement.isMember, isFalse);
     expect(entitlement.coinBalance, 0);
     expect(entitlement.unlockedEpisodeIds, isEmpty);

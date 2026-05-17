@@ -49,6 +49,29 @@ defer 项。不接真实服务端，不替换 mock 默认实现，不改变 UI�
 | Auth / Session | `USE_REMOTE_AUTH_API` | mock | `lib/features/auth/data/remote_auth_repository.dart` | `lib/features/auth/data/remote/auth_remote_data_source.dart` | `lib/features/auth/data/dto/`、`lib/features/auth/data/mapper/auth_mapper.dart` | 同上 | login / oauth / refresh 为 `none`（refresh 带 `apiSkipAuthRefreshExtraKey`）；session / logout / delete 为 `required` | `auth_remote_api_skeleton_test.dart`、`test/core/auth/*`、`api_client_session_auth_test.dart` | Google/Facebook SDK；**secure storage 未默认**；真实 refresh executor；logout/delete 各 feature cache/player cleanup（A7） |
 | Profile Summary | `USE_REMOTE_PROFILE_API` | mock | `lib/features/profile/data/remote_profile_repository.dart` | `lib/features/profile/data/remote/profile_remote_data_source.dart` | `profile_summary_dto.dart`、`profile_mapper.dart` | `GET /profile` | `required` | `test/features/auth/auth_remote_api_skeleton_test.dart` | Profile 会员卡/金币卡真实聚合、Profile 与 Wallet/Entitlement refresh 时机、头像真实图片渲染 |
 
+## Session 身份与 Token 类型（Guest / User，2026-05-17）
+
+产品模型：App 默认 **guest session**；登录为 **account link**。客户端 `ApiAuthPolicy.required`
+= 需要任意有效 session token（guest 或正式均可），见 `docs/networking-guidelines.md`。
+
+| 身份要求 | 说明 | 示例接口 |
+| --- | --- | --- |
+| **none** | 无 token | guest bootstrap（待增）、`POST /auth/login/*`、`POST /auth/refresh`（body 带 refreshToken） |
+| **guestOrUser**（= 当前 `required`） | guest 或正式 access token | `GET /home/feed`、`GET /dramas/*`、游客期 entitlement（若后端允许） |
+| **userRequired**（未来） | 仅正式用户 token | Wallet、My list、Entitlement 写、`POST /orders`、`GET /profile` |
+| **refresh** | 专用 none + 跳过 401 refresh 队列 | `POST /auth/refresh` |
+
+| 接口 | 当前 `ApiAuthPolicy` | 目标 token | 备注 |
+| --- | --- | --- | --- |
+| `POST /auth/guest/session`（待定） | none | — | bootstrap；返回 guest token |
+| `POST /auth/login/device` \| oauth | none | — | 请求带 guestId + deviceId |
+| `POST /auth/refresh` | none + skip refresh | guest 或 user refresh | 不与 required 空 token 冲突 |
+| `GET /auth/session` | required | 任意 | 有 token 时恢复；无 token 应走 guest bootstrap |
+| `GET /home/*` `GET /dramas/*` `GET /feed/*` | none（当前） | 可选 guest | 联调时可改 guestOrUser |
+| `GET /episodes/*/playback-source` | required | 任意 / user（待产品） | 播放源 |
+| Wallet / My list / Entitlement / orders | required | **user**（推荐） | 正式账号数据 |
+| `POST /auth/logout` `DELETE /account` | required | 当前 session | 成功后 guest bootstrap |
+
 ## Auth Policy 总览
 
 公共或本阶段按公共处理：

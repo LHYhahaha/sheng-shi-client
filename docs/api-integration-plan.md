@@ -119,8 +119,8 @@ Timeout defaults:
 
 Error mapping:
 
-- `401 unauthorized`: token refresh if available; otherwise transition to guest
-  or login-required state.
+- `401 unauthorized`: token refresh if available; otherwise cleanup + guest
+  bootstrap (not empty logged-out).
 - `403 entitlement`: user lacks entitlement, membership, coins, or unlock.
 - `403 source_expired`: signed playback source expired and can be refreshed.
 - `404`: missing content/source/order. For playback source, show retry or
@@ -172,27 +172,53 @@ Current mock:
 - `MockAuthRepository`
 - `AuthController`
 
+#### Guest session & account link（产品模型，2026-05-17 设计）
+
+App **不是**「未登录 = 无用户」。默认是 **游客账户 session**；用户主动登录是
+**account link / upgrade**（游客数据合并到正式账号），不是客户端简单替换 token。
+
+| 流程 | 客户端 | 服务端 |
+| --- | --- | --- |
+| App bootstrap | `Device-Id` 就绪 → **guest bootstrap**（无 token 或 bootstrap 专用接口） | 创建/恢复游客，返回 guest token + guestId |
+| 游客使用 | 带 guest access token 调 `required` 接口（当前语义：任意有效 session token） | 按策略返回游客 entitlement/进度等 |
+| 主动登录 | `POST login/*` 携带 **current guest session / guestId / deviceId** | link 游客 → 正式账号，合并数据 |
+| 登录成功 | 存 authenticated token；**refresh** entitlement / wallet / profile / my list / playback progress | 返回正式 session |
+| Logout | cleanup hooks → **guest bootstrap**（推荐同 device 新 guest session） | 返回 guest session |
+| Refresh failed | clear token → cleanup → guest bootstrap → reload guest-safe 数据 | 可选 guest refresh |
+
+推荐策略（待服务端确认）：logout 后 **重新 bootstrap guest**，不保留失效正式用户本地态。
+
+Skeleton（无真实网络）：`GuestSessionBootstrap`、`AuthSessionKind`、`AuthTokenSessionKind`。
+
 Future endpoints:
 
+- `POST /auth/guest/session`（或等价 bootstrap，**待后端命名**）
+  - Request: `deviceId`, `platform`, `appVersion`, `lang`；可选 install id。
+  - Response: guest `accessToken`, `refreshToken`, `guestId`, `sessionId`.
+  - Auth: `ApiAuthPolicy.none`。
+- `POST /auth/guest/refresh`（若与 user refresh 分离）
+  - Request: guest `refreshToken`.
+  - Response: guest token 包。
 - `GET /auth/session`
   - Request: auth token if available, device id.
-  - Response: `isAuthenticated`, `user`, `token`, `serverTime`, `isNewUser`.
+  - Response: `isAuthenticated`, `user`, `token`, `serverTime`, `isNewUser`, `guestId`.
+  - 有 token 时用 `required`；**无 token 的纯 bootstrap 必须走 guest bootstrap 接口**，不要与 session recovery 混用。
 - `POST /auth/login/device`
-  - Request: `deviceId`, `platform`, `appVersion`, `lang`.
-  - Response: session.
+  - Request: `deviceId`, `platform`, `appVersion`, `lang`, **`guestId`**, optional guest session proof.
+  - Response: authenticated session（account link 后）。
 - `POST /auth/login/oauth`
   - Request: `provider`, `idToken` or `accessToken`, `nonce`, `deviceId`,
-    `platform`, `appVersion`, `lang`.
-  - Response: session.
+    `platform`, `appVersion`, `lang`, **`guestId`**.
+  - Response: authenticated session.
 - `POST /auth/refresh`
-  - Request: `refreshToken`.
+  - Request: `refreshToken`（guest 或 user，由 token 类型决定）。
   - Response: token.
 - `POST /auth/logout`
   - Request: refresh token/device id.
-  - Response: guest session.
+  - Response: guest session 或指示客户端再调 guest bootstrap。
 - `DELETE /account`
   - Request: confirmation token or password if required.
-  - Response: guest session.
+  - Response: guest session；客户端 cleanup + guest bootstrap。
 
 Errors:
 

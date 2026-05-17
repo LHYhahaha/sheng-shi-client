@@ -5,10 +5,17 @@ import '../config/app_environment.dart';
 import 'api_exception.dart';
 import 'api_request_context.dart';
 
-/// API 鉴权策略。
+/// API 鉴权策略（当前阶段仅 [none] 与 [required]；游客/正式细分见文档）。
 ///
-/// - [none]：不带 Authorization（登录、OAuth、refresh 等）。
-/// - [required]：必须有 access token；缺失时客户端 fail-fast，不发起 HTTP。
+/// 阶段性语义（Post-RC Track A）：
+/// - [none]：完全公开接口，不带 Authorization（含 guest bootstrap、login/link、refresh）。
+/// - [required]：需要 **任意有效 session access token**（游客 token 或正式用户 token
+///   均可），缺失时 fail-fast 抛 [ApiErrorCode.sessionRequired]，不发起 HTTP。
+///
+/// 不等于“必须正式登录用户”。未来可能扩展（文档先行，enum 暂不增以免破坏 skeleton）：
+/// - `guestOrUser`：游客或正式 token 均可（与当前 required 接近）。
+/// - `userRequired`：必须正式账号 token（会员/钱包/片单等）。
+/// - refresh 专用策略继续配合 [apiSkipAuthRefreshExtraKey]。
 enum ApiAuthPolicy { none, required }
 
 typedef ApiRequestContextReader = ApiRequestContext Function();
