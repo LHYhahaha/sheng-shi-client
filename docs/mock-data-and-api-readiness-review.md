@@ -30,6 +30,14 @@
 
 **仍 defer**：Profile DTO、FavoriteMutation、Wallet 子记录 status、全站 DTO 迁移。
 
+## Home/Drama Remote Dry Run（2026-05-17）
+
+- fake HTTP：`test/helpers/recording_http_adapter.dart`、`drama_remote_dry_run_harness.dart`。
+- 覆盖：`GET /home/categories`、`GET /home/feed`；`USE_REMOTE_DRAMA_API` 默认 **false**。
+- 验证：A4 headers、envelope `code:0`、A6 strict `dramaId`、display title/cover fallback、分页 `nextPageToken`。
+- staging：`API_BASE_URL` + `USE_REMOTE_DRAMA_API=true`（见 `remote-contract-index.md`）。
+- remote 错误不静默回退 mock；Home 真实联调后应走 error/retry UI（本轮未改 UI）。
+
 ## 模块现状与 API 对接建议
 
 | 模块 | 当前数据来源 | 当前 readiness | 未来 repository / endpoint 建议 | 主要注意点 |

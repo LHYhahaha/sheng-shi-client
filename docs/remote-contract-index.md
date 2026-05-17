@@ -45,12 +45,29 @@ Subtitle/PreviewSprite 全量 strict、全站 DTO 迁移。
 
 详见 `docs/mock-data-and-api-readiness-review.md` § DTO Strict vs Display Fallback。
 
+## Home/Drama Remote Dry Run（2026-05-17）
+
+- **Harness**：`test/helpers/drama_remote_dry_run_harness.dart` + `RecordingHttpAdapter`（无真实 server）。
+- **测试**：`flutter test test/features/drama/drama_remote_dry_run_test.dart`
+- **只读 endpoints**：`GET /home/categories`、`GET /home/feed`（`none`，无 `Authorization`）。
+- **Staging 手动联调**（不默认开启）：
+
+```bash
+flutter run \
+  --dart-define=APP_ENV=staging \
+  --dart-define=API_BASE_URL=https://<your-staging-host> \
+  --dart-define=USE_REMOTE_DRAMA_API=true
+```
+
+- **错误策略**：remote 失败抛错；Home UI 应显示 error/retry，**不得静默回退 mock**。
+- **本轮不包含**：Player playback source、Entitlement、Commerce、IAP。
+
 ## 全局索引
 
 | 模块 | Remote 开关 | 默认 | Remote repository | Remote datasource | DTO / Mapper | Endpoint skeleton | Auth policy | 测试 | 主要 defer |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Network / ApiClient | 无 | 统一启用 | 不适用 | `lib/core/network/api_client.dart` | `ApiRequestContext`、`ApiPage`、`ApiException`（含 `sessionRequired`） | 所有 remote skeleton 共用 | 调用方显式传 `none/required`；`required` 无 token **不发 HTTP** | `api_client_test.dart`、`api_client_session_auth_test.dart`、`api_request_context_provider_test.dart` | 真实 device id/package info；**默认仍 in-memory token**；`authRefreshExecutorProvider` 真实 refresh；A7 cleanup hooks；网络日志脱敏 |
-| Home / Drama | `USE_REMOTE_DRAMA_API`，兼容旧 `USE_REMOTE_API` | mock | `lib/features/drama/data/remote_drama_repository.dart` | `lib/features/drama/data/remote/drama_remote_data_source.dart` | `lib/features/drama/data/dto/`、`lib/features/drama/data/mapper/drama_mapper.dart` | `GET /home/categories`、`GET /home/feed` | `none`，公共首页内容假设 | `test/features/drama/drama_mapper_test.dart`、`test/features/drama/remote_drama_repository_test.dart` | 真实分页字段、内容 locale/region、推荐策略、图片 CDN 策略 |
+| Home / Drama | `USE_REMOTE_DRAMA_API`，兼容旧 `USE_REMOTE_API` | mock | `lib/features/drama/data/remote_drama_repository.dart` | `lib/features/drama/data/remote/drama_remote_data_source.dart` | `lib/features/drama/data/dto/`、`lib/features/drama/data/mapper/drama_mapper.dart` | `GET /home/categories`、`GET /home/feed` | `none`，公共首页内容假设 | `drama_remote_dry_run_test.dart`、`drama_mapper_test.dart`、`remote_drama_repository_test.dart` | **Dry run Done**（fake adapter）；staging 见下；真实分页/locale/CDN defer |
 | MediaResource | 无 | domain/shared model | 不适用 | 不适用 | `lib/shared/media/media_resource.dart` | 不适用 | 不适用 | Home/Drama/My list/Profile mapper tests | 图片缓存、占位图、错误图、CDN resize、全站图片字段迁移 |
 | Player / Drama detail / For You | `USE_REMOTE_PLAYER_API` | mock | `remote_player_content_repository.dart`、`remote_player_feed_repository.dart` | `remote/player_remote_data_source.dart` | `player_content_dto.dart`、`player_episode_dto.dart`、`player_feed_item_dto.dart`、`player_feed_page_dto.dart`；`player_content_mapper.dart`、`player_feed_mapper.dart` | `GET /dramas/{dramaId}`、`GET /dramas/{dramaId}/episodes`、`GET /feed/for-you` | `none`，内容详情/feed 当前按公共内容假设；真实个性化可改 required | `test/features/player/player_remote_api_skeleton_test.dart` | 真实个性化 feed auth 策略、详情分页、内容多语言、真实 access 对象 |
 | Playback Source | `USE_REMOTE_PLAYER_API` | mock | `remote_player_playback_source_repository.dart` | `remote/playback_source_remote_data_source.dart` | `playback_source_dto.dart`、`subtitle_track_dto.dart`、`preview_sprite_dto.dart`；`playback_source_mapper.dart` | `GET /episodes/{episodeId}/playback-source` | `required` | `test/features/player/player_remote_api_skeleton_test.dart` | source refresh、backup HLS fallback、subtitle UI、preview sprite UI、真实 entitlement/access、CDN signed URL 过期 |

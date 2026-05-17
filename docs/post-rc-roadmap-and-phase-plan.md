@@ -326,6 +326,19 @@ refresh failed: clear auth token → cleanup → guest bootstrap → reload gues
 | **仍 defer** | Profile DTO、FavoriteMutation、Wallet 子记录、Subtitle/Sprite 全量 |
 | **依赖** | 后端 schema 冻结（见 §4.4） |
 
+#### Home/Drama Remote Integration Dry Run ✅（2026-05-17）
+
+| 项 | 内容 |
+| --- | --- |
+| **目标** | fake HTTP dry run 验证 Home/Drama 只读 remote 链路（不接真实 server） |
+| **Harness** | `test/helpers/recording_http_adapter.dart`、`fake_api_envelope.dart`、`drama_remote_dry_run_harness.dart` |
+| **测试** | `test/features/drama/drama_remote_dry_run_test.dart` |
+| **Endpoints** | `GET /home/categories`、`GET /home/feed`（`ApiAuthPolicy.none`） |
+| **验证** | headers、envelope、`ApiMappingException` strict、`USE_REMOTE_DRAMA_API` provider 切换；**默认仍 mock** |
+| **Staging** | `flutter run --dart-define=API_BASE_URL=https://<staging-host> --dart-define=USE_REMOTE_DRAMA_API=true`（无默认 staging URL） |
+| **不包含** | Player playback source、Entitlement、Wallet/Store/Membership、真实 IAP |
+| **错误策略** | remote 失败抛 `ApiException` / wrapped `ApiMappingException`；**不静默 fallback mock** |
+
 #### A7 — session cleanup（feature cache + player session）✅（2026-05-17，客户端骨架）
 
 | 项 | 内容 |

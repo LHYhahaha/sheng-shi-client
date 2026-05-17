@@ -11,7 +11,10 @@ class DramaMapper {
   static const _displayTitleFallback = 'Untitled';
 
   DramaCategory mapCategory(DramaCategoryDto dto) {
-    return DramaCategory(id: dto.id, title: dto.title);
+    return DramaCategory(
+      id: dto.id,
+      title: dto.title.isEmpty ? _displayTitleFallback : dto.title,
+    );
   }
 
   Drama mapDrama(DramaDto dto) {

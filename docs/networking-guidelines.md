@@ -89,6 +89,9 @@ final result = await apiClient.get<MyDto>(
   - feature **不得**自行拼上述 header；测试 override 各 runtime provider。
 - Post-RC Track A1–A3 已落地：`AuthTokenStore` + storage 抽象（默认 in-memory）、
   `ApiAuthPolicy.required` 空 token 客户端 fail-fast、`ApiClient` 401 单飞 refresh + 重试一次。
+- **Home/Drama dry run**（2026-05-17）：`RecordingHttpAdapter` 模拟 envelope；`GET /home/categories`、
+  `GET /home/feed` 为 `none`（无 Authorization）。`USE_REMOTE_DRAMA_API` 默认 false；staging 见
+  `docs/remote-contract-index.md`。remote 失败不得静默 fallback mock。
 - **A6**（2026-05-17）：远程 DTO 使用 `JsonFieldParser` strict 解析；失败抛
   `ApiMappingException`（含 `dtoName`/`field`）。展示字段（title/cover）在 mapper fallback；
   业务字段（id/token/hlsUrl/price/orderStatus/unlockType）缺失即错误。remote data source 对

@@ -44,7 +44,10 @@ mock repository；本阶段不接真实服务端、不打开 remote 默认开关
   strict（Auth/Player/Drama/Entitlement/Wallet/Store/Membership/Order/MyList）；unknown enum 与
   非 map payload 不再伪装成功。
 
-下一步进入真实 API 联调前的分域验证（A5+、A1.5 真实 bootstrap），仍保持 remote 默认关闭。
+- **Home/Drama Remote Dry Run**（2026-05-17）：`drama_remote_dry_run_test` + `RecordingHttpAdapter` 验证只读
+  categories/feed 链路（headers、envelope、strict DTO、provider 切换）；默认仍 mock。
+
+下一步进入真实 API 联调前的分域验证（A5+、staging Home/Drama、A1.5 真实 bootstrap），仍保持 remote 默认关闭。
 
 ## Phase F 目标
 
