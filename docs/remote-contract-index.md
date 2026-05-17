@@ -7,6 +7,8 @@ defer 项。不接真实服务端，不替换 mock 默认实现，不改变 UI�
 
 ## Release 封板前提（Current）
 
+- **封板与 QA**：[release-seal-checklist.md](release-seal-checklist.md) — RC 构建禁止 `USE_REMOTE_*` / 真实 `API_BASE_URL`；mock smoke 路径。
+
 - 所有 `USE_REMOTE_*` 默认 `false`；UI 默认 mock repository / mock payment / mock entitlement（`grantMock*`）。
 - **O3 Auth modal**：`auth.login` 全局弹窗 + mock provider 登录；真实 OAuth/login API defer。
 - 客户端 session/network 门禁（A1–A3）已就绪：storage 抽象、401 单飞 refresh + 重试一次、

@@ -8,11 +8,13 @@
 - 支付与权益走 mock（`grantMock*` / mock purchase delay）
 - Player / Unlock / Recharge / Membership / Toast / Wallet / Store 主链路已通过 Android 真机 RC 回归
 - QA P0/P1 无；RC P2 已收口
+- **Release Readiness Review 2（2026-05-17）**：mock RC **可封板**；见 [release-seal-checklist.md](release-seal-checklist.md)
 
 **本轮范围：** 只做方案与任务拆分，**不**改业务代码、不接真实 API/IAP、不迁移现有弹窗。
 
 相关文档：
 
+- [**Release Seal Checklist（封板 / QA / forbidden defines）**](release-seal-checklist.md)
 - [Remote Contract Index](remote-contract-index.md)
 - [Mock Data & API Readiness Review](mock-data-and-api-readiness-review.md)
 - [Global Overlay / Modal System Plan](global-overlay-modal-system-plan.md)
@@ -327,8 +329,8 @@ refresh failed: clear auth token → cleanup → guest bootstrap → reload gues
 | --- | --- |
 | **目标** | 统一 `RemoteApiSwitches` + `RemoteApiReadinessGuard`；staging smoke 文档；默认仍 mock |
 | **完成** | 风险分级；prod/staging/dev guard；`effective` fail-closed；legacy `USE_REMOTE_API` → drama |
-| **文档** | [remote-api-staging-checklist.md](remote-api-staging-checklist.md) |
-| **不做** | 不接真实 API；不改 provider 默认选型为 effective（可选下一步） |
+| **文档** | [remote-api-staging-checklist.md](remote-api-staging-checklist.md)、[release-seal-checklist.md](release-seal-checklist.md) |
+| **不做** | 不接真实 API；不改 provider 默认选型为 effective（A8.1 defer） |
 | **测试** | `remote_api_readiness_guard_test.dart`、`remote_api_guard_boundary_test.dart` |
 | **依赖** | A4、A6、A7 |
 
