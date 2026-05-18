@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../app_root_navigator_key.dart';
 import '../shell/app_shell.dart';
+import '../../features/auth/presentation/pages/account_cancellation_page.dart';
 import '../../features/auth/presentation/pages/account_page.dart';
 import '../../features/auth/presentation/pages/auth_page.dart';
 import '../../features/home/presentation/pages/home_page.dart';
@@ -12,7 +13,9 @@ import '../../features/my_list/presentation/pages/my_list_page.dart';
 import '../../features/player/presentation/pages/player_page.dart';
 import '../../features/profile/presentation/pages/language_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
+import '../../features/profile/presentation/pages/legal_placeholder_page.dart';
 import '../../features/profile/presentation/pages/settings_page.dart';
+import '../../l10n/app_localizations.dart';
 import '../../features/store/presentation/pages/store_page.dart';
 import '../../features/wallet/domain/wallet_record.dart';
 import '../../features/wallet/presentation/pages/wallet_history_page.dart';
@@ -135,6 +138,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.settings,
         name: RouteNames.settings,
         builder: (context, state) => const SettingsPage(),
+      ),
+      GoRoute(
+        path: RoutePaths.accountCancellation,
+        name: RouteNames.accountCancellation,
+        builder: (context, state) => const AccountCancellationPage(),
+      ),
+      GoRoute(
+        path: RoutePaths.userAgreement,
+        name: RouteNames.userAgreement,
+        builder: (context, state) =>
+            LegalPlaceholderPage(title: context.l10n.settingsUserAgreement),
+      ),
+      GoRoute(
+        path: RoutePaths.privacyPolicy,
+        name: RouteNames.privacyPolicy,
+        builder: (context, state) =>
+            LegalPlaceholderPage(title: context.l10n.settingsPrivacyPolicy),
       ),
       GoRoute(
         path: RoutePaths.transactionHistory,

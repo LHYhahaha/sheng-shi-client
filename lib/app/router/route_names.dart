@@ -11,6 +11,9 @@ abstract final class RouteNames {
   static const membership = 'membership';
   static const language = 'language';
   static const settings = 'settings';
+  static const accountCancellation = 'account-cancellation';
+  static const userAgreement = 'user-agreement';
+  static const privacyPolicy = 'privacy-policy';
   static const transactionHistory = 'transaction-history';
   static const consumptionHistory = 'consumption-history';
   static const recordCoins = 'record-coins';

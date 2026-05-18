@@ -79,6 +79,63 @@ class AppLocalizations {
     en: 'Settings will be available in a later phase.',
     zh: '设置页将在后续阶段开放。',
   );
+  String get settingsAccountCancellation =>
+      _text(en: 'Account cancellation', zh: '账号注销');
+  String get settingsUserAgreement => _text(en: 'User Agreement', zh: '用户协议');
+  String get settingsPrivacyPolicy => _text(en: 'Privacy Policy', zh: '隐私政策');
+  String get settingsLegalPlaceholder => _text(
+    en: 'The full document will be available in a later phase.',
+    zh: '完整文档将在后续阶段提供。',
+  );
+  String get accountCancellationTitle =>
+      _text(en: 'Account cancellation', zh: '账号注销');
+  String get accountCancellationDescription => _text(
+    en: 'Deleting your account permanently removes profile data, wallet balance, membership, and playback history from this device after confirmation.',
+    zh: '注销账号后，将按规则删除个人资料、钱包与会员等数据；确认后本设备将退出当前登录态。',
+  );
+  String get accountCancellationInfoCardTitle =>
+      _text(en: 'The following will be deleted', zh: '将删除以下信息');
+  String get accountCancellationInfoProfile =>
+      _text(en: 'Profile and login identity', zh: '个人资料与登录身份');
+  String get accountCancellationInfoWallet =>
+      _text(en: 'Wallet balance and transaction records', zh: '钱包余额与交易记录');
+  String get accountCancellationInfoMembership =>
+      _text(en: 'Membership status and benefits', zh: '会员状态与权益');
+  String get accountCancellationInfoPlayback =>
+      _text(en: 'Unlock history and playback progress', zh: '解锁记录与播放进度');
+  String get accountCancellationRiskTitle =>
+      _text(en: 'Risk notice', zh: '风险提示');
+  String get accountCancellationRiskBody => _text(
+    en: 'Account deletion cannot be undone. You must have zero paid coins and no active membership before the server accepts deletion.',
+    zh: '账号注销后无法恢复。服务端要求充值金币为 0 且非会员状态方可注销。',
+  );
+  String get accountCancellationAcceptRisk => _text(
+    en: 'I accept the deletion risks and agree to delete my account',
+    zh: '我接受删除风险并同意删除我的账户',
+  );
+  String accountCancellationDeleteButtonCountdown(int seconds) =>
+      _text(en: 'Delete account (${seconds}s)', zh: '删除账号（${seconds}s）');
+  String get accountCancellationDeleteButtonReady =>
+      _text(en: 'Delete account', zh: '删除账号');
+  String get accountCancellationConfirmTitle =>
+      _text(en: 'Delete account?', zh: '确认删除账号？');
+  String get accountCancellationConfirmMessage => _text(
+    en: 'Deleted account data cannot be recovered. Do you want to continue?',
+    zh: '删除后账号信息将无法找回，请确认是否继续。',
+  );
+  String get accountCancellationConfirmCancel => _text(en: 'Cancel', zh: '取消');
+  String get accountCancellationConfirmDelete =>
+      _text(en: 'Confirm delete', zh: '确认删除');
+  String get accountCancellationSuccess =>
+      _text(en: 'Account deleted', zh: '账号已删除');
+  String get accountDeletionRejectedNonZeroBalance => _text(
+    en: 'Paid coin balance must be zero before deleting your account.',
+    zh: '充值金币需为 0 才能注销账号。',
+  );
+  String get accountDeletionRejectedActiveMembership => _text(
+    en: 'Please cancel membership before deleting your account.',
+    zh: '请先取消会员后再注销账号。',
+  );
   String get authDeviceLogin => _text(en: 'Continue with Device', zh: '使用设备登录');
   String get authGoogleLogin =>
       _text(en: 'Sign in with Google', zh: '使用 Google 登录');

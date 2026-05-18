@@ -1,3 +1,4 @@
+import '../domain/account_deletion_exception.dart';
 import '../domain/auth_repository.dart';
 import '../domain/auth_session.dart';
 
@@ -12,6 +13,9 @@ class MockAuthRepository implements AuthRepository {
     sessionId: 'guest-sess-mock',
     guestId: 'guest-mock',
   );
+
+  /// 测试用：模拟服务端拒绝注销（余额不为 0 / 仍为会员等）。
+  AccountDeletionRejectedException? forcedDeleteRejection;
 
   @override
   Future<AuthSession> fetchSession() async {
@@ -53,6 +57,10 @@ class MockAuthRepository implements AuthRepository {
   @override
   Future<AuthSession> deleteAccount() async {
     await Future<void>.delayed(const Duration(milliseconds: 50));
+    final rejection = forcedDeleteRejection;
+    if (rejection != null) {
+      throw rejection;
+    }
     _session = const AuthSession.guest(
       sessionId: 'guest-sess-mock',
       guestId: 'guest-mock',

@@ -715,7 +715,7 @@ void main() {
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
   });
 
-  testWidgets('opens settings placeholder from profile', (tester) async {
+  testWidgets('opens settings list from profile', (tester) async {
     await tester.pumpWidget(buildDramaClientAppForTest());
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
@@ -728,10 +728,9 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Settings will be available in a later phase.'),
-      findsOneWidget,
-    );
+    expect(find.text('Account cancellation'), findsOneWidget);
+    expect(find.text('User Agreement'), findsOneWidget);
+    expect(find.text('Privacy Policy'), findsOneWidget);
   });
 
   testWidgets('changes app locale from language settings', (tester) async {

@@ -11,6 +11,9 @@ abstract final class RoutePaths {
   static const membership = '/membership';
   static const language = '/language';
   static const settings = '/settings';
+  static const accountCancellation = '/settings/account-cancellation';
+  static const userAgreement = '/settings/user-agreement';
+  static const privacyPolicy = '/settings/privacy-policy';
   static const transactionHistory = '/wallet/transaction-history';
   static const consumptionHistory = '/wallet/consumption-history';
   static const recordCoins = '/wallet/record-coins';

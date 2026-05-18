@@ -131,7 +131,7 @@ flutter run \
 - Entitlement 全部接口
 - `GET /auth/session`
 - `POST /auth/logout`
-- `DELETE /account`
+- `DELETE /account`（body 可选 `acceptedRisk` / `deviceId` / `sessionKind`；业务拒绝码见 `docs/auth/account-cancellation-plan.md`）
 - `GET /profile`
 
 说明：`GET /auth/session` 当前定义为 token-backed session recovery，因此使用
