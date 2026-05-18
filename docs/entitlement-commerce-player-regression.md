@@ -10,7 +10,7 @@ state instead of maintaining separate mock truth.
 
 真机 + Figma 深度测试发现播放器解锁链路存在 P0 音频泄漏问题，优先处理：
 
-- 计划文档：`docs/playback-unlock-hotfix-plan.md`
+- 历史计划文档：`docs/archive/2026-05-rc/playback-unlock-hotfix-plan.md`
 - 优先级：高于多语言 Phase G
 - 目标：锁定剧集 / 解锁弹窗 / 切 tab / 离开播放器时不再后台出声，并完成必要的解锁弹窗、Profile Settings、Wallet mock 默认值收口。
 

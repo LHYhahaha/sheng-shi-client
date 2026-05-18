@@ -3,7 +3,7 @@
 > **Document status: Current（封板说明）** — 本文描述当前客户端已经落地的全局
 > runtime 基础设施、配置合并优先级、设备分级、播放器消费链路，以及后续远程配置/
 > 多语言扩展边界。历史阶段计划见
-> [App Runtime Foundation Plan](app-runtime-foundation-plan.md)。
+> [App Runtime Foundation Plan](archive/2026-05-rc/app-runtime-foundation-plan.md)。
 
 ## 1. 目标
 
@@ -333,4 +333,3 @@ low -> RuntimePerformanceMode.ultraStable -> PlayerPerformanceMode.ultraStable
 - 有明确合并优先级和测试 override。
 - 播放器性能策略与预加载策略已经从 runtime 链路消费。
 - 真实远程配置、设备探针、多语言包下载仍在后续阶段，不阻塞当前版本。
-

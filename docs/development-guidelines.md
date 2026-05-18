@@ -470,7 +470,7 @@ build/app/outputs/flutter-apk/app-release.apk
 结构性整改必须先记录到：
 
 ```text
-docs/refactor-tracker.md
+docs/archive/2026-05-rc/refactor-tracker.md
 ```
 
 规则：

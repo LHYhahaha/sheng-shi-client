@@ -8,7 +8,7 @@
 相关文档：
 
 - [Remote API Staging Checklist](remote-api-staging-checklist.md) — **仅** internal staging 联调构建
-- [Post-RC Roadmap & Phase Plan](post-rc-roadmap-and-phase-plan.md)
+- [2026-05 RC Historical Archive](archive/2026-05-rc/README.md)
 - [Remote Contract Index](remote-contract-index.md)
 - [Entitlement Commerce Player Regression](entitlement-commerce-player-regression.md)
 

@@ -225,7 +225,7 @@ When implementation starts, update:
 
 - `README.md` with a clear `App Runtime / Global Overlay / Modal System` entry.
 - This document with implementation status.
-- `docs/app-runtime-foundation-plan.md` if runtime config controls modal behavior.
+- `docs/app-runtime-system.md` if runtime config controls modal behavior.
 - `docs/player-feed-engine-refactor-plan.md` if Player modal orchestration changes.
 
 README should explain:

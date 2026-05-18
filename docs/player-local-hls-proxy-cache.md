@@ -128,7 +128,7 @@ Any future local HLS cache/proxy work must compare at least these timings:
 - background audio behavior after tab switch, route pop, and app background.
 
 The result must be recorded in `docs/player-experience-architecture-plan.md` or
-`docs/player-playback-cache-plan.md` before production implementation starts.
+`docs/archive/2026-05-rc/player-playback-cache-plan.md` before production implementation starts.
 
 ## Current Implementation Status
 
@@ -150,4 +150,3 @@ local cache, first create a fresh production design covering:
 - Range support;
 - runtime fallback;
 - release-device metrics.
-

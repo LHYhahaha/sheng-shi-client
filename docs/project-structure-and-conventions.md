@@ -4,7 +4,7 @@
 
 - [技术架构](technical-architecture.md)
 - [多语言与首页数据架构规范](localization-and-home-data-architecture.md)
-- [开发排期](development-schedule.md)
+- [2026-05 RC 历史归档](archive/2026-05-rc/README.md)
 
 ## 1. 项目概览
 

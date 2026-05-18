@@ -15,18 +15,19 @@
 
 - [Release Seal Checklist](docs/release-seal-checklist.md)：RC 构建规则、禁止开关、QA smoke 路径。
 - [Remote API Staging Checklist](docs/remote-api-staging-checklist.md)：真实接口联调时如何安全打开 staging。
-- [Post-RC Roadmap & Phase Plan](docs/post-rc-roadmap-and-phase-plan.md)：后续阶段规划。
+- [Docs Archive 2026-05 RC](docs/archive/2026-05-rc/README.md)：已完成的历史计划与过程文档。
 
 ## 文档导航
 
 新成员建议按这个顺序阅读：
 
 1. 本文档：了解项目状态、运行、测试、打包和公共能力入口。
-2. [Release Seal Checklist](docs/release-seal-checklist.md)：了解当前 RC / release 的封板边界。
-3. [AppModal Supported Modals](docs/app-modal-supported-modals.md)：了解全局弹窗支持范围和使用方式。
-4. [App Runtime System](docs/app-runtime-system.md)：了解设备分级、播放器策略和运行时配置。
-5. [Remote Contract Index](docs/remote-contract-index.md)：了解未来真实 API 的模块开关和接口契约。
-6. [Project Structure And Conventions](docs/project-structure-and-conventions.md)：了解目录和分层规范。
+2. [Docs Index](docs/README.md)：查看当前有效文档和历史归档入口。
+3. [Release Seal Checklist](docs/release-seal-checklist.md)：了解当前 RC / release 的封板边界。
+4. [AppModal Supported Modals](docs/app-modal-supported-modals.md)：了解全局弹窗支持范围和使用方式。
+5. [App Runtime System](docs/app-runtime-system.md)：了解设备分级、播放器策略和运行时配置。
+6. [Remote Contract Index](docs/remote-contract-index.md)：了解未来真实 API 的模块开关和接口契约。
+7. [Project Structure And Conventions](docs/project-structure-and-conventions.md)：了解目录和分层规范。
 
 ## 环境要求
 
@@ -321,8 +322,8 @@ cleanup 会执行：
 
 文档：
 
-- [Entitlement Unlock Flow Plan](docs/entitlement-unlock-flow-plan.md)
 - [Entitlement Commerce Player Regression](docs/entitlement-commerce-player-regression.md)
+- [Mock Data And API Readiness Review](docs/mock-data-and-api-readiness-review.md)
 
 ### Localization
 
@@ -363,11 +364,9 @@ API / 联调：
 - [Bottom Navigation Assets](docs/bottom-navigation-assets.md)
 - [AppModal Supported Modals](docs/app-modal-supported-modals.md)
 
-历史计划和决策：
+历史归档：
 
-- [Post-RC Roadmap & Phase Plan](docs/post-rc-roadmap-and-phase-plan.md)
-- [Refactor Tracker](docs/refactor-tracker.md)
-- [Player Playback And Cache Plan](docs/player-playback-cache-plan.md)
+- [2026-05 RC Historical Archive](docs/archive/2026-05-rc/README.md)
 
 ## 后续明确 defer
 

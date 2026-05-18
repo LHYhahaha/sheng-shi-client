@@ -2,7 +2,7 @@
 
 日期：2026-05-15
 
-本文只评估当前 mock 数据、domain model、repository 边界到真实 API 的可迁移性，不接真实接口、不改 UI、不调整业务逻辑。结论基于当前 feature-first 结构、`docs/api-integration-plan.md`、`docs/player-source-and-cdn-spec.md`、`docs/entitlement-unlock-flow-plan.md` 和播放器资源调度相关文档。
+本文只评估当前 mock 数据、domain model、repository 边界到真实 API 的可迁移性，不接真实接口、不改 UI、不调整业务逻辑。结论基于当前 feature-first 结构、`docs/api-integration-plan.md`、`docs/player-source-and-cdn-spec.md`、历史 `docs/archive/2026-05-rc/entitlement-unlock-flow-plan.md` 和播放器资源调度相关文档。
 
 ## Release 封板前提（Current）
 
