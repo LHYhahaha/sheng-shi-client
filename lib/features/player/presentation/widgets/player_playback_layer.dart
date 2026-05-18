@@ -9,6 +9,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/player_performance_policy_provider.dart';
 import '../../application/player_playback_controller.dart';
+import '../../application/player_ui_controller.dart';
 import '../../domain/player_seek_preview_config.dart';
 import '../../domain/player_performance_policy.dart';
 import '../../application/player_rebuild_diagnostics.dart';
@@ -606,7 +607,8 @@ class PlayerPlaybackControlsConsumer extends ConsumerStatefulWidget {
     required this.onTogglePlay,
     required this.onRetry,
     this.useSingleDramaChromeTap = false,
-    this.onToggleChromeVisibility,
+    this.onExitImmersiveChrome,
+    this.onSingleDramaUserInteraction,
   });
 
   final String sessionKey;
@@ -614,9 +616,10 @@ class PlayerPlaybackControlsConsumer extends ConsumerStatefulWidget {
   final VoidCallback onTogglePlay;
   final VoidCallback onRetry;
 
-  /// 单剧：单击切换默认/沉浸 chrome；双击切换播放/暂停。
+  /// 单剧：沉浸态单击仅恢复 default chrome；default 态单击切换播放/暂停。
   final bool useSingleDramaChromeTap;
-  final VoidCallback? onToggleChromeVisibility;
+  final VoidCallback? onExitImmersiveChrome;
+  final VoidCallback? onSingleDramaUserInteraction;
 
   @override
   ConsumerState<PlayerPlaybackControlsConsumer> createState() =>
@@ -712,6 +715,7 @@ class PlayerPlaybackControlsConsumerState
       _lastTapAt = null;
       if (snapshot.isPlaying) {
         _togglePlayWithFeedback();
+        widget.onSingleDramaUserInteraction?.call();
       }
       return;
     }
@@ -732,10 +736,21 @@ class PlayerPlaybackControlsConsumerState
         return;
       }
       if (latest.isPlaying) {
-        widget.onToggleChromeVisibility?.call();
+        final showsChromeOverlays = ref.read(
+          playerUiControllerProvider(
+            widget.sessionKey,
+          ).select((state) => state.showsChromeOverlays),
+        );
+        if (!showsChromeOverlays) {
+          widget.onExitImmersiveChrome?.call();
+          return;
+        }
+        _togglePlayWithFeedback();
+        widget.onSingleDramaUserInteraction?.call();
         return;
       }
       widget.onTogglePlay();
+      widget.onSingleDramaUserInteraction?.call();
     });
   }
 

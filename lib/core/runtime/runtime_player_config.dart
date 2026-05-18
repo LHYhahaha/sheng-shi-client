@@ -14,6 +14,8 @@ class RuntimePlayerConfig {
     this.hlsMaxPreloadBytes,
     this.enablePlaybackTimingLogs = false,
     this.enableRebuildLogs = false,
+    this.autoImmersiveDelay = const Duration(seconds: 3),
+    this.enableAutoImmersiveForSingleDrama = true,
   });
 
   /// 本地安全默认：最小 HLS 预热、保守超时，不扩大 media session 窗口。
@@ -29,6 +31,8 @@ class RuntimePlayerConfig {
     hlsMaxPreloadBytes: 2 * 1024 * 1024,
     enablePlaybackTimingLogs: false,
     enableRebuildLogs: false,
+    autoImmersiveDelay: Duration(seconds: 3),
+    enableAutoImmersiveForSingleDrama: true,
   );
 
   /// 远程 / 实验下发的播放器档位；null 表示不覆盖设备推导。
@@ -85,6 +89,18 @@ class RuntimePlayerConfig {
   /// 默认 false。仅诊断滑动卡顿；开启会增加 I/O。
   final bool enableRebuildLogs;
 
+  /// 单剧播放器：正常播放且无用户操作后，自动隐藏 chrome 进入沉浸模式的等待时长。
+  ///
+  /// 默认 3 秒。仅作用于 [PlayerUiController] 的 UI chrome，不属于播放核心。
+  /// For You 不启用自动沉浸，本字段在 For You 会话中不被消费。
+  final Duration autoImmersiveDelay;
+
+  /// 是否在单剧播放器中启用「播放中自动进入沉浸 chrome」。
+  ///
+  /// 默认 `true`。关闭后仅保留手动/测试触发的 chrome 切换。
+  /// For You 在 UI 层固定不启用自动沉浸，与远程/本字段无关。
+  final bool enableAutoImmersiveForSingleDrama;
+
   /// 低端机收紧 HLS 预加载数量（在 remote merge 之后仍会再次应用）。
   RuntimePlayerConfig withDeviceCapabilityRules(DeviceCapability device) {
     if (device.performanceTier != DevicePerformanceTier.low) {
@@ -135,6 +151,9 @@ class RuntimePlayerConfig {
       hlsMaxPreloadBytes: remote.hlsMaxPreloadBytes ?? hlsMaxPreloadBytes,
       enablePlaybackTimingLogs: remote.enablePlaybackTimingLogs,
       enableRebuildLogs: remote.enableRebuildLogs,
+      autoImmersiveDelay: remote.autoImmersiveDelay,
+      enableAutoImmersiveForSingleDrama:
+          remote.enableAutoImmersiveForSingleDrama,
     );
   }
 
@@ -149,6 +168,8 @@ class RuntimePlayerConfig {
     int? hlsMaxPreloadBytes,
     bool? enablePlaybackTimingLogs,
     bool? enableRebuildLogs,
+    Duration? autoImmersiveDelay,
+    bool? enableAutoImmersiveForSingleDrama,
     bool clearPerformanceModeOverride = false,
   }) {
     return RuntimePlayerConfig(
@@ -172,6 +193,10 @@ class RuntimePlayerConfig {
       enablePlaybackTimingLogs:
           enablePlaybackTimingLogs ?? this.enablePlaybackTimingLogs,
       enableRebuildLogs: enableRebuildLogs ?? this.enableRebuildLogs,
+      autoImmersiveDelay: autoImmersiveDelay ?? this.autoImmersiveDelay,
+      enableAutoImmersiveForSingleDrama:
+          enableAutoImmersiveForSingleDrama ??
+          this.enableAutoImmersiveForSingleDrama,
     );
   }
 
@@ -196,7 +221,10 @@ class RuntimePlayerConfig {
         other.hlsPlaylistTimeout == hlsPlaylistTimeout &&
         other.hlsMaxPreloadBytes == hlsMaxPreloadBytes &&
         other.enablePlaybackTimingLogs == enablePlaybackTimingLogs &&
-        other.enableRebuildLogs == enableRebuildLogs;
+        other.enableRebuildLogs == enableRebuildLogs &&
+        other.autoImmersiveDelay == autoImmersiveDelay &&
+        other.enableAutoImmersiveForSingleDrama ==
+            enableAutoImmersiveForSingleDrama;
   }
 
   @override
@@ -211,5 +239,7 @@ class RuntimePlayerConfig {
     hlsMaxPreloadBytes,
     enablePlaybackTimingLogs,
     enableRebuildLogs,
+    autoImmersiveDelay,
+    enableAutoImmersiveForSingleDrama,
   );
 }

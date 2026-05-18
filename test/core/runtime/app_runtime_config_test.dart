@@ -16,6 +16,8 @@ void main() {
     expect(config.player.homeStartupHlsPreloadCount, 1);
     expect(config.player.hlsPlaylistTimeout, const Duration(seconds: 4));
     expect(config.player.performanceModeOverride, isNull);
+    expect(config.player.autoImmersiveDelay, const Duration(seconds: 3));
+    expect(config.player.enableAutoImmersiveForSingleDrama, isTrue);
     expect(config.localization.enableRemoteLanguagePack, isFalse);
     expect(config.localization.enableSubtitleByLocale, isFalse);
     expect(

@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/player_content.dart';
+import 'player_chrome_auto_immersive_config_provider.dart';
 
 /// 播放器 UI 状态 provider，按 sessionKey 隔离。
 ///
@@ -90,25 +93,119 @@ class PlayerUiController extends Notifier<PlayerUiState> {
 
   final String sessionKey;
 
-  @override
-  PlayerUiState build() => const PlayerUiState.initial();
+  Timer? _autoImmersiveTimer;
+  bool _autoImmersiveSessionEnabled = false;
+  bool _playbackIsPlaying = false;
+  bool _accessPlayable = false;
+  bool _modalBlocking = false;
+  bool _isSeeking = false;
+  bool _isPageScrolling = false;
+  bool _isViewportDragging = false;
+  bool _routeVisible = true;
 
-  void startSession(String episodeId) {
-    final episodeNumber = int.tryParse(episodeId) ?? 1;
-    state = PlayerUiState(
-      episodeNumber: episodeNumber,
-      isPlaying: false,
-      paywall: PlayerPaywallState.hidden,
-      chromeDisplayMode: PlayerChromeDisplayMode.defaultChrome,
-    );
+  @override
+  PlayerUiState build() {
+    ref.onDispose(_cancelAutoImmersiveTimer);
+    return const PlayerUiState.initial();
+  }
+
+  /// 按 feed 类型启用/关闭自动沉浸（For You 传 `enabled: false`）。
+  void configureAutoImmersiveSession({required bool enabled}) {
+    _autoImmersiveSessionEnabled = enabled;
+    if (!enabled) {
+      _cancelAutoImmersiveTimer();
+      return;
+    }
+    _scheduleAutoImmersiveTimer();
+  }
+
+  void syncAutoImmersiveBlockers({
+    bool? playbackIsPlaying,
+    bool? accessPlayable,
+    bool? modalBlocking,
+    bool? isSeeking,
+    bool? isPageScrolling,
+    bool? isViewportDragging,
+  }) {
+    var changed = false;
+    if (playbackIsPlaying != null && _playbackIsPlaying != playbackIsPlaying) {
+      _playbackIsPlaying = playbackIsPlaying;
+      changed = true;
+    }
+    if (accessPlayable != null && _accessPlayable != accessPlayable) {
+      _accessPlayable = accessPlayable;
+      changed = true;
+    }
+    if (modalBlocking != null && _modalBlocking != modalBlocking) {
+      _modalBlocking = modalBlocking;
+      changed = true;
+    }
+    if (isSeeking != null && _isSeeking != isSeeking) {
+      _isSeeking = isSeeking;
+      changed = true;
+    }
+    if (isPageScrolling != null && _isPageScrolling != isPageScrolling) {
+      _isPageScrolling = isPageScrolling;
+      changed = true;
+    }
+    if (isViewportDragging != null &&
+        _isViewportDragging != isViewportDragging) {
+      _isViewportDragging = isViewportDragging;
+      changed = true;
+    }
+    if (changed) {
+      _scheduleAutoImmersiveTimer();
+    }
+  }
+
+  /// viewport 落稳或切集：回到 default chrome，并按可播状态重启计时。
+  void onViewportSettled({
+    required bool accessPlayable,
+    required bool isItemChange,
+  }) {
+    _accessPlayable = accessPlayable;
+    if (isItemChange) {
+      showDefaultChrome();
+      _cancelAutoImmersiveTimer();
+    }
+    _scheduleAutoImmersiveTimer();
+  }
+
+  /// 用户操作（点击播放区、拖动 seek 等）：重置自动沉浸计时，不改变当前 chrome。
+  void notifyUserInteraction() {
+    _scheduleAutoImmersiveTimer();
+  }
+
+  /// 沉浸态点击视频区：仅恢复 default chrome，不暂停。
+  void onImmersiveVideoTap() {
+    showDefaultChrome();
+    _scheduleAutoImmersiveTimer();
+  }
+
+  void onRouteVisibilityChanged(bool visible) {
+    if (_routeVisible == visible) {
+      return;
+    }
+    _routeVisible = visible;
+    if (!visible) {
+      _cancelAutoImmersiveTimer();
+      return;
+    }
+    _scheduleAutoImmersiveTimer();
   }
 
   void toggleChromeDisplayMode() {
+    final enteringImmersive = state.showsChromeOverlays;
     state = state.copyWith(
-      chromeDisplayMode: state.showsChromeOverlays
+      chromeDisplayMode: enteringImmersive
           ? PlayerChromeDisplayMode.immersive
           : PlayerChromeDisplayMode.defaultChrome,
     );
+    if (enteringImmersive) {
+      _cancelAutoImmersiveTimer();
+    } else {
+      _scheduleAutoImmersiveTimer();
+    }
   }
 
   void showDefaultChrome() {
@@ -119,28 +216,50 @@ class PlayerUiController extends Notifier<PlayerUiState> {
     }
   }
 
+  void enterImmersiveChrome() {
+    if (!state.showsChromeOverlays) {
+      return;
+    }
+    state = state.copyWith(
+      chromeDisplayMode: PlayerChromeDisplayMode.immersive,
+    );
+  }
+
   void togglePlay() {
     state = state.copyWith(isPlaying: !state.isPlaying);
   }
 
   void showMemberPaywall() {
     state = state.copyWith(paywall: PlayerPaywallState.memberUnlock);
+    _scheduleAutoImmersiveTimer();
   }
 
   void showUnlockPaywall() {
     state = state.copyWith(paywall: PlayerPaywallState.unlock);
+    _scheduleAutoImmersiveTimer();
   }
 
   void hidePaywall() {
     state = state.copyWith(paywall: PlayerPaywallState.hidden);
+    _scheduleAutoImmersiveTimer();
   }
 
   void unlockPaywallAndPlay() {
     state = state.copyWith(isPlaying: true, paywall: PlayerPaywallState.hidden);
+    _scheduleAutoImmersiveTimer();
   }
 
   /// session cleanup 时隐藏 paywall 并停止 UI 播放意图。
   void resetForSessionCleanup() {
+    _cancelAutoImmersiveTimer();
+    _autoImmersiveSessionEnabled = false;
+    _playbackIsPlaying = false;
+    _accessPlayable = false;
+    _modalBlocking = false;
+    _isSeeking = false;
+    _isPageScrolling = false;
+    _isViewportDragging = false;
+    _routeVisible = true;
     state = const PlayerUiState.initial();
   }
 
@@ -151,6 +270,7 @@ class PlayerUiController extends Notifier<PlayerUiState> {
         isPlaying: false,
         paywall: PlayerPaywallState.hidden,
       );
+      _scheduleAutoImmersiveTimer();
       return;
     }
 
@@ -160,6 +280,7 @@ class PlayerUiController extends Notifier<PlayerUiState> {
         isPlaying: false,
         paywall: PlayerPaywallState.unlock,
       );
+      _scheduleAutoImmersiveTimer();
       return;
     }
 
@@ -168,5 +289,73 @@ class PlayerUiController extends Notifier<PlayerUiState> {
       isPlaying: true,
       paywall: PlayerPaywallState.hidden,
     );
+    _scheduleAutoImmersiveTimer();
+  }
+
+  void startSession(String episodeId) {
+    final episodeNumber = int.tryParse(episodeId) ?? 1;
+    _cancelAutoImmersiveTimer();
+    state = PlayerUiState(
+      episodeNumber: episodeNumber,
+      isPlaying: false,
+      paywall: PlayerPaywallState.hidden,
+      chromeDisplayMode: PlayerChromeDisplayMode.defaultChrome,
+    );
+  }
+
+  void _scheduleAutoImmersiveTimer() {
+    _cancelAutoImmersiveTimer();
+    if (!_canAutoEnterImmersive()) {
+      return;
+    }
+    final config = ref.read(playerChromeAutoImmersiveConfigProvider);
+    _autoImmersiveTimer = Timer(config.autoImmersiveDelay, () {
+      if (_canAutoEnterImmersive()) {
+        enterImmersiveChrome();
+      }
+    });
+  }
+
+  bool _canAutoEnterImmersive() {
+    if (!_autoImmersiveSessionEnabled) {
+      return false;
+    }
+    final config = ref.read(playerChromeAutoImmersiveConfigProvider);
+    if (!config.enableAutoImmersiveForSingleDrama) {
+      return false;
+    }
+    if (!_playbackIsPlaying) {
+      return false;
+    }
+    if (!_accessPlayable) {
+      return false;
+    }
+    if (_modalBlocking) {
+      return false;
+    }
+    if (_isSeeking) {
+      return false;
+    }
+    if (_isPageScrolling) {
+      return false;
+    }
+    if (_isViewportDragging) {
+      return false;
+    }
+    if (!_routeVisible) {
+      return false;
+    }
+    if (!state.showsChromeOverlays) {
+      return false;
+    }
+    if (state.showsPaywall) {
+      return false;
+    }
+    return true;
+  }
+
+  void _cancelAutoImmersiveTimer() {
+    _autoImmersiveTimer?.cancel();
+    _autoImmersiveTimer = null;
   }
 }

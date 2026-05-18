@@ -378,6 +378,7 @@ Last updated: 2026-05-17 (O2 Player modal migration).
 | Access presentation in shell | **Done** | `PlayerAccessPresenter` + engine `accessPresentationFor`. |
 | Overlay dwell / dismissed | **Done** | `PlayerOverlayOrchestrator`; engine `prepareAutoUnlockSheet` / `markAutoSheetDismissed`. |
 | Manual unlock / retry / recharge flow | **Done** | Engine `prepareManualUnlock`, `retryPlayback`, `completeCoinUnlock`, `continueAfterRechargeSuccess`; Player blocking sheets now go through `AppModalService` / Player modal coordinator. |
+| Single-drama chrome auto immersive | **Done** | `PlayerUiController` timer + blockers；Page 同步 playback/viewport/modal/seek；配置见 `RuntimePlayerConfig` / `playerChromeAutoImmersiveConfigOverrideProvider`。 |
 | PlaybackCoordinator split | **Defer** | `PlayerRuntimeCoordinator` + `PlayerPlaybackController` 仍承担 play/preload/quiesce；未单独 `PlaybackCoordinator` 文件。 |
 | AccessCoordinator split | **Defer** | 逻辑在 `PlayerAccessPresenter` + runtime；未单独 coordinator 文件。 |
 | Open-source reference decision | **Done** | 参考 `video_pool` pool/reconcile；不替换 PageView/业务 UI。 |

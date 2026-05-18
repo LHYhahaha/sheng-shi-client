@@ -13,6 +13,19 @@ changed by this phase.
 - **架构**：不继续大拆 engine；开源方案仅作思想参考，**不**替换 `media_kit` 或引入第三方 feed 库。
 - **Playback truth** 仍在 `PlayerPlaybackController`；UI / sheet / dwell 由 Page + engine 协调。
 
+### Single-drama chrome auto immersive (2026-05-16)
+
+单剧播放器 chrome（顶栏、侧栏、标题简介等）在**正常播放且用户无操作**一段时间后自动进入沉浸模式；属于 **UI chrome 行为**，不属于播放核心。
+
+| 项 | 说明 |
+| --- | --- |
+| 适用范围 | 仅 **单剧** `PlayerPage`（`PlayerFeedMode.singleDrama`） |
+| For You | **不启用**自动沉浸；会话层 `configureAutoImmersiveSession(enabled: false)` |
+| 默认延迟 | `3s`（`RuntimePlayerConfig.autoImmersiveDelay`） |
+| 状态归属 | `PlayerUiController` 管理 timer、blocker、chrome mode |
+| 点击行为 | 沉浸态单击视频区 → 仅恢复 default chrome，**不暂停**；default 态单击 → 播放/暂停 |
+| 测试覆盖 | `playerChromeAutoImmersiveConfigOverrideProvider` 可缩短 delay |
+
 ## 1. System Goals
 
 - Home card entry should feel close to instant. The first playable frame should

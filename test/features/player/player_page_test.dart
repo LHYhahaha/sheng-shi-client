@@ -12,7 +12,9 @@ import 'package:drama_client/features/entitlement/domain/user_entitlement_state.
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
 import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
+import 'package:drama_client/features/player/application/player_chrome_auto_immersive_config_provider.dart';
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
+import 'package:drama_client/features/player/domain/player_chrome_auto_immersive_config.dart';
 import 'package:drama_client/features/player/application/player_playback_prepare_manager.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/application/player_performance_policy_provider.dart';
@@ -949,13 +951,78 @@ void main() {
     expect(find.byKey(const ValueKey('player_immersive_button')), findsNothing);
   });
 
-  testWidgets('single drama tap toggles immersive chrome while playing', (
+  testWidgets('single drama auto enters immersive chrome while playing', (
     tester,
   ) async {
+    final playbackSession = _FakePlaybackSession();
+
     await tester.pumpWidget(
       _buildPlayerApp(
         repository: _FakePlayerFeedRepository.unlocked(),
-        playbackSessionFactory: () => _FakePlaybackSession(),
+        playbackSessionFactory: () => playbackSession,
+        providerOverrides: _singleDramaAutoImmersiveTestOverrides,
+      ),
+    );
+    await _pumpUntilSingleDramaPlaybackReady(tester);
+
+    expect(
+      tester.widget<PlayerChrome>(find.byType(PlayerChrome)).showChromeOverlays,
+      isTrue,
+    );
+
+    await tester.pump(
+      _testAutoImmersiveDelay + const Duration(milliseconds: 80),
+    );
+
+    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
+    expect(chrome.showChromeOverlays, isFalse);
+    expect(find.byKey(const ValueKey('player_seek_bar')), findsOneWidget);
+    final topBarVisibility = tester.widget<AnimatedOpacity>(
+      find.byKey(const ValueKey('player_top_bar_chrome_visibility')),
+    );
+    expect(topBarVisibility.opacity, 0);
+  });
+
+  testWidgets('single drama immersive tap restores default without pausing', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+        providerOverrides: _singleDramaAutoImmersiveTestOverrides,
+      ),
+    );
+    await _pumpUntilSingleDramaPlaybackReady(tester);
+    await tester.pump(
+      _testAutoImmersiveDelay + const Duration(milliseconds: 80),
+    );
+
+    expect(
+      tester.widget<PlayerChrome>(find.byType(PlayerChrome)).showChromeOverlays,
+      isFalse,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('player_video_tap_layer')));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      tester.widget<PlayerChrome>(find.byType(PlayerChrome)).showChromeOverlays,
+      isTrue,
+    );
+    expect(playbackSession.pauseCount, 0);
+  });
+
+  testWidgets('single drama default tap pauses while playing', (tester) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+        providerOverrides: _singleDramaAutoImmersiveDisabledOverrides,
       ),
     );
     await tester.pump(const Duration(seconds: 1));
@@ -965,21 +1032,31 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump();
 
-    final chrome = tester.widget<PlayerChrome>(find.byType(PlayerChrome));
-    expect(chrome.showChromeOverlays, isFalse);
-    expect(find.byKey(const ValueKey('player_download_button')), findsNothing);
-    expect(find.byKey(const ValueKey('player_seek_bar')), findsOneWidget);
-    final hiddenChromeShells = tester
-        .widgetList<AnimatedOpacity>(
-          find.byKey(const ValueKey('player_chrome_visibility_action_rail')),
-        )
-        .where((widget) => widget.opacity == 0);
-    expect(hiddenChromeShells, hasLength(1));
-
-    final topBarVisibility = tester.widget<AnimatedOpacity>(
-      find.byKey(const ValueKey('player_top_bar_chrome_visibility')),
+    expect(playbackSession.pauseCount, 1);
+    expect(
+      tester.widget<PlayerChrome>(find.byType(PlayerChrome)).showChromeOverlays,
+      isTrue,
     );
-    expect(topBarVisibility.opacity, 0);
+  });
+
+  testWidgets('for you does not auto enter immersive chrome', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: '/for-you',
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => _FakePlaybackSession(),
+        providerOverrides: _singleDramaAutoImmersiveTestOverrides,
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    await tester.pump(_testAutoImmersiveDelay + const Duration(seconds: 1));
+    await tester.pump();
+
+    expect(
+      tester.widget<PlayerChrome>(find.byType(PlayerChrome)).showChromeOverlays,
+      isTrue,
+    );
   });
 
   testWidgets('single drama immersive mode seek bar remains draggable', (
@@ -991,18 +1068,19 @@ void main() {
       _buildPlayerApp(
         repository: _FakePlayerFeedRepository.unlocked(),
         playbackSessionFactory: () => playbackSession,
+        providerOverrides: _singleDramaAutoImmersiveTestOverrides,
       ),
     );
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pumpAndSettle();
+    await _pumpUntilSingleDramaPlaybackReady(tester);
 
     playbackSession.emitDuration(const Duration(seconds: 100));
     await tester.pump();
     playbackSession.emitPosition(const Duration(seconds: 10));
     await tester.pump();
 
-    await tester.tap(find.byKey(const ValueKey('player_video_tap_layer')));
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(
+      _testAutoImmersiveDelay + const Duration(milliseconds: 80),
+    );
 
     final gesture = await tester.startGesture(
       tester.getCenter(find.byKey(const ValueKey('player_seek_bar'))),
@@ -2704,12 +2782,47 @@ Future<void> _pumpPaymentMethodSheet(WidgetTester tester) async {
   await tester.pump(Duration.zero);
 }
 
+Future<void> _pumpUntilSingleDramaPlaybackReady(WidgetTester tester) async {
+  await tester.pump();
+  for (var attempt = 0; attempt < 120; attempt++) {
+    if (find
+        .byKey(const ValueKey('player_video_tap_layer'))
+        .evaluate()
+        .isNotEmpty) {
+      return;
+    }
+    await tester.pump();
+  }
+  await tester.pump(const Duration(milliseconds: 100));
+}
+
 Future<void> _doubleTapVideo(WidgetTester tester) async {
   final tapTarget = find.byKey(const ValueKey('player_video_tap_layer'));
   await tester.tap(tapTarget);
   await tester.pump(const Duration(milliseconds: 40));
   await tester.tap(tapTarget);
 }
+
+const _testAutoImmersiveDelay = Duration(milliseconds: 100);
+
+final _singleDramaAutoImmersiveTestOverrides = [
+  playerChromeAutoImmersiveConfigOverrideProvider.overrideWithValue(
+    const PlayerChromeAutoImmersiveConfig(
+      autoImmersiveDelay: _testAutoImmersiveDelay,
+      enableAutoImmersiveForSingleDrama: true,
+    ),
+  ),
+];
+
+/// 避免 `pumpAndSettle` 期间误触发自动沉浸。
+final _singleDramaAutoImmersiveDisabledOverrides = [
+  playerChromeAutoImmersiveConfigOverrideProvider.overrideWithValue(
+    const PlayerChromeAutoImmersiveConfig(
+      autoImmersiveDelay: Duration(hours: 1),
+      enableAutoImmersiveForSingleDrama: true,
+    ),
+  ),
+];
 
 const _mockVideoUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
 const _mockSecondVideoUrl = 'https://test-streams.mux.dev/tos_ismc/main.m3u8';
@@ -2723,6 +2836,7 @@ Widget _buildPlayerApp({
   PlayerPlaybackPreloadManager? preloadManager,
   MockEntitlementRepository? entitlementRepository,
   List<ProviderObserver> observers = const [],
+  List providerOverrides = const [],
   PlayerPerformancePolicy? performancePolicy,
   RecordingAppToastService? toastService,
 }) {
@@ -2779,6 +2893,7 @@ Widget _buildPlayerApp({
         ),
       appToastProvider.overrideWithValue(toast),
       ...appModalRegistryOverrides,
+      ...providerOverrides,
     ],
     child: MaterialApp.router(
       builder: (context, child) => AppModalHost(child: child),

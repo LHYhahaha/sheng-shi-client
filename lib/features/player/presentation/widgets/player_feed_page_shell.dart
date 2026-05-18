@@ -38,7 +38,8 @@ class PlayerFeedPageShell extends ConsumerWidget {
     this.showChromeOverlays = true,
     this.chromeOverlayFadeDuration = Duration.zero,
     this.useSingleDramaChromeTap = false,
-    this.onToggleChromeVisibility,
+    this.onExitImmersiveChrome,
+    this.onSingleDramaUserInteraction,
     super.key,
   });
 
@@ -64,7 +65,8 @@ class PlayerFeedPageShell extends ConsumerWidget {
   final bool showChromeOverlays;
   final Duration chromeOverlayFadeDuration;
   final bool useSingleDramaChromeTap;
-  final VoidCallback? onToggleChromeVisibility;
+  final VoidCallback? onExitImmersiveChrome;
+  final VoidCallback? onSingleDramaUserInteraction;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -122,7 +124,8 @@ class PlayerFeedPageShell extends ConsumerWidget {
                   onTogglePlay: onTogglePlay,
                   onRetry: onRetry,
                   useSingleDramaChromeTap: useSingleDramaChromeTap,
-                  onToggleChromeVisibility: onToggleChromeVisibility,
+                  onExitImmersiveChrome: onExitImmersiveChrome,
+                  onSingleDramaUserInteraction: onSingleDramaUserInteraction,
                 )
               : null,
           videoFit: videoFitForEpisode(item.episode),

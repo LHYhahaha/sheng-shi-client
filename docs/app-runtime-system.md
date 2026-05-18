@@ -78,9 +78,12 @@ AppRuntimeConfig
 | `hlsMaxPreloadBytes` | 单条 HLS 预热字节上限 | `2 MiB` |
 | `enablePlaybackTimingLogs` | 播放链路 timing 日志 | `false` |
 | `enableRebuildLogs` | Player rebuild / overlay 诊断日志 | `false` |
+| `autoImmersiveDelay` | 单剧播放中无操作后自动隐藏 chrome 进入沉浸的等待时长（仅 UI） | `3s` |
+| `enableAutoImmersiveForSingleDrama` | 是否在单剧播放器启用自动沉浸 chrome | `true` |
 
 注意：
 
+- `autoImmersiveDelay` / `enableAutoImmersiveForSingleDrama` 只作用于 `PlayerUiController` 的 chrome 展示，**不**改变 `PlayerPlaybackController` 播放真相，**不**用于 For You（For You 在 UI 层固定关闭自动沉浸）；测试可通过 `playerChromeAutoImmersiveConfigOverrideProvider` 覆盖延迟。
 - 这里的 HLS 预热只做 HTTP playlist/segment 预热，不持有播放器实例。
 - prepared / retained media session 数量不由 remote runtime 随意扩大，仍由 `PlayerPerformancePolicy` 控制。
 - 低端机规则会把 HLS 预热数量收紧到 `0`。
