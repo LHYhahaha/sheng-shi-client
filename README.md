@@ -26,8 +26,9 @@
 3. [Release Seal Checklist](docs/release/release-seal-checklist.md)：了解当前 RC / release 的封板边界。
 4. [AppModal Supported Modals](docs/modal/app-modal-supported-modals.md)：了解全局弹窗支持范围和使用方式。
 5. [App Runtime System](docs/runtime/app-runtime-system.md)：了解设备分级、播放器策略和运行时配置。
-6. [Remote Contract Index](docs/api/remote-contract-index.md)：了解未来真实 API 的模块开关和接口契约。
-7. [Project Structure And Conventions](docs/engineering/project-structure-and-conventions.md)：了解目录和分层规范。
+6. [Account Cancellation Plan](docs/auth/account-cancellation-plan.md)：了解账号注销流程、风险确认和 cleanup 边界。
+7. [Remote Contract Index](docs/api/remote-contract-index.md)：了解未来真实 API 的模块开关和接口契约。
+8. [Project Structure And Conventions](docs/engineering/project-structure-and-conventions.md)：了解目录和分层规范。
 
 ## 环境要求
 

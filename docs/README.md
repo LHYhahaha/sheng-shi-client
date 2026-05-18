@@ -9,6 +9,7 @@
 | 封板 / QA | [Release Docs](release/README.md), [Release Seal Checklist](release/release-seal-checklist.md) |
 | 全局弹窗 | [Modal Docs](modal/README.md), [AppModal Supported Modals](modal/app-modal-supported-modals.md), [Global Overlay / Modal System Plan](modal/global-overlay-modal-system-plan.md) |
 | Runtime / 设备策略 | [Runtime Docs](runtime/README.md), [App Runtime System](runtime/app-runtime-system.md) |
+| 账号 / Auth | [Auth Docs](auth/README.md), [Account Cancellation Plan](auth/account-cancellation-plan.md) |
 | API / 联调 | [API Docs](api/README.md), [Remote Contract Index](api/remote-contract-index.md), [Remote API Staging Checklist](api/remote-api-staging-checklist.md), [API Integration Readiness Plan](api/api-integration-readiness-plan.md), [Networking Guidelines](api/networking-guidelines.md) |
 | 播放器 | [Player Docs](player/README.md), [Player Experience System Architecture](player/player-experience-architecture-plan.md), [Player Android Stable Mode Plan](player/player-android-stable-mode-plan.md), [Player Feed Engine Refactor Plan](player/player-feed-engine-refactor-plan.md), [Player Source And CDN Spec](player/player-source-and-cdn-spec.md) |
 | 多语言 / 首页数据 | [Localization Docs](localization/README.md), [Localization And Home Data Architecture](localization/localization-and-home-data-architecture.md) |
