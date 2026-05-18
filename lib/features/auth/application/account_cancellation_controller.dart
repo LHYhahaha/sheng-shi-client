@@ -55,17 +55,30 @@ class AccountCancellationState {
 
 class AccountCancellationController extends Notifier<AccountCancellationState> {
   Timer? _countdownTimer;
+  late int _countdownSeconds;
 
   @override
   AccountCancellationState build() {
     ref.onDispose(_cancelCountdown);
-    final seconds = ref.watch(accountCancellationCountdownProvider);
-    _beginCountdownIfNeeded(seconds);
-    return AccountCancellationState.initial(countdownSeconds: seconds);
+    _countdownSeconds = ref.watch(accountCancellationCountdownProvider);
+    return AccountCancellationState.initial(
+      countdownSeconds: _countdownSeconds,
+    );
   }
 
   void setAcceptedRisk(bool value) {
-    state = state.copyWith(acceptedRisk: value, clearError: true);
+    if (!value) {
+      _cancelCountdown();
+      state = state.copyWith(
+        acceptedRisk: false,
+        remainingSeconds: _countdownSeconds,
+        clearError: true,
+      );
+      return;
+    }
+
+    state = state.copyWith(acceptedRisk: true, clearError: true);
+    _beginCountdownIfNeeded();
   }
 
   void setSubmitting(bool value) {
@@ -82,9 +95,9 @@ class AccountCancellationController extends Notifier<AccountCancellationState> {
     }
   }
 
-  void _beginCountdownIfNeeded(int seconds) {
+  void _beginCountdownIfNeeded() {
     _cancelCountdown();
-    if (seconds <= 0) {
+    if (state.remainingSeconds <= 0) {
       return;
     }
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {

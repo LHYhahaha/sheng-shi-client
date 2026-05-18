@@ -455,7 +455,7 @@ class _CancellationBottomBar extends StatelessWidget {
     final bottomPadding = MediaQuery.paddingOf(context).bottom;
     return Container(
       height: 108 + bottomPadding,
-      padding: EdgeInsets.fromLTRB(50, 14, 50, 20 + bottomPadding),
+      padding: EdgeInsets.fromLTRB(26, 14, 26, 20 + bottomPadding),
       decoration: const BoxDecoration(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         gradient: LinearGradient(
@@ -540,7 +540,8 @@ class _RiskCheckboxRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              maxLines: 2,
+              maxLines: 1,
+              softWrap: false,
               overflow: TextOverflow.visible,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.88),

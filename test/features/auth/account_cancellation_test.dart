@@ -168,6 +168,10 @@ void main() {
         find.text('I accept the risk and agree to delete my account'),
         findsOneWidget,
       );
+      final riskText = tester.widget<Text>(
+        find.text('I accept the risk and agree to delete my account'),
+      );
+      expect(riskText.maxLines, 1);
 
       await tester.drag(find.byType(ListView), const Offset(0, -220));
       await tester.pump();
@@ -204,9 +208,18 @@ void main() {
       expect(find.text('Delete account'), findsOneWidget);
     });
 
-    testWidgets('countdown updates delete button label', (tester) async {
+    testWidgets('countdown starts after risk acceptance', (tester) async {
       await tester.pumpWidget(
         _buildRouterTestApp(initialLocation: RoutePaths.accountCancellation),
+      );
+      await tester.pump();
+      expect(find.text('Delete account (9s)'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Delete account (9s)'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('account_cancellation_risk_checkbox')),
       );
       await tester.pump();
       expect(find.text('Delete account (9s)'), findsOneWidget);
