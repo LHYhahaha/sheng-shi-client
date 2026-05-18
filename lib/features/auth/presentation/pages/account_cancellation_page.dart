@@ -12,6 +12,8 @@ import '../../application/auth_account_cancellation_coordinator.dart';
 import '../../application/auth_controller.dart';
 import '../../domain/account_deletion_exception.dart';
 
+const _accountCancellationAssetRoot = 'assets/images/auth/account_cancellation';
+
 class AccountCancellationPage extends ConsumerStatefulWidget {
   const AccountCancellationPage({super.key});
 
@@ -87,106 +89,104 @@ class _AccountCancellationPageState
         : l10n.accountCancellationDeleteButtonCountdown(state.remainingSeconds);
 
     return Scaffold(
-      backgroundColor: AppColors.black,
+      backgroundColor: const Color(0xFF0A0014),
       body: SafeArea(
         bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Stack(
           children: [
-            _AccountCancellationHeader(title: l10n.accountCancellationTitle),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                children: [
-                  Text(
-                    l10n.accountCancellationDescription,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.72),
-                      fontSize: 14,
-                      height: 20 / 14,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _InfoDeletionCard(
-                    title: l10n.accountCancellationInfoCardTitle,
-                    items: [
-                      l10n.accountCancellationInfoProfile,
-                      l10n.accountCancellationInfoWallet,
-                      l10n.accountCancellationInfoMembership,
-                      l10n.accountCancellationInfoPlayback,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _AccountCancellationHeader(
+                  title: l10n.accountCancellationTitle,
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 140),
+                    children: [
+                      Text(
+                        l10n.accountCancellationDescription,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontSize: 14,
+                          height: 20 / 14,
+                        ),
+                      ),
+                      const SizedBox(height: 11),
+                      _DeletionInfoPanel(items: _deletionItems(l10n)),
+                      const SizedBox(height: 18),
+                      _CancellationRiskNotice(
+                        firstLine: l10n.accountCancellationRiskLogoutDevices,
+                        secondLine: l10n.accountCancellationRiskDeletionFinal,
+                      ),
+                      if (state.error != null) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          _errorMessage(context, state.error!),
+                          style: const TextStyle(
+                            color: AppColors.danger,
+                            fontSize: 13,
+                            height: 18 / 13,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  _RiskNoticeCard(
-                    title: l10n.accountCancellationRiskTitle,
-                    body: l10n.accountCancellationRiskBody,
-                  ),
-                  if (state.error != null) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      _errorMessage(context, state.error!),
-                      style: const TextStyle(
-                        color: AppColors.danger,
-                        fontSize: 13,
-                        height: 18 / 13,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+                ),
+              ],
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _RiskCheckboxRow(
-                    label: l10n.accountCancellationAcceptRisk,
-                    value: state.acceptedRisk,
-                    onChanged: controller.setAcceptedRisk,
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    key: const ValueKey('account_cancellation_delete_button'),
-                    onPressed: state.canSubmit ? _submitDelete : null,
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      backgroundColor: AppColors.danger,
-                      disabledBackgroundColor: AppColors.danger.withValues(
-                        alpha: 0.35,
-                      ),
-                      foregroundColor: Colors.white,
-                      disabledForegroundColor: Colors.white.withValues(
-                        alpha: 0.45,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: state.isSubmitting
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Text(
-                            buttonLabel,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                  ),
-                ],
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _CancellationBottomBar(
+                acceptedRisk: state.acceptedRisk,
+                isSubmitting: state.isSubmitting,
+                canSubmit: state.canSubmit,
+                checkboxLabel: l10n.accountCancellationAcceptRisk,
+                buttonLabel: buttonLabel,
+                onAcceptedRiskChanged: controller.setAcceptedRisk,
+                onSubmit: _submitDelete,
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  List<_DeletionInfoItem> _deletionItems(AppLocalizations l10n) {
+    return [
+      _DeletionInfoItem(
+        title: l10n.accountCancellationInfoPersonalTitle,
+        subtitle: l10n.accountCancellationInfoPersonalSubtitle,
+        assetPath: '$_accountCancellationAssetRoot/personal_info.png',
+        backgroundColor: const Color(0xFF00C948),
+      ),
+      _DeletionInfoItem(
+        title: l10n.accountCancellationInfoThirdPartyTitle,
+        assetPath: '$_accountCancellationAssetRoot/third_party_account.png',
+        backgroundColor: const Color(0xFF00ACDF),
+      ),
+      _DeletionInfoItem(
+        title: l10n.accountCancellationInfoAccountBalanceTitle,
+        subtitle: l10n.accountCancellationInfoAccountBalanceSubtitle,
+        assetPath: '$_accountCancellationAssetRoot/account_balance.png',
+        backgroundColor: const Color(0xFFFF8C00),
+      ),
+      _DeletionInfoItem(
+        title: l10n.accountCancellationInfoYourBalanceTitle,
+        subtitle: l10n.accountCancellationInfoYourBalanceSubtitle,
+        assetPath: '$_accountCancellationAssetRoot/your_balance.png',
+        backgroundColor: const Color(0xFFBB4BE4),
+      ),
+      _DeletionInfoItem(
+        title: l10n.accountCancellationInfoMemberBenefitsTitle,
+        subtitle: l10n.accountCancellationInfoMemberBenefitsSubtitle,
+        assetPath: '$_accountCancellationAssetRoot/member_benefits.png',
+        backgroundColor: const Color(0xFF8E8E95),
+      ),
+    ];
   }
 
   String _errorMessage(BuildContext context, Object error) {
@@ -227,7 +227,7 @@ class _AccountCancellationHeader extends StatelessWidget {
               icon: const Icon(
                 Icons.chevron_left_rounded,
                 color: AppColors.textPrimary,
-                size: 28,
+                size: 24,
               ),
             ),
           ),
@@ -235,9 +235,9 @@ class _AccountCancellationHeader extends StatelessWidget {
             title,
             style: const TextStyle(
               color: AppColors.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              height: 22 / 18,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              height: 22 / 16,
             ),
           ),
         ],
@@ -246,64 +246,49 @@ class _AccountCancellationHeader extends StatelessWidget {
   }
 }
 
-class _InfoDeletionCard extends StatelessWidget {
-  const _InfoDeletionCard({required this.title, required this.items});
+class _DeletionInfoItem {
+  const _DeletionInfoItem({
+    required this.title,
+    required this.assetPath,
+    required this.backgroundColor,
+    this.subtitle,
+  });
 
   final String title;
-  final List<String> items;
+  final String? subtitle;
+  final String assetPath;
+  final Color backgroundColor;
+}
+
+class _DeletionInfoPanel extends StatelessWidget {
+  const _DeletionInfoPanel({required this.items});
+
+  final List<_DeletionInfoItem> items;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('account_cancellation_info_card'),
-      padding: const EdgeInsets.all(16),
+      constraints: const BoxConstraints(minHeight: 403),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
       decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
+        color: const Color(0xFF241A2D),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              height: 20 / 15,
-            ),
-          ),
-          const SizedBox(height: 12),
-          for (final item in items) ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 7),
-                  child: Container(
-                    width: 5,
-                    height: 5,
-                    decoration: const BoxDecoration(
-                      color: AppColors.textSecondary,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
+          for (var index = 0; index < items.length; index++) ...[
+            _DeletionInfoRow(item: items[index]),
+            if (index != items.length - 1)
+              Padding(
+                padding: const EdgeInsets.only(left: 38, top: 14, bottom: 14),
+                child: Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: Colors.white.withValues(alpha: 0.08),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    item,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.78),
-                      fontSize: 13,
-                      height: 18 / 13,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (item != items.last) const SizedBox(height: 8),
+              ),
           ],
         ],
       ),
@@ -311,41 +296,217 @@ class _InfoDeletionCard extends StatelessWidget {
   }
 }
 
-class _RiskNoticeCard extends StatelessWidget {
-  const _RiskNoticeCard({required this.title, required this.body});
+class _DeletionInfoRow extends StatelessWidget {
+  const _DeletionInfoRow({required this.item});
 
-  final String title;
-  final String body;
+  final _DeletionInfoItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = item.subtitle;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _DeletionIconTile(item: item),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(top: subtitle == null ? 2 : 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    height: 22 / 16,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 12,
+                      height: 16 / 12,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DeletionIconTile extends StatelessWidget {
+  const _DeletionIconTile({required this.item});
+
+  final _DeletionInfoItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 26,
+      height: 26,
+      decoration: BoxDecoration(
+        color: item.backgroundColor,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      alignment: Alignment.center,
+      child: Image.asset(
+        item.assetPath,
+        width: 20,
+        height: 20,
+        fit: BoxFit.contain,
+      ),
+    );
+  }
+}
+
+class _CancellationRiskNotice extends StatelessWidget {
+  const _CancellationRiskNotice({
+    required this.firstLine,
+    required this.secondLine,
+  });
+
+  final String firstLine;
+  final String secondLine;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('account_cancellation_risk_card'),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.danger.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.danger.withValues(alpha: 0.35)),
-      ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: AppColors.danger,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              height: 20 / 14,
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Image.asset(
+              '$_accountCancellationAssetRoot/warning.png',
+              width: 20,
+              height: 20,
+              fit: BoxFit.contain,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            body,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.72),
-              fontSize: 13,
-              height: 18 / 13,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  firstLine,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 12,
+                    height: 16 / 12,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 9),
+                  child: Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
+                ),
+                Text(
+                  secondLine,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 12,
+                    height: 16 / 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CancellationBottomBar extends StatelessWidget {
+  const _CancellationBottomBar({
+    required this.acceptedRisk,
+    required this.isSubmitting,
+    required this.canSubmit,
+    required this.checkboxLabel,
+    required this.buttonLabel,
+    required this.onAcceptedRiskChanged,
+    required this.onSubmit,
+  });
+
+  final bool acceptedRisk;
+  final bool isSubmitting;
+  final bool canSubmit;
+  final String checkboxLabel;
+  final String buttonLabel;
+  final ValueChanged<bool> onAcceptedRiskChanged;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.paddingOf(context).bottom;
+    return Container(
+      height: 108 + bottomPadding,
+      padding: EdgeInsets.fromLTRB(50, 14, 50, 20 + bottomPadding),
+      decoration: const BoxDecoration(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0x00251B2D), Color(0xFF251B2D)],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _RiskCheckboxRow(
+            label: checkboxLabel,
+            value: acceptedRisk,
+            onChanged: onAcceptedRiskChanged,
+          ),
+          const Spacer(),
+          SizedBox(
+            height: 44,
+            child: FilledButton(
+              key: const ValueKey('account_cancellation_delete_button'),
+              onPressed: canSubmit ? onSubmit : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFFF0D83),
+                disabledBackgroundColor: const Color(
+                  0xFFFF0D83,
+                ).withValues(alpha: 0.38),
+                foregroundColor: Colors.white,
+                disabledForegroundColor: Colors.white.withValues(alpha: 0.45),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: EdgeInsets.zero,
+              ),
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(
+                      buttonLabel,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        height: 20 / 16,
+                      ),
+                    ),
             ),
           ),
         ],
@@ -372,35 +533,49 @@ class _RiskCheckboxRow extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: () => onChanged(!value),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          SizedBox(
-            width: 24,
-            height: 24,
-            child: Checkbox(
-              value: value,
-              onChanged: (checked) => onChanged(checked ?? false),
-              activeColor: AppColors.danger,
-              checkColor: Colors.white,
-              side: BorderSide(
-                color: Colors.white.withValues(alpha: value ? 1 : 0.45),
-              ),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-          ),
-          const SizedBox(width: 10),
+          _RiskCheckboxIndicator(value: value),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.88),
-                fontSize: 13,
-                height: 18 / 13,
+                fontSize: 12,
+                height: 16 / 12,
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _RiskCheckboxIndicator extends StatelessWidget {
+  const _RiskCheckboxIndicator({required this.value});
+
+  final bool value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 14,
+      height: 14,
+      decoration: BoxDecoration(
+        color: value ? const Color(0xFFFF0D83) : Colors.transparent,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.white.withValues(alpha: value ? 1 : 0.45),
+          width: 1,
+        ),
+      ),
+      child: value
+          ? const Icon(Icons.check, size: 10, color: Colors.white)
+          : null,
     );
   }
 }

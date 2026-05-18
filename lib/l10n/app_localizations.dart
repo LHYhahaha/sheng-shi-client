@@ -90,28 +90,44 @@ class AppLocalizations {
   String get accountCancellationTitle =>
       _text(en: 'Account cancellation', zh: '账号注销');
   String get accountCancellationDescription => _text(
-    en: 'Deleting your account permanently removes profile data, wallet balance, membership, and playback history from this device after confirmation.',
-    zh: '注销账号后，将按规则删除个人资料、钱包与会员等数据；确认后本设备将退出当前登录态。',
+    en: 'Please confirm the information to be deleted:',
+    zh: '请确认将删除以下信息：',
   );
-  String get accountCancellationInfoCardTitle =>
-      _text(en: 'The following will be deleted', zh: '将删除以下信息');
-  String get accountCancellationInfoProfile =>
-      _text(en: 'Profile and login identity', zh: '个人资料与登录身份');
-  String get accountCancellationInfoWallet =>
-      _text(en: 'Wallet balance and transaction records', zh: '钱包余额与交易记录');
-  String get accountCancellationInfoMembership =>
-      _text(en: 'Membership status and benefits', zh: '会员状态与权益');
-  String get accountCancellationInfoPlayback =>
-      _text(en: 'Unlock history and playback progress', zh: '解锁记录与播放进度');
-  String get accountCancellationRiskTitle =>
-      _text(en: 'Risk notice', zh: '风险提示');
-  String get accountCancellationRiskBody => _text(
-    en: 'Account deletion cannot be undone. You must have zero paid coins and no active membership before the server accepts deletion.',
-    zh: '账号注销后无法恢复。服务端要求充值金币为 0 且非会员状态方可注销。',
+  String get accountCancellationInfoPersonalTitle =>
+      _text(en: 'Personal Information', zh: '个人信息');
+  String get accountCancellationInfoPersonalSubtitle => _text(
+    en: 'Your personal information (email address and nickname will be deleted)',
+    zh: '你的个人信息（邮箱地址与昵称将被删除）',
+  );
+  String get accountCancellationInfoThirdPartyTitle =>
+      _text(en: 'Third-party account information', zh: '第三方账号信息');
+  String get accountCancellationInfoAccountBalanceTitle =>
+      _text(en: 'Account balance', zh: '账号资产');
+  String get accountCancellationInfoAccountBalanceSubtitle => _text(
+    en: 'Consumption History, Recharge History, Chapter Unlock History, Series in My List.',
+    zh: '消费记录、充值记录、剧集解锁记录、我的片单中的短剧。',
+  );
+  String get accountCancellationInfoYourBalanceTitle =>
+      _text(en: 'Your balance', zh: '你的余额');
+  String get accountCancellationInfoYourBalanceSubtitle => _text(
+    en: 'Your Coin balance is zero. You may delete your account if desired.',
+    zh: '你的金币余额为 0，如需注销可继续操作。',
+  );
+  String get accountCancellationInfoMemberBenefitsTitle =>
+      _text(en: 'Member benefits', zh: '会员权益');
+  String get accountCancellationInfoMemberBenefitsSubtitle =>
+      _text(en: 'You’re not a member yet', zh: '你当前还不是会员');
+  String get accountCancellationRiskLogoutDevices => _text(
+    en: 'To ensure proper access, please log out from the account on other devices',
+    zh: '为确保正常访问，请先在其他设备退出该账号。',
+  );
+  String get accountCancellationRiskDeletionFinal => _text(
+    en: 'All information of this account will be deleted and cannot be retrieved.',
+    zh: '该账号的所有信息将被删除，且无法找回。',
   );
   String get accountCancellationAcceptRisk => _text(
-    en: 'I accept the deletion risks and agree to delete my account',
-    zh: '我接受删除风险并同意删除我的账户',
+    en: 'I accept the risk and agree to delete my account',
+    zh: '我接受风险并同意删除我的账户',
   );
   String accountCancellationDeleteButtonCountdown(int seconds) =>
       _text(en: 'Delete account (${seconds}s)', zh: '删除账号（${seconds}s）');

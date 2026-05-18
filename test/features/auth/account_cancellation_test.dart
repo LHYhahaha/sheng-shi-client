@@ -77,8 +77,14 @@ void main() {
         );
         await tester.pump();
 
-        final checkbox = tester.widget<Checkbox>(find.byType(Checkbox));
-        expect(checkbox.value, isFalse);
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(AccountCancellationPage)),
+        );
+        expect(
+          container.read(accountCancellationControllerProvider).acceptedRisk,
+          isFalse,
+        );
+        expect(find.byType(Checkbox), findsNothing);
 
         final button = tester.widget<FilledButton>(
           find.byKey(const ValueKey('account_cancellation_delete_button')),
@@ -87,6 +93,63 @@ void main() {
         expect(find.text('Delete account (9s)'), findsOneWidget);
       },
     );
+
+    testWidgets('shows Figma deletion rows, risk copy, and icon assets', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _buildRouterTestApp(initialLocation: RoutePaths.accountCancellation),
+      );
+      await tester.pump();
+
+      expect(
+        find.text('Please confirm the information to be deleted:'),
+        findsOneWidget,
+      );
+      expect(find.text('Personal Information'), findsOneWidget);
+      expect(find.text('Third-party account information'), findsOneWidget);
+      expect(find.text('Account balance'), findsOneWidget);
+      expect(find.text('Your balance'), findsOneWidget);
+      expect(find.text('Member benefits'), findsOneWidget);
+      expect(
+        find.text(
+          'Your personal information (email address and nickname will be deleted)',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'Consumption History, Recharge History, Chapter Unlock History, Series in My List.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'Your Coin balance is zero. You may delete your account if desired.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('You’re not a member yet'), findsOneWidget);
+      expect(
+        find.text(
+          'To ensure proper access, please log out from the account on other devices',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'All information of this account will be deleted and cannot be retrieved.',
+        ),
+        findsOneWidget,
+      );
+
+      expect(_assetImage('personal_info.png'), findsOneWidget);
+      expect(_assetImage('third_party_account.png'), findsOneWidget);
+      expect(_assetImage('account_balance.png'), findsOneWidget);
+      expect(_assetImage('your_balance.png'), findsOneWidget);
+      expect(_assetImage('member_benefits.png'), findsOneWidget);
+      expect(_assetImage('warning.png'), findsOneWidget);
+    });
 
     testWidgets('countdown finished without checkbox keeps button disabled', (
       tester,
@@ -339,6 +402,17 @@ class _CountingAuthRepository implements AuthRepository {
     _session = const AuthSession.guest();
     return _session;
   }
+}
+
+Finder _assetImage(String fileName) {
+  final path = 'assets/images/auth/account_cancellation/$fileName';
+  return find.byWidgetPredicate((widget) {
+    if (widget is! Image) {
+      return false;
+    }
+    final image = widget.image;
+    return image is AssetImage && image.assetName == path;
+  });
 }
 
 Widget _buildRouterTestApp({
