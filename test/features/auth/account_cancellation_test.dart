@@ -151,6 +151,39 @@ void main() {
       expect(_assetImage('warning.png'), findsOneWidget);
     });
 
+    testWidgets('small screen keeps body scrollable and risk text readable', (
+      tester,
+    ) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(375, 640);
+
+      await tester.pumpWidget(
+        _buildRouterTestApp(initialLocation: RoutePaths.accountCancellation),
+      );
+      await tester.pump();
+
+      expect(
+        find.text('I accept the risk and agree to delete my account'),
+        findsOneWidget,
+      );
+
+      await tester.drag(find.byType(ListView), const Offset(0, -220));
+      await tester.pump();
+
+      expect(
+        find.text(
+          'All information of this account will be deleted and cannot be retrieved.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('I accept the risk and agree to delete my account'),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('countdown finished without checkbox keeps button disabled', (
       tester,
     ) async {

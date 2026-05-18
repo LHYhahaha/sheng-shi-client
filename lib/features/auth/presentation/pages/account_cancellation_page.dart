@@ -540,12 +540,12 @@ class _RiskCheckboxRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+              overflow: TextOverflow.visible,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.88),
-                fontSize: 12,
-                height: 16 / 12,
+                fontSize: 11,
+                height: 15 / 11,
               ),
             ),
           ),
