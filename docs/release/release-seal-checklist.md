@@ -7,9 +7,9 @@
 
 相关文档：
 
-- [Remote API Staging Checklist](remote-api-staging-checklist.md) — **仅** internal staging 联调构建
-- [2026-05 RC Historical Archive](archive/2026-05-rc/README.md)
-- [Remote Contract Index](remote-contract-index.md)
+- [Remote API Staging Checklist](../api/remote-api-staging-checklist.md) — **仅** internal staging 联调构建
+- [2026-05 RC Historical Archive](../archive/2026-05-rc/README.md)
+- [Remote Contract Index](../api/remote-contract-index.md)
 - [Entitlement Commerce Player Regression](entitlement-commerce-player-regression.md)
 
 ---
@@ -42,7 +42,7 @@ flutter run \
   --dart-define=USE_REMOTE_DRAMA_API=true
 ```
 
-详见 [remote-api-staging-checklist.md](remote-api-staging-checklist.md)。
+详见 [remote-api-staging-checklist.md](../api/remote-api-staging-checklist.md)。
 
 ---
 
@@ -204,7 +204,7 @@ flutter test integration_test/app_smoke_test.dart -d <deviceId>
 
 ### Internal staging（非 RC，仅供联调）
 
-见 [remote-api-staging-checklist.md](remote-api-staging-checklist.md)。
+见 [remote-api-staging-checklist.md](../api/remote-api-staging-checklist.md)。
 
 ---
 

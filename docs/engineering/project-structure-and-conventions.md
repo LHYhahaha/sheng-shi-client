@@ -3,8 +3,8 @@
 本文档用于说明当前 Flutter 客户端项目的目录结构、代码放置规则和协作规范。更完整的技术选型和里程碑计划请参考：
 
 - [技术架构](technical-architecture.md)
-- [多语言与首页数据架构规范](localization-and-home-data-architecture.md)
-- [2026-05 RC 历史归档](archive/2026-05-rc/README.md)
+- [多语言与首页数据架构规范](../localization/localization-and-home-data-architecture.md)
+- [2026-05 RC 历史归档](../archive/2026-05-rc/README.md)
 
 ## 1. 项目概览
 

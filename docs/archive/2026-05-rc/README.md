@@ -4,11 +4,11 @@
 
 这些文档仅用于追溯决策背景，不再作为新开发任务的入口。开新版本时，请优先参考：
 
-- [Release Seal Checklist](../../release-seal-checklist.md)
-- [AppModal Supported Modals](../../app-modal-supported-modals.md)
-- [App Runtime System](../../app-runtime-system.md)
-- [Remote Contract Index](../../remote-contract-index.md)
-- [Project Structure And Conventions](../../project-structure-and-conventions.md)
+- [Release Seal Checklist](../../release/release-seal-checklist.md)
+- [AppModal Supported Modals](../../modal/app-modal-supported-modals.md)
+- [App Runtime System](../../runtime/app-runtime-system.md)
+- [Remote Contract Index](../../api/remote-contract-index.md)
+- [Project Structure And Conventions](../../engineering/project-structure-and-conventions.md)
 
 ## 已归档文档
 

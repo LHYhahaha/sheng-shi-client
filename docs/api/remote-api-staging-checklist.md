@@ -6,7 +6,7 @@
 **不接真实 API 前**：所有开关编译期默认 `false`；`RemoteApiReadinessGuard` 用于校验组合，feature provider **默认仍读** `RemoteApiSwitches.fromEnvironment()`（未自动套用 `effective`，避免隐式行为变化）。
 
 > **与 RC 封板包区分**  
-> - **Mock RC / 商店候选 release**：**禁止**任何 `USE_REMOTE_*=true` 与真实 `API_BASE_URL`。见 [release-seal-checklist.md](release-seal-checklist.md) §1–§2。  
+> - **Mock RC / 商店候选 release**：**禁止**任何 `USE_REMOTE_*=true` 与真实 `API_BASE_URL`。见 [release-seal-checklist.md](../release/release-seal-checklist.md) §1–§2。  
 > - **本文档**：仅适用于 **internal staging build**（工程/QA 联调），不得与封板 RC 使用同一构建参数。
 
 ## Remote API Switch Matrix
@@ -50,7 +50,7 @@
 
 ## Staging Smoke Commands
 
-**注意：** 以下命令用于 **internal staging**，不是 mock RC 封板包。RC 构建见 [release-seal-checklist.md](release-seal-checklist.md) §5。
+**注意：** 以下命令用于 **internal staging**，不是 mock RC 封板包。RC 构建见 [release-seal-checklist.md](../release/release-seal-checklist.md) §5。
 
 ### 第一阶段（推荐）：仅 Home / Drama
 

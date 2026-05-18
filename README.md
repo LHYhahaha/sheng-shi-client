@@ -13,8 +13,8 @@
 
 封板与 QA 入口：
 
-- [Release Seal Checklist](docs/release-seal-checklist.md)：RC 构建规则、禁止开关、QA smoke 路径。
-- [Remote API Staging Checklist](docs/remote-api-staging-checklist.md)：真实接口联调时如何安全打开 staging。
+- [Release Seal Checklist](docs/release/release-seal-checklist.md)：RC 构建规则、禁止开关、QA smoke 路径。
+- [Remote API Staging Checklist](docs/api/remote-api-staging-checklist.md)：真实接口联调时如何安全打开 staging。
 - [Docs Archive 2026-05 RC](docs/archive/2026-05-rc/README.md)：已完成的历史计划与过程文档。
 
 ## 文档导航
@@ -23,11 +23,11 @@
 
 1. 本文档：了解项目状态、运行、测试、打包和公共能力入口。
 2. [Docs Index](docs/README.md)：查看当前有效文档和历史归档入口。
-3. [Release Seal Checklist](docs/release-seal-checklist.md)：了解当前 RC / release 的封板边界。
-4. [AppModal Supported Modals](docs/app-modal-supported-modals.md)：了解全局弹窗支持范围和使用方式。
-5. [App Runtime System](docs/app-runtime-system.md)：了解设备分级、播放器策略和运行时配置。
-6. [Remote Contract Index](docs/remote-contract-index.md)：了解未来真实 API 的模块开关和接口契约。
-7. [Project Structure And Conventions](docs/project-structure-and-conventions.md)：了解目录和分层规范。
+3. [Release Seal Checklist](docs/release/release-seal-checklist.md)：了解当前 RC / release 的封板边界。
+4. [AppModal Supported Modals](docs/modal/app-modal-supported-modals.md)：了解全局弹窗支持范围和使用方式。
+5. [App Runtime System](docs/runtime/app-runtime-system.md)：了解设备分级、播放器策略和运行时配置。
+6. [Remote Contract Index](docs/api/remote-contract-index.md)：了解未来真实 API 的模块开关和接口契约。
+7. [Project Structure And Conventions](docs/engineering/project-structure-and-conventions.md)：了解目录和分层规范。
 
 ## 环境要求
 
@@ -111,7 +111,7 @@ RC / release 禁止项：
 - 真实 `API_BASE_URL`
 - `PLAYER_HLS_LOCAL_PROXY_SPIKE=true`
 
-真实接口联调只允许使用 internal staging build，第一阶段只建议打开 `USE_REMOTE_DRAMA_API=true`。完整规则见 [Remote API Staging Checklist](docs/remote-api-staging-checklist.md)。
+真实接口联调只允许使用 internal staging build，第一阶段只建议打开 `USE_REMOTE_DRAMA_API=true`。完整规则见 [Remote API Staging Checklist](docs/api/remote-api-staging-checklist.md)。
 
 ## 目录结构
 
@@ -131,7 +131,7 @@ integration_test/      真机 smoke 测试
 docs/                  项目规范、架构、联调、封板文档
 ```
 
-详细规范见 [Project Structure And Conventions](docs/project-structure-and-conventions.md)。
+详细规范见 [Project Structure And Conventions](docs/engineering/project-structure-and-conventions.md)。
 
 ## 公共能力
 
@@ -152,7 +152,7 @@ Runtime 是 App 启动后的统一运行时策略入口，负责设备能力、�
 - 远程配置未来应合并进 `AppRuntimeConfig`，再由各 feature 派生自己的配置。
 - 当前远程配置未接真实服务端。
 
-文档：[App Runtime System](docs/app-runtime-system.md)。
+文档：[App Runtime System](docs/runtime/app-runtime-system.md)。
 
 ### Remote API Switches
 
@@ -189,9 +189,9 @@ flutter run \
 
 文档：
 
-- [Remote Contract Index](docs/remote-contract-index.md)
-- [Remote API Staging Checklist](docs/remote-api-staging-checklist.md)
-- [Mock Data And API Readiness Review](docs/mock-data-and-api-readiness-review.md)
+- [Remote Contract Index](docs/api/remote-contract-index.md)
+- [Remote API Staging Checklist](docs/api/remote-api-staging-checklist.md)
+- [Mock Data And API Readiness Review](docs/api/mock-data-and-api-readiness-review.md)
 
 ### AppModal 全局弹窗
 
@@ -234,9 +234,9 @@ if (result.isConfirmed) {
 
 业务弹窗如果需要自定义 UI，应通过 feature payload/result + presenter registry 接入，不能让 `core/modal` 反向依赖 feature。
 
-文档：[Global Overlay / Modal System Plan](docs/global-overlay-modal-system-plan.md)。
+文档：[Global Overlay / Modal System Plan](docs/modal/global-overlay-modal-system-plan.md)。
 
-已支持弹窗清单、用途和接入方式见 [AppModal Supported Modals](docs/app-modal-supported-modals.md)。
+已支持弹窗清单、用途和接入方式见 [AppModal Supported Modals](docs/modal/app-modal-supported-modals.md)。
 
 ### Toast
 
@@ -275,9 +275,9 @@ cleanup 会执行：
 
 文档：
 
-- [API Integration Readiness Plan](docs/api-integration-readiness-plan.md)
-- [Networking Guidelines](docs/networking-guidelines.md)
-- [API Integration Plan](docs/api-integration-plan.md)
+- [API Integration Readiness Plan](docs/api/api-integration-readiness-plan.md)
+- [Networking Guidelines](docs/api/networking-guidelines.md)
+- [API Integration Plan](docs/api/api-integration-plan.md)
 
 ### Player Performance Policy
 
@@ -298,10 +298,10 @@ cleanup 会执行：
 
 文档：
 
-- [Player Android Performance Policy](docs/player-android-stable-mode-plan.md)
-- [Player Feed Engine Refactor Plan](docs/player-feed-engine-refactor-plan.md)
-- [Player Source And CDN Spec](docs/player-source-and-cdn-spec.md)
-- [Player Local HLS Proxy / Cache Decision](docs/player-local-hls-proxy-cache.md)
+- [Player Android Performance Policy](docs/player/player-android-stable-mode-plan.md)
+- [Player Feed Engine Refactor Plan](docs/player/player-feed-engine-refactor-plan.md)
+- [Player Source And CDN Spec](docs/player/player-source-and-cdn-spec.md)
+- [Player Local HLS Proxy / Cache Decision](docs/player/player-local-hls-proxy-cache.md)
 
 ### Commerce / Entitlement
 
@@ -322,8 +322,8 @@ cleanup 会执行：
 
 文档：
 
-- [Entitlement Commerce Player Regression](docs/entitlement-commerce-player-regression.md)
-- [Mock Data And API Readiness Review](docs/mock-data-and-api-readiness-review.md)
+- [Entitlement Commerce Player Regression](docs/release/entitlement-commerce-player-regression.md)
+- [Mock Data And API Readiness Review](docs/api/mock-data-and-api-readiness-review.md)
 
 ### Localization
 
@@ -334,35 +334,35 @@ cleanup 会执行：
 - 字幕按客户端语言选择
 - 远程语言包下载与本地缓存
 
-文档：[Localization And Home Data Architecture](docs/localization-and-home-data-architecture.md)。
+文档：[Localization And Home Data Architecture](docs/localization/localization-and-home-data-architecture.md)。
 
 ## 常用文档入口
 
 封板 / QA：
 
-- [Release Seal Checklist](docs/release-seal-checklist.md)
-- [Entitlement Commerce Player Regression](docs/entitlement-commerce-player-regression.md)
+- [Release Seal Checklist](docs/release/release-seal-checklist.md)
+- [Entitlement Commerce Player Regression](docs/release/entitlement-commerce-player-regression.md)
 
 API / 联调：
 
-- [Remote API Staging Checklist](docs/remote-api-staging-checklist.md)
-- [Remote Contract Index](docs/remote-contract-index.md)
-- [API Integration Readiness Plan](docs/api-integration-readiness-plan.md)
-- [Networking Guidelines](docs/networking-guidelines.md)
+- [Remote API Staging Checklist](docs/api/remote-api-staging-checklist.md)
+- [Remote Contract Index](docs/api/remote-contract-index.md)
+- [API Integration Readiness Plan](docs/api/api-integration-readiness-plan.md)
+- [Networking Guidelines](docs/api/networking-guidelines.md)
 
 播放器：
 
-- [Player Experience System Architecture](docs/player-experience-architecture-plan.md)
-- [Player Feed Engine Refactor Plan](docs/player-feed-engine-refactor-plan.md)
-- [Player Android Performance Policy](docs/player-android-stable-mode-plan.md)
-- [Player Source And CDN Spec](docs/player-source-and-cdn-spec.md)
+- [Player Experience System Architecture](docs/player/player-experience-architecture-plan.md)
+- [Player Feed Engine Refactor Plan](docs/player/player-feed-engine-refactor-plan.md)
+- [Player Android Performance Policy](docs/player/player-android-stable-mode-plan.md)
+- [Player Source And CDN Spec](docs/player/player-source-and-cdn-spec.md)
 
 工程规范：
 
-- [Project Structure And Conventions](docs/project-structure-and-conventions.md)
-- [Technical Architecture](docs/technical-architecture.md)
-- [Bottom Navigation Assets](docs/bottom-navigation-assets.md)
-- [AppModal Supported Modals](docs/app-modal-supported-modals.md)
+- [Project Structure And Conventions](docs/engineering/project-structure-and-conventions.md)
+- [Technical Architecture](docs/engineering/technical-architecture.md)
+- [Bottom Navigation Assets](docs/engineering/bottom-navigation-assets.md)
+- [AppModal Supported Modals](docs/modal/app-modal-supported-modals.md)
 
 历史归档：
 
