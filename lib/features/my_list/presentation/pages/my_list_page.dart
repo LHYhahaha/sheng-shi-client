@@ -14,8 +14,8 @@ import '../../domain/my_list_item.dart';
 /// My list 页面。
 ///
 /// 页面只负责组装 header/tab/list/slidable 和 shell navigation 显隐；列表数据、编辑态、
-/// 选择集合、删除和 open slidable 都由 MyListController 管理，方便后续接真实接口时
-/// 在 controller 内统一处理乐观更新与失败回滚。
+/// 选择集合、删除和 open slidable 都由 MyListController 管理。两个 tab 都支持批量编辑
+/// 和单行滑动删除，但两种交互互斥（编辑模式下禁用滑动删除）。
 class MyListPage extends ConsumerStatefulWidget {
   const MyListPage({super.key});
 
@@ -144,11 +144,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
       padding: EdgeInsets.fromLTRB(
         16,
         15,
-        state.isCollectionEditing
-            ? 4
-            : isPlayList
-            ? 0
-            : 36,
+        state.isCollectionEditing ? 4 : 0,
         state.isCollectionEditing
             ? 108 + MediaQuery.viewPaddingOf(context).bottom
             : 24,
@@ -158,14 +154,14 @@ class _MyListPageState extends ConsumerState<MyListPage> {
       itemBuilder: (context, index) {
         final item = state.items[index];
         return _MyListRowSwipeAction(
-          enabled:
-              !state.isCollectionEditing && state.selectedTab == MyListTab.play,
+          // 两个 tab 都支持左滑删除，但编辑模式下禁用
+          enabled: !state.isCollectionEditing,
           item: item,
           onDelete: () => controller.deleteItem(item.id),
           onOpened: () => controller.openPlayItem(item.id),
           onClosed: () => controller.closeOpenPlayItem(item.id),
           child: Padding(
-            padding: EdgeInsets.only(right: isPlayList ? 36 : 0),
+            padding: EdgeInsets.zero,
             child: _MyListRow(
               item: item,
               choosing: state.isCollectionEditing,
@@ -426,15 +422,15 @@ class _MyListRowSwipeAction extends StatelessWidget {
       return child;
     }
 
-    // 播放列表的删除是单行 slidable；收藏编辑态关闭该能力，避免同一行同时响应
-    // 选择和滑动删除。
+    // 两个 tab 都支持左滑删除，但编辑模式下禁用该能力，避免同一行同时响应
+    // 选择和滑动删除。当进入编辑模式时，已打开的 slidable 会自动关闭。
     return _SlidableOpenTracker(
       onOpened: onOpened,
       onClosed: onClosed,
       builder: (context, controller) => Slidable(
         key: ValueKey(item.id),
         controller: controller,
-        groupTag: 'my-list-play',
+        groupTag: 'my-list-items',
         closeOnScroll: true,
         endActionPane: ActionPane(
           motion: const ScrollMotion(),

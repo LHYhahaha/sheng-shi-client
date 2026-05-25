@@ -1,17 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../network/api_client.dart';
 import 'auth_refresh_coordinator.dart';
 import 'auth_refresh_executor_provider.dart';
 import 'auth_token_store.dart';
 import 'session_cleanup_coordinator.dart';
 
-final apiSessionAuthHandlerProvider = Provider<ApiSessionAuthHandler>((ref) {
+final apiSessionAuthHandlerProvider = Provider.family<ApiSessionAuthHandler, ApiClient>((ref, apiClient) {
   return ApiSessionAuthHandler(
     refreshCoordinator: ref.watch(authRefreshCoordinatorProvider),
     tokenStore: ref.read(authTokenStoreProvider.notifier),
     readToken: () => ref.read(authTokenStoreProvider),
     sessionCleanup: ref.watch(sessionCleanupCoordinatorProvider),
-    refreshExecutor: ref.watch(authRefreshExecutorProvider),
+    // 使用工厂函数创建执行器，传入 ApiClient
+    refreshExecutor: createAuthRefreshExecutor(apiClient),
   );
 });
 

@@ -14,8 +14,8 @@ final myListControllerProvider =
 
 /// 片单页状态。
 ///
-/// 收藏列表和播放列表共享页面骨架，但交互边界不同：收藏列表支持批量编辑/选择/删除，
-/// 播放列表支持单条滑出删除。`openPlayItemId` 只服务播放列表滑动状态，进入编辑、
+/// 收藏列表和播放列表共享页面骨架和编辑交互。两个 tab 都支持批量编辑/选择/删除，
+/// 也都支持单行滑动删除。`openPlayItemId` 记录当前打开的滑动删除项，进入编辑、
 /// 切 tab、删除或加载失败时都要清掉，避免旧行的 slidable 状态残留到新列表。
 class MyListState {
   const MyListState({
@@ -44,8 +44,8 @@ class MyListState {
 
   /// 收藏列表是否处于批量编辑模式。
   ///
-  /// 只允许在 collection tab 为 true。进入编辑会隐藏 shell bottom navigation，并关闭
-  /// 播放列表 slidable 状态。
+  /// 两个 tab 都支持编辑。进入编辑会隐藏 shell bottom navigation，并关闭
+  /// 任何打开的 slidable 状态。
   final bool isCollectionEditing;
 
   /// 当前 tab 下展示的条目。
@@ -56,7 +56,7 @@ class MyListState {
 
   /// 批量编辑时选中的 item id 集合。
   ///
-  /// 只对 collection tab 有意义。切 tab、reload、删除后必须清空，避免选择态命中
+  /// 两个 tab 都支持编辑。切 tab、reload、删除后必须清空，避免选择态命中
   /// 已不存在的条目。
   final Set<String> selectedIds;
 
@@ -72,14 +72,14 @@ class MyListState {
 
   /// 播放列表当前打开滑动删除动作的 item id。
   ///
-  /// 只允许一个打开项。它不用于 collection 编辑态，切 tab/删除/reload 都要清空。
+  /// 只允许一个打开项。两个 tab 都支持滑动删除，切 tab/删除/reload/进入编辑都要清空。
   final String? openPlayItemId;
 
   bool get isEmpty => !isLoading && error == null && items.isEmpty;
 
   int get selectedCount => selectedIds.length;
 
-  bool get canEditCollection => selectedTab == MyListTab.collection;
+  bool get canEditCollection => true;
 
   MyListState copyWith({
     MyListTab? selectedTab,
@@ -179,12 +179,8 @@ class MyListController extends Notifier<MyListState> {
   }
 
   void enterCollectionEdit() {
-    if (!state.canEditCollection) {
-      return;
-    }
-
-    // 只有收藏列表允许批量编辑。播放列表用单行滑动删除，两套交互不能同时存在，
-    // 否则底部删除栏和 slidable 删除会对同一列表产生冲突。
+    // 两个 tab 都支持批量编辑。进入编辑模式时关闭任何打开的 slidable，
+    // 避免编辑和滑动删除混用。
     state = state.copyWith(
       isCollectionEditing: true,
       selectedIds: const {},
@@ -243,11 +239,11 @@ class MyListController extends Notifier<MyListState> {
   }
 
   void openPlayItem(String id) {
-    if (state.selectedTab != MyListTab.play || state.isCollectionEditing) {
+    if (state.isCollectionEditing) {
       return;
     }
 
-    // 只记录一个打开项，配合 SlidableAutoCloseBehavior 保证播放列表不会同时露出
+    // 只记录一个打开项，配合 SlidableAutoCloseBehavior 保证两个 tab 都不会同时露出
     // 多个删除动作。编辑态下不允许打开，避免批量选择和单行删除混用。
     state = state.copyWith(openPlayItemId: id);
   }

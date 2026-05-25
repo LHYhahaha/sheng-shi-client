@@ -5,6 +5,7 @@ import 'auth_token_storage.dart';
 import 'auth_token_storage_provider.dart';
 
 export 'auth_token_snapshot.dart';
+export 'user_info_store.dart';
 
 final authTokenStoreProvider =
     NotifierProvider<AuthTokenStore, AuthTokenSnapshot>(AuthTokenStore.new);

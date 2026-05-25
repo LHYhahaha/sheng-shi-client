@@ -13,7 +13,7 @@ class RemoteApiSwitches {
     this.store = false,
     this.membership = false,
     this.entitlement = false,
-    this.auth = false,
+    this.auth = true,  // ← 改为 true，默认启用Auth远程API
     this.legacyUseRemoteApi = false,
   });
 
@@ -47,7 +47,8 @@ class RemoteApiSwitches {
       store: _envBool('USE_REMOTE_STORE_API'),
       membership: _envBool('USE_REMOTE_MEMBERSHIP_API'),
       entitlement: _envBool('USE_REMOTE_ENTITLEMENT_API'),
-      auth: _envBool('USE_REMOTE_AUTH_API'),
+      // auth: _envBool('USE_REMOTE_AUTH_API'),
+      auth: _envBoolWithDefault('USE_REMOTE_AUTH_API',true),
       legacyUseRemoteApi: _envBool('USE_REMOTE_API'),
     );
   }
@@ -143,3 +144,11 @@ class RemoteApiSwitches {
 }
 
 bool _envBool(String key) => bool.fromEnvironment(key);
+
+bool _envBoolWithDefault(String key, bool defaultValue) {
+  const value = String.fromEnvironment('USE_REMOTE_AUTH_API');
+  if (value.isEmpty) {
+    return defaultValue;
+  }
+  return value.toLowerCase() == 'true';
+}

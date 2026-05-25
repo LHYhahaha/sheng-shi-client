@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/api_session_auth_handler.dart';
 import '../auth/auth_token_store.dart';
+import '../auth/user_info_store.dart';
 import '../runtime/api_lang_provider.dart';
 import '../runtime/api_platform_provider.dart';
 import '../runtime/app_version_provider.dart';
@@ -32,8 +33,20 @@ final apiRequestContextProvider = Provider<ApiRequestContext>((ref) {
 const _installIdLoadingFallback = 'install-id-pending';
 
 final apiClientProvider = Provider<ApiClient>((ref) {
-  return ApiClient(
+  // 创建 ApiClient，但先不传 sessionAuthHandler
+  final apiClient = ApiClient(
     requestContextReader: () => ref.read(apiRequestContextProvider),
-    sessionAuthHandler: ref.watch(apiSessionAuthHandlerProvider),
+    sessionAuthHandler: null,
   );
+  
+  // 现在创建 sessionAuthHandler，传入已创建的 apiClient
+  final sessionAuthHandler = ref.watch(
+    apiSessionAuthHandlerProvider(apiClient),
+  );
+  
+  // 更新 ApiClient 的 sessionAuthHandler
+  apiClient.setSessionAuthHandler(sessionAuthHandler);
+  
+  return apiClient;
 });
+

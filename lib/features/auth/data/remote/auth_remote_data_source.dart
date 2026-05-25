@@ -8,6 +8,7 @@ import '../dto/login_request_dto.dart';
 import '../dto/logout_request_dto.dart';
 import '../dto/oauth_login_request_dto.dart';
 import '../dto/refresh_token_request_dto.dart';
+import '../dto/user_info_dto.dart';
 
 /// Auth 远程数据源骨架。
 ///
@@ -19,13 +20,30 @@ class AuthRemoteDataSource {
 
   final ApiClient _apiClient;
 
-  Future<AuthSessionDto> loginDevice(LoginRequestDto request) {
-    return _apiClient.post<AuthSessionDto>(
-      '/auth/login/device',
-      data: request.toJson(),
-      authPolicy: ApiAuthPolicy.none,
-      decoder: AuthSessionDto.fromJson,
-    );
+  Future<AuthSessionDto> loginDevice(LoginRequestDto request) async {
+    print('[AuthRemoteDataSource] loginDevice request:');
+    print('[AuthRemoteDataSource]   URL: POST /api/user/device/login');
+    print('[AuthRemoteDataSource]   Body: ${request.toJson()}');
+    
+    try {
+      final result = await _apiClient.post<AuthSessionDto>(
+        '/api/user/device/login',  // ← 改为正确的路径
+        data: request.toJson(),
+        authPolicy: ApiAuthPolicy.none,
+        decoder: AuthSessionDto.fromJson,
+      );
+      
+      print('[AuthRemoteDataSource] loginDevice response:');
+      print('[AuthRemoteDataSource]   isAuthenticated: ${result.isAuthenticated}');
+      print('[AuthRemoteDataSource]   isNewUser: ${result.isNewUser}');
+      print('[AuthRemoteDataSource]   user: ${result.user?.userId}');
+      print('[AuthRemoteDataSource]   token: ${result.token?.accessToken?.substring(0, 20)}...');
+      
+      return result;
+    } catch (e) {
+      print('[AuthRemoteDataSource] loginDevice error: $e');
+      rethrow;
+    }
   }
 
   Future<AuthSessionDto> loginOAuth(OAuthLoginRequestDto request) {
@@ -74,6 +92,14 @@ class AuthRemoteDataSource {
       data: request.toJson(),
       authPolicy: ApiAuthPolicy.required,
       decoder: AuthSessionDto.fromJson,
+    );
+  }
+
+  Future<UserInfoDto> getUserInfo() {
+    return _apiClient.get<UserInfoDto>(
+      '/api/user/get',
+      authPolicy: ApiAuthPolicy.required,
+      decoder: UserInfoDto.fromJson,
     );
   }
 }

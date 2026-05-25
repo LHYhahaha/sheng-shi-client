@@ -1,4 +1,5 @@
 import '../../../core/auth/session_cleanup_coordinator.dart';
+import '../../../core/auth/user_info_store.dart';
 import '../domain/auth_repository.dart';
 import '../domain/auth_session.dart';
 
@@ -10,10 +11,13 @@ class SessionCleanupAuthRepository implements AuthRepository {
   SessionCleanupAuthRepository({
     required this.delegate,
     required SessionCleanupCoordinator sessionCleanup,
-  }) : _sessionCleanup = sessionCleanup;
+    UserInfoStore? userInfoStore,
+  }) : _sessionCleanup = sessionCleanup,
+       _userInfoStore = userInfoStore;
 
   final AuthRepository delegate;
   final SessionCleanupCoordinator _sessionCleanup;
+  final UserInfoStore? _userInfoStore;
 
   @override
   Future<AuthSession> fetchSession() => delegate.fetchSession();
@@ -25,6 +29,7 @@ class SessionCleanupAuthRepository implements AuthRepository {
   @override
   Future<AuthSession> logout() async {
     final session = await delegate.logout();
+    await _userInfoStore?.clear();
     await _sessionCleanup.cleanup(SessionCleanupReason.logout);
     return session;
   }
@@ -32,6 +37,7 @@ class SessionCleanupAuthRepository implements AuthRepository {
   @override
   Future<AuthSession> deleteAccount() async {
     final session = await delegate.deleteAccount();
+    await _userInfoStore?.clear();
     await _sessionCleanup.cleanup(SessionCleanupReason.deleteAccount);
     return session;
   }

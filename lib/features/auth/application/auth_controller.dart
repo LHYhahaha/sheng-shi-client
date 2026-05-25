@@ -1,8 +1,41 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/auth_token_store.dart';
 import '../../../core/auth/session_cleanup_types.dart';
 import '../data/auth_repository_provider.dart';
 import '../domain/auth_session.dart';
+
+/// 游客登录初始化 provider。
+///
+/// APP 启动时自动触发游客登录，获取游客 token。失败不阻断应用启动。
+final guestLoginInitializerProvider = FutureProvider<void>((ref) async {
+  final useRemote = ref.watch(useRemoteAuthApiProvider);
+  if (!useRemote) {
+    print('[GuestLogin] Remote Auth API disabled, skipping guest login');
+    return;
+  }
+
+  try {
+    print('[GuestLogin] Starting guest login...');
+    
+    // 使用 read() 而不是 watch()，避免 authRepositoryProvider 变化时重新触发登录
+    final repository = ref.read(authRepositoryProvider);
+    
+    print('[GuestLogin] Calling login(AuthProviderType.device)...');
+    await repository.login(AuthProviderType.device);
+    
+    print('[GuestLogin] ✅ Guest login successful');
+    
+    final token = ref.read(authTokenStoreProvider);
+    print('[GuestLogin] Token saved: hasAccessToken=${token.hasAccessToken}');
+    if (token.hasAccessToken) {
+      print('[GuestLogin] Access Token: ${token.accessToken?.substring(0, 20)}...');
+    }
+  } catch (e, stackTrace) {
+    print('[GuestLogin] ❌ Guest login failed: $e');
+    print('[GuestLogin] Stack trace: $stackTrace');
+  }
+});
 
 /// Auth feature 的全局 session provider。
 ///

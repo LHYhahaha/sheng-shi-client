@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/auth_token_store.dart';
+import '../../../core/auth/user_info_store.dart';
 import '../../../core/auth/session_cleanup_coordinator.dart';
 import '../../../core/network/api_client_provider.dart';
 import '../../../core/network/remote_api_switches.dart';
@@ -23,6 +25,8 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
         apiClient: ref.watch(apiClientProvider),
       ),
       requestContext: ref.watch(apiRequestContextProvider),
+      tokenStore: ref.read(authTokenStoreProvider.notifier),
+      userInfoStore: ref.read(userInfoStoreProvider.notifier),
     );
   } else {
     base = MockAuthRepository();
@@ -30,5 +34,6 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return SessionCleanupAuthRepository(
     delegate: base,
     sessionCleanup: ref.read(sessionCleanupCoordinatorProvider),
+    userInfoStore: ref.read(userInfoStoreProvider.notifier),
   );
 });

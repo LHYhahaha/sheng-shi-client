@@ -1,6 +1,10 @@
 import 'package:dio/dio.dart';
 
+import '../../features/auth/data/dto/auth_token_dto.dart';
+import '../../features/auth/data/dto/auth_session_dto.dart';
 import '../auth/api_session_auth_handler.dart';
+import '../auth/auth_token_store.dart';
+import '../auth/user_info_store.dart';
 import '../config/app_environment.dart';
 import 'api_exception.dart';
 import 'api_request_context.dart';
@@ -65,7 +69,38 @@ class ApiClient {
           } else {
             options.headers.remove('Authorization');
           }
+          
+          // 打印完整的请求URL和详细信息
+          final fullUrl = '${options.baseUrl}${options.path}';
+          print('[ApiClient] ========== REQUEST ==========');
+          print('[ApiClient] Full URL: ${options.method} $fullUrl');
+          print('[ApiClient] Base URL: ${options.baseUrl}');
+          print('[ApiClient] Path: ${options.path}');
+          print('[ApiClient] Headers: ${options.headers}');
+          if (options.data != null) {
+            print('[ApiClient] Body: ${options.data}');
+          }
+          print('[ApiClient] ==============================');
+          
           handler.next(options);
+        },
+        onResponse: (response, handler) {
+          final fullUrl = '${response.requestOptions.baseUrl}${response.requestOptions.path}';
+          print('[ApiClient] ========== RESPONSE ==========');
+          print('[ApiClient] Full URL: ${response.requestOptions.method} $fullUrl');
+          print('[ApiClient] Status Code: ${response.statusCode}');
+          print('[ApiClient] Data: ${response.data}');
+          print('[ApiClient] ==============================');
+          handler.next(response);
+        },
+        onError: (error, handler) {
+          final fullUrl = '${error.requestOptions.baseUrl}${error.requestOptions.path}';
+          print('[ApiClient] ========== ERROR ==========');
+          print('[ApiClient] Full URL: ${error.requestOptions.method} $fullUrl');
+          print('[ApiClient] Status Code: ${error.response?.statusCode}');
+          print('[ApiClient] Error: ${error.message}');
+          print('[ApiClient] ==============================');
+          handler.next(error);
         },
       ),
     );
@@ -73,9 +108,14 @@ class ApiClient {
 
   final Dio _dio;
   final ApiRequestContextReader _requestContextReader;
-  final ApiSessionAuthHandler? _sessionAuthHandler;
+  ApiSessionAuthHandler? _sessionAuthHandler;
 
   Dio get dio => _dio;
+  
+  /// 设置 session auth handler（用于打破循环依赖）
+  void setSessionAuthHandler(ApiSessionAuthHandler handler) {
+    _sessionAuthHandler = handler;
+  }
 
   ApiRequestContext _readRequestContext() => _requestContextReader();
 
