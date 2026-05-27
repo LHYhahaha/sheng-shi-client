@@ -51,18 +51,10 @@ class AuthRemoteDataSource {
     print('[AuthRemoteDataSource]   URL: POST /api/user/facebook/login');
     print('[AuthRemoteDataSource]   Body: ${request.toJson()}');
     
-    // Facebook login endpoint expects the idToken in Authorization header
-    final options = Options(
-      headers: {
-        'Authorization': 'Bearer ${request.idToken}',
-      },
-    );
-    
     return _apiClient.post<AuthSessionDto>(
       '/api/user/facebook/login',
       data: request.toJson(),
-      authPolicy: ApiAuthPolicy.none,
-      options: options,
+      authPolicy: ApiAuthPolicy.required,
       decoder: AuthSessionDto.fromJson,
     );
   }

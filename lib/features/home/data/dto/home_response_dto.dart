@@ -78,6 +78,7 @@ class HomeDramaDto {
     required this.coverUrl,
     required this.title,
     required this.summary,
+    required this.playCount,
     required this.trailerEpisodeNum,
     required this.isVipOnly,
     required this.status,
@@ -89,6 +90,7 @@ class HomeDramaDto {
   final String coverUrl;
   final String title;
   final String summary;
+  final int playCount;
   final int trailerEpisodeNum;
   final int isVipOnly;
   final int status;
@@ -101,6 +103,7 @@ class HomeDramaDto {
       coverUrl: JsonFieldParser.optionalString(json, 'cover_url') ?? '',
       title: JsonFieldParser.optionalString(json, 'title') ?? '',
       summary: JsonFieldParser.optionalString(json, 'summary') ?? '',
+      playCount: JsonFieldParser.optionalInt(json, 'play_count') ?? 0,
       trailerEpisodeNum: JsonFieldParser.optionalInt(json, 'trailer_episode_num') ?? 0,
       isVipOnly: JsonFieldParser.optionalInt(json, 'is_vip_only') ?? 0,
       status: JsonFieldParser.optionalInt(json, 'status') ?? 0,

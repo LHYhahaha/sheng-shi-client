@@ -82,7 +82,7 @@ class I18nService {
   /// 获取服务器版本信息
   Future<Map<String, dynamic>> _getVersionInfo() async {
     return await _apiClient.get<Map<String, dynamic>>(
-      '/i18n/version',
+      '/api/i18n/version',
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) {
         if (data is Map<String, dynamic>) {

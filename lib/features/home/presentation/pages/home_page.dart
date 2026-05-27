@@ -15,6 +15,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
 import '../../application/home_feed_controller.dart';
 import '../../application/home_data_controller.dart';
+import '../../application/home_remote_data_provider.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -26,6 +27,7 @@ class HomePage extends ConsumerStatefulWidget {
 class _HomePageState extends ConsumerState<HomePage> {
   final _scrollController = ScrollController();
   late final PlayerStartupPreloadController _startupPreloadController;
+  int _remoteDataSelectedIndex = 0; // 远程数据的选中分类索引
 
   @override
   void initState() {
@@ -52,6 +54,13 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   void _onScroll() {
+    final remoteData = ref.read(homeRemoteDataProvider);
+    
+    // 远程数据一次性下发，不需要分页
+    if (remoteData != null) {
+      return;
+    }
+    
     final feedState = ref.read(homeFeedControllerProvider);
     if (!feedState.canLoadMore || !_scrollController.hasClients) {
       return;
@@ -65,13 +74,35 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   void _selectTab(int index) {
     final feedState = ref.read(homeFeedControllerProvider);
+    final remoteData = ref.read(homeRemoteDataProvider);
+    
+    // 如果使用远程数据，更新选中索引并滚动到顶部
+    if (remoteData != null) {
+      if (index >= remoteData.categories.length) {
+        return;
+      }
+      
+      setState(() {
+        _remoteDataSelectedIndex = index;
+      });
+      
+      unawaited(_startupPreloadController.cancel(reason: 'home category switch'));
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOut,
+        );
+      }
+      return;
+    }
+    
+    // 使用 mock 数据的原有逻辑
     if (feedState.selectedIndex == index ||
         index >= feedState.categories.length) {
       return;
     }
 
-    // 切分类会让首屏候选失效，必须取消 startup preload。Home 不创建 media session，
-    // 所以这里只处理 HLS/source 预热生命周期。
     unawaited(_startupPreloadController.cancel(reason: 'home category switch'));
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
@@ -86,153 +117,194 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(homeFeedControllerProvider, (previous, next) {
-      final shouldPreload =
-          !next.isInitialLoading &&
-          next.initialError == null &&
-          next.items.isNotEmpty &&
-          (previous == null ||
-              previous.isInitialLoading ||
-              previous.items != next.items);
-      if (!shouldPreload) {
-        return;
-      }
-      // 首屏数据稳定后触发启动预热。这里传 drama 而不是 episode，是因为 Home 卡片
-      // 只承载剧信息；最终 playable episode 由 startup controller 拉单剧 feed 决定。
-      unawaited(
-        _startupPreloadController.preloadFirstPlayableDrama(next.items.first),
-      );
-    });
+    // 监听远程数据
+    final remoteData = ref.watch(homeRemoteDataProvider);
+    final homeDataState = ref.watch(homeDataControllerProvider);
+    
+    // 监听 mock 数据
     final feedState = ref.watch(homeFeedControllerProvider);
     
-    // 监听首页 remote 数据加载状态
-    final homeDataState = ref.watch(homeDataControllerProvider);
-    if (homeDataState.isLoading) {
-      print('[HomePage] 首页 remote 数据加载中...');
-    } else if (homeDataState.hasError) {
-      print('[HomePage] 首页 remote 数据加载失败: ${homeDataState.error}');
-    } else if (homeDataState.data != null) {
-      print('[HomePage] 首页 remote 数据加载成功: ${homeDataState.data!.tabs.length} 个标签页');
+    // 决定使用哪个数据源：优先使用远程数据，降级到 mock 数据
+    final useRemoteData = remoteData != null && !homeDataState.isLoading;
+    final categories = useRemoteData ? remoteData.categories : feedState.categories;
+    final selectedIndex = useRemoteData ? _remoteDataSelectedIndex : feedState.selectedIndex;
+    
+    // 获取当前选中分类的剧卡列表
+    final items = useRemoteData
+        ? remoteData.getDramasForCategoryIndex(selectedIndex)
+        : feedState.items;
+    
+    // 预热逻辑
+    ref.listen(homeFeedControllerProvider, (previous, next) {
+      if (!useRemoteData) {
+        final shouldPreload =
+            !next.isInitialLoading &&
+            next.initialError == null &&
+            next.items.isNotEmpty &&
+            (previous == null ||
+                previous.isInitialLoading ||
+                previous.items != next.items);
+        if (!shouldPreload) {
+          return;
+        }
+        unawaited(
+          _startupPreloadController.preloadFirstPlayableDrama(next.items.first),
+        );
+      }
+    });
+    
+    // 远程数据预热
+    if (useRemoteData && items.isNotEmpty) {
+      unawaited(
+        _startupPreloadController.preloadFirstPlayableDrama(items.first),
+      );
     }
+
+    // 判断加载状态
+    final isLoading = useRemoteData ? homeDataState.isLoading : feedState.isInitialLoading;
+    final error = useRemoteData ? homeDataState.error : feedState.initialError;
+    final isEmpty = items.isEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.black,
       body: SafeArea(
         bottom: false,
-        child: CustomScrollView(
-          controller: _scrollController,
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-                child: _HomeTitleBar(
-                  onMembershipTap: () => context.push(RoutePaths.membership),
-                ),
-              ),
-            ),
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: _HomeTabsHeaderDelegate(
-                selectedTab: feedState.selectedIndex,
-                tabs: feedState.categories,
-                onTabChanged: _selectTab,
-              ),
-            ),
-            if (feedState.isInitialLoading)
-              const SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+        child: RefreshIndicator(
+          onRefresh: () async {
+            if (useRemoteData) {
+              await ref.read(homeDataControllerProvider.notifier).retry();
+            } else {
+              await ref.read(homeFeedControllerProvider.notifier).loadInitial();
+            }
+          },
+          child: CustomScrollView(
+            controller: _scrollController,
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                  child: _HomeTitleBar(
+                    onMembershipTap: () => context.push(RoutePaths.membership),
                   ),
                 ),
-              )
-            else if (feedState.initialError != null)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: _HomeErrorState(
-                  onRetry: () {
-                    unawaited(
-                      _startupPreloadController.cancel(reason: 'home retry'),
-                    );
-                    ref.read(homeFeedControllerProvider.notifier).loadInitial();
-                  },
-                ),
-              )
-            else if (feedState.items.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Text(
-                    context.l10n.feedEmpty,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
-                  ),
-                ),
-              )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(13, 2, 12, 24),
-                sliver: SliverLayoutBuilder(
-                  builder: (context, constraints) {
-                    if (constraints.crossAxisExtent <= 0) {
-                      return const SliverToBoxAdapter(child: SizedBox.shrink());
+              ),
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _HomeTabsHeaderDelegate(
+                  selectedTab: selectedIndex,
+                  tabs: categories,
+                  onTabChanged: (index) {
+                    if (useRemoteData) {
+                      // 远程数据：直接更新选中索引
+                      _selectTab(index);
+                    } else {
+                      // mock 数据：使用原有逻辑
+                      _selectTab(index);
                     }
-
-                    const crossAxisCount = 2;
-                    const crossAxisSpacing = 8.0;
-                    final tileWidth =
-                        (constraints.crossAxisExtent -
-                            crossAxisSpacing * (crossAxisCount - 1)) /
-                        crossAxisCount;
-                    final coverCacheWidth = math.max(
-                      1,
-                      (tileWidth * MediaQuery.devicePixelRatioOf(context))
-                          .round(),
-                    );
-
-                    return SliverMasonryGrid.count(
-                      crossAxisCount: crossAxisCount,
-                      mainAxisSpacing: 8,
-                      crossAxisSpacing: crossAxisSpacing,
-                      childCount: feedState.items.length,
-                      itemBuilder: (context, index) {
-                        final item = feedState.items[index];
-
-                        return _HomeDramaCard(
-                          key: ValueKey('home_drama_card_$index'),
-                          data: item,
-                          coverCacheWidth: coverCacheWidth,
-                          onTap: () {
-                            final tappedAt = DateTime.now();
-                            context.push(
-                              RoutePaths.playerLocation(
-                                dramaId: item.id,
-                                episodeId: '1',
-                                trigger: 'home_card_tap',
-                                userActionAtMs: tappedAt.millisecondsSinceEpoch,
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    );
                   },
                 ),
               ),
-            SliverToBoxAdapter(
-              child: _HomeFeedFooter(
-                isLoading: feedState.isLoadingMore,
-                hasMore: feedState.nextPageToken != null,
-                error: feedState.loadMoreError,
-                onRetry: () {
-                  ref.read(homeFeedControllerProvider.notifier).loadMore();
-                },
-              ),
-            ),
-          ],
+              if (isLoading)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                )
+              else if (error != null)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _HomeErrorState(
+                    onRetry: () {
+                      unawaited(
+                        _startupPreloadController.cancel(reason: 'home retry'),
+                      );
+                      if (useRemoteData) {
+                        ref.read(homeDataControllerProvider.notifier).retry();
+                      } else {
+                        ref.read(homeFeedControllerProvider.notifier).loadInitial();
+                      }
+                    },
+                  ),
+                )
+              else if (isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Text(
+                      context.l10n.feedEmpty,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+                    ),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(13, 2, 12, 24),
+                  sliver: SliverLayoutBuilder(
+                    builder: (context, constraints) {
+                      if (constraints.crossAxisExtent <= 0) {
+                        return const SliverToBoxAdapter(child: SizedBox.shrink());
+                      }
+
+                      const crossAxisCount = 2;
+                      const crossAxisSpacing = 8.0;
+                      final tileWidth =
+                          (constraints.crossAxisExtent -
+                              crossAxisSpacing * (crossAxisCount - 1)) /
+                          crossAxisCount;
+                      final coverCacheWidth = math.max(
+                        1,
+                        (tileWidth * MediaQuery.devicePixelRatioOf(context))
+                            .round(),
+                      );
+
+                      return SliverMasonryGrid.count(
+                        crossAxisCount: crossAxisCount,
+                        mainAxisSpacing: 8,
+                        crossAxisSpacing: crossAxisSpacing,
+                        childCount: items.length,
+                        itemBuilder: (context, index) {
+                          final item = items[index];
+
+                          return _HomeDramaCard(
+                            key: ValueKey('home_drama_card_$index'),
+                            data: item,
+                            coverCacheWidth: coverCacheWidth,
+                            onTap: () {
+                              final tappedAt = DateTime.now();
+                              context.push(
+                                RoutePaths.playerLocation(
+                                  dramaId: item.id,
+                                  episodeId: '1',
+                                  trigger: 'home_card_tap',
+                                  userActionAtMs: tappedAt.millisecondsSinceEpoch,
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              if (!useRemoteData)
+                SliverToBoxAdapter(
+                  child: _HomeFeedFooter(
+                    isLoading: feedState.isLoadingMore,
+                    hasMore: feedState.nextPageToken != null,
+                    error: feedState.loadMoreError,
+                    onRetry: () {
+                      ref.read(homeFeedControllerProvider.notifier).loadMore();
+                    },
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -472,11 +544,10 @@ class _HomeDramaCard extends StatelessWidget {
                   ],
                 ],
               ),
-            ),
-          ],
+            ),]
+          ),
         ),
-      ),
-    );
+      );
   }
 }
 
@@ -534,12 +605,16 @@ class _ExclusiveBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 60,
-      height: 18,
+      // width: 60,
+      // height: 18,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       alignment: Alignment.center,
       decoration: const BoxDecoration(
-        color: Color(0xFFFF2267),
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [Color(0xFFFFEEBD), Color(0xFFFDB849)],
+        ),
         borderRadius: BorderRadius.only(
           topRight: Radius.circular(6),
           bottomLeft: Radius.circular(6),
@@ -548,8 +623,9 @@ class _ExclusiveBadge extends StatelessWidget {
       child: Text(
         context.l10n.exclusive,
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: AppColors.textPrimary,
+          color: const Color(0xFF652400),
           fontSize: 11,
+          fontWeight: FontWeight.w500,
           height: 14 / 11,
         ),
       ),
@@ -567,8 +643,16 @@ class _ViewCount extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.play_arrow, color: AppColors.textPrimary, size: 14),
-        const SizedBox(width: 2),
+        // const Icon(Icons.play_arrow, color: AppColors.textPrimary, size: 14),
+        Image.asset(
+          'assets/images/home/home_views.png',
+          width: 10,
+          height: 10,
+          cacheWidth: (10 * MediaQuery.devicePixelRatioOf(context)).round(),
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.low,
+        ),
+        const SizedBox(width: 4),
         Text(
           label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(

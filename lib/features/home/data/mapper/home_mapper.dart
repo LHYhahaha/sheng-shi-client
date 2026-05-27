@@ -35,6 +35,7 @@ class HomeMapper {
       coverUrl: dto.coverUrl,
       title: dto.title,
       summary: dto.summary,
+      playCount: dto.playCount,
       trailerEpisodeNum: dto.trailerEpisodeNum,
       isVipOnly: dto.isVipOnly == 1,
       status: dto.status,

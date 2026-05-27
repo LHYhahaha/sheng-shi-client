@@ -58,6 +58,7 @@ class HomeDrama {
     required this.coverUrl,
     required this.title,
     required this.summary,
+    required this.playCount,
     required this.trailerEpisodeNum,
     required this.isVipOnly,
     required this.status,
@@ -78,6 +79,9 @@ class HomeDrama {
 
   /// 剧简介。
   final String summary;
+
+  /// 播放次数。
+  final int playCount;
 
   /// 预告集数。
   final int trailerEpisodeNum;

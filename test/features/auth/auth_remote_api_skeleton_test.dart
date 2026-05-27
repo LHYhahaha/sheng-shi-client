@@ -125,7 +125,7 @@ void main() {
       expect(adapter.lastOptions?.data, containsPair('provider', 'google'));
       expect(
         adapter.lastOptions?.data,
-        containsPair('idToken', 'mock-google-id-token'),
+        containsPair('facebookToken', 'mock-google-id-token'),
       );
     });
 

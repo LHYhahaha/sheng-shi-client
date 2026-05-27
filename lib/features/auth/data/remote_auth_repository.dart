@@ -126,12 +126,7 @@ class RemoteAuthRepository implements AuthRepository {
     print('[RemoteAuthRepository] _loginWithOAuth: calling backend API...');
     return await _remoteDataSource.loginOAuth(
       OAuthLoginRequestDto(
-        provider: provider.name,
-        idToken: oauthToken,
-        deviceId: _requestContext.deviceId,
-        platform: _requestContext.platform,
-        appVersion: _requestContext.appVersion,
-        lang: _requestContext.lang,
+        facebookToken: oauthToken,
       ),
     );
   }

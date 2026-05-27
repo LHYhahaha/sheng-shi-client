@@ -3,7 +3,7 @@ import '../dto/home_response_dto.dart';
 
 /// 首页远程数据源。
 ///
-/// 负责调用 /api/app/home 接口获取首页数据，需要登录后的 token。
+/// 负责调用 /api/home 接口获取首页数据，需要登录后的 token。
 class HomeRemoteDataSource {
   const HomeRemoteDataSource({required ApiClient apiClient})
     : _apiClient = apiClient;
@@ -15,10 +15,10 @@ class HomeRemoteDataSource {
   /// 需要在登录后携带 token 才能请求通。
   Future<HomeResponseDto> getHomeData() {
     print('[HomeRemoteDataSource] getHomeData request:');
-    print('[HomeRemoteDataSource]   URL: GET /api/app/home');
+    print('[HomeRemoteDataSource]   URL: GET /api/home');
     
     return _apiClient.get<HomeResponseDto>(
-      '/api/app/home',
+      '/api/home',
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) {
         print('[HomeRemoteDataSource] getHomeData response data: $data');
