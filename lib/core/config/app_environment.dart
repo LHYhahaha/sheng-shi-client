@@ -35,7 +35,7 @@ class AppConfig {
     return switch (environment) {
       AppEnvironment.dev => AppConfig(
         environment: environment,
-        apiBaseUrl: Uri.parse('https://dev-api.example.com'),
+        apiBaseUrl: Uri.parse('https://gateway-api.8y4w2vxvdffmd83.xyz'),
       ),
       AppEnvironment.staging => AppConfig(
         environment: environment,

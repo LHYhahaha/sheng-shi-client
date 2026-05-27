@@ -18,4 +18,14 @@ class RemoteProfileRepository implements ProfileRepository {
     final dto = await _remoteDataSource.getProfile();
     return _mapper.mapSummary(dto);
   }
+
+  Future<Map<String, dynamic>> fetchWallet(int userId) async {
+    final dto = await _remoteDataSource.getWallet(userId);
+    return {
+      'userId': dto.userId,
+      'coin': dto.coin,
+      'bonusCoin': dto.bonusCoin,
+      'totalCoin': dto.totalCoin,
+    };
+  }
 }

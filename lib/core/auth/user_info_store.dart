@@ -107,10 +107,11 @@ class UserInfoSnapshot {
 /// 用户信息应用层唯一读写入口。
 class UserInfoStore extends Notifier<UserInfoSnapshot> {
   bool _hydrateFinished = false;
+  late final Future<void> _hydrateFuture;
 
   @override
   UserInfoSnapshot build() {
-    Future.microtask(_hydrateFromStorage);
+    _hydrateFuture = _hydrateFromStorage();
     return const UserInfoSnapshot.empty();
   }
 
@@ -127,6 +128,9 @@ class UserInfoStore extends Notifier<UserInfoSnapshot> {
       state = stored;
     }
   }
+
+  /// 等待初始化完成
+  Future<void> waitForHydration() => _hydrateFuture;
 
   Future<void> save(UserInfoDto userInfo) async {
     _hydrateFinished = true;

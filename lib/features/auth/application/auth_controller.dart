@@ -1,39 +1,82 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/auth_token_store.dart';
+import '../../../core/auth/auth_refresh_executor_provider.dart';
 import '../../../core/auth/session_cleanup_types.dart';
+import '../../../core/auth/user_info_manager.dart';
 import '../data/auth_repository_provider.dart';
 import '../domain/auth_session.dart';
 
-/// 游客登录初始化 provider。
+/// APP 启动时的 token 初始化 provider。
 ///
-/// APP 启动时自动触发游客登录，获取游客 token。失败不阻断应用启动。
+/// 流程：
+/// 1. 检查是否有已保存的 token
+/// 2. 有 token → 尝试刷新 accessToken
+/// 3. 刷新失败 → 用 refreshToken 再试一次
+/// 4. 都失败 → 调用 loginDevice 获取新 token
+/// 5. 调用 AuthController.load() 更新 session 状态
+/// 失败不阻断应用启动。
 final guestLoginInitializerProvider = FutureProvider<void>((ref) async {
   final useRemote = ref.watch(useRemoteAuthApiProvider);
   if (!useRemote) {
-    print('[GuestLogin] Remote Auth API disabled, skipping guest login');
+    print('[TokenInit] Remote Auth API disabled, skipping token initialization');
     return;
   }
 
   try {
-    print('[GuestLogin] Starting guest login...');
+    print('[TokenInit] Starting token initialization...');
     
-    // 使用 read() 而不是 watch()，避免 authRepositoryProvider 变化时重新触发登录
+    final tokenStore = ref.read(authTokenStoreProvider);
     final repository = ref.read(authRepositoryProvider);
     
-    print('[GuestLogin] Calling login(AuthProviderType.device)...');
-    await repository.login(AuthProviderType.device);
+    // 检查是否有已保存的 token
+    if (tokenStore.hasAccessToken && tokenStore.accessToken != null && tokenStore.refreshToken != null) {
+      print('[TokenInit] Found existing token, attempting to refresh...');
+      
+      try {
+        // 尝试刷新 token（只尝试一次）
+        print('[TokenInit] Attempting to refresh token...');
+        final refreshed = await ref.read(authRefreshExecutorProvider)(tokenStore.refreshToken!);
+        
+        if (refreshed != null && refreshed.hasAccessToken) {
+          print('[TokenInit] ✅ Token refresh successful');
+          await ref.read(authTokenStoreProvider.notifier).save(refreshed);
+          // Token 刷新成功，继续调用 load() 更新 session
+        } else {
+          print('[TokenInit] Token refresh returned invalid result, falling back to device login...');
+          await repository.login(AuthProviderType.device);
+        }
+      } catch (e) {
+        print('[TokenInit] ⚠️ Token refresh failed: $e');
+        // 刷新失败，直接回退到设备登录，不再重试
+        print('[TokenInit] Token refresh failed, falling back to device login...');
+        await repository.login(AuthProviderType.device);
+      }
+    } else {
+      print('[TokenInit] No existing token found, performing device login...');
+      await repository.login(AuthProviderType.device);
+    }
     
-    print('[GuestLogin] ✅ Guest login successful');
+    print('[TokenInit] ✅ Token initialization successful');
     
     final token = ref.read(authTokenStoreProvider);
-    print('[GuestLogin] Token saved: hasAccessToken=${token.hasAccessToken}');
+    print('[TokenInit] Token saved: hasAccessToken=${token.hasAccessToken}');
     if (token.hasAccessToken) {
-      print('[GuestLogin] Access Token: ${token.accessToken?.substring(0, 20)}...');
+      print('[TokenInit] Access Token: ${token.accessToken?.substring(0, 20)}...');
+    }
+    
+    // 调用 AuthController.load() 更新 session 状态
+    print('[TokenInit] Calling AuthController.load() to update session...');
+    try {
+      await ref.read(authControllerProvider.notifier).load();
+      print('[TokenInit] ✅ AuthController.load() completed');
+    } catch (e) {
+      print('[TokenInit] ⚠️ AuthController.load() failed: $e');
+      // load() 失败不应该阻断初始化
     }
   } catch (e, stackTrace) {
-    print('[GuestLogin] ❌ Guest login failed: $e');
-    print('[GuestLogin] Stack trace: $stackTrace');
+    print('[TokenInit] ❌ Token initialization failed: $e');
+    print('[TokenInit] Stack trace: $stackTrace');
   }
 });
 
@@ -160,10 +203,104 @@ class AuthController extends Notifier<AuthState> {
     );
 
     try {
-      final session = await ref.read(authRepositoryProvider).fetchSession();
+      final tokenStore = ref.read(authTokenStoreProvider);
+      
+      if (tokenStore.hasAccessToken && tokenStore.accessToken != null && tokenStore.refreshToken != null) {
+        print('[AuthController.load] Found existing token, checking expiration...');
+        
+        final now = DateTime.now();
+        final accessTokenExpired = tokenStore.expiresAt != null && now.isAfter(tokenStore.expiresAt!);
+        final refreshTokenExpired = tokenStore.refreshExpiresAt != null && now.isAfter(tokenStore.refreshExpiresAt!);
+        
+        print('[AuthController.load] Access token expired: $accessTokenExpired, Refresh token expired: $refreshTokenExpired');
+        
+        if (!accessTokenExpired) {
+          print('[AuthController.load] ✅ Access token still valid, using existing token');
+          
+          if (!_isCurrent(generation)) {
+            return;
+          }
+          
+          // accessToken 未过期，等待 UserInfoStore 初始化后从本地用户信息构建 session
+          await ref.read(userInfoStoreProvider.notifier).waitForHydration();
+          final userInfoStore = ref.read(userInfoStoreProvider);
+          final session = UserInfoManager.buildSessionFromUserInfo(userInfoStore);
+          
+          if (!_isCurrent(generation)) {
+            return;
+          }
+          
+          state = state.copyWith(
+            isLoading: false,
+            session: session,
+            clearError: true,
+            clearPendingProvider: true,
+            clearFailedAction: true,
+          );
+          return;
+        }
+        
+        if (!refreshTokenExpired) {
+          print('[AuthController.load] Access token expired, attempting to refresh with refresh token...');
+          
+          try {
+            final refreshed = await ref.read(authRefreshExecutorProvider)(tokenStore.refreshToken!);
+            
+            if (refreshed != null && refreshed.hasAccessToken) {
+              print('[AuthController.load] ✅ Token refresh successful');
+              await ref.read(authTokenStoreProvider.notifier).save(refreshed);
+              
+              if (!_isCurrent(generation)) {
+                return;
+              }
+              
+              // Token 刷新成功，等待 UserInfoStore 初始化后从本地用户信息构建 session
+              await ref.read(userInfoStoreProvider.notifier).waitForHydration();
+              final userInfoStore = ref.read(userInfoStoreProvider);
+              final session = UserInfoManager.buildSessionFromUserInfo(userInfoStore);
+              
+              if (!_isCurrent(generation)) {
+                return;
+              }
+              
+              state = state.copyWith(
+                isLoading: false,
+                session: session,
+                clearError: true,
+                clearPendingProvider: true,
+                clearFailedAction: true,
+              );
+              return;
+            }
+          } catch (e) {
+            print('[AuthController.load] ⚠️ Token refresh failed: $e');
+          }
+        } else {
+          print('[AuthController.load] Refresh token also expired, need to re-login');
+        }
+        
+        print('[AuthController.load] Token refresh failed or refresh token expired, falling back to device login...');
+      } else {
+        print('[AuthController.load] No existing token found, performing device login...');
+      }
+      
+      // 没有 token 或都失败 → 调用 device login 获取新 token 和用户信息
+      print('[AuthController.load] Calling login(AuthProviderType.device)...');
+      await ref.read(authRepositoryProvider).login(AuthProviderType.device);
+      
       if (!_isCurrent(generation)) {
         return;
       }
+      
+      // 登录成功后，等待 UserInfoStore 初始化后从用户信息构建 session
+      await ref.read(userInfoStoreProvider.notifier).waitForHydration();
+      final userInfoStore = ref.read(userInfoStoreProvider);
+      final session = UserInfoManager.buildSessionFromUserInfo(userInfoStore);
+      
+      if (!_isCurrent(generation)) {
+        return;
+      }
+      
       state = state.copyWith(
         isLoading: false,
         session: session,
@@ -188,8 +325,6 @@ class AuthController extends Notifier<AuthState> {
       return;
     }
 
-    // pendingProvider 同时承担按钮 loading 和并发保护。登录渠道 SDK 往往会弹系统页，
-    // 重复点击可能创建多个回调，导致后返回的失败覆盖先成功的 session。
     state = state.copyWith(
       pendingProvider: provider,
       clearError: true,
@@ -197,7 +332,14 @@ class AuthController extends Notifier<AuthState> {
     );
 
     try {
-      final session = await ref.read(authRepositoryProvider).login(provider);
+      // 调用 repository 的 login 方法，会自动获取 token 和用户信息
+      await ref.read(authRepositoryProvider).login(provider);
+      
+      // 登录成功后，等待 UserInfoStore 初始化后从用户信息构建 session
+      await ref.read(userInfoStoreProvider.notifier).waitForHydration();
+      final userInfoStore = ref.read(userInfoStoreProvider);
+      final session = UserInfoManager.buildSessionFromUserInfo(userInfoStore, provider: provider);
+      
       state = state.copyWith(
         isLoading: false,
         session: session,

@@ -7,7 +7,7 @@ set -euo pipefail
 
 ADB="${ADB:-$HOME/Library/Android/sdk/platform-tools/adb}"
 DEVICE="${DEVICE:-}"
-PKG="com.yushi.drama.drama_client"
+PKG="com.yushi.drama.client"
 ACTIVITY="${PKG}/.MainActivity"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 OUT_DIR="${ROOT_DIR}/artifacts/manual_device_scroll"

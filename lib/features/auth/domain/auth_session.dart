@@ -27,6 +27,13 @@ class AuthUser {
     required this.avatarAssetPath,
     required this.provider,
     this.avatarResource,
+    this.showId,
+    this.language,
+    this.status,
+    this.vipExpireAt,
+    this.coin,
+    this.bonusCoin,
+    this.autoUnlock,
   });
 
   /// 用户 id（正式账号）。游客展示 id 见 [AuthSession.guestId] / [AuthSession.sessionId]。
@@ -36,6 +43,27 @@ class AuthUser {
   final String avatarAssetPath;
   final MediaResource? avatarResource;
   final AuthProviderType provider;
+  
+  /// 展示用的用户 id
+  final String? showId;
+  
+  /// 用户语言设置
+  final String? language;
+  
+  /// 用户状态
+  final int? status;
+  
+  /// VIP 过期时间
+  final String? vipExpireAt;
+  
+  /// 用户金币
+  final int? coin;
+  
+  /// 用户奖励金币
+  final int? bonusCoin;
+  
+  /// 自动解锁
+  final int? autoUnlock;
 }
 
 /// 认证会话（UI / application 可见层）。

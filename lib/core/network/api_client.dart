@@ -1,10 +1,6 @@
 import 'package:dio/dio.dart';
 
-import '../../features/auth/data/dto/auth_token_dto.dart';
-import '../../features/auth/data/dto/auth_session_dto.dart';
 import '../auth/api_session_auth_handler.dart';
-import '../auth/auth_token_store.dart';
-import '../auth/user_info_store.dart';
 import '../config/app_environment.dart';
 import 'api_exception.dart';
 import 'api_request_context.dart';
@@ -16,7 +12,7 @@ import 'api_request_context.dart';
 /// - [required]：需要 **任意有效 session access token**（游客 token 或正式用户 token
 ///   均可），缺失时 fail-fast 抛 [ApiErrorCode.sessionRequired]，不发起 HTTP。
 ///
-/// 不等于“必须正式登录用户”。未来可能扩展（文档先行，enum 暂不增以免破坏 skeleton）：
+/// 不等于"必须正式登录用户"。未来可能扩展（文档先行，enum 暂不增以免破坏 skeleton）：
 /// - `guestOrUser`：游客或正式 token 均可（与当前 required 接近）。
 /// - `userRequired`：必须正式账号 token（会员/钱包/片单等）。
 /// - refresh 专用策略继续配合 [apiSkipAuthRefreshExtraKey]。
@@ -66,7 +62,8 @@ class ApiClient {
               return;
             }
             options.headers['Authorization'] = 'Bearer $token';
-          } else {
+          } else if (!options.headers.containsKey('Authorization')) {
+            // Only remove Authorization header if it wasn't explicitly set
             options.headers.remove('Authorization');
           }
           
@@ -111,6 +108,9 @@ class ApiClient {
   ApiSessionAuthHandler? _sessionAuthHandler;
 
   Dio get dio => _dio;
+  
+  /// 获取当前的请求上下文
+  ApiRequestContext get requestContext => _readRequestContext();
   
   /// 设置 session auth handler（用于打破循环依赖）
   void setSessionAuthHandler(ApiSessionAuthHandler handler) {
@@ -243,6 +243,7 @@ class ApiClient {
           error,
           hasRetriedAfterRefresh,
           authPolicy,
+          null,
         )) {
           hasRetriedAfterRefresh = true;
           continue;
@@ -256,6 +257,7 @@ class ApiClient {
           apiError,
           hasRetriedAfterRefresh,
           authPolicy,
+          error.requestOptions,
         )) {
           hasRetriedAfterRefresh = true;
           continue;
@@ -277,8 +279,9 @@ class ApiClient {
     ApiException error,
     bool hasRetriedAfterRefresh,
     ApiAuthPolicy authPolicy,
+    RequestOptions? requestOptions,
   ) async {
-    if (!_shouldAttemptRefresh(error, hasRetriedAfterRefresh, authPolicy)) {
+    if (!_shouldAttemptRefresh(error, hasRetriedAfterRefresh, authPolicy, requestOptions)) {
       return false;
     }
 
@@ -300,6 +303,7 @@ class ApiClient {
     ApiException error,
     bool hasRetriedAfterRefresh,
     ApiAuthPolicy authPolicy,
+    RequestOptions? requestOptions,
   ) {
     if (_sessionAuthHandler == null) {
       return false;
@@ -311,6 +315,10 @@ class ApiClient {
       return false;
     }
     if (error.isSessionRequired) {
+      return false;
+    }
+    // 防止 refresh 请求本身再次触发 refresh（避免循环）
+    if (requestOptions?.extra[apiSkipAuthRefreshExtraKey] == true) {
       return false;
     }
     return error.code == ApiErrorCode.unauthorized;

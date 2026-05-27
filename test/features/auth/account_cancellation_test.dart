@@ -421,9 +421,6 @@ class _CountingAuthRepository implements AuthRepository {
   AuthSession _session = const AuthSession.guest();
 
   @override
-  Future<AuthSession> fetchSession() async => _session;
-
-  @override
   Future<AuthSession> login(AuthProviderType provider) async {
     _session = AuthSession(
       user: AuthUser(

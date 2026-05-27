@@ -18,6 +18,16 @@ class MockProfileRepository implements ProfileRepository {
       region: '',
     );
   }
+
+  @override
+  Future<Map<String, dynamic>> fetchWallet(int userId) async {
+    return {
+      'userId': userId,
+      'coin': 2000,
+      'bonusCoin': 0,
+      'totalCoin': 2000,
+    };
+  }
 }
 
 const sharedProfileAvatarResource = MediaResource.asset(

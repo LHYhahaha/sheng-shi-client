@@ -141,9 +141,6 @@ class _CoordinatorAuthRepository implements AuthRepository {
   AuthSession _session;
 
   @override
-  Future<AuthSession> fetchSession() async => _session;
-
-  @override
   Future<AuthSession> login(AuthProviderType provider) async {
     _session = _sessionFor(provider);
     return _session;

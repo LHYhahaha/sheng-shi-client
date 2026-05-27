@@ -14,6 +14,7 @@ class ProfileState {
   const ProfileState({
     required this.isLoggedIn,
     required this.userId,
+    required this.showId,
     required this.nickname,
     required this.avatarAssetPath,
     required this.membership,
@@ -25,6 +26,7 @@ class ProfileState {
   const ProfileState.mock()
     : isLoggedIn = false,
       userId = '15589299',
+      showId = '15589299',
       nickname = null,
       avatarAssetPath = authDefaultAvatarAssetPath,
       membership = const ProfileMembershipState.mock(),
@@ -37,10 +39,15 @@ class ProfileState {
   /// ProfilePage 会用 AuthState 覆盖这个字段；ProfileController 自身不拥有登录真相。
   final bool isLoggedIn;
 
-  /// 我的页展示用用户 id。
+  /// 我的页展示用用户 id（内部 id）。
   ///
   /// mock 游客也有默认 id。已登录时由 AuthState.user 覆盖，避免 profile mock 残留旧账号。
   final String userId;
+
+  /// 我的页展示用 showId（展示 id）。
+  ///
+  /// 这是用户可见的 id，不同于内部 userId。
+  final String showId;
 
   /// 我的页展示昵称。
   ///
@@ -80,17 +87,20 @@ class ProfileState {
   ProfileState copyWith({
     bool? isLoggedIn,
     String? userId,
+    String? showId,
     String? nickname,
     String? avatarAssetPath,
+    int? coin,
     bool? needsSessionReload,
   }) {
     return ProfileState(
       isLoggedIn: isLoggedIn ?? this.isLoggedIn,
       userId: userId ?? this.userId,
+      showId: showId ?? this.showId,
       nickname: nickname,
       avatarAssetPath: avatarAssetPath ?? this.avatarAssetPath,
       membership: membership,
-      coins: coins,
+      coins: coin != null ? coins.copyWith(balance: coin) : coins,
       language: language,
       needsSessionReload: needsSessionReload ?? this.needsSessionReload,
     );
@@ -158,6 +168,18 @@ class ProfileCoinsState {
   ///
   /// 控制是否允许进入流水页，和余额是否为 0 没有直接关系。
   final bool walletEnabled;
+
+  ProfileCoinsState copyWith({
+    int? balance,
+    bool? topUpEnabled,
+    bool? walletEnabled,
+  }) {
+    return ProfileCoinsState(
+      balance: balance ?? this.balance,
+      topUpEnabled: topUpEnabled ?? this.topUpEnabled,
+      walletEnabled: walletEnabled ?? this.walletEnabled,
+    );
+  }
 }
 
 /// 语言入口展示状态。

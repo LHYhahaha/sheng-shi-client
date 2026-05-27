@@ -1284,7 +1284,7 @@ class _SignedInAuthRepository implements AuthRepository {
   final AuthProviderType provider;
 
   @override
-  Future<AuthSession> fetchSession() async {
+  Future<AuthSession> login(AuthProviderType provider) async {
     return AuthSession(
       user: AuthUser(
         id: '15589299',
@@ -1298,9 +1298,6 @@ class _SignedInAuthRepository implements AuthRepository {
       ),
     );
   }
-
-  @override
-  Future<AuthSession> login(AuthProviderType provider) => fetchSession();
 
   @override
   Future<AuthSession> logout() async => const AuthSession.guest();

@@ -65,9 +65,6 @@ class _GuestAuthRepository implements AuthRepository {
   );
 
   @override
-  Future<AuthSession> fetchSession() async => _session;
-
-  @override
   Future<AuthSession> login(AuthProviderType provider) async {
     final guestId = _session.guestId;
     _session = AuthSession(

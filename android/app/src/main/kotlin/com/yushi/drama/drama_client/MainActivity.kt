@@ -1,4 +1,4 @@
-package com.yushi.drama.drama_client
+package com.yushi.drama.client
 
 import io.flutter.embedding.android.FlutterActivity
 

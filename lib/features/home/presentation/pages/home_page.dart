@@ -14,6 +14,7 @@ import '../../../../shared/media/media_resource.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
 import '../../application/home_feed_controller.dart';
+import '../../application/home_data_controller.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -36,6 +37,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     Future<void>.microtask(() {
       ref.read(homeFeedControllerProvider.notifier).loadInitial();
     });
+    // 首页 remote 数据会在 HomeDataController 中监听 AuthState 自动加载
   }
 
   @override
@@ -102,6 +104,16 @@ class _HomePageState extends ConsumerState<HomePage> {
       );
     });
     final feedState = ref.watch(homeFeedControllerProvider);
+    
+    // 监听首页 remote 数据加载状态
+    final homeDataState = ref.watch(homeDataControllerProvider);
+    if (homeDataState.isLoading) {
+      print('[HomePage] 首页 remote 数据加载中...');
+    } else if (homeDataState.hasError) {
+      print('[HomePage] 首页 remote 数据加载失败: ${homeDataState.error}');
+    } else if (homeDataState.data != null) {
+      print('[HomePage] 首页 remote 数据加载成功: ${homeDataState.data!.tabs.length} 个标签页');
+    }
 
     return Scaffold(
       backgroundColor: AppColors.black,

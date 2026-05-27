@@ -17,7 +17,7 @@ class WalletRemoteDataSource {
 
   Future<WalletDto> getWallet() {
     return _apiClient.get<WalletDto>(
-      '/wallet',
+      '/api/payment/wallet',
       authPolicy: ApiAuthPolicy.required,
       decoder: WalletDto.fromJson,
     );

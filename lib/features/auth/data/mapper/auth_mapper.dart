@@ -12,9 +12,16 @@ class AuthMapper {
 
   AuthSession mapSession(AuthSessionDto dto) {
     if (!dto.isAuthenticated || dto.user == null || dto.user!.isGuest) {
-      return const AuthSession.guest();
+      return AuthSession.guest(
+        sessionId: dto.sessionId,
+        guestId: dto.guestId,
+      );
     }
-    return AuthSession(user: mapUser(dto.user!));
+    return AuthSession(
+      user: mapUser(dto.user!),
+      sessionId: dto.sessionId,
+      guestId: dto.guestId,
+    );
   }
 
   AuthUser mapUser(AuthUserDto dto) {

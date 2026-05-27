@@ -47,29 +47,33 @@ class AuthRemoteDataSource {
   }
 
   Future<AuthSessionDto> loginOAuth(OAuthLoginRequestDto request) {
+    print('[AuthRemoteDataSource] loginOAuth request:');
+    print('[AuthRemoteDataSource]   URL: POST /api/user/facebook/login');
+    print('[AuthRemoteDataSource]   Body: ${request.toJson()}');
+    
+    // Facebook login endpoint expects the idToken in Authorization header
+    final options = Options(
+      headers: {
+        'Authorization': 'Bearer ${request.idToken}',
+      },
+    );
+    
     return _apiClient.post<AuthSessionDto>(
-      '/auth/login/oauth',
+      '/api/user/facebook/login',
       data: request.toJson(),
       authPolicy: ApiAuthPolicy.none,
+      options: options,
       decoder: AuthSessionDto.fromJson,
     );
   }
 
   Future<AuthTokenDto> refreshToken(RefreshTokenRequestDto request) {
     return _apiClient.post<AuthTokenDto>(
-      '/auth/refresh',
+      '/api/user/token/refresh',
       data: request.toJson(),
       authPolicy: ApiAuthPolicy.none,
       options: Options(extra: {apiSkipAuthRefreshExtraKey: true}),
       decoder: AuthTokenDto.fromJson,
-    );
-  }
-
-  Future<AuthSessionDto> fetchSession() {
-    return _apiClient.get<AuthSessionDto>(
-      '/auth/session',
-      authPolicy: ApiAuthPolicy.required,
-      decoder: AuthSessionDto.fromJson,
     );
   }
 

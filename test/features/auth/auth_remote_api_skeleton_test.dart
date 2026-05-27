@@ -139,24 +139,22 @@ void main() {
 
       expect(token.accessToken, 'access-token');
       expect(adapter.lastOptions?.method, 'POST');
-      expect(adapter.lastOptions?.path, '/auth/refresh');
+      expect(adapter.lastOptions?.path, '/api/user/token/refresh');
       expect(adapter.lastOptions?.headers['Authorization'], isNull);
     });
 
     test(
-      'session, logout, and delete account use required auth policy',
+      'logout and delete account use required auth policy',
       () async {
         final adapter = _FakeHttpClientAdapter(
           responseData: _ok(_guestSessionJson),
         );
         final source = AuthRemoteDataSource(apiClient: _apiClient(adapter));
 
-        await source.fetchSession();
         await source.logout();
         await source.deleteAccount();
 
         expect(adapter.requests.map((request) => request.path), [
-          '/auth/session',
           '/auth/logout',
           '/account',
         ]);
@@ -194,48 +192,6 @@ void main() {
       );
     });
 
-    test('auth envelope non-zero preserves businessCode', () async {
-      final adapter = _FakeHttpClientAdapter(
-        responseData: {'code': 2001, 'message': 'login failed', 'data': null},
-      );
-      final source = AuthRemoteDataSource(apiClient: _apiClient(adapter));
-
-      await expectLater(
-        source.fetchSession(),
-        throwsA(
-          isA<ApiException>().having(
-            (error) => error.businessCode,
-            'businessCode',
-            2001,
-          ),
-        ),
-      );
-    });
-
-    test(
-      'session bootstrap http 401 maps to unauthorized ApiException',
-      () async {
-        final adapter = _FakeHttpClientAdapter(
-          statusCode: 401,
-          responseData: {'message': 'unauthorized'},
-        );
-        final source = AuthRemoteDataSource(apiClient: _apiClient(adapter));
-
-        await expectLater(
-          source.fetchSession(),
-          throwsA(
-            isA<ApiException>().having(
-              (error) => error.code,
-              'code',
-              ApiErrorCode.unauthorized,
-            ),
-          ),
-        );
-      },
-    );
-  });
-
-  group('profile remote skeleton', () {
     test('profile dto maps network avatar, membership, and wallet summary', () {
       final dto = ProfileSummaryDto.fromJson(_profileJson);
       final summary = const ProfileMapper().mapSummary(dto);

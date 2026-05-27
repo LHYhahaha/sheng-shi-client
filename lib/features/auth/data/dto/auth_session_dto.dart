@@ -10,6 +10,8 @@ class AuthSessionDto {
     this.token,
     this.serverTime,
     required this.isNewUser,
+    this.sessionId,
+    this.guestId,
   });
 
   final bool isAuthenticated;
@@ -17,6 +19,8 @@ class AuthSessionDto {
   final AuthTokenDto? token;
   final DateTime? serverTime;
   final bool isNewUser;
+  final String? sessionId;
+  final String? guestId;
 
   factory AuthSessionDto.fromJson(Object? json) {
     final map = JsonFieldParser.requireMap(json, dtoName: 'AuthSessionDto');
@@ -89,6 +93,8 @@ class AuthSessionDto {
       token: token,
       serverTime: JsonFieldParser.optionalDateTime(map, 'serverTime'),
       isNewUser: isNewUser,
+      sessionId: JsonFieldParser.optionalString(map, 'sessionId'),
+      guestId: JsonFieldParser.optionalString(map, 'guestId'),
     );
   }
   

@@ -18,12 +18,6 @@ class MockAuthRepository implements AuthRepository {
   AccountDeletionRejectedException? forcedDeleteRejection;
 
   @override
-  Future<AuthSession> fetchSession() async {
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-    return _session;
-  }
-
-  @override
   Future<AuthSession> login(AuthProviderType provider) async {
     await Future<void>.delayed(const Duration(milliseconds: 80));
     final linkGuestId = _session.guestId ?? _session.sessionId;

@@ -5,6 +5,7 @@ import '../../../core/auth/user_info_store.dart';
 import '../../../core/auth/session_cleanup_coordinator.dart';
 import '../../../core/network/api_client_provider.dart';
 import '../../../core/network/remote_api_switches.dart';
+import '../../../core/oauth/oauth_service_provider.dart';
 import '../domain/auth_repository.dart';
 import 'mock_auth_repository.dart';
 import 'remote/auth_remote_data_source.dart';
@@ -27,6 +28,7 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
       requestContext: ref.watch(apiRequestContextProvider),
       tokenStore: ref.read(authTokenStoreProvider.notifier),
       userInfoStore: ref.read(userInfoStoreProvider.notifier),
+      oauthService: ref.watch(facebookOAuthServiceProvider),
     );
   } else {
     base = MockAuthRepository();

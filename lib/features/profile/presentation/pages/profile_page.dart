@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +10,7 @@ import '../../../auth/application/auth_modal_coordinator.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/profile_controller.dart';
+import '../../application/profile_wallet_provider.dart';
 import '../widgets/profile_coins_card.dart';
 import '../widgets/profile_header.dart';
 import '../widgets/profile_membership_card.dart';
@@ -18,25 +21,51 @@ import '../widgets/profile_menu_row.dart';
 /// 页面展示态由 Profile mock 数据和 AuthState 合成：会员/金币等资料仍来自
 /// ProfileController，登录身份、昵称和头像以 AuthState 为准。这样 logout/delete
 /// 后不需要手动同步 ProfileController，也避免多个页面各自维护登录布尔值。
-class ProfilePage extends ConsumerWidget {
+class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends ConsumerState<ProfilePage> {
+  @override
+  void initState() {
+    super.initState();
+    developer.log('ProfilePage initState called');
+    // 不在initState中直接读取authState，改为在build中使用ref.listen()监听
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = context.l10n;
     final profileState = ref.watch(profileControllerProvider);
     final authState = ref.watch(authControllerProvider);
+    final walletState = ref.watch(profileWalletProvider);
     final authModalCoordinator = ref.read(authModalCoordinatorProvider);
     final authUser = authState.user;
+
+    developer.log(
+      'ProfilePage build called, authState.isLoggedIn: ${authState.isLoggedIn}, authUser: $authUser',
+    );
+    developer.log(
+      'ProfilePage build called, walletState: coin=${walletState.coin}, isLoading=${walletState.isLoading}',
+    );
+
     // 这里只做展示层合成，不写回 profileState。Auth 是登录态源头；Profile 是资料
     // mock 源头。把合成结果回写会让退出登录后的旧昵称/头像残留在资料状态里。
     final state = profileState.copyWith(
       isLoggedIn: authState.isLoggedIn,
       userId: authUser?.id ?? profileState.userId,
+      showId: authUser?.showId ?? profileState.showId,
       nickname: authUser?.nickname,
       avatarAssetPath:
           authUser?.avatarAssetPath ?? profileState.avatarAssetPath,
+      coin: authUser?.coin ?? 0,
     );
+
+    // 使用用户信息中的金币数据（如果有的话）
+    final displayCoins = state.coins;
 
     return Scaffold(
       backgroundColor: AppColors.black,
@@ -50,6 +79,12 @@ class ProfilePage extends ConsumerWidget {
               onLoginTap: () => authModalCoordinator.showLogin(context),
               onAccountTap: () => context.push(RoutePaths.account),
             ),
+
+            //
+            // ElevatedButton(
+            //   onPressed: () => authModalCoordinator.showLogin(context),
+            //   child: Text("测四"),
+            // ),
             const SizedBox(height: 21),
             ProfileMembershipCard(
               membership: state.membership,
@@ -57,7 +92,7 @@ class ProfilePage extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             ProfileCoinsCard(
-              coins: state.coins,
+              coins: displayCoins,
               onTopUpTap: () => context.push(RoutePaths.store),
               onWalletTap: () => context.push(RoutePaths.wallet),
             ),

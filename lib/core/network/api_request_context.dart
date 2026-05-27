@@ -9,6 +9,11 @@ class ApiRequestContext {
     required this.platform,
     required this.appVersion,
     this.accessToken,
+    this.refreshToken,
+    this.accessTokenExpiresAt,
+    this.refreshTokenExpiresAt,
+    this.sessionId,
+    this.guestId,
   });
 
   /// 仅用于单元测试；生产路径使用 [apiRequestContextProvider]。
@@ -18,6 +23,11 @@ class ApiRequestContext {
     this.platform = 'android',
     this.appVersion = '1.0.0',
     this.accessToken,
+    this.refreshToken,
+    this.accessTokenExpiresAt,
+    this.refreshTokenExpiresAt,
+    this.sessionId,
+    this.guestId,
   });
 
   /// 安装级 install id，映射为 `Device-Id` header。
@@ -37,13 +47,38 @@ class ApiRequestContext {
   /// 当前 access token；refresh token 不在此暴露。
   final String? accessToken;
 
+  /// 当前 refresh token；仅用于 token 刷新流程。
+  final String? refreshToken;
+
+  /// access token 的过期时间。
+  final DateTime? accessTokenExpiresAt;
+
+  /// refresh token 的过期时间。
+  final DateTime? refreshTokenExpiresAt;
+
+  /// 服务端 session id（游客或正式用户）。
+  final String? sessionId;
+
+  /// 游客 id，account link 时传给服务端。
+  final String? guestId;
+
   Map<String, String> toBaseHeaders() {
-    return {
+    final headers = {
       'Device-Id': deviceId,
       'Lang': lang,
       'Platform': platform,
       'App-Version': appVersion,
       'Accept': 'application/json',
     };
+    
+    if (sessionId != null && sessionId!.isNotEmpty) {
+      headers['Session-Id'] = sessionId!;
+    }
+    
+    if (guestId != null && guestId!.isNotEmpty) {
+      headers['Guest-Id'] = guestId!;
+    }
+    
+    return headers;
   }
 }

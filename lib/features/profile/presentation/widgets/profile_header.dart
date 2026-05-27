@@ -57,7 +57,7 @@ class ProfileHeader extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'ID:${state.userId}',
+                      'ID:${state.showId}',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.textPrimary.withValues(alpha: 0.8),
                         fontSize: 12,

@@ -20,9 +20,6 @@ class SessionCleanupAuthRepository implements AuthRepository {
   final UserInfoStore? _userInfoStore;
 
   @override
-  Future<AuthSession> fetchSession() => delegate.fetchSession();
-
-  @override
   Future<AuthSession> login(AuthProviderType provider) =>
       delegate.login(provider);
 

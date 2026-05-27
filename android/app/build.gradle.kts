@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.yushi.drama.drama_client"
+    namespace = "com.yushi.drama.client"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,7 +20,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.yushi.drama.drama_client"
+        applicationId = "com.yushi.drama.client"
         minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

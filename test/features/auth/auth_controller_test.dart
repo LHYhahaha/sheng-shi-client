@@ -158,9 +158,6 @@ class _BlockingAuthRepository implements AuthRepository {
   int loginCalls = 0;
 
   @override
-  Future<AuthSession> fetchSession() async => const AuthSession.guest();
-
-  @override
   Future<AuthSession> login(AuthProviderType provider) {
     loginCalls += 1;
     _loginCompleter = Completer<AuthSession>();
@@ -199,14 +196,6 @@ class _FailingAuthRepository implements AuthRepository {
   bool failLogout = false;
   bool failDelete = false;
   AuthSession _session = const AuthSession.guest();
-
-  @override
-  Future<AuthSession> fetchSession() async {
-    if (failFetch) {
-      throw StateError('fetch failed');
-    }
-    return _session;
-  }
 
   @override
   Future<AuthSession> login(AuthProviderType provider) async {

@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/api_session_auth_handler.dart';
 import '../auth/auth_token_store.dart';
-import '../auth/user_info_store.dart';
 import '../runtime/api_lang_provider.dart';
 import '../runtime/api_platform_provider.dart';
 import '../runtime/app_version_provider.dart';
@@ -26,6 +25,11 @@ final apiRequestContextProvider = Provider<ApiRequestContext>((ref) {
     platform: ref.watch(apiPlatformProvider),
     appVersion: ref.watch(apiAppVersionProvider),
     accessToken: token.accessToken,
+    refreshToken: token.refreshToken,
+    accessTokenExpiresAt: token.expiresAt,
+    refreshTokenExpiresAt: token.refreshExpiresAt,
+    sessionId: token.subjectId,
+    guestId: token.guestId,
   );
 });
 

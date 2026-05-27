@@ -20,6 +20,10 @@ final apiSessionAuthHandlerProvider = Provider.family<ApiSessionAuthHandler, Api
 /// 401 场景的统一 refresh + cleanup 协调器。
 ///
 /// 只允许由 [ApiClient] 触发；feature 不得直接调用。
+/// 
+/// Token 刷新策略：
+/// 1. accessToken 失效 → 使用 refreshToken 刷新
+/// 2. refreshToken 失效 → 清理 session，需要重新登录
 class ApiSessionAuthHandler {
   ApiSessionAuthHandler({
     required AuthRefreshCoordinator refreshCoordinator,
@@ -39,27 +43,56 @@ class ApiSessionAuthHandler {
   final SessionCleanupCoordinator _sessionCleanup;
   final AuthRefreshExecutor _refreshExecutor;
 
-  /// 尝试 refresh；成功返回 true 以便 ApiClient 重试原请求一次。
+  /// 处理 401 Unauthorized 响应。
+  /// 
+  /// 流程：
+  /// 1. 检查 refreshToken 是否存在且有效
+  /// 2. 如果 refreshToken 已过期 → 清理 session，返回 false（需要重新登录）
+  /// 3. 如果 refreshToken 有效 → 尝试刷新 accessToken
+  /// 4. 刷新成功 → 保存新 token，返回 true（ApiClient 会重试原请求）
+  /// 5. 刷新失败 → 清理 session，返回 false（需要重新登录）
   Future<bool> handleUnauthorized() async {
     final current = _readToken();
     final refreshToken = current.refreshToken;
+    final refreshExpiresAt = current.refreshExpiresAt;
+    
+    print('[ApiSessionAuthHandler] handleUnauthorized called');
+    print('[ApiSessionAuthHandler]   hasRefreshToken: ${refreshToken != null && refreshToken.isNotEmpty}');
+    print('[ApiSessionAuthHandler]   refreshExpiresAt: $refreshExpiresAt');
+
+    // 检查 refreshToken 是否存在
     if (refreshToken == null || refreshToken.isEmpty) {
+      print('[ApiSessionAuthHandler] No refreshToken available, cleaning up session');
       await _sessionCleanup.cleanup(SessionCleanupReason.sessionExpired);
       return false;
     }
 
+    // 检查 refreshToken 是否已过期
+    final now = DateTime.now();
+    if (refreshExpiresAt != null && now.isAfter(refreshExpiresAt)) {
+      print('[ApiSessionAuthHandler] refreshToken expired at $refreshExpiresAt, cleaning up session');
+      await _sessionCleanup.cleanup(SessionCleanupReason.sessionExpired);
+      return false;
+    }
+
+    // 尝试使用 refreshToken 刷新 accessToken
     try {
+      print('[ApiSessionAuthHandler] Attempting to refresh accessToken with refreshToken');
       final refreshed = await _refreshCoordinator.refresh(
         () => _refreshExecutor(refreshToken),
       );
+      
       if (refreshed == null || !refreshed.hasAccessToken) {
+        print('[ApiSessionAuthHandler] Token refresh returned invalid result, cleaning up session');
         await _sessionCleanup.cleanup(SessionCleanupReason.refreshFailed);
         return false;
       }
 
+      print('[ApiSessionAuthHandler] Token refresh successful, saving new token');
       await _tokenStore.save(refreshed);
       return true;
-    } catch (_) {
+    } catch (e) {
+      print('[ApiSessionAuthHandler] Token refresh failed with error: $e, cleaning up session');
       await _sessionCleanup.cleanup(SessionCleanupReason.refreshFailed);
       return false;
     }

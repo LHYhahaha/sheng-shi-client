@@ -90,7 +90,7 @@ void main() {
     await container
         .read(apiClientProvider)
         .get<void>(
-          '/auth/refresh',
+          '/api/user/token/refresh',
           authPolicy: ApiAuthPolicy.none,
           decoder: (_) {},
         );

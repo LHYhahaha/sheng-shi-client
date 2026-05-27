@@ -159,7 +159,7 @@ void main() {
       );
 
       await client.post<void>(
-        '/auth/refresh',
+        '/api/user/token/refresh',
         data: {'refreshToken': 'refresh-1'},
         authPolicy: ApiAuthPolicy.none,
         options: Options(extra: {apiSkipAuthRefreshExtraKey: true}),

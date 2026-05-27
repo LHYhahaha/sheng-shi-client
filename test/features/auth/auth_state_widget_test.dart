@@ -271,14 +271,6 @@ class _WidgetAuthRepository implements AuthRepository {
   AuthSession _session;
 
   @override
-  Future<AuthSession> fetchSession() async {
-    if (failFetch) {
-      throw StateError('fetch failed');
-    }
-    return _session;
-  }
-
-  @override
   Future<AuthSession> login(AuthProviderType provider) async {
     if (failLogin) {
       throw StateError('login failed');
@@ -308,9 +300,6 @@ class _WidgetAuthRepository implements AuthRepository {
 
 class _BlockingFetchAuthRepository extends _WidgetAuthRepository {
   final Completer<AuthSession> _fetchCompleter = Completer<AuthSession>();
-
-  @override
-  Future<AuthSession> fetchSession() => _fetchCompleter.future;
 }
 
 class _BlockingLogoutAuthRepository extends _WidgetAuthRepository {

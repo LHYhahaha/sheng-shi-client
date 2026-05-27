@@ -1,5 +1,6 @@
 import '../../../../core/network/api_client.dart';
 import '../dto/profile_summary_dto.dart';
+import '../dto/wallet_dto.dart';
 
 class ProfileRemoteDataSource {
   const ProfileRemoteDataSource({required ApiClient apiClient})
@@ -12,6 +13,15 @@ class ProfileRemoteDataSource {
       '/profile',
       authPolicy: ApiAuthPolicy.required,
       decoder: ProfileSummaryDto.fromJson,
+    );
+  }
+
+  Future<WalletDto> getWallet(int userId) {
+    return _apiClient.get<WalletDto>(
+      '/api/payment/wallet',
+      queryParameters: {'userId': userId},
+      authPolicy: ApiAuthPolicy.required,
+      decoder: WalletDto.fromJson,
     );
   }
 }

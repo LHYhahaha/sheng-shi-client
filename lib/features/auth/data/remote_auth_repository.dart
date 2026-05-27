@@ -2,6 +2,7 @@ import '../../../core/auth/auth_token_snapshot.dart';
 import '../../../core/auth/auth_token_store.dart';
 import '../../../core/auth/user_info_store.dart';
 import '../../../core/network/api_request_context.dart';
+import '../../../core/oauth/oauth_service.dart';
 import '../domain/auth_repository.dart';
 import '../domain/auth_session.dart';
 import 'dto/auth_session_dto.dart';
@@ -21,23 +22,20 @@ class RemoteAuthRepository implements AuthRepository {
     AuthMapper mapper = const AuthMapper(),
     AuthTokenStore? tokenStore,
     UserInfoStore? userInfoStore,
+    OAuthService? oauthService,
   }) : _remoteDataSource = remoteDataSource,
        _requestContext = requestContext,
        _mapper = mapper,
        _tokenStore = tokenStore,
-       _userInfoStore = userInfoStore;
+       _userInfoStore = userInfoStore,
+       _oauthService = oauthService;
 
   final AuthRemoteDataSource _remoteDataSource;
   final ApiRequestContext _requestContext;
   final AuthMapper _mapper;
   final AuthTokenStore? _tokenStore;
   final UserInfoStore? _userInfoStore;
-
-  @override
-  Future<AuthSession> fetchSession() async {
-    final dto = await _remoteDataSource.fetchSession();
-    return _mapper.mapSession(dto);
-  }
+  final OAuthService? _oauthService;
 
   @override
   Future<AuthSession> login(AuthProviderType provider) async {
@@ -57,29 +55,29 @@ class RemoteAuthRepository implements AuthRepository {
         ),
       ),
       AuthProviderType.google ||
-      AuthProviderType.facebook => await _remoteDataSource.loginOAuth(
-        OAuthLoginRequestDto(
-          provider: provider.name,
-          // 本轮不接真实 SDK，token 字段只作为 remote skeleton contract。
-          idToken: 'mock-${provider.name}-id-token',
-          deviceId: _requestContext.deviceId,
-          platform: _requestContext.platform,
-          appVersion: _requestContext.appVersion,
-          lang: _requestContext.lang,
-        ),
-      ),
+      AuthProviderType.facebook => await _loginWithOAuth(provider),
     };
     
     print('[RemoteAuthRepository] login received response');
     await _saveToken(dto);
     print('[RemoteAuthRepository] login token saved');
     
-    // 登录成功后获取用户信息
+    // 登录接口只返回 token，需要调用用户接口获取用户信息
     print('[RemoteAuthRepository] fetching user info...');
     await _fetchAndSaveUserInfo();
     print('[RemoteAuthRepository] user info saved');
     
-    return _mapper.mapSession(dto);
+    // 从 UserInfoStore 中读取用户信息，构建 session
+    if (_userInfoStore != null) {
+      print('[RemoteAuthRepository] building session from user info store...');
+      // 这里需要通过 ref 来读取 userInfoStore 的状态
+      // 但由于 RemoteAuthRepository 不是 Notifier，无法直接访问
+      // 所以返回 guest session，让 AuthController 来处理
+      return const AuthSession.guest();
+    }
+    
+    print('[RemoteAuthRepository] userInfoStore is null, returning guest session');
+    return const AuthSession.guest();
   }
 
   @override
@@ -92,6 +90,50 @@ class RemoteAuthRepository implements AuthRepository {
   Future<AuthSession> deleteAccount() async {
     final dto = await _remoteDataSource.deleteAccount();
     return _mapper.mapSession(dto);
+  }
+
+  /// 使用 OAuth 服务获取 token，然后调用后端登录接口。
+  Future<AuthSessionDto> _loginWithOAuth(AuthProviderType provider) async {
+    print('[RemoteAuthRepository] _loginWithOAuth starting for provider: $provider');
+    
+    // 获取 OAuth token
+    String? oauthToken;
+    try {
+      if (_oauthService == null) {
+        print('[RemoteAuthRepository] _loginWithOAuth: oauthService is null, using mock token');
+        oauthToken = 'mock-${provider.name}-id-token';
+      } else {
+        print('[RemoteAuthRepository] _loginWithOAuth: calling OAuth service...');
+        oauthToken = switch (provider) {
+          AuthProviderType.facebook => await _oauthService!.signInWithFacebook(),
+          AuthProviderType.google => await _oauthService!.signInWithGoogle(),
+          _ => null,
+        };
+        
+        if (oauthToken == null) {
+          print('[RemoteAuthRepository] _loginWithOAuth: user cancelled login');
+          throw Exception('User cancelled OAuth login');
+        }
+        
+        print('[RemoteAuthRepository] _loginWithOAuth: got token: ${oauthToken.substring(0, 20)}...');
+      }
+    } catch (e) {
+      print('[RemoteAuthRepository] _loginWithOAuth: OAuth error: $e');
+      rethrow;
+    }
+    
+    // 调用后端登录接口
+    print('[RemoteAuthRepository] _loginWithOAuth: calling backend API...');
+    return await _remoteDataSource.loginOAuth(
+      OAuthLoginRequestDto(
+        provider: provider.name,
+        idToken: oauthToken,
+        deviceId: _requestContext.deviceId,
+        platform: _requestContext.platform,
+        appVersion: _requestContext.appVersion,
+        lang: _requestContext.lang,
+      ),
+    );
   }
 
   Future<void> _saveToken(AuthSessionDto dto) async {
@@ -107,14 +149,24 @@ class RemoteAuthRepository implements AuthRepository {
     print('[RemoteAuthRepository]   expiresAt: ${token.expiresAt}');
     print('[RemoteAuthRepository]   refreshExpiresAt: ${token.refreshExpiresAt}');
     
+    // 如果服务器没有返回sessionId，使用accessToken的前16个字符作为sessionId
+    final sessionId = dto.sessionId ?? 'sess-${token.accessToken.substring(0, 16)}';
+    final guestId = dto.guestId ?? 'guest-${token.accessToken.substring(0, 16)}';
+    
+    print('[RemoteAuthRepository]   sessionId: $sessionId');
+    print('[RemoteAuthRepository]   guestId: $guestId');
+    
     final snapshot = AuthTokenSnapshot(
       accessToken: token.accessToken,
       refreshToken: token.refreshToken,
       tokenType: token.tokenType,
       expiresAt: token.expiresAt,
       refreshExpiresAt: token.refreshExpiresAt,
-      sessionKind: AuthTokenSessionKind.guest,
-      guestId: token.accessToken,
+      sessionKind: dto.isAuthenticated 
+          ? AuthTokenSessionKind.authenticated 
+          : AuthTokenSessionKind.guest,
+      subjectId: sessionId,
+      guestId: guestId,
     );
 
     await _tokenStore!.save(snapshot);
@@ -140,7 +192,6 @@ class RemoteAuthRepository implements AuthRepository {
       print('[RemoteAuthRepository] _fetchAndSaveUserInfo completed');
     } catch (e) {
       print('[RemoteAuthRepository] _fetchAndSaveUserInfo failed: $e');
-      // 获取用户信息失败不应该阻断登录流程，但需要记录错误
     }
   }
 }
