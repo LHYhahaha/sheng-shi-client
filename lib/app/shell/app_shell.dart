@@ -41,20 +41,21 @@ class AppShell extends ConsumerWidget {
   }
 
   void _goBranch(WidgetRef ref, int index) {
-    if (navigationShell.currentIndex == AppShellDestinations.forYouIndex &&
-        index != AppShellDestinations.forYouIndex) {
-      // For You tab 在 indexedStack 中仍然挂载；切走时必须显式暂停可见性。
-      // 不能等 dispose，因为 tab 页面不会销毁，继续播放会造成后台出声和网络占用。
-      unawaited(
-        ref
-            .read(
-              playerPlaybackControllerProvider(
-                PlayerPlaybackSessionKeys.forYouTab,
-              ).notifier,
-            )
-            .pauseForVisibility(),
-      );
-    }
+    // TODO: For You tab 暂时禁用，相关逻辑已注释
+    // if (navigationShell.currentIndex == AppShellDestinations.forYouIndex &&
+    //     index != AppShellDestinations.forYouIndex) {
+    //   // For You tab 在 indexedStack 中仍然挂载；切走时必须显式暂停可见性。
+    //   // 不能等 dispose，因为 tab 页面不会销毁，继续播放会造成后台出声和网络占用。
+    //   unawaited(
+    //     ref
+    //         .read(
+    //           playerPlaybackControllerProvider(
+    //             PlayerPlaybackSessionKeys.forYouTab,
+    //           ).notifier,
+    //         )
+    //         .pauseForVisibility(),
+    //   );
+    // }
     navigationShell.goBranch(
       index,
       initialLocation: index == navigationShell.currentIndex,
@@ -65,11 +66,12 @@ class AppShell extends ConsumerWidget {
 class AppShellDestinations {
   const AppShellDestinations._();
 
-  static const forYouIndex = 1;
+  // TODO: For You tab 暂时禁用，索引已调整
+  // static const forYouIndex = 1;
 
   static const paths = [
     RoutePaths.home,
-    RoutePaths.forYou,
+    // RoutePaths.forYou,  // 暂时禁用
     RoutePaths.myList,
     RoutePaths.profile,
   ];

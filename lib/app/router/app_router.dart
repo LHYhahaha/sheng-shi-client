@@ -52,15 +52,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: RoutePaths.forYou,
-                name: RouteNames.forYou,
-                builder: (context, state) => const PlayerPage.forYou(),
-              ),
-            ],
-          ),
+          // StatefulShellBranch(
+          //   routes: [
+          //     GoRoute(
+          //       path: RoutePaths.forYou,
+          //       name: RouteNames.forYou,
+          //       builder: (context, state) => const PlayerPage.forYou(),
+          //     ),
+          //   ],
+          // ),
           StatefulShellBranch(
             routes: [
               GoRoute(
