@@ -95,6 +95,17 @@ class EntitlementController extends Notifier<UserEntitlementState> {
         .setAutoUnlockEnabled(enabled);
   }
 
+  /// 从钱包 API 同步金币和赠币余额到权益系统。
+  ///
+  /// 钱包页面加载数据后调用此方法，确保播放器解锁决策使用最新的余额。
+  void syncCoinBalance({required int coinBalance, required int bonusBalance}) {
+    state = state.copyWith(
+      coinBalance: coinBalance,
+      bonusBalance: bonusBalance,
+      clearLastUnlockError: true,
+    );
+  }
+
   /// 用金币解锁单集。
   ///
   /// mock 阶段会直接扣本地余额；真实阶段这里应调用服务端扣费/权益接口，成功后再刷新

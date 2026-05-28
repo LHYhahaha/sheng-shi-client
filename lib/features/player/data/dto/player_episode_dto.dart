@@ -1,111 +1,77 @@
-import '../../../../core/network/api_mapping_exception.dart';
 import '../../../../core/network/json_field_parser.dart';
 
 /// 播放器剧集远程 DTO。
-///
-/// DTO 只存在 data 层。`hlsUrl` 不放在这里，真实播放源必须通过 playback-source 接口
-/// 单独解析，避免详情接口绕过签名、过期和权益策略。
+/// 
+/// 用于接收短剧详情 API 返回的集数数据。
 class PlayerEpisodeDto {
   const PlayerEpisodeDto({
-    required this.episodeId,
-    required this.dramaId,
-    required this.episodeNumber,
-    required this.title,
-    required this.unlockType,
-    required this.requiredCoins,
-    required this.isAvailable,
-    required this.durationMs,
-    required this.aspectRatio,
-    required this.posterUrl,
-    required this.previewImageUrl,
-    this.accessStatus,
-    this.reasonCode,
+    required this.id,
+    required this.episodeNo,
+    required this.videoName,
+    required this.sourceUrl,
+    required this.durationSec,
+    required this.status,
+    required this.publishedAt,
+    required this.subtitles,
   });
 
-  final String episodeId;
-  final String dramaId;
-  final int episodeNumber;
-  final String? title;
-  final String unlockType;
-  final int? requiredCoins;
-  final bool isAvailable;
-  final int? durationMs;
-  final double? aspectRatio;
-  final String? posterUrl;
-  final String? previewImageUrl;
-  final String? accessStatus;
-  final String? reasonCode;
+  final int id;
+  final int episodeNo;
+  final String videoName;
+  final String sourceUrl;
+  final int durationSec;
+  final int status;
+  final String publishedAt;
+  final List<PlayerEpisodeSubtitleDto> subtitles;
 
   factory PlayerEpisodeDto.fromJson(Map<String, Object?> json) {
-    const dtoName = 'PlayerEpisodeDto';
-    final episodeId =
-        JsonFieldParser.optionalString(json, 'episodeId') ??
-        JsonFieldParser.optionalString(json, 'id');
-    if (episodeId == null) {
-      throw const ApiMappingException(
-        dtoName: dtoName,
-        field: 'episodeId',
-        reason: 'required episode id',
-      );
-    }
-
-    final unlockType = JsonFieldParser.parseUnlockType(json, dtoName: dtoName);
-    final requiredCoins = unlockType == 'coins'
-        ? JsonFieldParser.requireInt(json, 'requiredCoins', dtoName: dtoName)
-        : JsonFieldParser.optionalInt(json, 'requiredCoins');
-
     return PlayerEpisodeDto(
-      episodeId: episodeId,
-      dramaId: JsonFieldParser.requireString(json, 'dramaId', dtoName: dtoName),
-      episodeNumber:
-          JsonFieldParser.optionalInt(json, 'episodeNumber') ??
-          JsonFieldParser.optionalInt(json, 'number') ??
-          (throw const ApiMappingException(
-            dtoName: dtoName,
-            field: 'episodeNumber',
-            reason: 'required episode number',
-          )),
-      title: JsonFieldParser.optionalString(json, 'title'),
-      unlockType: unlockType,
-      requiredCoins: requiredCoins,
-      isAvailable: JsonFieldParser.requireBool(
-        json,
-        'isAvailable',
-        dtoName: dtoName,
-      ),
-      durationMs: JsonFieldParser.optionalInt(json, 'durationMs'),
-      aspectRatio: _doubleValue(json['aspectRatio']),
-      posterUrl: JsonFieldParser.optionalString(json, 'posterUrl'),
-      previewImageUrl: JsonFieldParser.optionalString(json, 'previewImageUrl'),
-      accessStatus: _accessStatus(json),
-      reasonCode: _reasonCode(json),
+      id: JsonFieldParser.optionalInt(json, 'id') ?? 0,
+      episodeNo: JsonFieldParser.optionalInt(json, 'episode_no') ?? 0,
+      videoName: JsonFieldParser.optionalString(json, 'video_name') ?? '',
+      sourceUrl: JsonFieldParser.optionalString(json, 'source_url') ?? '',
+      durationSec: JsonFieldParser.optionalInt(json, 'duration_sec') ?? 0,
+      status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
+      publishedAt: JsonFieldParser.optionalString(json, 'published_at') ?? '',
+      subtitles: _parseSubtitles(json['subtitles']),
     );
   }
 
-  static double? _doubleValue(Object? value) {
-    if (value is double) return value;
-    if (value is num) return value.toDouble();
-    if (value is String) return double.tryParse(value);
-    return null;
+  static List<PlayerEpisodeSubtitleDto> _parseSubtitles(Object? value) {
+    if (value is! List) return const <PlayerEpisodeSubtitleDto>[];
+    return value
+        .whereType<Map<String, Object?>>()
+        .map(PlayerEpisodeSubtitleDto.fromJson)
+        .toList(growable: false);
   }
+}
 
-  static Map<String, Object?> _mapValue(Object? value) {
-    if (value is Map<String, Object?>) return value;
-    return const <String, Object?>{};
-  }
+/// 播放器字幕 DTO。
+class PlayerEpisodeSubtitleDto {
+  const PlayerEpisodeSubtitleDto({
+    required this.id,
+    required this.language,
+    required this.subtitleName,
+    required this.subtitleUrl,
+    required this.format,
+    required this.status,
+  });
 
-  static String? _accessStatus(Map<String, Object?> json) {
-    final direct = JsonFieldParser.optionalString(json, 'accessStatus');
-    if (direct != null) return direct;
-    return JsonFieldParser.optionalString(_mapValue(json['access']), 'status');
-  }
+  final int id;
+  final String language;
+  final String subtitleName;
+  final String subtitleUrl;
+  final String format;
+  final int status;
 
-  static String? _reasonCode(Map<String, Object?> json) {
-    final direct = JsonFieldParser.optionalString(json, 'reasonCode');
-    if (direct != null) return direct;
-    return JsonFieldParser.optionalString(
-      _mapValue(json['access']),
-      'reasonCode',
+  factory PlayerEpisodeSubtitleDto.fromJson(Map<String, Object?> json) {
+    return PlayerEpisodeSubtitleDto(
+      id: JsonFieldParser.optionalInt(json, 'id') ?? 0,
+      language: JsonFieldParser.optionalString(json, 'language') ?? '',
+      subtitleName: JsonFieldParser.optionalString(json, 'subtitle_name') ?? '',
+      subtitleUrl: JsonFieldParser.optionalString(json, 'subtitle_url') ?? '',
+      format: JsonFieldParser.optionalString(json, 'format') ?? '',
+      status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
     );
   }
 }

@@ -14,11 +14,8 @@ class RemoteMembershipRepository implements MembershipRepository {
   final MembershipMapper _mapper;
 
   @override
-  Future<MembershipData> fetchMembership() async {
-    final dto = await _remoteDataSource.getMembershipData(
-      platform: 'android',
-      locale: 'en',
-    );
+  Future<MembershipData> fetchMembership({required int userId}) async {
+    final dto = await _remoteDataSource.getMembershipData(userId: userId);
     return _mapper.mapData(dto);
   }
 }

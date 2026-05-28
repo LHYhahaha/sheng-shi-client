@@ -88,6 +88,10 @@ class JsonFieldParser {
     return _parseInt(json[key]);
   }
 
+  static bool? optionalBool(Map<String, Object?> json, String key) {
+    return _parseBool(json[key]);
+  }
+
   static bool requireBool(
     Map<String, Object?> json,
     String key, {

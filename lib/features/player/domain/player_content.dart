@@ -211,5 +211,6 @@ class PlayerRecommendation {
 ///
 /// 负责剧集详情、选集和推荐内容，不负责 media session。不要在仓库实现里创建播放器。
 abstract interface class PlayerContentRepository {
+  /// 获取短剧详情（包含所有集数和字幕信息）。
   Future<PlayerContent> getPlayerContent({required String dramaId});
 }

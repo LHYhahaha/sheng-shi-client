@@ -167,10 +167,16 @@ class WalletController extends Notifier<WalletState> {
         return;
       }
 
+      // 同步钱包数据到权益系统
+      ref.read(entitlementControllerProvider.notifier).syncCoinBalance(
+        coinBalance: data.coins,
+        bonusBalance: data.bonus,
+      );
+
       final entitlementState = ref.read(entitlementControllerProvider);
       state = state.copyWith(
         isLoading: false,
-        coins: entitlementState.coinBalance,
+        coins: data.coins,
         bonus: data.bonus,
         // 自动解锁现在以 EntitlementState 为准，Player evaluateAccess 会读取同一份状态。
         // 钱包 mock 返回值只保留为历史接口占位，不再覆盖用户实际权益偏好。
@@ -223,6 +229,90 @@ class WalletController extends Notifier<WalletState> {
         }),
       ),
     );
+  }
+
+  /// 加载交易记录（充值记录）。
+  Future<void> loadTransactionRecords({String? pageToken}) async {
+    final generation = ++_generation;
+    state = state.copyWith(isLoading: true, clearError: true);
+
+    try {
+      final records = await ref
+          .read(walletRepositoryProvider)
+          .fetchTransactionRecords(pageToken: pageToken);
+      if (!_isCurrent(generation)) {
+        return;
+      }
+
+      state = state.copyWith(
+        isLoading: false,
+        transactionRecords: List<WalletRecord>.unmodifiable(records),
+        clearError: true,
+      );
+    } catch (error) {
+      if (!_isCurrent(generation)) {
+        return;
+      }
+
+      state = state.copyWith(isLoading: false, error: error);
+    }
+  }
+
+  /// 加载消费记录。
+  Future<void> loadConsumptionRecords({
+    required String status,
+    String? pageToken,
+  }) async {
+    final generation = ++_generation;
+    state = state.copyWith(isLoading: true, clearError: true);
+
+    try {
+      final records = await ref
+          .read(walletRepositoryProvider)
+          .fetchConsumptionRecords(status: status, pageToken: pageToken);
+      if (!_isCurrent(generation)) {
+        return;
+      }
+
+      state = state.copyWith(
+        isLoading: false,
+        consumptionRecords: List<WalletRecord>.unmodifiable(records),
+        clearError: true,
+      );
+    } catch (error) {
+      if (!_isCurrent(generation)) {
+        return;
+      }
+
+      state = state.copyWith(isLoading: false, error: error);
+    }
+  }
+
+  /// 加载金币奖励记录。
+  Future<void> loadRewardCoins({String? pageToken}) async {
+    final generation = ++_generation;
+    state = state.copyWith(isLoading: true, clearError: true);
+
+    try {
+      final records = await ref
+          .read(walletRepositoryProvider)
+          .fetchRewardCoins(pageToken: pageToken);
+      if (!_isCurrent(generation)) {
+        return;
+      }
+
+      state = state.copyWith(
+        isLoading: false,
+        coinRecords: List<WalletRecord>.unmodifiable(records),
+        clearError: true,
+      );
+    } catch (error) {
+      if (!_isCurrent(generation)) {
+        return;
+      }
+
+      state = state.copyWith(isLoading: false, error: error);
+    }
   }
 
   bool _isCurrent(int generation) => generation == _generation;

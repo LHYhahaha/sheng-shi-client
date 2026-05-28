@@ -1,48 +1,64 @@
 import '../../../../core/network/json_field_parser.dart';
-import 'membership_benefit_dto.dart';
 
 class MembershipProductDto {
   const MembershipProductDto({
     required this.productId,
-    required this.platformProductId,
-    this.basePlanId,
-    this.offerId,
-    this.productType,
-    required this.period,
-    required this.title,
-    required this.priceMicros,
-    required this.currencyCode,
-    required this.localizedPrice,
-    required this.originalPriceMicros,
-    required this.localizedOriginalPrice,
-    required this.promotionId,
-    required this.promotionExpiresAt,
-    required this.benefits,
-    required this.tips,
-    required this.enabled,
-    this.dailyPriceLabel,
-    this.description,
+    required this.productName,
+    required this.channelProductId,
+    required this.priceText,
+    required this.originalPriceText,
+    required this.periodType,
+    required this.periodValue,
+    required this.payChannel,
+    required this.status,
+    required this.sort,
+    this.promotionText,
+    this.promotionExpireSeconds,
+    this.createdAt,
+    this.updatedAt,
   });
 
-  final String productId;
-  final String platformProductId;
-  final String? basePlanId;
-  final String? offerId;
-  final String? productType;
-  final String period;
-  final String title;
-  final int priceMicros;
-  final String currencyCode;
-  final String localizedPrice;
-  final int? originalPriceMicros;
-  final String? localizedOriginalPrice;
-  final String? promotionId;
-  final DateTime? promotionExpiresAt;
-  final List<MembershipBenefitDto> benefits;
-  final List<String> tips;
-  final bool enabled;
-  final String? dailyPriceLabel;
-  final String? description;
+  /// 商品 ID
+  final int productId;
+
+  /// 商品名称
+  final String productName;
+
+  /// 渠道商品 ID（对应 platformProductId）
+  final String channelProductId;
+
+  /// 展示价格
+  final String priceText;
+
+  /// 原价展示
+  final String originalPriceText;
+
+  /// 会员周期类型（0=周/1=月/2=年）
+  final int periodType;
+
+  /// 周期值
+  final int periodValue;
+
+  /// 支付渠道
+  final int payChannel;
+
+  /// 商品状态
+  final int status;
+
+  /// 排序
+  final int sort;
+
+  /// 促销文案
+  final String? promotionText;
+
+  /// 促销倒计时秒数
+  final int? promotionExpireSeconds;
+
+  /// 创建时间
+  final String? createdAt;
+
+  /// 更新时间
+  final String? updatedAt;
 
   factory MembershipProductDto.fromJson(Object? json) {
     final map = JsonFieldParser.requireMap(
@@ -51,61 +67,63 @@ class MembershipProductDto {
     );
     const dtoName = 'MembershipProductDto';
     return MembershipProductDto(
-      productId: JsonFieldParser.requireString(
+      productId: JsonFieldParser.requireInt(
         map,
         'productId',
         dtoName: dtoName,
       ),
-      platformProductId: JsonFieldParser.requireString(
+      productName: JsonFieldParser.requireString(
         map,
-        'platformProductId',
+        'productName',
         dtoName: dtoName,
       ),
-      basePlanId: JsonFieldParser.optionalString(map, 'basePlanId'),
-      offerId: JsonFieldParser.optionalString(map, 'offerId'),
-      productType: JsonFieldParser.optionalString(map, 'productType'),
-      period: JsonFieldParser.requireString(map, 'period', dtoName: dtoName),
-      title: JsonFieldParser.optionalString(map, 'title') ?? '',
-      priceMicros: JsonFieldParser.requireInt(
+      channelProductId: JsonFieldParser.requireString(
         map,
-        'priceMicros',
+        'channelProductId',
         dtoName: dtoName,
       ),
-      currencyCode: JsonFieldParser.requireString(
+      priceText: JsonFieldParser.requireString(
         map,
-        'currencyCode',
+        'priceText',
         dtoName: dtoName,
       ),
-      localizedPrice:
-          JsonFieldParser.optionalString(map, 'localizedPrice') ?? '',
-      originalPriceMicros: JsonFieldParser.optionalInt(
+      originalPriceText: JsonFieldParser.requireString(
         map,
-        'originalPriceMicros',
+        'originalPriceText',
+        dtoName: dtoName,
       ),
-      localizedOriginalPrice: JsonFieldParser.optionalString(
+      periodType: JsonFieldParser.requireInt(
         map,
-        'localizedOriginalPrice',
+        'periodType',
+        dtoName: dtoName,
       ),
-      promotionId: JsonFieldParser.optionalString(map, 'promotionId'),
-      promotionExpiresAt: JsonFieldParser.optionalDateTime(
+      periodValue: JsonFieldParser.requireInt(
         map,
-        'promotionExpiresAt',
+        'periodValue',
+        dtoName: dtoName,
       ),
-      benefits: _list(map['benefits'], MembershipBenefitDto.fromJson),
-      tips: _stringList(map['tips']),
-      enabled: JsonFieldParser.requireBool(map, 'enabled', dtoName: dtoName),
-      dailyPriceLabel: JsonFieldParser.optionalString(map, 'dailyPriceLabel'),
-      description: JsonFieldParser.optionalString(map, 'description'),
+      payChannel: JsonFieldParser.requireInt(
+        map,
+        'payChannel',
+        dtoName: dtoName,
+      ),
+      status: JsonFieldParser.requireInt(
+        map,
+        'status',
+        dtoName: dtoName,
+      ),
+      sort: JsonFieldParser.requireInt(
+        map,
+        'sort',
+        dtoName: dtoName,
+      ),
+      promotionText: JsonFieldParser.optionalString(map, 'promotionText'),
+      promotionExpireSeconds: JsonFieldParser.optionalInt(
+        map,
+        'promotionExpireSeconds',
+      ),
+      createdAt: JsonFieldParser.optionalString(map, 'createdAt'),
+      updatedAt: JsonFieldParser.optionalString(map, 'updatedAt'),
     );
   }
-}
-
-List<T> _list<T>(Object? value, T Function(Object? json) mapper) {
-  if (value is List) return value.map(mapper).toList(growable: false);
-  return <T>[];
-}
-
-List<String> _stringList(Object? value) {
-  if (value is List) return value.whereType<String>().toList(growable: false);
-  return const <String>[];
 }

@@ -12,29 +12,21 @@ class MembershipPlan {
     required this.dailyPriceLabel,
     this.period,
     this.platformProductId,
-    this.basePlanId,
-    this.offerId,
-    this.productType,
-    this.priceMicros,
-    this.currencyCode,
-    this.originalPriceMicros,
-    this.promotionId,
-    this.promotionExpiresAt,
-    this.enabled = true,
-    this.originalPriceLabel,
     this.badgeLabel,
+    this.originalPriceLabel,
     this.description,
+    this.enabled = true,
   });
 
-  /// 套餐 id。
+  /// 套餐 id（对应 productId）。
   ///
   /// 购买确认和服务端下单使用它，不能用标题/价格文案反查。
   final String id;
 
-  /// 套餐标题。
+  /// 套餐标题（对应 productName）。
   final String title;
 
-  /// 总价展示文案。
+  /// 总价展示文案（对应 priceText）。
   final String priceLabel;
 
   /// 日均价展示文案。
@@ -45,46 +37,20 @@ class MembershipPlan {
   /// 订阅周期，如 weekly/monthly/yearly。
   final String? period;
 
-  /// Google/Apple 平台商品 id。
+  /// 渠道商品 id（对应 channelProductId）。
   final String? platformProductId;
 
-  /// Google Play base plan id。
-  ///
-  /// 订阅商品常见字段，真实下单不能只靠平台商品 id。
-  final String? basePlanId;
-
-  /// 订阅优惠 offer id。
-  final String? offerId;
-
-  /// 平台商品类型，通常是 subscription。
-  final String? productType;
-
-  /// 原始价格微单位。
-  final int? priceMicros;
-
-  /// 货币代码。
-  final String? currencyCode;
-
-  /// 原价微单位。
-  final int? originalPriceMicros;
-
-  /// 促销 id。
-  final String? promotionId;
-
-  /// 促销结束时间。
-  final DateTime? promotionExpiresAt;
-
-  /// 商品是否可售。
-  final bool enabled;
-
-  /// 原价展示文案。
-  final String? originalPriceLabel;
-
-  /// 徽标文案。
+  /// 徽标文案（对应 promotionText）。
   final String? badgeLabel;
+
+  /// 原价展示文案（对应 originalPriceText）。
+  final String? originalPriceLabel;
 
   /// 套餐描述。
   final String? description;
+
+  /// 商品是否可售。
+  final bool enabled;
 }
 
 /// 会员权益展示项。

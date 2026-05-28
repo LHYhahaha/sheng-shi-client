@@ -27,7 +27,7 @@ class WalletRemoteDataSource {
     String? pageToken,
   }) {
     return _apiClient.get<WalletPageDto<WalletTransactionRecordDto>>(
-      '/wallet/transactions',
+      '/api/payment/recharge/records',
       queryParameters: <String, Object?>{'pageToken': pageToken}
         ..removeWhere((_, value) => value == null),
       authPolicy: ApiAuthPolicy.required,
@@ -41,9 +41,8 @@ class WalletRemoteDataSource {
     String? pageToken,
   }) {
     return _apiClient.get<WalletPageDto<WalletConsumptionRecordDto>>(
-      '/wallet/consumption-records',
+      '/api/payment/coin/consume-records',
       queryParameters: <String, Object?>{
-        'status': status,
         'pageToken': pageToken,
       }..removeWhere((_, value) => value == null),
       authPolicy: ApiAuthPolicy.required,
@@ -56,7 +55,7 @@ class WalletRemoteDataSource {
     String? pageToken,
   }) {
     return _apiClient.get<WalletPageDto<WalletRewardCoinRecordDto>>(
-      '/wallet/reward-coins',
+      '/api/payment/bonus-coin/records',
       queryParameters: <String, Object?>{'pageToken': pageToken}
         ..removeWhere((_, value) => value == null),
       authPolicy: ApiAuthPolicy.required,

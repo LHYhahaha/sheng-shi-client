@@ -16,6 +16,7 @@ class WalletMapper {
     return WalletData(
       coins: dto.coinBalance,
       bonus: dto.bonusBalance,
+      totalCoin: dto.totalCoin,
       autoUnlockNextEpisode: dto.autoUnlockEnabled,
       transactionRecords: dto.transactionRecords
           .map(mapTransaction)
@@ -63,17 +64,17 @@ class WalletMapper {
 
   WalletRecord mapReward(WalletRewardCoinRecordDto dto) {
     return WalletRecord(
-      id: dto.id,
+      id: dto.recordId.toString(),
       type: WalletRecordType.coins,
-      title: '${dto.amountCoins} Reward Coins',
-      dateLabel: dto.expiresAt == null
-          ? ''
-          : 'Expires ${_dateLabel(dto.expiresAt)}',
-      trailingLabel: dto.claimed ? 'Claimed' : 'Check in',
+      title: '${dto.bonusCoin} Reward Coins',
+      dateLabel: dto.permanent
+          ? '${_dateLabel(dto.startAt)} - Permanent'
+          : '${_dateLabel(dto.startAt)} - ${_dateLabel(dto.expireAt)}',
+      trailingLabel: dto.status == 1 ? 'Claimed' : 'Check in',
       showCoinIcon: true,
-      rewardEnabled: dto.claimable && !dto.claimed,
-      rewardClaimed: dto.claimed,
-      subtitle: dto.title,
+      rewardEnabled: dto.status == 0,
+      rewardClaimed: dto.status == 1,
+      subtitle: dto.sourceName,
     );
   }
 

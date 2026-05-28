@@ -1,45 +1,30 @@
 import '../domain/player_feed.dart';
-import 'dto/player_content_dto.dart';
 import 'mapper/player_content_mapper.dart';
 import 'mapper/player_feed_mapper.dart';
 import 'remote/player_remote_data_source.dart';
 
-/// 播放 feed 远程 repository 骨架。
+/// 播放 feed 远程 repository。
 class RemotePlayerFeedRepository implements PlayerFeedRepository {
   const RemotePlayerFeedRepository({
     required PlayerRemoteDataSource remoteDataSource,
-    PlayerContentMapper contentMapper = const PlayerContentMapper(),
     PlayerFeedMapper feedMapper = const PlayerFeedMapper(),
+    PlayerContentMapper contentMapper = const PlayerContentMapper(),
   }) : _remoteDataSource = remoteDataSource,
-       _contentMapper = contentMapper,
-       _feedMapper = feedMapper;
+       _feedMapper = feedMapper,
+       _contentMapper = contentMapper;
 
   final PlayerRemoteDataSource _remoteDataSource;
-  final PlayerContentMapper _contentMapper;
   final PlayerFeedMapper _feedMapper;
+  final PlayerContentMapper _contentMapper;
 
   @override
   Future<List<PlayerFeedItem>> listSingleDramaFeed({
     required String dramaId,
     required String episodeId,
   }) async {
-    final detail = await _remoteDataSource.getDramaDetail(dramaId: dramaId);
-    final episodes = await _remoteDataSource.listEpisodes(dramaId: dramaId);
-    final content = _contentMapper.mapContent(
-      PlayerContentDto(
-        dramaId: detail.dramaId,
-        title: detail.title,
-        description: detail.description,
-        posterUrl: detail.posterUrl,
-        backgroundUrl: detail.backgroundUrl,
-        totalEpisodes: detail.totalEpisodes,
-        tags: detail.tags,
-        viewCount: detail.viewCount,
-        viewCountLabel: detail.viewCountLabel,
-        likeCountLabel: detail.likeCountLabel,
-        episodes: episodes,
-      ),
-    );
+    final dramaIdInt = int.tryParse(dramaId) ?? 0;
+    final dto = await _remoteDataSource.fetchDramaDetail(dramaId: dramaIdInt);
+    final content = _contentMapper.mapContent(dto);
 
     final items = content.episodes
         .map(

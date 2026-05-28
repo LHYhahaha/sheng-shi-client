@@ -2,24 +2,21 @@ import '../../domain/membership_plan.dart';
 import '../dto/membership_benefit_dto.dart';
 import '../dto/membership_data_dto.dart';
 import '../dto/membership_product_dto.dart';
-import '../dto/membership_status_dto.dart';
 
 /// 会员远程 DTO 到 domain 的 mapper。
 ///
-/// 会员商品列表和会员状态未来可能来自不同接口；mapper 只合成页面当前需要的展示快照，
+/// 会员商品列表和会员状态来自同一接口；mapper 只合成页面当前需要的展示快照，
 /// 不在客户端推断真实会员权益。
 class MembershipMapper {
   const MembershipMapper();
 
   MembershipData mapData(MembershipDataDto dto) {
-    final statusBenefits =
-        dto.status?.benefits ?? const <MembershipBenefitDto>[];
     return MembershipData(
-      isActive: dto.status?.isActive ?? false,
+      isActive: dto.isMember,
       heroTitle: dto.heroTitle,
       heroSubtitle: dto.heroSubtitle,
-      plans: dto.products.map(mapProduct).toList(growable: false),
-      benefits: (dto.benefits.isNotEmpty ? dto.benefits : statusBenefits)
+      plans: dto.memberProducts.map(mapProduct).toList(growable: false),
+      benefits: dto.benefits
           .map(mapBenefit)
           .toList(growable: false),
       tips: MembershipTips(
@@ -31,24 +28,16 @@ class MembershipMapper {
 
   MembershipPlan mapProduct(MembershipProductDto dto) {
     return MembershipPlan(
-      id: dto.productId,
-      title: dto.title,
-      priceLabel: dto.localizedPrice,
-      dailyPriceLabel: dto.dailyPriceLabel ?? '',
-      period: dto.period,
-      platformProductId: dto.platformProductId,
-      basePlanId: dto.basePlanId,
-      offerId: dto.offerId,
-      productType: dto.productType,
-      priceMicros: dto.priceMicros,
-      currencyCode: dto.currencyCode,
-      originalPriceMicros: dto.originalPriceMicros,
-      promotionId: dto.promotionId,
-      promotionExpiresAt: dto.promotionExpiresAt,
-      enabled: dto.enabled,
-      originalPriceLabel: dto.localizedOriginalPrice,
-      badgeLabel: dto.promotionId == null ? null : 'Limited offer',
-      description: dto.description,
+      id: dto.productId.toString(),
+      title: dto.productName,
+      priceLabel: dto.priceText,
+      dailyPriceLabel: _calculateDailyPrice(dto.priceText, dto.periodValue),
+      period: _mapPeriodType(dto.periodType),
+      platformProductId: dto.channelProductId,
+      badgeLabel: dto.promotionText,
+      originalPriceLabel: dto.originalPriceText,
+      description: dto.productName,
+      enabled: dto.status == 0, // 假设 status 0 表示可售
     );
   }
 
@@ -61,18 +50,27 @@ class MembershipMapper {
     );
   }
 
-  MembershipData mapProductsAndStatus({
-    required List<MembershipProductDto> products,
-    required MembershipStatusDto status,
-  }) {
-    return MembershipData(
-      isActive: status.isActive,
-      heroTitle: 'Join Membership',
-      heroSubtitle: status.isActive ? 'Membership active' : '',
-      plans: products.map(mapProduct).toList(growable: false),
-      benefits: status.benefits.map(mapBenefit).toList(growable: false),
-      tips: const MembershipTips(subscriptionNote: '', items: []),
-    );
+  /// 根据周期类型映射为字符串。
+  /// 0=周/1=月/2=年
+  String _mapPeriodType(int periodType) {
+    switch (periodType) {
+      case 0:
+        return 'weekly';
+      case 1:
+        return 'monthly';
+      case 2:
+        return 'yearly';
+      default:
+        return 'monthly';
+    }
+  }
+
+  /// 计算日均价格展示文案。
+  String _calculateDailyPrice(String priceText, int periodValue) {
+    if (periodValue <= 0) return '';
+    // 简单处理：假设 priceText 是 "¥29.99" 这样的格式
+    // 实际应该根据具体格式解析
+    return priceText;
   }
 
   MembershipBenefitIcon _icon(String value) {

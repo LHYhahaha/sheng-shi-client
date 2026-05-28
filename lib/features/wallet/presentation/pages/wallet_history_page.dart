@@ -22,7 +22,17 @@ class _WalletHistoryPageState extends ConsumerState<WalletHistoryPage> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => ref.read(walletControllerProvider.notifier).load());
+    Future.microtask(() {
+      final controller = ref.read(walletControllerProvider.notifier);
+      switch (widget.type) {
+        case WalletRecordType.transaction:
+          controller.loadTransactionRecords();
+        case WalletRecordType.consumption:
+          controller.loadConsumptionRecords(status: 'spent');
+        case WalletRecordType.coins:
+          controller.loadRewardCoins();
+      }
+    });
   }
 
   @override
@@ -56,7 +66,6 @@ class _WalletHistoryPageState extends ConsumerState<WalletHistoryPage> {
                 state: state,
                 type: widget.type,
                 onRetry: controller.retry,
-                onConsumptionFilterChanged: controller.setConsumptionFilter,
                 onClaimReward: controller.claimReward,
               ),
             ),
@@ -112,14 +121,12 @@ class _HistoryBody extends StatelessWidget {
     required this.state,
     required this.type,
     required this.onRetry,
-    required this.onConsumptionFilterChanged,
     required this.onClaimReward,
   });
 
   final WalletState state;
   final WalletRecordType type;
   final VoidCallback onRetry;
-  final ValueChanged<WalletConsumptionStatus> onConsumptionFilterChanged;
   final ValueChanged<String> onClaimReward;
 
   @override
@@ -145,32 +152,16 @@ class _HistoryBody extends StatelessWidget {
       );
     }
 
-    final records = switch (type) {
-      WalletRecordType.consumption =>
-        state
-            .recordsFor(type)
-            .where(
-              (record) => record.consumptionStatus == state.consumptionFilter,
-            )
-            .toList(growable: false),
-      _ => state.recordsFor(type),
-    };
+    final records = state.recordsFor(type);
 
     return ListView(
       padding: EdgeInsets.fromLTRB(
         16,
-        type == WalletRecordType.consumption ? 0 : 12,
+        12,
         16,
         MediaQuery.paddingOf(context).bottom + 32,
       ),
       children: [
-        if (type == WalletRecordType.consumption) ...[
-          _ConsumptionSegmentedControl(
-            value: state.consumptionFilter,
-            onChanged: onConsumptionFilterChanged,
-          ),
-          const SizedBox(height: 24),
-        ],
         if (records.isEmpty)
           const _HistoryEmptyState()
         else

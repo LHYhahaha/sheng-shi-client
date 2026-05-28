@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/session_cleanup_types.dart';
+import '../../../core/auth/user_info_store.dart';
 import '../../entitlement/application/entitlement_controller.dart';
 import '../data/membership_repository_provider.dart';
 import '../domain/membership_plan.dart';
@@ -190,9 +191,12 @@ class MembershipController extends Notifier<MembershipState> {
     );
 
     try {
+      final userInfo = ref.read(userInfoStoreProvider);
+      final userId = userInfo.userId ?? 0;
+      
       final data = await ref
           .read(membershipRepositoryProvider)
-          .fetchMembership();
+          .fetchMembership(userId: userId);
       if (!_isCurrent(generation)) {
         return;
       }
@@ -261,8 +265,8 @@ class MembershipController extends Notifier<MembershipState> {
       return;
     }
 
-    // mock success 会写入共享 EntitlementState，让 Player/Profile/Wallet 后续读取同一份
-    // 会员状态。真实接入时这里仍应等待服务端订单确认或触发权益刷新，不能只信客户端状态。
+    // mock success 会触发权益刷新，让 Player/Profile/Wallet 后续读取同一份
+    // 会员状态。真实接入时这里仍应等待服务端订单确认或触发权益刷新。
     final purchaseGeneration = _purchaseGeneration;
     final planId = state.confirmationPlanId;
     state = state.copyWith(purchaseStatus: MembershipPurchaseStatus.processing);
@@ -273,9 +277,8 @@ class MembershipController extends Notifier<MembershipState> {
       return;
     }
 
-    await ref
-        .read(entitlementControllerProvider.notifier)
-        .grantMockMembership(source: 'membership:$planId');
+    // 支付成功后刷新权益系统，获取最新的会员状态
+    await ref.read(entitlementControllerProvider.notifier).load();
 
     if (purchaseGeneration != _purchaseGeneration ||
         state.confirmationPlanId != planId ||

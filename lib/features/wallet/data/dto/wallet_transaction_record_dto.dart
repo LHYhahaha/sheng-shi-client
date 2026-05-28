@@ -10,6 +10,12 @@ class WalletTransactionRecordDto {
     required this.createdAt,
     required this.status,
     this.title,
+    this.amountText,
+    this.memberDays,
+    this.memberPeriodType,
+    this.orderNo,
+    this.paidAt,
+    this.productType,
   });
 
   final String id;
@@ -22,20 +28,39 @@ class WalletTransactionRecordDto {
   final DateTime? createdAt;
   final String status;
   final String? title;
+  
+  // 充值记录特有字段
+  final String? amountText;
+  final int? memberDays;
+  final int? memberPeriodType;
+  final String? orderNo;
+  final String? paidAt;
+  final int? productType;
 
   factory WalletTransactionRecordDto.fromJson(Object? json) {
     final map = json is Map<String, Object?> ? json : const <String, Object?>{};
+    
+    // 适配两种格式：
+    // 1. 旧格式交易记录：id, type, amount, bonusAmount, price, currency, platform, createdAt, status, title
+    // 2. 充值记录：coin, bonusCoin, amountText, currency, memberDays, memberPeriodType, orderNo, paidAt, productType, title
+    
     return WalletTransactionRecordDto(
-      id: _string(map['id']),
+      id: _string(map['id'] ?? map['orderNo']),
       type: _string(map['type'], fallback: 'transaction'),
-      amount: _int(map['amount']),
-      bonusAmount: _int(map['bonusAmount']),
+      amount: _int(map['amount'] ?? map['coin']),
+      bonusAmount: _int(map['bonusAmount'] ?? map['bonusCoin']),
       price: _nullableInt(map['price']),
       currency: _nullableString(map['currency']),
       platform: _nullableString(map['platform']),
-      createdAt: _date(map['createdAt']),
+      createdAt: _date(map['createdAt'] ?? map['paidAt']),
       status: _string(map['status'], fallback: 'success'),
       title: _nullableString(map['title']),
+      amountText: _nullableString(map['amountText']),
+      memberDays: _nullableInt(map['memberDays']),
+      memberPeriodType: _nullableInt(map['memberPeriodType']),
+      orderNo: _nullableString(map['orderNo']),
+      paidAt: _nullableString(map['paidAt']),
+      productType: _nullableInt(map['productType']),
     );
   }
 }

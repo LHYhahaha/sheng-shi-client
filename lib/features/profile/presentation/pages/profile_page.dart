@@ -5,8 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../app/router/app_router.dart';
 import '../../../auth/application/auth_controller.dart';
 import '../../../auth/application/auth_modal_coordinator.dart';
+import '../../../entitlement/application/entitlement_controller.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/profile_controller.dart';
@@ -33,7 +35,14 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   void initState() {
     super.initState();
     developer.log('ProfilePage initState called');
-    // 不在initState中直接读取authState，改为在build中使用ref.listen()监听
+    // 进入 Profile 页时刷新权益数据，确保会员状态和金币余额是最新的
+    _loadEntitlementData();
+  }
+
+  void _loadEntitlementData() {
+    Future.microtask(
+      () => ref.read(entitlementControllerProvider.notifier).load(),
+    );
   }
 
   @override
@@ -44,6 +53,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final walletState = ref.watch(profileWalletProvider);
     final authModalCoordinator = ref.read(authModalCoordinatorProvider);
     final authUser = authState.user;
+
+    // 监听路由变化，每次切换到 Profile 页面时刷新
+    ref.listen(appRouterProvider, (previous, next) {
+      final currentLocation = next.routerDelegate.currentConfiguration.last.matchedLocation;
+      if (currentLocation == RoutePaths.profile) {
+        developer.log('ProfilePage route activated, reloading entitlement data');
+        _loadEntitlementData();
+      }
+    });
 
     developer.log(
       'ProfilePage build called, authState.isLoggedIn: ${authState.isLoggedIn}, authUser: $authUser',
@@ -80,11 +98,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               onAccountTap: () => context.push(RoutePaths.account),
             ),
 
-            //
-            // ElevatedButton(
-            //   onPressed: () => authModalCoordinator.showLogin(context),
-            //   child: Text("测四"),
-            // ),
+
+            ElevatedButton(
+              onPressed: () => authModalCoordinator.showLogin(context),
+              child: Text("测四"),
+            ),
             const SizedBox(height: 21),
             ProfileMembershipCard(
               membership: state.membership,

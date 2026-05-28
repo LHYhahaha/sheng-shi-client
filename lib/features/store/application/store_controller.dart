@@ -259,20 +259,8 @@ class StoreController extends Notifier<StoreState> {
       return;
     }
 
-    final purchasedPackage = state.confirmationPackage;
-    if (purchasedPackage != null) {
-      final entitlement = ref.read(entitlementControllerProvider.notifier);
-      if (purchasedPackage.isCoinPackage && purchasedPackage.totalCoins > 0) {
-        await entitlement.grantMockCoins(
-          amount: purchasedPackage.totalCoins,
-          source: 'store:${purchasedPackage.id}',
-        );
-      } else if (!purchasedPackage.isCoinPackage) {
-        await entitlement.grantMockMembership(
-          source: 'store:${purchasedPackage.id}',
-        );
-      }
-    }
+    // 支付成功后刷新权益系统，获取最新的金币和会员状态
+    await ref.read(entitlementControllerProvider.notifier).load();
 
     if (purchaseGeneration != _purchaseGeneration ||
         state.confirmationPackageId != packageId ||

@@ -28,7 +28,6 @@ class _WalletPageState extends ConsumerState<WalletPage> {
     final entitlementState = ref.watch(entitlementControllerProvider);
     final controller = ref.read(walletControllerProvider.notifier);
     final displayState = state.copyWith(
-      coins: entitlementState.coinBalance,
       autoUnlockNextEpisode: entitlementState.autoUnlockEnabled,
     );
 

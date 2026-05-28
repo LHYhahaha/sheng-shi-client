@@ -5,7 +5,7 @@ class MockMembershipRepository implements MembershipRepository {
   const MockMembershipRepository();
 
   @override
-  Future<MembershipData> fetchMembership() async {
+  Future<MembershipData> fetchMembership({required int userId}) async {
     await Future<void>.delayed(const Duration(milliseconds: 80));
 
     return const MembershipData(

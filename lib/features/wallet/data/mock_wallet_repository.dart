@@ -1,8 +1,14 @@
+import '../data/dto/wallet_consumption_record_dto.dart';
+import '../data/dto/wallet_reward_coin_record_dto.dart';
+import '../data/dto/wallet_transaction_record_dto.dart';
+import '../data/mapper/wallet_mapper.dart';
 import '../domain/wallet_record.dart';
 import '../domain/wallet_repository.dart';
 
 class MockWalletRepository implements WalletRepository {
   const MockWalletRepository();
+
+  static const _mapper = WalletMapper();
 
   @override
   Future<WalletData> fetchWallet() async {
@@ -11,6 +17,7 @@ class MockWalletRepository implements WalletRepository {
     return const WalletData(
       coins: 4000,
       bonus: 4000,
+      totalCoin: 8000,
       autoUnlockNextEpisode: true,
       transactionRecords: [
         WalletRecord(
@@ -101,5 +108,144 @@ class MockWalletRepository implements WalletRepository {
         ),
       ],
     );
+  }
+
+  @override
+  Future<List<WalletRecord>> fetchTransactionRecords({
+    String? pageToken,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    const mockDtos = [
+      WalletTransactionRecordDto(
+        id: 'membership_weekly',
+        type: 'transaction',
+        amount: 0,
+        bonusAmount: 0,
+        price: 1999000,
+        currency: 'USD',
+        platform: 'iOS',
+        createdAt: null,
+        status: 'success',
+        title: 'Membership (Weekly)',
+      ),
+      WalletTransactionRecordDto(
+        id: 'coins_3000',
+        type: 'transaction',
+        amount: 3000,
+        bonusAmount: 0,
+        price: 1999000,
+        currency: 'USD',
+        platform: 'iOS',
+        createdAt: null,
+        status: 'success',
+        title: '3000 Coins',
+      ),
+      WalletTransactionRecordDto(
+        id: 'coins_3000_bonus',
+        type: 'transaction',
+        amount: 3000,
+        bonusAmount: 300,
+        price: 1999000,
+        currency: 'USD',
+        platform: 'iOS',
+        createdAt: null,
+        status: 'success',
+        title: '3000 Coins + 300bonus',
+      ),
+    ];
+
+    return mockDtos.map(_mapper.mapTransaction).toList(growable: false);
+  }
+
+  @override
+  Future<List<WalletRecord>> fetchConsumptionRecords({
+    required String status,
+    String? pageToken,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    const mockDtos = [
+      WalletConsumptionRecordDto(
+        id: 'unlock_ep_12',
+        dramaId: 'drama_1',
+        episodeId: 'ep_11',
+        episodeNumber: 11,
+        title: 'Raja Iblis Hidup Kembali',
+        amountCoins: 30,
+        sourceType: 'coins',
+        status: 'spent',
+        createdAt: null,
+        coverUrl: null,
+      ),
+      WalletConsumptionRecordDto(
+        id: 'unlock_ep_13',
+        dramaId: 'drama_1',
+        episodeId: 'ep_11',
+        episodeNumber: 11,
+        title: 'Raja Iblis Hidup Kembali',
+        amountCoins: 0,
+        sourceType: 'ad',
+        status: 'spent',
+        createdAt: null,
+        coverUrl: null,
+      ),
+      WalletConsumptionRecordDto(
+        id: 'unlock_ep_14',
+        dramaId: 'drama_1',
+        episodeId: 'ep_10',
+        episodeNumber: 10,
+        title: 'Pulang Malam Mengejutkan',
+        amountCoins: 20,
+        sourceType: 'coins',
+        status: 'expired',
+        createdAt: null,
+        coverUrl: null,
+      ),
+    ];
+
+    return mockDtos.map(_mapper.mapConsumption).toList(growable: false);
+  }
+
+  @override
+  Future<List<WalletRecord>> fetchRewardCoins({
+    String? pageToken,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    const mockDtos = [
+      WalletRewardCoinRecordDto(
+        recordId: 1,
+        bonusCoin: 10,
+        remainBonusCoin: 10,
+        sourceName: 'Daily Bonus',
+        status: 0,
+        startAt: null,
+        expireAt: null,
+        permanent: false,
+      ),
+      WalletRewardCoinRecordDto(
+        recordId: 2,
+        bonusCoin: 20,
+        remainBonusCoin: 0,
+        sourceName: 'Purchase Bonus',
+        status: 1,
+        startAt: null,
+        expireAt: null,
+        permanent: false,
+      ),
+      WalletRewardCoinRecordDto(
+        recordId: 3,
+        bonusCoin: 10,
+        remainBonusCoin: 10,
+        sourceName: 'Member Points',
+        status: 0,
+        startAt: null,
+        expireAt: null,
+        permanent: false,
+      ),
+    ];
+
+    return mockDtos.map(_mapper.mapReward).toList(growable: false);
   }
 }

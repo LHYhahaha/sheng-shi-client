@@ -1,71 +1,74 @@
-import '../../../../core/network/api_mapping_exception.dart';
 import '../../../../core/network/json_field_parser.dart';
 import 'player_episode_dto.dart';
 
 /// 播放器剧详情远程 DTO。
+/// 
+/// 接收短剧详情 API 返回的数据格式，包含剧的完整信息和所有集数。
 class PlayerContentDto {
   const PlayerContentDto({
-    required this.dramaId,
+    required this.id,
+    required this.coverUrl,
     required this.title,
-    required this.description,
-    required this.posterUrl,
-    required this.backgroundUrl,
-    required this.totalEpisodes,
-    required this.tags,
-    required this.viewCount,
-    required this.viewCountLabel,
-    required this.likeCountLabel,
+    required this.summary,
+    required this.categoryIds,
+    required this.tagIds,
+    required this.trailerEpisodeNum,
+    required this.pricePerEpisode,
+    required this.isVipOnly,
+    required this.status,
+    required this.languageMask,
+    required this.subtitleLangs,
+    required this.episodeTotal,
+    required this.onlineAt,
     required this.episodes,
   });
 
-  final String dramaId;
-  final String? title;
-  final String? description;
-  final String? posterUrl;
-  final String? backgroundUrl;
-  final int totalEpisodes;
-  final List<String> tags;
-  final int? viewCount;
-  final String? viewCountLabel;
-  final String? likeCountLabel;
+  final int id;
+  final String coverUrl;
+  final String title;
+  final String summary;
+  final List<int> categoryIds;
+  final List<int> tagIds;
+  final int trailerEpisodeNum;
+  final int pricePerEpisode;
+  final int isVipOnly;
+  final int status;
+  final String languageMask;
+  final String subtitleLangs;
+  final int episodeTotal;
+  final String onlineAt;
   final List<PlayerEpisodeDto> episodes;
 
   factory PlayerContentDto.fromJson(Map<String, Object?> json) {
-    const dtoName = 'PlayerContentDto';
-    final rawEpisodes = json['episodes'];
-    final dramaId =
-        JsonFieldParser.optionalString(json, 'dramaId') ??
-        JsonFieldParser.optionalString(json, 'id');
-    if (dramaId == null) {
-      throw ApiMappingException(
-        dtoName: dtoName,
-        field: 'dramaId',
-        reason: 'required drama id',
-      );
-    }
-
     return PlayerContentDto(
-      dramaId: dramaId,
-      title: JsonFieldParser.optionalString(json, 'title'),
-      description: JsonFieldParser.optionalString(json, 'description'),
-      posterUrl: JsonFieldParser.optionalString(json, 'posterUrl'),
-      backgroundUrl: JsonFieldParser.optionalString(json, 'backgroundUrl'),
-      totalEpisodes: JsonFieldParser.optionalInt(json, 'totalEpisodes') ?? 0,
-      tags: _stringList(json['tags']),
-      viewCount: JsonFieldParser.optionalInt(json, 'viewCount'),
-      viewCountLabel: JsonFieldParser.optionalString(json, 'viewCountLabel'),
-      likeCountLabel: JsonFieldParser.optionalString(json, 'likeCountLabel'),
-      episodes: rawEpisodes is List
-          ? rawEpisodes
-                .whereType<Map<String, Object?>>()
-                .map(PlayerEpisodeDto.fromJson)
-                .toList(growable: false)
-          : const <PlayerEpisodeDto>[],
+      id: JsonFieldParser.optionalInt(json, 'id') ?? 0,
+      coverUrl: JsonFieldParser.optionalString(json, 'cover_url') ?? '',
+      title: JsonFieldParser.optionalString(json, 'title') ?? '',
+      summary: JsonFieldParser.optionalString(json, 'summary') ?? '',
+      categoryIds: _parseIntList(json['category_ids']),
+      tagIds: _parseIntList(json['tag_ids']),
+      trailerEpisodeNum: JsonFieldParser.optionalInt(json, 'trailer_episode_num') ?? 0,
+      pricePerEpisode: JsonFieldParser.optionalInt(json, 'price_per_episode') ?? 0,
+      isVipOnly: JsonFieldParser.optionalInt(json, 'is_vip_only') ?? 0,
+      status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
+      languageMask: JsonFieldParser.optionalString(json, 'language_mask') ?? '',
+      subtitleLangs: JsonFieldParser.optionalString(json, 'subtitle_langs') ?? '',
+      episodeTotal: JsonFieldParser.optionalInt(json, 'episode_total') ?? 0,
+      onlineAt: JsonFieldParser.optionalString(json, 'online_at') ?? '',
+      episodes: _parseEpisodes(json['episodes']),
     );
   }
 
-  static List<String> _stringList(Object? value) {
-    if (value is! List) return const <String>[];
-    return value.whereType<String>().toList(growable: false);
+  static List<int> _parseIntList(Object? value) {
+    if (value is! List) return const <int>[];
+    return value.whereType<int>().toList(growable: false);
+  }
+
+  static List<PlayerEpisodeDto> _parseEpisodes(Object? value) {
+    if (value is! List) return const <PlayerEpisodeDto>[];
+    return value
+        .whereType<Map<String, Object?>>()
+        .map(PlayerEpisodeDto.fromJson)
+        .toList(growable: false);
   }
 }

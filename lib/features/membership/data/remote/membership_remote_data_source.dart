@@ -1,57 +1,26 @@
 import '../../../../core/network/api_client.dart';
 import '../dto/membership_data_dto.dart';
-import '../dto/membership_product_dto.dart';
-import '../dto/membership_status_dto.dart';
 
-/// 会员远程数据源骨架。
+/// 会员远程数据源。
 ///
-/// 商品列表假设可未登录查看；会员状态是登录后权益数据，必须 required。
+/// 会员商品列表和会员状态来自同一接口，需要 token 认证。
 class MembershipRemoteDataSource {
   const MembershipRemoteDataSource({required ApiClient apiClient})
     : _apiClient = apiClient;
 
   final ApiClient _apiClient;
 
-  Future<MembershipDataDto> getMembershipData({
-    required String platform,
-    required String locale,
-  }) {
+  /// 获取会员页数据（包含商品列表和会员状态）。
+  ///
+  /// 接口：POST /api/payment/member/page
+  /// 参数：{"userId": userId}
+  /// 返回：会员商品列表和当前会员状态
+  Future<MembershipDataDto> getMembershipData({required int userId}) {
     return _apiClient.get<MembershipDataDto>(
-      '/membership/products',
-      queryParameters: {'platform': platform, 'locale': locale},
-      authPolicy: ApiAuthPolicy.none,
-      decoder: MembershipDataDto.fromJson,
-    );
-  }
-
-  Future<List<MembershipProductDto>> listProducts({
-    required String platform,
-    required String locale,
-  }) {
-    return _apiClient.get<List<MembershipProductDto>>(
-      '/membership/products',
-      queryParameters: {'platform': platform, 'locale': locale},
-      authPolicy: ApiAuthPolicy.none,
-      decoder: (data) {
-        final map = data is Map<String, Object?>
-            ? data
-            : const <String, Object?>{};
-        final rawItems = map['products'] ?? data;
-        if (rawItems is List) {
-          return rawItems
-              .map(MembershipProductDto.fromJson)
-              .toList(growable: false);
-        }
-        return const <MembershipProductDto>[];
-      },
-    );
-  }
-
-  Future<MembershipStatusDto> getStatus() {
-    return _apiClient.get<MembershipStatusDto>(
-      '/membership/status',
+      '/api/payment/member/page',
+      queryParameters: {'userId': userId},
       authPolicy: ApiAuthPolicy.required,
-      decoder: MembershipStatusDto.fromJson,
+      decoder: MembershipDataDto.fromJson,
     );
   }
 }

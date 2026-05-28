@@ -7,6 +7,7 @@ class WalletDto {
   const WalletDto({
     required this.coinBalance,
     required this.bonusBalance,
+    required this.totalCoin,
     required this.autoUnlockEnabled,
     required this.transactionRecords,
     required this.consumptionRecords,
@@ -15,6 +16,7 @@ class WalletDto {
 
   final int coinBalance;
   final int bonusBalance;
+  final int totalCoin;
   final bool autoUnlockEnabled;
   final List<WalletTransactionRecordDto> transactionRecords;
   final List<WalletConsumptionRecordDto> consumptionRecords;
@@ -22,23 +24,17 @@ class WalletDto {
 
   factory WalletDto.fromJson(Object? json) {
     final map = JsonFieldParser.requireMap(json, dtoName: 'WalletDto');
-    const dtoName = 'WalletDto';
     return WalletDto(
-      coinBalance: JsonFieldParser.requireInt(
-        map,
-        'coinBalance',
-        dtoName: dtoName,
-      ),
-      bonusBalance: JsonFieldParser.requireInt(
-        map,
-        'bonusBalance',
-        dtoName: dtoName,
-      ),
-      autoUnlockEnabled: JsonFieldParser.requireBool(
-        map,
-        'autoUnlockEnabled',
-        dtoName: dtoName,
-      ),
+      // 适配当前 API 返回格式：coin -> coinBalance, bonusCoin -> bonusBalance
+      coinBalance: JsonFieldParser.optionalInt(map, 'coin') ??
+          JsonFieldParser.optionalInt(map, 'coinBalance') ??
+          0,
+      bonusBalance: JsonFieldParser.optionalInt(map, 'bonusCoin') ??
+          JsonFieldParser.optionalInt(map, 'bonusBalance') ??
+          0,
+      totalCoin: JsonFieldParser.optionalInt(map, 'totalCoin') ?? 0,
+      autoUnlockEnabled:
+          JsonFieldParser.optionalBool(map, 'autoUnlockEnabled') ?? false,
       transactionRecords: _list(
         map['transactionRecords'],
         WalletTransactionRecordDto.fromJson,

@@ -1,38 +1,24 @@
 import '../domain/player_content.dart';
-import 'dto/player_content_dto.dart';
 import 'mapper/player_content_mapper.dart';
 import 'remote/player_remote_data_source.dart';
 
-/// 播放详情远程 repository 骨架。
+/// 播放详情远程 repository。
 ///
-/// 真实详情和 episode list 可以来自两个接口；repository 负责合并后再交给 mapper。
+/// 通过 fetchDramaDetail 接口获取完整的短剧详情（包含所有集数和字幕信息）。
 class RemotePlayerContentRepository implements PlayerContentRepository {
   const RemotePlayerContentRepository({
     required PlayerRemoteDataSource remoteDataSource,
-    PlayerContentMapper mapper = const PlayerContentMapper(),
+    PlayerContentMapper contentMapper = const PlayerContentMapper(),
   }) : _remoteDataSource = remoteDataSource,
-       _mapper = mapper;
+       _contentMapper = contentMapper;
 
   final PlayerRemoteDataSource _remoteDataSource;
-  final PlayerContentMapper _mapper;
+  final PlayerContentMapper _contentMapper;
 
   @override
   Future<PlayerContent> getPlayerContent({required String dramaId}) async {
-    final detail = await _remoteDataSource.getDramaDetail(dramaId: dramaId);
-    final episodes = await _remoteDataSource.listEpisodes(dramaId: dramaId);
-    final combined = PlayerContentDto(
-      dramaId: detail.dramaId,
-      title: detail.title,
-      description: detail.description,
-      posterUrl: detail.posterUrl,
-      backgroundUrl: detail.backgroundUrl,
-      totalEpisodes: detail.totalEpisodes,
-      tags: detail.tags,
-      viewCount: detail.viewCount,
-      viewCountLabel: detail.viewCountLabel,
-      likeCountLabel: detail.likeCountLabel,
-      episodes: episodes,
-    );
-    return _mapper.mapContent(combined);
+    final dramaIdInt = int.tryParse(dramaId) ?? 0;
+    final dto = await _remoteDataSource.fetchDramaDetail(dramaId: dramaIdInt);
+    return _contentMapper.mapContent(dto);
   }
 }

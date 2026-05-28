@@ -1,32 +1,35 @@
 class WalletRewardCoinRecordDto {
   const WalletRewardCoinRecordDto({
-    required this.id,
-    required this.title,
-    required this.amountCoins,
-    required this.expiresAt,
-    required this.claimable,
-    required this.claimed,
-    required this.claimedAt,
+    required this.recordId,
+    required this.bonusCoin,
+    required this.remainBonusCoin,
+    required this.sourceName,
+    required this.status,
+    required this.startAt,
+    required this.expireAt,
+    required this.permanent,
   });
 
-  final String id;
-  final String title;
-  final int amountCoins;
-  final DateTime? expiresAt;
-  final bool claimable;
-  final bool claimed;
-  final DateTime? claimedAt;
+  final int recordId;
+  final int bonusCoin;
+  final int remainBonusCoin;
+  final String sourceName;
+  final int status;
+  final DateTime? startAt;
+  final DateTime? expireAt;
+  final bool permanent;
 
   factory WalletRewardCoinRecordDto.fromJson(Object? json) {
     final map = json is Map<String, Object?> ? json : const <String, Object?>{};
     return WalletRewardCoinRecordDto(
-      id: _string(map['id']),
-      title: _string(map['title']),
-      amountCoins: _int(map['amountCoins']),
-      expiresAt: _date(map['expiresAt']),
-      claimable: _bool(map['claimable']),
-      claimed: _bool(map['claimed']),
-      claimedAt: _date(map['claimedAt']),
+      recordId: _int(map['recordId']),
+      bonusCoin: _int(map['bonusCoin']),
+      remainBonusCoin: _int(map['remainBonusCoin']),
+      sourceName: _string(map['sourceName']),
+      status: _int(map['status']),
+      startAt: _date(map['startAt']),
+      expireAt: _date(map['expireAt']),
+      permanent: _bool(map['permanent']),
     );
   }
 }

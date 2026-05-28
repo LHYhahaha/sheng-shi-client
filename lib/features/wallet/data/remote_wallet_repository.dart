@@ -22,4 +22,38 @@ class RemoteWalletRepository implements WalletRepository {
     final dto = await _remoteDataSource.getWallet();
     return _mapper.mapWallet(dto);
   }
+
+  @override
+  Future<List<WalletRecord>> fetchTransactionRecords({
+    String? pageToken,
+  }) async {
+    final pageDto = await _remoteDataSource.listTransactions(pageToken: pageToken);
+    return pageDto.items
+        .map(_mapper.mapTransaction)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<WalletRecord>> fetchConsumptionRecords({
+    required String status,
+    String? pageToken,
+  }) async {
+    final pageDto = await _remoteDataSource.listConsumptionRecords(
+      status: status,
+      pageToken: pageToken,
+    );
+    return pageDto.items
+        .map(_mapper.mapConsumption)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<WalletRecord>> fetchRewardCoins({
+    String? pageToken,
+  }) async {
+    final pageDto = await _remoteDataSource.listRewardCoins(pageToken: pageToken);
+    return pageDto.items
+        .map(_mapper.mapReward)
+        .toList(growable: false);
+  }
 }

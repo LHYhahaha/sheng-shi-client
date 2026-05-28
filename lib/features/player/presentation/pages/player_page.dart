@@ -13,6 +13,7 @@ import '../../../../core/modal/app_modal_source.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
+import '../../application/player_drama_detail_controller.dart';
 import '../../application/player_feed_controller.dart';
 import '../../application/player_feed_engine.dart';
 import '../../application/player_feed_engine_access_flow.dart';
@@ -255,6 +256,25 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
     if (widget.feedMode == PlayerFeedMode.singleDrama) {
       _syncAutoImmersiveBlockers();
+    }
+    
+    // 加载短剧详情数据
+    await _loadDramaDetail();
+  }
+
+  /// 加载短剧详情数据。
+  Future<void> _loadDramaDetail() async {
+    if (widget.feedMode != PlayerFeedMode.singleDrama || widget.dramaId == null) {
+      return;
+    }
+    
+    try {
+      final detailController = ref.read(
+        playerDramaDetailControllerProvider(widget.dramaId!).notifier,
+      );
+      await detailController.load();
+    } catch (error) {
+      print('❌ 加载短剧详情异常: $error');
     }
   }
 

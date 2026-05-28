@@ -272,17 +272,19 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
 
   void clearOverlayDismissed(String itemId) => _overlay.clearDismissed(itemId);
 
-  /// 重试播放：评估权益并执行 runtime；返回需 Page 展示的 sheet。
+  /// 重试播放：刷新权益后评估权益并执行 runtime；返回需 Page 展示的 sheet。
   Future<PlayerOverlaySheetIntent> retryPlayback(PlayerFeedItem item) async {
     if (!_canExecuteUserInitiatedRuntime(item)) {
       return PlayerOverlaySheetIntent.none;
     }
+    // 解锁前刷新权益数据，确保金币和会员状态是最新的
+    await ref.read(entitlementControllerProvider.notifier).load();
     final decision = evaluateAccess(item);
     await handleAccessDecision(item, decision, autoPresentSheet: false);
     return _sheetIntentForDecision(decision, item);
   }
 
-  /// 手动 Unlock Now：取消 dwell，评估并返回 sheet 意图。
+  /// 手动 Unlock Now：取消 dwell，刷新权益后评估并返回 sheet 意图。
   Future<PlayerOverlaySheetIntent> prepareManualUnlock(
     PlayerFeedItem item,
   ) async {
@@ -293,6 +295,8 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     if (!isLockedAutoSheetCandidate(item)) {
       return PlayerOverlaySheetIntent.none;
     }
+    // 解锁前刷新权益数据，确保金币和会员状态是最新的
+    await ref.read(entitlementControllerProvider.notifier).load();
     final decision = evaluateAccess(item);
     if (decision.type == EpisodeAccessDecisionType.allowPlay) {
       await handleAccessDecision(item, decision, autoPresentSheet: false);
@@ -301,7 +305,7 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     return _sheetIntentForDecision(decision, item);
   }
 
-  /// 自动 dwell 弹窗：评估 settled locked 项；auto unlock 开启时直接扣币播放。
+  /// 自动 dwell 弹窗：刷新权益后评估 settled locked 项；auto unlock 开启时直接扣币播放。
   Future<PlayerUnlockFlowResult> prepareAutoUnlockSheet({
     required PlayerFeedItem item,
     required bool isModalOpen,
@@ -315,6 +319,8 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
         !isLockedAutoSheetCandidate(item)) {
       return const PlayerUnlockFlowResult();
     }
+    // 解锁前刷新权益数据，确保金币和会员状态是最新的
+    await ref.read(entitlementControllerProvider.notifier).load();
     final decision = evaluateAccess(item);
     if (decision.type == EpisodeAccessDecisionType.allowPlay) {
       await handleAccessDecision(item, decision, autoPresentSheet: false);
@@ -362,6 +368,8 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     ref
         .read(playerRechargeUnlockControllerProvider(sessionKey).notifier)
         .close();
+    // 充值或开通会员成功后，刷新权益数据
+    await ref.read(entitlementControllerProvider.notifier).load();
     if (grantedMembershipPackage) {
       final decision = evaluateAccess(item);
       if (decision.type == EpisodeAccessDecisionType.allowPlay) {

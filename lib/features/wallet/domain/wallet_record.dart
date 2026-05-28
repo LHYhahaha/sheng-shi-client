@@ -114,6 +114,7 @@ class WalletData {
   const WalletData({
     required this.coins,
     required this.bonus,
+    required this.totalCoin,
     required this.autoUnlockNextEpisode,
     required this.transactionRecords,
     required this.consumptionRecords,
@@ -125,6 +126,9 @@ class WalletData {
 
   /// 赠币余额。
   final int bonus;
+
+  /// 总金币余额。
+  final int totalCoin;
 
   /// 服务端或 mock 返回的自动解锁偏好。
   final bool autoUnlockNextEpisode;
