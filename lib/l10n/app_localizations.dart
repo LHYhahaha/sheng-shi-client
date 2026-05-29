@@ -39,7 +39,10 @@ class AppLocalizations {
   String get navHome => _text(en: 'Home', zh: '首页');
   String get navForYou => _text(en: 'For you', zh: '推荐');
   String get navMyList => _text(en: 'My list', zh: '片单');
+  String get navGame => _text(en: 'Game', zh: '游戏');
+  String get navMember => _text(en: 'Member', zh: '会员');
   String get navProfile => _text(en: 'Profile', zh: '我的');
+  String get memberPagePlaceholder => _text(en: 'Under development', zh: '正在联调中');
   String get exclusive => _text(en: 'Exclusive', zh: '独家');
   String get feedLoading => _text(en: 'Loading...', zh: '加载中...');
   String get feedEmpty => _text(en: 'There is no content for now~', zh: '暂无内容');

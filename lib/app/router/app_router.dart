@@ -7,7 +7,9 @@ import '../shell/app_shell.dart';
 import '../../features/auth/presentation/pages/account_cancellation_page.dart';
 import '../../features/auth/presentation/pages/account_page.dart';
 import '../../features/auth/presentation/pages/auth_page.dart';
+import '../../features/game/presentation/pages/game_page.dart';
 import '../../features/home/presentation/pages/home_page.dart';
+import '../../features/member/presentation/pages/member_page.dart';
 import '../../features/membership/presentation/pages/membership_page.dart';
 import '../../features/my_list/presentation/pages/my_list_page.dart';
 import '../../features/player/presentation/pages/player_page.dart';
@@ -49,6 +51,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: RoutePaths.home,
                 name: RouteNames.home,
                 builder: (context, state) => const HomePage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RoutePaths.game,
+                name: RouteNames.game,
+                builder: (context, state) => const GamePage(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RoutePaths.member,
+                name: RouteNames.member,
+                builder: (context, state) => const MemberPage(),
               ),
             ],
           ),

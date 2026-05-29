@@ -146,7 +146,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
     Future<void>.microtask(() async {
       _shellChrome?.hide();
-      await ref.read(entitlementControllerProvider.notifier).load();
+      // await ref.read(entitlementControllerProvider.notifier).load();
       if (!mounted) {
         return;
       }
@@ -166,6 +166,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   @override
   void dispose() {
+    // 上报观看退出事件
+    unawaited(_playbackController.reportWatchProgress(eventType: 4)); // 4: exit
     WidgetsBinding.instance.removeObserver(this);
     _modalService.dismissForSource(AppModalSource.player);
     _overlayOrchestrator.cancelPending();
@@ -450,6 +452,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         )) {
           return;
         }
+        // 上报观看完成事件
+        unawaited(playbackController.reportWatchProgress(eventType: 6)); // 6: complete
         feedEngine.markEndedHandled(next.$1!);
         if (feedSnapshot.$5) {
           unawaited(_advanceToNextFromCompletion());

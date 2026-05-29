@@ -278,7 +278,7 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
       return PlayerOverlaySheetIntent.none;
     }
     // 解锁前刷新权益数据，确保金币和会员状态是最新的
-    await ref.read(entitlementControllerProvider.notifier).load();
+    // await ref.read(entitlementControllerProvider.notifier).load();
     final decision = evaluateAccess(item);
     await handleAccessDecision(item, decision, autoPresentSheet: false);
     return _sheetIntentForDecision(decision, item);
@@ -296,7 +296,7 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
       return PlayerOverlaySheetIntent.none;
     }
     // 解锁前刷新权益数据，确保金币和会员状态是最新的
-    await ref.read(entitlementControllerProvider.notifier).load();
+    // await ref.read(entitlementControllerProvider.notifier).load();
     final decision = evaluateAccess(item);
     if (decision.type == EpisodeAccessDecisionType.allowPlay) {
       await handleAccessDecision(item, decision, autoPresentSheet: false);
@@ -320,7 +320,7 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
       return const PlayerUnlockFlowResult();
     }
     // 解锁前刷新权益数据，确保金币和会员状态是最新的
-    await ref.read(entitlementControllerProvider.notifier).load();
+    // await ref.read(entitlementControllerProvider.notifier).load();
     final decision = evaluateAccess(item);
     if (decision.type == EpisodeAccessDecisionType.allowPlay) {
       await handleAccessDecision(item, decision, autoPresentSheet: false);
@@ -369,7 +369,7 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
         .read(playerRechargeUnlockControllerProvider(sessionKey).notifier)
         .close();
     // 充值或开通会员成功后，刷新权益数据
-    await ref.read(entitlementControllerProvider.notifier).load();
+    // await ref.read(entitlementControllerProvider.notifier).load();
     if (grantedMembershipPackage) {
       final decision = evaluateAccess(item);
       if (decision.type == EpisodeAccessDecisionType.allowPlay) {

@@ -118,8 +118,7 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
       final repository = ref.read(playerFeedRepositoryProvider);
       final items = switch (config.mode) {
         PlayerFeedMode.singleDrama => repository.listSingleDramaFeed(
-          dramaId: "27",
-          // config.dramaId!,
+          dramaId: config.dramaId!,
           episodeId: config.episodeId!,
         ),
         PlayerFeedMode.forYou => repository.listForYouFeed(),

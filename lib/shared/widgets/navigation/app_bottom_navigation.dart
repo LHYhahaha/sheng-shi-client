@@ -15,7 +15,7 @@ class AppBottomNavigation extends StatelessWidget {
   });
 
   static const _contentWidth = 354.0;
-  static const _itemWidth = 72.0;
+  static const _itemWidth = 64.0;
   static const _iconSize = 24.0;
 
   static const _items = [
@@ -26,11 +26,24 @@ class AppBottomNavigation extends StatelessWidget {
       fallbackIcon: Icons.home_rounded,
     ),
     _BottomNavigationItem(
-      label: _BottomNavigationLabel.forYou,
-      selectedAssetPath: 'assets/navigation/for_you_selected.png',
-      unselectedAssetPath: 'assets/navigation/for_you_unselected.png',
-      fallbackIcon: Icons.play_circle_fill_rounded,
+      label: _BottomNavigationLabel.game,
+      selectedAssetPath: 'assets/navigation/home_selected.png',
+      unselectedAssetPath: 'assets/navigation/home_unselected.png',
+      fallbackIcon: Icons.sports_esports_rounded,
     ),
+    _BottomNavigationItem(
+      label: _BottomNavigationLabel.member,
+      selectedAssetPath: 'assets/navigation/profile_selected.png',
+      unselectedAssetPath: 'assets/navigation/profile_unselected.png',
+      fallbackIcon: Icons.card_membership_rounded,
+    ),
+    // TODO: 暂时禁用 For You tab
+    // _BottomNavigationItem(
+    //   label: _BottomNavigationLabel.forYou,
+    //   selectedAssetPath: 'assets/navigation/for_you_selected.png',
+    //   unselectedAssetPath: 'assets/navigation/for_you_unselected.png',
+    //   fallbackIcon: Icons.play_circle_fill_rounded,
+    // ),
     _BottomNavigationItem(
       label: _BottomNavigationLabel.myList,
       selectedAssetPath: 'assets/navigation/my_list_selected.png',
@@ -213,6 +226,8 @@ enum _BottomNavigationLabel {
   home,
   forYou,
   myList,
+  game,
+  member,
   profile;
 
   String resolve(AppLocalizations l10n) {
@@ -220,6 +235,8 @@ enum _BottomNavigationLabel {
       _BottomNavigationLabel.home => l10n.navHome,
       _BottomNavigationLabel.forYou => l10n.navForYou,
       _BottomNavigationLabel.myList => l10n.navMyList,
+      _BottomNavigationLabel.game => l10n.navGame,
+      _BottomNavigationLabel.member => l10n.navMember,
       _BottomNavigationLabel.profile => l10n.navProfile,
     };
   }

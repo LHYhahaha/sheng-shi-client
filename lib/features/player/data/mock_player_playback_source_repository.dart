@@ -40,7 +40,7 @@ class MockPlayerPlaybackSourceRepository
     if (remoteUrl == null) {
       throw StateError('Episode has no playable source.');
     }
-    await Future<void>.delayed(requestDelay);
+    // 直接使用 episode.videoSource，无需延迟
     if (failNextResolve) {
       failNextResolve = false;
       throw StateError('Mock playback source resolve failed.');

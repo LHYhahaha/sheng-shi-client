@@ -12,10 +12,13 @@ class MyListRemoteDataSource {
 
   final ApiClient _apiClient;
 
-  Future<MyListPageDto<FavoriteItemDto>> listFavorites({String? pageToken}) {
+  Future<MyListPageDto<FavoriteItemDto>> listFavorites({
+    int? page,
+    int? pageSize,
+  }) {
     return _apiClient.get<MyListPageDto<FavoriteItemDto>>(
-      '/me/favorites',
-      queryParameters: <String, Object?>{'pageToken': pageToken}
+      '/api/user/short/follow/list',
+      queryParameters: <String, Object?>{'page': page, 'pageSize': pageSize}
         ..removeWhere((_, value) => value == null),
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) => MyListPageDto.favoritesFromJson(
@@ -24,7 +27,7 @@ class MyListRemoteDataSource {
     );
   }
 
-  Future<FavoriteMutationDto> addFavorite({required String dramaId}) {
+  Future<FavoriteMutationDto> addFavorite({required int dramaId}) {
     return _apiClient.post<FavoriteMutationDto>(
       '/me/favorites',
       data: {'dramaId': dramaId},
@@ -33,19 +36,18 @@ class MyListRemoteDataSource {
     );
   }
 
-  Future<FavoriteMutationDto> deleteFavorite({required String dramaId}) {
-    return _apiClient.delete<FavoriteMutationDto>(
-      '/me/favorites/$dramaId',
+  Future<FavoriteMutationDto> deleteFavorite({required int dramaId}) {
+    return _apiClient.post<FavoriteMutationDto>(
+      '/api/user/short/unfollow',
+      data: {'dramaId': dramaId},
       authPolicy: ApiAuthPolicy.required,
       decoder: FavoriteMutationDto.fromJson,
     );
   }
 
-  Future<FavoriteMutationDto> deleteFavorites({
-    required List<String> dramaIds,
-  }) {
-    return _apiClient.delete<FavoriteMutationDto>(
-      '/me/favorites:batch',
+  Future<FavoriteMutationDto> deleteFavorites({required List<int> dramaIds}) {
+    return _apiClient.post<FavoriteMutationDto>(
+      '/api/user/short/unfollow',
       data: {'dramaIds': dramaIds},
       authPolicy: ApiAuthPolicy.required,
       decoder: FavoriteMutationDto.fromJson,
@@ -53,11 +55,12 @@ class MyListRemoteDataSource {
   }
 
   Future<MyListPageDto<PlayHistoryItemDto>> listPlayHistory({
-    String? pageToken,
+    int? page,
+    int? pageSize,
   }) {
     return _apiClient.get<MyListPageDto<PlayHistoryItemDto>>(
-      '/me/play-history',
-      queryParameters: <String, Object?>{'pageToken': pageToken}
+      '/api/user/watch/history/list',
+      queryParameters: <String, Object?>{'page': page, 'pageSize': pageSize}
         ..removeWhere((_, value) => value == null),
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) => MyListPageDto.playHistoryFromJson(
@@ -66,9 +69,19 @@ class MyListRemoteDataSource {
     );
   }
 
-  Future<FavoriteMutationDto> deletePlayHistory({required String historyId}) {
-    return _apiClient.delete<FavoriteMutationDto>(
-      '/me/play-history/$historyId',
+  Future<FavoriteMutationDto> deletePlayHistory({int? dramaId}) {
+    return _apiClient.post<FavoriteMutationDto>(
+      '/api/user/watch/history/delete',
+      data: {"dramaId": dramaId},
+      authPolicy: ApiAuthPolicy.required,
+      decoder: FavoriteMutationDto.fromJson,
+    );
+  }
+
+  Future<FavoriteMutationDto> deletePlayHistories({List<int>? dramaIds}) {
+    return _apiClient.post<FavoriteMutationDto>(
+      '/api/user/watch/history/delete',
+      data: {dramaIds: dramaIds},
       authPolicy: ApiAuthPolicy.required,
       decoder: FavoriteMutationDto.fromJson,
     );

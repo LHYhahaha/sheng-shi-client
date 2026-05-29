@@ -16,7 +16,7 @@ class EntitlementRemoteDataSource {
   Future<UserEntitlementStateDto> fetchEntitlements() async {
     // 并行调用两个接口获取最新的金币和会员状态
     final walletFuture = _apiClient.get<Map<String, dynamic>>(
-      '/api/wallet',
+      '/api/payment/wallet',
       authPolicy: ApiAuthPolicy.required,
       decoder: (json) => json as Map<String, dynamic>,
     );
@@ -34,24 +34,28 @@ class EntitlementRemoteDataSource {
     // 合并两个接口的数据
     return UserEntitlementStateDto(
       isGuest: false,
-      isMember: membershipData['data']['isMember'] as bool? ?? false,
-      membershipExpiresAt: membershipData['data']['vipExpireAt'] != null
-          ? DateTime.tryParse(membershipData['data']['vipExpireAt'] as String)
+      isMember: membershipData['isMember'] as bool? ?? false,
+      membershipExpiresAt: membershipData['vipExpireAt'] != null
+          ? DateTime.tryParse(membershipData['vipExpireAt'] as String)
           : null,
-      coinBalance: walletData['data']['coin'] as int? ?? 0,
-      bonusBalance: walletData['data']['bonusCoin'] as int? ?? 0,
-      autoUnlockEnabled: false, // 从用户信息接口获取，这里暂时设为 false
+      coinBalance: int.parse(walletData['coin'])  as int? ?? 0,
+      bonusBalance: int.parse(walletData['bonusCoin']) as int? ?? 0,
+      autoUnlockEnabled: walletData['autoUnlockEnabled'] as bool? ?? false,
       unlockedEpisodeIds: const [],
     );
   }
 
-  Future<UserEntitlementStateDto> setAutoUnlockEnabled(bool enabled) {
-    return _apiClient.patch<UserEntitlementStateDto>(
-      '/entitlements/settings/auto-unlock',
-      data: {'autoUnlockEnabled': enabled},
+  Future<UserEntitlementStateDto> setAutoUnlockEnabled(bool enabled) async {
+    // 调用钱包接口设置自动解锁
+    await _apiClient.post<Map<String, dynamic>>(
+      '/api/user/auto-unlock/set',
+      data: {'autoUnlock': enabled ? 1 : 0},
       authPolicy: ApiAuthPolicy.required,
-      decoder: UserEntitlementStateDto.fromJson,
+      decoder: (json) => json as Map<String, dynamic>,
     );
+    
+    // 设置成功后，重新获取权益状态以同步最新的自动解锁状态
+    return fetchEntitlements();
   }
 
   Future<UnlockEpisodeResponseDto> unlockEpisode(

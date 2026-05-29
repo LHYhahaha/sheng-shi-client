@@ -18,6 +18,8 @@ class PlayerContentDto {
     required this.status,
     required this.languageMask,
     required this.subtitleLangs,
+    required this.playCount,
+    required this.favoriteCount,
     required this.episodeTotal,
     required this.onlineAt,
     required this.episodes,
@@ -35,6 +37,8 @@ class PlayerContentDto {
   final int status;
   final String languageMask;
   final String subtitleLangs;
+  final int playCount;
+  final int favoriteCount;
   final int episodeTotal;
   final String onlineAt;
   final List<PlayerEpisodeDto> episodes;
@@ -53,6 +57,8 @@ class PlayerContentDto {
       status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
       languageMask: JsonFieldParser.optionalString(json, 'language_mask') ?? '',
       subtitleLangs: JsonFieldParser.optionalString(json, 'subtitle_langs') ?? '',
+      playCount: JsonFieldParser.optionalInt(json, 'play_count') ?? 0,
+      favoriteCount: JsonFieldParser.optionalInt(json, 'favorite_count') ?? 0,
       episodeTotal: JsonFieldParser.optionalInt(json, 'episode_total') ?? 0,
       onlineAt: JsonFieldParser.optionalString(json, 'online_at') ?? '',
       episodes: _parseEpisodes(json['episodes']),

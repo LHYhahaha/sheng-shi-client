@@ -73,6 +73,8 @@ class AppShellDestinations {
     RoutePaths.home,
     // RoutePaths.forYou,  // 暂时禁用
     RoutePaths.myList,
+    RoutePaths.game,
+    RoutePaths.member,
     RoutePaths.profile,
   ];
 }

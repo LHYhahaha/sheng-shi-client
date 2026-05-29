@@ -8,10 +8,13 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../data/playback_progress_repository_provider.dart';
 import '../data/player_playback_source_repository_provider.dart';
 import '../data/player_preload_config_provider.dart';
+import '../data/player_remote_data_source_provider.dart';
+import '../data/remote/player_remote_data_source.dart';
 import '../domain/player_feed.dart';
 import '../domain/player_playback_progress.dart';
 import '../domain/player_playback_source.dart';
 import '../domain/player_preload_state.dart';
+import 'player_feed_controller.dart';
 import 'player_playback_prepare_manager.dart';
 import 'player_playback_timing_trace.dart';
 import 'player_rebuild_diagnostics.dart';
@@ -1194,6 +1197,73 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _accessOverlayPausedItemId = null;
     await _session.pause();
     state = state.copyWith(status: PlayerPlaybackStatus.paused);
+    unawaited(_reportWatchProgress(eventType: 3)); // 3: pause
+  }
+
+  /// 上报观看进度。
+  Future<void> reportWatchProgress({
+    required int eventType,
+    bool autoUnlockNext = false,
+  }) async {
+    unawaited(_reportWatchProgress(
+      eventType: eventType,
+      autoUnlockNext: autoUnlockNext,
+    ));
+  }
+
+  Future<void> _reportWatchProgress({
+    required int eventType,
+    bool autoUnlockNext = false,
+  }) async {
+    if (_isSessionDisposed ||
+        state.currentItemId == null ||
+        _currentPlaybackSource == null) {
+      return;
+    }
+
+    try {
+      final feedState = ref.read(playerFeedControllerProvider(sessionKey));
+      final currentItem = feedState.currentItem;
+      if (currentItem == null) {
+        return;
+      }
+
+      final dramaId = int.tryParse(currentItem.content.id) ?? 0;
+      final episodeId = int.tryParse(currentItem.episode.id);
+      final episodeNo = currentItem.episode.number ?? 0;
+      final durationSecond = state.duration.inSeconds;
+      final watchSecond = state.position.inSeconds;
+
+      _logTiming(
+        'report watch progress',
+        itemId: state.currentItemId,
+        details: _timingDetails([
+          'eventType=$eventType',
+          'dramaId=$dramaId',
+          'episodeId=$episodeId',
+          'episodeNo=$episodeNo',
+          'durationSecond=$durationSecond',
+          'watchSecond=$watchSecond',
+          'autoUnlockNext=$autoUnlockNext',
+        ]),
+      );
+
+      await ref.read(playerRemoteDataSourceProvider).reportWatchProgress(
+        autoUnlockNext: autoUnlockNext,
+        dramaId: dramaId,
+        durationSecond: durationSecond,
+        episodeId: episodeId,
+        episodeNo: episodeNo,
+        eventType: eventType,
+        watchSecond: watchSecond,
+      );
+    } catch (error) {
+      _logTiming(
+        'report watch progress error',
+        itemId: state.currentItemId,
+        error: error,
+      );
+    }
   }
 
   void beginSeek() {

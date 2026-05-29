@@ -48,6 +48,8 @@ class PlayerFeedItemDto {
               episodeTotal: 0,
               onlineAt: '',
               episodes: [],
+              playCount: 0,
+              favoriteCount: 0,
             ),
       episode: episodeJson is Map<String, Object?>
           ? PlayerEpisodeDto.fromJson(episodeJson)

@@ -37,7 +37,7 @@ class MyListPageDto<T> {
 }
 
 List<Object?> _items(Map<String, Object?> json) {
-  final value = json['items'];
+  final value = json['list'];
   if (value is List) return value;
   return const <Object?>[];
 }

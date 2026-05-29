@@ -3,6 +3,8 @@ abstract final class RoutePaths {
   static const forYou = '/for-you';
   static const player = '/player/:dramaId/:episodeId';
   static const myList = '/my-list';
+  static const game = '/game';
+  static const member = '/member';
   static const profile = '/profile';
   static const auth = '/auth';
   static const account = '/account';

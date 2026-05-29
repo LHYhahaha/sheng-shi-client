@@ -110,6 +110,10 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
         fromIndex: previousIndex,
         toIndex: index,
       );
+      // 上报切集事件
+      if (playbackTrigger == 'swipe_next' || playbackTrigger == 'swipe_previous' || playbackTrigger == 'auto_next') {
+        unawaited(_playbackController.reportWatchProgress(eventType: 5)); // 5: switchEpisode
+      }
     }
 
     final accessStopwatch = Stopwatch()..start();
@@ -220,6 +224,8 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
           state.accessPresenter.playableCopy(item),
           resumeIfCurrentSource: true,
         );
+        // 上报观看开始事件
+        unawaited(_playbackController.reportWatchProgress(eventType: 1)); // 1: start
       case EpisodeAccessDecisionType.autoUnlockAndPlay:
         await _quiesceItemForAccessOverlay(
           item,

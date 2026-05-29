@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
+import '../../application/player_like_controller.dart';
 import '../../application/player_playback_controller.dart';
 import '../../application/player_runtime_coordinator.dart';
 import '../../domain/player_access_presentation.dart';
@@ -85,6 +86,11 @@ class PlayerFeedPageShell extends ConsumerWidget {
           )
         : null;
 
+    // 获取点赞状态
+    final likeState = isSettledPage
+        ? ref.watch(playerLikeControllerProvider(item.content.id))
+        : const PlayerLikeState.initial();
+
     final isLockedSettledPage =
         isSettledPage &&
         (accessPresentation == PlayerAccessPresentationState.lockedCoins ||
@@ -154,10 +160,20 @@ class PlayerFeedPageShell extends ConsumerWidget {
           onEpisodesTap: onEpisodesTap,
           onShareTap: onShareTap,
           onMoreTap: onMoreTap,
+          onLikeTap: isSettledPage
+              ? () {
+                  ref
+                      .read(playerLikeControllerProvider(item.content.id)
+                          .notifier)
+                      .toggleLike();
+                }
+              : () {},
           showUnlockButton: isLockedSettledPage,
           unlockLabel: lockedActionLabel,
           onUnlockTap: isLockedSettledPage ? onUnlockTap : onOpenMembership,
           forYouLayout: forYouLayout,
+          isLiked: likeState.isLiked,
+          isLikeLoading: likeState.isLoading,
         ),
         if (item.episode.isUnavailable)
           UnavailableEpisodeOverlay(

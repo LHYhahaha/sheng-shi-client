@@ -14,10 +14,16 @@ class FavoriteItemDto {
     required this.tags,
     required this.badges,
     required this.createdAt,
+    required this.followSource,
+    required this.lastEpisodeId,
+    required this.lastEpisodeNo,
+    required this.lastWatchAt,
+    required this.status,
+    required this.updatedAt,
   });
 
   final String? favoriteId;
-  final String dramaId;
+  final int dramaId;
   final String? title;
   final String? description;
   final String? coverUrl;
@@ -27,12 +33,19 @@ class FavoriteItemDto {
   final List<String> tags;
   final List<String> badges;
   final DateTime? createdAt;
+  final int followSource;
+  final int lastEpisodeId;
+  final int lastEpisodeNo;
+  final String? lastWatchAt;
+  final int status;
+  final String? updatedAt;
 
   factory FavoriteItemDto.fromJson(Map<String, Object?> json) {
     const dtoName = 'FavoriteItemDto';
+
     return FavoriteItemDto(
       favoriteId: JsonFieldParser.optionalString(json, 'favoriteId'),
-      dramaId: JsonFieldParser.requireString(json, 'dramaId', dtoName: dtoName),
+      dramaId: JsonFieldParser.optionalInt(json, 'shortId') ?? 0,
       title: JsonFieldParser.optionalString(json, 'title'),
       description:
           JsonFieldParser.optionalString(json, 'description') ??
@@ -47,6 +60,12 @@ class FavoriteItemDto {
       tags: _stringList(json['tags']),
       badges: _stringList(json['badges']),
       createdAt: JsonFieldParser.optionalDateTime(json, 'createdAt'),
+      followSource: JsonFieldParser.optionalInt(json, 'followSource') ?? 0,
+      lastEpisodeId: JsonFieldParser.optionalInt(json, 'lastEpisodeId') ?? 0,
+      lastEpisodeNo: JsonFieldParser.optionalInt(json, 'lastEpisodeNo') ?? 0,
+      lastWatchAt: JsonFieldParser.optionalString(json, 'lastWatchAt'),
+      status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
+      updatedAt: JsonFieldParser.optionalString(json, 'updatedAt'),
     );
   }
 }

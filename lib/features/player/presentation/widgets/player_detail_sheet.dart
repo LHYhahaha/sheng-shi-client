@@ -508,12 +508,30 @@ class _EpisodesPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (episodes.isEmpty) {
+      return Center(
+        child: Text(
+          context.l10n.playerFeedEmpty,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.5),
+            fontSize: 14,
+            height: 18 / 14,
+          ),
+        ),
+      );
+    }
+
     final visibleEpisodes = episodes
         .where((episode) {
           return episode.number >= rangeStart &&
               episode.number < rangeStart + 30;
         })
         .toList(growable: false);
+
+    final maxEpisodeNumber = episodes.isNotEmpty
+        ? episodes.map((e) => e.number).reduce((a, b) => a > b ? a : b)
+        : 0;
+    final showSecondRange = maxEpisodeNumber > 30;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -525,34 +543,48 @@ class _EpisodesPanel extends StatelessWidget {
               selected: rangeStart == 1,
               onTap: () => onRangeChanged(1),
             ),
-            const SizedBox(width: 20),
-            _RangeButton(
-              label: '31-50',
-              selected: rangeStart == 31,
-              onTap: () => onRangeChanged(31),
-            ),
+            if (showSecondRange) ...[
+              const SizedBox(width: 20),
+              _RangeButton(
+                label: '31-${(maxEpisodeNumber ~/ 30 + 1) * 30}',
+                selected: rangeStart == 31,
+                onTap: () => onRangeChanged(31),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 12),
-        GridView.builder(
-          physics: const NeverScrollableScrollPhysics(),
-          shrinkWrap: true,
-          itemCount: visibleEpisodes.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 5,
-            crossAxisSpacing: 4,
-            mainAxisSpacing: 4,
-            childAspectRatio: 66 / 54,
+        if (visibleEpisodes.isEmpty)
+          Center(
+            child: Text(
+              context.l10n.playerFeedEmpty,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.5),
+                fontSize: 14,
+                height: 18 / 14,
+              ),
+            ),
+          )
+        else
+          GridView.builder(
+            physics: const NeverScrollableScrollPhysics(),
+            shrinkWrap: true,
+            itemCount: visibleEpisodes.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 5,
+              crossAxisSpacing: 4,
+              mainAxisSpacing: 4,
+              childAspectRatio: 66 / 54,
+            ),
+            itemBuilder: (context, index) {
+              final episode = visibleEpisodes[index];
+              return _EpisodeTile(
+                episode: episode,
+                selected: episode.number == currentEpisode,
+                onTap: () => onEpisodeSelected(episode),
+              );
+            },
           ),
-          itemBuilder: (context, index) {
-            final episode = visibleEpisodes[index];
-            return _EpisodeTile(
-              episode: episode,
-              selected: episode.number == currentEpisode,
-              onTap: () => onEpisodeSelected(episode),
-            );
-          },
-        ),
       ],
     );
   }

@@ -4,78 +4,58 @@ import '../../../../core/network/json_field_parser.dart';
 /// 播放历史远程 DTO。
 class PlayHistoryItemDto {
   const PlayHistoryItemDto({
-    required this.historyId,
     required this.dramaId,
     required this.episodeId,
-    required this.title,
-    required this.description,
-    required this.coverUrl,
-    required this.coverAspectRatio,
-    required this.episodeNumber,
-    required this.totalEpisodes,
-    required this.progressMs,
-    required this.durationMs,
+    required this.episodeNo,
+    required this.watchSecond,
+    required this.durationSecond,
+    required this.watchCount,
     required this.progressPercent,
-    required this.updatedAt,
+    required this.lastWatchAt,
+    this.historyId,
   });
 
-  final String? historyId;
-  final String dramaId;
-  final String episodeId;
-  final String? title;
-  final String? description;
-  final String? coverUrl;
-  final double? coverAspectRatio;
-  final int episodeNumber;
-  final int totalEpisodes;
-  final int? progressMs;
-  final int? durationMs;
-  final double? progressPercent;
-  final DateTime? updatedAt;
+  final int dramaId;
+  final int episodeId;
+  final int episodeNo;
+  final int watchSecond;
+  final int durationSecond;
+  final int watchCount;
+  final int progressPercent;
+  final String? lastWatchAt;
+  final int? historyId;
 
   factory PlayHistoryItemDto.fromJson(Map<String, Object?> json) {
     const dtoName = 'PlayHistoryItemDto';
-    final historyId = JsonFieldParser.optionalString(json, 'historyId');
-    final dramaId = JsonFieldParser.optionalString(json, 'dramaId');
-    final episodeId = JsonFieldParser.optionalString(json, 'episodeId');
+    final dramaId = JsonFieldParser.optionalInt(json, 'dramaId');
+    final episodeId = JsonFieldParser.optionalInt(json, 'episodeId');
+
     if (dramaId == null) {
       throw const ApiMappingException(
         dtoName: dtoName,
         field: 'dramaId',
-        reason: 'required drama id',
+        reason: 'required short id',
       );
     }
-    if (historyId == null && (episodeId == null || episodeId.isEmpty)) {
+    if (episodeId == null) {
       throw const ApiMappingException(
         dtoName: dtoName,
-        field: 'historyId',
-        reason: 'historyId or episodeId required',
+        field: 'episodeId',
+        reason: 'required episode id',
       );
     }
 
     return PlayHistoryItemDto(
-      historyId: historyId,
       dramaId: dramaId,
-      episodeId: episodeId ?? '',
-      title: JsonFieldParser.optionalString(json, 'title'),
-      description:
-          JsonFieldParser.optionalString(json, 'description') ??
-          JsonFieldParser.optionalString(json, 'introduction'),
-      coverUrl: JsonFieldParser.optionalString(json, 'coverUrl'),
-      coverAspectRatio: _doubleValue(json['coverAspectRatio']),
-      episodeNumber: JsonFieldParser.optionalInt(json, 'episodeNumber') ?? 0,
-      totalEpisodes: JsonFieldParser.optionalInt(json, 'totalEpisodes') ?? 0,
-      progressMs: JsonFieldParser.optionalInt(json, 'progressMs'),
-      durationMs: JsonFieldParser.optionalInt(json, 'durationMs'),
-      progressPercent: _doubleValue(json['progressPercent']),
-      updatedAt: JsonFieldParser.optionalDateTime(json, 'updatedAt'),
+      episodeId: episodeId,
+      episodeNo: JsonFieldParser.optionalInt(json, 'episodeNo') ?? 0,
+      watchSecond: JsonFieldParser.optionalInt(json, 'watchSecond') ?? 0,
+      durationSecond: JsonFieldParser.optionalInt(json, 'durationSecond') ?? 0,
+      watchCount: JsonFieldParser.optionalInt(json, 'watchCount') ?? 0,
+      progressPercent:
+          JsonFieldParser.optionalInt(json, 'progressPercent') ?? 0,
+      lastWatchAt: JsonFieldParser.optionalString(json, 'lastWatchAt'),
+      historyId: JsonFieldParser.optionalInt(json, 'historyId'),
     );
   }
-}
-
-double? _doubleValue(Object? value) {
-  if (value is double) return value;
-  if (value is num) return value.toDouble();
-  if (value is String) return double.tryParse(value);
-  return null;
 }

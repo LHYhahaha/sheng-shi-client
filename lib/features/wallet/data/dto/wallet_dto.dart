@@ -35,6 +35,7 @@ class WalletDto {
       totalCoin: JsonFieldParser.optionalInt(map, 'totalCoin') ?? 0,
       autoUnlockEnabled:
           JsonFieldParser.optionalBool(map, 'autoUnlockEnabled') ?? false,
+      // 记录字段可能不在钱包余额接口中返回，使用空列表作为默认值
       transactionRecords: _list(
         map['transactionRecords'],
         WalletTransactionRecordDto.fromJson,

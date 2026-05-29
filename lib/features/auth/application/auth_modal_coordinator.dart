@@ -77,13 +77,13 @@ class AuthModalCoordinator {
   ) async {
     final authState = _readAuthState();
     final user = authState.user;
-    if (authState.isLoggedIn && user != null) {
-      return AuthLoginModalResult.success(
-        provider: user.provider,
-        user: user,
-        accountLinked: authState.session.guestId != null,
-      );
-    }
+    // if (authState.isLoggedIn && user != null) {
+    //   return AuthLoginModalResult.success(
+    //     provider: user.provider,
+    //     user: user,
+    //     accountLinked: authState.session.guestId != null,
+    //   );
+    // }
 
     if (!context.mounted) {
       return const AuthLoginModalResult.dismissed();

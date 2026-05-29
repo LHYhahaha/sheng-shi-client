@@ -42,9 +42,8 @@ class WalletRemoteDataSource {
   }) {
     return _apiClient.get<WalletPageDto<WalletConsumptionRecordDto>>(
       '/api/payment/coin/consume-records',
-      queryParameters: <String, Object?>{
-        'pageToken': pageToken,
-      }..removeWhere((_, value) => value == null),
+      queryParameters: <String, Object?>{'pageToken': pageToken}
+        ..removeWhere((_, value) => value == null),
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) =>
           WalletPageDto.fromJson(data, WalletConsumptionRecordDto.fromJson),
@@ -73,9 +72,9 @@ class WalletRemoteDataSource {
   }
 
   Future<WalletSettingDto> setAutoUnlockEnabled({required bool enabled}) {
-    return _apiClient.patch<WalletSettingDto>(
-      '/entitlements/settings/auto-unlock',
-      data: {'autoUnlockEnabled': enabled},
+    return _apiClient.post<WalletSettingDto>(
+      '/api/user/auto-unlock/set',
+      data: {'autoUnlock': enabled ? 1 : 0},
       authPolicy: ApiAuthPolicy.required,
       decoder: WalletSettingDto.fromJson,
     );

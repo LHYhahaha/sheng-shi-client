@@ -208,14 +208,15 @@ class MyListController extends Notifier<MyListState> {
     state = state.copyWith(selectedIds: Set<String>.unmodifiable(selectedIds));
   }
 
-  void deleteSelected() {
+  Future<void> deleteSelected() async {
     if (state.selectedIds.isEmpty) {
       return;
     }
 
     final selectedIds = state.selectedIds;
-    // mock 阶段本地删除是乐观结果；真实接口接入后，这里应成为发起批量删除和
-    // 失败回滚的唯一入口，避免 UI 层各自过滤列表。
+    final isCollection = state.selectedTab == MyListTab.collection;
+    
+    // 乐观更新：先本地删除
     state = state.copyWith(
       items: List<MyListItem>.unmodifiable(
         state.items.where((item) => !selectedIds.contains(item.id)),
@@ -224,9 +225,39 @@ class MyListController extends Notifier<MyListState> {
       isCollectionEditing: false,
       clearOpenPlayItemId: true,
     );
+
+    // 调用远程接口
+    try {
+      final repository = ref.read(myListRepositoryProvider);
+      if (isCollection) {
+        // 收藏列表：提取 dramaId（从 id 中解析）
+        final dramaIds = selectedIds
+            .map((id) => _extractDramaId(id))
+            .whereType<int>()
+            .toList();
+        if (dramaIds.isNotEmpty) {
+          await repository.deleteFavorites(dramaIds: dramaIds);
+        }
+      } else {
+        // 播放历史：提取 historyId（从 id 中解析）
+        final historyIds = selectedIds
+            .map((id) => _extractHistoryId(id))
+            .whereType<int>()
+            .toList();
+        if (historyIds.isNotEmpty) {
+          await repository.deletePlayHistories(historyIds: historyIds);
+        }
+      }
+    } catch (error) {
+      // 删除失败时重新加载列表
+      await load();
+    }
   }
 
-  void deleteItem(String id) {
+  Future<void> deleteItem(String id) async {
+
+    print("????");
+
     state = state.copyWith(
       items: List<MyListItem>.unmodifiable(
         state.items.where((item) => item.id != id),
@@ -236,6 +267,66 @@ class MyListController extends Notifier<MyListState> {
       ),
       clearOpenPlayItemId: true,
     );
+
+    // 调用远程接口
+    try {
+      final repository = ref.read(myListRepositoryProvider);
+      final isCollection = state.selectedTab == MyListTab.collection;
+      
+      if (isCollection) {
+        // 收藏列表：提取 dramaId
+        final dramaId = _extractDramaId(id);
+        if (dramaId != null) {
+          await repository.deleteFavorite(dramaId: dramaId);
+        }
+      } else {
+        // 播放历史：提取 historyId
+        final historyId = _extractHistoryId(id);
+        if (historyId != null) {
+          await repository.deletePlayHistory(historyId: historyId);
+        }
+      }
+    } catch (error) {
+      // 删除失败时重新加载列表
+      await load();
+    }
+  }
+
+  /// 从 id 中提取 dramaId（收藏列表）
+  /// 
+  /// 收藏 id 格式示例：'collection-raja-iblis'
+  /// 实际接入时需要根据真实 id 格式调整解析逻辑
+  int? _extractDramaId(String id) {
+    // 从当前列表中找到对应的 item，获取其 dramaId
+    try {
+      final item = state.items.firstWhere((item) => item.id == id);
+      return item.dramaId;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// 从 id 中提取 historyId（播放历史）
+  /// 
+  /// 播放历史 id 格式示例：'history:1:1'
+  /// 实际接入时需要根据真实 id 格式调整解析逻辑
+  int? _extractHistoryId(String id) {
+    // 从当前列表中找到对应的 item，获取其 historyId
+    try {
+      final item = state.items.firstWhere((item) => item.id == id);
+      return item.historyId ?? _generateHistoryId(item);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// 如果服务端未返回 historyId，使用 dramaId + episodeId 生成
+  int? _generateHistoryId(MyListItem item) {
+    if (item.dramaId != null && item.episodeId != null) {
+      // 简单的组合方式，实际可能需要调整
+      return item.dramaId! * 10000 + item.episodeId!;
+    }
+    return null;
   }
 
   void openPlayItem(String id) {

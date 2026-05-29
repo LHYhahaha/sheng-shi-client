@@ -10,7 +10,7 @@ class ProfileRemoteDataSource {
 
   Future<ProfileSummaryDto> getProfile() {
     return _apiClient.get<ProfileSummaryDto>(
-      '/profile',
+      '/api/user/get',
       authPolicy: ApiAuthPolicy.required,
       decoder: ProfileSummaryDto.fromJson,
     );
@@ -19,7 +19,6 @@ class ProfileRemoteDataSource {
   Future<WalletDto> getWallet(int userId) {
     return _apiClient.get<WalletDto>(
       '/api/payment/wallet',
-      queryParameters: {'userId': userId},
       authPolicy: ApiAuthPolicy.required,
       decoder: WalletDto.fromJson,
     );

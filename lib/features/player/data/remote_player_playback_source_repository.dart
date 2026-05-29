@@ -23,26 +23,51 @@ class RemotePlayerPlaybackSourceRepository
 
   @override
   Future<PlaybackSource> resolve(PlayerFeedItem item) async {
-    final dto = await _remoteDataSource.getPlaybackSource(
-      episodeId: item.episode.id,
-    );
-    return _mapper.mapSource(
-      dto,
-      item: item,
+    // 直接使用 episode.videoSource（来自首页 API 的 source_url），无需调用 playback-source API
+    final remoteUrl = item.episode.videoSource;
+    if (remoteUrl == null || remoteUrl.isEmpty) {
+      throw StateError('Episode has no playable source.');
+    }
+
+    return PlaybackSource(
+      itemId: item.id,
+      remoteUrl: remoteUrl,
+      playableSource: remoteUrl,
+      cacheKey: _cacheKey(item),
+      expiresAt: DateTime.now().add(const Duration(minutes: 30)),
+      codecHint: 'hls',
       status: PlaybackSourceStatus.resolved,
     );
   }
 
   @override
   Future<PlaybackPreloadState> preload(PlayerFeedItem item) async {
-    final dto = await _remoteDataSource.getPlaybackSource(
-      episodeId: item.episode.id,
-    );
-    final source = _mapper.mapSource(
-      dto,
-      item: item,
+    // 直接使用 episode.videoSource，无需调用 playback-source API
+    final remoteUrl = item.episode.videoSource;
+    if (remoteUrl == null || remoteUrl.isEmpty) {
+      return PlaybackPreloadState(
+        itemId: item.id,
+        sourceUrl: '',
+        status: PlaybackPreloadStatus.failed,
+        startedAt: DateTime.now(),
+        completedAt: DateTime.now(),
+        error: StateError('Episode has no playable source.'),
+      );
+    }
+
+    final source = PlaybackSource(
+      itemId: item.id,
+      remoteUrl: remoteUrl,
+      playableSource: remoteUrl,
+      cacheKey: _cacheKey(item),
+      expiresAt: DateTime.now().add(const Duration(minutes: 30)),
+      codecHint: 'hls',
       status: PlaybackSourceStatus.preloaded,
     );
     return _preloadManager.preload(item: item, source: source);
+  }
+
+  String _cacheKey(PlayerFeedItem item) {
+    return 'player:${item.content.id}:${item.episode.id}';
   }
 }

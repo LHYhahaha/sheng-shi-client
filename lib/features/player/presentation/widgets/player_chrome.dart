@@ -30,6 +30,7 @@ class PlayerChrome extends StatefulWidget {
     required this.onShareTap,
     required this.onMoreTap,
     required this.onUnlockTap,
+    required this.onLikeTap,
     this.showUnlockButton = false,
     this.unlockLabel,
     this.overlayOpacity = 1.0,
@@ -55,6 +56,8 @@ class PlayerChrome extends StatefulWidget {
     this.forYouLayout = false,
     this.showChromeOverlays = true,
     this.chromeOverlayFadeDuration = Duration.zero,
+    this.isLiked = false,
+    this.isLikeLoading = false,
     super.key,
   });
 
@@ -67,6 +70,7 @@ class PlayerChrome extends StatefulWidget {
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
   final VoidCallback onUnlockTap;
+  final VoidCallback onLikeTap;
   final bool showUnlockButton;
   final String? unlockLabel;
   final double overlayOpacity;
@@ -97,6 +101,12 @@ class PlayerChrome extends StatefulWidget {
   /// chrome 显隐过渡；stable/ultraStable 应为 [Duration.zero] 或极短。
   final Duration chromeOverlayFadeDuration;
 
+  /// 是否已点赞。
+  final bool isLiked;
+
+  /// 是否正在加载点赞状态。
+  final bool isLikeLoading;
+
   @visibleForTesting
   static double videoViewportBottomInset({
     required bool forYouLayout,
@@ -125,6 +135,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
   VoidCallback get onShareTap => widget.onShareTap;
   VoidCallback get onMoreTap => widget.onMoreTap;
   VoidCallback get onUnlockTap => widget.onUnlockTap;
+  VoidCallback get onLikeTap => widget.onLikeTap;
   bool get showUnlockButton => widget.showUnlockButton;
   String? get unlockLabel => widget.unlockLabel;
   double get overlayOpacity => widget.overlayOpacity;
@@ -151,6 +162,8 @@ class _PlayerChromeState extends State<PlayerChrome> {
   bool get forYouLayout => widget.forYouLayout;
   bool get showChromeOverlays => widget.showChromeOverlays;
   Duration get chromeOverlayFadeDuration => widget.chromeOverlayFadeDuration;
+  bool get isLiked => widget.isLiked;
+  bool get isLikeLoading => widget.isLikeLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -224,6 +237,9 @@ class _PlayerChromeState extends State<PlayerChrome> {
           onEpisodesTap: onEpisodesTap,
           onShareTap: onShareTap,
           onMoreTap: onMoreTap,
+          onLikeTap: onLikeTap,
+          isLiked: isLiked,
+          isLikeLoading: isLikeLoading,
           showChromeOverlays: showChromeOverlays,
           chromeOverlayFadeDuration: chromeOverlayFadeDuration,
         ),
@@ -409,6 +425,9 @@ class _PlayerActionRailLayer extends StatelessWidget {
     required this.onEpisodesTap,
     required this.onShareTap,
     required this.onMoreTap,
+    required this.onLikeTap,
+    required this.isLiked,
+    required this.isLikeLoading,
     required this.showChromeOverlays,
     required this.chromeOverlayFadeDuration,
   });
@@ -421,6 +440,9 @@ class _PlayerActionRailLayer extends StatelessWidget {
   final VoidCallback onEpisodesTap;
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
+  final VoidCallback onLikeTap;
+  final bool isLiked;
+  final bool isLikeLoading;
   final bool showChromeOverlays;
   final Duration chromeOverlayFadeDuration;
 
@@ -450,6 +472,9 @@ class _PlayerActionRailLayer extends StatelessWidget {
                 onEpisodesTap: onEpisodesTap,
                 onShareTap: onShareTap,
                 onMoreTap: onMoreTap,
+                onLikeTap: onLikeTap,
+                isLiked: isLiked,
+                isLikeLoading: isLikeLoading,
               ),
             ),
           ),
@@ -761,6 +786,9 @@ class PlayerActionRail extends StatelessWidget {
     required this.onEpisodesTap,
     required this.onShareTap,
     required this.onMoreTap,
+    required this.onLikeTap,
+    required this.isLiked,
+    required this.isLikeLoading,
     super.key,
   });
 
@@ -768,15 +796,19 @@ class PlayerActionRail extends StatelessWidget {
   final VoidCallback onEpisodesTap;
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
+  final VoidCallback onLikeTap;
+  final bool isLiked;
+  final bool isLikeLoading;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _ActionItem(
-          icon: Icons.star_rounded,
+        _LikeActionItem(
           label: likeCountLabel,
-          onTap: () {},
+          isLiked: isLiked,
+          isLoading: isLikeLoading,
+          onTap: onLikeTap,
         ),
         const SizedBox(height: 18),
         _ActionItem(
@@ -1272,6 +1304,74 @@ class _ActionItem extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    height: 16 / 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 点赞按钮组件。
+class _LikeActionItem extends StatelessWidget {
+  const _LikeActionItem({
+    required this.label,
+    required this.isLiked,
+    required this.isLoading,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isLiked;
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: isLoading ? null : onTap,
+        child: SizedBox(
+          width: 58,
+          height: 54,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (isLoading)
+                SizedBox(
+                  width: 30,
+                  height: 30,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Colors.white.withValues(alpha: 0.7),
+                    ),
+                  ),
+                )
+              else
+                Icon(
+                  isLiked ? Icons.star_rounded : Icons.star_outline_rounded,
+                  color: isLiked ? const Color(0xFFFFD700) : Colors.white,
+                  size: 30,
+                ),
+              const SizedBox(height: 3),
+              Flexible(
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isLiked ? const Color(0xFFFFD700) : Colors.white,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                     height: 16 / 12,

@@ -1,7 +1,7 @@
 import '../../../../core/network/json_field_parser.dart';
 
 /// 播放器剧集远程 DTO。
-/// 
+///
 /// 用于接收短剧详情 API 返回的集数数据。
 class PlayerEpisodeDto {
   const PlayerEpisodeDto({
@@ -29,7 +29,9 @@ class PlayerEpisodeDto {
       id: JsonFieldParser.optionalInt(json, 'id') ?? 0,
       episodeNo: JsonFieldParser.optionalInt(json, 'episode_no') ?? 0,
       videoName: JsonFieldParser.optionalString(json, 'video_name') ?? '',
-      sourceUrl: JsonFieldParser.optionalString(json, 'source_url') ?? '',
+      sourceUrl:
+          // "https://cdn.nq1st.cc/nono/AppleHLS1/nono.m3u8",
+          JsonFieldParser.optionalString(json, 'source_url') ?? '',
       durationSec: JsonFieldParser.optionalInt(json, 'duration_sec') ?? 0,
       status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
       publishedAt: JsonFieldParser.optionalString(json, 'published_at') ?? '',

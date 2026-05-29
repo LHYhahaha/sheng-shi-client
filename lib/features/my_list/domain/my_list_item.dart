@@ -18,6 +18,9 @@ class MyListItem {
     required this.currentEpisode,
     required this.episodeCount,
     MediaResource? coverResource,
+    this.dramaId,
+    this.episodeId,
+    this.historyId,
   }) : _coverResource = coverResource;
 
   /// My list 默认封面兜底。
@@ -58,6 +61,21 @@ class MyListItem {
 
   /// 总集数。
   ///
-  /// 只用于展示“当前/总集数”。
+  /// 只用于展示"当前/总集数"。
   final int episodeCount;
+
+  /// 剧集 ID（用于删除收藏）。
+  ///
+  /// 来自收藏列表接口，用于删除操作。
+  final int? dramaId;
+
+  /// 集数 ID（用于删除播放历史）。
+  ///
+  /// 来自播放历史接口，与 dramaId 组合标识唯一的播放历史记录。
+  final int? episodeId;
+
+  /// 播放历史 ID（用于删除播放历史）。
+  ///
+  /// 如果服务端返回，优先使用此 ID 删除；否则使用 dramaId + episodeId 组合。
+  final int? historyId;
 }

@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:flutter_swiper_plus/flutter_swiper_plus.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
@@ -28,6 +29,14 @@ class _HomePageState extends ConsumerState<HomePage> {
   final _scrollController = ScrollController();
   late final PlayerStartupPreloadController _startupPreloadController;
   int _remoteDataSelectedIndex = 0; // 远程数据的选中分类索引
+
+  List image = [
+    "assets/images/home/picture1.jpg",
+    "assets/images/home/picture4.jpg",
+    "assets/images/home/picture2.jpg",
+    "assets/images/home/picture5.jpg",
+    "assets/images/home/picture3.jpg",
+  ];
 
   @override
   void initState() {
@@ -55,12 +64,12 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   void _onScroll() {
     final remoteData = ref.read(homeRemoteDataProvider);
-    
+
     // 远程数据一次性下发，不需要分页
     if (remoteData != null) {
       return;
     }
-    
+
     final feedState = ref.read(homeFeedControllerProvider);
     if (!feedState.canLoadMore || !_scrollController.hasClients) {
       return;
@@ -75,18 +84,20 @@ class _HomePageState extends ConsumerState<HomePage> {
   void _selectTab(int index) {
     final feedState = ref.read(homeFeedControllerProvider);
     final remoteData = ref.read(homeRemoteDataProvider);
-    
+
     // 如果使用远程数据，更新选中索引并滚动到顶部
     if (remoteData != null) {
       if (index >= remoteData.categories.length) {
         return;
       }
-      
+
       setState(() {
         _remoteDataSelectedIndex = index;
       });
-      
-      unawaited(_startupPreloadController.cancel(reason: 'home category switch'));
+
+      unawaited(
+        _startupPreloadController.cancel(reason: 'home category switch'),
+      );
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           0,
@@ -96,7 +107,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       }
       return;
     }
-    
+
     // 使用 mock 数据的原有逻辑
     if (feedState.selectedIndex == index ||
         index >= feedState.categories.length) {
@@ -120,20 +131,24 @@ class _HomePageState extends ConsumerState<HomePage> {
     // 监听远程数据
     final remoteData = ref.watch(homeRemoteDataProvider);
     final homeDataState = ref.watch(homeDataControllerProvider);
-    
+
     // 监听 mock 数据
     final feedState = ref.watch(homeFeedControllerProvider);
-    
+
     // 决定使用哪个数据源：优先使用远程数据，降级到 mock 数据
     final useRemoteData = remoteData != null && !homeDataState.isLoading;
-    final categories = useRemoteData ? remoteData.categories : feedState.categories;
-    final selectedIndex = useRemoteData ? _remoteDataSelectedIndex : feedState.selectedIndex;
-    
+    final categories = useRemoteData
+        ? remoteData.categories
+        : feedState.categories;
+    final selectedIndex = useRemoteData
+        ? _remoteDataSelectedIndex
+        : feedState.selectedIndex;
+
     // 获取当前选中分类的剧卡列表
     final items = useRemoteData
         ? remoteData.getDramasForCategoryIndex(selectedIndex)
         : feedState.items;
-    
+
     // 预热逻辑
     ref.listen(homeFeedControllerProvider, (previous, next) {
       if (!useRemoteData) {
@@ -152,7 +167,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         );
       }
     });
-    
+
     // 远程数据预热
     if (useRemoteData && items.isNotEmpty) {
       unawaited(
@@ -161,7 +176,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
 
     // 判断加载状态
-    final isLoading = useRemoteData ? homeDataState.isLoading : feedState.isInitialLoading;
+    final isLoading = useRemoteData
+        ? homeDataState.isLoading
+        : feedState.isInitialLoading;
     final error = useRemoteData ? homeDataState.error : feedState.initialError;
     final isEmpty = items.isEmpty;
 
@@ -204,6 +221,26 @@ class _HomePageState extends ConsumerState<HomePage> {
                   },
                 ),
               ),
+              SliverToBoxAdapter(
+                child: Container(
+                  margin: EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(20)
+                  ),
+                  height: 200,
+                  child: Swiper(
+                    itemBuilder: (BuildContext context, int index) {
+                      return Image.asset(image[index], fit: BoxFit.fill);
+                    },
+                    indicatorLayout: PageIndicatorLayout.COLOR,
+                    autoplay: true,
+                    itemCount: image.length,
+                    pagination: SwiperPagination(),
+                    control: SwiperControl(),
+                  ),
+                ),
+              ),
               if (isLoading)
                 const SliverFillRemaining(
                   hasScrollBody: false,
@@ -225,7 +262,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                       if (useRemoteData) {
                         ref.read(homeDataControllerProvider.notifier).retry();
                       } else {
-                        ref.read(homeFeedControllerProvider.notifier).loadInitial();
+                        ref
+                            .read(homeFeedControllerProvider.notifier)
+                            .loadInitial();
                       }
                     },
                   ),
@@ -236,9 +275,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                   child: Center(
                     child: Text(
                       context.l10n.feedEmpty,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textMuted,
+                      ),
                     ),
                   ),
                 )
@@ -248,7 +287,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                   sliver: SliverLayoutBuilder(
                     builder: (context, constraints) {
                       if (constraints.crossAxisExtent <= 0) {
-                        return const SliverToBoxAdapter(child: SizedBox.shrink());
+                        return const SliverToBoxAdapter(
+                          child: SizedBox.shrink(),
+                        );
                       }
 
                       const crossAxisCount = 2;
@@ -282,7 +323,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                                   dramaId: item.id,
                                   episodeId: '1',
                                   trigger: 'home_card_tap',
-                                  userActionAtMs: tappedAt.millisecondsSinceEpoch,
+                                  userActionAtMs:
+                                      tappedAt.millisecondsSinceEpoch,
                                 ),
                               );
                             },
@@ -544,10 +586,11 @@ class _HomeDramaCard extends StatelessWidget {
                   ],
                 ],
               ),
-            ),]
-          ),
+            ),
+          ],
         ),
-      );
+      ),
+    );
   }
 }
 

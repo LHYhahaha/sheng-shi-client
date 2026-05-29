@@ -59,5 +59,16 @@ final featureSessionCleanupRegistrationProvider = Provider<void>((ref) {
     (reason) async {
       membershipController.resetForSessionCleanup(reason);
     },
+    // Session cleanup 完成后，自动触发重新登录流程
+    // 这确保 token 失效后能自动恢复到游客登录状态，并获取用户信息
+    (reason) async {
+      print('[FeatureSessionCleanup] Triggering re-login after cleanup for reason: $reason');
+      try {
+        await authController.load();
+        print('[FeatureSessionCleanup] Re-login completed successfully');
+      } catch (e) {
+        print('[FeatureSessionCleanup] Re-login failed: $e');
+      }
+    },
   ]);
 });

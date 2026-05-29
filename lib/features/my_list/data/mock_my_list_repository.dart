@@ -2,80 +2,113 @@ import '../domain/my_list_item.dart';
 import '../domain/my_list_repository.dart';
 
 class MockMyListRepository implements MyListRepository {
-  const MockMyListRepository();
+  MockMyListRepository() : _collectionItems = List.of([]),
+                           _playItems = List.of([]);
+
+  late final List<MyListItem> _collectionItems;
+  late final List<MyListItem> _playItems;
 
   @override
   Future<List<MyListItem>> fetchItems({required MyListTab tab}) async {
     await Future<void>.delayed(const Duration(milliseconds: 220));
     return switch (tab) {
-      MyListTab.collection => _collectionItems,
-      MyListTab.play => _playItems,
+      MyListTab.collection => List.unmodifiable(_collectionItems),
+      MyListTab.play => List.unmodifiable(_playItems),
     };
   }
 
   @override
-  Future<void> deleteFavorite({required String dramaId}) async {}
+  Future<void> deleteFavorite({required int dramaId}) async {
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    _collectionItems.removeWhere((item) => item.dramaId == dramaId);
+  }
 
   @override
-  Future<void> deleteFavorites({required List<String> dramaIds}) async {}
+  Future<void> deleteFavorites({required List<int> dramaIds}) async {
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    _collectionItems.removeWhere((item) => 
+      item.dramaId != null && dramaIds.contains(item.dramaId));
+  }
 
   @override
-  Future<void> deletePlayHistory({required String historyId}) async {}
+  Future<void> deletePlayHistory({required int historyId}) async {
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    _playItems.removeWhere((item) => item.historyId == historyId);
+  }
+
+  @override
+  Future<void> deletePlayHistories({required List<int> historyIds}) async {
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    _playItems.removeWhere((item) => 
+      item.historyId != null && historyIds.contains(item.historyId));
+  }
 }
 
 const _intro =
     'IntroductionIntroductionIntroductionIntroductionIntroductionIntroductionIntroductionIntroduc...';
 
-const _collectionItems = [
-  MyListItem(
+final _collectionItems = [
+  const MyListItem(
     id: 'collection-raja-iblis',
     title: 'Raja Iblis Hidup Kembali',
     introduction: _intro,
     coverAssetPath: 'assets/images/my_list/cover_1.png',
     currentEpisode: 1,
     episodeCount: 52,
+    dramaId: 1001,
   ),
-  MyListItem(
+  const MyListItem(
     id: 'collection-pulang-malam',
     title: 'Pulang Malam Mengejutkan',
     introduction: _intro,
     coverAssetPath: 'assets/images/my_list/cover_2.png',
     currentEpisode: 1,
     episodeCount: 52,
+    dramaId: 1002,
   ),
-  MyListItem(
+  const MyListItem(
     id: 'collection-naga-tersembunyi',
     title: 'Naga Tersembunyi Dewa Perang',
     introduction: _intro,
     coverAssetPath: 'assets/images/my_list/cover_3.png',
     currentEpisode: 1,
     episodeCount: 52,
+    dramaId: 1003,
   ),
 ];
 
-const _playItems = [
-  MyListItem(
-    id: 'play-raja-iblis',
-    title: 'Raja Iblis Hidup Kembali',
-    introduction: _intro,
+final _playItems = [
+  const MyListItem(
+    id: 'history:1:1',
+    title: 'EP. 1',
+    introduction: '',
     coverAssetPath: 'assets/images/my_list/cover_1.png',
     currentEpisode: 1,
-    episodeCount: 52,
+    episodeCount: 0,
+    dramaId: 1001,
+    episodeId: 1,
+    historyId: 2001,
   ),
-  MyListItem(
-    id: 'play-pulang-malam',
-    title: 'Pulang Malam Mengejutkan',
-    introduction: _intro,
+  const MyListItem(
+    id: 'history:2:2',
+    title: 'EP. 2',
+    introduction: '',
     coverAssetPath: 'assets/images/my_list/cover_2.png',
-    currentEpisode: 1,
-    episodeCount: 52,
+    currentEpisode: 2,
+    episodeCount: 0,
+    dramaId: 1002,
+    episodeId: 2,
+    historyId: 2002,
   ),
-  MyListItem(
-    id: 'play-naga-tersembunyi',
-    title: 'Naga Tersembunyi Dewa Perang',
-    introduction: _intro,
+  const MyListItem(
+    id: 'history:3:3',
+    title: 'EP. 3',
+    introduction: '',
     coverAssetPath: 'assets/images/my_list/cover_3.png',
-    currentEpisode: 1,
-    episodeCount: 52,
+    currentEpisode: 3,
+    episodeCount: 0,
+    dramaId: 1003,
+    episodeId: 3,
+    historyId: 2003,
   ),
 ];

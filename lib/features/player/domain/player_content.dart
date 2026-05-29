@@ -16,6 +16,8 @@ class PlayerContent {
     required this.posterAssetPath,
     required this.episodes,
     required this.recommendations,
+    this.playCount = 0,
+    this.favoriteCount = 0,
   });
 
   /// 剧内容 id。
@@ -67,6 +69,16 @@ class PlayerContent {
   ///
   /// 推荐项只用于展示/跳转，不应直接加入当前播放 feed 或预热。
   final List<PlayerRecommendation> recommendations;
+
+  /// 播放量。
+  ///
+  /// 从服务端返回的原始播放数据。
+  final int playCount;
+
+  /// 收藏量。
+  ///
+  /// 从服务端返回的原始收藏数据。
+  final int favoriteCount;
 }
 
 /// 播放页 episode 模型。

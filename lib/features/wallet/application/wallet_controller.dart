@@ -162,7 +162,7 @@ class WalletController extends Notifier<WalletState> {
 
     try {
       final data = await ref.read(walletRepositoryProvider).fetchWallet();
-      await ref.read(entitlementControllerProvider.notifier).load();
+      // await ref.read(entitlementControllerProvider.notifier).load();
       if (!_isCurrent(generation)) {
         return;
       }
