@@ -40,6 +40,7 @@ class HomeMapper {
       isVipOnly: dto.isVipOnly == 1,
       status: dto.status,
       episodeTotal: dto.episodeTotal,
+      tags: dto.tagsName,
     );
   }
 }

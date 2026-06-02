@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -393,6 +394,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   final _preloadStates = <String, PlaybackPreloadState>{};
   final _preparingItemIds = <String>{};
   var _activePreloadAllowedIds = <String>{};
+  PlaybackProgress? _pendingResumeProgress;
   int _generation = 0;
   int _preloadGeneration = 0;
   bool _pauseWhenOpenCompletes = false;
@@ -479,6 +481,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       error: error,
       details: details,
     );
+  }
+
+  /// 设置待恢复的播放进度（从播放历史进入时使用）。
+  void setPendingResumeProgress(PlaybackProgress? progress) {
+    _pendingResumeProgress = progress;
   }
 
   @override
@@ -651,9 +658,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
     _pauseWhenOpenCompletes = false;
     _accessOverlayPausedItemId = null;
-    final resumeProgress = _shouldPersistProgress
-        ? await _progressRepository.getProgress(item.id)
-        : null;
+    final resumeProgress = _pendingResumeProgress ??
+        (_shouldPersistProgress
+            ? await _progressRepository.getProgress(item.id)
+            : null);
+    // 消费完恢复进度后清空，避免重复使用
+    _pendingResumeProgress = null;
     state = state.copyWith(
       status: PlayerPlaybackStatus.opening,
       hasFirstFrame: false,
@@ -2046,9 +2056,42 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     PlaybackProgress? progress,
     int generation,
   ) async {
+    developer.log(
+      '_restoreProgressIfNeeded: progress=$progress, '
+      'canResume=${progress?.canResume}, '
+      '_shouldPersistProgress=$_shouldPersistProgress',
+    );
     if (progress == null || !progress.canResume || !_shouldPersistProgress) {
+      developer.log(
+        '_restoreProgressIfNeeded: 不恢复 - '
+        'progress==null:${progress == null}, '
+        'canResume:${progress?.canResume}, '
+        '_shouldPersistProgress:$_shouldPersistProgress',
+      );
       return;
     }
+    developer.log(
+      '_restoreProgressIfNeeded: 开始恢复播放，seek 到 ${progress.position.inSeconds}s',
+    );
+
+    // 等待首帧到达后再 seek，确保 VideoOutput 已创建
+    // 如果已经有首帧（在 prepared hit 场景），直接 seek
+    if (!_currentPlaybackHasFirstFrame) {
+      developer.log('_restoreProgressIfNeeded: 等待首帧...');
+      try {
+        await _session.widthStream.firstWhere(
+          (width) => width != null && width > 0,
+        );
+        developer.log('_restoreProgressIfNeeded: 首帧已到达');
+      } catch (_) {
+        // stream 已取消或超时，不阻止继续执行
+        developer.log('_restoreProgressIfNeeded: 等待首帧超时或被取消');
+      }
+      if (!ref.mounted || !_isCurrent(generation)) {
+        return;
+      }
+    }
+
     await _session.seek(progress.position);
     if (!ref.mounted || !_isCurrent(generation)) {
       return;
@@ -2069,6 +2112,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (_currentPlaybackBufferedPosition < progress.position) {
       _currentPlaybackBufferedPosition = progress.position;
     }
+    developer.log('_restoreProgressIfNeeded: 恢复完成，已 seek 到 ${progress.position.inSeconds}s');
   }
 
   void _saveProgressIfNeeded({Duration? position, Duration? duration}) {

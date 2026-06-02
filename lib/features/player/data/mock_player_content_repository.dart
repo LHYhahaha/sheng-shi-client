@@ -328,6 +328,7 @@ class MockPlayerContentRepository implements PlayerContentRepository {
             coverAssetPath: 'assets/images/player/recommend_3.png',
           ),
         ],
+        episodeTotal: 50,
       ),
     );
   }

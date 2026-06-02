@@ -12,7 +12,11 @@ class PlayHistoryItemDto {
     required this.watchCount,
     required this.progressPercent,
     required this.lastWatchAt,
-    this.historyId,
+    this.coverUrl,
+    this.episodeTotal,
+    this.summary,
+    this.tagsName,
+    this.title,
   });
 
   final int dramaId;
@@ -23,7 +27,11 @@ class PlayHistoryItemDto {
   final int watchCount;
   final int progressPercent;
   final String? lastWatchAt;
-  final int? historyId;
+  final String? coverUrl;
+  final int? episodeTotal;
+  final String? summary;
+  final List<String>? tagsName;
+  final String? title;
 
   factory PlayHistoryItemDto.fromJson(Map<String, Object?> json) {
     const dtoName = 'PlayHistoryItemDto';
@@ -55,7 +63,18 @@ class PlayHistoryItemDto {
       progressPercent:
           JsonFieldParser.optionalInt(json, 'progressPercent') ?? 0,
       lastWatchAt: JsonFieldParser.optionalString(json, 'lastWatchAt'),
-      historyId: JsonFieldParser.optionalInt(json, 'historyId'),
+      coverUrl: JsonFieldParser.optionalString(json, 'coverUrl'),
+      episodeTotal: JsonFieldParser.optionalInt(json, 'episodeTotal'),
+      summary: JsonFieldParser.optionalString(json, 'summary'),
+      tagsName: _parseTagsName(json['tagsName']),
+      title: JsonFieldParser.optionalString(json, 'title'),
     );
+  }
+
+  static List<String>? _parseTagsName(Object? value) {
+    if (value is List) {
+      return value.whereType<String>().toList(growable: false);
+    }
+    return null;
   }
 }

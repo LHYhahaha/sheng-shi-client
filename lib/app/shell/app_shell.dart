@@ -9,6 +9,24 @@ import '../../features/player/application/player_playback_controller.dart';
 import '../../shared/widgets/navigation/app_bottom_navigation.dart';
 import 'app_shell_chrome.dart';
 
+/// 当前 Shell Tab 索引的 notifier。
+class _CurrentTabIndexNotifier extends Notifier<int> {
+  @override
+  int build() {
+    return 0;
+  }
+
+  void setIndex(int index) {
+    state = index;
+  }
+}
+
+/// 当前 Shell Tab 索引的 provider。
+final appShellCurrentTabIndexProvider =
+    NotifierProvider<_CurrentTabIndexNotifier, int>(
+  _CurrentTabIndexNotifier.new,
+);
+
 /// 主导航 shell。
 ///
 /// Shell 只管理 tab 容器和底部导航显示，不拥有播放器 session。离开 For You tab 时
@@ -26,6 +44,13 @@ class AppShell extends ConsumerWidget {
     final showBottomNavigation = ref.watch(
       appShellBottomNavigationVisibleProvider,
     );
+
+    // 延迟更新当前 Tab 索引，避免在 build 中修改 provider
+    Future.microtask(() {
+      ref.read(appShellCurrentTabIndexProvider.notifier).setIndex(
+        navigationShell.currentIndex,
+      );
+    });
 
     return Scaffold(
       body: navigationShell,
@@ -68,6 +93,12 @@ class AppShellDestinations {
 
   // TODO: For You tab 暂时禁用，索引已调整
   // static const forYouIndex = 1;
+
+  static const homeIndex = 0;
+  static const gameIndex = 1;
+  static const memberIndex = 2;
+  static const myListIndex = 3;
+  static const profileIndex = 4;
 
   static const paths = [
     RoutePaths.home,

@@ -13,6 +13,17 @@ Future<void> main() async {
 
   final preferences = await SharedPreferences.getInstance();
 
+  // 预加载 install id，确保登录时已准备好真实值
+  final container = ProviderContainer(
+    overrides: [
+      installIdStorageProvider.overrideWithValue(
+        createSharedPreferencesInstallIdStorage(preferences),
+      ),
+    ],
+  );
+  await container.read(installIdProvider.future);
+  container.dispose();
+
   runApp(
     ProviderScope(
       overrides: [

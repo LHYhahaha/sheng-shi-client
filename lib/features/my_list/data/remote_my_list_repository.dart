@@ -47,11 +47,11 @@ class RemoteMyListRepository implements MyListRepository {
 
   @override
   Future<void> deletePlayHistory({required int historyId}) async {
-    await _remoteDataSource.deletePlayHistory(dramaId: historyId);
+    await _remoteDataSource.deletePlayHistory(historyId: historyId);
   }
 
   @override
   Future<void> deletePlayHistories({required List<int> historyIds}) async {
-    await _remoteDataSource.deletePlayHistories(dramaIds: historyIds);
+    await _remoteDataSource.deletePlayHistories(historyIds: historyIds);
   }
 }

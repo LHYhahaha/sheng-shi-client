@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../application/player_like_count_provider.dart';
 import '../../domain/player_content.dart';
 import '../../domain/player_performance_policy.dart';
 import '../../domain/player_seek_preview_config.dart';
@@ -127,42 +130,78 @@ class _PlayerChromeState extends State<PlayerChrome> {
   Timer? _feedbackTimer;
 
   PlayerContent get content => widget.content;
+
   bool get isPlaying => widget.isPlaying;
+
   bool get showCenterPlayButton => widget.showCenterPlayButton;
+
   VoidCallback get onTogglePlay => widget.onTogglePlay;
+
   VoidCallback get onWatchNowTap => widget.onWatchNowTap;
+
   VoidCallback get onEpisodesTap => widget.onEpisodesTap;
+
   VoidCallback get onShareTap => widget.onShareTap;
+
   VoidCallback get onMoreTap => widget.onMoreTap;
+
   VoidCallback get onUnlockTap => widget.onUnlockTap;
+
   VoidCallback get onLikeTap => widget.onLikeTap;
+
   bool get showUnlockButton => widget.showUnlockButton;
+
   String? get unlockLabel => widget.unlockLabel;
+
   double get overlayOpacity => widget.overlayOpacity;
+
   ValueListenable<double>? get overlayOpacityListenable =>
       widget.overlayOpacityListenable;
+
   bool get showViewportBackdrop => widget.showViewportBackdrop;
+
   bool get showLoading => widget.showLoading;
+
   bool get playbackError => widget.playbackError;
+
   Duration get position => widget.position;
+
   Duration get duration => widget.duration;
+
   Duration get bufferedPosition => widget.bufferedPosition;
+
   Duration? get seekPreviewPosition => widget.seekPreviewPosition;
+
   bool get isSeeking => widget.isSeeking;
+
   bool get showTrackLoading => widget.showTrackLoading;
+
   bool get canSeek => widget.canSeek;
+
   VoidCallback? get onSeekStart => widget.onSeekStart;
+
   ValueChanged<Duration>? get onSeekUpdate => widget.onSeekUpdate;
+
   VoidCallback? get onSeekEnd => widget.onSeekEnd;
+
   VoidCallback? get onSeekCancel => widget.onSeekCancel;
+
   VoidCallback? get onRetry => widget.onRetry;
+
   Widget? get playbackLayer => widget.playbackLayer;
+
   Widget? get seekBar => widget.seekBar;
+
   BoxFit get videoFit => widget.videoFit;
+
   bool get forYouLayout => widget.forYouLayout;
+
   bool get showChromeOverlays => widget.showChromeOverlays;
+
   Duration get chromeOverlayFadeDuration => widget.chromeOverlayFadeDuration;
+
   bool get isLiked => widget.isLiked;
+
   bool get isLikeLoading => widget.isLikeLoading;
 
   @override
@@ -234,6 +273,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
           overlayOpacity: overlayOpacity,
           overlayOpacityListenable: overlayOpacityListenable,
           likeCountLabel: content.likeCountLabel,
+          dramaId: content.id,
           onEpisodesTap: onEpisodesTap,
           onShareTap: onShareTap,
           onMoreTap: onMoreTap,
@@ -422,6 +462,7 @@ class _PlayerActionRailLayer extends StatelessWidget {
     required this.overlayOpacity,
     required this.overlayOpacityListenable,
     required this.likeCountLabel,
+    required this.dramaId,
     required this.onEpisodesTap,
     required this.onShareTap,
     required this.onMoreTap,
@@ -437,6 +478,7 @@ class _PlayerActionRailLayer extends StatelessWidget {
   final double overlayOpacity;
   final ValueListenable<double>? overlayOpacityListenable;
   final String likeCountLabel;
+  final String dramaId;
   final VoidCallback onEpisodesTap;
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
@@ -467,8 +509,9 @@ class _PlayerActionRailLayer extends StatelessWidget {
             child: _OverlayOpacity(
               opacity: overlayOpacity,
               opacityListenable: overlayOpacityListenable,
-              child: PlayerActionRail(
+              child: _PlayerActionRailContent(
                 likeCountLabel: likeCountLabel,
+                dramaId: dramaId,
                 onEpisodesTap: onEpisodesTap,
                 onShareTap: onShareTap,
                 onMoreTap: onMoreTap,
@@ -829,6 +872,68 @@ class PlayerActionRail extends StatelessWidget {
           label: context.l10n.playerMore,
           onTap: onMoreTap,
         ),
+      ],
+    );
+  }
+}
+
+/// 处理点赞数缓存的 action rail 内容。
+class _PlayerActionRailContent extends ConsumerWidget {
+  const _PlayerActionRailContent({
+    required this.likeCountLabel,
+    required this.dramaId,
+    required this.onEpisodesTap,
+    required this.onShareTap,
+    required this.onMoreTap,
+    required this.onLikeTap,
+    required this.isLiked,
+    required this.isLikeLoading,
+  });
+
+  final String likeCountLabel;
+  final String dramaId;
+  final VoidCallback onEpisodesTap;
+  final VoidCallback onShareTap;
+  final VoidCallback onMoreTap;
+  final VoidCallback onLikeTap;
+  final bool isLiked;
+  final bool isLikeLoading;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 获取实时的点赞数显示文案
+    final displayLikeCountLabel = ref.watch(
+      playerLikeCountProvider((likeCountLabel, dramaId)),
+    );
+
+    return Column(
+      children: [
+        _LikeActionItem(
+          label: displayLikeCountLabel,
+          isLiked: isLiked,
+          isLoading: isLikeLoading,
+          onTap: onLikeTap,
+        ),
+        const SizedBox(height: 18),
+        _ActionItem(
+          icon: Icons.layers_rounded,
+          imageIcon: Image.asset("assets/images/player/episodes.png",height: 28),
+          label: context.l10n.playerEpisodes,
+          onTap: onEpisodesTap,
+        ),
+        const SizedBox(height: 18),
+        _ActionItem(
+          icon: Icons.reply_rounded,
+          label: context.l10n.playerShare,
+          onTap: onShareTap,
+          flipIcon: true,
+        ),
+        // const SizedBox(height: 18),
+        // _ActionItem(
+        //   icon: Icons.more_horiz_rounded,
+        //   label: context.l10n.playerMore,
+        //   onTap: onMoreTap,
+        // ),
       ],
     );
   }
@@ -1269,12 +1374,14 @@ class _ActionItem extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.flipIcon = false,
+    this.imageIcon,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
   final bool flipIcon;
+  final Widget? imageIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -1294,7 +1401,7 @@ class _ActionItem extends StatelessWidget {
             children: [
               flipIcon
                   ? Transform.flip(flipX: true, child: iconWidget)
-                  : iconWidget,
+                  : imageIcon ?? iconWidget,
               const SizedBox(height: 3),
               Flexible(
                 child: Text(

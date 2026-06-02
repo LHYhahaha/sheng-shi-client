@@ -13,6 +13,8 @@ class PlayerEpisodeDto {
     required this.status,
     required this.publishedAt,
     required this.subtitles,
+    required this.isUnlocked,
+    required this.isVipOnly,
   });
 
   final int id;
@@ -23,6 +25,16 @@ class PlayerEpisodeDto {
   final int status;
   final String publishedAt;
   final List<PlayerEpisodeSubtitleDto> subtitles;
+
+  /// 当前用户是否已解锁该集。
+  ///
+  /// 0 = 未解锁，1 = 已解锁。用于判断是否需要付费或会员权限。
+  final int isUnlocked;
+
+  /// 该集是否为会员专属。
+  ///
+  /// 0 = 非会员专属，1 = 会员专属。
+  final int isVipOnly;
 
   factory PlayerEpisodeDto.fromJson(Map<String, Object?> json) {
     return PlayerEpisodeDto(
@@ -36,6 +48,8 @@ class PlayerEpisodeDto {
       status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
       publishedAt: JsonFieldParser.optionalString(json, 'published_at') ?? '',
       subtitles: _parseSubtitles(json['subtitles']),
+      isUnlocked: JsonFieldParser.optionalInt(json, 'is_unlocked') ?? 0,
+      isVipOnly: JsonFieldParser.optionalInt(json, 'is_vip_only') ?? 0,
     );
   }
 

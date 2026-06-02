@@ -2,8 +2,9 @@ import '../domain/my_list_item.dart';
 import '../domain/my_list_repository.dart';
 
 class MockMyListRepository implements MyListRepository {
-  MockMyListRepository() : _collectionItems = List.of([]),
-                           _playItems = List.of([]);
+  MockMyListRepository()
+    : _collectionItems = List.of([]),
+      _playItems = List.of([]);
 
   late final List<MyListItem> _collectionItems;
   late final List<MyListItem> _playItems;
@@ -26,21 +27,19 @@ class MockMyListRepository implements MyListRepository {
   @override
   Future<void> deleteFavorites({required List<int> dramaIds}) async {
     await Future<void>.delayed(const Duration(milliseconds: 100));
-    _collectionItems.removeWhere((item) => 
-      item.dramaId != null && dramaIds.contains(item.dramaId));
+    _collectionItems.removeWhere((item) => dramaIds.contains(item.dramaId));
   }
 
   @override
   Future<void> deletePlayHistory({required int historyId}) async {
     await Future<void>.delayed(const Duration(milliseconds: 100));
-    _playItems.removeWhere((item) => item.historyId == historyId);
+    _playItems.removeWhere((item) => item.dramaId == historyId);
   }
 
   @override
   Future<void> deletePlayHistories({required List<int> historyIds}) async {
     await Future<void>.delayed(const Duration(milliseconds: 100));
-    _playItems.removeWhere((item) => 
-      item.historyId != null && historyIds.contains(item.historyId));
+    _playItems.removeWhere((item) => historyIds.contains(item.dramaId));
   }
 }
 
@@ -49,66 +48,54 @@ const _intro =
 
 final _collectionItems = [
   const MyListItem(
-    id: 'collection-raja-iblis',
+    dramaId: 1,
     title: 'Raja Iblis Hidup Kembali',
     introduction: _intro,
     coverAssetPath: 'assets/images/my_list/cover_1.png',
     currentEpisode: 1,
     episodeCount: 52,
-    dramaId: 1001,
   ),
   const MyListItem(
-    id: 'collection-pulang-malam',
+    dramaId: 2,
     title: 'Pulang Malam Mengejutkan',
     introduction: _intro,
     coverAssetPath: 'assets/images/my_list/cover_2.png',
     currentEpisode: 1,
     episodeCount: 52,
-    dramaId: 1002,
   ),
   const MyListItem(
-    id: 'collection-naga-tersembunyi',
+    dramaId: 3,
     title: 'Naga Tersembunyi Dewa Perang',
     introduction: _intro,
     coverAssetPath: 'assets/images/my_list/cover_3.png',
     currentEpisode: 1,
     episodeCount: 52,
-    dramaId: 1003,
   ),
 ];
 
 final _playItems = [
   const MyListItem(
-    id: 'history:1:1',
+    dramaId: 4,
     title: 'EP. 1',
     introduction: '',
     coverAssetPath: 'assets/images/my_list/cover_1.png',
     currentEpisode: 1,
     episodeCount: 0,
-    dramaId: 1001,
-    episodeId: 1,
-    historyId: 2001,
   ),
   const MyListItem(
-    id: 'history:2:2',
+    dramaId: 5,
     title: 'EP. 2',
     introduction: '',
     coverAssetPath: 'assets/images/my_list/cover_2.png',
     currentEpisode: 2,
     episodeCount: 0,
-    dramaId: 1002,
-    episodeId: 2,
-    historyId: 2002,
   ),
   const MyListItem(
-    id: 'history:3:3',
+    dramaId: 6,
     title: 'EP. 3',
     introduction: '',
     coverAssetPath: 'assets/images/my_list/cover_3.png',
     currentEpisode: 3,
     episodeCount: 0,
-    dramaId: 1003,
-    episodeId: 3,
-    historyId: 2003,
   ),
 ];

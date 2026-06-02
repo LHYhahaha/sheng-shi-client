@@ -63,6 +63,7 @@ class HomeDrama {
     required this.isVipOnly,
     required this.status,
     required this.episodeTotal,
+    required this.tags,
   });
 
   /// 剧 ID。
@@ -94,4 +95,7 @@ class HomeDrama {
 
   /// 总集数。
   final int episodeTotal;
+
+  /// 剧标签列表。
+  final List<String> tags;
 }

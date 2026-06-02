@@ -11,16 +11,15 @@ enum MyListTab { collection, play }
 /// 状态应通过 repository 返回，不要让 UI 自行拼接。
 class MyListItem {
   const MyListItem({
-    required this.id,
+    required this.dramaId,
     required this.title,
     required this.introduction,
     required this.coverAssetPath,
     required this.currentEpisode,
     required this.episodeCount,
     MediaResource? coverResource,
-    this.dramaId,
     this.episodeId,
-    this.historyId,
+    this.watchSecond,
   }) : _coverResource = coverResource;
 
   /// My list 默认封面兜底。
@@ -29,10 +28,10 @@ class MyListItem {
   /// 可以把这个兜底迁移到 shared media 层。
   static const fallbackCoverAssetPath = 'assets/images/my_list/cover_1.png';
 
-  /// 条目 id。
+  /// 条目 dramaId。
   ///
-  /// 用于选择、删除和 slidable open state，不能用列表 index 替代。
-  final String id;
+  /// 用于选择、删除和 slidable open state，是唯一标识，不能用列表 index 替代。
+  final int dramaId;
 
   /// 剧名或条目标题。
   final String title;
@@ -64,18 +63,9 @@ class MyListItem {
   /// 只用于展示"当前/总集数"。
   final int episodeCount;
 
-  /// 剧集 ID（用于删除收藏）。
-  ///
-  /// 来自收藏列表接口，用于删除操作。
-  final int? dramaId;
-
-  /// 集数 ID（用于删除播放历史）。
-  ///
-  /// 来自播放历史接口，与 dramaId 组合标识唯一的播放历史记录。
+  /// 集数id。
   final int? episodeId;
 
-  /// 播放历史 ID（用于删除播放历史）。
-  ///
-  /// 如果服务端返回，优先使用此 ID 删除；否则使用 dramaId + episodeId 组合。
-  final int? historyId;
+  /// 观看时间。
+  final int? watchSecond;
 }

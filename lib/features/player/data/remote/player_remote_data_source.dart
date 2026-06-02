@@ -3,7 +3,9 @@ import '../../../../core/network/json_field_parser.dart';
 import '../../../my_list/data/dto/favorite_mutation_dto.dart';
 import '../dto/player_content_dto.dart';
 import '../dto/player_feed_page_dto.dart';
+import '../dto/player_recommendation_dto.dart';
 import '../dto/short_follow_check_dto.dart';
+import '../dto/watch_progress_dto.dart';
 import '../dto/watch_progress_report_dto.dart';
 
 /// Player 内容/Feed 远程数据源。
@@ -23,6 +25,30 @@ class PlayerRemoteDataSource {
         JsonFieldParser.requireMap(data, dtoName: 'PlayerContentDto'),
       ),
     );
+  }
+
+  /// 获取推荐列表。
+  Future<List<PlayerRecommendationDto>> fetchRecommendations({
+    required int dramaId,
+    required List<int> tagIds,
+  }) {
+    return _apiClient.post<List<PlayerRecommendationDto>>(
+      '/api/home/tags',
+      data: <String, Object?>{
+        'dramaId': dramaId,
+        'tag_ids': tagIds,
+      },
+      authPolicy: ApiAuthPolicy.required,
+      decoder: (data) => _parseRecommendations(data),
+    );
+  }
+
+  static List<PlayerRecommendationDto> _parseRecommendations(Object? data) {
+    if (data is! List) return const <PlayerRecommendationDto>[];
+    return data
+        .whereType<Map<String, Object?>>()
+        .map(PlayerRecommendationDto.fromJson)
+        .toList(growable: false);
   }
 
   Future<PlayerFeedPageDto> listForYouFeed({String? pageToken}) {
@@ -67,6 +93,25 @@ class PlayerRemoteDataSource {
         JsonFieldParser.requireMap(data, dtoName: 'ShortFollowCheckDto'),
       ),
     ).then((dto) => dto.followed);
+  }
+
+  /// 获取观看进度。
+  Future<WatchProgressDto?> fetchWatchProgress({required int dramaId}) {
+    return _apiClient.get<WatchProgressDto?>(
+      '/api/user/watch/progress',
+      queryParameters: <String, Object?>{'dramaId': dramaId},
+      authPolicy: ApiAuthPolicy.required,
+      decoder: (data) {
+        try {
+          return WatchProgressDto.fromJson(
+            JsonFieldParser.requireMap(data, dtoName: 'WatchProgressDto'),
+          );
+        } catch (e) {
+          // 如果解析失败，返回 null，这样可以正常继续播放
+          return null;
+        }
+      },
+    );
   }
 
   /// 上报观看进度。

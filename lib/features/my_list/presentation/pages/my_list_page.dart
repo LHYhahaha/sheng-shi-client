@@ -1,9 +1,13 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../app/router/app_router.dart';
 import '../../../../app/router/route_paths.dart';
+import '../../../../app/shell/app_shell.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
@@ -24,18 +28,25 @@ class MyListPage extends ConsumerStatefulWidget {
 }
 
 class _MyListPageState extends ConsumerState<MyListPage> {
-  late final AppShellBottomNavigationVisible _shellChrome;
+  AppShellBottomNavigationVisible? _shellChrome;
 
   @override
   void initState() {
     super.initState();
-    _shellChrome = ref.read(appShellBottomNavigationVisibleProvider.notifier);
-    Future.microtask(() => ref.read(myListControllerProvider.notifier).load());
+    // 在 initState 中延迟初始化 ref 相关的东西
+    Future.microtask(() {
+      if (mounted) {
+        _shellChrome = ref.read(
+          appShellBottomNavigationVisibleProvider.notifier,
+        );
+        ref.read(myListControllerProvider.notifier).load();
+      }
+    });
   }
 
   @override
   void dispose() {
-    _shellChrome.show();
+    _shellChrome?.show();
     super.dispose();
   }
 
@@ -45,15 +56,23 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     final state = ref.watch(myListControllerProvider);
     final controller = ref.read(myListControllerProvider.notifier);
 
+    // 监听 Tab 索引变化，当切换到 MyList Tab 时刷新数据
+    ref.listen(appShellCurrentTabIndexProvider, (previous, current) {
+      // 当切换到 MyList Tab 时刷新数据
+      if (current == AppShellDestinations.myListIndex && previous != current) {
+        developer.log('MyList tab activated, reloading data');
+        controller.load();
+      }
+    });
     ref.listen(
       myListControllerProvider.select((state) => state.isCollectionEditing),
       (previous, next) {
         // 批量编辑时隐藏 shell bottom navigation，给底部删除栏让位。
         // dispose 时会强制 show，避免从编辑态离开页面后全局导航永久隐藏。
         if (next) {
-          _shellChrome.hide();
+          _shellChrome?.hide();
         } else {
-          _shellChrome.show();
+          _shellChrome?.show();
         }
       },
     );
@@ -157,18 +176,30 @@ class _MyListPageState extends ConsumerState<MyListPage> {
           // 两个 tab 都支持左滑删除，但编辑模式下禁用
           enabled: !state.isCollectionEditing,
           item: item,
-          onDelete: () => controller.deleteItem(item.id),
-          onOpened: () => controller.openPlayItem(item.id),
-          onClosed: () => controller.closeOpenPlayItem(item.id),
+          onDelete: () => controller.deleteItem(item.dramaId),
+          onOpened: () => controller.openPlayItem(item.dramaId),
+          onClosed: () => controller.closeOpenPlayItem(item.dramaId),
           child: Padding(
             padding: EdgeInsets.zero,
             child: _MyListRow(
               item: item,
               choosing: state.isCollectionEditing,
-              selected: state.selectedIds.contains(item.id),
+              selected: state.selectedIds.contains(item.dramaId),
               onTap: state.isCollectionEditing
-                  ? () => controller.toggleSelection(item.id)
-                  : controller.closeAnyOpenPlayItem,
+                  ? () => controller.toggleSelection(item.dramaId)
+                  : () {
+                      controller.closeAnyOpenPlayItem();
+                      // 播放历史项点击导航到播放器
+                      if (item.episodeId != null) {
+                        context.push(
+                          RoutePaths.playerLocation(
+                            dramaId: item.dramaId.toString(),
+                            episodeId: item.episodeId.toString(),
+                            trigger: 'play_history_item',
+                          ),
+                        );
+                      }
+                    },
             ),
           ),
         );
@@ -356,7 +387,7 @@ class _MyListTabs extends StatelessWidget {
             child: ColoredBox(
               color: AppColors.primary,
               child: SizedBox(
-                width: selectedTab == MyListTab.collection ? 139 : 63,
+                width: selectedTab == MyListTab.collection ? 63 : 58,
                 height: 2,
               ),
             ),
@@ -428,7 +459,7 @@ class _MyListRowSwipeAction extends StatelessWidget {
       onOpened: onOpened,
       onClosed: onClosed,
       builder: (context, controller) => Slidable(
-        key: ValueKey(item.id),
+        key: ValueKey(item.dramaId),
         controller: controller,
         groupTag: 'my-list-items',
         closeOnScroll: true,
@@ -452,7 +483,7 @@ class _MyListRowSwipeAction extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    context.l10n.myListDelete,
+                    context.l10n.myListRemove,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: AppColors.textPrimary,
                       fontSize: 10,
@@ -558,7 +589,11 @@ class _MyListRow extends StatelessWidget {
               ),
             ),
           ],
-          _CoverImage(assetPath: item.coverAssetPath),
+          _CoverImage(
+            assetPath: item.coverAssetPath,
+            currentEpisode: item.currentEpisode,
+            episodeCount: item.episodeCount,
+          ),
           const SizedBox(width: 12),
           Expanded(child: _RowCopy(item: item)),
         ],
@@ -574,12 +609,24 @@ class _MyListRow extends StatelessWidget {
 }
 
 class _CoverImage extends StatelessWidget {
-  const _CoverImage({required this.assetPath});
+  const _CoverImage({
+    required this.assetPath,
+    required this.currentEpisode,
+    required this.episodeCount,
+  });
 
   final String assetPath;
+  final int currentEpisode;
+  final int episodeCount;
 
   @override
   Widget build(BuildContext context) {
+    // 计算进度百分比，总宽度为 74
+    final progress = episodeCount > 0
+        ? (currentEpisode / episodeCount).clamp(0.0, 1.0)
+        : 0.0;
+    final progressWidth = 74 * progress;
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppRadii.xs),
       child: Stack(
@@ -591,12 +638,12 @@ class _CoverImage extends StatelessWidget {
             fit: BoxFit.cover,
             filterQuality: FilterQuality.medium,
           ),
-          const Positioned(
+          Positioned(
             left: 0,
             bottom: 0,
             child: ColoredBox(
               color: AppColors.primary,
-              child: SizedBox(width: 39, height: 2),
+              child: SizedBox(width: progressWidth, height: 2),
             ),
           ),
         ],

@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +7,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../application/auth_controller.dart';
 import '../widgets/auth_login_modal_content.dart';
 import 'auth_modal_payloads.dart';
+import '../../domain/auth_session.dart';
 
 /// Auth 登录全局 bottom sheet（复用 [AuthLoginModalContent]）。
 class AuthLoginModalSheet extends ConsumerStatefulWidget {
@@ -19,9 +21,51 @@ class AuthLoginModalSheet extends ConsumerStatefulWidget {
 }
 
 class _AuthLoginModalSheetState extends ConsumerState<AuthLoginModalSheet> {
+  ProviderSubscription? _providerSubscription;
+
   @override
   void initState() {
     super.initState();
+    developer.log('[AuthLoginModalSheet] initState');
+    
+    // 使用 listenManual 监听 auth 状态变化，确保第三方登录完成后能可靠地关闭 bottom sheet
+    _providerSubscription = ref.listenManual(
+      authControllerProvider.select((state) => state.user?.provider),
+      (previous, next) {
+        developer.log(
+          '[AuthLoginModalSheet] provider changed: previous=$previous, next=$next, mounted=$mounted',
+        );
+        if (!mounted) {
+          developer.log('[AuthLoginModalSheet] widget not mounted, skipping');
+          return;
+        }
+        // 当 provider 从 device 变为其他（第三方登录）时，关闭 bottom sheet
+        if (previous == AuthProviderType.device &&
+            next != null &&
+            next != AuthProviderType.device) {
+          developer.log(
+            '[AuthLoginModalSheet] Third-party login detected, popping bottom sheet',
+          );
+          final session = ref.read(authControllerProvider).session;
+          final user = session.user;
+          if (user == null) {
+            developer.log('[AuthLoginModalSheet] user is null, cannot pop');
+            return;
+          }
+          Navigator.of(context).pop(
+            LoginModalResult.success(
+              provider: user.provider.name,
+              userId: user.id,
+              userNickname: user.nickname,
+              accountLinked: session.guestId != null,
+            ),
+          );
+          developer.log('[AuthLoginModalSheet] Navigator.pop() called');
+        }
+      },
+      fireImmediately: false,
+    );
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -31,28 +75,15 @@ class _AuthLoginModalSheetState extends ConsumerState<AuthLoginModalSheet> {
   }
 
   @override
+  void dispose() {
+    _providerSubscription?.close();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    ref.listen(authControllerProvider.select((state) => state.isLoggedIn), (
-      previous,
-      next,
-    ) {
-      if (!next || !mounted) {
-        return;
-      }
-      final session = ref.read(authControllerProvider).session;
-      final user = session.user;
-      if (user == null) {
-        return;
-      }
-      Navigator.of(context).pop(
-        LoginModalResult.success(
-          provider: user.provider.name,
-          userId: user.id,
-          userNickname: user.nickname,
-          accountLinked: session.guestId != null,
-        ),
-      );
-    });
+    developer.log('[AuthLoginModalSheet] build called');
+
 
     final state = ref.watch(authControllerProvider);
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;

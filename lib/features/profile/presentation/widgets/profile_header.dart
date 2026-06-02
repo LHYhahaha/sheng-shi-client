@@ -9,12 +9,14 @@ class ProfileHeader extends StatelessWidget {
     required this.state,
     this.onLoginTap,
     this.onAccountTap,
+    this.onGuestTap,
     super.key,
   });
 
   final ProfileState state;
   final VoidCallback? onLoginTap;
   final VoidCallback? onAccountTap;
+  final VoidCallback? onGuestTap;
 
   @override
   Widget build(BuildContext context) {
@@ -23,8 +25,18 @@ class ProfileHeader extends StatelessWidget {
         ? state.nickname ?? state.userId
         : l10n.profileLogin;
 
+    void handleTap() {
+      if (onGuestTap != null) {
+        onGuestTap!();
+      } else if (state.isLoggedIn) {
+        onAccountTap?.call();
+      } else {
+        onLoginTap?.call();
+      }
+    }
+
     return InkWell(
-      onTap: state.isLoggedIn ? onAccountTap : onLoginTap,
+      onTap: handleTap,
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       child: SizedBox(

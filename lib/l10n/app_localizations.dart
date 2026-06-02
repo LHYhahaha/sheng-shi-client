@@ -186,12 +186,13 @@ class AppLocalizations {
     zh: '当前为 MVP 测试用注销账号确认，不会删除真实数据。',
   );
   String get authDeleteAccountConfirm => _text(en: 'Delete', zh: '注销');
+  String get myListRemove => _text(en: 'Remove', zh: '移除');
   String get walletTitle => _text(en: 'My Wallet', zh: '钱包');
   String get walletCoins => _text(en: 'Coins', zh: '金币');
-  String get walletBonus => _text(en: 'Bonus', zh: '赠币');
+  String get walletBonus => _text(en: 'Reward Coins', zh: '赠币');
   String get walletTopUp => _text(en: 'Top Up', zh: '充值');
   String get walletAutoUnlockNextEpisode =>
-      _text(en: 'Auto-unlock the next episode', zh: '自动解锁下一集');
+      _text(en: 'Unlock next episode automatically', zh: '自动解锁下一集');
   String get transactionHistoryTitle =>
       _text(en: 'Transaction history', zh: '交易记录');
   String get consumptionHistoryTitle =>

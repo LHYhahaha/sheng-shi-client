@@ -69,19 +69,19 @@ class MyListRemoteDataSource {
     );
   }
 
-  Future<FavoriteMutationDto> deletePlayHistory({int? dramaId}) {
+  Future<FavoriteMutationDto> deletePlayHistory({required int historyId}) {
     return _apiClient.post<FavoriteMutationDto>(
       '/api/user/watch/history/delete',
-      data: {"dramaId": dramaId},
+      data: {"historyId": historyId},
       authPolicy: ApiAuthPolicy.required,
       decoder: FavoriteMutationDto.fromJson,
     );
   }
 
-  Future<FavoriteMutationDto> deletePlayHistories({List<int>? dramaIds}) {
+  Future<FavoriteMutationDto> deletePlayHistories({List<int>? historyIds}) {
     return _apiClient.post<FavoriteMutationDto>(
       '/api/user/watch/history/delete',
-      data: {dramaIds: dramaIds},
+      data: {'dramaIds': historyIds},
       authPolicy: ApiAuthPolicy.required,
       decoder: FavoriteMutationDto.fromJson,
     );

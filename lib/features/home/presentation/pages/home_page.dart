@@ -45,10 +45,8 @@ class _HomePageState extends ConsumerState<HomePage> {
       playerStartupPreloadControllerProvider.notifier,
     );
     _scrollController.addListener(_onScroll);
-    Future<void>.microtask(() {
-      ref.read(homeFeedControllerProvider.notifier).loadInitial();
-    });
     // 首页 remote 数据会在 HomeDataController 中监听 AuthState 自动加载
+    // 不需要在这里手动加载 mock 数据，HomeFeedController 会根据 remote 数据的存在情况自动决定
   }
 
   @override
@@ -196,6 +194,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           },
           child: CustomScrollView(
             controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(
@@ -226,7 +225,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   margin: EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
                     color: Colors.black,
-                    borderRadius: BorderRadius.circular(20)
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   height: 200,
                   child: Swiper(
@@ -242,7 +241,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
               ),
               if (isLoading)
-                const SliverFillRemaining(
+                SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(
                     child: SizedBox.square(
@@ -253,7 +252,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 )
               else if (error != null)
                 SliverFillRemaining(
-                  hasScrollBody: false,
+                  hasScrollBody: true,
                   child: _HomeErrorState(
                     onRetry: () {
                       unawaited(
@@ -575,9 +574,9 @@ class _HomeDramaCard extends StatelessWidget {
                       height: 16,
                       child: Row(
                         children: [
-                          for (final tag in data.tags.indexed) ...[
+                          for (final tag in data.tags.take(2).toList().indexed) ...[
                             _HomeTag(label: tag.$2),
-                            if (tag.$1 != data.tags.length - 1)
+                            if (tag.$1 != data.tags.take(2).length - 1)
                               const SizedBox(width: 8),
                           ],
                         ],
@@ -718,6 +717,7 @@ class _HomeTag extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 16,
+      constraints: const BoxConstraints(maxWidth: 65),
       padding: const EdgeInsets.symmetric(horizontal: 6),
       alignment: Alignment.center,
       decoration: BoxDecoration(

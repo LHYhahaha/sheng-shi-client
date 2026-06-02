@@ -64,7 +64,7 @@ class HomeRemoteData {
           viewCountLabel: _formatPlayCount(homeDrama.playCount),
           episodeCount: homeDrama.episodeTotal,
           categoryId: tabs[index].id.toString(),
-          tags: [], // 远程数据暂无标签
+          tags: homeDrama.tags,
           coverAspectRatio: 0.7,
           isExclusive: homeDrama.isVipOnly,
         ))

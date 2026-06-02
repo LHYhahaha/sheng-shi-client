@@ -16,37 +16,29 @@ class MyListMapper {
   MyListItem mapFavorite(FavoriteItemDto dto) {
     final fallbackAsset = MyListItem.fallbackCoverAssetPath;
     return MyListItem(
-      id: _favoriteId(dto),
+      dramaId: dto.dramaId,
       title: dto.title ?? _displayTitleFallback,
       introduction: dto.description ?? '',
       coverAssetPath: fallbackAsset,
       coverResource: _coverResource(dto.coverUrl, dto.coverAspectRatio),
       currentEpisode: dto.latestEpisodeNumber ?? 1,
       episodeCount: dto.totalEpisodes,
-      dramaId: dto.dramaId != 0 ? dto.dramaId : null,
     );
   }
 
   MyListItem mapPlayHistory(PlayHistoryItemDto dto) {
     final fallbackAsset = MyListItem.fallbackCoverAssetPath;
     return MyListItem(
-      id: _historyId(dto),
-      title: 'EP. ${dto.episodeNo}',
-      introduction: '',
-      coverAssetPath: fallbackAsset,
-      currentEpisode: dto.episodeNo,
-      episodeCount: 0,
       dramaId: dto.dramaId,
+      title: dto.title ?? _displayTitleFallback,
+      introduction: dto.summary ?? '',
+      coverAssetPath: fallbackAsset,
+      coverResource: _coverResource(dto.coverUrl, null),
+      currentEpisode: dto.episodeNo,
+      episodeCount: dto.episodeTotal ?? 0,
       episodeId: dto.episodeId,
-      historyId: dto.historyId,
+      watchSecond: dto.watchSecond,
     );
-  }
-
-  String favoriteDeleteDramaId(MyListItem item) {
-    final id = item.id.startsWith('favorite:')
-        ? item.id.substring('favorite:'.length)
-        : item.id;
-    return id;
   }
 
   MediaResource _coverResource(String? coverUrl, double? aspectRatio) {
@@ -57,14 +49,5 @@ class MyListMapper {
       MyListItem.fallbackCoverAssetPath,
       aspectRatio: aspectRatio,
     );
-  }
-
-  String _favoriteId(FavoriteItemDto dto) {
-    if (dto.dramaId != 0) return dto.dramaId.toString();
-    return dto.favoriteId ?? '';
-  }
-
-  String _historyId(PlayHistoryItemDto dto) {
-    return 'history:${dto.dramaId}:${dto.episodeId}';
   }
 }

@@ -25,11 +25,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(walletControllerProvider);
-    final entitlementState = ref.watch(entitlementControllerProvider);
     final controller = ref.read(walletControllerProvider.notifier);
-    final displayState = state.copyWith(
-      autoUnlockNextEpisode: entitlementState.autoUnlockEnabled,
-    );
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0014),
@@ -50,7 +46,7 @@ class _WalletPageState extends ConsumerState<WalletPage> {
             ),
             Expanded(
               child: _WalletBody(
-                state: displayState,
+                state: state,
                 onRetry: controller.retry,
                 onTopUp: () => context.push(RoutePaths.store),
                 onTransactionHistory: () =>
@@ -108,7 +104,7 @@ class _WalletHeader extends StatelessWidget {
   }
 }
 
-class _WalletBody extends StatelessWidget {
+class _WalletBody extends ConsumerWidget {
   const _WalletBody({
     required this.state,
     required this.onRetry,
@@ -128,7 +124,7 @@ class _WalletBody extends StatelessWidget {
   final ValueChanged<bool> onAutoUnlockChanged;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (state.isLoading) {
       return const Center(
         child: SizedBox.square(
@@ -149,6 +145,8 @@ class _WalletBody extends StatelessWidget {
         ),
       );
     }
+
+    final entitlementState = ref.watch(entitlementControllerProvider);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 33, 16, 32),
@@ -206,7 +204,7 @@ class _WalletBody extends StatelessWidget {
         const SizedBox(height: 28),
         _WalletSwitchRow(
           label: context.l10n.walletAutoUnlockNextEpisode,
-          value: state.autoUnlockNextEpisode,
+          value: entitlementState.autoUnlockEnabled,
           onChanged: onAutoUnlockChanged,
         ),
       ],

@@ -18,6 +18,8 @@ class PlayerContent {
     required this.recommendations,
     this.playCount = 0,
     this.favoriteCount = 0,
+    this.likeCountDelta = 0,
+    this.episodeTotal = 0,
   });
 
   /// 剧内容 id。
@@ -79,6 +81,16 @@ class PlayerContent {
   ///
   /// 从服务端返回的原始收藏数据。
   final int favoriteCount;
+
+  /// 点赞数变化。
+  ///
+  /// 本地缓存的点赞数相对于初始值的变化量，用于立即更新 UI。
+  final int likeCountDelta;
+
+  /// 总集数。
+  ///
+  /// 从服务端返回的总集数，用于动态生成 episode tab。
+  final int episodeTotal;
 }
 
 /// 播放页 episode 模型。

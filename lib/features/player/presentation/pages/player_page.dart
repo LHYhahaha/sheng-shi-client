@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/player_feed_controller.dart';
 import '../../application/player_feed_engine.dart';
 import '../../application/player_feed_engine_access_flow.dart';
+import '../../application/player_like_controller.dart';
 import '../../application/player_overlay_orchestrator.dart';
 import '../../application/player_performance_policy_provider.dart';
 import '../../application/player_playback_controller.dart';
@@ -23,10 +25,14 @@ import '../../application/player_unlock_modal_coordinator.dart';
 import '../../application/player_rebuild_diagnostics.dart';
 import '../../application/player_ui_controller.dart';
 import '../../application/player_viewport_controller.dart';
+import '../../application/watch_progress_provider.dart';
+import '../../data/player_content_repository_provider.dart';
+import '../../data/player_remote_data_source_provider.dart';
 import '../../domain/player_access_presentation.dart';
 import '../../domain/player_performance_policy.dart';
 import '../../domain/player_content.dart';
 import '../../domain/player_feed.dart';
+import '../../domain/player_playback_progress.dart';
 import '../widgets/player_action_sheets.dart';
 import '../widgets/player_detail_sheet.dart';
 import '../widgets/player_feed_page_shell.dart';
@@ -80,6 +86,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   late final PlayerOverlayOrchestrator _overlayOrchestrator;
   late final AppModalService _modalService;
   AppShellBottomNavigationVisible? _shellChrome;
+  PlaybackProgress? _resumeProgress;
   bool _isSeekDragging = false;
   bool _isModalOpen = false;
   bool _isAutoAdvancing = false;
@@ -150,6 +157,53 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (!mounted) {
         return;
       }
+      
+      // 从 watch progress API 获取观看进度（所有进入播放页的场景都需要检查是否有之前的进度）
+      if (widget.dramaId != null) {
+        try {
+          final dramaId = int.tryParse(widget.dramaId!);
+          if (dramaId != null) {
+            developer.log('PlayerPage: 准备获取 watch progress，dramaId=$dramaId');
+            final dataSource = ref.read(playerRemoteDataSourceProvider);
+            final watchProgress = await dataSource.fetchWatchProgress(
+              dramaId: dramaId,
+            );
+            developer.log('PlayerPage: 获取到 watch progress=$watchProgress');
+            if (watchProgress != null && mounted) {
+              // 构建与 PlayerFeedItem 一致的 id 格式：'single:{content.id}:{episode.id}'
+              final contentId = widget.dramaId;
+              final episodeId = watchProgress.episodeId.toString();
+              _resumeProgress = PlaybackProgress(
+                itemId: 'single:$contentId:$episodeId',
+                position: Duration(seconds: watchProgress.watchSecond),
+                duration: Duration(seconds: watchProgress.durationSecond),
+                updatedAt: DateTime.now(),
+              );
+              developer.log(
+                'PlayerPage: _resumeProgress 已设置：'
+                'itemId=${_resumeProgress!.itemId}, '
+                'position=${_resumeProgress!.position.inSeconds}s, '
+                'duration=${_resumeProgress!.duration.inSeconds}s, '
+                'canResume=${_resumeProgress!.canResume}',
+              );
+              developer.log(
+                'Loaded watch progress: itemId=${_resumeProgress!.itemId}, '
+                'position=${_resumeProgress!.position.inSeconds}s, '
+                'trigger=${widget.initialPlaybackTrigger}',
+              );
+              // 立即设置待恢复的播放进度，避免播放已开始才设置
+              _playbackController.setPendingResumeProgress(_resumeProgress);
+            }
+          }
+        } catch (e) {
+          developer.log('Failed to fetch watch progress: $e', error: e);
+        }
+      }
+      
+      if (!mounted) {
+        return;
+      }
+      
       final uiController = ref.read(
         playerUiControllerProvider(_sessionKey).notifier,
       );
@@ -160,7 +214,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (widget.feedMode == PlayerFeedMode.singleDrama) {
         _syncAutoImmersiveBlockers();
       }
-      unawaited(_loadFeedForTiming());
+      
+      // 每次进入播放页时，刷新点赞状态
+      if (widget.dramaId != null) {
+        final likeController = ref.read(
+          playerLikeControllerProvider(widget.dramaId!).notifier,
+        );
+        unawaited(likeController.refreshLikeStatus());
+      }
+      
+      await _loadFeedForTiming();
     });
   }
 
@@ -234,6 +297,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
     final feedState = ref.read(feedProvider);
     if (feedState.currentItem != null) {
+      // 设置待恢复的播放进度（从播放历史进入时）
+      if (_resumeProgress != null) {
+        _playbackController.setPendingResumeProgress(_resumeProgress);
+      }
+      
       _feedEngine.initializeViewport(
         index: feedState.currentIndex,
         itemId: feedState.currentItem!.id,
@@ -1020,6 +1088,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }) {
     _isModalOpen = true;
     _syncAutoImmersiveBlockers();
+    
+    // 重新获取完整的 content（包含推荐列表）
+    final contentRepository = ref.read(playerContentRepositoryProvider);
+    final contentFuture = contentRepository.getPlayerContent(dramaId: content.id);
+    
     return showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -1029,18 +1102,24 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       isScrollControlled: true,
       useSafeArea: true,
       builder: (sheetContext) {
-        return PlayerDetailSheet(
-          content: content,
-          initialTab: initialTab,
-          currentEpisode:
-              ref
-                  .read(playerFeedControllerProvider(_sessionKey))
-                  .currentItem
-                  ?.episode
-                  .number ??
-              1,
-          onEpisodeSelected: (episode) {
-            _closeSheetAndSelectEpisode(sheetContext, episode);
+        return FutureBuilder<PlayerContent>(
+          future: contentFuture,
+          builder: (context, snapshot) {
+            final displayContent = snapshot.data ?? content;
+            return PlayerDetailSheet(
+              content: displayContent,
+              initialTab: initialTab,
+              currentEpisode:
+                  ref
+                      .read(playerFeedControllerProvider(_sessionKey))
+                      .currentItem
+                      ?.episode
+                      .number ??
+                  1,
+              onEpisodeSelected: (episode) {
+                _closeSheetAndSelectEpisode(sheetContext, episode);
+              },
+            );
           },
         );
       },

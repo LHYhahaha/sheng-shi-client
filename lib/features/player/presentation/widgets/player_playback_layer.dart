@@ -15,7 +15,7 @@ import '../../domain/player_performance_policy.dart';
 import '../../application/player_rebuild_diagnostics.dart';
 import '../../application/player_viewport_controller.dart';
 import '../../domain/player_content.dart';
-import 'player_chrome.dart';
+import 'player_chrome.dart' hide SizedBox;
 
 abstract final class PlayerTopBarMetrics {
   static const horizontal = 16.0;
@@ -1081,32 +1081,32 @@ class PlayerTopBarContent extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              GestureDetector(
-                key: const ValueKey('player_speed_button'),
-                behavior: HitTestBehavior.opaque,
-                onTap: onSpeedTap,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 6,
-                  ),
-                  child: Text(
-                    _formatRate(context, playbackRate),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      height: 18 / 14,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              const Icon(
-                key: ValueKey('player_more_button'),
-                Icons.more_horiz,
-                color: Colors.white,
-                size: PlayerTopBarMetrics.moreIconSize,
-              ),
+              // GestureDetector(
+              //   key: const ValueKey('player_speed_button'),
+              //   behavior: HitTestBehavior.opaque,
+              //   onTap: onSpeedTap,
+              //   child: Padding(
+              //     padding: const EdgeInsets.symmetric(
+              //       horizontal: 4,
+              //       vertical: 6,
+              //     ),
+              //     child: Text(
+              //       _formatRate(context, playbackRate),
+              //       style: const TextStyle(
+              //         color: Colors.white,
+              //         fontSize: 14,
+              //         height: 18 / 14,
+              //       ),
+              //     ),
+              //   ),
+              // ),
+              // const SizedBox(width: 14),
+              // const Icon(
+              //   key: ValueKey('player_more_button'),
+              //   Icons.more_horiz,
+              //   color: Colors.white,
+              //   size: PlayerTopBarMetrics.moreIconSize,
+              // ),
             ],
           ),
         ),

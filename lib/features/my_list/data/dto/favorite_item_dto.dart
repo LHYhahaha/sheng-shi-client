@@ -3,7 +3,6 @@ import '../../../../core/network/json_field_parser.dart';
 /// 收藏条目远程 DTO。
 class FavoriteItemDto {
   const FavoriteItemDto({
-    required this.favoriteId,
     required this.dramaId,
     required this.title,
     required this.description,
@@ -22,7 +21,6 @@ class FavoriteItemDto {
     required this.updatedAt,
   });
 
-  final String? favoriteId;
   final int dramaId;
   final String? title;
   final String? description;
@@ -44,8 +42,7 @@ class FavoriteItemDto {
     const dtoName = 'FavoriteItemDto';
 
     return FavoriteItemDto(
-      favoriteId: JsonFieldParser.optionalString(json, 'favoriteId'),
-      dramaId: JsonFieldParser.optionalInt(json, 'shortId') ?? 0,
+      dramaId: JsonFieldParser.optionalInt(json, 'dramaId') ?? 0,
       title: JsonFieldParser.optionalString(json, 'title'),
       description:
           JsonFieldParser.optionalString(json, 'description') ??

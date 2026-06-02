@@ -149,6 +149,7 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
                                   setState(() => _rangeStart = value);
                                 },
                                 onEpisodeSelected: widget.onEpisodeSelected,
+                                totalEpisodes: widget.content.episodeTotal,
                               ),
                       ),
                     ],
@@ -457,10 +458,7 @@ class _RecommendationCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
           child: AspectRatio(
             aspectRatio: 109 / 147,
-            child: Image.asset(
-              recommendation.coverAssetPath,
-              fit: BoxFit.cover,
-            ),
+            child: _buildCoverImage(),
           ),
         ),
         const SizedBox(height: 4),
@@ -488,6 +486,40 @@ class _RecommendationCard extends StatelessWidget {
       ],
     );
   }
+
+  Widget _buildCoverImage() {
+    final path = recommendation.coverAssetPath;
+    
+    // 判断是否是网络 URL
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return Image.network(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            color: Colors.grey[800],
+            child: const Center(
+              child: Icon(Icons.image_not_supported, color: Colors.grey),
+            ),
+          );
+        },
+      );
+    }
+    
+    // 本地 asset
+    return Image.asset(
+      path,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          color: Colors.grey[800],
+          child: const Center(
+            child: Icon(Icons.image_not_supported, color: Colors.grey),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _EpisodesPanel extends StatelessWidget {
@@ -497,6 +529,7 @@ class _EpisodesPanel extends StatelessWidget {
     required this.rangeStart,
     required this.onRangeChanged,
     required this.onEpisodeSelected,
+    required this.totalEpisodes,
     super.key,
   });
 
@@ -505,6 +538,23 @@ class _EpisodesPanel extends StatelessWidget {
   final int rangeStart;
   final ValueChanged<int> onRangeChanged;
   final ValueChanged<PlayerEpisode> onEpisodeSelected;
+  final int totalEpisodes;
+
+  /// 生成所有的 episode range tabs
+  List<({int start, int end})> _generateRanges() {
+    if (totalEpisodes <= 0) {
+      return [];
+    }
+
+    final ranges = <({int start, int end})>[];
+    int start = 1;
+    while (start <= totalEpisodes) {
+      final end = (start + 29).clamp(start, totalEpisodes);
+      ranges.add((start: start, end: end));
+      start = end + 1;
+    }
+    return ranges;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -521,6 +571,7 @@ class _EpisodesPanel extends StatelessWidget {
       );
     }
 
+    final ranges = _generateRanges();
     final visibleEpisodes = episodes
         .where((episode) {
           return episode.number >= rangeStart &&
@@ -528,27 +579,17 @@ class _EpisodesPanel extends StatelessWidget {
         })
         .toList(growable: false);
 
-    final maxEpisodeNumber = episodes.isNotEmpty
-        ? episodes.map((e) => e.number).reduce((a, b) => a > b ? a : b)
-        : 0;
-    final showSecondRange = maxEpisodeNumber > 30;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            _RangeButton(
-              label: '1-30',
-              selected: rangeStart == 1,
-              onTap: () => onRangeChanged(1),
-            ),
-            if (showSecondRange) ...[
-              const SizedBox(width: 20),
+            for (int i = 0; i < ranges.length; i++) ...[
+              if (i > 0) const SizedBox(width: 20),
               _RangeButton(
-                label: '31-${(maxEpisodeNumber ~/ 30 + 1) * 30}',
-                selected: rangeStart == 31,
-                onTap: () => onRangeChanged(31),
+                label: '${ranges[i].start}-${ranges[i].end}',
+                selected: rangeStart == ranges[i].start,
+                onTap: () => onRangeChanged(ranges[i].start),
               ),
             ],
           ],

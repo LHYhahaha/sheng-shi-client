@@ -83,6 +83,7 @@ class HomeDramaDto {
     required this.isVipOnly,
     required this.status,
     required this.episodeTotal,
+    required this.tagsName,
   });
 
   final int id;
@@ -95,6 +96,7 @@ class HomeDramaDto {
   final int isVipOnly;
   final int status;
   final int episodeTotal;
+  final List<String> tagsName;
 
   factory HomeDramaDto.fromJson(Map<String, Object?> json) {
     return HomeDramaDto(
@@ -108,6 +110,12 @@ class HomeDramaDto {
       isVipOnly: JsonFieldParser.optionalInt(json, 'is_vip_only') ?? 0,
       status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
       episodeTotal: JsonFieldParser.optionalInt(json, 'episode_total') ?? 0,
+      tagsName: _parseTagsName(json['tags_name']),
     );
+  }
+
+  static List<String> _parseTagsName(Object? value) {
+    if (value is! List) return const <String>[];
+    return value.whereType<String>().toList(growable: false);
   }
 }

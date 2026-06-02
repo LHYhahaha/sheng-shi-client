@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -31,7 +33,10 @@ class AuthModalCoordinator {
   Future<AuthLoginModalResult> showLogin(BuildContext context) {
     return _present(
       context,
-      const AuthLoginModalPayload(intent: AuthLoginIntent.userInitiated),
+      const AuthLoginModalPayload(
+        intent: AuthLoginIntent.userInitiated,
+        triggerSource: AppModalSource.auth,
+      ),
     );
   }
 

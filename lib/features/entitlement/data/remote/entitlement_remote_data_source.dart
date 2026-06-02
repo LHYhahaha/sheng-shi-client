@@ -12,36 +12,43 @@ class EntitlementRemoteDataSource {
 
   final ApiClient _apiClient;
 
-  /// 获取权益状态（调用钱包和会员状态接口）。
-  Future<UserEntitlementStateDto> fetchEntitlements() async {
-    // 并行调用两个接口获取最新的金币和会员状态
-    final walletFuture = _apiClient.get<Map<String, dynamic>>(
-      '/api/payment/wallet',
-      authPolicy: ApiAuthPolicy.required,
-      decoder: (json) => json as Map<String, dynamic>,
-    );
+  /// 获取权益状态（调用统一的权益接口）。
+  /// 
+  /// 可选传入 [dramaId] 来获取该剧的已解锁剧集ID列表。
+  /// 不传入时返回全局权益信息和未绑定剧集的解锁列表。
+  Future<UserEntitlementStateDto> fetchEntitlements({int? dramaId}) async {
+    final queryParams = dramaId != null ? {'dramaId': dramaId} : null;
     
-    final membershipFuture = _apiClient.get<Map<String, dynamic>>(
-      '/api/payment/member/status',
+    final response = await _apiClient.get<Map<String, dynamic>>(
+      '/api/user/entitlements',
+      queryParameters: queryParams,
       authPolicy: ApiAuthPolicy.required,
       decoder: (json) => json as Map<String, dynamic>,
     );
 
-    final results = await Future.wait([walletFuture, membershipFuture]);
-    final walletData = results[0] as Map<String, dynamic>;
-    final membershipData = results[1] as Map<String, dynamic>;
+    // 从统一接口的响应中提取数据
+    final userInfo = response['userInfo'] as Map<String, dynamic>? ?? {};
+    final wallet = response['wallet'] as Map<String, dynamic>? ?? {};
+    final membership = response['membership'] as Map<String, dynamic>? ?? {};
+    final playback = response['playback'] as Map<String, dynamic>? ?? {};
 
-    // 合并两个接口的数据
+    // 转换解锁的剧集编号列表
+    final unlockedEpisodeNos = playback['unlockedEpisodeNos'] as List?;
+    final unlockedEpisodeIds = unlockedEpisodeNos != null
+        ? unlockedEpisodeNos.map((e) => e.toString()).toList()
+        : <String>[];
+
     return UserEntitlementStateDto(
-      isGuest: false,
-      isMember: membershipData['isMember'] as bool? ?? false,
-      membershipExpiresAt: membershipData['vipExpireAt'] != null
-          ? DateTime.tryParse(membershipData['vipExpireAt'] as String)
+      isGuest: userInfo['isGuest'] as bool? ?? true,
+      isMember: membership['isMember'] as bool? ?? false,
+      membershipExpiresAt: membership['membershipExpiresAt'] != null
+          ? DateTime.tryParse(membership['membershipExpiresAt'] as String)
           : null,
-      coinBalance: int.parse(walletData['coin'])  as int? ?? 0,
-      bonusBalance: int.parse(walletData['bonusCoin']) as int? ?? 0,
-      autoUnlockEnabled: walletData['autoUnlockEnabled'] as bool? ?? false,
-      unlockedEpisodeIds: const [],
+      coinBalance: int.parse(wallet['coinBalance'].toString()) as int? ?? 0,
+      bonusBalance: int.parse(wallet['bonusBalance'].toString()) as int? ?? 0,
+      autoUnlockEnabled: playback['autoUnlockEnabled'] as bool? ?? false,
+      unlockedEpisodeIds: unlockedEpisodeIds,
+      pendingOperationId: playback['pendingOperationId'] as String?,
     );
   }
 

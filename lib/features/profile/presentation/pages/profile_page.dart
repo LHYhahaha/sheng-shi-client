@@ -5,14 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
-import '../../../../app/router/app_router.dart';
+import '../../../../app/shell/app_shell.dart';
 import '../../../auth/application/auth_controller.dart';
 import '../../../auth/application/auth_modal_coordinator.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/profile_controller.dart';
-import '../../application/profile_wallet_provider.dart';
 import '../widgets/profile_coins_card.dart';
 import '../widgets/profile_header.dart';
 import '../widgets/profile_membership_card.dart';
@@ -20,9 +19,9 @@ import '../widgets/profile_menu_row.dart';
 
 /// 我的页。
 ///
-/// 页面展示态由 Profile mock 数据和 AuthState 合成：会员/金币等资料仍来自
-/// ProfileController，登录身份、昵称和头像以 AuthState 为准。这样 logout/delete
-/// 后不需要手动同步 ProfileController，也避免多个页面各自维护登录布尔值。
+/// 金币数据来自 EntitlementController（/api/user/entitlements 接口），
+/// 不再单独请求 /api/payment/wallet。
+/// 登录身份、昵称和头像以 AuthState 为准。
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
 
@@ -34,8 +33,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   @override
   void initState() {
     super.initState();
-    developer.log('ProfilePage initState called');
-    // 进入 Profile 页时刷新权益数据，确保会员状态和金币余额是最新的
     _loadEntitlementData();
   }
 
@@ -50,40 +47,37 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final l10n = context.l10n;
     final profileState = ref.watch(profileControllerProvider);
     final authState = ref.watch(authControllerProvider);
-    final walletState = ref.watch(profileWalletProvider);
+    final entitlementState = ref.watch(entitlementControllerProvider);
     final authModalCoordinator = ref.read(authModalCoordinatorProvider);
     final authUser = authState.user;
 
-    // 监听路由变化，每次切换到 Profile 页面时刷新
-    ref.listen(appRouterProvider, (previous, next) {
-      final currentLocation = next.routerDelegate.currentConfiguration.last.matchedLocation;
-      if (currentLocation == RoutePaths.profile) {
-        developer.log('ProfilePage route activated, reloading entitlement data');
+    // 监听 Tab 索引变化，每次切换到 Profile Tab 时刷新权益数据
+    ref.listen(appShellCurrentTabIndexProvider, (previous, current) {
+      if (current == AppShellDestinations.profileIndex && previous != current) {
         _loadEntitlementData();
       }
     });
 
-    developer.log(
-      'ProfilePage build called, authState.isLoggedIn: ${authState.isLoggedIn}, authUser: $authUser',
-    );
-    developer.log(
-      'ProfilePage build called, walletState: coin=${walletState.coin}, isLoading=${walletState.isLoading}',
-    );
 
-    // 这里只做展示层合成，不写回 profileState。Auth 是登录态源头；Profile 是资料
-    // mock 源头。把合成结果回写会让退出登录后的旧昵称/头像残留在资料状态里。
+    // 展示层合成：Auth 是登录态源头，Profile 是资料 mock 源头
+    // 金币数据来自 entitlementState（/api/user/entitlements 接口）
+    final totalCoins = entitlementState.coinBalance + entitlementState.bonusBalance;
     final state = profileState.copyWith(
       isLoggedIn: authState.isLoggedIn,
       userId: authUser?.id ?? profileState.userId,
       showId: authUser?.showId ?? profileState.showId,
       nickname: authUser?.nickname,
-      avatarAssetPath:
-          authUser?.avatarAssetPath ?? profileState.avatarAssetPath,
-      coin: authUser?.coin ?? 0,
+      avatarAssetPath: authUser?.avatarAssetPath ?? profileState.avatarAssetPath,
+      coin: totalCoins,
     );
 
-    // 使用用户信息中的金币数据（如果有的话）
-    final displayCoins = state.coins;
+    void onHeaderTap() {
+      if (entitlementState.isGuest) {
+        authModalCoordinator.showLogin(context);
+      } else {
+        context.push(RoutePaths.account);
+      }
+    }
 
     return Scaffold(
       backgroundColor: AppColors.black,
@@ -94,14 +88,13 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           children: [
             ProfileHeader(
               state: state,
-              onLoginTap: () => authModalCoordinator.showLogin(context),
+              onLoginTap: () {
+                if (entitlementState.isGuest) {
+                  authModalCoordinator.showLogin(context);
+                }
+              },
               onAccountTap: () => context.push(RoutePaths.account),
-            ),
-
-
-            ElevatedButton(
-              onPressed: () => authModalCoordinator.showLogin(context),
-              child: Text("测四"),
+              onGuestTap: onHeaderTap,
             ),
             const SizedBox(height: 21),
             ProfileMembershipCard(
@@ -110,7 +103,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             ),
             const SizedBox(height: 12),
             ProfileCoinsCard(
-              coins: displayCoins,
+              coins: state.coins,
               onTopUpTap: () => context.push(RoutePaths.store),
               onWalletTap: () => context.push(RoutePaths.wallet),
             ),
@@ -122,6 +115,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             ),
             ProfileMenuRow(
               title: l10n.profileSettings,
+              iconAssetPath: 'assets/images/profile/setting.png',
               onTap: () => context.push(RoutePaths.settings),
             ),
           ],

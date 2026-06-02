@@ -58,7 +58,7 @@ class MyListState {
   ///
   /// 两个 tab 都支持编辑。切 tab、reload、删除后必须清空，避免选择态命中
   /// 已不存在的条目。
-  final Set<String> selectedIds;
+  final Set<int> selectedIds;
 
   /// 当前列表是否正在加载。
   ///
@@ -73,7 +73,7 @@ class MyListState {
   /// 播放列表当前打开滑动删除动作的 item id。
   ///
   /// 只允许一个打开项。两个 tab 都支持滑动删除，切 tab/删除/reload/进入编辑都要清空。
-  final String? openPlayItemId;
+  final int? openPlayItemId;
 
   bool get isEmpty => !isLoading && error == null && items.isEmpty;
 
@@ -85,11 +85,11 @@ class MyListState {
     MyListTab? selectedTab,
     bool? isCollectionEditing,
     List<MyListItem>? items,
-    Set<String>? selectedIds,
+    Set<int>? selectedIds,
     bool? isLoading,
     Object? error,
     bool clearError = false,
-    String? openPlayItemId,
+    int? openPlayItemId,
     bool clearOpenPlayItemId = false,
   }) {
     return MyListState(
@@ -196,16 +196,16 @@ class MyListController extends Notifier<MyListState> {
     );
   }
 
-  void toggleSelection(String id) {
+  void toggleSelection(int dramaId) {
     if (!state.isCollectionEditing) {
       return;
     }
 
     final selectedIds = {...state.selectedIds};
-    if (!selectedIds.add(id)) {
-      selectedIds.remove(id);
+    if (!selectedIds.add(dramaId)) {
+      selectedIds.remove(dramaId);
     }
-    state = state.copyWith(selectedIds: Set<String>.unmodifiable(selectedIds));
+    state = state.copyWith(selectedIds: Set<int>.unmodifiable(selectedIds));
   }
 
   Future<void> deleteSelected() async {
@@ -213,13 +213,12 @@ class MyListController extends Notifier<MyListState> {
       return;
     }
 
-    final selectedIds = state.selectedIds;
-    final isCollection = state.selectedTab == MyListTab.collection;
-    
+    final selectedDramaIds = state.selectedIds;
+
     // 乐观更新：先本地删除
     state = state.copyWith(
       items: List<MyListItem>.unmodifiable(
-        state.items.where((item) => !selectedIds.contains(item.id)),
+        state.items.where((item) => !selectedDramaIds.contains(item.dramaId)),
       ),
       selectedIds: const {},
       isCollectionEditing: false,
@@ -229,24 +228,14 @@ class MyListController extends Notifier<MyListState> {
     // 调用远程接口
     try {
       final repository = ref.read(myListRepositoryProvider);
+      final isCollection = state.selectedTab == MyListTab.collection;
+      
       if (isCollection) {
-        // 收藏列表：提取 dramaId（从 id 中解析）
-        final dramaIds = selectedIds
-            .map((id) => _extractDramaId(id))
-            .whereType<int>()
-            .toList();
-        if (dramaIds.isNotEmpty) {
-          await repository.deleteFavorites(dramaIds: dramaIds);
-        }
+        // 收藏列表：使用 dramaId 删除
+        await repository.deleteFavorites(dramaIds: selectedDramaIds.toList());
       } else {
-        // 播放历史：提取 historyId（从 id 中解析）
-        final historyIds = selectedIds
-            .map((id) => _extractHistoryId(id))
-            .whereType<int>()
-            .toList();
-        if (historyIds.isNotEmpty) {
-          await repository.deletePlayHistories(historyIds: historyIds);
-        }
+        // 播放历史：使用 dramaId 删除
+        await repository.deletePlayHistories(historyIds: selectedDramaIds.toList());
       }
     } catch (error) {
       // 删除失败时重新加载列表
@@ -254,16 +243,13 @@ class MyListController extends Notifier<MyListState> {
     }
   }
 
-  Future<void> deleteItem(String id) async {
-
-    print("????");
-
+  Future<void> deleteItem(int dramaId) async {
     state = state.copyWith(
       items: List<MyListItem>.unmodifiable(
-        state.items.where((item) => item.id != id),
+        state.items.where((item) => item.dramaId != dramaId),
       ),
-      selectedIds: Set<String>.unmodifiable(
-        state.selectedIds.where((selectedId) => selectedId != id),
+      selectedIds: Set<int>.unmodifiable(
+        state.selectedIds.where((selectedId) => selectedId != dramaId),
       ),
       clearOpenPlayItemId: true,
     );
@@ -272,19 +258,13 @@ class MyListController extends Notifier<MyListState> {
     try {
       final repository = ref.read(myListRepositoryProvider);
       final isCollection = state.selectedTab == MyListTab.collection;
-      
+
       if (isCollection) {
-        // 收藏列表：提取 dramaId
-        final dramaId = _extractDramaId(id);
-        if (dramaId != null) {
-          await repository.deleteFavorite(dramaId: dramaId);
-        }
+        // 收藏列表：使用 dramaId 删除
+        await repository.deleteFavorite(dramaId: dramaId);
       } else {
-        // 播放历史：提取 historyId
-        final historyId = _extractHistoryId(id);
-        if (historyId != null) {
-          await repository.deletePlayHistory(historyId: historyId);
-        }
+        // 播放历史：使用 dramaId 删除
+        await repository.deletePlayHistory(historyId: dramaId);
       }
     } catch (error) {
       // 删除失败时重新加载列表
@@ -292,55 +272,18 @@ class MyListController extends Notifier<MyListState> {
     }
   }
 
-  /// 从 id 中提取 dramaId（收藏列表）
-  /// 
-  /// 收藏 id 格式示例：'collection-raja-iblis'
-  /// 实际接入时需要根据真实 id 格式调整解析逻辑
-  int? _extractDramaId(String id) {
-    // 从当前列表中找到对应的 item，获取其 dramaId
-    try {
-      final item = state.items.firstWhere((item) => item.id == id);
-      return item.dramaId;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  /// 从 id 中提取 historyId（播放历史）
-  /// 
-  /// 播放历史 id 格式示例：'history:1:1'
-  /// 实际接入时需要根据真实 id 格式调整解析逻辑
-  int? _extractHistoryId(String id) {
-    // 从当前列表中找到对应的 item，获取其 historyId
-    try {
-      final item = state.items.firstWhere((item) => item.id == id);
-      return item.historyId ?? _generateHistoryId(item);
-    } catch (e) {
-      return null;
-    }
-  }
-
-  /// 如果服务端未返回 historyId，使用 dramaId + episodeId 生成
-  int? _generateHistoryId(MyListItem item) {
-    if (item.dramaId != null && item.episodeId != null) {
-      // 简单的组合方式，实际可能需要调整
-      return item.dramaId! * 10000 + item.episodeId!;
-    }
-    return null;
-  }
-
-  void openPlayItem(String id) {
+  void openPlayItem(int dramaId) {
     if (state.isCollectionEditing) {
       return;
     }
 
     // 只记录一个打开项，配合 SlidableAutoCloseBehavior 保证两个 tab 都不会同时露出
     // 多个删除动作。编辑态下不允许打开，避免批量选择和单行删除混用。
-    state = state.copyWith(openPlayItemId: id);
+    state = state.copyWith(openPlayItemId: dramaId);
   }
 
-  void closeOpenPlayItem(String id) {
-    if (state.openPlayItemId != id) {
+  void closeOpenPlayItem(int dramaId) {
+    if (state.openPlayItemId != dramaId) {
       return;
     }
 
