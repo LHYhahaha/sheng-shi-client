@@ -13,17 +13,17 @@ class EntitlementRemoteDataSource {
   final ApiClient _apiClient;
 
   /// 获取权益状态（调用统一的权益接口）。
-  /// 
+  ///
   /// 可选传入 [dramaId] 来获取该剧的已解锁剧集ID列表。
   /// 不传入时返回全局权益信息和未绑定剧集的解锁列表。
   Future<UserEntitlementStateDto> fetchEntitlements({int? dramaId}) async {
     final queryParams = dramaId != null ? {'dramaId': dramaId} : null;
-    
+
     final response = await _apiClient.get<Map<String, dynamic>>(
       '/api/user/entitlements',
       queryParameters: queryParams,
       authPolicy: ApiAuthPolicy.required,
-      decoder: (json) => json as Map<String, dynamic>,
+      decoder: (json) => Map<String, dynamic>.from(json as Map),
     );
 
     // 从统一接口的响应中提取数据
@@ -44,8 +44,8 @@ class EntitlementRemoteDataSource {
       membershipExpiresAt: membership['membershipExpiresAt'] != null
           ? DateTime.tryParse(membership['membershipExpiresAt'] as String)
           : null,
-      coinBalance: int.parse(wallet['coinBalance'].toString()) as int? ?? 0,
-      bonusBalance: int.parse(wallet['bonusBalance'].toString()) as int? ?? 0,
+      coinBalance: _intValue(wallet['coinBalance']),
+      bonusBalance: _intValue(wallet['bonusBalance']),
       autoUnlockEnabled: playback['autoUnlockEnabled'] as bool? ?? false,
       unlockedEpisodeIds: unlockedEpisodeIds,
       pendingOperationId: playback['pendingOperationId'] as String?,
@@ -60,7 +60,7 @@ class EntitlementRemoteDataSource {
       authPolicy: ApiAuthPolicy.required,
       decoder: (json) => json as Map<String, dynamic>,
     );
-    
+
     // 设置成功后，重新获取权益状态以同步最新的自动解锁状态
     return fetchEntitlements();
   }
@@ -75,4 +75,17 @@ class EntitlementRemoteDataSource {
       decoder: UnlockEpisodeResponseDto.fromJson,
     );
   }
+}
+
+int _intValue(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  if (value is String) {
+    return int.tryParse(value) ?? 0;
+  }
+  return 0;
 }

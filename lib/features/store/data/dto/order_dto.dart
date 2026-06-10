@@ -28,7 +28,7 @@ class OrderDto {
         'productId',
         dtoName: dtoName,
       ),
-      status: JsonFieldParser.parseOrderStatus(map, dtoName: dtoName),
+      status: JsonFieldParser.requireString(map, 'status', dtoName: dtoName),
       amountMicros: JsonFieldParser.requireInt(
         map,
         'amountMicros',

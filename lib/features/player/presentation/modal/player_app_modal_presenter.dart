@@ -7,13 +7,16 @@ import '../../../../core/modal/app_modal_request.dart';
 import '../../../../core/modal/app_modal_result.dart';
 import '../../../../core/modal/app_modal_root_sheet.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
+import '../../domain/player_feed.dart';
+import '../../application/player_feed_controller.dart';
+import '../../application/player_recharge_unlock_controller.dart';
 import '../widgets/player_action_sheets.dart';
 import '../widgets/player_payment_method_modal_layer.dart';
 import '../widgets/player_recharge_unlock_sheet.dart';
 import 'player_modal_channels.dart';
 import 'player_modal_payloads.dart';
 
-/// Player 解锁/充值弹窗 presenter：通过 root bottom sheet 展示，避免 tab 遮挡。
+/// Player 瑙ｉ攣/鍏呭€煎脊绐?presenter锛氶€氳繃 root bottom sheet 灞曠ず锛岄伩鍏?tab 閬尅銆?
 class PlayerAppModalPresenter implements AppModalPresenter {
   const PlayerAppModalPresenter();
 
@@ -61,13 +64,74 @@ class PlayerAppModalPresenter implements AppModalPresenter {
     final modalContext = resolveAppModalPresentationContext(context);
     final container = ProviderScope.containerOf(modalContext, listen: false);
     final balance = container.read(entitlementControllerProvider).coinBalance;
+    final sessionKey = payload.sessionKey;
+    final itemId = payload.itemId;
+    final price = payload.price;
+
+    // 浠?feed controller 鑾峰彇瀹屾暣鐨?item 淇℃伅
+    final feedState = container.read(playerFeedControllerProvider(sessionKey));
+    PlayerFeedItem? item;
+    for (final candidate in feedState.items) {
+      if (candidate.id == itemId) {
+        item = candidate;
+        break;
+      }
+    }
+
+    if (item == null) {
+      debugPrint('[_presentCoinUnlock] 鏈壘鍒?item: $itemId');
+      return const CoinUnlockModalResult.cancelled();
+    }
+
     final unlocked = await showAppModalRootBottomSheet<bool>(
       context: modalContext,
       builder: (sheetContext) {
         return PlayerCoinUnlockSheet(
-          price: payload.price,
+          price: price,
           balance: balance,
-          onConfirm: () => Navigator.of(sheetContext).pop(true),
+          onConfirm: () async {
+            // 璋冪敤瑙ｉ攣 API
+            final navigator = Navigator.of(sheetContext);
+            try {
+              debugPrint(
+                '[_presentCoinUnlock] 寮€濮嬭皟鐢ㄨВ閿?API锛宨temId=$itemId, price=$price',
+              );
+              final dramaId = int.tryParse(item!.content.id) ?? 0;
+              final episodeNo = item.episode.number;
+              final shortTitle = item.content.playTitle.isNotEmpty
+                  ? item.content.playTitle
+                  : item.content.title;
+              final cover = item.content.posterAssetPath;
+              final episodeId = int.tryParse(item.episode.id);
+
+              final controller = container.read(
+                playerRechargeUnlockControllerProvider(sessionKey).notifier,
+              );
+              await controller.unlockWithCoin(
+                autoUnlockNext: false,
+                coin: price,
+                dramaId: dramaId,
+                episodeNo: episodeNo,
+                shortTitle: shortTitle,
+                cover: cover,
+                episodeId: episodeId,
+              );
+
+              final unlockState = container.read(
+                playerRechargeUnlockControllerProvider(sessionKey),
+              );
+              if (unlockState.status == PlayerRechargeUnlockStatus.success) {
+                debugPrint('[_presentCoinUnlock] unlock succeeded');
+                navigator.pop(true);
+              } else {
+                debugPrint('[_presentCoinUnlock] 瑙ｉ攣澶辫触: success=false');
+                navigator.pop(false);
+              }
+            } catch (e, st) {
+              debugPrint('[_presentCoinUnlock] 瑙ｉ攣寮傚父: $e\n$st');
+              navigator.pop(false);
+            }
+          },
         );
       },
     );
@@ -96,7 +160,14 @@ class PlayerAppModalPresenter implements AppModalPresenter {
       context: modalContext,
       isScrollControlled: true,
       builder: (sheetContext) {
-        return PlayerRechargeUnlockSheet(sessionKey: payload.sessionKey);
+        return PlayerRechargeUnlockSheet(
+          sessionKey: payload.sessionKey,
+          dramaId: payload.dramaId,
+          episodeNo: payload.episodeNo,
+          shortTitle: payload.shortTitle,
+          cover: payload.cover,
+          episodeId: payload.episodeId,
+        );
       },
     );
 

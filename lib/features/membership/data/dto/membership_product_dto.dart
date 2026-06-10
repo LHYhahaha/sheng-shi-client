@@ -1,5 +1,11 @@
 import '../../../../core/network/json_field_parser.dart';
 
+/// 会员商品 DTO
+///
+/// 后端返回字段说明：
+/// - productName: 可能为空字符串
+/// - payChannel: 可能是字符串枚举（如 "PAY_CHANNEL_GOOGLE"）或 int
+/// - periodType: 可能是字符串枚举（如 "MEMBER_PERIOD_TYPE_MONTH"）或 int
 class MembershipProductDto {
   const MembershipProductDto({
     required this.productId,
@@ -14,116 +20,91 @@ class MembershipProductDto {
     required this.sort,
     this.promotionText,
     this.promotionExpireSeconds,
+    this.iapPriceText,
+    this.iapRegularPriceText,
+    this.iapHasPromo,
+    this.iapPromoPeriod,
+    this.iapRegularPeriod,
     this.createdAt,
     this.updatedAt,
   });
 
-  /// 商品 ID
   final int productId;
-
-  /// 商品名称
   final String productName;
-
-  /// 渠道商品 ID（对应 platformProductId）
   final String channelProductId;
-
-  /// 展示价格
   final String priceText;
-
-  /// 原价展示
   final String originalPriceText;
-
-  /// 会员周期类型（0=周/1=月/2=年）
   final int periodType;
-
-  /// 周期值
   final int periodValue;
-
-  /// 支付渠道
   final int payChannel;
-
-  /// 商品状态
   final int status;
-
-  /// 排序
   final int sort;
-
-  /// 促销文案
   final String? promotionText;
-
-  /// 促销倒计时秒数
   final int? promotionExpireSeconds;
-
-  /// 创建时间
+  final String? iapPriceText;
+  final String? iapRegularPriceText;
+  final bool? iapHasPromo;
+  final String? iapPromoPeriod;
+  final String? iapRegularPeriod;
   final String? createdAt;
-
-  /// 更新时间
   final String? updatedAt;
 
+  /// 完全容错的 JSON 解析
+  ///
+  /// 支持以下情况：
+  /// - 字段为 null
+  /// - 字段为空字符串
+  /// - 数字字段可能是 int 或 string
+  /// - 枚举字段可能是 string（如 "MEMBER_PERIOD_TYPE_MONTH"）
   factory MembershipProductDto.fromJson(Object? json) {
     final map = JsonFieldParser.requireMap(
       json,
       dtoName: 'MembershipProductDto',
     );
-    const dtoName = 'MembershipProductDto';
+
+    // 辅助方法：解析数字字段（支持 int/num/string）
+    int parseInt(Object? value, {int fallback = 0}) {
+      if (value == null) return fallback;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) {
+        // 尝试解析数字字符串
+        final parsed = int.tryParse(value);
+        if (parsed != null) return parsed;
+        // 是枚举字符串，返回默认值
+        // TODO: 根据后端实际枚举值映射到 int
+        return fallback;
+      }
+      return fallback;
+    }
+
+    // 辅助方法：解析字符串字段（容错）
+    String parseString(Object? value, {String fallback = ''}) {
+      if (value == null) return fallback;
+      if (value is String) return value; // 允许空字符串
+      return fallback;
+    }
+
     return MembershipProductDto(
-      productId: JsonFieldParser.requireInt(
-        map,
-        'productId',
-        dtoName: dtoName,
-      ),
-      productName: JsonFieldParser.requireString(
-        map,
-        'productName',
-        dtoName: dtoName,
-      ),
-      channelProductId: JsonFieldParser.requireString(
-        map,
-        'channelProductId',
-        dtoName: dtoName,
-      ),
-      priceText: JsonFieldParser.requireString(
-        map,
-        'priceText',
-        dtoName: dtoName,
-      ),
-      originalPriceText: JsonFieldParser.requireString(
-        map,
-        'originalPriceText',
-        dtoName: dtoName,
-      ),
-      periodType: JsonFieldParser.requireInt(
-        map,
-        'periodType',
-        dtoName: dtoName,
-      ),
-      periodValue: JsonFieldParser.requireInt(
-        map,
-        'periodValue',
-        dtoName: dtoName,
-      ),
-      payChannel: JsonFieldParser.requireInt(
-        map,
-        'payChannel',
-        dtoName: dtoName,
-      ),
-      status: JsonFieldParser.requireInt(
-        map,
-        'status',
-        dtoName: dtoName,
-      ),
-      sort: JsonFieldParser.requireInt(
-        map,
-        'sort',
-        dtoName: dtoName,
-      ),
-      promotionText: JsonFieldParser.optionalString(map, 'promotionText'),
-      promotionExpireSeconds: JsonFieldParser.optionalInt(
-        map,
-        'promotionExpireSeconds',
-      ),
-      createdAt: JsonFieldParser.optionalString(map, 'createdAt'),
-      updatedAt: JsonFieldParser.optionalString(map, 'updatedAt'),
+      productId: parseInt(map['productId']),
+      productName: parseString(map['productName'], fallback: 'Membership'),
+      channelProductId: parseString(map['channelProductId']),
+      priceText: parseString(map['priceText']),
+      originalPriceText: parseString(map['originalPriceText']),
+      periodType: parseInt(map['periodType']),
+      periodValue: parseInt(map['periodValue']),
+      payChannel: parseInt(map['payChannel']),
+      status: parseInt(map['status']),
+      sort: parseInt(map['sort']),
+      promotionText: parseString(map['promotionText']),
+      promotionExpireSeconds: parseInt(map['promotionExpireSeconds']),
+      iapPriceText: null, // IAP 字段不从后端解析，由 IAP 查询填充
+      iapRegularPriceText: null,
+      iapHasPromo: null,
+      iapPromoPeriod: null,
+      iapRegularPeriod: null,
+      createdAt: parseString(map['createdAt']),
+      updatedAt: parseString(map['updatedAt']),
     );
   }
 }

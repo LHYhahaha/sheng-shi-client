@@ -15,10 +15,7 @@ class RemoteStoreRepository implements StoreRepository {
 
   @override
   Future<StoreRechargeData> fetchRechargeData() async {
-    final dto = await _remoteDataSource.listRechargeProducts(
-      platform: 'android',
-      locale: 'en',
-    );
+    final dto = await _remoteDataSource.fetchRechargePage();
     return _mapper.mapRechargeData(dto);
   }
 }

@@ -28,7 +28,7 @@ abstract final class MembershipLayout {
   static const planCardGroupWidth = planCardWidth * 3 + planCardGap * 2;
 
   static const navButtonSize = 44.0;
-  static const navButtonLeft = 16.0;
+  static const navButtonLeft = 10.0;
 
   static const benefitsTitlePaddingTop = 24.0;
   static const benefitsTitleLineWidth = 52.0;

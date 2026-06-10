@@ -55,8 +55,8 @@ class MembershipAppModalPresenter implements AppModalPresenter {
               return MembershipConfirmationSheet(
                 plan: plan,
                 status: sheetState.purchaseStatus,
-                onConfirm: sheetController.confirmMockPurchase,
-                onCancel: sheetController.cancelMockPurchase,
+                onConfirm: sheetController.confirmPurchase,
+                onCancel: sheetController.cancelPurchase,
                 onClose: () {
                   Navigator.of(
                     sheetContext,

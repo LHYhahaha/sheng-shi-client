@@ -13,7 +13,6 @@ import '../../../../core/modal/app_modal_service.dart';
 import '../../../../core/modal/app_modal_source.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
-import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/player_feed_controller.dart';
 import '../../application/player_feed_engine.dart';
 import '../../application/player_feed_engine_access_flow.dart';
@@ -25,7 +24,6 @@ import '../../application/player_unlock_modal_coordinator.dart';
 import '../../application/player_rebuild_diagnostics.dart';
 import '../../application/player_ui_controller.dart';
 import '../../application/player_viewport_controller.dart';
-import '../../application/watch_progress_provider.dart';
 import '../../data/player_content_repository_provider.dart';
 import '../../data/player_remote_data_source_provider.dart';
 import '../../domain/player_access_presentation.dart';
@@ -37,6 +35,8 @@ import '../widgets/player_action_sheets.dart';
 import '../widgets/player_detail_sheet.dart';
 import '../widgets/player_feed_page_shell.dart';
 import '../widgets/player_playback_layer.dart';
+import '../widgets/player_subtitle_overlay.dart';
+import '../widgets/player_subtitle_sheet.dart';
 
 /// 播放器 UI 宿主：纵向 [PageView] + 顶层单例 Video surface + sheet。
 ///
@@ -759,9 +759,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   unawaited(_goBackFromPlayer());
                 },
                 onSpeedTap: _showSpeedSheet,
+                onSubtitleTap: _showSubtitleSheet,
               ),
             ),
           ),
+        // 字幕叠加层
+        PlayerSubtitleOverlay(sessionKey: _sessionKey),
       ],
     );
   }
@@ -996,6 +999,38 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _retryPlaybackForItem(PlayerFeedItem item) async {
+    // 重试前重新获取历史播放进度，因为 _pendingResumeProgress
+    // 在第一次 playItem 时已经被消费并清空（第 737 行）
+    if (widget.feedMode == PlayerFeedMode.singleDrama && widget.dramaId != null) {
+      try {
+        final dramaId = int.tryParse(widget.dramaId!);
+        if (dramaId != null) {
+          final dataSource = ref.read(playerRemoteDataSourceProvider);
+          final watchProgress = await dataSource.fetchWatchProgress(
+            dramaId: dramaId,
+          );
+          if (watchProgress != null && mounted) {
+            // 重新构建与 PlayerFeedItem 一致的 id 格式：'single:{content.id}:{episode.id}'
+            final contentId = widget.dramaId!;
+            final episodeId = watchProgress.episodeId.toString();
+            _resumeProgress = PlaybackProgress(
+              itemId: 'single:$contentId:$episodeId',
+              position: Duration(seconds: watchProgress.watchSecond),
+              duration: Duration(seconds: watchProgress.durationSecond),
+              updatedAt: DateTime.now(),
+            );
+            _playbackController.setPendingResumeProgress(_resumeProgress);
+            developer.log(
+              '_retryPlaybackForItem: 重新设置恢复进度 - '
+              'position=${_resumeProgress!.position.inSeconds}s',
+            );
+          }
+        }
+      } catch (e) {
+        developer.log('_retryPlaybackForItem: 获取历史进度失败 - $e');
+      }
+    }
+
     final engine = _feedEngine;
     final intent = await engine.retryPlayback(item);
     if (!mounted) {
@@ -1171,6 +1206,25 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             );
           },
         );
+      },
+    );
+    _isModalOpen = false;
+    if (mounted) {
+      _syncAutoImmersiveBlockers();
+    }
+  }
+
+  Future<void> _showSubtitleSheet() async {
+    _isModalOpen = true;
+    _syncAutoImmersiveBlockers();
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.7),
+      isDismissible: true,
+      enableDrag: true,
+      builder: (context) {
+        return PlayerSubtitleSheet(sessionKey: _sessionKey);
       },
     );
     _isModalOpen = false;

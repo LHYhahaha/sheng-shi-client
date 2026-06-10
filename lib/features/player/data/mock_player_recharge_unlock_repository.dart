@@ -1,3 +1,4 @@
+import '../data/dto/player_episode_unlock_dto.dart';
 import '../domain/player_recharge_unlock_offer.dart';
 import '../domain/player_recharge_unlock_repository.dart';
 
@@ -84,6 +85,32 @@ class MockPlayerRechargeUnlockRepository
       ],
       tips:
           'Coins are used to unlock paid episodes.\nVIP membership unlocks eligible dramas during the active period.',
+    );
+  }
+
+  @override
+  Future<PlayerEpisodeUnlockDto> unlockEpisodeWithCoin({
+    required bool autoUnlockNext,
+    required int coin,
+    required int dramaId,
+    required int episodeNo,
+    required String shortTitle,
+    String? cover,
+    int? episodeId,
+  }) async {
+    // Mock 延迟
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    // Mock 成功返回
+    return PlayerEpisodeUnlockDto(
+      autoUnlock: autoUnlockNext,
+      bonusCoin: 0,
+      coin: 1000, // 假设用户当前有1000金币
+      costCoin: coin,
+      dramaId: dramaId,
+      episodeId: episodeId ?? 0,
+      success: true,
+      userId: 12345,
     );
   }
 }

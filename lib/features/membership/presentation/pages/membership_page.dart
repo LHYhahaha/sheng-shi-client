@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/modal/app_modal_result.dart';
 import '../../../../core/modal/app_modal_provider.dart';
 import '../../../../core/modal/app_modal_service.dart';
 import '../../../../core/modal/app_modal_source.dart';
@@ -13,6 +14,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../application/membership_controller.dart';
 import '../../application/membership_modal_coordinator.dart';
 import '../../domain/membership_plan.dart';
+import '../../../../core/utils/period_iso_parser.dart';
 import '../membership_layout.dart';
 import '../widgets/membership_benefits_panel.dart';
 import '../widgets/membership_plan_card.dart';
@@ -50,6 +52,24 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
     final topInset = MediaQuery.paddingOf(context).top;
 
     ref.watch(membershipModalCoordinatorProvider);
+
+    // 监听购买状态变化，显示成功/失败弹窗
+    ref.listen(
+      membershipControllerProvider.select((state) => state.purchaseStatus),
+      (previous, next) {
+        if (previous == next) return;
+
+        if (next == MembershipPurchaseStatus.success) {
+          _modalService.dismissForSource(
+            AppModalSource.membership,
+            result: const MembershipPurchaseModalResult.completed(),
+          );
+          if (mounted) {
+            _goBack();
+          }
+        }
+      },
+    );
 
     ref.listen(
       membershipControllerProvider.select((state) => state.confirmationPlan),
@@ -96,13 +116,13 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
               ),
             Positioned(
               top: topInset,
-              left: MembershipLayout.navButtonLeft,
+              left: 0,
               child: SizedBox(
                 width: MembershipLayout.navButtonSize,
                 height: MembershipLayout.navButtonSize,
                 child: IconButton(
                   onPressed: _goBack,
-                  icon: const Icon(Icons.chevron_left_rounded, size: 22),
+                  icon: const Icon(Icons.chevron_left_rounded, size: 36),
                   color: AppColors.textPrimary,
                   padding: EdgeInsets.zero,
                 ),
@@ -183,7 +203,40 @@ class _MembershipBody extends StatelessWidget {
               selectedPlanId: state.selectedPlanId,
               onPlanTap: controller.selectPlanAndConfirm,
             ),
-            SizedBox(
+            // 促销文案（根据语言动态组装）
+            const SizedBox(height: 8),
+            Builder(
+              builder: (context) {
+                final locale = Localizations.localeOf(context);
+                final plan = selectedPlan;
+                // 只有当 hasPromo 为 true 时才显示促销文案
+                final promoText = (plan != null && plan.hasPromo)
+                    ? PeriodIsoParser.buildPromoDescription(
+                        promoPrice: plan.promotionPriceLabel,
+                        regularPrice: plan.regularPriceLabel,
+                        promoPeriodIso: plan.promoPeriodIso,
+                        regularPeriodIso: plan.regularPeriodIso,
+                        languageCode: locale.languageCode,
+                      )
+                    : null;
+                if (promoText == null) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: MembershipLayout.horizontalPadding,
+                  ),
+                  child: Text(
+                    promoText,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF767676).withValues(alpha: 0.9),
+                      fontSize: 12,
+                      height: 1.5,
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(
               height:
                   MembershipLayout.planDescriptionTop -
                   MembershipLayout.planCardsTop -
@@ -216,7 +269,7 @@ class _MembershipBody extends StatelessWidget {
                   MembershipLayout.planDescriptionTop -
                   18,
             ),
-            MembershipBenefitsPanel(benefits: state.benefits, tips: state.tips),
+            MembershipBenefitsPanel(),
           ],
         ),
       ),
@@ -253,6 +306,7 @@ class _MembershipPlanCardsRow extends StatelessWidget {
                 if (index > 0)
                   const SizedBox(width: MembershipLayout.planCardGap),
                 MembershipPlanCard(
+                  key: MembershipPlanCard.planKey(plans[index].id),
                   plan: plans[index],
                   selected: selectedPlanId == plans[index].id,
                   onTap: () => onPlanTap(plans[index].id),

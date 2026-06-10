@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -104,8 +106,19 @@ class MediaKitPlayerSession implements PlayerPlaybackSession {
   Stream<String> get errorStream => player.stream.error;
 
   @override
-  Future<void> open(String source, {bool play = true}) {
-    return player.open(Media(source), play: play);
+  Future<void> open(String source, {bool play = true}) async {
+    developer.log('MediaKitPlayerSession: 开始打开视频 - source=$source, play=$play');
+    try {
+      final media = Media(source);
+      developer.log('MediaKitPlayerSession: Media 对象已创建，${media.end}');
+      await player.open(media, play: play);
+      developer.log('MediaKitPlayerSession: 视频打开成功 - source=$source');
+    } catch (e, st) {
+      developer.log(
+        'MediaKitPlayerSession: 视频打开失败 - source=$source, error=$e\n$st',
+      );
+      rethrow;
+    }
   }
 
   @override

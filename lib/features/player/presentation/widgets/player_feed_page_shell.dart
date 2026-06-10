@@ -170,7 +170,12 @@ class PlayerFeedPageShell extends ConsumerWidget {
               : () {},
           showUnlockButton: isLockedSettledPage,
           unlockLabel: lockedActionLabel,
-          onUnlockTap: isLockedSettledPage ? onUnlockTap : onOpenMembership,
+          onUnlockTap: isLockedSettledPage
+              ? (accessPresentation ==
+                      PlayerAccessPresentationState.lockedMembership
+                  ? onOpenMembership
+                  : onUnlockTap)
+              : () {},
           forYouLayout: forYouLayout,
           isLiked: likeState.isLiked,
           isLikeLoading: likeState.isLoading,

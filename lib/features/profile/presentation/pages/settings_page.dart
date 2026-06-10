@@ -23,7 +23,7 @@ class SettingsPage extends StatelessWidget {
             const SizedBox(height: 12),
             _SettingsRow(
               key: const ValueKey('settings_account_cancellation_row'),
-              title: l10n.settingsAccountCancellation,
+              title: l10n.settingsDeleteAccount,
               onTap: () => context.push(RoutePaths.accountCancellation),
             ),
             _SettingsRow(

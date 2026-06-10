@@ -55,8 +55,8 @@ class StoreAppModalPresenter implements AppModalPresenter {
               return StoreConfirmationSheet(
                 package: package,
                 status: sheetState.purchaseStatus,
-                onConfirm: sheetController.confirmMockPurchase,
-                onCancel: sheetController.cancelMockPurchase,
+                onConfirm: sheetController.confirmPurchase,
+                onCancel: sheetController.cancelPurchase,
                 onClose: () {
                   Navigator.of(
                     sheetContext,
@@ -70,6 +70,7 @@ class StoreAppModalPresenter implements AppModalPresenter {
     );
     return switch (status) {
       StorePurchaseStatus.success => const StorePurchaseModalResult.completed(),
+      StorePurchaseStatus.failed => const StorePurchaseModalResult.cancelled(),
       StorePurchaseStatus.cancelled =>
         const StorePurchaseModalResult.cancelled(),
       null =>

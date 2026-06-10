@@ -15,7 +15,7 @@ import '../../domain/player_performance_policy.dart';
 import '../../application/player_rebuild_diagnostics.dart';
 import '../../application/player_viewport_controller.dart';
 import '../../domain/player_content.dart';
-import 'player_chrome.dart' hide SizedBox;
+import 'player_chrome.dart';
 
 abstract final class PlayerTopBarMetrics {
   static const horizontal = 16.0;
@@ -432,15 +432,22 @@ class ActivePlaybackSurfaceOverlayState
       return const SizedBox.shrink();
     }
 
+    // 修复：即使首帧未到达，也要让 Video widget 可见（opacity > 0），
+    // 这样原生 VideoOutput 才会创建，widthStream 才能收到事件。
+    // 否则会形成死循环：首帧未到 -> Video 隐藏 -> 原生 surface 不创建 -> 首帧永远到不了
     final showVideo =
         canShowVideoSurface &&
-        (snapshot.hasFirstFrame || showVideoBeforeFirstFrame);
+        (snapshot.hasFirstFrame || showVideoBeforeFirstFrame || snapshot.status == PlayerPlaybackStatus.playing || snapshot.status == PlayerPlaybackStatus.opening);
     final dimDuringDrag =
         widget.isViewportDragging &&
         widget.policy.allowVideoSurfaceOpacityAnimationDuringDrag;
     final surfaceOpacity = showVideo
         ? (dimDuringDrag ? widget.policy.videoSurfaceDimOpacityDuringDrag : 1.0)
         : 0.0;
+    
+    // 调试：打印Video Surface的渲染条件（正式版可移除）
+    // developer.log(...);
+
     final mediaQuery = MediaQuery.of(context);
     final bottomFrameHeight = widget.forYouLayout
         ? mediaQuery.padding.bottom
@@ -971,6 +978,7 @@ class PlayerTopBar extends StatelessWidget {
     this.overlayOpacityListenable,
     required this.onBackTap,
     required this.onSpeedTap,
+    required this.onSubtitleTap,
   });
 
   final int episodeNumber;
@@ -979,6 +987,7 @@ class PlayerTopBar extends StatelessWidget {
   final ValueListenable<double>? overlayOpacityListenable;
   final VoidCallback onBackTap;
   final VoidCallback onSpeedTap;
+  final VoidCallback onSubtitleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1002,6 +1011,7 @@ class PlayerTopBar extends StatelessWidget {
             playbackRate: playbackRate,
             onBackTap: onBackTap,
             onSpeedTap: onSpeedTap,
+            onSubtitleTap: onSubtitleTap,
           ),
         ),
       );
@@ -1018,6 +1028,7 @@ class PlayerTopBar extends StatelessWidget {
           playbackRate: playbackRate,
           onBackTap: onBackTap,
           onSpeedTap: onSpeedTap,
+          onSubtitleTap: onSubtitleTap,
         ),
       ),
     );
@@ -1031,12 +1042,14 @@ class PlayerTopBarContent extends StatelessWidget {
     required this.playbackRate,
     required this.onBackTap,
     required this.onSpeedTap,
+    required this.onSubtitleTap,
   });
 
   final int episodeNumber;
   final double playbackRate;
   final VoidCallback onBackTap;
   final VoidCallback onSpeedTap;
+  final VoidCallback onSubtitleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1081,6 +1094,25 @@ class PlayerTopBarContent extends StatelessWidget {
                 ),
               ),
               const Spacer(),
+              // 字幕按钮
+              GestureDetector(
+                key: const ValueKey('player_subtitle_button'),
+                behavior: HitTestBehavior.opaque,
+                onTap: onSubtitleTap,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
+                  child: const Icon(
+                    Icons.closed_caption_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+              ),
+              // const SizedBox(width: 4),
+              // // 倍速按钮
               // GestureDetector(
               //   key: const ValueKey('player_speed_button'),
               //   behavior: HitTestBehavior.opaque,
@@ -1100,25 +1132,11 @@ class PlayerTopBarContent extends StatelessWidget {
               //     ),
               //   ),
               // ),
-              // const SizedBox(width: 14),
-              // const Icon(
-              //   key: ValueKey('player_more_button'),
-              //   Icons.more_horiz,
-              //   color: Colors.white,
-              //   size: PlayerTopBarMetrics.moreIconSize,
-              // ),
             ],
           ),
         ),
       ),
     );
-  }
-
-  String _formatRate(BuildContext context, double rate) {
-    if ((rate - 1.0).abs() < 0.01) {
-      return context.l10n.playerSpeed;
-    }
-    return '${rate.toStringAsFixed(1)}x';
   }
 }
 

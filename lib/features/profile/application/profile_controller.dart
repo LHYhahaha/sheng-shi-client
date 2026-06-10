@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/session_cleanup_types.dart';
 import '../../auth/domain/auth_session.dart';
+import '../data/profile_repository_provider.dart';
 
 final profileControllerProvider =
     NotifierProvider<ProfileController, ProfileState>(ProfileController.new);
@@ -90,6 +91,8 @@ class ProfileState {
     String? showId,
     String? nickname,
     String? avatarAssetPath,
+    ProfileMembershipState? membership,
+    ProfileCoinsState? coins,
     int? coin,
     bool? needsSessionReload,
   }) {
@@ -99,8 +102,10 @@ class ProfileState {
       showId: showId ?? this.showId,
       nickname: nickname,
       avatarAssetPath: avatarAssetPath ?? this.avatarAssetPath,
-      membership: membership,
-      coins: coin != null ? coins.copyWith(balance: coin) : coins,
+      membership: membership ?? this.membership,
+      coins:
+          coins ??
+          (coin != null ? this.coins.copyWith(balance: coin) : this.coins),
       language: language,
       needsSessionReload: needsSessionReload ?? this.needsSessionReload,
     );
@@ -203,6 +208,29 @@ class ProfileLanguageState {
 class ProfileController extends Notifier<ProfileState> {
   @override
   ProfileState build() => const ProfileState.mock();
+
+  Future<void> load() async {
+    final summary = await ref
+        .read(profileRepositoryProvider)
+        .fetchProfileSummary();
+    state = state.copyWith(
+      isLoggedIn: true,
+      userId: summary.userId,
+      showId: summary.displayId,
+      nickname: summary.nickname,
+      membership: ProfileMembershipState(
+        isActive: summary.membership.isActive,
+        entryEnabled: true,
+        expiresAt: summary.membership.expiresAt,
+      ),
+      coins: ProfileCoinsState(
+        balance: summary.wallet.coinBalance,
+        topUpEnabled: state.coins.topUpEnabled,
+        walletEnabled: state.coins.walletEnabled,
+      ),
+      needsSessionReload: false,
+    );
+  }
 
   /// 回到 mock 游客资料摘要，并标记下次进入我的页应重新加载。
   void resetForSessionCleanup(SessionCleanupReason reason) {

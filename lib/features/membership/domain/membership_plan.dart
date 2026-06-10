@@ -1,6 +1,3 @@
-/// 会员权益图标类型。
-enum MembershipBenefitIcon { series, download, points, membersOnly, hd, adFree }
-
 /// 会员套餐。
 ///
 /// 价格相关字段都是展示 label，真实下单金额必须由服务端订单确认。
@@ -14,8 +11,29 @@ class MembershipPlan {
     this.platformProductId,
     this.badgeLabel,
     this.originalPriceLabel,
+    /// 促销价展示文案（Google IAP 促销首期价）。
+    ///
+    /// 当 [hasPromo] 为 true 时，[priceLabel] 可能已被更新为促销价。
+    /// 这个字段用于 UI 明确展示促销价格。
+    this.promotionPriceLabel,
+    /// 是否有促销价。
+    this.hasPromo = false,
+    /// 续费原价展示文案（促销结束后的价格）。
+    this.regularPriceLabel,
+    /// 促销倒计时截止时间（毫秒时间戳），0 表示无倒计时。
+    ///
+    /// UI 层根据此字段展示倒计时，倒计时结束后隐藏促销标签。
+    this.promoCountdownEndMs = 0,
     this.description,
     this.enabled = true,
+    /// Google Play IAP 促销首期周期 ISO，如 "P1W"。
+    ///
+    /// 用于 UI 层根据当前语言动态组装促销文案。
+    this.promoPeriodIso,
+    /// Google Play IAP 续费周期 ISO，如 "P1M"。
+    ///
+    /// 用于 UI 层根据当前语言动态组装促销文案。
+    this.regularPeriodIso,
   });
 
   /// 套餐 id（对应 productId）。
@@ -27,6 +45,8 @@ class MembershipPlan {
   final String title;
 
   /// 总价展示文案（对应 priceText）。
+  ///
+  /// 当存在促销时，此字段可能是促销首期价。
   final String priceLabel;
 
   /// 日均价展示文案。
@@ -34,7 +54,7 @@ class MembershipPlan {
   /// 只用于营销展示，不参与客户端金额计算。
   final String dailyPriceLabel;
 
-  /// 订阅周期，如 weekly/monthly/yearly。
+  /// 订阅周期 ISO 8601 格式，如 P1W / P1M / P1Y。
   final String? period;
 
   /// 渠道商品 id（对应 channelProductId）。
@@ -46,24 +66,48 @@ class MembershipPlan {
   /// 原价展示文案（对应 originalPriceText）。
   final String? originalPriceLabel;
 
+  /// 促销价展示文案（Google IAP 促销首期价）。
+  final String? promotionPriceLabel;
+
+  /// 是否有促销价。
+  final bool hasPromo;
+
+  /// 续费原价展示文案（促销结束后的价格）。
+  final String? regularPriceLabel;
+
+  /// 促销倒计时截止时间（毫秒时间戳），0 表示无倒计时。
+  ///
+  /// UI 层根据此字段展示倒计时，倒计时结束后隐藏促销标签。
+  final int promoCountdownEndMs;
+
   /// 套餐描述。
   final String? description;
 
   /// 商品是否可售。
   final bool enabled;
+
+  /// Google Play IAP 促销首期周期 ISO，如 "P1W"。
+  ///
+  /// 用于 UI 层根据当前语言动态组装促销文案。
+  final String? promoPeriodIso;
+
+  /// Google Play IAP 续费周期 ISO，如 "P1M"。
+  ///
+  /// 用于 UI 层根据当前语言动态组装促销文案。
+  final String? regularPeriodIso;
 }
 
 /// 会员权益展示项。
 class MembershipBenefit {
   const MembershipBenefit({
-    required this.icon,
+    required this.iconPath,
     required this.title,
     this.highlight,
     this.description,
   });
 
-  /// 权益图标类型。
-  final MembershipBenefitIcon icon;
+  /// 权益图标本地图片路径。
+  final String iconPath;
 
   /// 权益标题。
   final String title;
@@ -95,8 +139,6 @@ class MembershipData {
     required this.heroTitle,
     required this.heroSubtitle,
     required this.plans,
-    required this.benefits,
-    required this.tips,
   });
 
   /// 当前账号会员是否有效。
@@ -110,10 +152,4 @@ class MembershipData {
 
   /// 可购买套餐列表。
   final List<MembershipPlan> plans;
-
-  /// 权益展示列表。
-  final List<MembershipBenefit> benefits;
-
-  /// 提示文案。
-  final MembershipTips tips;
 }

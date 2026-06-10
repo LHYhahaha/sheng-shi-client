@@ -1,29 +1,33 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../../core/auth/session_cleanup_types.dart';
 import '../../entitlement/application/entitlement_controller.dart';
+import '../../pay/application/iap_price_service.dart';
+import '../../pay/provider/iap_price_service_provider.dart';
+import '../../pay/provider/iap_purchase_service_provider.dart';
+import '../../pay/provider/pay_repository_provider.dart';
 import '../data/store_repository_provider.dart';
 import '../domain/store_package.dart';
 
-/// Store feature 的唯一页面状态入口。
-///
-/// UI、弹窗和测试都通过这个 provider 读写商店状态，避免各处直接 new repository 或
-/// 自行模拟购买流程。后续接真实订单/IAP 时，订单状态、验单和权益刷新都应从这里
-/// 统一进入，而不是把支付结果散落到按钮回调里。
 final storeControllerProvider = NotifierProvider<StoreController, StoreState>(
   StoreController.new,
 );
 
-/// 商店 mock 购买确认弹窗的本地流程状态。
-///
-/// 这些状态只描述“弹窗交互走到哪一步”，不是支付渠道或服务端订单状态。真实支付接入
-/// 后，`success` 也只能代表服务端确认后的结果，不能由客户端延迟任务自行认定。
-enum StorePurchaseStatus { idle, processing, success, cancelled }
+enum StorePurchaseStatus {
+  idle,
+  creatingOrder,
+  waitingPayment,
+  verifying,
+  pending,
+  success,
+  failed,
+  cancelled,
+}
 
-/// 商店页状态，覆盖充值套餐、余额和 mock 购买确认弹窗。
-///
-/// 购买状态只服务 MVP 交互演示，不代表真实支付结果。接真实支付时，success 必须由
-/// 服务端订单/收据校验后回写，不能只信客户端按钮点击或本地延迟完成。
 class StoreState {
   const StoreState({
     required this.isLoading,
@@ -34,6 +38,7 @@ class StoreState {
     required this.selectedPackageId,
     required this.confirmationPackageId,
     required this.purchaseStatus,
+    required this.iapProductDetails,
     this.error,
   });
 
@@ -46,58 +51,18 @@ class StoreState {
       selectedPackageId = null,
       confirmationPackageId = null,
       purchaseStatus = StorePurchaseStatus.idle,
+      iapProductDetails = const {},
       error = null;
 
-  /// 商店页是否正在加载充值数据。
-  ///
-  /// 只覆盖套餐/余额初始加载和 retry，不表示支付 processing。支付中的 loading 由
-  /// `purchaseStatus` 表达，避免整页 loading 和确认弹窗 loading 混在一起。
   final bool isLoading;
-
-  /// 当前展示的金币余额。
-  ///
-  /// mock 阶段来自充值页接口数据；真实接入后应以钱包/服务端刷新为准。客户端 mock
-  /// purchase success 不能直接累加这个字段。
   final int balance;
-
-  /// 金币充值套餐列表。
-  ///
-  /// 只用于展示和选择，不代表已创建订单。点击确认时仍要用 `confirmationPackageId`
-  /// 锁定下单对象，防止 selected 在弹窗打开后被其他交互改变。
   final List<StorePackage> coinPackages;
-
-  /// VIP 相关售卖套餐列表。
-  ///
-  /// 与会员页套餐展示可能来自不同接口口径，不能简单和 MembershipPlan 互相替代。
   final List<StorePackage> vipPackages;
-
-  /// 商店提示文案。
-  ///
-  /// 当前为 mock 固定文案；未来如由服务端下发，仍应作为展示数据处理，不参与支付判断。
   final StoreTips? tips;
-
-  /// 当前页面选中的套餐 id。
-  ///
-  /// 这是列表选择态，用于高亮卡片；不是最终购买对象。最终购买对象由打开确认弹窗时
-  /// 写入的 `confirmationPackageId` 决定。
   final String? selectedPackageId;
-
-  /// 当前确认弹窗锁定的套餐 id。
-  ///
-  /// 弹窗打开后用它隔离异步 purchase result。用户切换列表选择或关闭弹窗时，旧的
-  /// processing 结果不能落到新的确认对象上。
   final String? confirmationPackageId;
-
-  /// mock 购买确认流程状态。
-  ///
-  /// 只表达客户端弹窗流程：idle/processing/success/cancelled。真实支付成功必须等待
-  /// 服务端订单或渠道收据确认，不能只依赖这个字段发放金币/权益。
   final StorePurchaseStatus purchaseStatus;
-
-  /// 加载商店数据时的错误。
-  ///
-  /// 支付失败未来应单独建订单错误或 purchase error，不要复用整页 error，否则支付
-  /// 弹窗错误可能把套餐列表误清空。
+  final Map<String, ProductDetails> iapProductDetails;
   final Object? error;
 
   List<StorePackage> get packages => [...coinPackages, ...vipPackages];
@@ -130,6 +95,7 @@ class StoreState {
     String? selectedPackageId,
     String? confirmationPackageId,
     StorePurchaseStatus? purchaseStatus,
+    Map<String, ProductDetails>? iapProductDetails,
     Object? error,
     bool clearError = false,
     bool clearConfirmation = false,
@@ -145,23 +111,23 @@ class StoreState {
           ? null
           : confirmationPackageId ?? this.confirmationPackageId,
       purchaseStatus: purchaseStatus ?? this.purchaseStatus,
+      iapProductDetails: iapProductDetails ?? this.iapProductDetails,
       error: clearError ? null : error ?? this.error,
     );
   }
 }
 
-/// 商店页控制器。
-///
-/// 这里集中管理套餐加载、选择和确认弹窗状态。UI 只读写 controller，不直接 new
-/// repository，是为了后续接支付 SDK、订单接口和风控校验时仍能保持单一状态机入口。
 class StoreController extends Notifier<StoreState> {
+  static const _packageName = 'com.yushi.drama.client';
+  static const _coinProductType = 1;
+  static const _vipProductType = 2;
+
   int _generation = 0;
   int _purchaseGeneration = 0;
 
   @override
   StoreState build() => const StoreState.initial();
 
-  /// 清除 mock 购买进行中状态，避免 logout 后仍显示“购买中”。
   void resetForSessionCleanup(SessionCleanupReason reason) {
     ++_generation;
     ++_purchaseGeneration;
@@ -182,27 +148,64 @@ class StoreController extends Notifier<StoreState> {
         return;
       }
 
-      // 默认选择第一个金币包，金币为空再退到 VIP 包。这个策略只影响 UI 初始态，
-      // 不代表服务端推荐或最终下单项，真实支付仍要以 confirmationPackageId 为准。
+      final channelProductIds = <String>{};
+      for (final package in data.coinPackages) {
+        final productId = package.platformProductId;
+        if (productId != null && productId.isNotEmpty) {
+          channelProductIds.add(productId);
+        }
+      }
+      for (final package in data.vipPackages) {
+        final productId = package.platformProductId;
+        if (productId != null && productId.isNotEmpty) {
+          channelProductIds.add(productId);
+        }
+      }
+
+      var iapDetails = <String, ProductDetails>{};
+      if (channelProductIds.isNotEmpty) {
+        iapDetails = await ref
+            .read(iapPriceServiceProvider)
+            .queryProducts(productIds: channelProductIds);
+      }
+
+      if (!_isCurrent(generation)) {
+        return;
+      }
+
       final selectedId = data.coinPackages.isNotEmpty
           ? data.coinPackages.first.id
           : data.vipPackages.isNotEmpty
           ? data.vipPackages.first.id
           : null;
+
+      final priceService = ref.read(iapPriceServiceProvider);
+      final coinPackages = _mergeIapPricing(
+        data.coinPackages,
+        iapDetails,
+        priceService,
+      );
+      final vipPackages = _mergeIapPricing(
+        data.vipPackages,
+        iapDetails,
+        priceService,
+      );
+
       state = state.copyWith(
         isLoading: false,
         balance: data.balance,
-        coinPackages: List<StorePackage>.unmodifiable(data.coinPackages),
-        vipPackages: List<StorePackage>.unmodifiable(data.vipPackages),
+        coinPackages: List<StorePackage>.unmodifiable(coinPackages),
+        vipPackages: List<StorePackage>.unmodifiable(vipPackages),
         tips: data.tips,
         selectedPackageId: selectedId,
+        iapProductDetails: iapDetails,
         clearError: true,
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
+      debugPrint('[Store] load failed: $error\n$stackTrace');
       if (!_isCurrent(generation)) {
         return;
       }
-
       state = state.copyWith(isLoading: false, error: error);
     }
   }
@@ -213,7 +216,6 @@ class StoreController extends Notifier<StoreState> {
     if (state.packageById(id) == null) {
       return;
     }
-
     state = state.copyWith(selectedPackageId: id);
   }
 
@@ -223,12 +225,11 @@ class StoreController extends Notifier<StoreState> {
       return;
     }
 
-    // 每次打开确认弹窗都递增 purchaseGeneration，使旧的 processing 延迟结果失效。
-    // 否则用户关闭 A 包再打开 B 包时，A 包的异步 success 可能落到 B 包弹窗上。
     _purchaseGeneration++;
     state = state.copyWith(
       confirmationPackageId: selectedPackage.id,
       purchaseStatus: StorePurchaseStatus.idle,
+      clearError: true,
     );
   }
 
@@ -240,46 +241,232 @@ class StoreController extends Notifier<StoreState> {
     );
   }
 
-  Future<void> confirmMockPurchase() async {
+  Future<void> confirmPurchase() async {
     if (state.confirmationPackage == null ||
         state.purchaseStatus != StorePurchaseStatus.idle) {
       return;
     }
 
-    // mock 只模拟“processing -> success”的 UI 节奏。E3 起，金币权益统一写入
-    // EntitlementController，避免 Store、Wallet、Player 各自维护一份余额。
-    // 真实支付仍必须等服务端校验支付渠道回调/订单状态后，再刷新钱包和权益。
     final purchaseGeneration = _purchaseGeneration;
-    final packageId = state.confirmationPackageId;
-    state = state.copyWith(purchaseStatus: StorePurchaseStatus.processing);
-    await Future<void>.delayed(const Duration(milliseconds: 180));
-    if (purchaseGeneration != _purchaseGeneration ||
-        state.confirmationPackageId != packageId ||
-        state.purchaseStatus != StorePurchaseStatus.processing) {
-      return;
+    final package = state.confirmationPackage!;
+    StreamSubscription<PurchaseDetails>? sub;
+    try {
+      final platformProductId = package.platformProductId;
+      if (platformProductId == null || platformProductId.isEmpty) {
+        throw Exception('Package has no platform product id: ${package.id}');
+      }
+
+      var productDetails = state.iapProductDetails[platformProductId];
+      productDetails ??= await ref
+          .read(iapPriceServiceProvider)
+          .queryProduct(productId: platformProductId);
+      if (productDetails == null) {
+        throw Exception('Product details not found for $platformProductId');
+      }
+
+      state = state.copyWith(
+        purchaseStatus: StorePurchaseStatus.creatingOrder,
+        clearError: true,
+      );
+
+      final productId = int.tryParse(package.id);
+      if (productId == null || productId <= 0) {
+        throw Exception('Invalid product id: ${package.id}');
+      }
+
+      final productType = _productTypeFor(package);
+      final payRepository = ref.read(payRepositoryProvider);
+      final paymentOrder = await payRepository.createPaymentOrder(
+        productId: productId,
+        productType: productType,
+        scene: package.isCoinPackage ? 'store_coin' : 'store_vip',
+      );
+
+      if (!_isCurrentPurchase(purchaseGeneration, package.id)) {
+        return;
+      }
+
+      final iapService = ref.read(iapPurchaseServiceProvider);
+      if (iapService == null) {
+        throw Exception('IAP purchase service not available');
+      }
+
+      final completer = Completer<PurchaseDetails?>();
+      sub = iapService.purchaseStream.listen((details) {
+        if (details.productID == productDetails!.id && !completer.isCompleted) {
+          completer.complete(details);
+        }
+      });
+
+      state = state.copyWith(
+        purchaseStatus: StorePurchaseStatus.waitingPayment,
+      );
+      final started = await iapService.buyProduct(
+        product: productDetails,
+        isConsumable: package.isCoinPackage,
+      );
+      if (!started) {
+        throw Exception('Failed to launch IAP purchase');
+      }
+
+      final purchaseDetails = await completer.future.timeout(
+        const Duration(minutes: 5),
+        onTimeout: () {
+          debugPrint('[Store] purchase timed out.');
+          return null;
+        },
+      );
+
+      if (!_isCurrentPurchase(purchaseGeneration, package.id)) {
+        return;
+      }
+      if (purchaseDetails == null) {
+        throw Exception('Purchase timeout or cancelled');
+      }
+
+      if (purchaseDetails.status == PurchaseStatus.pending) {
+        state = state.copyWith(purchaseStatus: StorePurchaseStatus.pending);
+        return;
+      }
+      if (purchaseDetails.status == PurchaseStatus.error) {
+        throw Exception('Purchase failed: ${purchaseDetails.error}');
+      }
+      if (purchaseDetails.status.name == 'canceled') {
+        state = state.copyWith(purchaseStatus: StorePurchaseStatus.cancelled);
+        return;
+      }
+      if (purchaseDetails.status != PurchaseStatus.purchased &&
+          purchaseDetails.status != PurchaseStatus.restored) {
+        throw Exception(
+          'Unsupported purchase status: ${purchaseDetails.status}',
+        );
+      }
+
+      state = state.copyWith(purchaseStatus: StorePurchaseStatus.verifying);
+      final verifyResult = await payRepository.verifyGooglePayment(
+        orderNo: paymentOrder.orderNo,
+        channelProductId: purchaseDetails.productID,
+        packageName: _packageName,
+        productType: productType,
+        purchaseToken: purchaseDetails.verificationData.serverVerificationData,
+        channelOrderId: purchaseDetails.purchaseID,
+        rawReceipt: purchaseDetails.verificationData.source,
+      );
+
+      if (!_isCurrentPurchase(purchaseGeneration, package.id)) {
+        return;
+      }
+      if (verifyResult.orderStatus != 'ORDER_STATUS_SUCCESS') {
+        throw Exception(
+          'Payment verification returned ${verifyResult.orderStatus}',
+        );
+      }
+
+      if (purchaseDetails.pendingCompletePurchase) {
+        await iapService.completePurchase(purchaseDetails);
+      }
+
+      await ref.read(entitlementControllerProvider.notifier).load();
+
+      if (!_isCurrentPurchase(purchaseGeneration, package.id)) {
+        return;
+      }
+
+      state = state.copyWith(purchaseStatus: StorePurchaseStatus.success);
+    } catch (error, stackTrace) {
+      debugPrint('[Store] purchase failed: $error\n$stackTrace');
+      if (purchaseGeneration == _purchaseGeneration) {
+        state = state.copyWith(
+          purchaseStatus: StorePurchaseStatus.failed,
+          error: error,
+        );
+      }
+    } finally {
+      await sub?.cancel();
     }
-
-    // 支付成功后刷新权益系统，获取最新的金币和会员状态
-    await ref.read(entitlementControllerProvider.notifier).load();
-
-    if (purchaseGeneration != _purchaseGeneration ||
-        state.confirmationPackageId != packageId ||
-        state.purchaseStatus != StorePurchaseStatus.processing) {
-      return;
-    }
-
-    state = state.copyWith(purchaseStatus: StorePurchaseStatus.success);
   }
 
-  void cancelMockPurchase() {
+  void cancelPurchase() {
     if (state.purchaseStatus != StorePurchaseStatus.idle) {
       return;
     }
-
-    // 取消只在 idle 允许，processing 期间不允许把本地状态改成 cancelled，
-    // 避免真实支付接入后出现“渠道仍在处理中但 UI 已取消”的错觉。
     state = state.copyWith(purchaseStatus: StorePurchaseStatus.cancelled);
   }
 
   bool _isCurrent(int generation) => generation == _generation;
+
+  int _productTypeFor(StorePackage package) =>
+      package.isCoinPackage ? _coinProductType : _vipProductType;
+
+  List<StorePackage> _mergeIapPricing(
+    List<StorePackage> packages,
+    Map<String, ProductDetails> iapDetails,
+    IapPriceService priceService,
+  ) {
+    return [
+      for (final package in packages)
+        _mergePackagePricing(
+          package,
+          iapDetails[package.platformProductId],
+          priceService,
+        ),
+    ];
+  }
+
+  StorePackage _mergePackagePricing(
+    StorePackage package,
+    ProductDetails? product,
+    IapPriceService priceService,
+  ) {
+    if (product == null) {
+      return package;
+    }
+
+    if (package.isCoinPackage) {
+      return package.copyWith(
+        priceLabel: product.price,
+        priceMicros: (product.rawPrice * 1000000).toInt(),
+        currencyCode: product.currencyCode,
+      );
+    }
+
+    final promo = priceService.extractPromoInfo(product);
+    final hasPromo = promo?['hasPromo'] == true;
+    if (!hasPromo) {
+      return package.copyWith(
+        priceLabel: product.price,
+        priceMicros: (product.rawPrice * 1000000).toInt(),
+        currencyCode: product.currencyCode,
+        promotionExpireSeconds: 0,
+      );
+    }
+
+    final promoPrice = promo?['promoPrice'] as String? ?? product.price;
+    final regularPrice = promo?['regularPrice'] as String?;
+    final promoMicros = promo?['promoPriceMicros'] as int?;
+    final regularMicros = promo?['regularPriceMicros'] as int?;
+    final backendCountdown = package.promotionExpireSeconds;
+    final countdownSeconds = backendCountdown > 0 ? backendCountdown : 3600;
+
+    return package.copyWith(
+      priceLabel: promoPrice,
+      originalPriceLabel: regularPrice ?? package.originalPriceLabel,
+      priceMicros: promoMicros ?? (product.rawPrice * 1000000).toInt(),
+      originalPriceMicros: regularMicros,
+      currencyCode: product.currencyCode,
+      basePlanId: promo?['basePlanId'] as String?,
+      offerId: promo?['offerId'] as String?,
+      badgeLabel: 'Promotion',
+      promotionExpiresAt: DateTime.now().add(
+        Duration(seconds: countdownSeconds),
+      ),
+      promotionExpireSeconds: countdownSeconds,
+    );
+  }
+
+  bool _isCurrentPurchase(int purchaseGeneration, String packageId) {
+    return purchaseGeneration == _purchaseGeneration &&
+        state.confirmationPackageId == packageId &&
+        state.purchaseStatus != StorePurchaseStatus.idle;
+  }
 }

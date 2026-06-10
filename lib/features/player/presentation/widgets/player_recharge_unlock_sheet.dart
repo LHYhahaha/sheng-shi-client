@@ -1,13 +1,12 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../core/utils/period_iso_parser.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
 import '../../domain/player_recharge_unlock_offer.dart';
@@ -21,9 +20,22 @@ import 'player_payment_method_sheet.dart';
 /// requiredCoins 与商品目录上下文；余额展示统一读 EntitlementController，不在 offer 内缓存。
 /// 继续 pending unlock。
 class PlayerRechargeUnlockSheet extends ConsumerStatefulWidget {
-  const PlayerRechargeUnlockSheet({required this.sessionKey, super.key});
+  const PlayerRechargeUnlockSheet({
+    required this.sessionKey,
+    required this.dramaId,
+    required this.episodeNo,
+    required this.shortTitle,
+    this.cover,
+    this.episodeId,
+    super.key,
+  });
 
   final String sessionKey;
+  final int dramaId;
+  final int episodeNo;
+  final String shortTitle;
+  final String? cover;
+  final int? episodeId;
 
   @override
   ConsumerState<PlayerRechargeUnlockSheet> createState() =>
@@ -32,36 +44,18 @@ class PlayerRechargeUnlockSheet extends ConsumerStatefulWidget {
 
 class _PlayerRechargeUnlockSheetState
     extends ConsumerState<PlayerRechargeUnlockSheet> {
-  static Duration get _promotionDuration => _isTestEnvironment
-      ? const Duration(seconds: 1)
-      : const Duration(hours: 1);
-
-  static Duration get _promotionTick => _isTestEnvironment
-      ? const Duration(milliseconds: 50)
-      : const Duration(seconds: 1);
-
-  static bool get _isTestEnvironment {
-    if (kIsWeb) {
-      return false;
-    }
-    return SchedulerBinding.instance.runtimeType.toString().contains('Test');
-  }
-
-  late Duration _promotionRemaining;
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    _promotionRemaining = _promotionDuration;
-    _timer = Timer.periodic(_promotionTick, (_) {
-      if (!mounted || _promotionRemaining == Duration.zero) {
+    // 每秒更新一次 UI，以显示最新的倒计时状态
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) {
         return;
       }
-      setState(() {
-        final next = _promotionRemaining - _promotionTick;
-        _promotionRemaining = next.isNegative ? Duration.zero : next;
-      });
+      // 触发 rebuild 以更新倒计时显示
+      setState(() {});
     });
   }
 
@@ -94,6 +88,12 @@ class _PlayerRechargeUnlockSheetState
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final screenHeight = MediaQuery.sizeOf(context).height;
     final sheetHeight = math.min(654.0, screenHeight - 72);
+
+    // 获取用户金币余额和所需金币
+    final coinBalance = ref.watch(entitlementControllerProvider).coinBalance;
+    final requiredCoins = state.offer?.requiredCoins ?? 0;
+    final hasEnoughCoins = coinBalance >= requiredCoins;
+
     final content = state.offer == null
         ? KeyedSubtree(
             key: const ValueKey('player_recharge_loading_sheet'),
@@ -102,8 +102,10 @@ class _PlayerRechargeUnlockSheetState
         : KeyedSubtree(
             key: const ValueKey('player_recharge_offer_sheet'),
             child: _OfferContent(
+              sessionKey: widget.sessionKey,
               state: state,
-              promotionRemaining: _promotionRemaining,
+              hasEnoughCoins: hasEnoughCoins,
+              coinBalance: coinBalance,
               onClose: () {
                 ref.read(provider.notifier).close();
                 Navigator.of(context).pop(false);
@@ -130,6 +132,9 @@ class _PlayerRechargeUnlockSheetState
                   );
                 }
               },
+              onUnlockWithCoin: hasEnoughCoins
+                  ? () => _unlockWithCoin(context, ref, state)
+                  : null,
             ),
           );
     return Padding(
@@ -145,6 +150,41 @@ class _PlayerRechargeUnlockSheetState
         ),
       ),
     );
+  }
+
+  Future<void> _unlockWithCoin(
+    BuildContext context,
+    WidgetRef ref,
+    PlayerRechargeUnlockState state,
+  ) async {
+    if (!mounted) return;
+
+    final controller = ref.read(
+      playerRechargeUnlockControllerProvider(widget.sessionKey).notifier,
+    );
+
+    // 在 async gap 之前保存 navigator，避免 BuildContext 警告
+    final navigator = Navigator.of(context);
+
+    await controller.unlockWithCoin(
+      autoUnlockNext: false, // 可以根据实际需求设置
+      coin: state.offer?.requiredCoins ?? 0,
+      dramaId: widget.dramaId,
+      episodeNo: widget.episodeNo,
+      shortTitle: widget.shortTitle,
+      cover: widget.cover,
+      episodeId: widget.episodeId,
+    );
+
+    // 检查解锁是否成功
+    if (!mounted) return;
+
+    final newState = ref.read(
+      playerRechargeUnlockControllerProvider(widget.sessionKey),
+    );
+    if (newState.status == PlayerRechargeUnlockStatus.success) {
+      navigator.pop(true);
+    }
   }
 }
 
@@ -175,25 +215,32 @@ class _LoadingOrError extends StatelessWidget {
   }
 }
 
-class _OfferContent extends StatelessWidget {
+class _OfferContent extends ConsumerWidget {
   const _OfferContent({
+    required this.sessionKey,
     required this.state,
-    required this.promotionRemaining,
+    required this.hasEnoughCoins,
+    required this.coinBalance,
     required this.onClose,
     required this.onCoinTap,
     required this.onMembershipTap,
+    this.onUnlockWithCoin,
   });
 
+  final String sessionKey;
   final PlayerRechargeUnlockState state;
-  final Duration promotionRemaining;
+  final bool hasEnoughCoins;
+  final int coinBalance;
   final VoidCallback onClose;
   final ValueChanged<String> onCoinTap;
   final ValueChanged<String> onMembershipTap;
+  final VoidCallback? onUnlockWithCoin;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final offer = state.offer!;
     final isProcessing = state.status == PlayerRechargeUnlockStatus.processing;
+
     return Stack(
       children: [
         Positioned.fill(
@@ -208,6 +255,22 @@ class _OfferContent extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 如果用户有足够金币，显示"使用金币解锁"按钮
+                if (onUnlockWithCoin != null) ...[
+                  _CoinUnlockButton(
+                    onTap: onUnlockWithCoin!,
+                    coinCost: offer.requiredCoins,
+                    coinBalance: coinBalance,
+                    isProcessing: isProcessing,
+                  ),
+                  const SizedBox(height: 16),
+                  // 分隔线
+                  Divider(
+                    height: 1,
+                    color: Colors.white.withValues(alpha: 0.09),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 _UnlockInfo(offer: offer),
                 const SizedBox(height: 19),
                 SizedBox(
@@ -222,6 +285,7 @@ class _OfferContent extends StatelessWidget {
                     itemBuilder: (context, index) {
                       final package = offer.coinPackages[index];
                       return _CoinPackageCard(
+                        sessionKey: sessionKey,
                         package: package,
                         selected: state.selectedCoinPackageId == package.id,
                         enabled: !isProcessing,
@@ -233,11 +297,12 @@ class _OfferContent extends StatelessWidget {
                 const SizedBox(height: 20),
                 for (final package in offer.membershipPackages) ...[
                   _MembershipPackageCard(
+                    key: ValueKey('player_recharge_membership_${package.id}'),
+                    sessionKey: sessionKey,
                     package: package,
                     benefits: offer.benefits,
                     selected: state.selectedMembershipPackageId == package.id,
                     enabled: !isProcessing,
-                    promotionRemaining: promotionRemaining,
                     onTap: () => onMembershipTap(package.id),
                   ),
                   const SizedBox(height: 8),
@@ -328,6 +393,65 @@ class _OfferContent extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _CoinUnlockButton extends StatelessWidget {
+  const _CoinUnlockButton({
+    required this.onTap,
+    required this.coinCost,
+    required this.coinBalance,
+    required this.isProcessing,
+  });
+
+  final VoidCallback onTap;
+  final int coinCost;
+  final int coinBalance;
+  final bool isProcessing;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: isProcessing ? null : onTap,
+      child: Container(
+        width: double.infinity,
+        height: 56,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        alignment: Alignment.center,
+        child: isProcessing
+            ? const SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.black,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/images/profile/coin.png',
+                    width: 24,
+                    height: 24,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '使用 $coinCost 金币解锁',
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+      ),
     );
   }
 }
@@ -523,9 +647,10 @@ class _BonusBadge extends StatelessWidget {
 }
 
 class _CoinCardContent extends StatelessWidget {
-  const _CoinCardContent({required this.package});
+  const _CoinCardContent({required this.package, required this.displayPrice});
 
   final PlayerRechargeCoinPackage package;
+  final String displayPrice;
 
   @override
   Widget build(BuildContext context) {
@@ -550,7 +675,7 @@ class _CoinCardContent extends StatelessWidget {
           Align(
             alignment: Alignment.centerRight,
             child: Text(
-              package.googlePriceLabel,
+              displayPrice,
               style: const TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 12,
@@ -588,21 +713,26 @@ class _CoinPackageCardFrame extends StatelessWidget {
   }
 }
 
-class _CoinPackageCard extends StatelessWidget {
+class _CoinPackageCard extends ConsumerWidget {
   const _CoinPackageCard({
+    required this.sessionKey,
     required this.package,
     required this.selected,
     required this.enabled,
     required this.onTap,
   });
 
+  final String sessionKey;
   final PlayerRechargeCoinPackage package;
   final bool selected;
   final bool enabled;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final displayPrice =
+        package.iapInfo?.displayPrice ?? package.googlePriceLabel;
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: enabled ? onTap : null,
@@ -612,7 +742,10 @@ class _CoinPackageCard extends StatelessWidget {
         children: [
           _CoinPackageCardFrame(
             selected: selected,
-            child: _CoinCardContent(package: package),
+            child: _CoinCardContent(
+              package: package,
+              displayPrice: displayPrice,
+            ),
           ),
           if (package.hasBonus)
             Positioned(
@@ -629,32 +762,53 @@ class _CoinPackageCard extends StatelessWidget {
   }
 }
 
-class _PromoCountdownBadge extends StatelessWidget {
-  const _PromoCountdownBadge({required this.remaining});
+class _PromoCountdownBadge extends ConsumerWidget {
+  const _PromoCountdownBadge({
+    required this.sessionKey,
+    required this.packageId,
+  });
 
-  final Duration remaining;
+  final String sessionKey;
+  final String packageId;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      key: const ValueKey('player_recharge_promo_badge'),
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFF5964),
-        borderRadius: BorderRadius.only(
-          topRight: Radius.circular(8),
-          bottomLeft: Radius.circular(8),
-        ),
-      ),
-      child: Text(
-        _formatCountdown(remaining),
-        style: const TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          height: 15 / 10,
-        ),
-      ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    return StreamBuilder(
+      stream: Stream.periodic(const Duration(seconds: 1)),
+      builder: (context, snapshot) {
+        final controller = ref.read(
+          playerRechargeUnlockControllerProvider(sessionKey).notifier,
+        );
+        final remainingSeconds = controller.getPromotionRemainingSeconds(
+          packageId,
+        );
+        final remaining = Duration(seconds: remainingSeconds);
+
+        if (remainingSeconds <= 0) {
+          return const SizedBox.shrink();
+        }
+
+        return Container(
+          key: const ValueKey('player_recharge_promo_badge'),
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+          decoration: const BoxDecoration(
+            color: Color(0xFFFF5964),
+            borderRadius: BorderRadius.only(
+              topRight: Radius.circular(8),
+              bottomLeft: Radius.circular(8),
+            ),
+          ),
+          child: Text(
+            _formatCountdown(remaining),
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              height: 15 / 10,
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -704,18 +858,28 @@ class _MembershipCardBackground extends StatelessWidget {
 }
 
 class _MembershipPriceBlock extends StatelessWidget {
-  const _MembershipPriceBlock({required this.package, required this.showPromo});
+  const _MembershipPriceBlock({
+    required this.package,
+    required this.showPromo,
+    this.displayPrice,
+    this.displayOriginalPrice,
+  });
 
   final PlayerRechargeMembershipPackage package;
   final bool showPromo;
+  final String? displayPrice;
+  final String? displayOriginalPrice;
 
   @override
   Widget build(BuildContext context) {
+    final price = displayPrice ?? package.googlePriceLabel;
+    final originalPrice = displayOriginalPrice ?? package.originalPriceLabel;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Text(
-          package.googlePriceLabel,
+          price,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
@@ -725,9 +889,9 @@ class _MembershipPriceBlock extends StatelessWidget {
             height: 25 / 20,
           ),
         ),
-        if (showPromo && package.originalPriceLabel != null)
+        if (showPromo && originalPrice != null)
           Text(
-            package.originalPriceLabel!,
+            originalPrice,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -749,11 +913,17 @@ class _MembershipInfoArea extends StatelessWidget {
     required this.package,
     required this.description,
     required this.showPromo,
+    this.promoDescription,
+    this.displayPrice,
+    this.displayOriginalPrice,
   });
 
   final PlayerRechargeMembershipPackage package;
   final String description;
   final bool showPromo;
+  final String? promoDescription;
+  final String? displayPrice;
+  final String? displayOriginalPrice;
 
   @override
   Widget build(BuildContext context) {
@@ -778,22 +948,41 @@ class _MembershipInfoArea extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: const Color(0xFF51210F).withValues(alpha: 0.55),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    height: 13 / 10,
+                // 展示促销文案（如果有），否则展示description
+                if (promoDescription != null)
+                  Text(
+                    promoDescription!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: const Color(0xFF51210F).withValues(alpha: 0.55),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      height: 13 / 10,
+                    ),
+                  )
+                else
+                  Text(
+                    description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: const Color(0xFF51210F).withValues(alpha: 0.55),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      height: 13 / 10,
+                    ),
                   ),
-                ),
               ],
             ),
           ),
           const SizedBox(width: 10),
-          _MembershipPriceBlock(package: package, showPromo: showPromo),
+          _MembershipPriceBlock(
+            package: package,
+            showPromo: showPromo,
+            displayPrice: displayPrice,
+            displayOriginalPrice: displayOriginalPrice,
+          ),
         ],
       ),
     );
@@ -894,28 +1083,44 @@ class _MembershipBenefitBand extends StatelessWidget {
   }
 }
 
-class _MembershipPackageCard extends StatelessWidget {
+class _MembershipPackageCard extends ConsumerWidget {
   const _MembershipPackageCard({
+    super.key,
+    required this.sessionKey,
     required this.package,
     required this.benefits,
     required this.selected,
     required this.enabled,
-    required this.promotionRemaining,
     required this.onTap,
   });
 
+  final String sessionKey;
   final PlayerRechargeMembershipPackage package;
   final List<PlayerRechargeBenefit> benefits;
   final bool selected;
   final bool enabled;
-  final Duration promotionRemaining;
   final VoidCallback onTap;
 
-  bool get _showPromo =>
-      package.isPromotional && promotionRemaining > Duration.zero;
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final iapInfo = package.iapInfo;
+    final displayPrice = iapInfo?.displayPrice ?? package.googlePriceLabel;
+    final displayOriginalPrice =
+        iapInfo?.displayOriginalPrice ?? package.originalPriceLabel;
+    final showPromo = iapInfo?.hasPromo ?? package.isPromotional;
+
+    String? promoDescription;
+    if (iapInfo?.hasPromo == true) {
+      final locale = Localizations.localeOf(context);
+      promoDescription = PeriodIsoParser.buildPromoDescription(
+        promoPrice: iapInfo!.displayPrice,
+        regularPrice: iapInfo.displayOriginalPrice,
+        promoPeriodIso: iapInfo.promoPeriod,
+        regularPeriodIso: iapInfo.regularPeriod,
+        languageCode: locale.languageCode,
+      );
+    }
+
     final description =
         package.description ?? context.l10n.playerAutoRenewCancel;
     return GestureDetector(
@@ -933,14 +1138,20 @@ class _MembershipPackageCard extends StatelessWidget {
             _MembershipInfoArea(
               package: package,
               description: description,
-              showPromo: _showPromo,
+              showPromo: showPromo,
+              promoDescription: promoDescription,
+              displayPrice: displayPrice,
+              displayOriginalPrice: displayOriginalPrice,
             ),
             _MembershipBenefitBand(benefits: benefits),
-            if (_showPromo)
+            if (showPromo)
               Positioned(
                 right: 0,
                 top: 0,
-                child: _PromoCountdownBadge(remaining: promotionRemaining),
+                child: _PromoCountdownBadge(
+                  sessionKey: sessionKey,
+                  packageId: package.id,
+                ),
               ),
           ],
         ),

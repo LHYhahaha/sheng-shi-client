@@ -1,4 +1,5 @@
 import '../../entitlement/domain/episode_unlock_type.dart';
+import 'player_subtitle.dart';
 
 /// 播放器剧集内容模型。
 ///
@@ -109,7 +110,13 @@ class PlayerEpisode {
     this.videoAspectRatio,
     this.duration,
     this.isAvailable = true,
+    this.subtitles = const [],
   });
+
+  /// 该集可用的字幕轨道列表。
+  ///
+  /// 为空表示无字幕。播放器应允许关闭字幕。
+  final List<PlayerSubtitle> subtitles;
 
   /// 剧集 id。
   ///
@@ -179,6 +186,7 @@ class PlayerEpisode {
     double? videoAspectRatio,
     Duration? duration,
     bool? isAvailable,
+    List<PlayerSubtitle>? subtitles,
   }) {
     return PlayerEpisode(
       id: id ?? this.id,
@@ -191,6 +199,7 @@ class PlayerEpisode {
       videoAspectRatio: videoAspectRatio ?? this.videoAspectRatio,
       duration: duration ?? this.duration,
       isAvailable: isAvailable ?? this.isAvailable,
+      subtitles: subtitles ?? this.subtitles,
     );
   }
 

@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../app/router/app_router.dart';
 import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
@@ -483,7 +482,7 @@ class _MyListRowSwipeAction extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    context.l10n.myListRemove,
+                    context.l10n.myListDelete,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: AppColors.textPrimary,
                       fontSize: 10,
@@ -631,13 +630,7 @@ class _CoverImage extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppRadii.xs),
       child: Stack(
         children: [
-          Image.asset(
-            assetPath,
-            width: 74,
-            height: 101,
-            fit: BoxFit.cover,
-            filterQuality: FilterQuality.medium,
-          ),
+          _buildCoverImage(assetPath),
           Positioned(
             left: 0,
             bottom: 0,
@@ -648,6 +641,48 @@ class _CoverImage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildCoverImage(String assetPath) {
+    // 判断是否是网络 URL
+    if (assetPath.startsWith('http://') || assetPath.startsWith('https://')) {
+      return Image.network(
+        assetPath,
+        fit: BoxFit.cover,
+        width: 74,
+        height: 101,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            width: 74,
+            height: 101,
+            color: Colors.black,
+            child: const Center(
+              child: Icon(Icons.image_not_supported, color: Colors.grey),
+            ),
+          );
+        },
+      );
+    }
+
+    // 本地 asset
+    return Image.asset(
+      assetPath,
+      width: 74,
+      height: 101,
+      fit: BoxFit.cover,
+      filterQuality: FilterQuality.medium,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          width: 74,
+          height: 101,
+          color: Colors.grey[800],
+          child: const Center(
+            child: Icon(Icons.image_not_supported, color: Colors.grey),
+          ),
+        );
+      },
     );
   }
 }

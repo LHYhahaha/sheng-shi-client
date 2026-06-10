@@ -1,5 +1,6 @@
+import 'package:drama_client/features/player/data/dto/player_feed_item_dto.dart';
+
 import '../../domain/player_feed.dart';
-import '../dto/player_feed_item_dto.dart';
 import 'player_content_mapper.dart';
 
 /// 播放 feed DTO mapper。

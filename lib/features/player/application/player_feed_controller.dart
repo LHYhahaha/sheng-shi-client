@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/player_feed_repository_provider.dart';
 import '../domain/player_content.dart';
 import '../domain/player_feed.dart';
+import '../../entitlement/domain/episode_unlock_type.dart';
 
 /// 播放器 feed provider，按 sessionKey 隔离实例。
 ///
@@ -157,6 +159,50 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
     await load(config);
   }
 
+  Future<PlayerFeedItem?> refreshCurrentDramaAtEpisode({
+    required String episodeId,
+  }) async {
+    final config = state.config;
+    final currentItem = state.currentItem;
+    final dramaId = config?.dramaId ?? currentItem?.content.id;
+    if (dramaId == null || dramaId.isEmpty) {
+      return currentItem;
+    }
+
+    final generation = ++_generation;
+    state = state.copyWith(isLoading: true, clearError: true);
+
+    try {
+      final repository = ref.read(playerFeedRepositoryProvider);
+      final loadedItems = await repository.listSingleDramaFeed(
+        dramaId: dramaId,
+        episodeId: episodeId,
+      );
+      if (!_isCurrent(generation)) {
+        return state.currentItem;
+      }
+
+      state = state.copyWith(
+        config: PlayerFeedConfig.singleDrama(
+          dramaId: dramaId,
+          episodeId: episodeId,
+        ),
+        items: List<PlayerFeedItem>.unmodifiable(loadedItems),
+        currentIndex: 0,
+        isLoading: false,
+        clearError: true,
+      );
+      return state.currentItem;
+    } catch (error) {
+      if (!_isCurrent(generation)) {
+        return state.currentItem;
+      }
+
+      state = state.copyWith(isLoading: false, error: error);
+      return state.currentItem;
+    }
+  }
+
   void setCurrentIndex(int index) {
     if (index < 0 ||
         index >= state.items.length ||
@@ -199,6 +245,59 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
       items: List<PlayerFeedItem>.unmodifiable(updatedItems),
     );
     return state.currentIndex;
+  }
+
+  /// 更新指定剧集的播放地址。
+  ///
+  /// 在金币解锁成功后调用，将服务端返回的 sourceUrl 写入对应的 episode，
+  /// 以便播放器可以立即播放解锁后的剧集。
+  ///
+  /// [dramaId] 剧目ID
+  /// [episodeId] 剧集ID
+  /// [sourceUrl] 播放地址
+  /// 返回是否成功更新
+  bool updateEpisodeVideoUrl({
+    required String dramaId,
+    required String episodeId,
+    required String sourceUrl,
+  }) {
+    final itemIndex = state.items.indexWhere((item) {
+      return item.content.id == dramaId && item.episode.id == episodeId;
+    });
+
+    if (itemIndex == -1) {
+      debugPrint(
+        '[PlayerFeed] 未找到对应的剧集: dramaId=$dramaId, episodeId=$episodeId',
+      );
+      return false;
+    }
+
+    final item = state.items[itemIndex];
+    final updatedEpisode = PlayerEpisode(
+      id: item.episode.id,
+      number: item.episode.number,
+      isLocked: false, // 解锁后不再锁定
+      unlockType: EpisodeUnlockType.free, // 解锁后变为免费
+      requiredCoins: item.episode.requiredCoins,
+      videoUrl: sourceUrl, // 更新播放地址
+      videoAssetPath: item.episode.videoAssetPath,
+      videoAspectRatio: item.episode.videoAspectRatio,
+      duration: item.episode.duration,
+      isAvailable: item.episode.isAvailable,
+      subtitles: item.episode.subtitles,
+    );
+
+    final updatedItems = [...state.items];
+    updatedItems[itemIndex] = item.copyWith(episode: updatedEpisode);
+    state = state.copyWith(
+      items: List<PlayerFeedItem>.unmodifiable(updatedItems),
+    );
+
+    debugPrint(
+      '[PlayerFeed] 已更新剧集播放地址: dramaId=$dramaId, '
+      'episodeId=$episodeId, sourceUrl=$sourceUrl',
+    );
+    return true;
   }
 
   bool _isCurrent(int generation) => generation == _generation;

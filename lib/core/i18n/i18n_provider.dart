@@ -1,7 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../network/api_client_provider.dart';
+import '../../l10n/app_localizations.dart';
 import 'i18n_service.dart';
 import 'language_package.dart';
 
@@ -60,11 +64,36 @@ class I18nController extends Notifier<I18nState> {
     return const I18nState();
   }
 
+  /// 从语言包文件加载远程字符串
+  Future<Map<String, dynamic>?> _loadRemoteStrings(LanguagePackage package) async {
+    try {
+      final file = File(package.filePath);
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        final json = jsonDecode(content) as Map<String, dynamic>;
+        return json;
+      }
+    } catch (e) {
+      print('[I18n] ❌ Failed to load remote strings: $e');
+    }
+    return null;
+  }
+
+  /// 更新 AppLocalizations 的远程字符串
+  Future<void> _updateRemoteStrings(LanguagePackage package) async {
+    final strings = await _loadRemoteStrings(package);
+    AppLocalizations.setRemoteStrings(strings);
+    if (strings != null) {
+      print('[I18n] ✅ Remote strings updated, ${strings.length} keys loaded');
+    }
+  }
+
   /// 内部初始化方法
   Future<void> _initializeLanguage() async {
     try {
       state = state.copyWith(isLoading: true, error: null);
       final package = await _service.initialize('zh');
+      await _updateRemoteStrings(package);
       state = state.copyWith(
         languageCode: 'zh',
         package: package,
@@ -82,6 +111,7 @@ class I18nController extends Notifier<I18nState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final package = await _service.initialize(languageCode);
+      await _updateRemoteStrings(package);
       state = state.copyWith(
         languageCode: languageCode,
         package: package,
@@ -98,6 +128,7 @@ class I18nController extends Notifier<I18nState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final package = await _service.switchLanguage(languageCode);
+      await _updateRemoteStrings(package);
       state = state.copyWith(
         languageCode: languageCode,
         package: package,
@@ -117,6 +148,7 @@ class I18nController extends Notifier<I18nState> {
   /// 清空缓存
   Future<void> clearCache() async {
     await _service.clearCache();
+    AppLocalizations.setRemoteStrings(null);
     state = const I18nState();
   }
 }

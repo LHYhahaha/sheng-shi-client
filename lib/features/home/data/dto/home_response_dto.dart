@@ -26,8 +26,8 @@ class HomeResponseDto {
   static List<HomeTabDto> _parseTabs(Object? value) {
     if (value is! List) return const <HomeTabDto>[];
     return value
-        .whereType<Map<String, Object?>>()
-        .map(HomeTabDto.fromJson)
+        .whereType<Map>()
+        .map((item) => HomeTabDto.fromJson(Map<String, Object?>.from(item)))
         .toList(growable: false);
   }
 }
@@ -64,8 +64,8 @@ class HomeTabDto {
   static List<HomeDramaDto> _parseDramas(Object? value) {
     if (value is! List) return const <HomeDramaDto>[];
     return value
-        .whereType<Map<String, Object?>>()
-        .map(HomeDramaDto.fromJson)
+        .whereType<Map>()
+        .map((item) => HomeDramaDto.fromJson(Map<String, Object?>.from(item)))
         .toList(growable: false);
   }
 }
@@ -106,7 +106,8 @@ class HomeDramaDto {
       title: JsonFieldParser.optionalString(json, 'title') ?? '',
       summary: JsonFieldParser.optionalString(json, 'summary') ?? '',
       playCount: JsonFieldParser.optionalInt(json, 'play_count') ?? 0,
-      trailerEpisodeNum: JsonFieldParser.optionalInt(json, 'trailer_episode_num') ?? 0,
+      trailerEpisodeNum:
+          JsonFieldParser.optionalInt(json, 'trailer_episode_num') ?? 0,
       isVipOnly: JsonFieldParser.optionalInt(json, 'is_vip_only') ?? 0,
       status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
       episodeTotal: JsonFieldParser.optionalInt(json, 'episode_total') ?? 0,

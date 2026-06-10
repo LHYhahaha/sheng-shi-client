@@ -1,3 +1,5 @@
+import 'package:flutter/cupertino.dart';
+
 import '../../../../core/network/api_client.dart';
 import '../dto/membership_data_dto.dart';
 
@@ -13,14 +15,27 @@ class MembershipRemoteDataSource {
   /// 获取会员页数据（包含商品列表和会员状态）。
   ///
   /// 接口：POST /api/payment/member/page
-  /// 参数：{"userId": userId}
   /// 返回：会员商品列表和当前会员状态
-  Future<MembershipDataDto> getMembershipData({required int userId}) {
+  Future<MembershipDataDto> getMembershipData() {
+    debugPrint('[MembershipRemote] 开始请求会员数据');
+
     return _apiClient.get<MembershipDataDto>(
       '/api/payment/member/page',
-      queryParameters: {'userId': userId},
       authPolicy: ApiAuthPolicy.required,
-      decoder: MembershipDataDto.fromJson,
+      decoder: (data) {
+        try {
+          debugPrint('[MembershipRemote] decoder 收到数据: $data');
+          final dto = MembershipDataDto.fromJson(data);
+          debugPrint(
+            '[MembershipRemote] decoder 成功: isMember=${dto.isMember}, products=${dto.memberProducts.length}',
+          );
+          return dto;
+        } catch (e, stack) {
+          debugPrint('[MembershipRemote] decoder 失败: $e');
+          debugPrint('[MembershipRemote] decoder 堆栈: $stack');
+          rethrow;
+        }
+      },
     );
   }
 }

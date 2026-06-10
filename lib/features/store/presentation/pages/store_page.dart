@@ -28,6 +28,7 @@ class StorePage extends ConsumerStatefulWidget {
 
 class _StorePageState extends ConsumerState<StorePage> {
   bool _modalOpen = false;
+  bool _returnedAfterPurchase = false;
   late final AppModalService _modalService;
 
   @override
@@ -70,6 +71,20 @@ class _StorePageState extends ConsumerState<StorePage> {
                 }
               }),
         );
+      },
+    );
+
+    // 验单成功后关闭确认弹窗并返回上一页。
+    ref.listen(
+      storeControllerProvider.select((state) => state.purchaseStatus),
+      (previous, next) {
+        if (next == StorePurchaseStatus.success &&
+            previous != StorePurchaseStatus.success &&
+            !_returnedAfterPurchase &&
+            mounted) {
+          _returnedAfterPurchase = true;
+          unawaited(_returnAfterPurchaseSuccess());
+        }
       },
     );
 
@@ -143,6 +158,19 @@ class _StorePageState extends ConsumerState<StorePage> {
             )
           : null,
     );
+  }
+
+  Future<void> _returnAfterPurchaseSuccess() async {
+    _modalService.dismissForSource(AppModalSource.store);
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) {
+      return;
+    }
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(RoutePaths.profile);
+    }
   }
 }
 

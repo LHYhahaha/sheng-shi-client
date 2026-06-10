@@ -30,9 +30,19 @@ class PlayerRechargeUnlockModalPayload {
     required this.sessionKey,
     required this.itemId,
     required this.requiredCoins,
+    required this.dramaId,
+    required this.episodeNo,
+    required this.shortTitle,
+    this.cover,
+    this.episodeId,
   });
 
   final String sessionKey;
   final String itemId;
   final int requiredCoins;
+  final int dramaId;
+  final int episodeNo;
+  final String shortTitle;
+  final String? cover;
+  final int? episodeId;
 }

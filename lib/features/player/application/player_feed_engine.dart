@@ -21,17 +21,6 @@ final playerFeedEngineProvider =
       PlayerFeedEngine.new,
     );
 
-/// Feed 播放器引擎门面（应用层统一入口）。
-///
-/// 聚合：viewport、[PlayerRuntimeCoordinator]、[PlayerOverlayOrchestrator]、
-/// [PlayerPerformancePolicy]、权益/sheet 意图解析。
-///
-/// 入口约定：
-/// - 手势：`onScrollStart` / `onPageChanged` / `onScrollEnd` / `settleViewport` / `onViewportSettled`
-/// - 用户操作：`retryPlayback`、`prepareManualUnlock`、`completeCoinUnlock`、`continueAfterRechargeSuccess`
-/// - 只读：`accessPresentationFor`、`isCurrentFeedItem`
-///
-/// drag 阶段不 evaluate/play/preload/弹窗；仅 settled 且 viewport idle 时执行 runtime。
 class PlayerFeedEngineState {
   const PlayerFeedEngineState({
     required this.policy,
@@ -55,7 +44,7 @@ class PlayerFeedEngineState {
   bool get isViewportSettling =>
       viewport.scrollPhase == PlayerViewportScrollPhase.settling;
 
-  /// 是否允许执行 playback/access/preload/sheet 等 runtime 工作。
+  /// 鏄惁鍏佽鎵ц playback/access/preload/sheet 绛?runtime 宸ヤ綔銆?
   bool get canExecuteRuntime =>
       viewport.scrollPhase == PlayerViewportScrollPhase.idle &&
       settledItem != null &&
@@ -142,7 +131,7 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     _viewport.initialize(index: index, itemId: itemId);
   }
 
-  /// 仅在 viewport settled 后调用；drag 阶段调用将被忽略。
+  /// 浠呭湪 viewport settled 鍚庤皟鐢紱drag 闃舵璋冪敤灏嗚蹇界暐銆?
   Future<void> onViewportSettled({
     required PlayerFeedItem item,
     required int index,
@@ -156,16 +145,33 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     required bool Function(PlayerFeedItem item) isCurrentFeedItem,
     required bool Function(PlayerFeedItem item) isPageActivelyMoving,
   }) async {
+    print(
+      '馃攳 [PlayerFeedEngine] onViewportSettled called - itemId: ${item.id}, index: $index, playbackTrigger: $playbackTrigger',
+    );
+    print(
+      '馃攳 [PlayerFeedEngine] Conditions - isModalOpen: $isModalOpen, hasActiveCoinSheet: $hasActiveCoinSheet, hasActiveRechargeSheet: $hasActiveRechargeSheet, isPageScrolling: $isPageScrolling',
+    );
+
     final viewport = ref.read(playerViewportControllerProvider(sessionKey));
+    print(
+      '馃攳 [PlayerFeedEngine] viewport.scrollPhase: ${viewport.scrollPhase}, settledItemId: ${viewport.settledItemId}, settledIndex: ${viewport.settledIndex}',
+    );
+
     if (viewport.scrollPhase != PlayerViewportScrollPhase.idle) {
+      print('馃攳 [PlayerFeedEngine] 鉂?Viewport not idle, returning');
       return;
     }
     if (viewport.settledItemId != item.id || viewport.settledIndex != index) {
+      print(
+        '馃攳 [PlayerFeedEngine] 鉂?Viewport settled item mismatch, returning',
+      );
       return;
     }
+
+    print('馃攳 [PlayerFeedEngine] 鉁?Viewport settled, proceeding...');
     if (previousItemId != null && previousItemId != item.id) {
-      // 自动解锁弹窗的 dismiss 只对“当前这次停留”生效。
-      // 用户离开该 item 后，下次再滑回来应重新允许自动弹出。
+      // 鑷姩瑙ｉ攣寮圭獥鐨?dismiss 鍙鈥滃綋鍓嶈繖娆″仠鐣欌€濈敓鏁堛€?
+      // 鐢ㄦ埛绂诲紑璇?item 鍚庯紝涓嬫鍐嶆粦鍥炴潵搴旈噸鏂板厑璁歌嚜鍔ㄥ脊鍑恒€?
       _overlay.clearDismissed(previousItemId);
     }
 
@@ -272,19 +278,20 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
 
   void clearOverlayDismissed(String itemId) => _overlay.clearDismissed(itemId);
 
-  /// 重试播放：刷新权益后评估权益并执行 runtime；返回需 Page 展示的 sheet。
+  /// 閲嶈瘯鎾斁锛氬埛鏂版潈鐩婂悗璇勪及鏉冪泭骞舵墽琛?runtime锛涜繑鍥為渶 Page 灞曠ず鐨?sheet銆?
   Future<PlayerOverlaySheetIntent> retryPlayback(PlayerFeedItem item) async {
-    if (!_canExecuteUserInitiatedRuntime(item)) {
+    final latestItem = _latestCurrentVersionOf(item);
+    if (latestItem == null || !_canExecuteUserInitiatedRuntime(latestItem)) {
       return PlayerOverlaySheetIntent.none;
     }
-    // 解锁前刷新权益数据，确保金币和会员状态是最新的
+    // 瑙ｉ攣鍓嶅埛鏂版潈鐩婃暟鎹紝纭繚閲戝竵鍜屼細鍛樼姸鎬佹槸鏈€鏂扮殑
     // await ref.read(entitlementControllerProvider.notifier).load();
-    final decision = evaluateAccess(item);
-    await handleAccessDecision(item, decision, autoPresentSheet: false);
-    return _sheetIntentForDecision(decision, item);
+    final decision = evaluateAccess(latestItem);
+    await handleAccessDecision(latestItem, decision, autoPresentSheet: false);
+    return _sheetIntentForDecision(decision, latestItem);
   }
 
-  /// 手动 Unlock Now：取消 dwell，刷新权益后评估并返回 sheet 意图。
+  /// 鎵嬪姩 Unlock Now锛氬彇娑?dwell锛屽埛鏂版潈鐩婂悗璇勪及骞惰繑鍥?sheet 鎰忓浘銆?
   Future<PlayerOverlaySheetIntent> prepareManualUnlock(
     PlayerFeedItem item,
   ) async {
@@ -295,7 +302,7 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     if (!isLockedAutoSheetCandidate(item)) {
       return PlayerOverlaySheetIntent.none;
     }
-    // 解锁前刷新权益数据，确保金币和会员状态是最新的
+    // 瑙ｉ攣鍓嶅埛鏂版潈鐩婃暟鎹紝纭繚閲戝竵鍜屼細鍛樼姸鎬佹槸鏈€鏂扮殑
     // await ref.read(entitlementControllerProvider.notifier).load();
     final decision = evaluateAccess(item);
     if (decision.type == EpisodeAccessDecisionType.allowPlay) {
@@ -305,96 +312,141 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     return _sheetIntentForDecision(decision, item);
   }
 
-  /// 自动 dwell 弹窗：刷新权益后评估 settled locked 项；auto unlock 开启时直接扣币播放。
+  /// 鑷姩 dwell 寮圭獥锛氬埛鏂版潈鐩婂悗璇勪及 settled locked 椤癸紱auto unlock 寮€鍚椂鐩存帴鎵ｅ竵鎾斁銆?
   Future<PlayerUnlockFlowResult> prepareAutoUnlockSheet({
     required PlayerFeedItem item,
     required bool isModalOpen,
     required bool hasActiveCoinSheet,
     required bool hasActiveRechargeSheet,
   }) async {
+    print('馃攳 [PlayerFeedEngine] prepareAutoUnlockSheet - itemId: ${item.id}');
+    print(
+      '馃攳 [PlayerFeedEngine] Conditions check - isModalOpen: $isModalOpen, hasActiveCoinSheet: $hasActiveCoinSheet, hasActiveRechargeSheet: $hasActiveRechargeSheet',
+    );
+    print(
+      '馃攳 [PlayerFeedEngine] _canExecuteUserInitiatedRuntime: ${_canExecuteUserInitiatedRuntime(item)}',
+    );
+    print(
+      '馃攳 [PlayerFeedEngine] isLockedAutoSheetCandidate: ${isLockedAutoSheetCandidate(item)}',
+    );
+
     if (!_canExecuteUserInitiatedRuntime(item) ||
         isModalOpen ||
         hasActiveCoinSheet ||
         hasActiveRechargeSheet ||
         !isLockedAutoSheetCandidate(item)) {
+      print(
+        '馃攳 [PlayerFeedEngine] 鉂?Conditions not met in prepareAutoUnlockSheet, returning empty result',
+      );
       return const PlayerUnlockFlowResult();
     }
-    // 解锁前刷新权益数据，确保金币和会员状态是最新的
+    print(
+      '馃攳 [PlayerFeedEngine] 鉁?Conditions met, proceeding with unlock flow...',
+    );
+    // 瑙ｉ攣鍓嶅埛鏂版潈鐩婃暟鎹紝纭繚閲戝竵鍜屼細鍛樼姸鎬佹槸鏈€鏂扮殑
     // await ref.read(entitlementControllerProvider.notifier).load();
     final decision = evaluateAccess(item);
+    print(
+      '馃攳 [PlayerFeedEngine] evaluateAccess decision - type: ${decision.type}, reason: ${decision.reason}',
+    );
+
     if (decision.type == EpisodeAccessDecisionType.allowPlay) {
+      print('馃攳 [PlayerFeedEngine] Decision: allowPlay, handling decision...');
       await handleAccessDecision(item, decision, autoPresentSheet: false);
       return const PlayerUnlockFlowResult();
     }
     if (decision.type == EpisodeAccessDecisionType.autoUnlockAndPlay) {
+      print(
+        '馃攳 [PlayerFeedEngine] Decision: autoUnlockAndPlay, completing coin unlock...',
+      );
       final unlocked = await completeCoinUnlock(item);
+      print('馃攳 [PlayerFeedEngine] Auto unlock result: $unlocked');
       return PlayerUnlockFlowResult(didAutoUnlock: unlocked);
     }
-    return PlayerUnlockFlowResult(
-      sheetIntent: _autoSheetIntentForDecision(decision),
+
+    final sheetIntent = _autoSheetIntentForDecision(decision);
+    print(
+      '馃攳 [PlayerFeedEngine] Decision: ${decision.type}, sheetIntent: $sheetIntent',
     );
+    return PlayerUnlockFlowResult(sheetIntent: sheetIntent);
   }
 
-  /// Coin 确认后：扣币并走 runtime（不自动弹 sheet）。
+  /// Coin 纭鍚庯細鎵ｅ竵骞惰蛋 runtime锛堜笉鑷姩寮?sheet锛夈€?
   Future<bool> completeCoinUnlock(PlayerFeedItem item) async {
-    if (!_canExecuteUserInitiatedRuntime(item)) {
+    final latestItem = _latestCurrentVersionOf(item);
+    if (latestItem == null || !_canExecuteUserInitiatedRuntime(latestItem)) {
       return false;
     }
-    final operationId =
-        ref.read(entitlementControllerProvider).pendingUnlock?.operationId ??
-        'coin-unlock:${item.content.id}:${item.episode.id}';
-    final decision = await ref
-        .read(entitlementControllerProvider.notifier)
-        .unlockWithCoins(
-          dramaId: item.content.id,
-          episodeId: item.episode.id,
-          itemId: item.id,
-          price: item.episode.requiredCoins,
-          operationId: operationId,
-        );
-    await handleAccessDecision(item, decision, autoPresentSheet: false);
-    return decision.type == EpisodeAccessDecisionType.allowPlay;
+    return _unlockCurrentItemWithCoinApi(latestItem, autoUnlockNext: false);
   }
 
-  /// Recharge sheet 成功：发放 mock 权益并决定下一步 sheet 或直接播放。
+  /// Recharge sheet 鎴愬姛锛氬彂鏀?mock 鏉冪泭骞跺喅瀹氫笅涓€姝?sheet 鎴栫洿鎺ユ挱鏀俱€?
   Future<PlayerUnlockFlowResult> continueAfterRechargeSuccess({
     required PlayerFeedItem item,
     required bool grantedCoinPackage,
     required bool grantedMembershipPackage,
   }) async {
-    if (!_canExecuteUserInitiatedRuntime(item)) {
+    final latestBeforeRefresh = _latestCurrentVersionOf(item);
+    if (latestBeforeRefresh == null ||
+        !_canExecuteUserInitiatedRuntime(latestBeforeRefresh)) {
       return const PlayerUnlockFlowResult();
     }
     ref
         .read(playerRechargeUnlockControllerProvider(sessionKey).notifier)
         .close();
-    // 充值或开通会员成功后，刷新权益数据
+    final refreshedItem = await ref
+        .read(playerFeedControllerProvider(sessionKey).notifier)
+        .refreshCurrentDramaAtEpisode(
+          episodeId: latestBeforeRefresh.episode.id,
+        );
+    final currentItem =
+        refreshedItem ?? _latestCurrentVersionOf(latestBeforeRefresh);
+    if (currentItem == null || !_canExecuteUserInitiatedRuntime(currentItem)) {
+      return const PlayerUnlockFlowResult();
+    }
+    // 鍏呭€兼垨寮€閫氫細鍛樻垚鍔熷悗锛屽埛鏂版潈鐩婃暟鎹?
     // await ref.read(entitlementControllerProvider.notifier).load();
     if (grantedMembershipPackage) {
-      final decision = evaluateAccess(item);
+      final decision = evaluateAccess(currentItem);
       if (decision.type == EpisodeAccessDecisionType.allowPlay) {
-        await handleAccessDecision(item, decision, autoPresentSheet: false);
+        await handleAccessDecision(
+          currentItem,
+          decision,
+          autoPresentSheet: false,
+        );
         return const PlayerUnlockFlowResult(didActivateMembership: true);
       }
       await quiesceAfterRecharge(
-        item,
+        currentItem,
         reason: decision.reason ?? 'membership purchase pending unlock',
       );
       _ui.showUnlockPaywall();
       return PlayerUnlockFlowResult(
-        sheetIntent: _sheetIntentForDecision(decision, item),
+        sheetIntent: _sheetIntentForDecision(decision, currentItem),
       );
     }
-    await quiesceAfterRecharge(
-      item,
-      reason: 'recharge success awaiting coin confirmation',
-    );
-    _ui.showUnlockPaywall();
     if (grantedCoinPackage) {
+      if (ref.read(entitlementControllerProvider).autoUnlockEnabled) {
+        final unlocked = await _unlockCurrentItemWithCoinApi(
+          currentItem,
+          autoUnlockNext: true,
+        );
+        return PlayerUnlockFlowResult(didAutoUnlock: unlocked);
+      }
+      await quiesceAfterRecharge(
+        currentItem,
+        reason: 'recharge success awaiting coin confirmation',
+      );
+      _ui.showUnlockPaywall();
       return const PlayerUnlockFlowResult(
         sheetIntent: PlayerOverlaySheetIntent.coinUnlock,
       );
     }
+    await quiesceAfterRecharge(
+      currentItem,
+      reason: 'recharge success awaiting unlock continuation',
+    );
+    _ui.showUnlockPaywall();
     return const PlayerUnlockFlowResult();
   }
 
@@ -429,7 +481,8 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
       case EpisodeAccessDecisionType.showRechargeDialog:
         return PlayerOverlaySheetIntent.rechargeUnlock;
       case EpisodeAccessDecisionType.goMembership:
-        return PlayerOverlaySheetIntent.rechargeUnlock;
+        // 绾細鍛樺墽锛氳Е鍙戣烦杞細鍛橀〉
+        return PlayerOverlaySheetIntent.membership;
       case EpisodeAccessDecisionType.waitUnlock:
         if (item.episode.isUnavailable) {
           return PlayerOverlaySheetIntent.none;
@@ -438,13 +491,16 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     }
   }
 
-  /// 自动 dwell 弹窗：仅 coin/recharge；会员/等待类保持 inline Unlock 由用户手动点。
+  /// 鑷姩 dwell 寮圭獥锛歝oin/recharge/浼氬憳閮芥敮鎸佽嚜鍔ㄥ脊绐楋紱waitUnlock 淇濇寔 inline Unlock 鐢辩敤鎴锋墜鍔ㄧ偣銆?
   PlayerOverlaySheetIntent _autoSheetIntentForDecision(
     EpisodeAccessDecision decision,
   ) {
     switch (decision.type) {
       case EpisodeAccessDecisionType.allowPlay:
+        return PlayerOverlaySheetIntent.none;
       case EpisodeAccessDecisionType.goMembership:
+        // 绾細鍛樺墽锛氳嚜鍔ㄨЕ鍙戣烦杞細鍛橀〉
+        return PlayerOverlaySheetIntent.membership;
       case EpisodeAccessDecisionType.waitUnlock:
         return PlayerOverlaySheetIntent.none;
       case EpisodeAccessDecisionType.autoUnlockAndPlay:
@@ -461,5 +517,46 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     }
     final viewport = ref.read(playerViewportControllerProvider(sessionKey));
     return viewport.scrollPhase != PlayerViewportScrollPhase.dragging;
+  }
+
+  PlayerFeedItem? _latestCurrentVersionOf(PlayerFeedItem item) {
+    final currentItem = ref
+        .read(playerFeedControllerProvider(sessionKey))
+        .currentItem;
+    if (currentItem?.id != item.id) {
+      return null;
+    }
+    return currentItem;
+  }
+
+  Future<bool> _unlockCurrentItemWithCoinApi(
+    PlayerFeedItem item, {
+    required bool autoUnlockNext,
+  }) async {
+    await ref
+        .read(playerRechargeUnlockControllerProvider(sessionKey).notifier)
+        .unlockWithCoin(
+          autoUnlockNext: autoUnlockNext,
+          coin: item.episode.requiredCoins,
+          dramaId: int.tryParse(item.content.id) ?? 0,
+          episodeNo: item.episode.number,
+          shortTitle: item.content.playTitle.isNotEmpty
+              ? item.content.playTitle
+              : item.content.title,
+          cover: item.content.posterAssetPath,
+          episodeId: int.tryParse(item.episode.id),
+        );
+
+    final unlockState = ref.read(
+      playerRechargeUnlockControllerProvider(sessionKey),
+    );
+    if (unlockState.status != PlayerRechargeUnlockStatus.success) {
+      return false;
+    }
+
+    final unlockedItem = _latestCurrentVersionOf(item) ?? item;
+    final decision = evaluateAccess(unlockedItem);
+    await handleAccessDecision(unlockedItem, decision, autoPresentSheet: false);
+    return decision.type == EpisodeAccessDecisionType.allowPlay;
   }
 }

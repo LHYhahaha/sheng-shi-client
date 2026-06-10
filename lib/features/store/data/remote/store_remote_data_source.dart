@@ -3,23 +3,23 @@ import '../dto/order_create_request_dto.dart';
 import '../dto/order_dto.dart';
 import '../dto/store_recharge_data_dto.dart';
 
-/// 充值商店远程数据源骨架。
+/// 充值商店远程数据源。
 ///
-/// 商品列表当前假设可未登录查看，所以使用 none；创建订单属于登录后动作，必须 required。
+/// 商品列表接口：GET /api/payment/recharge/page
+/// 创建订单属于登录后动作，必须 required。
 class StoreRemoteDataSource {
   const StoreRemoteDataSource({required ApiClient apiClient})
     : _apiClient = apiClient;
 
   final ApiClient _apiClient;
 
-  Future<StoreRechargeDataDto> listRechargeProducts({
-    required String platform,
-    required String locale,
-  }) {
+  /// 获取充值页面数据
+  /// 
+  /// 对应后端 API：GET /api/payment/recharge/page
+  Future<StoreRechargeDataDto> fetchRechargePage() {
     return _apiClient.get<StoreRechargeDataDto>(
-      '/store/recharge-products',
-      queryParameters: {'platform': platform, 'locale': locale},
-      authPolicy: ApiAuthPolicy.none,
+      '/api/payment/recharge/page',
+      authPolicy: ApiAuthPolicy.required,
       decoder: StoreRechargeDataDto.fromJson,
     );
   }

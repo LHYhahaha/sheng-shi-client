@@ -32,6 +32,7 @@ class StorePackage {
     this.subtitle,
     this.footnote,
     this.benefits = const [],
+    this.promotionExpireSeconds = 0,
   });
 
   /// 套餐 id。
@@ -59,7 +60,7 @@ class StorePackage {
 
   /// 赠送金币数。
   ///
-  /// 只用于 mock 权益发放和展示校验。真实权益发放必须以后端验单/订单结果为准。
+  /// 只用于展示校验。真实权益发放必须以后端验单/订单结果为准。
   final int bonusCoins;
 
   /// 原始价格微单位。
@@ -88,7 +89,7 @@ class StorePackage {
 
   /// 平台商品类型，例如 consumable/subscription。
   ///
-  /// 只做订单 contract 预留，不参与当前 mock UI 判断。
+  /// 只做订单 contract 预留，不参与 UI 判断。
   final String? productType;
 
   /// 促销 id。
@@ -125,13 +126,75 @@ class StorePackage {
   /// 只用于说明权益，真实权益以会员接口刷新为准。
   final List<StorePackageBenefit> benefits;
 
+  /// 促销倒计时秒数。
+  ///
+  /// 仅会员商品，来自 API 的 `promotionExpireSeconds`。
+  /// UI 层根据此字段计算倒计时结束时间。
+  final int promotionExpireSeconds;
+
   bool get isCoinPackage => kind == StorePackageKind.coins;
 
-  /// mock 充值成功后写入 Entitlement 的总金币数。
+  /// 套餐展示中的总金币数。
   ///
   /// 这里刻意保留结构化总数，避免 StoreController 去解析展示文案。真实阶段仍不能只信
   /// 客户端这个值，必须等服务端订单确认后再发放。
   int get totalCoins => baseCoins + bonusCoins;
+
+  /// 创建套餐的副本，可选择性地覆盖字段。
+  StorePackage copyWith({
+    String? id,
+    StorePackageKind? kind,
+    String? title,
+    String? priceLabel,
+    int? baseCoins,
+    int? bonusCoins,
+    int? priceMicros,
+    String? currencyCode,
+    int? originalPriceMicros,
+    String? platformProductId,
+    String? basePlanId,
+    String? offerId,
+    String? productType,
+    String? promotionId,
+    DateTime? promotionExpiresAt,
+    int? sortOrder,
+    bool? enabled,
+    String? bonusLabel,
+    String? badgeLabel,
+    String? originalPriceLabel,
+    String? subtitle,
+    String? footnote,
+    List<StorePackageBenefit>? benefits,
+    int? promotionExpireSeconds,
+  }) {
+    return StorePackage(
+      id: id ?? this.id,
+      kind: kind ?? this.kind,
+      title: title ?? this.title,
+      priceLabel: priceLabel ?? this.priceLabel,
+      baseCoins: baseCoins ?? this.baseCoins,
+      bonusCoins: bonusCoins ?? this.bonusCoins,
+      priceMicros: priceMicros ?? this.priceMicros,
+      currencyCode: currencyCode ?? this.currencyCode,
+      originalPriceMicros: originalPriceMicros ?? this.originalPriceMicros,
+      platformProductId: platformProductId ?? this.platformProductId,
+      basePlanId: basePlanId ?? this.basePlanId,
+      offerId: offerId ?? this.offerId,
+      productType: productType ?? this.productType,
+      promotionId: promotionId ?? this.promotionId,
+      promotionExpiresAt: promotionExpiresAt ?? this.promotionExpiresAt,
+      sortOrder: sortOrder ?? this.sortOrder,
+      enabled: enabled ?? this.enabled,
+      bonusLabel: bonusLabel ?? this.bonusLabel,
+      badgeLabel: badgeLabel ?? this.badgeLabel,
+      originalPriceLabel: originalPriceLabel ?? this.originalPriceLabel,
+      subtitle: subtitle ?? this.subtitle,
+      footnote: footnote ?? this.footnote,
+      benefits: benefits ?? this.benefits,
+      promotionExpireSeconds:
+          promotionExpireSeconds ?? this.promotionExpireSeconds,
+    );
+  }
 }
 
 /// 商店套餐权益展示项。

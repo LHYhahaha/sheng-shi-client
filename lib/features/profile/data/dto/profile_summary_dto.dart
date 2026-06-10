@@ -62,11 +62,15 @@ class ProfileSummaryDto {
 
   factory ProfileSummaryDto.fromJson(Object? json) {
     final map = json is Map<String, Object?> ? json : const <String, Object?>{};
+    final displayId = _string(
+      map['displayId'],
+      fallback: _string(map['showId'], fallback: _string(map['showid'])),
+    );
     return ProfileSummaryDto(
-      userId: _string(map['userId']),
+      userId: _string(map['userId'], fallback: displayId),
       nickname: _string(map['nickname']),
       avatarUrl: _nullableString(map['avatarUrl']),
-      displayId: _string(map['displayId']),
+      displayId: displayId,
       membershipSummary: ProfileMembershipSummaryDto.fromJson(
         map['membershipSummary'],
       ),

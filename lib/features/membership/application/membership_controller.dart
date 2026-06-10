@@ -1,30 +1,36 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../../core/auth/session_cleanup_types.dart';
-import '../../../core/auth/user_info_store.dart';
+import '../../../core/utils/period_iso_parser.dart';
 import '../../entitlement/application/entitlement_controller.dart';
+import '../../pay/application/google_play_pricing_extractor.dart';
+import '../../pay/application/iap_price_service.dart';
+import '../../pay/provider/iap_price_service_provider.dart';
+import '../../pay/provider/iap_purchase_service_provider.dart';
+import '../../pay/provider/pay_repository_provider.dart';
 import '../data/membership_repository_provider.dart';
 import '../domain/membership_plan.dart';
 
-/// Membership feature 的唯一页面状态入口。
-///
-/// 会员页展示、套餐选择和 mock 开通弹窗都通过这里管理。真实订阅接入后，客户端只能
-/// 触发订单/验单流程，会员权益是否生效必须由服务端权益刷新决定。
 final membershipControllerProvider =
     NotifierProvider<MembershipController, MembershipState>(
       MembershipController.new,
     );
 
-/// 会员 mock 开通确认弹窗的本地流程状态。
-///
-/// 只用于按钮禁用、loading 和完成态展示，不代表 App Store/Google Play 或服务端
-/// 已经确认权益。不要用这个 enum 直接驱动 Profile 的会员 active 状态。
-enum MembershipPurchaseStatus { idle, processing, success, cancelled }
+enum MembershipPurchaseStatus {
+  idle,
+  creatingOrder,
+  waitingPayment,
+  verifying,
+  pending,
+  success,
+  failed,
+  cancelled,
+}
 
-/// 会员页状态，包含权益展示、套餐选择和 mock 开通确认。
-///
-/// `isActive` 来自会员接口，不应由客户端 mock purchase success 直接推断。真实接入时，
-/// 开通成功必须以服务端权益刷新为准，否则会出现支付成功/失败与会员态不一致。
 class MembershipState {
   const MembershipState({
     required this.isLoading,
@@ -32,11 +38,10 @@ class MembershipState {
     required this.heroTitle,
     required this.heroSubtitle,
     required this.plans,
-    required this.benefits,
-    required this.tips,
     required this.selectedPlanId,
     required this.confirmationPlanId,
     required this.purchaseStatus,
+    required this.iapProductDetails,
     this.error,
   });
 
@@ -46,71 +51,21 @@ class MembershipState {
       heroTitle = '',
       heroSubtitle = '',
       plans = const [],
-      benefits = const [],
-      tips = null,
       selectedPlanId = null,
       confirmationPlanId = null,
       purchaseStatus = MembershipPurchaseStatus.idle,
+      iapProductDetails = const {},
       error = null;
 
-  /// 会员页是否正在加载权益和套餐数据。
-  ///
-  /// 不表示购买 processing；购买流程只通过 `purchaseStatus` 表达，避免整页 loading
-  /// 遮住确认弹窗状态。
   final bool isLoading;
-
-  /// 当前账号是否已经是会员。
-  ///
-  /// 这个字段来自会员接口，不应由本地 mock purchase success 直接改写。真实支付后
-  /// 需要重新拉取权益或等待服务端回写。
   final bool isActive;
-
-  /// 会员页 hero 主标题。
-  ///
-  /// 属于营销展示文案，不参与权益判断。后续多语言或远程配置只应影响展示。
   final String heroTitle;
-
-  /// 会员页 hero 副标题。
-  ///
-  /// 与 `heroTitle` 一样只用于展示，不要在业务逻辑中解析文案判断套餐类型。
   final String heroSubtitle;
-
-  /// 可购买会员套餐列表。
-  ///
-  /// 套餐价格、周期和标签都以接口返回为准；UI 不应根据数组顺序推断真实推荐策略，
-  /// 当前默认选第一个只是 MVP 初始态。
   final List<MembershipPlan> plans;
-
-  /// 会员权益展示列表。
-  ///
-  /// 只用于说明权益，不代表实际授权开关。播放器解锁仍需要 source/账号权益接口确认。
-  final List<MembershipBenefit> benefits;
-
-  /// 会员页提示文案。
-  ///
-  /// 当前为展示数据，不能作为支付条款或风控判断来源。
-  final MembershipTips? tips;
-
-  /// 当前选中的套餐 id。
-  ///
-  /// 用于卡片高亮；打开确认弹窗后应以 `confirmationPlanId` 为准，防止切换选择影响
-  /// 正在处理的购买流程。
   final String? selectedPlanId;
-
-  /// 确认弹窗锁定的套餐 id。
-  ///
-  /// processing 延迟完成时会再次校验它，避免旧弹窗结果污染新套餐。
   final String? confirmationPlanId;
-
-  /// mock 会员购买流程状态。
-  ///
-  /// success 只说明客户端确认流程完成，不说明会员权益已生效。真实接入时必须通过
-  /// 服务端订单/权益刷新更新 `isActive`。
   final MembershipPurchaseStatus purchaseStatus;
-
-  /// 加载会员页数据时的错误。
-  ///
-  /// 购买错误未来应与加载错误分开，否则支付失败会错误地把权益页面置为整页失败。
+  final Map<String, ProductDetails> iapProductDetails;
   final Object? error;
 
   bool get hasContent => !isLoading && error == null;
@@ -138,11 +93,10 @@ class MembershipState {
     String? heroTitle,
     String? heroSubtitle,
     List<MembershipPlan>? plans,
-    List<MembershipBenefit>? benefits,
-    MembershipTips? tips,
     String? selectedPlanId,
     String? confirmationPlanId,
     MembershipPurchaseStatus? purchaseStatus,
+    Map<String, ProductDetails>? iapProductDetails,
     Object? error,
     bool clearError = false,
     bool clearConfirmation = false,
@@ -153,23 +107,21 @@ class MembershipState {
       heroTitle: heroTitle ?? this.heroTitle,
       heroSubtitle: heroSubtitle ?? this.heroSubtitle,
       plans: plans ?? this.plans,
-      benefits: benefits ?? this.benefits,
-      tips: tips ?? this.tips,
       selectedPlanId: selectedPlanId ?? this.selectedPlanId,
       confirmationPlanId: clearConfirmation
           ? null
           : confirmationPlanId ?? this.confirmationPlanId,
       purchaseStatus: purchaseStatus ?? this.purchaseStatus,
+      iapProductDetails: iapProductDetails ?? this.iapProductDetails,
       error: clearError ? null : error ?? this.error,
     );
   }
 }
 
-/// 会员页控制器。
-///
-/// 控制器保持“加载会员权益”和“购买确认状态”分离。这样接支付后可以先完成订单流程，
-/// 再通过 membership repository 重新拉取权益，而不是在 UI 层临时拼会员态。
 class MembershipController extends Notifier<MembershipState> {
+  static const _packageName = 'com.yushi.drama.client';
+  static const _membershipProductType = 2;
+
   int _generation = 0;
   int _purchaseGeneration = 0;
 
@@ -191,32 +143,36 @@ class MembershipController extends Notifier<MembershipState> {
     );
 
     try {
-      final userInfo = ref.read(userInfoStoreProvider);
-      final userId = userInfo.userId ?? 0;
-      
       final data = await ref
           .read(membershipRepositoryProvider)
-          .fetchMembership(userId: userId);
+          .fetchMembership();
+
       if (!_isCurrent(generation)) {
         return;
       }
+
+      final iapDetails = await _queryIapProducts(data.plans);
+      if (!_isCurrent(generation)) {
+        return;
+      }
+
+      final plans = _mergeIapPricing(data.plans, iapDetails);
 
       state = state.copyWith(
         isLoading: false,
         isActive: data.isActive,
         heroTitle: data.heroTitle,
         heroSubtitle: data.heroSubtitle,
-        plans: List<MembershipPlan>.unmodifiable(data.plans),
-        benefits: List<MembershipBenefit>.unmodifiable(data.benefits),
-        tips: data.tips,
-        selectedPlanId: data.plans.isEmpty ? null : data.plans.first.id,
+        plans: List<MembershipPlan>.unmodifiable(plans),
+        selectedPlanId: plans.isEmpty ? null : plans.first.id,
+        iapProductDetails: iapDetails,
         clearError: true,
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
+      debugPrint('[Membership] load failed: $error\n$stackTrace');
       if (!_isCurrent(generation)) {
         return;
       }
-
       state = state.copyWith(isLoading: false, error: error);
     }
   }
@@ -227,11 +183,9 @@ class MembershipController extends Notifier<MembershipState> {
     if (state.planById(id) == null) {
       return;
     }
-
     state = state.copyWith(selectedPlanId: id);
   }
 
-  /// 选中套餐并打开 mock 购买确认（Figma：无底部固定 Join Now，点卡片即购买入口）。
   void selectPlanAndConfirm(String id) {
     selectPlan(id);
     showConfirmation();
@@ -243,11 +197,11 @@ class MembershipController extends Notifier<MembershipState> {
       return;
     }
 
-    // 打开确认弹窗即刷新购买代次，防止旧弹窗的异步 processing 结果污染新套餐。
     _purchaseGeneration++;
     state = state.copyWith(
       confirmationPlanId: selectedPlan.id,
       purchaseStatus: MembershipPurchaseStatus.idle,
+      clearError: true,
     );
   }
 
@@ -259,44 +213,352 @@ class MembershipController extends Notifier<MembershipState> {
     );
   }
 
-  Future<void> confirmMockPurchase() async {
+  Future<void> confirmPurchase() async {
     if (state.confirmationPlan == null ||
         state.purchaseStatus != MembershipPurchaseStatus.idle) {
       return;
     }
 
-    // mock success 会触发权益刷新，让 Player/Profile/Wallet 后续读取同一份
-    // 会员状态。真实接入时这里仍应等待服务端订单确认或触发权益刷新。
     final purchaseGeneration = _purchaseGeneration;
-    final planId = state.confirmationPlanId;
-    state = state.copyWith(purchaseStatus: MembershipPurchaseStatus.processing);
-    await Future<void>.delayed(const Duration(milliseconds: 180));
-    if (purchaseGeneration != _purchaseGeneration ||
-        state.confirmationPlanId != planId ||
-        state.purchaseStatus != MembershipPurchaseStatus.processing) {
-      return;
+    final plan = state.confirmationPlan!;
+    StreamSubscription<PurchaseDetails>? sub;
+    try {
+      final platformProductId = plan.platformProductId;
+      if (platformProductId == null || platformProductId.isEmpty) {
+        throw Exception('Plan has no platform product id: ${plan.id}');
+      }
+
+      var productDetails = state.iapProductDetails[platformProductId];
+      if (productDetails == null) {
+        final queried = await ref
+            .read(iapPriceServiceProvider)
+            .queryProduct(productId: platformProductId);
+        productDetails = queried;
+      }
+      if (productDetails == null) {
+        throw Exception('Product details not found for $platformProductId');
+      }
+
+      state = state.copyWith(
+        purchaseStatus: MembershipPurchaseStatus.creatingOrder,
+        clearError: true,
+      );
+
+      final payRepository = ref.read(payRepositoryProvider);
+      final paymentOrder = await payRepository.createPaymentOrder(
+        productId: int.tryParse(plan.id) ?? 0,
+        productType: _membershipProductType,
+        scene: 'membership',
+      );
+
+      if (!_isCurrentPurchase(purchaseGeneration, plan.id)) {
+        return;
+      }
+
+      final iapService = ref.read(iapPurchaseServiceProvider);
+      if (iapService == null) {
+        throw Exception('IAP purchase service not available');
+      }
+
+      final purchaseCompleter = Completer<PurchaseDetails?>();
+      sub = iapService.purchaseStream.listen((details) {
+        if (details.productID == productDetails!.id &&
+            !purchaseCompleter.isCompleted) {
+          purchaseCompleter.complete(details);
+        }
+      });
+
+      state = state.copyWith(
+        purchaseStatus: MembershipPurchaseStatus.waitingPayment,
+      );
+      final started = await iapService.buyProduct(product: productDetails);
+      if (!started) {
+        throw Exception('Failed to launch IAP purchase');
+      }
+
+      final purchaseDetails = await purchaseCompleter.future.timeout(
+        const Duration(minutes: 5),
+        onTimeout: () {
+          debugPrint('[Membership] purchase timed out.');
+          return null;
+        },
+      );
+
+      if (!_isCurrentPurchase(purchaseGeneration, plan.id)) {
+        return;
+      }
+      if (purchaseDetails == null) {
+        throw Exception('Purchase timeout or cancelled');
+      }
+
+      if (purchaseDetails.status == PurchaseStatus.pending) {
+        state = state.copyWith(
+          purchaseStatus: MembershipPurchaseStatus.pending,
+        );
+        return;
+      }
+      if (purchaseDetails.status == PurchaseStatus.error) {
+        throw Exception('Purchase failed: ${purchaseDetails.error}');
+      }
+      if (purchaseDetails.status.name == 'canceled') {
+        state = state.copyWith(
+          purchaseStatus: MembershipPurchaseStatus.cancelled,
+        );
+        return;
+      }
+      if (purchaseDetails.status != PurchaseStatus.purchased &&
+          purchaseDetails.status != PurchaseStatus.restored) {
+        throw Exception(
+          'Unsupported purchase status: ${purchaseDetails.status}',
+        );
+      }
+
+      state = state.copyWith(
+        purchaseStatus: MembershipPurchaseStatus.verifying,
+      );
+      final verifyResult = await payRepository.verifyGooglePayment(
+        orderNo: paymentOrder.orderNo,
+        channelProductId: purchaseDetails.productID,
+        packageName: _packageName,
+        productType: _membershipProductType,
+        purchaseToken: purchaseDetails.verificationData.serverVerificationData,
+        channelOrderId: purchaseDetails.purchaseID,
+        rawReceipt: purchaseDetails.verificationData.source,
+      );
+
+      if (!_isCurrentPurchase(purchaseGeneration, plan.id)) {
+        return;
+      }
+      if (verifyResult.orderStatus != 'ORDER_STATUS_SUCCESS') {
+        throw Exception(
+          'Payment verification returned ${verifyResult.orderStatus}',
+        );
+      }
+
+      if (purchaseDetails.pendingCompletePurchase) {
+        await iapService.completePurchase(purchaseDetails);
+      }
+
+      await _refreshAfterPurchase();
+
+      if (!_isCurrentPurchase(purchaseGeneration, plan.id)) {
+        return;
+      }
+      state = state.copyWith(purchaseStatus: MembershipPurchaseStatus.success);
+    } catch (error, stackTrace) {
+      debugPrint('[Membership] purchase failed: $error\n$stackTrace');
+      if (purchaseGeneration == _purchaseGeneration) {
+        state = state.copyWith(
+          purchaseStatus: MembershipPurchaseStatus.failed,
+          error: error,
+        );
+      }
+    } finally {
+      await sub?.cancel();
     }
-
-    // 支付成功后刷新权益系统，获取最新的会员状态
-    await ref.read(entitlementControllerProvider.notifier).load();
-
-    if (purchaseGeneration != _purchaseGeneration ||
-        state.confirmationPlanId != planId ||
-        state.purchaseStatus != MembershipPurchaseStatus.processing) {
-      return;
-    }
-
-    state = state.copyWith(purchaseStatus: MembershipPurchaseStatus.success);
   }
 
-  void cancelMockPurchase() {
+  void cancelPurchase() {
     if (state.purchaseStatus != MembershipPurchaseStatus.idle) {
       return;
     }
-
-    // processing 中不允许取消本地状态，避免支付渠道仍在处理时 UI 先进入 cancelled。
     state = state.copyWith(purchaseStatus: MembershipPurchaseStatus.cancelled);
   }
 
+  Future<Map<String, ProductDetails>> _queryIapProducts(
+    List<MembershipPlan> plans,
+  ) async {
+    final productIds = <String>{};
+    for (final plan in plans) {
+      final productId = plan.platformProductId;
+      if (productId != null && productId.isNotEmpty) {
+        productIds.add(productId);
+      }
+    }
+    if (productIds.isEmpty) {
+      return const {};
+    }
+    return ref
+        .read(iapPriceServiceProvider)
+        .queryProducts(productIds: productIds);
+  }
+
+  List<MembershipPlan> _mergeIapPricing(
+    List<MembershipPlan> plans,
+    Map<String, ProductDetails> iapDetails,
+  ) {
+    if (iapDetails.isEmpty) {
+      return plans;
+    }
+
+    final priceService = ref.read(iapPriceServiceProvider);
+    return [
+      for (final plan in plans)
+        _mergePlanPricing(
+          plan,
+          iapDetails[plan.platformProductId],
+          priceService,
+        ),
+    ];
+  }
+
+  MembershipPlan _mergePlanPricing(
+    MembershipPlan plan,
+    ProductDetails? product,
+    IapPriceService priceService,
+  ) {
+    if (product == null) {
+      return plan;
+    }
+
+    final promo = priceService.extractPromoInfo(product);
+    if (promo != null && promo['hasPromo'] == true) {
+      final promoPrice = promo['promoPrice'] as String? ?? product.price;
+      final regularPrice = promo['regularPrice'] as String?;
+      final promoPeriod = promo['promoPeriod'] as String?;
+      final regularPeriod = promo['regularPeriod'] as String?;
+      final promoMicros = promo['promoPriceMicros'] as int?;
+      final regularMicros = promo['regularPriceMicros'] as int?;
+
+      return _copyPlan(
+        plan,
+        title: _cleanTitle(product.title),
+        priceLabel: promoPrice,
+        originalPriceLabel: regularPrice ?? plan.originalPriceLabel,
+        promotionPriceLabel: promoPrice,
+        hasPromo: true,
+        regularPriceLabel: regularPrice,
+        promoPeriodIso: promoPeriod,
+        regularPeriodIso: regularPeriod,
+        dailyPriceLabel: _dailyPriceLabel(
+          priceMicros: promoMicros ?? regularMicros,
+          periodIso: promoPeriod ?? regularPeriod ?? plan.regularPeriodIso,
+          currencyCode: product.currencyCode,
+          currencySymbol: product.currencySymbol,
+        ),
+      );
+    }
+
+    final displayPricing = GooglePlayPricingExtractor.extractDisplayPricing(
+      product,
+    );
+    return _copyPlan(
+      plan,
+      title: _cleanTitle(product.title),
+      priceLabel: product.price,
+      hasPromo: false,
+      dailyPriceLabel: _dailyPriceLabel(
+        priceMicros:
+            displayPricing?['priceMicros'] as int? ??
+            (product.rawPrice * 1000000).round(),
+        periodIso:
+            displayPricing?['period'] as String? ?? plan.regularPeriodIso,
+        currencyCode: product.currencyCode,
+        currencySymbol:
+            displayPricing?['currencySymbol'] as String? ??
+            product.currencySymbol,
+      ),
+    );
+  }
+
+  MembershipPlan _copyPlan(
+    MembershipPlan plan, {
+    String? title,
+    String? priceLabel,
+    String? dailyPriceLabel,
+    String? originalPriceLabel,
+    String? promotionPriceLabel,
+    bool? hasPromo,
+    String? regularPriceLabel,
+    String? promoPeriodIso,
+    String? regularPeriodIso,
+  }) {
+    return MembershipPlan(
+      id: plan.id,
+      title: title ?? plan.title,
+      priceLabel: priceLabel ?? plan.priceLabel,
+      dailyPriceLabel: dailyPriceLabel ?? plan.dailyPriceLabel,
+      period: plan.period,
+      platformProductId: plan.platformProductId,
+      badgeLabel: plan.badgeLabel,
+      originalPriceLabel: originalPriceLabel ?? plan.originalPriceLabel,
+      promotionPriceLabel: promotionPriceLabel ?? plan.promotionPriceLabel,
+      hasPromo: hasPromo ?? plan.hasPromo,
+      regularPriceLabel: regularPriceLabel ?? plan.regularPriceLabel,
+      promoCountdownEndMs: plan.promoCountdownEndMs,
+      description: plan.description,
+      enabled: plan.enabled,
+      promoPeriodIso: promoPeriodIso ?? plan.promoPeriodIso,
+      regularPeriodIso: regularPeriodIso ?? plan.regularPeriodIso,
+    );
+  }
+
+  String _cleanTitle(String title) =>
+      title.split(RegExp(r'\s*\(')).first.trim();
+
+  String _dailyPriceLabel({
+    required int? priceMicros,
+    required String? periodIso,
+    required String currencyCode,
+    required String currencySymbol,
+  }) {
+    if (priceMicros == null ||
+        priceMicros < 0 ||
+        periodIso == null ||
+        periodIso.isEmpty ||
+        (currencyCode.isEmpty && currencySymbol.isEmpty)) {
+      return '';
+    }
+    final days = _periodToDays(periodIso);
+    if (days <= 0) {
+      return '';
+    }
+    final daily = priceMicros / 1000000.0 / days;
+    final roundedUp = (daily * 100).ceil() / 100;
+    return '${_formatCurrency(currencyCode, currencySymbol, roundedUp)}/day';
+  }
+
+  String _formatCurrency(
+    String currencyCode,
+    String currencySymbol,
+    double amount,
+  ) {
+    final normalizedSymbol = currencySymbol.trim();
+    if (normalizedSymbol.isNotEmpty) {
+      return '$normalizedSymbol${amount.toStringAsFixed(2)}';
+    }
+    final normalizedCode = currencyCode.trim().toUpperCase();
+    if (normalizedCode.isEmpty) {
+      return amount.toStringAsFixed(2);
+    }
+    return '$normalizedCode ${amount.toStringAsFixed(2)}';
+  }
+
+  Future<void> _refreshAfterPurchase() async {
+    await ref.read(entitlementControllerProvider.notifier).load();
+  }
+
+  int _periodToDays(String periodIso) {
+    final parsed = PeriodIsoParser.parse(periodIso);
+    if (parsed == null) {
+      return 0;
+    }
+    final value = parsed['value'] as int;
+    final unit = parsed['unit'] as String;
+    return switch (unit) {
+      'D' => value,
+      'W' => value * 7,
+      'M' => value * 30,
+      'Y' => value * 365,
+      _ => 0,
+    };
+  }
+
   bool _isCurrent(int generation) => generation == _generation;
+
+  bool _isCurrentPurchase(int purchaseGeneration, String planId) {
+    return purchaseGeneration == _purchaseGeneration &&
+        state.confirmationPlanId == planId &&
+        state.purchaseStatus != MembershipPurchaseStatus.idle;
+  }
 }

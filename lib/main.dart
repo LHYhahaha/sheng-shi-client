@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
 import 'bootstrap/app_modal_registry_bootstrap.dart';
+import 'core/auth/auth_token_storage_provider.dart';
+import 'core/auth/flutter_secure_auth_token_storage.dart';
 import 'core/runtime/install_id_provider.dart';
 
 Future<void> main() async {
@@ -29,6 +31,9 @@ Future<void> main() async {
       overrides: [
         installIdStorageProvider.overrideWithValue(
           createSharedPreferencesInstallIdStorage(preferences),
+        ),
+        authTokenStorageProvider.overrideWithValue(
+          FlutterSecureAuthTokenStorage(),
         ),
         ...appModalRegistryOverrides,
       ],

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/session_cleanup_types.dart';
@@ -192,6 +193,38 @@ class EntitlementController extends Notifier<UserEntitlementState> {
 
   void clearPendingUnlock() {
     state = state.copyWith(clearPendingUnlock: true);
+  }
+
+  /// 金币解锁剧集成功后，更新本地 entitlement 状态。
+  ///
+  /// 此方法应在调用 `/api/payment/episode/unlock` 成功后调用，用于更新：
+  /// 1. 金币余额（coinBalance 和 bonusBalance）
+  /// 2. 已解锁剧集列表（unlockedEpisodeIds）
+  ///
+  /// [episodeId] 解锁的剧集ID
+  /// [coinBalance] 最新的金币余额
+  /// [bonusBalance] 最新的赠币余额
+  void updateAfterCoinUnlock({
+    required String episodeId,
+    required int coinBalance,
+    required int bonusBalance,
+  }) {
+    final updatedUnlockedIds = Set<String>.from(state.unlockedEpisodeIds)
+      ..add(episodeId);
+    
+    state = state.copyWith(
+      coinBalance: coinBalance,
+      bonusBalance: bonusBalance,
+      unlockedEpisodeIds: updatedUnlockedIds,
+      clearPendingUnlock: true,
+      clearInFlightUnlock: true,
+      clearLastUnlockError: true,
+    );
+    
+    debugPrint(
+      '[Entitlement] 金币解锁成功，已更新状态: episodeId=$episodeId, '
+      'coinBalance=$coinBalance, bonusBalance=$bonusBalance',
+    );
   }
 
   EpisodeAccessDecision _evaluate({

@@ -1,20 +1,22 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:developer' as developer;
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:http/http.dart' as http;
 
 import '../data/playback_progress_repository_provider.dart';
 import '../data/player_playback_source_repository_provider.dart';
 import '../data/player_preload_config_provider.dart';
 import '../data/player_remote_data_source_provider.dart';
-import '../data/remote/player_remote_data_source.dart';
 import '../domain/player_feed.dart';
 import '../domain/player_playback_progress.dart';
 import '../domain/player_playback_source.dart';
 import '../domain/player_preload_state.dart';
+import '../domain/player_subtitle.dart';
 import 'player_feed_controller.dart';
 import 'player_playback_prepare_manager.dart';
 import 'player_playback_timing_trace.dart';
@@ -22,6 +24,7 @@ import 'player_rebuild_diagnostics.dart';
 import 'player_session_controller.dart';
 import 'player_session_registry.dart';
 import 'player_startup_preload_controller.dart';
+import 'subtitle_parser.dart';
 
 final playerPlaybackSessionFactoryProvider =
     Provider<PlayerPlaybackSession Function()>((ref) {
@@ -109,6 +112,11 @@ class PlayerPlaybackState {
     this.seekPreviewPosition,
     this.error,
     this.errorKind,
+    // ── 字幕相关字段 ─────────────────────────────
+    this.availableSubtitles = const [],
+    this.currentSubtitleUrl,
+    this.subtitleCues = const [],
+    this.currentSubtitleText = '',
   });
 
   const PlayerPlaybackState.initial({VideoController? videoController})
@@ -128,6 +136,11 @@ class PlayerPlaybackState {
         surfaceLifecycle: videoController == null
             ? PlayerVideoSurfaceLifecycle.detached
             : PlayerVideoSurfaceLifecycle.attached,
+        // ── 字幕相关默认值 ─────────────────────────────
+        availableSubtitles: const [],
+        currentSubtitleUrl: null,
+        subtitleCues: const [],
+        currentSubtitleText: '',
       );
 
   /// 当前页面应该绑定到 `Video` 组件的 media_kit 控制器。
@@ -242,6 +255,28 @@ class PlayerPlaybackState {
   /// 应依赖这个稳定枚举，不要解析底层错误字符串。
   final PlayerPlaybackErrorKind? errorKind;
 
+  // ── 字幕相关状态 ─────────────────────────────────────
+
+  /// 当前 episode 可用的字幕轨道列表。
+  ///
+  /// 为空表示无字幕可用。播放器应允许关闭字幕。
+  final List<PlayerSubtitle> availableSubtitles;
+
+  /// 当前选中的字幕轨道 URL。
+  ///
+  /// `null` 表示关闭字幕。切换字幕时更新此字段并重新加载字幕文件。
+  final String? currentSubtitleUrl;
+
+  /// 当前已解析的字幕条目列表。
+  ///
+  /// 为空表示无字幕或字幕尚未加载/解析完成。
+  final List<SubtitleCue> subtitleCues;
+
+  /// 当前播放位置应显示的字幕文本。
+  ///
+  /// 为空字符串表示当前位置无字幕。UI 据此渲染字幕 overlay。
+  final String currentSubtitleText;
+
   bool get isPlaying => status == PlayerPlaybackStatus.playing;
   bool get isOpening => status == PlayerPlaybackStatus.opening;
   bool get isError => status == PlayerPlaybackStatus.error;
@@ -301,6 +336,12 @@ class PlayerPlaybackState {
     bool clearSource = false,
     bool clearVideoController = false,
     bool clearSeekPreview = false,
+    // ── 字幕相关 ─────────────────────────────────────
+    List<PlayerSubtitle>? availableSubtitles,
+    String? currentSubtitleUrl,
+    List<SubtitleCue>? subtitleCues,
+    String? currentSubtitleText,
+    bool clearSubtitle = false,
   }) {
     return PlayerPlaybackState(
       videoController: clearVideoController
@@ -333,6 +374,11 @@ class PlayerPlaybackState {
           : seekPreviewPosition ?? this.seekPreviewPosition,
       error: clearError ? null : error ?? this.error,
       errorKind: clearError ? null : errorKind ?? this.errorKind,
+      // ── 字幕字段 ─────────────────────────────────────
+      availableSubtitles: availableSubtitles ?? this.availableSubtitles,
+      currentSubtitleUrl: clearSubtitle ? null : (currentSubtitleUrl ?? this.currentSubtitleUrl),
+      subtitleCues: subtitleCues ?? this.subtitleCues,
+      currentSubtitleText: currentSubtitleText ?? this.currentSubtitleText,
     );
   }
 
@@ -517,6 +563,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
   }
 
+  /// 防止短时间内重复调用 playItem 导致多次 open
+  PlayerFeedItem? _lastPlayItemRequest;
+  DateTime _lastPlayItemTime = DateTime.now();
+
   Future<void> playItem(
     PlayerFeedItem? item, {
     bool resumeIfCurrentSource = false,
@@ -524,6 +574,21 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (_isSessionDisposed) {
       return;
     }
+
+    // 防重复调用：相同 item 在 500ms 内忽略
+    if (item != null && _lastPlayItemRequest != null) {
+      final isSameItem = item.id == _lastPlayItemRequest!.id;
+      final timeSinceLastCall = DateTime.now().difference(_lastPlayItemTime);
+      if (isSameItem && timeSinceLastCall.inMilliseconds < 500) {
+        developer.log(
+          'playItem: 忽略重复调用 - itemId=${item.id}, '
+          'timeSinceLastCall=${timeSinceLastCall.inMilliseconds}ms',
+        );
+        return;
+      }
+    }
+    _lastPlayItemRequest = item;
+    _lastPlayItemTime = DateTime.now();
 
     ref.read(playerSessionRegistryProvider.notifier).register(sessionKey);
     _startPlaybackTrace(item);
@@ -748,6 +813,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         if (!ref.mounted || !_isCurrent(generation)) {
           return;
         }
+        
+        // 加载字幕
+        _loadSubtitlesForItem(item);
+        
         if (_pauseWhenOpenCompletes) {
           await _session.pause();
           state = state.copyWith(
@@ -824,6 +893,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         source: playbackSource.playableSource,
         elapsed: DateTime.now().difference(openStartedAt),
       );
+
       if (!ref.mounted) {
         return;
       }
@@ -834,15 +904,27 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         }
         return;
       }
+
       await _restoreProgressIfNeeded(resumeProgress, generation);
+
+      // 不再阻塞等待首帧 - 让 _handlePosition 在 position > 0 时设置 hasFirstFrame
+      // 这样视频可以立即开始播放，UI 会根据 hasFirstFrame 状态显示/隐藏 loading
+      
+      // 确保开始播放
+      await _session.play();
       if (!ref.mounted || !_isCurrent(generation)) {
         return;
       }
+      
+      // 加载字幕
+      _loadSubtitlesForItem(item);
+      
       if (_pauseWhenOpenCompletes) {
         await _session.pause();
         state = state.copyWith(
           status: PlayerPlaybackStatus.paused,
           isBuffering: false,
+          hasFirstFrame: _currentPlaybackHasFirstFrame,
         );
         return;
       }
@@ -850,8 +932,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         status: PlayerPlaybackStatus.playing,
         isBuffering: false,
         hasEnded: false,
+        hasFirstFrame: _currentPlaybackHasFirstFrame,
       );
-    } catch (error) {
+    } catch (error, st) {
       final errorKind = didResolveSource
           ? PlayerPlaybackErrorKind.mediaFatal
           : PlayerPlaybackErrorKind.sourceResolve;
@@ -861,6 +944,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         source: sourceHint,
         error: error,
         details: 'kind=${errorKind.name}',
+      );
+      developer.log(
+        'playItem: 播放失败 - itemId=${item.id}, source=$sourceHint, error=$error\n$st',
       );
       if (!_isCurrent(generation)) {
         return;
@@ -1240,7 +1326,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
       final dramaId = int.tryParse(currentItem.content.id) ?? 0;
       final episodeId = int.tryParse(currentItem.episode.id);
-      final episodeNo = currentItem.episode.number ?? 0;
+      final episodeNo = currentItem.episode.number;
       final durationSecond = state.duration.inSeconds;
       final watchSecond = state.position.inSeconds;
 
@@ -1566,6 +1652,18 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
     _lastPositionUpdate = clamped;
     _currentPlaybackPosition = clamped;
+
+    // 首帧检测：position > 0 说明解码器已经开始输出帧（HLS 流无 width 事件，用此替代）
+    if (clamped > Duration.zero && !_currentPlaybackHasFirstFrame) {
+      _currentPlaybackHasFirstFrame = true;
+      _logTiming(
+        'first frame detected (position > 0)',
+        itemId: state.currentItemId,
+        source: state.currentSource,
+        details: _timingDetails(['positionMs=${clamped.inMilliseconds}']),
+      );
+    }
+
     if (clamped > Duration.zero &&
         state.currentItemId != null &&
         _firstPositionLoggedItemIds.add(state.currentItemId!)) {
@@ -1588,8 +1686,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         details: _timingDetails(['positionMs=${clamped.inMilliseconds}']),
       );
     }
-    state = state.copyWith(position: clamped);
+    state = state.copyWith(
+      position: clamped,
+      hasFirstFrame: _currentPlaybackHasFirstFrame,
+    );
     _saveProgressIfNeeded(position: clamped);
+    // 更新字幕显示
+    _updateCurrentSubtitle(clamped);
   }
 
   void _handleDuration(Duration duration) {
@@ -1824,7 +1927,6 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       session.durationStream.listen(_handleDuration),
       session.bufferedPositionStream.listen(_handleBufferedPosition),
       session.rateStream.listen(_handleRate),
-      session.widthStream.listen(_handleWidth),
       session.errorStream.listen(_handleError),
     ];
   }
@@ -2075,17 +2177,37 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
 
     // 等待首帧到达后再 seek，确保 VideoOutput 已创建
-    // 如果已经有首帧（在 prepared hit 场景），直接 seek
+    // 注意：不能用 widthStream，改用 position 检测
     if (!_currentPlaybackHasFirstFrame) {
-      developer.log('_restoreProgressIfNeeded: 等待首帧...');
       try {
-        await _session.widthStream.firstWhere(
-          (width) => width != null && width > 0,
-        );
-        developer.log('_restoreProgressIfNeeded: 首帧已到达');
-      } catch (_) {
-        // stream 已取消或超时，不阻止继续执行
-        developer.log('_restoreProgressIfNeeded: 等待首帧超时或被取消');
+        final firstFrameCompleter = Completer<bool>();
+        late StreamSubscription<Duration> positionSub;
+        
+        // 监听 position 流
+        positionSub = _session.positionStream.listen((position) {
+          if (position > Duration.zero && !firstFrameCompleter.isCompleted) {
+            firstFrameCompleter.complete(true);
+          }
+        });
+        
+        // 超时定时器
+        final timeoutTimer = Timer(const Duration(seconds: 15), () {
+          if (!firstFrameCompleter.isCompleted) {
+            developer.log('_restoreProgressIfNeeded: 等待首帧超时（15秒），强制继续');
+            firstFrameCompleter.complete(false);
+          }
+        });
+        
+        final result = await firstFrameCompleter.future;
+        await positionSub.cancel();
+        timeoutTimer.cancel();
+        
+        if (result) {
+          _currentPlaybackHasFirstFrame = true;
+          developer.log('_restoreProgressIfneeded: 首帧已到达（position > 0）');
+        }
+      } catch (e) {
+        developer.log('_restoreProgressIfNeeded: 等待首帧异常 - $e');
       }
       if (!ref.mounted || !_isCurrent(generation)) {
         return;
@@ -2112,7 +2234,191 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (_currentPlaybackBufferedPosition < progress.position) {
       _currentPlaybackBufferedPosition = progress.position;
     }
-    developer.log('_restoreProgressIfNeeded: 恢复完成，已 seek 到 ${progress.position.inSeconds}s');
+
+    // 恢复进度后，更新字幕显示位置
+    _updateCurrentSubtitle(progress.position);
+  }
+
+  /// 加载指定 item 的字幕列表。
+  ///
+  /// 在 [playItem] 中调用，会在成功打开 source 后自动加载默认字幕。
+  void _loadSubtitlesForItem(PlayerFeedItem item) {
+    final subtitles = item.episode.subtitles;
+    if (subtitles.isEmpty) {
+      _clearSubtitles();
+      return;
+    }
+
+    state = state.copyWith(availableSubtitles: subtitles);
+
+    // 自动选择默认字幕，若无默认则选第一个
+    PlayerSubtitle? defaultSubtitle;
+    for (final subtitle in subtitles) {
+      if (subtitle.isDefault) {
+        defaultSubtitle = subtitle;
+        break;
+      }
+    }
+    defaultSubtitle ??= subtitles.isNotEmpty ? subtitles.first : null;
+    
+    if (defaultSubtitle != null) {
+      unawaited(setSubtitle(defaultSubtitle.url));
+    }
+  }
+
+
+
+
+  /// 切换当前字幕轨道。
+  ///
+  /// [subtitleUrl] 为 `null` 时关闭字幕。
+  /// 公开方法，供 UI 层字幕选择器调用。
+  Future<void> setSubtitle(String? subtitleUrl) async {
+    if (subtitleUrl == null) {
+      // 关闭字幕 - 使用 clearSubtitle 确保 currentSubtitleUrl 被正确设置为 null
+      state = state.copyWith(
+        clearSubtitle: true,
+        subtitleCues: const [],
+        currentSubtitleText: '',
+      );
+      developer.log('setSubtitle: 已关闭字幕');
+      return;
+    }
+
+    // 先保存旧的 URL，用于失败回滚
+    final oldUrl = state.currentSubtitleUrl;
+    state = state.copyWith(currentSubtitleUrl: subtitleUrl);
+    developer.log('setSubtitle: 开始切换字幕 - $subtitleUrl');
+
+    try {
+      await _fetchAndParseSubtitle(subtitleUrl);
+      developer.log('setSubtitle: 字幕切换成功 - $subtitleUrl');
+    } catch (e, st) {
+      // 字幕加载失败，回滚状态
+      developer.log('setSubtitle: 字幕加载失败，回滚状态 - $e\n$st');
+      state = state.copyWith(
+        currentSubtitleUrl: oldUrl,
+        subtitleCues: const [],
+        currentSubtitleText: '',
+      );
+    }
+  }
+
+  /// 从网络获取并解析字幕文件。
+  ///
+  /// 包含重试机制和超时处理，最多重试 3 次。
+  Future<void> _fetchAndParseSubtitle(String url) async {
+    const maxRetries = 3;
+    const timeout = Duration(seconds: 10);
+
+    for (var attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        developer.log('_fetchAndParseSubtitle: 尝试下载字幕 (第 $attempt 次) - $url');
+        
+        final response = await http
+            .get(Uri.parse(url))
+            .timeout(timeout);
+
+        if (response.statusCode != 200) {
+          developer.log('_fetchAndParseSubtitle: HTTP ${response.statusCode} for $url (第 $attempt 次)');
+          
+          // 如果是客户端错误（4xx），不重试
+          if (response.statusCode >= 400 && response.statusCode < 500) {
+            developer.log('_fetchAndParseSubtitle: 客户端错误，不再重试');
+            return;
+          }
+          
+          // 如果是服务器错误（5xx），继续重试
+          if (attempt < maxRetries) {
+            await Future.delayed(Duration(seconds: attempt)); // 指数退避
+            continue;
+          }
+          return;
+        }
+
+        final format = _guessFormatFromUrl(url);
+        final cues = SubtitleParser.parse(
+          content: utf8.decode(response.bodyBytes),
+          format: format,
+        );
+
+        if (!ref.mounted) return;
+        state = state.copyWith(subtitleCues: cues);
+
+        // 立即更新当前位置对应的字幕
+        _updateCurrentSubtitle(state.position);
+        
+        developer.log('_fetchAndParseSubtitle: 字幕解析成功，共 ${cues.length} 条');
+        return; // 成功，退出重试循环
+      } on TimeoutException catch (e) {
+        developer.log('_fetchAndParseSubtitle: 超时 (第 $attempt 次) - $e');
+        if (attempt == maxRetries) {
+          developer.log('_fetchAndParseSubtitle: 已达到最大重试次数，放弃下载');
+          return;
+        }
+      } on http.ClientException catch (e) {
+        developer.log('_fetchAndParseSubtitle: 网络错误 (第 $attempt 次) - $e');
+        if (attempt == maxRetries) {
+          developer.log('_fetchAndParseSubtitle: 已达到最大重试次数，放弃下载');
+          return;
+        }
+        // 等待后重试
+        await Future.delayed(Duration(seconds: attempt));
+      } catch (e, st) {
+        developer.log('_fetchAndParseSubtitle: 未知错误 (第 $attempt 次) - $e\n$st');
+        if (attempt == maxRetries) {
+          return;
+        }
+        await Future.delayed(Duration(seconds: attempt));
+      }
+    }
+  }
+
+  /// 根据当前播放位置更新应显示的字幕文本。
+  ///
+  /// 应在 position stream 和 seek 后调用。
+  void _updateCurrentSubtitle(Duration position) {
+    final cues = state.subtitleCues;
+    if (cues.isEmpty) return;
+
+    // 二分查找当前位置对应的字幕
+    var low = 0;
+    var high = cues.length - 1;
+    SubtitleCue? currentCue;
+    while (low <= high) {
+      final mid = (low + high) ~/ 2;
+      final cue = cues[mid];
+      if (position >= cue.start && position <= cue.end) {
+        currentCue = cue;
+        break;
+      } else if (position < cue.start) {
+        high = mid - 1;
+      } else {
+        low = mid + 1;
+      }
+    }
+
+    final newText = currentCue?.text ?? '';
+    if (state.currentSubtitleText != newText) {
+      state = state.copyWith(currentSubtitleText: newText);
+    }
+  }
+
+  /// 清除字幕状态。
+  void _clearSubtitles() {
+    state = state.copyWith(
+      availableSubtitles: const [],
+      currentSubtitleUrl: null,
+      subtitleCues: const [],
+      currentSubtitleText: '',
+    );
+  }
+
+  /// 根据 URL 猜测字幕格式。
+  String _guessFormatFromUrl(String url) {
+    final lower = url.toLowerCase();
+    if (lower.endsWith('.srt')) return 'srt';
+    return 'vtt'; // 默认 VTT
   }
 
   void _saveProgressIfNeeded({Duration? position, Duration? duration}) {

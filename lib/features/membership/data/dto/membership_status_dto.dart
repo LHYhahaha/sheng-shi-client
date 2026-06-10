@@ -1,4 +1,4 @@
-import 'membership_benefit_dto.dart';
+
 
 class MembershipStatusDto {
   const MembershipStatusDto({
@@ -8,7 +8,6 @@ class MembershipStatusDto {
     this.renewsAt,
     required this.autoRenewEnabled,
     this.source,
-    required this.benefits,
   });
 
   final bool isActive;
@@ -17,7 +16,7 @@ class MembershipStatusDto {
   final DateTime? renewsAt;
   final bool autoRenewEnabled;
   final String? source;
-  final List<MembershipBenefitDto> benefits;
+
 
   factory MembershipStatusDto.fromJson(Object? json) {
     final map = json is Map<String, Object?> ? json : const <String, Object?>{};
@@ -28,7 +27,6 @@ class MembershipStatusDto {
       renewsAt: _date(map['renewsAt']),
       autoRenewEnabled: map['autoRenewEnabled'] == true,
       source: _nullableString(map['source']),
-      benefits: _list(map['benefits'], MembershipBenefitDto.fromJson),
     );
   }
 }
@@ -41,7 +39,4 @@ DateTime? _date(Object? value) {
   return null;
 }
 
-List<T> _list<T>(Object? value, T Function(Object? json) mapper) {
-  if (value is List) return value.map(mapper).toList(growable: false);
-  return <T>[];
-}
+

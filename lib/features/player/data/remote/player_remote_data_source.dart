@@ -1,7 +1,10 @@
+import 'package:drama_client/features/store/data/dto/store_recharge_data_dto.dart';
+
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/json_field_parser.dart';
 import '../../../my_list/data/dto/favorite_mutation_dto.dart';
 import '../dto/player_content_dto.dart';
+import '../dto/player_episode_unlock_dto.dart';
 import '../dto/player_feed_page_dto.dart';
 import '../dto/player_recommendation_dto.dart';
 import '../dto/short_follow_check_dto.dart';
@@ -24,6 +27,17 @@ class PlayerRemoteDataSource {
       decoder: (data) => PlayerContentDto.fromJson(
         JsonFieldParser.requireMap(data, dtoName: 'PlayerContentDto'),
       ),
+    );
+  }
+
+    /// 获取充值页面数据
+  ///
+  /// 对应后端 API：GET /api/payment/recharge/page
+  Future<StoreRechargeDataDto> fetchRechargePage() {
+    return _apiClient.get<StoreRechargeDataDto>(
+      '/api/payment/recharge/page',
+      authPolicy: ApiAuthPolicy.required,
+      decoder: StoreRechargeDataDto.fromJson,
     );
   }
 
@@ -137,7 +151,37 @@ class PlayerRemoteDataSource {
       '/api/user/watch/progress/report',
       data: dto.toJson(),
       authPolicy: ApiAuthPolicy.required,
-      decoder: (_) => null,
+      decoder: (_) {},
+    );
+  }
+
+  /// 金币解锁剧集。
+  ///
+  /// 对应后端 API：POST /api/payment/episode/unlock
+  Future<PlayerEpisodeUnlockDto> unlockEpisode({
+    required bool autoUnlockNext,
+    required int coin,
+    required int dramaId,
+    required int episodeNo,
+    required String shortTitle,
+    String? cover,
+    int? episodeId,
+  }) {
+    return _apiClient.post<PlayerEpisodeUnlockDto>(
+      '/api/payment/episode/unlock',
+      data: <String, Object?>{
+        'autoUnlockNext': autoUnlockNext,
+        'coin': coin,
+        'cover': cover,
+        'dramaId': dramaId,
+        'episodeId': episodeId,
+        'episodeNo': episodeNo,
+        'shortTitle': shortTitle,
+      }..removeWhere((_, value) => value == null),
+      authPolicy: ApiAuthPolicy.required,
+      decoder: (data) => PlayerEpisodeUnlockDto.fromJson(
+        JsonFieldParser.requireMap(data, dtoName: 'PlayerEpisodeUnlockDto'),
+      ),
     );
   }
 }

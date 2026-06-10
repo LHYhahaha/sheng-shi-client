@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../locale/app_locale_controller.dart';
 
 /// 当前 API 支持的 `Lang` header 取值（内容/接口语言，与 UI 固定文案包可不同）。
-const apiSupportedLangCodes = <String>{'en', 'es', 'pt', 'hi'};
+const apiSupportedLangCodes = <String>{'en', 'zh'};
 
 /// 将 [Locale] 映射为 API `Lang`；不支持的语言 fallback 到 `en`。
 ///

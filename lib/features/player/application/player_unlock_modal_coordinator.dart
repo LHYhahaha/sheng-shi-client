@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/modal/app_modal_controller.dart';
 import '../../../core/modal/app_modal_policy.dart';
@@ -10,6 +11,7 @@ import '../../../core/modal/app_modal_source.dart';
 import '../../../core/toast/app_toast_provider.dart';
 import '../../../core/toast/app_toast_service.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../app/router/route_names.dart';
 import '../domain/player_feed.dart';
 import '../presentation/modal/player_modal_channels.dart';
 import '../presentation/modal/player_modal_payloads.dart';
@@ -67,12 +69,14 @@ class PlayerUnlockModalCoordinator {
           launchedByAutoSheet: launchedByAutoSheet,
         );
       case PlayerOverlaySheetIntent.rechargeUnlock:
-      case PlayerOverlaySheetIntent.membership:
         await showRechargeUnlock(
           context,
           item,
           launchedByAutoSheet: launchedByAutoSheet,
         );
+      case PlayerOverlaySheetIntent.membership:
+        // 纯会员剧：直接跳转到会员开通页面
+        await context.pushNamed(RouteNames.membership);
     }
   }
 
@@ -103,11 +107,14 @@ class PlayerUnlockModalCoordinator {
       return;
     }
 
-    final didUnlock = await _engine.completeCoinUnlock(item);
-    if (!didUnlock || !context.mounted) {
-      return;
+    // API解锁已成功，Controller已更新entitlement和feed中的videoUrl
+    // 无需再次调用completeCoinUnlock（避免重复扣币）
+    // 直接触发播放即可
+    final sheetIntent = await _engine.retryPlayback(item);
+
+    if (sheetIntent == PlayerOverlaySheetIntent.none && context.mounted) {
+      _appToast.success(context.l10n.playerUnlockSuccessful);
     }
-    _appToast.success(context.l10n.playerUnlockSuccessful);
   }
 
   Future<void> showRechargeUnlock(
@@ -130,6 +137,13 @@ class PlayerUnlockModalCoordinator {
         sessionKey: _sessionKey,
         itemId: item.id,
         requiredCoins: item.episode.requiredCoins,
+        dramaId: int.tryParse(item.content.id) ?? 0,
+        episodeNo: item.episode.number,
+        shortTitle: item.content.playTitle.isNotEmpty
+            ? item.content.playTitle
+            : item.content.title,
+        cover: item.content.posterAssetPath,
+        episodeId: int.tryParse(item.episode.id),
       ),
     );
 
@@ -173,6 +187,10 @@ class PlayerUnlockModalCoordinator {
 
     if (flowResult.didActivateMembership) {
       _appToast.success(context.l10n.playerMembershipActivated);
+      return;
+    }
+    if (flowResult.didAutoUnlock) {
+      _appToast.success(context.l10n.playerUnlockedAutomatically);
       return;
     }
 

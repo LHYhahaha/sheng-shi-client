@@ -33,10 +33,8 @@ class PreparedPlaybackSession {
     this.position = Duration.zero,
     this.duration = Duration.zero,
     this.bufferedPosition = Duration.zero,
-    StreamSubscription<int?>? firstFrameSubscription,
     StreamSubscription<Duration>? positionSubscription,
-  }) : _firstFrameSubscription = firstFrameSubscription,
-       _positionSubscription = positionSubscription;
+  }) : _positionSubscription = positionSubscription;
 
   /// prepared/retained session 对应的 item id。
   ///
@@ -84,13 +82,9 @@ class PreparedPlaybackSession {
 
   /// retained previous 的缓冲位置快照。
   final Duration bufferedPosition;
-  StreamSubscription<int?>? _firstFrameSubscription;
   StreamSubscription<Duration>? _positionSubscription;
 
   Future<void> detachFirstFrameListener() async {
-    final subscription = _firstFrameSubscription;
-    _firstFrameSubscription = null;
-    await subscription?.cancel();
     final positionSubscription = _positionSubscription;
     _positionSubscription = null;
     await positionSubscription?.cancel();
@@ -159,7 +153,6 @@ class PlayerPlaybackPrepareManager {
 
     final generation = ++_generation;
     PlayerPlaybackSession? session;
-    StreamSubscription<int?>? widthSubscription;
     StreamSubscription<Duration>? positionSubscription;
     StreamSubscription<bool>? playingSubscription;
     StreamSubscription<bool>? bufferingSubscription;
@@ -174,22 +167,22 @@ class PlayerPlaybackPrepareManager {
       var hasPlaybackAdvanced = false;
       final firstFrameCompleter = Completer<void>();
       PreparedPlaybackSession? prepared;
-      widthSubscription = session.widthStream.listen((width) {
-        if (width != null && width > 0) {
+      
+      // 使用 position 检测首帧：如果 position > 0，说明视频已经开始播放，首帧已到达
+      positionSubscription = session.positionStream.listen((position) {
+        if (position > Duration.zero && !hasFirstFrame) {
           hasFirstFrame = true;
           prepared?.hasFirstFrame = true;
           _log(
-            'prepare widthStream received',
+            'prepare first frame received (position > 0)',
             itemId: item.id,
             source: source.playableSource,
-            details: 'width=$width',
+            details: 'position=${position.inMilliseconds}ms',
           );
           if (!firstFrameCompleter.isCompleted) {
             firstFrameCompleter.complete();
           }
         }
-      });
-      positionSubscription = session.positionStream.listen((position) {
         if (position > Duration.zero) {
           hasPlaybackAdvanced = true;
           prepared?.hasPlaybackAdvanced = true;
@@ -229,7 +222,7 @@ class PlayerPlaybackPrepareManager {
         ]),
       );
       // warm-up 必须静音播放到首帧或超时。media_kit 只有真正 open/play 后才会推进
-      // 解码和 width/position stream；直接静态缓存 URL 无法覆盖首帧黑屏问题。
+      // 解码和 position stream；直接静态缓存 URL 无法覆盖首帧黑屏问题。
       await session.setVolume(0);
       _log(
         'prepare open start',
@@ -245,7 +238,6 @@ class PlayerPlaybackPrepareManager {
       if (generation != _generation) {
         _pendingSessions.remove(item.id);
         _completeWarmUpCancel(item.id);
-        await widthSubscription.cancel();
         await positionSubscription.cancel();
         await playingSubscription.cancel();
         await bufferingSubscription.cancel();
@@ -259,10 +251,8 @@ class PlayerPlaybackPrepareManager {
         isOpened: true,
         hasFirstFrame: hasFirstFrame,
         hasPlaybackAdvanced: hasPlaybackAdvanced,
-        firstFrameSubscription: widthSubscription,
         positionSubscription: positionSubscription,
       );
-      widthSubscription = null;
       positionSubscription = null;
       _pendingSessions.remove(item.id);
       await _put(prepared);
@@ -283,7 +273,6 @@ class PlayerPlaybackPrepareManager {
     } catch (_) {
       _pendingSessions.remove(item.id);
       _completeWarmUpCancel(item.id);
-      await widthSubscription?.cancel();
       await positionSubscription?.cancel();
       await playingSubscription?.cancel();
       await bufferingSubscription?.cancel();

@@ -8,7 +8,7 @@ import '../../../../shared/widgets/app_primary_button.dart';
 import '../../application/store_controller.dart';
 import '../../domain/store_package.dart';
 
-/// 商店 mock 购买确认弹窗。
+/// 商店购买确认弹窗。
 ///
 /// 弹窗只展示 StoreController 的本地流程态，并在 processing 期间禁用按钮。真实支付
 /// 接入后，这里仍不应直接发放金币或会员权益，只负责把用户确认交给 controller。
@@ -32,14 +32,23 @@ class StoreConfirmationSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
 
-    final isProcessing = status == StorePurchaseStatus.processing;
+    final isProcessing =
+        status == StorePurchaseStatus.creatingOrder ||
+        status == StorePurchaseStatus.waitingPayment ||
+        status == StorePurchaseStatus.verifying ||
+        status == StorePurchaseStatus.pending;
     final isComplete =
         status == StorePurchaseStatus.success ||
+        status == StorePurchaseStatus.failed ||
         status == StorePurchaseStatus.cancelled;
     final statusLabel = switch (status) {
-      StorePurchaseStatus.idle => l10n.storeMockPaymentNote,
-      StorePurchaseStatus.processing => l10n.storePurchaseProcessing,
+      StorePurchaseStatus.idle => l10n.storePaymentNote,
+      StorePurchaseStatus.creatingOrder => l10n.storePurchaseProcessing,
+      StorePurchaseStatus.waitingPayment => l10n.storePurchaseProcessing,
+      StorePurchaseStatus.verifying => l10n.storePurchaseProcessing,
+      StorePurchaseStatus.pending => l10n.storePurchaseProcessing,
       StorePurchaseStatus.success => l10n.storePurchaseSuccess,
+      StorePurchaseStatus.failed => l10n.storePurchaseFailed,
       StorePurchaseStatus.cancelled => l10n.storePurchaseCancelled,
     };
 

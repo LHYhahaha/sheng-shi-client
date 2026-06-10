@@ -32,14 +32,23 @@ class MembershipConfirmationSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
 
-    final isProcessing = status == MembershipPurchaseStatus.processing;
+    final isProcessing =
+        status == MembershipPurchaseStatus.creatingOrder ||
+        status == MembershipPurchaseStatus.waitingPayment ||
+        status == MembershipPurchaseStatus.verifying ||
+        status == MembershipPurchaseStatus.pending;
     final isComplete =
         status == MembershipPurchaseStatus.success ||
+        status == MembershipPurchaseStatus.failed ||
         status == MembershipPurchaseStatus.cancelled;
     final statusLabel = switch (status) {
-      MembershipPurchaseStatus.idle => l10n.membershipMockPaymentNote,
-      MembershipPurchaseStatus.processing => l10n.storePurchaseProcessing,
+      MembershipPurchaseStatus.idle => l10n.storePaymentNote,
+      MembershipPurchaseStatus.creatingOrder => l10n.storePurchaseProcessing,
+      MembershipPurchaseStatus.waitingPayment => l10n.storePurchaseProcessing,
+      MembershipPurchaseStatus.verifying => l10n.storePurchaseProcessing,
+      MembershipPurchaseStatus.pending => l10n.storePurchaseProcessing,
       MembershipPurchaseStatus.success => l10n.storePurchaseSuccess,
+      MembershipPurchaseStatus.failed => l10n.storePurchaseFailed,
       MembershipPurchaseStatus.cancelled => l10n.storePurchaseCancelled,
     };
 

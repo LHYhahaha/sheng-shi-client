@@ -1,14 +1,14 @@
-import 'dart:developer' as developer;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell.dart';
+import '../../../../core/auth/user_info_store.dart';
 import '../../../auth/application/auth_controller.dart';
 import '../../../auth/application/auth_modal_coordinator.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
+import '../../../../core/network/proxy_config.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/profile_controller.dart';
@@ -48,6 +48,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final profileState = ref.watch(profileControllerProvider);
     final authState = ref.watch(authControllerProvider);
     final entitlementState = ref.watch(entitlementControllerProvider);
+    final userInfoState = ref.watch(userInfoStoreProvider);
     final authModalCoordinator = ref.read(authModalCoordinatorProvider);
     final authUser = authState.user;
 
@@ -58,21 +59,29 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       }
     });
 
-
-    // 展示层合成：Auth 是登录态源头，Profile 是资料 mock 源头
+    // 展示层合成：用户资料来自当前 token 同步后的 UserInfoStore；
+    // 是否游客用于交互分流，以 AuthState 为准。
     // 金币数据来自 entitlementState（/api/user/entitlements 接口）
-    final totalCoins = entitlementState.coinBalance + entitlementState.bonusBalance;
+    final totalCoins =
+        entitlementState.coinBalance + entitlementState.bonusBalance;
+    final hasAccountInfo = authUser != null || userInfoState.hasUserInfo;
     final state = profileState.copyWith(
-      isLoggedIn: authState.isLoggedIn,
-      userId: authUser?.id ?? profileState.userId,
-      showId: authUser?.showId ?? profileState.showId,
-      nickname: authUser?.nickname,
-      avatarAssetPath: authUser?.avatarAssetPath ?? profileState.avatarAssetPath,
+      isLoggedIn: hasAccountInfo,
+      userId: authUser?.id ?? userInfoState.showId ?? profileState.userId,
+      showId: authUser?.showId ?? userInfoState.showId ?? profileState.showId,
+      nickname: authUser?.nickname ?? userInfoState.nickname,
+      avatarAssetPath:
+          authUser?.avatarAssetPath ?? profileState.avatarAssetPath,
+      membership: ProfileMembershipState(
+        isActive: entitlementState.isMember,
+        entryEnabled: profileState.membership.entryEnabled,
+        expiresAt: entitlementState.membershipExpiresAt,
+      ),
       coin: totalCoins,
     );
 
     void onHeaderTap() {
-      if (entitlementState.isGuest) {
+      if (authState.session.isGuest) {
         authModalCoordinator.showLogin(context);
       } else {
         context.push(RoutePaths.account);
@@ -89,7 +98,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             ProfileHeader(
               state: state,
               onLoginTap: () {
-                if (entitlementState.isGuest) {
+                if (authState.session.isGuest) {
                   authModalCoordinator.showLogin(context);
                 }
               },
@@ -117,6 +126,20 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               title: l10n.profileSettings,
               iconAssetPath: 'assets/images/profile/setting.png',
               onTap: () => context.push(RoutePaths.settings),
+            ),
+            Consumer(
+              builder: (context, ref, _) {
+                final proxyState = ref.watch(proxyConfigProvider);
+                final subtitle = proxyState.isEnabled
+                    ? '代理已开启 (${proxyState.proxyAddress})'
+                    : '未开启';
+                return ProfileMenuRow(
+                  title: '抓包代理 (Charles)',
+                  subtitle: subtitle,
+                  iconAssetPath: 'assets/images/profile/setting.png',
+                  onTap: () => showProxyConfigDialog(context, ref),
+                );
+              },
             ),
           ],
         ),

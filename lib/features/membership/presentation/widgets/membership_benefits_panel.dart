@@ -5,20 +5,62 @@ import '../membership_layout.dart';
 import '../../domain/membership_plan.dart';
 
 class MembershipBenefitsPanel extends StatelessWidget {
-  const MembershipBenefitsPanel({
-    required this.benefits,
-    required this.tips,
-    super.key,
-  });
-
-  final List<MembershipBenefit> benefits;
-  final MembershipTips? tips;
+  const MembershipBenefitsPanel({super.key});
 
   static const _gold = Color(0xFFE6CFA6);
+
+  /// 内置的 4 个会员权益项。
+  ///
+  /// 文案来自 [AppLocalizations]，图片来自 assets/images/membership/。
+  List<MembershipBenefit> _buildBenefits(AppLocalizations l10n) => [
+    MembershipBenefit(
+      iconPath: 'assets/images/membership/membership_series.png',
+      title: l10n.benefitSeriesTitle,
+      highlight: l10n.benefitSeriesHighlight,
+      description: l10n.benefitSeriesDescription,
+    ),
+    MembershipBenefit(
+      iconPath: 'assets/images/membership/membership_download.png',
+      title: l10n.benefitDownload,
+    ),
+    MembershipBenefit(
+      iconPath: 'assets/images/membership/membership_only.png',
+      title: l10n.benefitMembersOnly,
+    ),
+    MembershipBenefit(
+      iconPath: 'assets/images/membership/membership_hd.png',
+      title: l10n.benefitHd,
+    ),
+  ];
+
+  /// 内置的提示文案。
+  ///
+  /// 从 [AppLocalizations.membershipPaymentNote] 解析条款列表，
+  /// 自动去除每行开头的编号（如 "1."、"2."）。
+  MembershipTips _buildTips(AppLocalizations l10n) {
+    final paymentNoteItems = l10n.membershipPaymentNote
+        .split('\n')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .map((item) {
+          // 去掉开头的编号，如 "1.xxx" 或 "1. xxx"
+          final match = RegExp(r'^\d+\.?\s*(.*)').firstMatch(item);
+          return match != null ? match.group(1)! : item;
+        })
+        .toList();
+
+    return MembershipTips(
+      subscriptionNote: l10n.membershipAutoRenewCancel,
+      items: paymentNoteItems,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final l10n = context.l10n;
+    final benefits = _buildBenefits(l10n);
+    final tips = _buildTips(l10n);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Container(
@@ -78,7 +120,7 @@ class MembershipBenefitsPanel extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       child: Text(
-                        context.l10n.membershipBenefits,
+                        l10n.membershipBenefits,
                         style: textTheme.bodyMedium?.copyWith(
                           color: _gold,
                           fontSize: 14,
@@ -96,10 +138,8 @@ class MembershipBenefitsPanel extends StatelessWidget {
                   if (index < benefits.length - 1)
                     const SizedBox(height: MembershipLayout.benefitsRowGap),
                 ],
-                if (tips != null) ...[
-                  const SizedBox(height: 28),
-                  _MembershipTips(tips: tips!),
-                ],
+                const SizedBox(height: 28),
+                _MembershipTips(tips: tips),
               ],
             ),
           ),
@@ -143,24 +183,17 @@ class _BenefitRow extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Container(
+        SizedBox(
           width: MembershipLayout.benefitsIconSize,
           height: MembershipLayout.benefitsIconSize,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF4B3C31), Color(0x004B3C31)],
-            ),
-            borderRadius: BorderRadius.circular(
-              MembershipLayout.benefitsIconRadius,
-            ),
-            border: Border.all(color: const Color(0x3DFFEAC4)),
+          child: Image.asset(
+            benefit.iconPath,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) =>
+                const SizedBox.shrink(),
           ),
-          child: Icon(_iconFor(benefit.icon), color: _gold, size: 18),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -204,17 +237,6 @@ class _BenefitRow extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  IconData _iconFor(MembershipBenefitIcon icon) {
-    return switch (icon) {
-      MembershipBenefitIcon.series => Icons.video_library_rounded,
-      MembershipBenefitIcon.download => Icons.download_rounded,
-      MembershipBenefitIcon.points => Icons.auto_awesome_rounded,
-      MembershipBenefitIcon.membersOnly => Icons.workspace_premium_rounded,
-      MembershipBenefitIcon.hd => Icons.hd_rounded,
-      MembershipBenefitIcon.adFree => Icons.ad_units_rounded,
-    };
   }
 }
 

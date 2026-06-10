@@ -19,6 +19,7 @@ class RemoteProfileRepository implements ProfileRepository {
     return _mapper.mapSummary(dto);
   }
 
+  @override
   Future<Map<String, dynamic>> fetchWallet(int userId) async {
     final dto = await _remoteDataSource.getWallet(userId);
     return {
