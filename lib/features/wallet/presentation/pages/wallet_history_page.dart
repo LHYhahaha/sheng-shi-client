@@ -3,11 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/i18n/ui_text.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_spacing.dart';
 import '../../application/wallet_controller.dart';
 import '../../domain/wallet_record.dart';
+
+extension _WalletUiTextX on AppLocalizations {
+  String walletText(UiText text) => resolveUiText(text);
+}
 
 class WalletHistoryPage extends ConsumerStatefulWidget {
   const WalletHistoryPage({required this.type, super.key});
@@ -307,7 +312,7 @@ class _ConsumptionRecordRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                record.title,
+                context.l10n.walletText(record.titleText),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -318,7 +323,9 @@ class _ConsumptionRecordRow extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                record.subtitle ?? '',
+                record.subtitleText == null
+                    ? ''
+                    : context.l10n.walletText(record.subtitleText!),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -344,7 +351,7 @@ class _ConsumptionRecordRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              record.trailingLabel,
+              context.l10n.walletText(record.trailingLabelText),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.right,
@@ -356,7 +363,9 @@ class _ConsumptionRecordRow extends StatelessWidget {
             ),
             if (record.trailingSubtitle != null)
               Text(
-                record.trailingSubtitle!,
+                record.sourceType?.toLowerCase() == 'coins'
+                    ? context.l10n.consumptionHistoryCoins
+                    : context.l10n.walletText(record.trailingSubtitleText!),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,
@@ -380,71 +389,48 @@ class _CoinRewardRecordRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final enabled = record.rewardEnabled && !record.rewardClaimed;
-
     return Row(
       children: [
-        Opacity(
-          opacity: enabled ? 1 : 0.5,
-          child: Image.asset(
-            'assets/images/profile/coin.png',
-            width: 26,
-            height: 26,
-          ),
-        ),
-        const SizedBox(width: 8),
         Expanded(
-          child: Opacity(
-            opacity: enabled ? 1 : 0.5,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  record.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w600,
-                    height: 1.5,
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.l10n.walletText(record.titleText),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  height: 1.5,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  record.dateLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.5),
-                    height: 1.5,
-                  ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                record.dateLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  height: 1.5,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
         const SizedBox(width: AppSpacing.md),
-        SizedBox(
-          width: 74,
-          height: 30,
-          child: FilledButton(
-            onPressed: enabled ? onClaim : null,
-            style: FilledButton.styleFrom(
-              padding: EdgeInsets.zero,
-              backgroundColor: AppColors.textPrimary,
-              disabledBackgroundColor: Colors.white.withValues(alpha: 0.24),
-              foregroundColor: const Color(0xFF0A0014),
-              disabledForegroundColor: const Color(
-                0xFF0A0014,
-              ).withValues(alpha: 0.4),
-              textStyle: Theme.of(
-                context,
-              ).textTheme.labelMedium?.copyWith(height: 1.3),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Text(context.l10n.walletCheckIn),
+        Text(
+          record.trailingLabel == "1"
+              ? context.l10n.claimCoinsTypeRechargeBonus
+              : record.trailingLabel == "2"
+              ? context.l10n.consumptionHistorySpent
+              : context.l10n.consumptionHistoryExpired,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w500,
+            height: 1.5,
           ),
         ),
       ],
@@ -479,7 +465,7 @@ class _HistoryRecordRow extends StatelessWidget {
                   ],
                   Flexible(
                     child: Text(
-                      record.title,
+                      context.l10n.walletText(record.titleText),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -506,7 +492,7 @@ class _HistoryRecordRow extends StatelessWidget {
         ),
         const SizedBox(width: AppSpacing.md),
         Text(
-          record.trailingLabel,
+          context.l10n.walletText(record.trailingLabelText),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.right,

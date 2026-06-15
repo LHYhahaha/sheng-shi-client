@@ -49,22 +49,10 @@ class MockStoreRepository implements StoreRepository {
           originalPriceLabel: r'$19.99',
           badgeLabel: '23:59:59',
           benefits: [
-            StorePackageBenefit(
-              icon: StoreBenefitIcon.drama,
-              label: 'Unlock 8,000+ dramas',
-            ),
-            StorePackageBenefit(
-              icon: StoreBenefitIcon.download,
-              label: 'Download',
-            ),
-            StorePackageBenefit(
-              icon: StoreBenefitIcon.hd,
-              label: '1080p quality',
-            ),
-            StorePackageBenefit(
-              icon: StoreBenefitIcon.points,
-              label: 'Daily member points',
-            ),
+            StorePackageBenefit(icon: StoreBenefitIcon.drama),
+            StorePackageBenefit(icon: StoreBenefitIcon.download),
+            StorePackageBenefit(icon: StoreBenefitIcon.hd),
+            StorePackageBenefit(icon: StoreBenefitIcon.points),
           ],
         ),
         StorePackage(
@@ -74,22 +62,10 @@ class MockStoreRepository implements StoreRepository {
           subtitle: 'Auto renew · Cancel anytime',
           priceLabel: r'$14.99',
           benefits: [
-            StorePackageBenefit(
-              icon: StoreBenefitIcon.drama,
-              label: 'Unlock 8,000+ dramas',
-            ),
-            StorePackageBenefit(
-              icon: StoreBenefitIcon.download,
-              label: 'Download',
-            ),
-            StorePackageBenefit(
-              icon: StoreBenefitIcon.hd,
-              label: '1080p quality',
-            ),
-            StorePackageBenefit(
-              icon: StoreBenefitIcon.points,
-              label: 'Daily member points',
-            ),
+            StorePackageBenefit(icon: StoreBenefitIcon.drama),
+            StorePackageBenefit(icon: StoreBenefitIcon.download),
+            StorePackageBenefit(icon: StoreBenefitIcon.hd),
+            StorePackageBenefit(icon: StoreBenefitIcon.points),
           ],
         ),
       ],

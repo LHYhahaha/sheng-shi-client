@@ -7,7 +7,8 @@ import '../domain/auth_session.dart';
 ///
 /// 放在 auth data 层，避免 AuthController（application）直接依赖 coordinator，同时保证
 /// mock 与 remote repository 行为一致。
-class SessionCleanupAuthRepository implements AuthRepository {
+class SessionCleanupAuthRepository
+    implements AuthRepository, CurrentAuthSessionSynchronizer {
   SessionCleanupAuthRepository({
     required this.delegate,
     required SessionCleanupCoordinator sessionCleanup,
@@ -22,6 +23,14 @@ class SessionCleanupAuthRepository implements AuthRepository {
   @override
   Future<AuthSession> login(AuthProviderType provider) =>
       delegate.login(provider);
+
+  @override
+  Future<AuthSession> syncCurrentSession() {
+    if (delegate is CurrentAuthSessionSynchronizer) {
+      return (delegate as CurrentAuthSessionSynchronizer).syncCurrentSession();
+    }
+    return Future.value(const AuthSession.guest());
+  }
 
   @override
   Future<AuthSession> logout() async {

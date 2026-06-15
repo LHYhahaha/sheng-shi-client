@@ -21,6 +21,7 @@ final entitlementRepositoryProvider = Provider<EntitlementRepository>((ref) {
       remoteDataSource: EntitlementRemoteDataSource(
         apiClient: ref.watch(apiClientProvider),
       ),
+      ref: ref,
     );
   }
   return MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOn();

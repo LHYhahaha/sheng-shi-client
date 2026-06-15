@@ -11,3 +11,7 @@ abstract interface class AuthRepository {
 
   Future<AuthSession> deleteAccount();
 }
+
+abstract interface class CurrentAuthSessionSynchronizer {
+  Future<AuthSession> syncCurrentSession();
+}

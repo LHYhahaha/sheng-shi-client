@@ -24,21 +24,25 @@ class AuthRemoteDataSource {
     print('[AuthRemoteDataSource] loginDevice request:');
     print('[AuthRemoteDataSource]   URL: POST /api/user/device/login');
     print('[AuthRemoteDataSource]   Body: ${request.toJson()}');
-    
+
     try {
       final result = await _apiClient.post<AuthSessionDto>(
-        '/api/user/device/login',  // ← 改为正确的路径
+        '/api/user/device/login', // ← 改为正确的路径
         data: request.toJson(),
         authPolicy: ApiAuthPolicy.none,
         decoder: AuthSessionDto.fromJson,
       );
-      
+
       print('[AuthRemoteDataSource] loginDevice response:');
-      print('[AuthRemoteDataSource]   isAuthenticated: ${result.isAuthenticated}');
+      print(
+        '[AuthRemoteDataSource]   isAuthenticated: ${result.isAuthenticated}',
+      );
       print('[AuthRemoteDataSource]   isNewUser: ${result.isNewUser}');
       print('[AuthRemoteDataSource]   user: ${result.user?.userId}');
-      print('[AuthRemoteDataSource]   token: ${result.token?.accessToken?.substring(0, 20)}...');
-      
+      print(
+        '[AuthRemoteDataSource]   token: ${result.token?.accessToken.substring(0, 20)}...',
+      );
+
       return result;
     } catch (e) {
       print('[AuthRemoteDataSource] loginDevice error: $e');
@@ -50,7 +54,7 @@ class AuthRemoteDataSource {
     print('[AuthRemoteDataSource] loginOAuth request:');
     print('[AuthRemoteDataSource]   URL: POST /api/user/facebook/login');
     print('[AuthRemoteDataSource]   Body: ${request.toJson()}');
-    
+
     return _apiClient.post<AuthSessionDto>(
       '/api/user/facebook/login',
       data: request.toJson(),
@@ -69,14 +73,17 @@ class AuthRemoteDataSource {
     );
   }
 
-  Future<AuthSessionDto> logout([
-    LogoutRequestDto request = const LogoutRequestDto(),
-  ]) {
-    return _apiClient.post<AuthSessionDto>(
-      '/auth/logout',
+  Future<bool> logout([LogoutRequestDto request = const LogoutRequestDto()]) {
+    return _apiClient.post<bool>(
+      '/api/user/logout',
       data: request.toJson(),
       authPolicy: ApiAuthPolicy.required,
-      decoder: AuthSessionDto.fromJson,
+      decoder: (data) {
+        if (data is Map) {
+          return data['success'] == true;
+        }
+        return false;
+      },
     );
   }
 

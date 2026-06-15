@@ -18,11 +18,13 @@ class MyListMapper {
     return MyListItem(
       dramaId: dto.dramaId,
       title: dto.title ?? _displayTitleFallback,
-      introduction: dto.description ?? '',
+      introduction: dto.summary ?? '',
       coverAssetPath: dto.coverUrl ?? fallbackAsset,
       coverResource: _coverResource(dto.coverUrl, dto.coverAspectRatio),
-      currentEpisode: dto.latestEpisodeNumber ?? 1,
-      episodeCount: dto.totalEpisodes,
+      currentEpisode: dto.lastEpisodeNo ?? 1,
+      episodeCount: dto.episodeTotal,
+      episodeId: dto.lastEpisodeId,
+
     );
   }
 

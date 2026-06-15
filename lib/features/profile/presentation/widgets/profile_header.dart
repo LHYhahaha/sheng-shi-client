@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/media/media_resource.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../auth/domain/auth_session.dart';
 import '../../application/profile_controller.dart';
 
 class ProfileHeader extends StatelessWidget {
@@ -48,7 +50,7 @@ class ProfileHeader extends StatelessWidget {
               height: 52,
               decoration: const BoxDecoration(shape: BoxShape.circle),
               clipBehavior: Clip.antiAlias,
-              child: Image.asset(state.avatarAssetPath, fit: BoxFit.cover),
+              child: _buildAvatarImage(),
             ),
             const SizedBox(width: 13),
             Column(
@@ -91,5 +93,26 @@ class ProfileHeader extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildAvatarImage() {
+    final avatarResource = state.avatarResource;
+    if (avatarResource != null) {
+      if (avatarResource.isNetwork) {
+        return Image.network(
+          avatarResource.value,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Image.asset(
+              authDefaultAvatarAssetPath,
+              fit: BoxFit.cover,
+            );
+          },
+        );
+      } else if (avatarResource.isAsset) {
+        return Image.asset(avatarResource.value, fit: BoxFit.cover);
+      }
+    }
+    return Image.asset(state.avatarAssetPath, fit: BoxFit.cover);
   }
 }

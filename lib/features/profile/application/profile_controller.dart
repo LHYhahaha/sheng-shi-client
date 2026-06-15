@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/session_cleanup_types.dart';
+import '../../../shared/media/media_resource.dart';
 import '../../auth/domain/auth_session.dart';
 import '../data/profile_repository_provider.dart';
 
@@ -18,6 +19,7 @@ class ProfileState {
     required this.showId,
     required this.nickname,
     required this.avatarAssetPath,
+    required this.avatarResource,
     required this.membership,
     required this.coins,
     required this.language,
@@ -30,6 +32,7 @@ class ProfileState {
       showId = '15589299',
       nickname = null,
       avatarAssetPath = authDefaultAvatarAssetPath,
+      avatarResource = const MediaResource.asset(authDefaultAvatarAssetPath),
       membership = const ProfileMembershipState.mock(),
       coins = const ProfileCoinsState.mock(),
       language = const ProfileLanguageState.enabled(),
@@ -61,6 +64,9 @@ class ProfileState {
   /// 层拼接 URL。
   final String avatarAssetPath;
 
+  /// 头像资源（支持网络图片）。
+  final MediaResource? avatarResource;
+
   /// 会员卡展示数据。
   ///
   /// 只用于我的页卡片摘要，不作为播放器解锁依据。
@@ -91,6 +97,7 @@ class ProfileState {
     String? showId,
     String? nickname,
     String? avatarAssetPath,
+    MediaResource? avatarResource,
     ProfileMembershipState? membership,
     ProfileCoinsState? coins,
     int? coin,
@@ -102,6 +109,7 @@ class ProfileState {
       showId: showId ?? this.showId,
       nickname: nickname,
       avatarAssetPath: avatarAssetPath ?? this.avatarAssetPath,
+      avatarResource: avatarResource ?? this.avatarResource,
       membership: membership ?? this.membership,
       coins:
           coins ??
@@ -218,6 +226,7 @@ class ProfileController extends Notifier<ProfileState> {
       userId: summary.userId,
       showId: summary.displayId,
       nickname: summary.nickname,
+      avatarResource: summary.avatarResource,
       membership: ProfileMembershipState(
         isActive: summary.membership.isActive,
         entryEnabled: true,

@@ -23,11 +23,11 @@ class ProfileMembershipCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final isActive = membership.isActive;
     final title = isActive
-        ? l10n.profileMembership
-        : l10n.profileMembershipJoin;
+        ? l10n.profileVipCardMembership
+        : l10n.profileVipCardMembershipJoin;
     final subtitle = isActive
-        ? 'Valid time ${_formatExpiry(membership.expiresAt)}'
-        : 'to enjoy all series for free';
+        ? '${l10n.profileMembershipValidUntil} ${_formatExpiry(membership.expiresAt)}'
+        : l10n.profileBenefitsIntro;
 
     return Container(
       padding: EdgeInsets.only(bottom: 10),

@@ -35,4 +35,7 @@ abstract final class MembershipLayout {
   static const benefitsRowGap = 20.0;
   static const benefitsIconSize = 30.0;
   static const benefitsIconRadius = 10.0;
+
+  /// 底部购买按钮区域高度（按钮高度 + 上下内边距）
+  static const bottomButtonAreaHeight = 86.0;
 }

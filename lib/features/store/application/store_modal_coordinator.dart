@@ -5,6 +5,7 @@ import '../../../core/modal/app_modal_controller.dart';
 import '../../../core/modal/app_modal_policy.dart';
 import '../../../core/modal/app_modal_provider.dart';
 import '../../../core/modal/app_modal_request.dart';
+import '../../../core/modal/app_modal_result.dart';
 import '../../../core/modal/app_modal_service.dart';
 import '../../../core/modal/app_modal_source.dart';
 import '../presentation/modal/store_modal_channels.dart';
@@ -28,10 +29,12 @@ class StoreModalCoordinator {
   final StoreController _storeController;
   final StoreState Function() _readStoreState;
 
-  Future<void> presentPurchaseConfirmation(BuildContext context) async {
+  Future<StorePurchaseModalResult> presentPurchaseConfirmation(
+    BuildContext context,
+  ) async {
     final package = _readStoreState().confirmationPackage;
     if (package == null || !context.mounted) {
-      return;
+      return const StorePurchaseModalResult.dismissed();
     }
 
     final request = FeatureAppModalRequest(
@@ -43,7 +46,19 @@ class StoreModalCoordinator {
       priority: AppModalPriority.high,
     );
 
-    await _modalService.show(request);
+    final result = await _modalService.show(request);
+    if (result is StorePurchaseModalResult) {
+      return result;
+    }
+    return switch (result.kind) {
+      AppModalResultKind.completed =>
+        const StorePurchaseModalResult.completed(),
+      AppModalResultKind.cancelled =>
+        const StorePurchaseModalResult.cancelled(),
+      AppModalResultKind.dismissed =>
+        const StorePurchaseModalResult.dismissed(),
+      AppModalResultKind.failed => const StorePurchaseModalResult.cancelled(),
+    };
   }
 
   void dismissStoreModals() {

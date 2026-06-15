@@ -44,6 +44,18 @@ class MembershipAppModalPresenter implements AppModalPresenter {
           container: container,
           child: Consumer(
             builder: (context, ref, child) {
+              ref.listen(
+                membershipControllerProvider.select(
+                  (state) => state.purchaseStatus,
+                ),
+                (previous, next) {
+                  if (next == MembershipPurchaseStatus.success &&
+                      previous != MembershipPurchaseStatus.success) {
+                    Navigator.of(sheetContext).pop(next);
+                  }
+                },
+              );
+
               final sheetState = ref.watch(membershipControllerProvider);
               final sheetController = ref.read(
                 membershipControllerProvider.notifier,
@@ -56,7 +68,6 @@ class MembershipAppModalPresenter implements AppModalPresenter {
                 plan: plan,
                 status: sheetState.purchaseStatus,
                 onConfirm: sheetController.confirmPurchase,
-                onCancel: sheetController.cancelPurchase,
                 onClose: () {
                   Navigator.of(
                     sheetContext,

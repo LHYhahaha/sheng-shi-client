@@ -5,5 +5,5 @@ abstract interface class HomeRepository {
   /// 获取首页数据。
   ///
   /// 需要登录后的 token。
-  Future<HomeData> getHomeData();
+  Future<HomeData> getHomeData({int? page, int pageSize = 20, int? tabId});
 }

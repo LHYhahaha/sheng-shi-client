@@ -10,6 +10,7 @@ import '../../../auth/application/auth_modal_coordinator.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../../../core/network/proxy_config.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/media/media_resource.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/profile_controller.dart';
 import '../widgets/profile_coins_card.dart';
@@ -65,6 +66,13 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final totalCoins =
         entitlementState.coinBalance + entitlementState.bonusBalance;
     final hasAccountInfo = authUser != null || userInfoState.hasUserInfo;
+    
+    // 优先使用 authUser 的 avatarResource，否则使用 userInfoState.avatar 构建网络头像
+    final avatarResource = authUser?.avatarResource ??
+        (userInfoState.avatar != null && userInfoState.avatar!.isNotEmpty
+            ? MediaResource.network(userInfoState.avatar!)
+            : profileState.avatarResource);
+    
     final state = profileState.copyWith(
       isLoggedIn: hasAccountInfo,
       userId: authUser?.id ?? userInfoState.showId ?? profileState.userId,
@@ -72,6 +80,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       nickname: authUser?.nickname ?? userInfoState.nickname,
       avatarAssetPath:
           authUser?.avatarAssetPath ?? profileState.avatarAssetPath,
+      avatarResource: avatarResource,
       membership: ProfileMembershipState(
         isActive: entitlementState.isMember,
         entryEnabled: profileState.membership.entryEnabled,

@@ -1,5 +1,7 @@
+import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/svg.dart';
 
 import '../../../../core/utils/period_iso_parser.dart';
 import '../../../../shared/theme/app_radii.dart';
@@ -30,6 +32,11 @@ class StoreVipPackageCard extends ConsumerWidget {
     final displayPrice = package.priceLabel;
     final displayOriginalPrice = package.originalPriceLabel;
     final showPromo = package.promotionExpireSeconds > 0;
+    final title = PeriodIsoParser.localizedMembershipTitle(
+      package.title,
+      fallbackId: package.id,
+      languageCode: Localizations.localeOf(context).languageCode,
+    );
     String? promoDescription;
 
     if (package.platformProductId != null &&
@@ -64,27 +71,23 @@ class StoreVipPackageCard extends ConsumerWidget {
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFFFFF2D7), Color(0xFFFFD08A)],
+              colors: [Color(0xFFFFF0D9), Color(0xFFF3CA92)],
             ),
             borderRadius: BorderRadius.circular(AppRadii.sm),
-            border: Border.all(
-              color: selected ? const Color(0xFFFF0A7A) : Colors.transparent,
-              width: 1.5,
-            ),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFFFF0A7A).withValues(alpha: 0.22),
-                      blurRadius: 14,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : null,
           ),
           clipBehavior: Clip.antiAlias,
           child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              Positioned.fill(child: CustomPaint(painter: _VipStripePainter())),
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Image.asset(
+                  "assets/images/profile/vip_v.png",
+                  height: 98,
+                  fit: BoxFit.contain,
+                ),
+              ),
               if (package.badgeLabel != null && !showPromo)
                 Positioned(
                   right: 0,
@@ -113,19 +116,19 @@ class StoreVipPackageCard extends ConsumerWidget {
                 ),
               if (showPromo)
                 Positioned(
-                  right: 0,
-                  top: 0,
+                  right: -2,
+                  top: -1,
                   child: _PromoCountdownBadge(
                     endTime: package.promotionExpiresAt,
                     fallbackSeconds: package.promotionExpireSeconds,
                   ),
                 ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 17, 16, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 17, 16, 0),
+                    child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
@@ -133,7 +136,7 @@ class StoreVipPackageCard extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                package.title,
+                                title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.titleMedium
@@ -144,25 +147,24 @@ class StoreVipPackageCard extends ConsumerWidget {
                                     ),
                               ),
                               const SizedBox(height: 9),
-                              if (package.subtitle != null)
-                                Text(
-                                  package.subtitle!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.labelSmall
-                                      ?.copyWith(
-                                        color: _ink.withValues(alpha: 0.6),
-                                      ),
-                                ),
+                              Text(
+                                context.l10n.playerAutoRenewCancel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(
+                                      fontSize: 10,
+                                      color: _ink.withValues(alpha: 0.5),
+                                    ),
+                              ),
                               // 展示促销文案（替换footnote），没有促销则不展示
                               if (promoDescription != null)
                                 Text(
                                   promoDescription,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
                                   style: Theme.of(context).textTheme.labelSmall
                                       ?.copyWith(
-                                        color: _ink.withValues(alpha: 0.6),
+                                        fontSize: 10,
+                                        color: _ink.withValues(alpha: 0.5),
                                       ),
                                 ),
                             ],
@@ -197,15 +199,18 @@ class StoreVipPackageCard extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    const Spacer(),
-                    Container(
-                      height: 60,
-                      padding: const EdgeInsets.fromLTRB(16, 7, 16, 7),
-                      color: const Color(0x33FFF8E7),
-                      child: _BenefitGrid(benefits: package.benefits),
+                  ),
+                  const Spacer(),
+                  Container(
+                    height: 60,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 7,
                     ),
-                  ],
-                ),
+                    color: const Color(0x33FFF8E7),
+                    child: _BenefitGrid(benefits: package.benefits),
+                  ),
+                ],
               ),
             ],
           ),
@@ -250,15 +255,14 @@ class _PromoCountdownBadgeState extends State<_PromoCountdownBadge> {
         }
 
         return Container(
-          height: 19,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: 2,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 2),
           decoration: const BoxDecoration(
-            color: Color(0xFFFE3273),
+            gradient: LinearGradient(
+              colors: [Color(0xFFFF9E53), Color(0xFFFE1340), Color(0xFFFE3273)],
+            ),
             borderRadius: BorderRadius.only(
               bottomLeft: Radius.circular(AppRadii.sm),
+              topRight: Radius.circular(AppRadii.sm),
             ),
           ),
           child: Text(
@@ -301,13 +305,19 @@ class _BenefitGrid extends StatelessWidget {
       ),
       itemBuilder: (context, index) {
         final benefit = benefits[index];
+        final label = _localizedLabel(context, benefit.icon);
         return Row(
           children: [
-            Icon(_iconFor(benefit.icon), size: 17, color: _ink),
+            SvgPicture.asset(
+              _iconFor(benefit.icon),
+              width: 20,
+              height: 20,
+              fit: BoxFit.contain,
+            ),
             const SizedBox(width: AppSpacing.xs),
             Expanded(
               child: Text(
-                benefit.label,
+                label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -323,12 +333,21 @@ class _BenefitGrid extends StatelessWidget {
     );
   }
 
-  IconData _iconFor(StoreBenefitIcon icon) {
+  String _localizedLabel(BuildContext context, StoreBenefitIcon icon) {
     return switch (icon) {
-      StoreBenefitIcon.drama => Icons.video_library_rounded,
-      StoreBenefitIcon.download => Icons.download_rounded,
-      StoreBenefitIcon.hd => Icons.hd_rounded,
-      StoreBenefitIcon.points => Icons.auto_awesome_rounded,
+      StoreBenefitIcon.drama => context.l10n.rechargeBenefitUnlockDramas,
+      StoreBenefitIcon.download => context.l10n.rechargeBenefitDownload,
+      StoreBenefitIcon.hd => context.l10n.rechargeBenefitHd,
+      StoreBenefitIcon.points => context.l10n.rechargeBenefitDailyPoints,
+    };
+  }
+
+  String _iconFor(StoreBenefitIcon icon) {
+    return switch (icon) {
+      StoreBenefitIcon.drama => "assets/images/profile/brown_series.svg",
+      StoreBenefitIcon.download => "assets/images/profile/brown_download.svg",
+      StoreBenefitIcon.hd => "assets/images/profile/brown_hd.svg",
+      StoreBenefitIcon.points => "assets/images/profile/brown_points.svg",
     };
   }
 }

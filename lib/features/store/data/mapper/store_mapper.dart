@@ -101,19 +101,10 @@ class StoreMapper {
 
   List<StorePackageBenefit> _defaultBenefits() {
     return const [
-      StorePackageBenefit(
-        icon: StoreBenefitIcon.drama,
-        label: 'Unlimited dramas',
-      ),
-      StorePackageBenefit(
-        icon: StoreBenefitIcon.download,
-        label: 'Download offline',
-      ),
-      StorePackageBenefit(icon: StoreBenefitIcon.hd, label: 'HD quality'),
-      StorePackageBenefit(
-        icon: StoreBenefitIcon.points,
-        label: 'Exclusive points',
-      ),
+      StorePackageBenefit(icon: StoreBenefitIcon.drama),
+      StorePackageBenefit(icon: StoreBenefitIcon.download),
+      StorePackageBenefit(icon: StoreBenefitIcon.hd),
+      StorePackageBenefit(icon: StoreBenefitIcon.points),
     ];
   }
 }

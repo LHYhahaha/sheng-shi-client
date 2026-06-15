@@ -1,3 +1,5 @@
+import '../../../../core/i18n/ui_text.dart';
+import '../../../../l10n/remote_texts.dart';
 import '../../../../shared/media/media_resource.dart';
 import '../../domain/wallet_record.dart';
 import '../dto/wallet_consumption_record_dto.dart';
@@ -5,10 +7,11 @@ import '../dto/wallet_dto.dart';
 import '../dto/wallet_reward_coin_record_dto.dart';
 import '../dto/wallet_transaction_record_dto.dart';
 
-/// 钱包远程 DTO 到 domain 的 mapper。
+/// Wallet remote DTO to domain mapper.
 ///
-/// 这里不做账本计算，只把服务端结构化字段映射成当前 UI 已接收的展示模型；真实余额、
-/// 赠币和流水一致性以后端返回为准。
+/// This layer only maps structured remote fields into the current domain
+/// display model. Fixed client copy is represented as [UiText] specs and is
+/// resolved by the presentation layer with the current locale.
 class WalletMapper {
   const WalletMapper();
 
@@ -32,28 +35,33 @@ class WalletMapper {
     return WalletRecord(
       id: dto.id,
       type: WalletRecordType.transaction,
-      title: dto.title ?? _transactionTitle(dto),
+      title: dto.title == null ? _transactionTitle(dto) : UiText.raw(dto.title!),
       dateLabel: _dateLabel(dto.createdAt),
-      trailingLabel: dto.price != null
-          ? _priceLabel(dto.price!, dto.currency)
-          : dto.amount.toString(),
-      showCoinIcon: dto.amount > 0,
-      detailLabel: dto.platform,
-      trailingSubtitle: dto.status,
+      trailingLabel: UiText.raw(dto.amountText ?? ''),
+      showCoinIcon: dto.coinAmount + dto.bonusAmount > 0,
+      detailLabel: dto.platform == null ? null : UiText.raw(dto.platform!),
+      trailingSubtitle: UiText.raw(dto.status),
     );
   }
 
   WalletRecord mapConsumption(WalletConsumptionRecordDto dto) {
+    final isAd = dto.sourceType.toLowerCase() == 'ad';
+
     return WalletRecord(
       id: dto.id,
       type: WalletRecordType.consumption,
-      title: 'EP. ${dto.episodeNumber}',
-      subtitle: dto.title,
+      title: RemoteTexts.consumptionHistoryEpisodeIndex.uiText({
+        'index': dto.episodeNumber,
+      }),
+      subtitle: UiText.raw(dto.title),
       dateLabel: _dateLabel(dto.createdAt),
-      trailingLabel: dto.sourceType.toLowerCase() == 'ad'
-          ? 'AD'
-          : '-${dto.amountCoins}',
-      trailingSubtitle: dto.sourceType.toLowerCase() == 'ad' ? null : 'Coins',
+      trailingLabel: isAd
+          ? RemoteTexts.walletRecordSourceAd.uiText()
+          : UiText.raw('-${dto.amountCoins}'),
+      trailingSubtitle: isAd
+          ? null
+          : RemoteTexts.consumptionHistoryCoins.uiText(),
+      sourceType: dto.sourceType,
       posterAssetPath: _fallbackPoster,
       posterResource: _poster(dto.coverUrl),
       consumptionStatus: dto.status.toLowerCase() == 'expired'
@@ -66,15 +74,15 @@ class WalletMapper {
     return WalletRecord(
       id: dto.recordId.toString(),
       type: WalletRecordType.coins,
-      title: '${dto.bonusCoin} Reward Coins',
-      dateLabel: dto.permanent
-          ? '${_dateLabel(dto.startAt)} - Permanent'
-          : '${_dateLabel(dto.startAt)} - ${_dateLabel(dto.expireAt)}',
-      trailingLabel: dto.status == 1 ? 'Claimed' : 'Check in',
+      title: RemoteTexts.walletRecordRewardCoins.uiText({
+        'count': dto.bonusCoin,
+      }),
+      dateLabel: _dateLabel(dto.startAt),
+      trailingLabel: UiText.raw(dto.status.toString()),
       showCoinIcon: true,
       rewardEnabled: dto.status == 0,
       rewardClaimed: dto.status == 1,
-      subtitle: dto.sourceName,
+      subtitle: UiText.raw(dto.sourceName),
     );
   }
 
@@ -85,17 +93,17 @@ class WalletMapper {
     return const MediaResource.asset(_fallbackPoster);
   }
 
-  String _transactionTitle(WalletTransactionRecordDto dto) {
+  UiText _transactionTitle(WalletTransactionRecordDto dto) {
     if (dto.bonusAmount > 0) {
-      return '${dto.amount} Coins + ${dto.bonusAmount} bonus';
+      return RemoteTexts.walletRecordTransactionCoinsBonus.uiText({
+        'coins': dto.coinAmount,
+        'bonus': dto.bonusAmount,
+      });
     }
-    return dto.type.isEmpty ? 'Transaction' : dto.type;
-  }
 
-  String _priceLabel(int priceMicros, String? currency) {
-    final amount = priceMicros / 1000000;
-    final symbol = currency == 'USD' || currency == null ? r'$' : currency;
-    return '$symbol${amount.toStringAsFixed(2)}';
+    return dto.type.isEmpty
+        ? RemoteTexts.transactionHistoryTitle.uiText()
+        : UiText.raw(dto.type);
   }
 
   String _dateLabel(DateTime? value) {

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/utils/period_iso_parser.dart';
 import '../membership_layout.dart';
 import '../../domain/membership_plan.dart';
 
@@ -83,6 +84,17 @@ class _MembershipPlanCardState extends State<MembershipPlanCard> {
     final textTheme = Theme.of(context).textTheme;
     final plan = widget.plan;
     final selected = widget.selected;
+    final languageCode = Localizations.localeOf(context).languageCode;
+    final title = PeriodIsoParser.localizedMembershipTitle(
+      plan.title,
+      periodIso: plan.period ?? plan.regularPeriodIso,
+      fallbackId: plan.id,
+      languageCode: languageCode,
+    );
+    final dailyPriceLabel = PeriodIsoParser.localizedDailyPriceLabel(
+      plan.dailyPriceLabel,
+      languageCode: languageCode,
+    );
 
     return Semantics(
       button: true,
@@ -115,7 +127,7 @@ class _MembershipPlanCardState extends State<MembershipPlanCard> {
                     Row(),
                     // 标题
                     Text(
-                      plan.title,
+                      title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
@@ -180,7 +192,7 @@ class _MembershipPlanCardState extends State<MembershipPlanCard> {
                       : Colors.white.withValues(alpha: 0.08),
                   child: Center(
                     child: Text(
-                      plan.dailyPriceLabel,
+                      dailyPriceLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: textTheme.labelSmall?.copyWith(

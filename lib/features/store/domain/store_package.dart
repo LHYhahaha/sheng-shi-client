@@ -199,13 +199,10 @@ class StorePackage {
 
 /// 商店套餐权益展示项。
 class StorePackageBenefit {
-  const StorePackageBenefit({required this.icon, required this.label});
+  const StorePackageBenefit({required this.icon});
 
   /// 展示图标类型。
   final StoreBenefitIcon icon;
-
-  /// 权益文案。
-  final String label;
 }
 
 /// 商店权益图标类型。

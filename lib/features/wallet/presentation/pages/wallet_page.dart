@@ -188,17 +188,17 @@ class _WalletBody extends ConsumerWidget {
         ),
         const SizedBox(height: 28),
         _WalletMenuRow(
-          label: context.l10n.transactionHistoryTitle,
+          label: context.l10n.walletMenuTransactionHistory,
           onTap: onTransactionHistory,
         ),
         const SizedBox(height: 28),
         _WalletMenuRow(
-          label: context.l10n.consumptionHistoryTitle,
+          label: context.l10n.walletMenuConsumptionHistory,
           onTap: onConsumptionHistory,
         ),
         const SizedBox(height: 28),
         _WalletMenuRow(
-          label: context.l10n.recordCoinsTitle,
+          label: context.l10n.walletMenuClaimCoins,
           onTap: onRecordCoins,
         ),
         const SizedBox(height: 28),

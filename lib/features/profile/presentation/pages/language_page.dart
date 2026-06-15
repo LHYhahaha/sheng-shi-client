@@ -22,7 +22,7 @@ class LanguagePage extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _LanguageHeader(title: context.l10n.profileLanguage),
+            _LanguageHeader(title: context.l10n.languagePageTitle),
             const SizedBox(height: 12),
             _LanguageOption(
               label: 'English',

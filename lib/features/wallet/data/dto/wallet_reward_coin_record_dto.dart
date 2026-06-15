@@ -40,6 +40,7 @@ String _string(Object? value, {String fallback = ''}) =>
 int _int(Object? value, {int fallback = 0}) {
   if (value is int) return value;
   if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? fallback;
   return fallback;
 }
 

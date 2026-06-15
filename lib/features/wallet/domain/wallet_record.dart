@@ -1,3 +1,4 @@
+import '../../../core/i18n/ui_text.dart';
 import '../../../shared/media/media_resource.dart';
 
 /// 钱包记录类型。
@@ -18,19 +19,47 @@ class WalletRecord {
   const WalletRecord({
     required this.id,
     required this.type,
-    required this.title,
+    required UiText title,
     required this.dateLabel,
-    required this.trailingLabel,
+    required UiText trailingLabel,
     this.showCoinIcon = false,
     this.posterAssetPath,
     this.posterResource,
-    this.subtitle,
-    this.detailLabel,
-    this.trailingSubtitle,
+    UiText? subtitle,
+    UiText? detailLabel,
+    UiText? trailingSubtitle,
+    this.sourceType,
     this.consumptionStatus,
     this.rewardEnabled = false,
     this.rewardClaimed = false,
-  });
+  }) : titleText = title,
+       trailingLabelText = trailingLabel,
+       subtitleText = subtitle,
+       detailLabelText = detailLabel,
+       trailingSubtitleText = trailingSubtitle;
+
+  WalletRecord.raw({
+    required this.id,
+    required this.type,
+    required String title,
+    required this.dateLabel,
+    required String trailingLabel,
+    this.showCoinIcon = false,
+    this.posterAssetPath,
+    this.posterResource,
+    String? subtitle,
+    String? detailLabel,
+    String? trailingSubtitle,
+    this.sourceType,
+    this.consumptionStatus,
+    this.rewardEnabled = false,
+    this.rewardClaimed = false,
+  }) : titleText = UiText.raw(title),
+       trailingLabelText = UiText.raw(trailingLabel),
+       subtitleText = subtitle == null ? null : UiText.raw(subtitle),
+       detailLabelText = detailLabel == null ? null : UiText.raw(detailLabel),
+       trailingSubtitleText =
+           trailingSubtitle == null ? null : UiText.raw(trailingSubtitle);
 
   /// 记录 id。
   ///
@@ -41,13 +70,18 @@ class WalletRecord {
   final WalletRecordType type;
 
   /// 主标题。
-  final String title;
+  final UiText titleText;
+
+  String get title => titleText.rawValue ?? titleText.fallbackEn;
 
   /// 日期展示文案。
   final String dateLabel;
 
   /// 右侧主文案，例如金额、状态或奖励按钮文案。
-  final String trailingLabel;
+  final UiText trailingLabelText;
+
+  String get trailingLabel =>
+      trailingLabelText.rawValue ?? trailingLabelText.fallbackEn;
 
   /// 是否显示金币图标。
   ///
@@ -64,13 +98,26 @@ class WalletRecord {
   final MediaResource? posterResource;
 
   /// 副标题。
-  final String? subtitle;
+  final UiText? subtitleText;
+
+  String? get subtitle => subtitleText?.rawValue ?? subtitleText?.fallbackEn;
 
   /// 详情文案。
-  final String? detailLabel;
+  final UiText? detailLabelText;
+
+  String? get detailLabel =>
+      detailLabelText?.rawValue ?? detailLabelText?.fallbackEn;
 
   /// 右侧副文案。
-  final String? trailingSubtitle;
+  final UiText? trailingSubtitleText;
+
+  String? get trailingSubtitle =>
+      trailingSubtitleText?.rawValue ?? trailingSubtitleText?.fallbackEn;
+
+  /// 消费来源类型。
+  ///
+  /// 用于 UI 层根据来源类型显示本地化文本。例如 'coins' 显示为本地化的 'Coins'。
+  final String? sourceType;
 
   /// 消费状态。
   ///
@@ -87,19 +134,24 @@ class WalletRecord {
   /// mock 阶段仅改变按钮状态；真实发放需要服务端确认后刷新钱包。
   final bool rewardClaimed;
 
-  WalletRecord copyWith({bool? rewardEnabled, bool? rewardClaimed}) {
+  WalletRecord copyWith({
+    bool? rewardEnabled,
+    bool? rewardClaimed,
+    String? sourceType,
+  }) {
     return WalletRecord(
       id: id,
       type: type,
-      title: title,
+      title: titleText,
       dateLabel: dateLabel,
-      trailingLabel: trailingLabel,
+      trailingLabel: trailingLabelText,
       showCoinIcon: showCoinIcon,
       posterAssetPath: posterAssetPath,
       posterResource: posterResource,
-      subtitle: subtitle,
-      detailLabel: detailLabel,
-      trailingSubtitle: trailingSubtitle,
+      subtitle: subtitleText,
+      detailLabel: detailLabelText,
+      trailingSubtitle: trailingSubtitleText,
+      sourceType: sourceType ?? this.sourceType,
       consumptionStatus: consumptionStatus,
       rewardEnabled: rewardEnabled ?? this.rewardEnabled,
       rewardClaimed: rewardClaimed ?? this.rewardClaimed,

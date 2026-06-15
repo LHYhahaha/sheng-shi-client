@@ -1,104 +1,264 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/application/auth_controller.dart';
 import '../data/home_repository_provider.dart';
 import '../domain/home_data.dart';
 
-/// 首页数据加载状态。
 class HomeDataState {
-  const HomeDataState({this.data, this.isLoading = false, this.error});
+  const HomeDataState({
+    this.data,
+    this.isLoading = false,
+    this.isLoadingMore = false,
+    this.error,
+    this.loadMoreError,
+  });
 
-  /// 首页数据。
   final HomeData? data;
-
-  /// 是否正在加载。
   final bool isLoading;
-
-  /// 加载错误。
+  final bool isLoadingMore;
   final Object? error;
+  final Object? loadMoreError;
 
   bool get hasError => error != null;
 
   HomeDataState copyWith({
     HomeData? data,
     bool? isLoading,
+    bool? isLoadingMore,
     Object? error,
     bool clearError = false,
+    Object? loadMoreError,
+    bool clearLoadMoreError = false,
   }) {
     return HomeDataState(
       data: data ?? this.data,
       isLoading: isLoading ?? this.isLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       error: clearError ? null : (error ?? this.error),
+      loadMoreError: clearLoadMoreError
+          ? null
+          : (loadMoreError ?? this.loadMoreError),
     );
   }
 }
 
-/// 首页数据加载控制器。
-///
-/// 负责从远程接口加载首页数据。
-/// 采用与 ProfilePage 相同的模式：监听 AuthState 判断 session 是否就绪，
-/// 游客/正式账号只要有有效 token 都可以加载首页数据。
 final homeDataControllerProvider =
     NotifierProvider<HomeDataController, HomeDataState>(HomeDataController.new);
 
 class HomeDataController extends Notifier<HomeDataState> {
+  static const pageSize = 20;
+
   bool _loadAttempted = false;
+  int _generation = 0;
 
   @override
   HomeDataState build() {
-    // 监听 AuthState，当认证初始化完成时自动加载数据。
     ref.listen(authControllerProvider, (previous, next) {
       final wasReady = previous != null && !previous.isLoading;
       final isReady = !next.isLoading && next.error == null;
 
-      print(
-        '[HomeDataController] Auth state changed: wasReady=$wasReady, isReady=$isReady, isLoggedIn=${next.isLoggedIn}, _loadAttempted=$_loadAttempted',
-      );
-
       if (!wasReady && isReady && !_loadAttempted) {
-        print('[HomeDataController] Auth session ready, loading home data...');
         _loadAttempted = true;
-        Future.microtask(loadHomeData);
+        unawaited(Future.microtask(loadHomeData));
       }
     });
 
     Future.microtask(() {
       final authState = ref.read(authControllerProvider);
       if (!authState.isLoading && authState.error == null && !_loadAttempted) {
-        print('[HomeDataController] Auth already ready, loading home data...');
         _loadAttempted = true;
-        loadHomeData();
+        unawaited(loadHomeData());
       }
     });
 
     return const HomeDataState();
   }
 
-  /// 加载首页数据。
   Future<void> loadHomeData() async {
-    state = state.copyWith(isLoading: true, clearError: true);
+    final generation = ++_generation;
+    state = state.copyWith(
+      isLoading: true,
+      isLoadingMore: false,
+      clearError: true,
+      clearLoadMoreError: true,
+    );
 
     try {
       final repository = ref.read(homeRepositoryProvider);
       final homeData = await repository.getHomeData();
-
-      print('[HomeDataController] loadHomeData success');
-      print('[HomeDataController]   tabs count: ${homeData.tabs.length}');
+      if (!_isCurrent(generation)) {
+        return;
+      }
 
       state = state.copyWith(
         data: homeData,
         isLoading: false,
         clearError: true,
+        clearLoadMoreError: true,
       );
     } catch (error) {
-      print('[HomeDataController] loadHomeData error: $error');
+      if (!_isCurrent(generation)) {
+        return;
+      }
       state = state.copyWith(isLoading: false, error: error);
     }
   }
 
-  /// 重试加载首页数据。
+  Future<void> refreshTab(int tabId) async {
+    final currentData = state.data;
+    if (currentData == null) {
+      await loadHomeData();
+      return;
+    }
+
+    final generation = ++_generation;
+    state = state.copyWith(clearError: true, clearLoadMoreError: true);
+
+    try {
+      final repository = ref.read(homeRepositoryProvider);
+      final page = await repository.getHomeData(
+        page: 1,
+        pageSize: pageSize,
+        tabId: tabId,
+      );
+      if (!_isCurrent(generation)) {
+        return;
+      }
+
+      final tab = _tabFromPage(page, tabId);
+      state = state.copyWith(
+        data: _replaceTab(currentData, tab),
+        clearError: true,
+        clearLoadMoreError: true,
+      );
+    } catch (error) {
+      if (!_isCurrent(generation)) {
+        return;
+      }
+      state = state.copyWith(error: error);
+    }
+  }
+
+  Future<void> refreshHomeData() async {
+    final generation = ++_generation;
+    state = state.copyWith(
+      isLoadingMore: false,
+      clearError: true,
+      clearLoadMoreError: true,
+    );
+
+    try {
+      final repository = ref.read(homeRepositoryProvider);
+      final homeData = await repository.getHomeData();
+      if (!_isCurrent(generation)) {
+        return;
+      }
+
+      state = state.copyWith(
+        data: homeData,
+        isLoadingMore: false,
+        clearError: true,
+        clearLoadMoreError: true,
+      );
+    } catch (error) {
+      if (!_isCurrent(generation)) {
+        return;
+      }
+      state = state.copyWith(error: error, isLoadingMore: false);
+    }
+  }
+
+  Future<void> loadMoreTab(int tabId) async {
+    final currentData = state.data;
+    if (currentData == null || state.isLoadingMore) {
+      return;
+    }
+
+    final tab = _findTab(currentData, tabId);
+    if (tab == null || !tab.hasMoreDramas) {
+      return;
+    }
+
+    final generation = _generation;
+    state = state.copyWith(isLoadingMore: true, clearLoadMoreError: true);
+
+    try {
+      final repository = ref.read(homeRepositoryProvider);
+      final page = await repository.getHomeData(
+        page: tab.nextPage,
+        pageSize: pageSize,
+        tabId: tabId,
+      );
+      if (!_isCurrent(generation)) {
+        return;
+      }
+
+      final nextTab = _tabFromPage(page, tabId);
+      final mergedTab = nextTab.copyWith(
+        dramas: List.unmodifiable([...tab.dramas, ...nextTab.dramas]),
+      );
+      state = state.copyWith(
+        data: _replaceTab(currentData, mergedTab),
+        isLoadingMore: false,
+        clearLoadMoreError: true,
+      );
+    } catch (error) {
+      if (!_isCurrent(generation)) {
+        return;
+      }
+
+      state = state.copyWith(loadMoreError: error, isLoadingMore: false);
+    }
+  }
+
   Future<void> retry() async {
     _loadAttempted = true;
     await loadHomeData();
+  }
+
+  HomeTab? _findTab(HomeData data, int tabId) {
+    for (final tab in data.tabs) {
+      if (tab.id == tabId) {
+        return tab;
+      }
+    }
+    return null;
+  }
+
+  HomeTab _tabFromPage(HomeData page, int tabId) {
+    final matchingTab = _findTab(page, tabId);
+    if (matchingTab != null) {
+      return matchingTab;
+    }
+    if (page.tabs.isNotEmpty) {
+      return page.tabs.first;
+    }
+    throw StateError('Home tab $tabId not found in response');
+  }
+
+  HomeData _replaceTab(HomeData currentData, HomeTab tab) {
+    var replaced = false;
+    final tabs = [
+      for (final existing in currentData.tabs)
+        if (existing.id == tab.id) ...[tab] else ...[existing],
+    ];
+
+    for (final existing in currentData.tabs) {
+      if (existing.id == tab.id) {
+        replaced = true;
+        break;
+      }
+    }
+    if (!replaced) {
+      tabs.add(tab);
+    }
+
+    return currentData.copyWith(tabs: List.unmodifiable(tabs));
+  }
+
+  bool _isCurrent(int generation) {
+    return generation == _generation;
   }
 }

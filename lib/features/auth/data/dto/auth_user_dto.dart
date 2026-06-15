@@ -20,11 +20,7 @@ class AuthUserDto {
   factory AuthUserDto.fromJson(Object? json) {
     final map = JsonFieldParser.requireMap(json, dtoName: 'AuthUserDto');
     return AuthUserDto(
-      userId: JsonFieldParser.requireString(
-        map,
-        'userId',
-        dtoName: 'AuthUserDto',
-      ),
+      userId: JsonFieldParser.optionalString(map, 'userId') ?? '',
       nickname: JsonFieldParser.optionalString(map, 'nickname') ?? '',
       avatarUrl: JsonFieldParser.optionalString(map, 'avatarUrl'),
       provider: JsonFieldParser.optionalString(map, 'provider') ?? 'device',

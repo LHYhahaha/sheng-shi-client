@@ -33,10 +33,6 @@ class StoreCoinPackageCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0x80414143),
             borderRadius: BorderRadius.circular(AppRadii.sm),
-            border: Border.all(
-              color: selected ? AppColors.primary : Colors.transparent,
-              width: 1.5,
-            ),
           ),
           child: Stack(
             children: [

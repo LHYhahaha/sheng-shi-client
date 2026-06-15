@@ -12,9 +12,9 @@ import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_spacing.dart';
-import '../../../../shared/widgets/app_primary_button.dart';
 import '../../application/store_controller.dart';
 import '../../application/store_modal_coordinator.dart';
+import '../modal/store_modal_results.dart';
 import '../widgets/store_coin_package_card.dart';
 import '../widgets/store_tips.dart';
 import '../widgets/store_vip_package_card.dart';
@@ -64,27 +64,21 @@ class _StorePageState extends ConsumerState<StorePage> {
           ref
               .read(storeModalCoordinatorProvider)
               .presentPurchaseConfirmation(context)
-              .whenComplete(() {
+              .then((result) {
                 _modalOpen = false;
-                if (mounted) {
-                  ref.read(storeControllerProvider.notifier).hideConfirmation();
+                if (!mounted) {
+                  return;
                 }
+                if (StoreModalResults.isPurchaseCompleted(result) &&
+                    !_returnedAfterPurchase) {
+                  _returnedAfterPurchase = true;
+                  ref.read(appToastProvider).success(l10n.storePurchaseSuccess);
+                  _returnAfterPurchaseSuccess();
+                  return;
+                }
+                ref.read(storeControllerProvider.notifier).hideConfirmation();
               }),
         );
-      },
-    );
-
-    // 验单成功后关闭确认弹窗并返回上一页。
-    ref.listen(
-      storeControllerProvider.select((state) => state.purchaseStatus),
-      (previous, next) {
-        if (next == StorePurchaseStatus.success &&
-            previous != StorePurchaseStatus.success &&
-            !_returnedAfterPurchase &&
-            mounted) {
-          _returnedAfterPurchase = true;
-          unawaited(_returnAfterPurchaseSuccess());
-        }
       },
     );
 
@@ -134,7 +128,10 @@ class _StorePageState extends ConsumerState<StorePage> {
                   child: _StoreBody(
                     state: state,
                     onRetry: controller.retry,
-                    onSelect: controller.selectPackage,
+                    onSelect: (id) {
+                      controller.selectPackage(id);
+                      controller.showConfirmation();
+                    },
                   ),
                 ),
               ],
@@ -142,30 +139,16 @@ class _StorePageState extends ConsumerState<StorePage> {
           ],
         ),
       ),
-      bottomNavigationBar: state.hasContent
-          ? SafeArea(
-              top: false,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-                color: const Color(0xFF040404),
-                child: AppPrimaryButton(
-                  label: l10n.storeBuyNow,
-                  onPressed: state.selectedPackage == null
-                      ? null
-                      : controller.showConfirmation,
-                ),
-              ),
-            )
-          : null,
     );
   }
 
   Future<void> _returnAfterPurchaseSuccess() async {
-    _modalService.dismissForSource(AppModalSource.store);
+    // 弹窗已关闭，无需再次 dismiss
     await Future<void>.delayed(Duration.zero);
     if (!mounted) {
       return;
     }
+    // 返回到 Profile 页面
     if (context.canPop()) {
       context.pop();
     } else {

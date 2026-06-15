@@ -5,10 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
-import '../../../../core/modal/app_modal_result.dart';
 import '../../../../core/modal/app_modal_provider.dart';
 import '../../../../core/modal/app_modal_service.dart';
 import '../../../../core/modal/app_modal_source.dart';
+import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/membership_controller.dart';
@@ -16,6 +16,8 @@ import '../../application/membership_modal_coordinator.dart';
 import '../../domain/membership_plan.dart';
 import '../../../../core/utils/period_iso_parser.dart';
 import '../membership_layout.dart';
+import '../membership_route_result.dart';
+import '../modal/membership_modal_results.dart';
 import '../widgets/membership_benefits_panel.dart';
 import '../widgets/membership_plan_card.dart';
 
@@ -50,26 +52,9 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
     final state = ref.watch(membershipControllerProvider);
     final controller = ref.read(membershipControllerProvider.notifier);
     final topInset = MediaQuery.paddingOf(context).top;
+    final l10n = context.l10n;
 
     ref.watch(membershipModalCoordinatorProvider);
-
-    // 监听购买状态变化，显示成功/失败弹窗
-    ref.listen(
-      membershipControllerProvider.select((state) => state.purchaseStatus),
-      (previous, next) {
-        if (previous == next) return;
-
-        if (next == MembershipPurchaseStatus.success) {
-          _modalService.dismissForSource(
-            AppModalSource.membership,
-            result: const MembershipPurchaseModalResult.completed(),
-          );
-          if (mounted) {
-            _goBack();
-          }
-        }
-      },
-    );
 
     ref.listen(
       membershipControllerProvider.select((state) => state.confirmationPlan),
@@ -83,13 +68,19 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
           ref
               .read(membershipModalCoordinatorProvider)
               .presentPurchaseConfirmation(context)
-              .whenComplete(() {
+              .then((result) {
                 _modalOpen = false;
-                if (mounted) {
-                  ref
-                      .read(membershipControllerProvider.notifier)
-                      .hideConfirmation();
+                if (!mounted) {
+                  return;
                 }
+                if (MembershipModalResults.isPurchaseCompleted(result)) {
+                  ref.read(appToastProvider).success(l10n.storePurchaseSuccess);
+                  _goBack(result: MembershipRouteResult.purchaseCompleted);
+                  return;
+                }
+                ref
+                    .read(membershipControllerProvider.notifier)
+                    .hideConfirmation();
               }),
         );
       },
@@ -111,7 +102,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
             _MembershipBody(state: state, controller: controller),
             if (state.hasContent)
               _MembershipHeroContent(
-                title: state.heroTitle,
+                title: context.l10n.membershipTitle,
                 subtitle: state.heroSubtitle,
               ),
             Positioned(
@@ -121,22 +112,28 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
                 width: MembershipLayout.navButtonSize,
                 height: MembershipLayout.navButtonSize,
                 child: IconButton(
-                  onPressed: _goBack,
+                  onPressed: () => _goBack(),
                   icon: const Icon(Icons.chevron_left_rounded, size: 36),
                   color: AppColors.textPrimary,
                   padding: EdgeInsets.zero,
                 ),
               ),
             ),
+            // 底部悬浮购买按钮
+            if (state.hasContent && state.selectedPlan != null)
+              _MembershipBottomButton(
+                selectedPlan: state.selectedPlan!,
+                onPurchase: controller.showConfirmation,
+              ),
           ],
         ),
       ),
     );
   }
 
-  void _goBack() {
+  void _goBack({Object? result}) {
     if (context.canPop()) {
-      context.pop();
+      context.pop(result);
       return;
     }
     context.go(RoutePaths.profile);
@@ -192,7 +189,7 @@ class _MembershipBody extends StatelessWidget {
       left: 0,
       right: 0,
       top: MembershipLayout.scrollContentTop,
-      bottom: 0,
+      bottom: state.hasContent ? MembershipLayout.bottomButtonAreaHeight : 0,
       child: ClipRect(
         child: ListView(
           padding: EdgeInsets.only(bottom: bottomInset + 24),
@@ -201,7 +198,7 @@ class _MembershipBody extends StatelessWidget {
             _MembershipPlanCardsRow(
               plans: state.plans,
               selectedPlanId: state.selectedPlanId,
-              onPlanTap: controller.selectPlanAndConfirm,
+              onPlanTap: controller.selectPlan,
             ),
             // 促销文案（根据语言动态组装）
             const SizedBox(height: 8),
@@ -290,44 +287,29 @@ class _MembershipPlanCardsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const groupWidth = MembershipLayout.planCardGroupWidth;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth;
-        final useCenteredGroup =
-            maxWidth >= groupWidth + MembershipLayout.horizontalPadding * 2;
-
-        final group = SizedBox(
-          width: groupWidth,
-          child: Row(
-            children: [
-              for (var index = 0; index < plans.length; index++) ...[
-                if (index > 0)
-                  const SizedBox(width: MembershipLayout.planCardGap),
-                MembershipPlanCard(
-                  key: MembershipPlanCard.planKey(plans[index].id),
-                  plan: plans[index],
-                  selected: selectedPlanId == plans[index].id,
-                  onTap: () => onPlanTap(plans[index].id),
-                ),
-              ],
+    return SizedBox(
+      height: MembershipLayout.planCardHeight,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        padding: const EdgeInsets.symmetric(
+          horizontal: MembershipLayout.horizontalPadding,
+        ),
+        child: Row(
+          children: [
+            for (var index = 0; index < plans.length; index++) ...[
+              if (index > 0)
+                const SizedBox(width: MembershipLayout.planCardGap),
+              MembershipPlanCard(
+                key: MembershipPlanCard.planKey(plans[index].id),
+                plan: plans[index],
+                selected: selectedPlanId == plans[index].id,
+                onTap: () => onPlanTap(plans[index].id),
+              ),
             ],
-          ),
-        );
-
-        if (useCenteredGroup) {
-          return Align(alignment: Alignment.center, child: group);
-        }
-
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(
-            horizontal: MembershipLayout.horizontalPadding,
-          ),
-          child: group,
-        );
-      },
+          ],
+        ),
+      ),
     );
   }
 }
@@ -465,6 +447,93 @@ class _AvatarDots extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// 底部悬浮购买按钮
+class _MembershipBottomButton extends StatelessWidget {
+  const _MembershipBottomButton({
+    required this.selectedPlan,
+    required this.onPurchase,
+  });
+
+  final MembershipPlan selectedPlan;
+  final VoidCallback onPurchase;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(16, 12, 16, bottomInset + 12),
+        decoration: BoxDecoration(
+          color: MembershipLayout.background,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(25),
+            topRight: Radius.circular(25),
+          ),
+          border: Border(
+            top: BorderSide(color: Color(0xFF3B3B3B), width: 1),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.3),
+              blurRadius: 8,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Text(
+              context.l10n.membershipAutoRenewCancel,
+              style: TextStyle(color: Color(0XFFE6CFA6), fontSize: 14),
+            ),
+            SizedBox(height: 20),
+            GestureDetector(
+              onTap: onPurchase,
+              child: Container(
+                height: 50,
+                width: double.infinity,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(25),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFFFFEBC7), Color(0xFFFFDB99)],
+                  ),
+                ),
+                child: Text(
+                  context.l10n.membershipBuyNow,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: const Color(0xFF1B1B1C),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(height: 10),
+            RichText(text: TextSpan(
+              style: TextStyle(
+                fontSize: 11,
+                color: Color(0xFFFFFFFF).withValues(alpha: 0.5)
+              ),
+              children: [
+                TextSpan(text: context.l10n.appCommonLegalPrivacyPolicy),
+                TextSpan(text: '    ·    '),
+                TextSpan(text: context.l10n.appCommonLegalTermsOfUse),
+              ]
+            ))
+          ],
+        ),
       ),
     );
   }

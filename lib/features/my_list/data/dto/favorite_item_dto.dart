@@ -5,10 +5,10 @@ class FavoriteItemDto {
   const FavoriteItemDto({
     required this.dramaId,
     required this.title,
-    required this.description,
+    required this.summary,
     required this.coverUrl,
     required this.coverAspectRatio,
-    required this.totalEpisodes,
+    required this.episodeTotal,
     required this.latestEpisodeNumber,
     required this.tags,
     required this.badges,
@@ -23,10 +23,10 @@ class FavoriteItemDto {
 
   final int dramaId;
   final String? title;
-  final String? description;
+  final String? summary;
   final String? coverUrl;
   final double? coverAspectRatio;
-  final int totalEpisodes;
+  final int episodeTotal;
   final int? latestEpisodeNumber;
   final List<String> tags;
   final List<String> badges;
@@ -44,12 +44,12 @@ class FavoriteItemDto {
     return FavoriteItemDto(
       dramaId: JsonFieldParser.optionalInt(json, 'dramaId') ?? 0,
       title: JsonFieldParser.optionalString(json, 'title'),
-      description:
-          JsonFieldParser.optionalString(json, 'description') ??
+      summary:
+          JsonFieldParser.optionalString(json, 'summary') ??
           JsonFieldParser.optionalString(json, 'introduction'),
       coverUrl: JsonFieldParser.optionalString(json, 'coverUrl'),
       coverAspectRatio: _doubleValue(json['coverAspectRatio']),
-      totalEpisodes: JsonFieldParser.optionalInt(json, 'totalEpisodes') ?? 0,
+      episodeTotal: JsonFieldParser.optionalInt(json, 'episodeTotal') ?? 0,
       latestEpisodeNumber: JsonFieldParser.optionalInt(
         json,
         'latestEpisodeNumber',

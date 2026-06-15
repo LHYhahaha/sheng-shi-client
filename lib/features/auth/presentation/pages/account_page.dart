@@ -92,20 +92,6 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                     const SizedBox(height: 18),
                   ],
                   _AccountActionRow(
-                    label: context.l10n.authLogout,
-                    isLoading: isBusy,
-                    onTap: () async {
-                      await controller.logout();
-                      final nextState = ref.read(authControllerProvider);
-                      if (context.mounted &&
-                          nextState.error == null &&
-                          !nextState.isLoggedIn) {
-                        context.go(RoutePaths.profile);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 18),
-                  _AccountActionRow(
                     label: context.l10n.authDeleteAccount,
                     destructive: true,
                     enabled: !isBusy,
@@ -224,19 +210,17 @@ class _AccountActionRow extends StatelessWidget {
     required this.onTap,
     this.destructive = false,
     this.enabled = true,
-    this.isLoading = false,
   });
 
   final String label;
   final VoidCallback onTap;
   final bool destructive;
   final bool enabled;
-  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: enabled && !isLoading ? onTap : null,
+      onTap: enabled ? onTap : null,
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       child: Container(
@@ -261,14 +245,6 @@ class _AccountActionRow extends StatelessWidget {
                 ),
               ),
             ),
-            if (isLoading)
-              const SizedBox.square(
-                dimension: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppColors.primary,
-                ),
-              ),
           ],
         ),
       ),

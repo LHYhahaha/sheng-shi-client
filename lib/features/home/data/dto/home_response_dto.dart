@@ -40,6 +40,9 @@ class HomeTabDto {
     required this.flag,
     required this.sort,
     required this.status,
+    required this.page,
+    required this.pageSize,
+    required this.dramaTotal,
     required this.dramas,
   });
 
@@ -48,6 +51,9 @@ class HomeTabDto {
   final String flag;
   final int sort;
   final int status;
+  final int page;
+  final int pageSize;
+  final int dramaTotal;
   final List<HomeDramaDto> dramas;
 
   factory HomeTabDto.fromJson(Map<String, Object?> json) {
@@ -57,6 +63,9 @@ class HomeTabDto {
       flag: JsonFieldParser.optionalString(json, 'flag') ?? '',
       sort: JsonFieldParser.optionalInt(json, 'sort') ?? 0,
       status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
+      page: JsonFieldParser.optionalInt(json, 'page') ?? 1,
+      pageSize: JsonFieldParser.optionalInt(json, 'page_size') ?? 20,
+      dramaTotal: JsonFieldParser.optionalInt(json, 'drama_total') ?? 0,
       dramas: _parseDramas(json['dramas']),
     );
   }

@@ -5,6 +5,7 @@ import '../../../core/modal/app_modal_controller.dart';
 import '../../../core/modal/app_modal_policy.dart';
 import '../../../core/modal/app_modal_provider.dart';
 import '../../../core/modal/app_modal_request.dart';
+import '../../../core/modal/app_modal_result.dart';
 import '../../../core/modal/app_modal_service.dart';
 import '../../../core/modal/app_modal_source.dart';
 import '../presentation/modal/membership_modal_channels.dart';
@@ -28,10 +29,12 @@ class MembershipModalCoordinator {
   final MembershipController _membershipController;
   final MembershipState Function() _readMembershipState;
 
-  Future<void> presentPurchaseConfirmation(BuildContext context) async {
+  Future<MembershipPurchaseModalResult> presentPurchaseConfirmation(
+    BuildContext context,
+  ) async {
     final plan = _readMembershipState().confirmationPlan;
     if (plan == null || !context.mounted) {
-      return;
+      return const MembershipPurchaseModalResult.dismissed();
     }
 
     final request = FeatureAppModalRequest(
@@ -43,7 +46,20 @@ class MembershipModalCoordinator {
       priority: AppModalPriority.high,
     );
 
-    await _modalService.show(request);
+    final result = await _modalService.show(request);
+    if (result is MembershipPurchaseModalResult) {
+      return result;
+    }
+    return switch (result.kind) {
+      AppModalResultKind.completed =>
+        const MembershipPurchaseModalResult.completed(),
+      AppModalResultKind.cancelled =>
+        const MembershipPurchaseModalResult.cancelled(),
+      AppModalResultKind.dismissed =>
+        const MembershipPurchaseModalResult.dismissed(),
+      AppModalResultKind.failed =>
+        const MembershipPurchaseModalResult.cancelled(),
+    };
   }
 
   void dismissMembershipModals() {

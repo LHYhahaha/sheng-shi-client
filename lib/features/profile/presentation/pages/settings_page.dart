@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../auth/application/auth_controller.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
+    final controller = ref.read(authControllerProvider.notifier);
+    final authState = ref.watch(authControllerProvider);
+    final isGuest = authState.session.isGuest;
 
     return Scaffold(
       backgroundColor: AppColors.black,
@@ -36,6 +42,33 @@ class SettingsPage extends StatelessWidget {
               title: l10n.settingsPrivacyPolicy,
               onTap: () => context.push(RoutePaths.privacyPolicy),
             ),
+            if (!isGuest)
+              InkWell(
+                onTap: () async {
+                  await controller.logout();
+                  final nextState = ref.read(authControllerProvider);
+                  if (context.mounted &&
+                      nextState.error == null &&
+                      nextState.session.isGuest) {
+                    final message = context.l10n.authLogoutSuccess;
+                    ref.read(appToastProvider).success(message);
+                    context.go(RoutePaths.profile);
+                  }
+                },
+                child: Container(
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  margin: const EdgeInsets.symmetric(horizontal: 50,vertical: 40),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: Color(0xFFFFFFFF).withValues(alpha: 0.1),
+                  ),
+                  child: Text(
+                    context.l10n.settingsButtonLogout,
+                    style: TextStyle(color: Color(0XFFFF007A), fontSize: 14),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

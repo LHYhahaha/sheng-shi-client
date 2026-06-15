@@ -2,8 +2,9 @@ class WalletTransactionRecordDto {
   const WalletTransactionRecordDto({
     required this.id,
     required this.type,
-    required this.amount,
+    // required this.amount,
     required this.bonusAmount,
+    required this.coinAmount,
     required this.price,
     required this.currency,
     required this.platform,
@@ -20,7 +21,8 @@ class WalletTransactionRecordDto {
 
   final String id;
   final String type;
-  final int amount;
+  final int coinAmount;
+  // final int amount;
   final int bonusAmount;
   final int? price;
   final String? currency;
@@ -45,9 +47,10 @@ class WalletTransactionRecordDto {
     // 2. 充值记录：coin, bonusCoin, amountText, currency, memberDays, memberPeriodType, orderNo, paidAt, productType, title
     
     return WalletTransactionRecordDto(
-      id: _string(map['id'] ?? map['orderNo']),
+      id: _string(map['orderNo']),
       type: _string(map['type'], fallback: 'transaction'),
-      amount: _int(map['amount'] ?? map['coin']),
+      // amount: _int(map['amount'] ?? map['coin']),
+      coinAmount: _int(map['coin']),
       bonusAmount: _int(map['bonusAmount'] ?? map['bonusCoin']),
       price: _nullableInt(map['price']),
       currency: _nullableString(map['currency']),
@@ -74,6 +77,7 @@ String? _nullableString(Object? value) =>
 int _int(Object? value, {int fallback = 0}) {
   if (value is int) return value;
   if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? fallback;
   return fallback;
 }
 

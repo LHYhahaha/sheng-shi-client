@@ -1,5 +1,3 @@
-
-
 import '../../../../core/network/json_field_parser.dart';
 
 /// 用户详细信息 DTO。
@@ -7,9 +5,9 @@ import '../../../../core/network/json_field_parser.dart';
 /// 登录后调用 /api/user/get 获取的用户完整信息。
 class UserInfoDto {
   const UserInfoDto({
-    required this.userId,
     required this.showId,
     required this.nickname,
+    this.userId,
     this.avatar,
     this.language,
     this.status,
@@ -19,7 +17,7 @@ class UserInfoDto {
     this.autoUnlock,
   });
 
-  final int userId;
+  final int? userId;
   final String showId;
   final String nickname;
   final String? avatar;
@@ -32,23 +30,14 @@ class UserInfoDto {
 
   factory UserInfoDto.fromJson(Object? json) {
     final map = JsonFieldParser.requireMap(json, dtoName: 'UserInfoDto');
-    
+
     return UserInfoDto(
-      userId: JsonFieldParser.requireInt(
-        map,
-        'userId',
-        dtoName: 'UserInfoDto',
-      ),
-      showId: JsonFieldParser.requireString(
-        map,
-        'showId',
-        dtoName: 'UserInfoDto',
-      ),
-      nickname: JsonFieldParser.requireString(
-        map,
-        'nickname',
-        dtoName: 'UserInfoDto',
-      ),
+      userId: JsonFieldParser.optionalInt(map, 'userId'),
+      showId: _requiredShowId(map),
+      nickname:
+          JsonFieldParser.optionalString(map, 'nickname') ??
+          JsonFieldParser.optionalString(map, 'nickName') ??
+          _requiredShowId(map),
       avatar: JsonFieldParser.optionalString(map, 'avatar'),
       language: JsonFieldParser.optionalString(map, 'language'),
       status: JsonFieldParser.optionalInt(map, 'status'),
@@ -60,7 +49,7 @@ class UserInfoDto {
   }
 
   Map<String, Object?> toJson() => {
-    'userId': userId,
+    if (userId != null) 'userId': userId,
     'showId': showId,
     'nickname': nickname,
     'avatar': avatar,
@@ -71,4 +60,14 @@ class UserInfoDto {
     'bonusCoin': bonusCoin,
     'autoUnlock': autoUnlock,
   };
+}
+
+String _requiredShowId(Map<String, Object?> map) {
+  final showId =
+      JsonFieldParser.optionalString(map, 'showId') ??
+      JsonFieldParser.optionalString(map, 'showid');
+  if (showId == null || showId.isEmpty) {
+    return JsonFieldParser.requireString(map, 'showId', dtoName: 'UserInfoDto');
+  }
+  return showId;
 }

@@ -17,6 +17,14 @@ class EntitlementRemoteDataSource {
   /// 可选传入 [dramaId] 来获取该剧的已解锁剧集ID列表。
   /// 不传入时返回全局权益信息和未绑定剧集的解锁列表。
   Future<UserEntitlementStateDto> fetchEntitlements({int? dramaId}) async {
+    final result = await fetchEntitlementsWithUserInfo(dramaId: dramaId);
+    return result['dto'] as UserEntitlementStateDto;
+  }
+
+  /// 获取权益状态并返回用户信息。
+  ///
+  /// 返回包含 'dto' 和 'userInfo' 的 Map。
+  Future<Map<String, dynamic>> fetchEntitlementsWithUserInfo({int? dramaId}) async {
     final queryParams = dramaId != null ? {'dramaId': dramaId} : null;
 
     final response = await _apiClient.get<Map<String, dynamic>>(
@@ -38,7 +46,7 @@ class EntitlementRemoteDataSource {
         ? unlockedEpisodeNos.map((e) => e.toString()).toList()
         : <String>[];
 
-    return UserEntitlementStateDto(
+    final dto = UserEntitlementStateDto(
       isGuest: userInfo['isGuest'] as bool? ?? true,
       isMember: membership['isMember'] as bool? ?? false,
       membershipExpiresAt: membership['membershipExpiresAt'] != null
@@ -50,6 +58,11 @@ class EntitlementRemoteDataSource {
       unlockedEpisodeIds: unlockedEpisodeIds,
       pendingOperationId: playback['pendingOperationId'] as String?,
     );
+
+    return {
+      'dto': dto,
+      'userInfo': userInfo,
+    };
   }
 
   Future<UserEntitlementStateDto> setAutoUnlockEnabled(bool enabled) async {

@@ -14,7 +14,6 @@ class WalletConsumptionRecordDto {
     this.coin,
     this.rechargeCoin,
     this.recordId,
-    this.shortId,
   });
 
   final String id;
@@ -27,45 +26,33 @@ class WalletConsumptionRecordDto {
   final String sourceType;
   final DateTime? createdAt;
   final String status;
-  
+
   // 新 API 格式的额外字段
   final int? bonusCoin;
   final int? coin;
   final int? rechargeCoin;
   final int? recordId;
-  final int? shortId;
 
   factory WalletConsumptionRecordDto.fromJson(Object? json) {
     final map = json is Map<String, Object?> ? json : const <String, Object?>{};
-    
+
     // 适配两种格式：
     // 1. Mock 格式：id, dramaId, episodeId, episodeNumber, title, coverUrl, amountCoins, sourceType, createdAt, status
     // 2. 新 API 格式：recordId, shortId, episodeId, episodeNo, shortTitle, cover, coin, bonusCoin, rechargeCoin, consumedAt
-    
+
     final isMockFormat = map.containsKey('id') && map.containsKey('dramaId');
-    
     return WalletConsumptionRecordDto(
-      id: isMockFormat 
-          ? _string(map['id'])
-          : _string(map['recordId']),
-      dramaId: isMockFormat
-          ? _string(map['dramaId'])
-          : _string(map['shortId']),
-      episodeId: isMockFormat
-          ? _string(map['episodeId'])
-          : _string(map['episodeId']),
+      id: isMockFormat ? _string(map['id']) : _string(map['recordId']),
+      dramaId: _string(map['dramaId']),
+      episodeId: _string(map['episodeId']),
       episodeNumber: isMockFormat
           ? _int(map['episodeNumber'])
           : _int(map['episodeNo']),
-      title: isMockFormat
-          ? _string(map['title'])
-          : _string(map['shortTitle']),
+      title: isMockFormat ? _string(map['title']) : _string(map['shortTitle']),
       coverUrl: isMockFormat
           ? _nullableString(map['coverUrl'])
           : _nullableString(map['cover']),
-      amountCoins: isMockFormat
-          ? _int(map['amountCoins'])
-          : _int(map['coin']),
+      amountCoins: _int(map['coin']),
       sourceType: _string(map['sourceType'], fallback: 'coins'),
       createdAt: isMockFormat
           ? _date(map['createdAt'])
@@ -75,7 +62,6 @@ class WalletConsumptionRecordDto {
       coin: _nullableInt(map['coin']),
       rechargeCoin: _nullableInt(map['rechargeCoin']),
       recordId: _nullableInt(map['recordId']),
-      shortId: _nullableInt(map['shortId']),
     );
   }
 }
@@ -89,6 +75,7 @@ String? _nullableString(Object? value) =>
 int _int(Object? value, {int fallback = 0}) {
   if (value is int) return value;
   if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? fallback;
   return fallback;
 }
 

@@ -148,14 +148,21 @@ class StoreController extends Notifier<StoreState> {
         return;
       }
 
+      // 检查用户是否已是会员
+      final isMember = ref.read(entitlementControllerProvider).isMember;
+
+      // 如果用户已是会员，不加载会员商品
+      final vipPackagesRaw = isMember ? <StorePackage>[] : data.vipPackages;
+      final coinPackagesRaw = data.coinPackages;
+
       final channelProductIds = <String>{};
-      for (final package in data.coinPackages) {
+      for (final package in coinPackagesRaw) {
         final productId = package.platformProductId;
         if (productId != null && productId.isNotEmpty) {
           channelProductIds.add(productId);
         }
       }
-      for (final package in data.vipPackages) {
+      for (final package in vipPackagesRaw) {
         final productId = package.platformProductId;
         if (productId != null && productId.isNotEmpty) {
           channelProductIds.add(productId);
@@ -173,20 +180,20 @@ class StoreController extends Notifier<StoreState> {
         return;
       }
 
-      final selectedId = data.coinPackages.isNotEmpty
-          ? data.coinPackages.first.id
-          : data.vipPackages.isNotEmpty
-          ? data.vipPackages.first.id
+      final selectedId = coinPackagesRaw.isNotEmpty
+          ? coinPackagesRaw.first.id
+          : vipPackagesRaw.isNotEmpty
+          ? vipPackagesRaw.first.id
           : null;
 
       final priceService = ref.read(iapPriceServiceProvider);
       final coinPackages = _mergeIapPricing(
-        data.coinPackages,
+        coinPackagesRaw,
         iapDetails,
         priceService,
       );
       final vipPackages = _mergeIapPricing(
-        data.vipPackages,
+        vipPackagesRaw,
         iapDetails,
         priceService,
       );

@@ -1,4 +1,3 @@
-import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -26,30 +25,18 @@ class _AuthLoginModalSheetState extends ConsumerState<AuthLoginModalSheet> {
   @override
   void initState() {
     super.initState();
-    developer.log('[AuthLoginModalSheet] initState');
-    
+
     // 使用 listenManual 监听 auth 状态变化，确保第三方登录完成后能可靠地关闭 bottom sheet
     _providerSubscription = ref.listenManual(
       authControllerProvider.select((state) => state.user?.provider),
-      (previous, next) {
-        developer.log(
-          '[AuthLoginModalSheet] provider changed: previous=$previous, next=$next, mounted=$mounted',
-        );
+      (_, next) {
         if (!mounted) {
-          developer.log('[AuthLoginModalSheet] widget not mounted, skipping');
           return;
         }
-        // 当 provider 从 device 变为其他（第三方登录）时，关闭 bottom sheet
-        if (previous == AuthProviderType.device &&
-            next != null &&
-            next != AuthProviderType.device) {
-          developer.log(
-            '[AuthLoginModalSheet] Third-party login detected, popping bottom sheet',
-          );
+        if (next != null && next != AuthProviderType.device) {
           final session = ref.read(authControllerProvider).session;
           final user = session.user;
           if (user == null) {
-            developer.log('[AuthLoginModalSheet] user is null, cannot pop');
             return;
           }
           Navigator.of(context).pop(
@@ -60,12 +47,11 @@ class _AuthLoginModalSheetState extends ConsumerState<AuthLoginModalSheet> {
               accountLinked: session.guestId != null,
             ),
           );
-          developer.log('[AuthLoginModalSheet] Navigator.pop() called');
         }
       },
       fireImmediately: false,
     );
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -82,9 +68,6 @@ class _AuthLoginModalSheetState extends ConsumerState<AuthLoginModalSheet> {
 
   @override
   Widget build(BuildContext context) {
-    developer.log('[AuthLoginModalSheet] build called');
-
-
     final state = ref.watch(authControllerProvider);
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
 

@@ -6,7 +6,8 @@ import '../domain/auth_session.dart';
 ///
 /// 用延迟模拟平台登录/账号操作，但不持久化真实凭证。真实接入时仍应保持相同接口，
 /// 让 AuthController 继续负责 pending/error/session 合成。
-class MockAuthRepository implements AuthRepository {
+class MockAuthRepository
+    implements AuthRepository, CurrentAuthSessionSynchronizer {
   MockAuthRepository();
 
   AuthSession _session = const AuthSession.guest(
@@ -35,6 +36,12 @@ class MockAuthRepository implements AuthRepository {
       sessionId: 'sess-${provider.name}',
       guestId: linkGuestId,
     );
+    return _session;
+  }
+
+  @override
+  Future<AuthSession> syncCurrentSession() async {
+    await Future<void>.delayed(const Duration(milliseconds: 20));
     return _session;
   }
 

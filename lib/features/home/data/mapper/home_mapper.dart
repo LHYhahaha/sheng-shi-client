@@ -24,6 +24,9 @@ class HomeMapper {
       flag: dto.flag,
       sort: dto.sort,
       status: dto.status,
+      page: dto.page,
+      pageSize: dto.pageSize,
+      dramaTotal: dto.dramaTotal,
       dramas: dto.dramas.map(_mapDrama).toList(growable: false),
     );
   }

@@ -14,20 +14,20 @@ class MockWalletRepository implements WalletRepository {
   Future<WalletData> fetchWallet() async {
     await Future<void>.delayed(const Duration(milliseconds: 80));
 
-    return const WalletData(
+    return WalletData(
       coins: 4000,
       bonus: 4000,
       totalCoin: 8000,
       autoUnlockNextEpisode: true,
       transactionRecords: [
-        WalletRecord(
+        WalletRecord.raw(
           id: 'membership_weekly',
           type: WalletRecordType.transaction,
           title: 'Membership (Weekly)',
           dateLabel: '2026.04.24',
           trailingLabel: r'$19.99',
         ),
-        WalletRecord(
+        WalletRecord.raw(
           id: 'coins_3000',
           type: WalletRecordType.transaction,
           title: '3000 Coins',
@@ -35,7 +35,7 @@ class MockWalletRepository implements WalletRepository {
           trailingLabel: r'$19.99',
           showCoinIcon: true,
         ),
-        WalletRecord(
+        WalletRecord.raw(
           id: 'coins_3000_bonus',
           type: WalletRecordType.transaction,
           title: '3000 Coins + 300bonus',
@@ -44,8 +44,8 @@ class MockWalletRepository implements WalletRepository {
           showCoinIcon: true,
         ),
       ],
-      consumptionRecords: [
-        WalletRecord(
+      consumptionRecords:  [
+        WalletRecord.raw(
           id: 'unlock_ep_12',
           type: WalletRecordType.consumption,
           title: 'EP. 11',
@@ -56,7 +56,7 @@ class MockWalletRepository implements WalletRepository {
           posterAssetPath: 'assets/images/my_list/cover_1.png',
           consumptionStatus: WalletConsumptionStatus.spent,
         ),
-        WalletRecord(
+        WalletRecord.raw(
           id: 'unlock_ep_13',
           type: WalletRecordType.consumption,
           title: 'EP. 11',
@@ -66,7 +66,7 @@ class MockWalletRepository implements WalletRepository {
           posterAssetPath: 'assets/images/my_list/cover_1.png',
           consumptionStatus: WalletConsumptionStatus.spent,
         ),
-        WalletRecord(
+        WalletRecord.raw(
           id: 'unlock_ep_14',
           type: WalletRecordType.consumption,
           title: 'EP. 10',
@@ -78,8 +78,8 @@ class MockWalletRepository implements WalletRepository {
           consumptionStatus: WalletConsumptionStatus.expired,
         ),
       ],
-      coinRecords: [
-        WalletRecord(
+      coinRecords:  [
+        WalletRecord.raw(
           id: 'daily_bonus',
           type: WalletRecordType.coins,
           title: '10 Reward Coins',
@@ -88,7 +88,7 @@ class MockWalletRepository implements WalletRepository {
           showCoinIcon: true,
           rewardEnabled: true,
         ),
-        WalletRecord(
+        WalletRecord.raw(
           id: 'purchase_bonus',
           type: WalletRecordType.coins,
           title: '20 Reward Coins',
@@ -97,7 +97,7 @@ class MockWalletRepository implements WalletRepository {
           showCoinIcon: true,
           rewardClaimed: true,
         ),
-        WalletRecord(
+        WalletRecord.raw(
           id: 'member_points',
           type: WalletRecordType.coins,
           title: '10 Reward Coins',
@@ -120,7 +120,7 @@ class MockWalletRepository implements WalletRepository {
       WalletTransactionRecordDto(
         id: 'membership_weekly',
         type: 'transaction',
-        amount: 0,
+        coinAmount: 0,
         bonusAmount: 0,
         price: 1999000,
         currency: 'USD',
@@ -132,7 +132,7 @@ class MockWalletRepository implements WalletRepository {
       WalletTransactionRecordDto(
         id: 'coins_3000',
         type: 'transaction',
-        amount: 3000,
+        coinAmount: 3000,
         bonusAmount: 0,
         price: 1999000,
         currency: 'USD',
@@ -144,7 +144,7 @@ class MockWalletRepository implements WalletRepository {
       WalletTransactionRecordDto(
         id: 'coins_3000_bonus',
         type: 'transaction',
-        amount: 3000,
+        coinAmount: 3000,
         bonusAmount: 300,
         price: 1999000,
         currency: 'USD',
@@ -208,9 +208,7 @@ class MockWalletRepository implements WalletRepository {
   }
 
   @override
-  Future<List<WalletRecord>> fetchRewardCoins({
-    String? pageToken,
-  }) async {
+  Future<List<WalletRecord>> fetchRewardCoins({String? pageToken}) async {
     await Future<void>.delayed(const Duration(milliseconds: 80));
 
     const mockDtos = [

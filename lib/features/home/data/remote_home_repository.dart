@@ -17,21 +17,17 @@ class RemoteHomeRepository implements HomeRepository {
   final HomeMapper _mapper;
 
   @override
-  Future<HomeData> getHomeData() async {
-    print('[RemoteHomeRepository] getHomeData starting...');
-    
-    try {
-      final dto = await _remoteDataSource.getHomeData();
-      print('[RemoteHomeRepository] getHomeData received response');
-      
-      final homeData = _mapper.mapHomeData(dto);
-      print('[RemoteHomeRepository] getHomeData mapped to domain model');
-      print('[RemoteHomeRepository]   tabs count: ${homeData.tabs.length}');
-      
-      return homeData;
-    } catch (e) {
-      print('[RemoteHomeRepository] getHomeData error: $e');
-      rethrow;
-    }
+  Future<HomeData> getHomeData({
+    int? page,
+    int pageSize = 20,
+    int? tabId,
+  }) async {
+    final dto = await _remoteDataSource.getHomeData(
+      page: page,
+      pageSize: pageSize,
+      tabId: tabId,
+    );
+
+    return _mapper.mapHomeData(dto);
   }
 }

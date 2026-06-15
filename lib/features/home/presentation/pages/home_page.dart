@@ -63,8 +63,22 @@ class _HomePageState extends ConsumerState<HomePage> {
   void _onScroll() {
     final remoteData = ref.read(homeRemoteDataProvider);
 
-    // 远程数据一次性下发，不需要分页
+    // Remote home data keeps pagination per tab.
     if (remoteData != null) {
+      if (!_scrollController.hasClients) {
+        return;
+      }
+
+      final tab = remoteData.getTabForCategoryIndex(_remoteDataSelectedIndex);
+      final homeDataState = ref.read(homeDataControllerProvider);
+      if (tab == null || !tab.hasMoreDramas || homeDataState.isLoadingMore) {
+        return;
+      }
+
+      final position = _scrollController.position;
+      if (position.extentAfter < 500) {
+        ref.read(homeDataControllerProvider.notifier).loadMoreTab(tab.id);
+      }
       return;
     }
 
@@ -138,14 +152,20 @@ class _HomePageState extends ConsumerState<HomePage> {
     final categories = useRemoteData
         ? remoteData.categories
         : feedState.categories;
-    final selectedIndex = useRemoteData
-        ? _remoteDataSelectedIndex
+    final selectedIndex = useRemoteData && categories.isNotEmpty
+        ? math.min(_remoteDataSelectedIndex, categories.length - 1)
         : feedState.selectedIndex;
+    if (useRemoteData && selectedIndex != _remoteDataSelectedIndex) {
+      _remoteDataSelectedIndex = selectedIndex;
+    }
 
     // 获取当前选中分类的剧卡列表
     final items = useRemoteData
         ? remoteData.getDramasForCategoryIndex(selectedIndex)
         : feedState.items;
+    final selectedRemoteTab = useRemoteData
+        ? remoteData.getTabForCategoryIndex(selectedIndex)
+        : null;
 
     // 预热逻辑
     ref.listen(homeFeedControllerProvider, (previous, next) {
@@ -187,7 +207,30 @@ class _HomePageState extends ConsumerState<HomePage> {
         child: RefreshIndicator(
           onRefresh: () async {
             if (useRemoteData) {
-              await ref.read(homeDataControllerProvider.notifier).retry();
+              final tab = selectedRemoteTab;
+              if (tab == null) {
+                await ref.read(homeDataControllerProvider.notifier).retry();
+              } else {
+                final selectedTabId = tab.id;
+                await ref
+                    .read(homeDataControllerProvider.notifier)
+                    .refreshHomeData();
+                if (!mounted) {
+                  return;
+                }
+
+                final refreshedRemoteData = ref.read(homeRemoteDataProvider);
+                final nextIndex =
+                    refreshedRemoteData?.tabs.indexWhere(
+                      (tab) => tab.id == selectedTabId,
+                    ) ??
+                    -1;
+                if (nextIndex != -1 && nextIndex != _remoteDataSelectedIndex) {
+                  setState(() {
+                    _remoteDataSelectedIndex = nextIndex;
+                  });
+                }
+              }
             } else {
               await ref.read(homeFeedControllerProvider.notifier).loadInitial();
             }
@@ -333,17 +376,31 @@ class _HomePageState extends ConsumerState<HomePage> {
                     },
                   ),
                 ),
-              if (!useRemoteData)
-                SliverToBoxAdapter(
-                  child: _HomeFeedFooter(
-                    isLoading: feedState.isLoadingMore,
-                    hasMore: feedState.nextPageToken != null,
-                    error: feedState.loadMoreError,
-                    onRetry: () {
+              SliverToBoxAdapter(
+                child: _HomeFeedFooter(
+                  isLoading: useRemoteData
+                      ? homeDataState.isLoadingMore
+                      : feedState.isLoadingMore,
+                  hasMore: useRemoteData
+                      ? selectedRemoteTab?.hasMoreDramas == true
+                      : feedState.nextPageToken != null,
+                  error: useRemoteData
+                      ? homeDataState.loadMoreError
+                      : feedState.loadMoreError,
+                  onRetry: () {
+                    if (useRemoteData) {
+                      final tab = selectedRemoteTab;
+                      if (tab != null) {
+                        ref
+                            .read(homeDataControllerProvider.notifier)
+                            .loadMoreTab(tab.id);
+                      }
+                    } else {
                       ref.read(homeFeedControllerProvider.notifier).loadMore();
-                    },
-                  ),
+                    }
+                  },
                 ),
+              ),
             ],
           ),
         ),
@@ -574,7 +631,8 @@ class _HomeDramaCard extends StatelessWidget {
                       height: 16,
                       child: Row(
                         children: [
-                          for (final tag in data.tags.take(2).toList().indexed) ...[
+                          for (final tag
+                              in data.tags.take(2).toList().indexed) ...[
                             _HomeTag(label: tag.$2),
                             if (tag.$1 != data.tags.take(2).length - 1)
                               const SizedBox(width: 8),

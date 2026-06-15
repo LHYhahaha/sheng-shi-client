@@ -59,28 +59,30 @@ class AuthLoginModalContent extends ConsumerWidget {
           ),
           const SizedBox(height: 14),
         ],
-        AuthActionButton(
-          label: l10n.authDeviceLogin,
-          icon: Icons.phone_iphone_rounded,
-          backgroundColor: const Color(0xFF262033),
-          foregroundColor: AppColors.textPrimary,
-          isLoading: state.pendingProvider == AuthProviderType.device,
-          onPressed: state.pendingProvider == null
-              ? () => controller.login(AuthProviderType.device)
-              : null,
-        ),
-        const SizedBox(height: 12),
-        AuthActionButton(
-          label: l10n.authGoogleLogin,
-          icon: Icons.g_mobiledata_rounded,
-          backgroundColor: AppColors.textPrimary,
-          foregroundColor: const Color(0xFF1A1A1A),
-          isLoading: state.pendingProvider == AuthProviderType.google,
-          onPressed: state.pendingProvider == null
-              ? () => controller.login(AuthProviderType.google)
-              : null,
-        ),
-        const SizedBox(height: 12),
+        // TODO(暂未开放): Device登录按钮 - 2026-06-15
+        // AuthActionButton(
+        //   label: l10n.authDeviceLogin,
+        //   icon: Icons.phone_iphone_rounded,
+        //   backgroundColor: const Color(0xFF262033),
+        //   foregroundColor: AppColors.textPrimary,
+        //   isLoading: state.pendingProvider == AuthProviderType.device,
+        //   onPressed: state.pendingProvider == null
+        //       ? () => controller.login(AuthProviderType.device)
+        //       : null,
+        // ),
+        // const SizedBox(height: 12),
+        // TODO(暂未开放): Google登录按钮 - 2026-06-15
+        // AuthActionButton(
+        //   label: l10n.authGoogleLogin,
+        //   icon: Icons.g_mobiledata_rounded,
+        //   backgroundColor: AppColors.textPrimary,
+        //   foregroundColor: const Color(0xFF1A1A1A),
+        //   isLoading: state.pendingProvider == AuthProviderType.google,
+        //   onPressed: state.pendingProvider == null
+        //       ? () => controller.login(AuthProviderType.google)
+        //       : null,
+        // ),
+        // const SizedBox(height: 12),
         Stack(
           clipBehavior: Clip.none,
           children: [
@@ -94,11 +96,11 @@ class AuthLoginModalContent extends ConsumerWidget {
                   ? () => controller.login(AuthProviderType.facebook)
                   : null,
             ),
-            Positioned(
-              top: -12,
-              right: 0,
-              child: _ClaimBadge(label: l10n.authClaimCoins),
-            ),
+            // Positioned(
+            //   top: -12,
+            //   right: 0,
+            //   child: _ClaimBadge(label: l10n.authClaimCoins),
+            // ),
           ],
         ),
         const SizedBox(height: 18),

@@ -1,5 +1,9 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/auth/user_info_store.dart';
 import '../domain/entitlement_repository.dart';
 import '../domain/user_entitlement_state.dart';
+import '../data/dto/user_entitlement_state_dto.dart';
 import 'dto/unlock_episode_request_dto.dart';
 import 'mapper/entitlement_mapper.dart';
 import 'remote/entitlement_remote_data_source.dart';
@@ -12,15 +16,26 @@ class RemoteEntitlementRepository implements EntitlementRepository {
   const RemoteEntitlementRepository({
     required EntitlementRemoteDataSource remoteDataSource,
     EntitlementMapper mapper = const EntitlementMapper(),
+    required Ref ref,
   }) : _remoteDataSource = remoteDataSource,
-       _mapper = mapper;
+       _mapper = mapper,
+       _ref = ref;
 
   final EntitlementRemoteDataSource _remoteDataSource;
   final EntitlementMapper _mapper;
+  final Ref _ref;
 
   @override
   Future<UserEntitlementState> fetchState() async {
-    final dto = await _remoteDataSource.fetchEntitlements();
+    final result = await _remoteDataSource.fetchEntitlementsWithUserInfo();
+    final dto = result['dto'] as UserEntitlementStateDto;
+    final userInfo = result['userInfo'] as Map<String, dynamic>?;
+    
+    // 保存用户信息到 UserInfoStore（包括头像 URL）
+    if (userInfo != null && userInfo.isNotEmpty) {
+      await _ref.read(userInfoStoreProvider.notifier).saveFromMap(userInfo);
+    }
+    
     return _mapper.mapState(dto);
   }
 

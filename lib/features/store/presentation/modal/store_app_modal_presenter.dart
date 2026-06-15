@@ -44,6 +44,16 @@ class StoreAppModalPresenter implements AppModalPresenter {
           container: container,
           child: Consumer(
             builder: (context, ref, child) {
+              ref.listen(
+                storeControllerProvider.select((state) => state.purchaseStatus),
+                (previous, next) {
+                  if (next == StorePurchaseStatus.success &&
+                      previous != StorePurchaseStatus.success) {
+                    Navigator.of(sheetContext).pop(next);
+                  }
+                },
+              );
+
               final sheetState = ref.watch(storeControllerProvider);
               final sheetController = ref.read(
                 storeControllerProvider.notifier,
@@ -56,7 +66,6 @@ class StoreAppModalPresenter implements AppModalPresenter {
                 package: package,
                 status: sheetState.purchaseStatus,
                 onConfirm: sheetController.confirmPurchase,
-                onCancel: sheetController.cancelPurchase,
                 onClose: () {
                   Navigator.of(
                     sheetContext,
