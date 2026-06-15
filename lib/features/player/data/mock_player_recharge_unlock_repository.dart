@@ -14,6 +14,7 @@ class MockPlayerRechargeUnlockRepository
   Future<PlayerRechargeUnlockOffer> fetchOffer({
     required String itemId,
     required int requiredCoins,
+    bool isMember = false,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 20));
     return PlayerRechargeUnlockOffer(
@@ -48,23 +49,26 @@ class MockPlayerRechargeUnlockRepository
           googlePriceLabel: r'$14.99',
         ),
       ],
-      membershipPackages: const [
-        PlayerRechargeMembershipPackage(
-          id: 'weekly_vip_promo',
-          periodLabel: 'Weekly',
-          googleProductId: 'vip_weekly_intro',
-          googlePriceLabel: r'$12.99',
-          originalPriceLabel: r'$24.99',
-          isPromotional: true,
-          description: 'Auto renew\nCancel anytime',
-        ),
-        PlayerRechargeMembershipPackage(
-          id: 'monthly_vip',
-          periodLabel: 'Monthly',
-          googleProductId: 'vip_monthly',
-          googlePriceLabel: r'$29.99',
-        ),
-      ],
+      // 如果用户已是会员，不返回会员商品
+      membershipPackages: isMember
+          ? []
+          : const [
+              PlayerRechargeMembershipPackage(
+                id: 'weekly_vip_promo',
+                periodLabel: 'Weekly',
+                googleProductId: 'vip_weekly_intro',
+                googlePriceLabel: r'$12.99',
+                originalPriceLabel: r'$24.99',
+                isPromotional: true,
+                description: 'Auto renew\nCancel anytime',
+              ),
+              PlayerRechargeMembershipPackage(
+                id: 'monthly_vip',
+                periodLabel: 'Monthly',
+                googleProductId: 'vip_monthly',
+                googlePriceLabel: r'$29.99',
+              ),
+            ],
       benefits: const [
         PlayerRechargeBenefit(
           icon: PlayerRechargeBenefitIcon.series,

@@ -12,13 +12,16 @@ class RemotePlayerPlaybackSourceRepository
   const RemotePlayerPlaybackSourceRepository({
     required PlaybackSourceRemoteDataSource remoteDataSource,
     required PlayerPlaybackPreloadManager preloadManager,
+    Map<String, String>? httpHeaders,
     PlaybackSourceMapper mapper = const PlaybackSourceMapper(),
   }) : _remoteDataSource = remoteDataSource,
        _preloadManager = preloadManager,
+       _httpHeaders = httpHeaders,
        _mapper = mapper;
 
   final PlaybackSourceRemoteDataSource _remoteDataSource;
   final PlayerPlaybackPreloadManager _preloadManager;
+  final Map<String, String>? _httpHeaders;
   final PlaybackSourceMapper _mapper;
 
   @override
@@ -37,6 +40,7 @@ class RemotePlayerPlaybackSourceRepository
       expiresAt: DateTime.now().add(const Duration(minutes: 30)),
       codecHint: 'hls',
       status: PlaybackSourceStatus.resolved,
+      httpHeaders: _httpHeaders,
     );
   }
 
@@ -63,6 +67,7 @@ class RemotePlayerPlaybackSourceRepository
       expiresAt: DateTime.now().add(const Duration(minutes: 30)),
       codecHint: 'hls',
       status: PlaybackSourceStatus.preloaded,
+      httpHeaders: _httpHeaders,
     );
     return _preloadManager.preload(item: item, source: source);
   }

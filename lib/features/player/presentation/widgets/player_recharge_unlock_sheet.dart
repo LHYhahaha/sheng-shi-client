@@ -25,8 +25,8 @@ class PlayerRechargeUnlockSheet extends ConsumerStatefulWidget {
     required this.dramaId,
     required this.episodeNo,
     required this.shortTitle,
-    this.cover,
-    this.episodeId,
+    required this.cover,
+    required this.episodeId,
     super.key,
   });
 
@@ -34,8 +34,8 @@ class PlayerRechargeUnlockSheet extends ConsumerStatefulWidget {
   final int dramaId;
   final int episodeNo;
   final String shortTitle;
-  final String? cover;
-  final int? episodeId;
+  final String cover;
+  final int episodeId;
 
   @override
   ConsumerState<PlayerRechargeUnlockSheet> createState() =>
@@ -240,6 +240,8 @@ class _OfferContent extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final offer = state.offer!;
     final isProcessing = state.status == PlayerRechargeUnlockStatus.processing;
+    // 检查用户是否已是会员
+    final isMember = ref.watch(entitlementControllerProvider).isMember;
 
     return Stack(
       children: [
@@ -295,18 +297,20 @@ class _OfferContent extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
-                for (final package in offer.membershipPackages) ...[
-                  _MembershipPackageCard(
-                    key: ValueKey('player_recharge_membership_${package.id}'),
-                    sessionKey: sessionKey,
-                    package: package,
-                    benefits: offer.benefits,
-                    selected: state.selectedMembershipPackageId == package.id,
-                    enabled: !isProcessing,
-                    onTap: () => onMembershipTap(package.id),
-                  ),
-                  const SizedBox(height: 8),
-                ],
+                // 如果用户不是会员，显示会员商品
+                if (!isMember)
+                  for (final package in offer.membershipPackages) ...[
+                    _MembershipPackageCard(
+                      key: ValueKey('player_recharge_membership_${package.id}'),
+                      sessionKey: sessionKey,
+                      package: package,
+                      benefits: offer.benefits,
+                      selected: state.selectedMembershipPackageId == package.id,
+                      enabled: !isProcessing,
+                      onTap: () => onMembershipTap(package.id),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                 const SizedBox(height: 4),
                 if (isProcessing)
                   Row(
@@ -927,6 +931,11 @@ class _MembershipInfoArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final title = PeriodIsoParser.localizedMembershipTitle(
+      package.title,
+      fallbackId: package.id,
+      languageCode: Localizations.localeOf(context).languageCode,
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 17, 16, 0),
       child: Row(
@@ -937,7 +946,7 @@ class _MembershipInfoArea extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  package.title,
+                  title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -1121,8 +1130,10 @@ class _MembershipPackageCard extends ConsumerWidget {
       );
     }
 
-    final description =
-        package.description ?? context.l10n.playerAutoRenewCancel;
+    final languageCode = Localizations.localeOf(context).languageCode;
+    final description = languageCode == 'en'
+        ? package.description ?? context.l10n.playerAutoRenewCancel
+        : context.l10n.playerAutoRenewCancel;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: enabled ? onTap : null,

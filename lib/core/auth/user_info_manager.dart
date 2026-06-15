@@ -1,4 +1,5 @@
 import '../../features/auth/domain/auth_session.dart';
+import '../../shared/media/media_resource.dart';
 import 'user_info_store.dart';
 
 /// 用户信息管理器
@@ -21,17 +22,24 @@ class UserInfoManager {
     UserInfoSnapshot userInfo, {
     AuthProviderType provider = AuthProviderType.device,
   }) {
-    if (userInfo.hasUserInfo &&
-        userInfo.userId != null &&
-        userInfo.nickname != null) {
+    if (provider != AuthProviderType.device && userInfo.hasUserInfo) {
       print(
-        '[UserInfoManager] Building authenticated session for user: ${userInfo.userId}',
+        '[UserInfoManager] Building authenticated session for showId: ${userInfo.showId}',
       );
 
+      final displayId = userInfo.showId ?? userInfo.nickname ?? '';
+
+      // 如果有头像 URL，使用网络头像；否则使用默认头像
+      final avatarResource =
+          (userInfo.avatar != null && userInfo.avatar!.isNotEmpty)
+          ? MediaResource.network(userInfo.avatar!)
+          : const MediaResource.asset(authDefaultAvatarAssetPath);
+
       final user = AuthUser(
-        id: userInfo.userId.toString(),
-        nickname: userInfo.nickname ?? '',
+        id: displayId,
+        nickname: userInfo.nickname ?? displayId,
         avatarAssetPath: authDefaultAvatarAssetPath,
+        avatarResource: avatarResource,
         provider: provider,
         showId: userInfo.showId,
         language: userInfo.language,
@@ -45,9 +53,7 @@ class UserInfoManager {
       return AuthSession(user: user);
     }
 
-    print(
-      '[UserInfoManager] No user info available, returning guest session',
-    );
+    print('[UserInfoManager] No user info available, returning guest session');
     return const AuthSession.guest();
   }
 }

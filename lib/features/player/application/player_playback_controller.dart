@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:convert';
 
@@ -39,7 +39,14 @@ final playerPlaybackSessionFactoryProvider =
 final playerPlaybackPrepareManagerFactoryProvider =
     Provider<PlayerPlaybackPrepareManager Function()>((ref) {
       final sessionFactory = ref.watch(playerPlaybackSessionFactoryProvider);
-      return () => PlayerPlaybackPrepareManager(sessionFactory: sessionFactory);
+      final preloadConfig = ref.watch(playerPreloadConfigProvider);
+      final maxWindowSessions =
+          preloadConfig.effectivePreparedForwardSessionCount +
+          preloadConfig.effectiveRetainedBackwardSessionCount;
+      return () => PlayerPlaybackPrepareManager(
+        sessionFactory: sessionFactory,
+        maxWindowSessions: maxWindowSessions,
+      );
     });
 
 final playerPlaybackControllerProvider =
@@ -376,7 +383,9 @@ class PlayerPlaybackState {
       errorKind: clearError ? null : errorKind ?? this.errorKind,
       // ── 字幕字段 ─────────────────────────────────────
       availableSubtitles: availableSubtitles ?? this.availableSubtitles,
-      currentSubtitleUrl: clearSubtitle ? null : (currentSubtitleUrl ?? this.currentSubtitleUrl),
+      currentSubtitleUrl: clearSubtitle
+          ? null
+          : (currentSubtitleUrl ?? this.currentSubtitleUrl),
       subtitleCues: subtitleCues ?? this.subtitleCues,
       currentSubtitleText: currentSubtitleText ?? this.currentSubtitleText,
     );
@@ -441,14 +450,28 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   final _preparingItemIds = <String>{};
   var _activePreloadAllowedIds = <String>{};
   PlaybackProgress? _pendingResumeProgress;
+  bool _lastResumeProgressWasPending = false;
   int _generation = 0;
   int _preloadGeneration = 0;
+  int _visibilityDetachEpoch = 0;
   bool _pauseWhenOpenCompletes = false;
   String? _accessOverlayPausedItemId;
   bool _isSessionDisposed = false;
   bool _wasPlayingBeforeSeek = false;
   bool _ignoreNextCompleted = false;
   Duration? _lastPositionUpdate;
+  Duration? _restoreFloorPosition;
+  int _restoreFloorGeneration = 0;
+  Timer? _restoreFloorTimer;
+  bool _resumeGuardRepairing = false;
+  int _resumeGuardRepairAttempts = 0;
+  String? _lastAppliedResumeItemId;
+  Duration? _lastAppliedResumePosition;
+  int _lastAppliedResumeGeneration = -1;
+  DateTime? _lastProgressSaveAt;
+  String? _lastSavedProgressItemId;
+  Duration? _lastSavedProgressPosition;
+  Duration? _lastSavedProgressDuration;
   late final _timingTrace = PlayerPlaybackTimingTrace(sessionKey: sessionKey);
   final _playingBeforeFirstFrameLoggedItemIds = <String>{};
   final _positionBeforeFirstFrameLoggedItemIds = <String>{};
@@ -531,7 +554,41 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   /// 设置待恢复的播放进度（从播放历史进入时使用）。
   void setPendingResumeProgress(PlaybackProgress? progress) {
+    if (progress != null && _isStaleResumeProgress(progress)) {
+      _logTiming(
+        'pending resume progress skipped stale',
+        itemId: progress.itemId,
+        source: state.currentSource,
+        details: _timingDetails([
+          'currentMs=${state.position.inMilliseconds}',
+          'resumeMs=${progress.position.inMilliseconds}',
+        ]),
+      );
+      return;
+    }
     _pendingResumeProgress = progress;
+  }
+
+  /// 对当前正在播放的 item 立即应用恢复进度。
+  ///
+  /// 远程观看进度可能晚于首播链路返回；这时不能重新 open source，只需要在
+  /// 当前 generation 上补一次 seek，并同步进度条/字幕位置。
+  Future<void> restoreCurrentProgress(PlaybackProgress progress) async {
+    if (_isSessionDisposed ||
+        state.currentItemId == null ||
+        state.currentItemId != progress.itemId ||
+        state.currentSource == null) {
+      setPendingResumeProgress(progress);
+      return;
+    }
+    final normalized = _normalizeResumeProgress(
+      progress,
+      state.duration > Duration.zero ? state.duration : null,
+    );
+    if (normalized == null) {
+      return;
+    }
+    await _restoreProgressIfNeeded(normalized, _generation);
   }
 
   @override
@@ -548,6 +605,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       // window 和当前播放器。这里不依赖 UI dispose，因为 tab、route、后台切换的
       // 生命周期触发顺序并不总是稳定。
       unawaited(_cancelSessionStreams());
+      _restoreFloorTimer?.cancel();
       unawaited(_disposePreloads(syncState: false));
       unawaited(_releaseSessionWindowFor('provider dispose'));
       unawaited(
@@ -723,25 +781,33 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
     _pauseWhenOpenCompletes = false;
     _accessOverlayPausedItemId = null;
-    final resumeProgress = _pendingResumeProgress ??
-        (_shouldPersistProgress
-            ? await _progressRepository.getProgress(item.id)
-            : null);
-    // 消费完恢复进度后清空，避免重复使用
-    _pendingResumeProgress = null;
+    final resumeProgress = _normalizeResumeProgress(
+      await _resumeProgressForItem(item.id),
+      item.episode.duration,
+    );
+    final resumeProgressWasPending = _lastResumeProgressWasPending;
+    final resumeStart = resumeProgress?.canResume == true
+        ? resumeProgress!.position
+        : null;
     state = state.copyWith(
       status: PlayerPlaybackStatus.opening,
       hasFirstFrame: false,
       isBuffering: true,
-      position: Duration.zero,
-      duration: _effectiveDuration(Duration.zero, item.episode.duration),
-      bufferedPosition: Duration.zero,
+      position: resumeStart ?? Duration.zero,
+      duration: resumeStart != null && resumeProgress != null
+          ? _effectiveDuration(resumeProgress.duration, item.episode.duration)
+          : _effectiveDuration(Duration.zero, item.episode.duration),
+      bufferedPosition: resumeStart ?? Duration.zero,
       isSeeking: false,
       hasEnded: false,
       currentItemId: item.id,
       currentSource: sourceHint,
       clearError: true,
       clearSeekPreview: true,
+      availableSubtitles: const [],
+      subtitleCues: const [],
+      currentSubtitleText: '',
+      clearSubtitle: true,
       videoController: _session.videoController,
       surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
     );
@@ -752,6 +818,18 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       // prepared/retained 命中时直接接管已经 open 的 session，避免同一个 item
       // 重复 open。命中窗口只覆盖相邻滑动，不承诺覆盖所有 HLS preload 候选。
       final prepared = _prepareManager.takeIfMatches(item.id);
+      if (prepared != null && resumeStart != null && resumeProgressWasPending) {
+        _logTiming(
+          'prepared session skipped for resume start',
+          itemId: item.id,
+          source: prepared.source.playableSource,
+          details: _timingDetails([
+            'resumeMs=${resumeStart.inMilliseconds}',
+            'kind=${prepared.kind.name}',
+          ]),
+        );
+        await prepared.dispose();
+      }
       _logTiming(
         'take window session',
         itemId: item.id,
@@ -770,7 +848,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           'windowItemsAfter=${_windowItemsText()}',
         ]),
       );
-      if (prepared != null) {
+      if (prepared != null && !(resumeStart != null && resumeProgressWasPending)) {
         final hitEvent = prepared.kind == PreparedPlaybackSessionKind.retained
             ? 'retained hit previous'
             : 'prepared hit next';
@@ -813,10 +891,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         if (!ref.mounted || !_isCurrent(generation)) {
           return;
         }
-        
+
         // 加载字幕
         _loadSubtitlesForItem(item);
-        
+
         if (_pauseWhenOpenCompletes) {
           await _session.pause();
           state = state.copyWith(
@@ -884,9 +962,24 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         'session play called',
         itemId: item.id,
         source: playbackSource.playableSource,
-        details: 'reason=media open play=true',
+        details: resumeStart == null
+            ? 'reason=media open play=true'
+            : 'reason=resume open paused before seek',
       );
-      await _session.open(playbackSource.playableSource, play: true);
+      if (resumeStart == null) {
+        await _session.open(
+          playbackSource.playableSource,
+          play: true,
+          httpHeaders: playbackSource.httpHeaders,
+        );
+      } else {
+        await _session.open(
+          playbackSource.playableSource,
+          play: false,
+          start: resumeStart,
+          httpHeaders: playbackSource.httpHeaders,
+        );
+      }
       _logTiming(
         'media open end',
         itemId: item.id,
@@ -905,20 +998,44 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         return;
       }
 
-      await _restoreProgressIfNeeded(resumeProgress, generation);
+      if (resumeStart != null && resumeProgress != null) {
+        _lastAppliedResumeGeneration = generation;
+        _lastAppliedResumeItemId = resumeProgress.itemId;
+        _lastAppliedResumePosition = resumeStart;
+        _resumeGuardRepairAttempts = 0;
+        state = state.copyWith(
+          position: resumeStart,
+          duration: resumeProgress.duration > Duration.zero
+              ? resumeProgress.duration
+              : state.duration,
+          bufferedPosition: state.bufferedPosition < resumeStart
+              ? resumeStart
+              : state.bufferedPosition,
+        );
+        _currentPlaybackPosition = resumeStart;
+        if (resumeProgress.duration > Duration.zero) {
+          _currentPlaybackDuration = resumeProgress.duration;
+        }
+        if (_currentPlaybackBufferedPosition < resumeStart) {
+          _currentPlaybackBufferedPosition = resumeStart;
+        }
+        _updateCurrentSubtitle(resumeStart);
+      } else {
+        await _restoreProgressIfNeeded(resumeProgress, generation);
+      }
 
       // 不再阻塞等待首帧 - 让 _handlePosition 在 position > 0 时设置 hasFirstFrame
       // 这样视频可以立即开始播放，UI 会根据 hasFirstFrame 状态显示/隐藏 loading
-      
+
       // 确保开始播放
       await _session.play();
       if (!ref.mounted || !_isCurrent(generation)) {
         return;
       }
-      
+
       // 加载字幕
       _loadSubtitlesForItem(item);
-      
+
       if (_pauseWhenOpenCompletes) {
         await _session.pause();
         state = state.copyWith(
@@ -1004,6 +1121,24 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         skipped: skipped,
       ),
     ];
+    final sessionForwardCandidates = _preloadCandidatesInDirection(
+      items,
+      currentIndex,
+      direction: 1,
+      count: config.effectivePreparedForwardSessionCount,
+      skipped: <String>[],
+    )
+        .where((item) => !_usesCurrentMediaSource(item))
+        .toList(growable: false);
+    final sessionBackwardCandidates = _preloadCandidatesInDirection(
+      items,
+      currentIndex,
+      direction: -1,
+      count: config.effectiveRetainedBackwardSessionCount,
+      skipped: <String>[],
+    )
+        .where((item) => !_usesCurrentMediaSource(item))
+        .toList(growable: false);
 
     // HLS preload count 控制 HTTP playlist/segment 预热，不控制 prepared session window。
     // prepared session 持有播放器和解码资源，扩大到多个 next/previous 会提高内存、
@@ -1016,6 +1151,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (state.currentItemId != null) {
       allowedIds.add(state.currentItemId!);
     }
+    final sessionAllowedIds = <String>{
+      if (state.currentItemId != null) state.currentItemId!,
+      ...sessionForwardCandidates.map((item) => item.id),
+      ...sessionBackwardCandidates.map((item) => item.id),
+    };
     final previousActivePreloadAllowedIds = _activePreloadAllowedIds.toSet();
     _logTiming(
       'preload candidates',
@@ -1025,6 +1165,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         'candidates=${candidates.map((candidate) => candidate.id).join(',')}',
         'skipped=${skipped.join(',')}',
         'allowedIds=${allowedIds.join(',')}',
+        'sessionAllowedIds=${sessionAllowedIds.join(',')}',
         'activePreloadAllowedIds=${previousActivePreloadAllowedIds.join(',')}',
         'forwardHlsPreloadCount=$forwardPreloadCount',
         'backwardHlsPreloadCount=$backwardPreloadCount',
@@ -1039,7 +1180,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _preloadedItemIds.removeWhere((id) => !allowedIds.contains(id));
     _cancelPreloadsNotIn(allowedIds);
     await _retainSessionWindowOnly(
-      allowedIds,
+      sessionAllowedIds,
       reason: 'stale generation/window trim',
     );
 
@@ -1048,9 +1189,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (state.currentItemId != null &&
         state.currentSource != null &&
         config.effectivePreparedForwardSessionCount > 0) {
-      final nextItem = forwardCandidates.isEmpty
+      final nextItem = sessionForwardCandidates.isEmpty
           ? null
-          : forwardCandidates.first;
+          : sessionForwardCandidates.first;
       if (nextItem != null) {
         // 只 prepare 第一个 forward playable item，保持 previous/current/next 窗口。
         // 不要按 HLS preload 数量循环 prepare，否则会变成播放器实例池。
@@ -1301,10 +1442,16 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     required int eventType,
     bool autoUnlockNext = false,
   }) async {
-    unawaited(_reportWatchProgress(
-      eventType: eventType,
-      autoUnlockNext: autoUnlockNext,
-    ));
+    unawaited(
+      _reportWatchProgress(
+        eventType: eventType,
+        autoUnlockNext: autoUnlockNext,
+      ),
+    );
+  }
+
+  Future<void> persistCurrentProgress() {
+    return _persistProgressIfNeeded();
   }
 
   Future<void> _reportWatchProgress({
@@ -1329,6 +1476,18 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       final episodeNo = currentItem.episode.number;
       final durationSecond = state.duration.inSeconds;
       final watchSecond = state.position.inSeconds;
+      if (durationSecond <= 0 || watchSecond <= 0) {
+        _logTiming(
+          'report watch progress skipped zero progress',
+          itemId: state.currentItemId,
+          details: _timingDetails([
+            'eventType=$eventType',
+            'durationSecond=$durationSecond',
+            'watchSecond=$watchSecond',
+          ]),
+        );
+        return;
+      }
 
       _logTiming(
         'report watch progress',
@@ -1344,15 +1503,17 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         ]),
       );
 
-      await ref.read(playerRemoteDataSourceProvider).reportWatchProgress(
-        autoUnlockNext: autoUnlockNext,
-        dramaId: dramaId,
-        durationSecond: durationSecond,
-        episodeId: episodeId,
-        episodeNo: episodeNo,
-        eventType: eventType,
-        watchSecond: watchSecond,
-      );
+      await ref
+          .read(playerRemoteDataSourceProvider)
+          .reportWatchProgress(
+            autoUnlockNext: autoUnlockNext,
+            dramaId: dramaId,
+            durationSecond: durationSecond,
+            episodeId: episodeId,
+            episodeNo: episodeNo,
+            eventType: eventType,
+            watchSecond: watchSecond,
+          );
     } catch (error) {
       _logTiming(
         'report watch progress error',
@@ -1424,19 +1585,55 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     return detachSurfaceForVisibility(syncState: syncState);
   }
 
+  Future<void> resumeAfterVisibilityPause() async {
+    if (_isSessionDisposed ||
+        state.status != PlayerPlaybackStatus.paused ||
+        state.currentSource == null) {
+      return;
+    }
+    _visibilityDetachEpoch += 1;
+    _pauseWhenOpenCompletes = false;
+    _accessOverlayPausedItemId = null;
+    await _session.play();
+    if (!ref.mounted) {
+      return;
+    }
+    state = state.copyWith(
+      status: PlayerPlaybackStatus.playing,
+      isBuffering: !state.hasFirstFrame,
+      hasEnded: false,
+      videoController: _session.videoController,
+      surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
+    );
+  }
+
   Future<void> detachSurfaceForVisibility({bool syncState = true}) async {
     if (_isSessionDisposed) {
       return;
     }
+    final visibilityEpoch = ++_visibilityDetachEpoch;
     // 页面隐藏、切 tab、进后台都走这里。generation 先失效旧 open，避免异步 open
     // 完成后又自动 play；随后释放 session window 和 HTTP preload，防止隐藏页面继续
     // 占用音频/网络资源。
     _pauseWhenOpenCompletes = true;
     _accessOverlayPausedItemId = null;
+    await _persistProgressIfNeeded();
+    if (visibilityEpoch != _visibilityDetachEpoch) {
+      return;
+    }
     ++_generation;
     await _session.pause();
+    if (visibilityEpoch != _visibilityDetachEpoch) {
+      return;
+    }
     await _releaseSessionWindowFor('hidden');
+    if (visibilityEpoch != _visibilityDetachEpoch) {
+      return;
+    }
     await _disposePreloads(syncState: syncState);
+    if (visibilityEpoch != _visibilityDetachEpoch) {
+      return;
+    }
     if (!syncState || !ref.mounted) {
       return;
     }
@@ -1469,6 +1666,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
     _pauseWhenOpenCompletes = true;
     _accessOverlayPausedItemId = null;
+    await _persistProgressIfNeeded();
     ++_generation;
     await _session.pause();
     await _releaseSessionWindowFor('dispose surface detach');
@@ -1522,6 +1720,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     // For You tab 不走 disposeSession，而是 pauseForVisibility，以保留 tab provider。
     _pauseWhenOpenCompletes = true;
     _accessOverlayPausedItemId = null;
+    await _persistProgressIfNeeded();
     ++_generation;
     await _releaseSessionWindowFor('dispose');
     await _disposePreloads(syncState: syncState);
@@ -1645,6 +1844,28 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
     final clamped = _clampToDuration(position);
+    final restoreFloor = _restoreFloorPosition;
+    if (restoreFloor != null &&
+        _restoreFloorGeneration == _generation &&
+        clamped < restoreFloor - const Duration(milliseconds: 500)) {
+      _logTiming(
+        'ignore position before restored point',
+        itemId: state.currentItemId,
+        source: state.currentSource,
+        details: _timingDetails([
+          'positionMs=${clamped.inMilliseconds}',
+          'restoreMs=${restoreFloor.inMilliseconds}',
+        ]),
+      );
+      _repairResumePositionIfNeeded(restoreFloor, _generation, clamped);
+      return;
+    }
+    if (restoreFloor != null &&
+        _restoreFloorGeneration == _generation &&
+        clamped >= restoreFloor) {
+      _restoreFloorTimer?.cancel();
+      _restoreFloorPosition = null;
+    }
     final last = _lastPositionUpdate;
     if (last != null &&
         (clamped - last).abs() < const Duration(milliseconds: 250)) {
@@ -1727,6 +1948,60 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return fallback;
     }
     return Duration.zero;
+  }
+
+  PlaybackProgress? _normalizeResumeProgress(
+    PlaybackProgress? progress,
+    Duration? itemDuration,
+  ) {
+    if (progress == null || !progress.canResume) {
+      return null;
+    }
+    final effectiveDuration = _effectiveDuration(
+      Duration.zero,
+      itemDuration,
+    );
+    if (effectiveDuration <= Duration.zero) {
+      return progress;
+    }
+    final maxSeekPosition = effectiveDuration - const Duration(seconds: 3);
+    if (maxSeekPosition <= Duration.zero) {
+      _logTiming(
+        'resume progress skipped short duration',
+        itemId: progress.itemId,
+        source: state.currentSource,
+        details: _timingDetails([
+          'durationMs=${effectiveDuration.inMilliseconds}',
+          'resumeMs=${progress.position.inMilliseconds}',
+        ]),
+      );
+      return null;
+    }
+    final normalizedPosition = progress.position > maxSeekPosition
+        ? maxSeekPosition
+        : progress.position;
+    if (normalizedPosition <= Duration.zero) {
+      return null;
+    }
+    if (normalizedPosition != progress.position ||
+        effectiveDuration != progress.duration) {
+      _logTiming(
+        'resume progress normalized',
+        itemId: progress.itemId,
+        source: state.currentSource,
+        details: _timingDetails([
+          'fromMs=${progress.position.inMilliseconds}',
+          'toMs=${normalizedPosition.inMilliseconds}',
+          'durationMs=${effectiveDuration.inMilliseconds}',
+        ]),
+      );
+    }
+    return PlaybackProgress(
+      itemId: progress.itemId,
+      position: normalizedPosition,
+      duration: effectiveDuration,
+      updatedAt: progress.updatedAt,
+    );
   }
 
   void _handleBufferedPosition(Duration position) {
@@ -1927,6 +2202,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       session.durationStream.listen(_handleDuration),
       session.bufferedPositionStream.listen(_handleBufferedPosition),
       session.rateStream.listen(_handleRate),
+      session.widthStream.listen(_handleWidth),
       session.errorStream.listen(_handleError),
     ];
   }
@@ -2176,44 +2452,46 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       '_restoreProgressIfNeeded: 开始恢复播放，seek 到 ${progress.position.inSeconds}s',
     );
 
-    // 等待首帧到达后再 seek，确保 VideoOutput 已创建
-    // 注意：不能用 widthStream，改用 position 检测
-    if (!_currentPlaybackHasFirstFrame) {
-      try {
-        final firstFrameCompleter = Completer<bool>();
-        late StreamSubscription<Duration> positionSub;
-        
-        // 监听 position 流
-        positionSub = _session.positionStream.listen((position) {
-          if (position > Duration.zero && !firstFrameCompleter.isCompleted) {
-            firstFrameCompleter.complete(true);
-          }
-        });
-        
-        // 超时定时器
-        final timeoutTimer = Timer(const Duration(seconds: 15), () {
-          if (!firstFrameCompleter.isCompleted) {
-            developer.log('_restoreProgressIfNeeded: 等待首帧超时（15秒），强制继续');
-            firstFrameCompleter.complete(false);
-          }
-        });
-        
-        final result = await firstFrameCompleter.future;
-        await positionSub.cancel();
-        timeoutTimer.cancel();
-        
-        if (result) {
-          _currentPlaybackHasFirstFrame = true;
-          developer.log('_restoreProgressIfneeded: 首帧已到达（position > 0）');
-        }
-      } catch (e) {
-        developer.log('_restoreProgressIfNeeded: 等待首帧异常 - $e');
-      }
-      if (!ref.mounted || !_isCurrent(generation)) {
-        return;
-      }
+    if (state.hasEnded) {
+      _logTiming(
+        'resume progress skipped after ended',
+        itemId: state.currentItemId,
+        source: state.currentSource,
+      );
+      return;
     }
-
+    if (_lastAppliedResumeGeneration == generation &&
+        _lastAppliedResumeItemId == progress.itemId &&
+        _lastAppliedResumePosition == progress.position) {
+      _logTiming(
+        'resume progress skipped duplicate',
+        itemId: progress.itemId,
+        source: state.currentSource,
+        details: _timingDetails([
+          'positionMs=${progress.position.inMilliseconds}',
+        ]),
+      );
+      return;
+    }
+    final currentPosition = _currentPlaybackPosition > Duration.zero
+        ? _currentPlaybackPosition
+        : state.position;
+    if (currentPosition > progress.position + const Duration(seconds: 1)) {
+      _logTiming(
+        'resume progress skipped stale',
+        itemId: progress.itemId,
+        source: state.currentSource,
+        details: _timingDetails([
+          'currentMs=${currentPosition.inMilliseconds}',
+          'resumeMs=${progress.position.inMilliseconds}',
+        ]),
+      );
+      return;
+    }
+    _lastAppliedResumeGeneration = generation;
+    _lastAppliedResumeItemId = progress.itemId;
+    _lastAppliedResumePosition = progress.position;
+    _armRestoreFloor(progress.position, generation);
     await _session.seek(progress.position);
     if (!ref.mounted || !_isCurrent(generation)) {
       return;
@@ -2237,6 +2515,305 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
     // 恢复进度后，更新字幕显示位置
     _updateCurrentSubtitle(progress.position);
+    unawaited(_confirmRestoreSeek(progress.position, generation));
+  }
+
+  void _armRestoreFloor(Duration position, int generation) {
+    _restoreFloorTimer?.cancel();
+    _restoreFloorPosition = position;
+    _restoreFloorGeneration = generation;
+    _restoreFloorTimer = Timer(const Duration(seconds: 3), () {
+      if (_restoreFloorGeneration != generation) {
+        return;
+      }
+      _restoreFloorPosition = null;
+    });
+  }
+
+  Future<bool> _seekToResumeBeforePlay(
+    Duration position,
+    int generation,
+  ) async {
+    await _waitUntilResumeSeekReady(generation);
+    if (!ref.mounted || !_isCurrent(generation)) {
+      return false;
+    }
+
+    for (var attempt = 1; attempt <= 2; attempt += 1) {
+      _armRestoreFloor(position, generation);
+      final reachedFuture = _waitForResumePosition(
+        position,
+        generation,
+        timeout: attempt == 1
+            ? const Duration(milliseconds: 450)
+            : const Duration(milliseconds: 300),
+      );
+      developer.log(
+        'PlayerPlaybackController: resume seek attempt $attempt - '
+        'position=$position',
+      );
+      await _session.seek(position);
+      final reached = await reachedFuture;
+      if (!ref.mounted || !_isCurrent(generation)) {
+        return false;
+      }
+      if (reached) {
+        developer.log(
+          'PlayerPlaybackController: resume seek confirmed - '
+          'position=$position, attempt=$attempt',
+        );
+        return true;
+      }
+      developer.log(
+        'PlayerPlaybackController: resume seek not confirmed - '
+        'position=$position, attempt=$attempt',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+    }
+    return false;
+  }
+
+  Future<void> _waitUntilResumeSeekReady(int generation) async {
+    if (_currentPlaybackHasFirstFrame || state.hasFirstFrame) {
+      developer.log(
+        'PlayerPlaybackController: resume seek ready immediately - '
+        'hasFirstFrame=${state.hasFirstFrame}',
+      );
+      return;
+    }
+
+    final completer = Completer<void>();
+    final subscriptions = <StreamSubscription<dynamic>>[];
+    Timer? timeoutTimer;
+
+    void complete(String reason) {
+      if (completer.isCompleted) {
+        return;
+      }
+      developer.log(
+        'PlayerPlaybackController: resume seek ready - reason=$reason',
+      );
+      _logTiming(
+        'resume seek ready',
+        itemId: state.currentItemId,
+        source: state.currentSource,
+        details: reason,
+      );
+      completer.complete();
+    }
+
+    subscriptions
+      ..add(
+        _session.widthStream.listen((width) {
+          if (width != null && width > 0) {
+            complete('width=$width');
+          }
+        }),
+      )
+      ..add(
+        _session.positionStream.listen((position) {
+          if (position > Duration.zero) {
+            complete('positionMs=${position.inMilliseconds}');
+          }
+        }),
+      )
+      ..add(
+        _session.durationStream.listen((duration) {
+          if (duration > Duration.zero) {
+            complete('durationMs=${duration.inMilliseconds}');
+          }
+        }),
+      );
+    timeoutTimer = Timer(const Duration(milliseconds: 1200), () {
+      complete('timeout');
+    });
+
+    try {
+      await completer.future;
+    } finally {
+      timeoutTimer.cancel();
+      for (final subscription in subscriptions) {
+        unawaited(subscription.cancel());
+      }
+    }
+    if (!ref.mounted || !_isCurrent(generation)) {
+      return;
+    }
+  }
+
+  Future<bool> _waitForResumePosition(
+    Duration target,
+    int generation, {
+    required Duration timeout,
+  }) async {
+    final threshold = target - const Duration(milliseconds: 500);
+    if (_currentPlaybackPosition >= threshold && threshold > Duration.zero) {
+      return true;
+    }
+    final completer = Completer<bool>();
+    Timer? timeoutTimer;
+    late final StreamSubscription<Duration> subscription;
+
+    void complete(bool value, String reason) {
+      if (completer.isCompleted) {
+        return;
+      }
+      developer.log(
+        'PlayerPlaybackController: resume position ack - '
+        'target=$target, reached=$value, reason=$reason',
+      );
+      completer.complete(value);
+    }
+
+    subscription = _session.positionStream.listen((position) {
+      if (!_isCurrent(generation)) {
+        complete(false, 'stale_generation');
+        return;
+      }
+      if (position >= threshold) {
+        complete(true, 'position=$position');
+      }
+    });
+    timeoutTimer = Timer(timeout, () {
+      complete(false, 'timeout');
+    });
+
+    try {
+      return await completer.future;
+    } finally {
+      timeoutTimer.cancel();
+      unawaited(subscription.cancel());
+    }
+  }
+
+  void _repairResumePositionIfNeeded(
+    Duration target,
+    int generation,
+    Duration current,
+  ) {
+    if (_resumeGuardRepairing ||
+        _resumeGuardRepairAttempts >= 2 ||
+        _isSessionDisposed ||
+        !_isCurrent(generation)) {
+      return;
+    }
+    _resumeGuardRepairing = true;
+    _resumeGuardRepairAttempts += 1;
+    developer.log(
+      'PlayerPlaybackController: resume guard repair '
+      'attempt=$_resumeGuardRepairAttempts, current=$current, target=$target',
+    );
+    unawaited(() async {
+      try {
+        await _session.pause();
+        if (!ref.mounted || !_isCurrent(generation) || _isSessionDisposed) {
+          return;
+        }
+        _armRestoreFloor(target, generation);
+        await _session.seek(target);
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+        if (!ref.mounted || !_isCurrent(generation) || _isSessionDisposed) {
+          return;
+        }
+        await _session.play();
+      } catch (error) {
+        _logTiming(
+          'resume guard repair error',
+          itemId: state.currentItemId,
+          source: state.currentSource,
+          error: error,
+        );
+      } finally {
+        _resumeGuardRepairing = false;
+      }
+    }());
+  }
+
+  Future<void> _confirmRestoreSeek(Duration position, int generation) async {
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (!ref.mounted || !_isCurrent(generation) || _isSessionDisposed) {
+      return;
+    }
+    final currentPosition = _currentPlaybackPosition > Duration.zero
+        ? _currentPlaybackPosition
+        : state.position;
+    if (state.hasEnded ||
+        (currentPosition > Duration.zero &&
+            currentPosition >= position - const Duration(milliseconds: 250))) {
+      _logTiming(
+        'resume confirm seek skipped',
+        itemId: state.currentItemId,
+        source: state.currentSource,
+        details: _timingDetails([
+          'currentMs=${currentPosition.inMilliseconds}',
+          'resumeMs=${position.inMilliseconds}',
+          'hasEnded=${state.hasEnded}',
+        ]),
+      );
+      return;
+    }
+    await _session.seek(position);
+    if (!ref.mounted || !_isCurrent(generation)) {
+      return;
+    }
+    _armRestoreFloor(position, generation);
+    state = state.copyWith(
+      position: position,
+      bufferedPosition: state.bufferedPosition < position
+          ? position
+          : state.bufferedPosition,
+    );
+    _currentPlaybackPosition = position;
+    if (_currentPlaybackBufferedPosition < position) {
+      _currentPlaybackBufferedPosition = position;
+    }
+  }
+
+  bool _usesCurrentMediaSource(PlayerFeedItem item) {
+    final candidate = item.episode.videoSource;
+    if (candidate == null || state.currentItemId == item.id) {
+      return false;
+    }
+    final currentSource = _currentPlaybackSource;
+    return candidate == state.currentSource ||
+        candidate == currentSource?.remoteUrl ||
+        candidate == currentSource?.playableSource;
+  }
+
+  bool _isStaleResumeProgress(PlaybackProgress progress) {
+    if (!progress.canResume || state.currentItemId != progress.itemId) {
+      return false;
+    }
+    final currentPosition = _currentPlaybackPosition > Duration.zero
+        ? _currentPlaybackPosition
+        : state.position;
+    return state.hasEnded ||
+        currentPosition > progress.position + const Duration(seconds: 1);
+  }
+
+  Future<PlaybackProgress?> _resumeProgressForItem(String itemId) async {
+    _lastResumeProgressWasPending = false;
+    final pending = _pendingResumeProgress;
+    if (pending != null) {
+      if (pending.itemId == itemId) {
+        _pendingResumeProgress = null;
+        _lastResumeProgressWasPending = true;
+        return pending;
+      }
+      _logTiming(
+        'resume progress pending kept for different item',
+        itemId: itemId,
+        details: _timingDetails([
+          'pendingItemId=${pending.itemId}',
+          'requestedItemId=$itemId',
+        ]),
+      );
+      return null;
+    }
+    if (!_shouldPersistProgress) {
+      return null;
+    }
+    return _progressRepository.getProgress(itemId);
   }
 
   /// 加载指定 item 的字幕列表。
@@ -2260,14 +2837,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       }
     }
     defaultSubtitle ??= subtitles.isNotEmpty ? subtitles.first : null;
-    
+
     if (defaultSubtitle != null) {
       unawaited(setSubtitle(defaultSubtitle.url));
     }
   }
-
-
-
 
   /// 切换当前字幕轨道。
   ///
@@ -2314,20 +2888,20 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     for (var attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         developer.log('_fetchAndParseSubtitle: 尝试下载字幕 (第 $attempt 次) - $url');
-        
-        final response = await http
-            .get(Uri.parse(url))
-            .timeout(timeout);
+
+        final response = await http.get(Uri.parse(url)).timeout(timeout);
 
         if (response.statusCode != 200) {
-          developer.log('_fetchAndParseSubtitle: HTTP ${response.statusCode} for $url (第 $attempt 次)');
-          
+          developer.log(
+            '_fetchAndParseSubtitle: HTTP ${response.statusCode} for $url (第 $attempt 次)',
+          );
+
           // 如果是客户端错误（4xx），不重试
           if (response.statusCode >= 400 && response.statusCode < 500) {
             developer.log('_fetchAndParseSubtitle: 客户端错误，不再重试');
             return;
           }
-          
+
           // 如果是服务器错误（5xx），继续重试
           if (attempt < maxRetries) {
             await Future.delayed(Duration(seconds: attempt)); // 指数退避
@@ -2347,7 +2921,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
         // 立即更新当前位置对应的字幕
         _updateCurrentSubtitle(state.position);
-        
+
         developer.log('_fetchAndParseSubtitle: 字幕解析成功，共 ${cues.length} 条');
         return; // 成功，退出重试循环
       } on TimeoutException catch (e) {
@@ -2408,9 +2982,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   void _clearSubtitles() {
     state = state.copyWith(
       availableSubtitles: const [],
-      currentSubtitleUrl: null,
       subtitleCues: const [],
       currentSubtitleText: '',
+      clearSubtitle: true,
     );
   }
 
@@ -2430,14 +3004,84 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (nextPosition <= Duration.zero || nextDuration <= Duration.zero) {
       return;
     }
+    final itemId = state.currentItemId!;
+    if (!_shouldSaveProgressSnapshot(itemId, nextPosition, nextDuration)) {
+      return;
+    }
+    _markProgressSnapshotSaved(itemId, nextPosition, nextDuration);
     unawaited(
       _progressRepository.saveProgress(
         PlaybackProgress(
-          itemId: state.currentItemId!,
+          itemId: itemId,
           position: nextPosition,
           duration: nextDuration,
           updatedAt: DateTime.now(),
         ),
+      ),
+    );
+  }
+
+  bool _shouldSaveProgressSnapshot(
+    String itemId,
+    Duration position,
+    Duration duration,
+  ) {
+    final lastSaveAt = _lastProgressSaveAt;
+    final lastItemId = _lastSavedProgressItemId;
+    final lastPosition = _lastSavedProgressPosition;
+    final lastDuration = _lastSavedProgressDuration;
+    if (lastSaveAt == null ||
+        lastItemId != itemId ||
+        lastPosition == null ||
+        lastDuration == null ||
+        lastDuration != duration) {
+      return true;
+    }
+    final elapsed = DateTime.now().difference(lastSaveAt);
+    final positionDelta = (position - lastPosition).abs();
+    return elapsed >= const Duration(seconds: 3) ||
+        positionDelta >= const Duration(seconds: 3);
+  }
+
+  void _markProgressSnapshotSaved(
+    String itemId,
+    Duration position,
+    Duration duration,
+  ) {
+    _lastProgressSaveAt = DateTime.now();
+    _lastSavedProgressItemId = itemId;
+    _lastSavedProgressPosition = position;
+    _lastSavedProgressDuration = duration;
+  }
+
+  Future<void> _persistProgressIfNeeded({
+    Duration? position,
+    Duration? duration,
+  }) async {
+    if (!_shouldPersistProgress || state.currentItemId == null) {
+      return;
+    }
+    final nextPosition =
+        position ??
+        (_currentPlaybackPosition > Duration.zero
+            ? _currentPlaybackPosition
+            : state.position);
+    final nextDuration =
+        duration ??
+        (_currentPlaybackDuration > Duration.zero
+            ? _currentPlaybackDuration
+            : state.duration);
+    if (nextPosition <= Duration.zero || nextDuration <= Duration.zero) {
+      return;
+    }
+    final itemId = state.currentItemId!;
+    _markProgressSnapshotSaved(itemId, nextPosition, nextDuration);
+    await _progressRepository.saveProgress(
+      PlaybackProgress(
+        itemId: itemId,
+        position: nextPosition,
+        duration: nextDuration,
+        updatedAt: DateTime.now(),
       ),
     );
   }
@@ -2533,6 +3177,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _currentPlaybackPosition = Duration.zero;
     _currentPlaybackDuration = Duration.zero;
     _currentPlaybackBufferedPosition = Duration.zero;
+    _lastPositionUpdate = null;
+    _lastProgressSaveAt = null;
+    _lastSavedProgressItemId = null;
+    _lastSavedProgressPosition = null;
+    _lastSavedProgressDuration = null;
   }
 
   Future<void> _retainSessionWindowOnly(

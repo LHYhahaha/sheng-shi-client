@@ -35,7 +35,7 @@ class ApiRequestContext {
   /// 不是硬件唯一 ID；清 App 数据后会重新生成。guest bootstrap / account link 依赖此值。
   final String deviceId;
 
-  /// 接口语言（en / es / pt / hi）；由 [apiLangProvider] 映射，不支持语言 fallback en。
+  /// 接口语言（en / zh）；由 [apiLangProvider] 映射，不支持语言 fallback en。
   final String lang;
 
   /// 运行平台：android / ios / web 等。
@@ -70,15 +70,15 @@ class ApiRequestContext {
       'App-Version': appVersion,
       'Accept': 'application/json',
     };
-    
+
     if (sessionId != null && sessionId!.isNotEmpty) {
       headers['Session-Id'] = sessionId!;
     }
-    
+
     if (guestId != null && guestId!.isNotEmpty) {
       headers['Guest-Id'] = guestId!;
     }
-    
+
     return headers;
   }
 }

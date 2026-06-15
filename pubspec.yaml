@@ -44,6 +44,7 @@ dependencies:
   in_app_purchase_android: ^0.5.0
   device_info_plus: ^13.1.0
   android_id: ^0.5.1
+  flutter_udid: ^2.0.2
 
 dev_dependencies:
   flutter_test:

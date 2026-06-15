@@ -544,7 +544,7 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
               ? item.content.playTitle
               : item.content.title,
           cover: item.content.posterAssetPath,
-          episodeId: int.tryParse(item.episode.id),
+          episodeId: int.tryParse(item.episode.id) ?? 0,
         );
 
     final unlockState = ref.read(

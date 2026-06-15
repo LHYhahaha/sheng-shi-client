@@ -15,6 +15,7 @@ class PlayerContent {
     required this.likeCountLabel,
     required this.backgroundAssetPath,
     required this.posterAssetPath,
+    this.coverUrl,
     required this.episodes,
     required this.recommendations,
     this.playCount = 0,
@@ -62,6 +63,11 @@ class PlayerContent {
   ///
   /// 用于首帧前或不可播放时的视觉占位，不代表视频源。
   final String posterAssetPath;
+
+  /// 网络封面 URL。
+  ///
+  /// 优先使用此字段加载封面，如果为空则使用 [posterAssetPath]。
+  final String? coverUrl;
 
   /// 剧集列表。
   ///

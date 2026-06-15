@@ -22,6 +22,7 @@ class AuthTokenSnapshot {
     this.sessionKind,
     this.subjectId,
     this.guestId,
+    this.provider,
   });
 
   const AuthTokenSnapshot.empty()
@@ -32,7 +33,8 @@ class AuthTokenSnapshot {
       refreshExpiresAt = null,
       sessionKind = null,
       subjectId = null,
-      guestId = null;
+      guestId = null,
+      provider = null;
 
   final String? accessToken;
   final String? refreshToken;
@@ -48,6 +50,9 @@ class AuthTokenSnapshot {
 
   /// account link 用的游客锚点 id（登录请求携带，便于服务端合并游客数据）。
   final String? guestId;
+
+  /// 登录渠道名称，如 device / facebook。用于 refresh 后保留身份来源。
+  final String? provider;
 
   bool get hasAccessToken => accessToken != null && accessToken!.isNotEmpty;
 
@@ -65,6 +70,7 @@ class AuthTokenSnapshot {
       'sessionKind': sessionKind?.name,
       'subjectId': subjectId,
       'guestId': guestId,
+      'provider': provider,
     };
   }
 
@@ -82,6 +88,7 @@ class AuthTokenSnapshot {
       sessionKind: _sessionKindFromJson(json['sessionKind']),
       subjectId: _nullableString(json['subjectId']),
       guestId: _nullableString(json['guestId']),
+      provider: _nullableString(json['provider']),
     );
   }
 

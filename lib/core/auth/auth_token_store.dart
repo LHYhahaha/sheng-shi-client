@@ -16,14 +16,19 @@ final authTokenStoreProvider =
 /// provider 即可，无需改 UI 或 feature repository。
 class AuthTokenStore extends Notifier<AuthTokenSnapshot> {
   bool _hydrateFinished = false;
+  late final Future<void> _hydrateFuture;
 
   @override
   AuthTokenSnapshot build() {
-    Future.microtask(_hydrateFromStorage);
+    _hydrateFuture = _hydrateFromStorage();
     return const AuthTokenSnapshot.empty();
   }
 
   AuthTokenStorage get _storage => ref.read(authTokenStorageProvider);
+
+  AuthTokenSnapshot get snapshot => state;
+
+  Future<void> waitForHydration() => _hydrateFuture;
 
   Future<void> _hydrateFromStorage() async {
     if (_hydrateFinished) {

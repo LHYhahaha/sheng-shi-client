@@ -127,6 +127,10 @@ class PlayerRechargeUnlockController
     extends Notifier<PlayerRechargeUnlockState> {
   PlayerRechargeUnlockController(this.sessionKey);
 
+  static const _packageName = 'com.yushi.drama.client';
+  static const _coinProductType = 1;
+  static const _membershipProductType = 2;
+
   final String sessionKey;
   int _generation = 0;
   int _purchaseGeneration = 0;
@@ -145,6 +149,10 @@ class PlayerRechargeUnlockController
   }) async {
     final generation = ++_generation;
     _purchaseGeneration++;
+
+    // 检查用户是否已是会员
+    final isMember = ref.read(entitlementControllerProvider).isMember;
+
     state = PlayerRechargeUnlockState(
       status: PlayerRechargeUnlockStatus.loading,
       itemId: itemId,
@@ -156,7 +164,11 @@ class PlayerRechargeUnlockController
     try {
       final offer = await ref
           .read(playerRechargeUnlockRepositoryProvider)
-          .fetchOffer(itemId: itemId, requiredCoins: requiredCoins);
+          .fetchOffer(
+            itemId: itemId,
+            requiredCoins: requiredCoins,
+            isMember: isMember,
+          );
       if (!_isCurrent(generation)) {
         return;
       }
@@ -260,6 +272,7 @@ class PlayerRechargeUnlockController
     final purchaseGeneration = ++_purchaseGeneration;
     state = state.copyWith(status: PlayerRechargeUnlockStatus.processing);
 
+    StreamSubscription<PurchaseDetails>? sub;
     try {
       // 获取选中的套餐
       final selectedCoinPackage = state.selectedCoinPackage;
@@ -275,7 +288,9 @@ class PlayerRechargeUnlockController
           ? selectedCoinPackage.id
           : selectedMembershipPackage!.id;
       final productId = int.tryParse(packageId) ?? 0;
-      final productType = isCoinPackage ? 1 : 2; // 1=金币商品, 2=会员商品
+      final productType = isCoinPackage
+          ? _coinProductType
+          : _membershipProductType;
 
       if (productId == 0) {
         throw Exception('Invalid productId: $packageId');
@@ -325,12 +340,10 @@ class PlayerRechargeUnlockController
 
       // 6. 设置 Completer 等待购买结果
       final completer = Completer<PurchaseDetails?>();
-      StreamSubscription? sub;
 
       sub = iapService.purchaseStream.listen((details) {
-        if (details.productID == productDetails.id) {
+        if (details.productID == productDetails.id && !completer.isCompleted) {
           completer.complete(details);
-          sub?.cancel();
         }
       });
 
@@ -344,11 +357,14 @@ class PlayerRechargeUnlockController
         debugPrint('[PlayerRecharge] 使用 offerToken: $offerToken');
       }
 
-      await iapService.buyProduct(
+      final started = await iapService.buyProduct(
         product: productDetails,
         isConsumable: isConsumable,
         offerToken: offerToken,
       );
+      if (!started) {
+        throw Exception('Failed to launch IAP purchase');
+      }
 
       // 8. 等待购买结果（设置超时）
       final purchaseDetails = await completer.future.timeout(
@@ -370,22 +386,63 @@ class PlayerRechargeUnlockController
         throw Exception('Purchase timeout or cancelled');
       }
 
-      if (purchaseDetails.status == PurchaseStatus.purchased) {
-        // 直接完成购买（跳过验单）
-        debugPrint('[PlayerRecharge] 购买成功，直接完成（跳过验单）');
-        await iapService.completePurchase(purchaseDetails);
-
-        if (purchaseGeneration != _purchaseGeneration ||
-            state.status != PlayerRechargeUnlockStatus.processing) {
-          return;
-        }
-
-        // 标记成功
-        state = state.copyWith(status: PlayerRechargeUnlockStatus.success);
-        debugPrint('[PlayerRecharge] 购买流程完成（跳过验单和权益刷新）');
-      } else if (purchaseDetails.status == PurchaseStatus.error) {
+      if (purchaseDetails.status == PurchaseStatus.pending) {
+        debugPrint('[PlayerRecharge] purchase pending');
+        return;
+      }
+      if (purchaseDetails.status == PurchaseStatus.error) {
         throw Exception('Purchase failed: ${purchaseDetails.error}');
       }
+      if (purchaseDetails.status.name == 'canceled') {
+        state = state.copyWith(status: PlayerRechargeUnlockStatus.cancelled);
+        return;
+      }
+      if (purchaseDetails.status != PurchaseStatus.purchased &&
+          purchaseDetails.status != PurchaseStatus.restored) {
+        throw Exception(
+          'Unsupported purchase status: ${purchaseDetails.status}',
+        );
+      }
+
+      debugPrint('[PlayerRecharge] purchase success, verifying order');
+      final verifyResult = await ref
+          .read(payRepositoryProvider)
+          .verifyGooglePayment(
+            orderNo: order.orderNo,
+            channelProductId: purchaseDetails.productID,
+            packageName: _packageName,
+            productType: productType,
+            purchaseToken:
+                purchaseDetails.verificationData.serverVerificationData,
+            channelOrderId: purchaseDetails.purchaseID,
+            rawReceipt: purchaseDetails.verificationData.source,
+          );
+
+      if (purchaseGeneration != _purchaseGeneration ||
+          state.status != PlayerRechargeUnlockStatus.processing) {
+        return;
+      }
+      if (verifyResult.orderStatus != 'ORDER_STATUS_SUCCESS') {
+        throw Exception(
+          'Payment verification returned ${verifyResult.orderStatus}',
+        );
+      }
+
+      if (purchaseDetails.pendingCompletePurchase) {
+        await iapService.completePurchase(purchaseDetails);
+      }
+
+      await ref.read(entitlementControllerProvider.notifier).load();
+
+      if (purchaseGeneration != _purchaseGeneration ||
+          state.status != PlayerRechargeUnlockStatus.processing) {
+        return;
+      }
+
+      state = state.copyWith(status: PlayerRechargeUnlockStatus.success);
+      debugPrint(
+        '[PlayerRecharge] purchase verified and entitlement refreshed',
+      );
     } catch (e, st) {
       debugPrint('[PlayerRecharge] 购买失败: $e\n$st');
 
@@ -395,6 +452,8 @@ class PlayerRechargeUnlockController
           error: e,
         );
       }
+    } finally {
+      await sub?.cancel();
     }
   }
 
@@ -405,8 +464,8 @@ class PlayerRechargeUnlockController
     required int dramaId,
     required int episodeNo,
     required String shortTitle,
-    String? cover,
-    int? episodeId,
+    required String cover,
+    required int episodeId,
   }) async {
     final unlockGeneration = ++_purchaseGeneration;
     state = state.copyWith(status: PlayerRechargeUnlockStatus.processing);

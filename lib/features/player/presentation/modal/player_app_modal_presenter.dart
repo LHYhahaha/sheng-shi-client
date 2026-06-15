@@ -103,6 +103,12 @@ class PlayerAppModalPresenter implements AppModalPresenter {
                   : item.content.title;
               final cover = item.content.posterAssetPath;
               final episodeId = int.tryParse(item.episode.id);
+              
+              if (episodeId == null) {
+                debugPrint('[_presentCoinUnlock] episode id parse failed: ${item.episode.id}');
+                navigator.pop(false);
+                return;
+              }
 
               final controller = container.read(
                 playerRechargeUnlockControllerProvider(sessionKey).notifier,

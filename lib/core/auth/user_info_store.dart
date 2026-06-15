@@ -4,8 +4,9 @@ import '../../features/auth/data/dto/user_info_dto.dart';
 import 'user_info_storage.dart';
 import 'user_info_storage_provider.dart';
 
-final userInfoStoreProvider =
-    NotifierProvider<UserInfoStore, UserInfoSnapshot>(UserInfoStore.new);
+final userInfoStoreProvider = NotifierProvider<UserInfoStore, UserInfoSnapshot>(
+  UserInfoStore.new,
+);
 
 /// 用户信息快照。
 class UserInfoSnapshot {
@@ -45,9 +46,19 @@ class UserInfoSnapshot {
   final int? bonusCoin;
   final int? autoUnlock;
 
-  bool get isEmpty => userId == null;
+  bool get isEmpty =>
+      userId == null &&
+      showId == null &&
+      nickname == null &&
+      avatar == null &&
+      language == null &&
+      status == null &&
+      vipExpireAt == null &&
+      coin == null &&
+      bonusCoin == null &&
+      autoUnlock == null;
 
-  bool get hasUserInfo => userId != null && nickname != null;
+  bool get hasUserInfo => showId != null || nickname != null;
 
   Map<String, Object?> toJson() {
     return {
@@ -71,7 +82,8 @@ class UserInfoSnapshot {
 
     return UserInfoSnapshot(
       userId: _nullableInt(json['userId']),
-      showId: _nullableString(json['showId']),
+      showId:
+          _nullableString(json['showId']) ?? _nullableString(json['showid']),
       nickname: _nullableString(json['nickname']),
       avatar: _nullableString(json['avatar']),
       language: _nullableString(json['language']),
@@ -117,6 +129,8 @@ class UserInfoStore extends Notifier<UserInfoSnapshot> {
 
   UserInfoStorage get _storage => ref.read(userInfoStorageProvider);
 
+  UserInfoSnapshot get snapshot => state;
+
   Future<void> _hydrateFromStorage() async {
     if (_hydrateFinished) {
       return;
@@ -155,7 +169,7 @@ class UserInfoStore extends Notifier<UserInfoSnapshot> {
     _hydrateFinished = true;
     final snapshot = UserInfoSnapshot(
       userId: _parseInt(data['userId']),
-      showId: _parseString(data['showId']),
+      showId: _parseString(data['showId']) ?? _parseString(data['showid']),
       nickname: _parseString(data['nickname']),
       avatar: _parseString(data['avatar']),
       language: _parseString(data['language']),

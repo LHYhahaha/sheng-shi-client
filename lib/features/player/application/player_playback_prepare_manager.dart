@@ -105,7 +105,7 @@ class PreparedPlaybackSession {
 class PlayerPlaybackPrepareManager {
   PlayerPlaybackPrepareManager({
     required PlayerPlaybackSession Function() sessionFactory,
-    this.maxWindowSessions = 2,
+    this.maxWindowSessions = 11,
     this.warmUpTimeout = const Duration(milliseconds: 4000),
     this.timingLogger,
   }) : _sessionFactory = sessionFactory;
@@ -167,7 +167,7 @@ class PlayerPlaybackPrepareManager {
       var hasPlaybackAdvanced = false;
       final firstFrameCompleter = Completer<void>();
       PreparedPlaybackSession? prepared;
-      
+
       // 使用 position 检测首帧：如果 position > 0，说明视频已经开始播放，首帧已到达
       positionSubscription = session.positionStream.listen((position) {
         if (position > Duration.zero && !hasFirstFrame) {
@@ -229,7 +229,11 @@ class PlayerPlaybackPrepareManager {
         itemId: item.id,
         source: source.playableSource,
       );
-      await session.open(source.playableSource, play: true);
+      await session.open(
+        source.playableSource,
+        play: true,
+        // httpHeaders: source.httpHeaders,
+      );
       _log(
         'prepare open completed',
         itemId: item.id,
@@ -559,7 +563,12 @@ class _NoopPlaybackSession implements PlayerPlaybackSession {
   Stream<String> get errorStream => const Stream<String>.empty();
 
   @override
-  Future<void> open(String source, {bool play = true}) async {}
+  Future<void> open(
+    String source, {
+    bool play = true,
+    Duration? start,
+    Map<String, String>? httpHeaders,
+  }) async {}
 
   @override
   Future<void> play() async {}

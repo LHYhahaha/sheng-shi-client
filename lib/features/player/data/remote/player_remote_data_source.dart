@@ -30,7 +30,7 @@ class PlayerRemoteDataSource {
     );
   }
 
-    /// 获取充值页面数据
+  /// 获取充值页面数据
   ///
   /// 对应后端 API：GET /api/payment/recharge/page
   Future<StoreRechargeDataDto> fetchRechargePage() {
@@ -48,10 +48,7 @@ class PlayerRemoteDataSource {
   }) {
     return _apiClient.post<List<PlayerRecommendationDto>>(
       '/api/home/tags',
-      data: <String, Object?>{
-        'dramaId': dramaId,
-        'tag_ids': tagIds,
-      },
+      data: <String, Object?>{'dramaId': dramaId, 'tag_ids': tagIds},
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) => _parseRecommendations(data),
     );
@@ -99,14 +96,16 @@ class PlayerRemoteDataSource {
 
   /// 检查短剧点赞状态。
   Future<bool> checkShortFollowStatus({required int dramaId}) {
-    return _apiClient.get<ShortFollowCheckDto>(
-      '/api/user/short/follow/check',
-      queryParameters: <String, Object?>{'dramaId': dramaId},
-      authPolicy: ApiAuthPolicy.required,
-      decoder: (data) => ShortFollowCheckDto.fromJson(
-        JsonFieldParser.requireMap(data, dtoName: 'ShortFollowCheckDto'),
-      ),
-    ).then((dto) => dto.followed);
+    return _apiClient
+        .get<ShortFollowCheckDto>(
+          '/api/user/short/follow/check',
+          queryParameters: <String, Object?>{'dramaId': dramaId},
+          authPolicy: ApiAuthPolicy.required,
+          decoder: (data) => ShortFollowCheckDto.fromJson(
+            JsonFieldParser.requireMap(data, dtoName: 'ShortFollowCheckDto'),
+          ),
+        )
+        .then((dto) => dto.followed);
   }
 
   /// 获取观看进度。
@@ -164,8 +163,8 @@ class PlayerRemoteDataSource {
     required int dramaId,
     required int episodeNo,
     required String shortTitle,
-    String? cover,
-    int? episodeId,
+    required String cover,
+    required int episodeId,
   }) {
     return _apiClient.post<PlayerEpisodeUnlockDto>(
       '/api/payment/episode/unlock',

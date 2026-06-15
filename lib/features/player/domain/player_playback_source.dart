@@ -19,6 +19,7 @@ class PlaybackSource {
     required this.expiresAt,
     required this.codecHint,
     required this.status,
+    this.httpHeaders,
   });
 
   /// source 绑定的 feed item id。
@@ -35,6 +36,11 @@ class PlaybackSource {
   ///
   /// 可能等于 remoteUrl，也可能是 local HLS proxy URL。不要持久化这个字段到内容数据。
   final String playableSource;
+
+  /// HTTP headers passed to the media player when opening this source.
+  ///
+  /// This carries the App request auth context without putting tokens in URLs.
+  final Map<String, String>? httpHeaders;
 
   /// 播放源缓存 key。
   ///

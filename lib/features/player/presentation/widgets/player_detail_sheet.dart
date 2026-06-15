@@ -211,25 +211,25 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
                         top: 8,
                         child: AppSheetHandle(),
                       ),
-                      Positioned(
-                        left: 16,
-                        top: 22,
-                        child: AppRoundIconButton(
-                          key: _mode == _DetailSheetMode.compact
-                              ? const ValueKey('player_detail_sheet_expand')
-                              : const ValueKey('player_detail_sheet_shrink'),
-                          icon: _mode == _DetailSheetMode.compact
-                              ? Icons.open_in_full_rounded
-                              : Icons.close_fullscreen_rounded,
-                          onTap: () {
-                            if (_mode == _DetailSheetMode.compact) {
-                              unawaited(_setMode(_DetailSheetMode.expanded));
-                            } else {
-                              unawaited(_setMode(_DetailSheetMode.compact));
-                            }
-                          },
-                        ),
-                      ),
+                      // Positioned(
+                      //   left: 16,
+                      //   top: 22,
+                      //   child: AppRoundIconButton(
+                      //     key: _mode == _DetailSheetMode.compact
+                      //         ? const ValueKey('player_detail_sheet_expand')
+                      //         : const ValueKey('player_detail_sheet_shrink'),
+                      //     icon: _mode == _DetailSheetMode.compact
+                      //         ? Icons.open_in_full_rounded
+                      //         : Icons.close_fullscreen_rounded,
+                      //     onTap: () {
+                      //       if (_mode == _DetailSheetMode.compact) {
+                      //         unawaited(_setMode(_DetailSheetMode.expanded));
+                      //       } else {
+                      //         unawaited(_setMode(_DetailSheetMode.compact));
+                      //       }
+                      //     },
+                      //   ),
+                      // ),
                       Positioned(
                         right: 16,
                         top: 22,
@@ -256,6 +256,35 @@ class _Header extends StatelessWidget {
 
   final PlayerContent content;
 
+  Widget _buildCoverImage() {
+    final coverUrl = content.coverUrl;
+    final posterPath = content.posterAssetPath;
+
+    if (coverUrl != null && coverUrl.isNotEmpty) {
+      return Image.network(
+        coverUrl,
+        width: 68,
+        height: 91,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Image.asset(
+            posterPath,
+            width: 68,
+            height: 91,
+            fit: BoxFit.cover,
+          );
+        },
+      );
+    }
+
+    return Image.asset(
+      posterPath,
+      width: 68,
+      height: 91,
+      fit: BoxFit.cover,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -263,12 +292,7 @@ class _Header extends StatelessWidget {
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
-          child: Image.asset(
-            content.posterAssetPath,
-            width: 68,
-            height: 91,
-            fit: BoxFit.cover,
-          ),
+          child: _buildCoverImage(),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -384,33 +408,97 @@ class _Segment extends StatelessWidget {
   }
 }
 
-class _SynopsisPanel extends StatelessWidget {
+class _SynopsisPanel extends StatefulWidget {
   const _SynopsisPanel({required this.content, super.key});
 
   final PlayerContent content;
 
   @override
+  State<_SynopsisPanel> createState() => _SynopsisPanelState();
+}
+
+class _SynopsisPanelState extends State<_SynopsisPanel> {
+  bool _isExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
+    final synopsis = widget.content.synopsis;
+    final textStyle = TextStyle(
+      color: Colors.white.withValues(alpha: 0.42),
+      fontSize: 12,
+      height: 16 / 12,
+    );
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text.rich(
-          TextSpan(
-            text: content.synopsis,
-            children: [
-              TextSpan(
-                text: '...${context.l10n.playerMore}',
-                style: const TextStyle(color: Colors.white),
-              ),
-            ],
-          ),
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.42),
-            fontSize: 12,
-            height: 16 / 12,
-          ),
+        // 使用 LayoutBuilder 动态检测文本是否溢出
+        LayoutBuilder(
+          builder: (context, constraints) {
+            // 使用 TextPainter 检测文本是否超过三行
+            final textPainter = TextPainter(
+              text: TextSpan(text: synopsis, style: textStyle),
+              maxLines: 3,
+              textDirection: TextDirection.ltr,
+            );
+            textPainter.layout(maxWidth: constraints.maxWidth);
+            
+            // 计算完整文本的高度
+            final fullTextPainter = TextPainter(
+              text: TextSpan(text: synopsis, style: textStyle),
+              textDirection: TextDirection.ltr,
+            );
+            fullTextPainter.layout(maxWidth: constraints.maxWidth);
+            
+            // 如果完整文本高度大于三行文本高度，说明文本溢出了
+            final isOverflowing = fullTextPainter.height > textPainter.height + 0.1;
+            
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  synopsis,
+                  maxLines: _isExpanded ? null : 3,
+                  overflow: _isExpanded ? null : TextOverflow.ellipsis,
+                  style: textStyle,
+                ),
+                if (isOverflowing && !_isExpanded)
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isExpanded = true;
+                      });
+                    },
+                    child: Text(
+                      ' ${context.l10n.playerMore}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        height: 16 / 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                if (_isExpanded)
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isExpanded = false;
+                      });
+                    },
+                    child: const Text(
+                      ' Less...',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        height: 16 / 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 18),
         Text(
@@ -426,7 +514,7 @@ class _SynopsisPanel extends StatelessWidget {
         GridView.builder(
           physics: const NeverScrollableScrollPhysics(),
           shrinkWrap: true,
-          itemCount: content.recommendations.length,
+          itemCount: widget.content.recommendations.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 3,
             crossAxisSpacing: 8,
@@ -435,7 +523,7 @@ class _SynopsisPanel extends StatelessWidget {
           ),
           itemBuilder: (context, index) {
             return _RecommendationCard(
-              recommendation: content.recommendations[index],
+              recommendation: widget.content.recommendations[index],
             );
           },
         ),
@@ -522,7 +610,7 @@ class _RecommendationCard extends StatelessWidget {
   }
 }
 
-class _EpisodesPanel extends StatelessWidget {
+class _EpisodesPanel extends StatefulWidget {
   const _EpisodesPanel({
     required this.episodes,
     required this.currentEpisode,
@@ -540,16 +628,79 @@ class _EpisodesPanel extends StatelessWidget {
   final ValueChanged<PlayerEpisode> onEpisodeSelected;
   final int totalEpisodes;
 
+  @override
+  State<_EpisodesPanel> createState() => _EpisodesPanelState();
+}
+
+class _EpisodesPanelState extends State<_EpisodesPanel> {
+  late final ScrollController _rangeScrollController;
+  bool _hasScrolledToSelected = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _rangeScrollController = ScrollController();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToSelectedRange();
+    });
+  }
+
+  @override
+  void didUpdateWidget(_EpisodesPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.rangeStart != widget.rangeStart) {
+      _hasScrolledToSelected = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToSelectedRange();
+      });
+    }
+  }
+
+  void _scrollToSelectedRange() {
+    if (_hasScrolledToSelected || !_rangeScrollController.hasClients) {
+      return;
+    }
+
+    final ranges = _generateRanges();
+    final selectedIndex = ranges.indexWhere(
+      (range) => range.start == widget.rangeStart,
+    );
+
+    if (selectedIndex < 0) {
+      return;
+    }
+
+    // 计算选中项的位置
+    const itemWidth = 60.0; // 估算每个range button的宽度
+    const separatorWidth = 20.0;
+    final targetOffset = selectedIndex * (itemWidth + separatorWidth);
+    final maxOffset = _rangeScrollController.position.maxScrollExtent;
+
+    _rangeScrollController.animateTo(
+      targetOffset.clamp(0.0, maxOffset),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+    );
+
+    _hasScrolledToSelected = true;
+  }
+
+  @override
+  void dispose() {
+    _rangeScrollController.dispose();
+    super.dispose();
+  }
+
   /// 生成所有的 episode range tabs
   List<({int start, int end})> _generateRanges() {
-    if (totalEpisodes <= 0) {
+    if (widget.totalEpisodes <= 0) {
       return [];
     }
 
     final ranges = <({int start, int end})>[];
     int start = 1;
-    while (start <= totalEpisodes) {
-      final end = (start + 29).clamp(start, totalEpisodes);
+    while (start <= widget.totalEpisodes) {
+      final end = (start + 29).clamp(start, widget.totalEpisodes);
       ranges.add((start: start, end: end));
       start = end + 1;
     }
@@ -558,7 +709,7 @@ class _EpisodesPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (episodes.isEmpty) {
+    if (widget.episodes.isEmpty) {
       return Center(
         child: Text(
           context.l10n.playerFeedEmpty,
@@ -572,27 +723,31 @@ class _EpisodesPanel extends StatelessWidget {
     }
 
     final ranges = _generateRanges();
-    final visibleEpisodes = episodes
+    final visibleEpisodes = widget.episodes
         .where((episode) {
-          return episode.number >= rangeStart &&
-              episode.number < rangeStart + 30;
+          return episode.number >= widget.rangeStart &&
+              episode.number < widget.rangeStart + 30;
         })
         .toList(growable: false);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            for (int i = 0; i < ranges.length; i++) ...[
-              if (i > 0) const SizedBox(width: 20),
-              _RangeButton(
-                label: '${ranges[i].start}-${ranges[i].end}',
-                selected: rangeStart == ranges[i].start,
-                onTap: () => onRangeChanged(ranges[i].start),
-              ),
-            ],
-          ],
+        SizedBox(
+          height: 36,
+          child: ListView.separated(
+            controller: _rangeScrollController,
+            scrollDirection: Axis.horizontal,
+            itemCount: ranges.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 20),
+            itemBuilder: (context, index) {
+              return _RangeButton(
+                label: '${ranges[index].start}-${ranges[index].end}',
+                selected: widget.rangeStart == ranges[index].start,
+                onTap: () => widget.onRangeChanged(ranges[index].start),
+              );
+            },
+          ),
         ),
         const SizedBox(height: 12),
         if (visibleEpisodes.isEmpty)
@@ -621,8 +776,9 @@ class _EpisodesPanel extends StatelessWidget {
               final episode = visibleEpisodes[index];
               return _EpisodeTile(
                 episode: episode,
-                selected: episode.number == currentEpisode,
-                onTap: () => onEpisodeSelected(episode),
+                selected: episode.number == widget.currentEpisode,
+                onTap: () => widget.onEpisodeSelected(episode),
+                currentEpisode: widget.currentEpisode,
               );
             },
           ),
@@ -649,8 +805,7 @@ class _RangeButton extends StatelessWidget {
       onTap: onTap,
       child: SizedBox(
         height: 36,
-        child: Align(
-          alignment: Alignment.centerLeft,
+        child: Center(
           child: Text(
             label,
             style: TextStyle(
@@ -673,11 +828,13 @@ class _EpisodeTile extends StatelessWidget {
     required this.episode,
     required this.selected,
     required this.onTap,
+    required this.currentEpisode,
   });
 
   final PlayerEpisode episode;
   final bool selected;
   final VoidCallback onTap;
+  final int currentEpisode;
 
   @override
   Widget build(BuildContext context) {
@@ -735,7 +892,7 @@ class _EpisodeTile extends StatelessWidget {
                 size: 12,
               ),
             ),
-          if (episode.number == 10)
+          if (episode.isLocked && episode.number == currentEpisode + 1)
             const Positioned(right: 0, top: 0, child: _GiftBadge()),
         ],
       ),
@@ -759,7 +916,7 @@ class _GiftBadge extends StatelessWidget {
         ),
       ),
       child: const Icon(
-        Icons.local_fire_department,
+        Icons.lock_rounded,
         color: Colors.white,
         size: 12,
       ),

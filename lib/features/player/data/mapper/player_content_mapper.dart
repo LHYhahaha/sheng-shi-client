@@ -23,6 +23,7 @@ class PlayerContentMapper {
       likeCountLabel: _formatFavoriteCount(dto.favoriteCount),
       backgroundAssetPath: 'assets/images/player/player_background.png',
       posterAssetPath: 'assets/images/player/detail_cover.png',
+      coverUrl: dto.coverUrl.isNotEmpty ? dto.coverUrl : null,
       episodes: dto.episodes
           .map(
             (episode) =>

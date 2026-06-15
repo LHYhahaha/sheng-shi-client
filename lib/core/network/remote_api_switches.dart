@@ -5,7 +5,7 @@ import 'remote_api_module.dart';
 /// 默认全部为 `false`。`drama` 另兼容早期 `USE_REMOTE_API`。
 class RemoteApiSwitches {
   const RemoteApiSwitches({
-    this.drama = false,
+    this.drama = true,  // ← 改为 true，启用Drama远程API，不使用mock数据兜底
     this.player = false,
     this.myList = false,
     this.profile = false,
@@ -14,6 +14,7 @@ class RemoteApiSwitches {
     this.membership = false,
     this.entitlement = false,
     this.auth = true,  // ← 改为 true，默认启用Auth远程API
+    this.oauth = false,  // ← OAuth 服务开关，默认使用 mock
     this.legacyUseRemoteApi = false,
   });
 
@@ -29,6 +30,7 @@ class RemoteApiSwitches {
   final bool membership;
   final bool entitlement;
   final bool auth;
+  final bool oauth;
 
   /// Phase A 早期通用开关；仅映射到 [drama]。
   final bool legacyUseRemoteApi;
@@ -39,16 +41,25 @@ class RemoteApiSwitches {
   /// 从 `--dart-define=USE_REMOTE_*` 读取（编译期常量）。
   static RemoteApiSwitches fromEnvironment() {
     return RemoteApiSwitches(
-      drama: _envBool('USE_REMOTE_DRAMA_API'),
-      player: _envBool('USE_REMOTE_PLAYER_API'),
-      myList: _envBool('USE_REMOTE_MY_LIST_API'),
-      profile: _envBool('USE_REMOTE_PROFILE_API'),
-      wallet: _envBool('USE_REMOTE_WALLET_API'),
-      store: _envBool('USE_REMOTE_STORE_API'),
-      membership: _envBool('USE_REMOTE_MEMBERSHIP_API'),
-      entitlement: _envBool('USE_REMOTE_ENTITLEMENT_API'),
+      // drama: _envBool('USE_REMOTE_DRAMA_API'),
+      drama: _envBoolWithDefault('USE_REMOTE_DRAMA_API',true),
+      // player: _envBool('USE_REMOTE_PLAYER_API'),
+      player: _envBoolWithDefault('USE_REMOTE_PLAYER_API',true),
+      // myList: _envBool('USE_REMOTE_MY_LIST_API'),
+      myList: _envBoolWithDefault('USE_REMOTE_MY_LIST_API',true),
+      // profile: _envBool('USE_REMOTE_PROFILE_API'),
+      profile: _envBoolWithDefault('USE_REMOTE_PROFILE_API',true),
+      // wallet: _envBool('USE_REMOTE_WALLET_API'),
+      wallet: _envBoolWithDefault('USE_REMOTE_WALLET_API',true),
+      // store: _envBool('USE_REMOTE_STORE_API'),
+      store: _envBoolWithDefault('USE_REMOTE_STORE_API',true),
+      // membership: _envBool('USE_REMOTE_MEMBERSHIP_API'),
+      membership: _envBoolWithDefault('USE_REMOTE_MEMBERSHIP_API',true),
+      // entitlement: _envBool('USE_REMOTE_ENTITLEMENT_API'),
+      entitlement: _envBoolWithDefault('USE_REMOTE_ENTITLEMENT_API',true),
       // auth: _envBool('USE_REMOTE_AUTH_API'),
       auth: _envBoolWithDefault('USE_REMOTE_AUTH_API',true),
+      oauth: _envBool('USE_REMOTE_OAUTH_API'),
       legacyUseRemoteApi: _envBool('USE_REMOTE_API'),
     );
   }
@@ -146,7 +157,7 @@ class RemoteApiSwitches {
 bool _envBool(String key) => bool.fromEnvironment(key);
 
 bool _envBoolWithDefault(String key, bool defaultValue) {
-  const value = String.fromEnvironment('USE_REMOTE_AUTH_API');
+  String  value = String.fromEnvironment(key);
   if (value.isEmpty) {
     return defaultValue;
   }

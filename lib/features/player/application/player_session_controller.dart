@@ -47,7 +47,12 @@ abstract interface class PlayerPlaybackSession {
   /// 打开 source。
   ///
   /// `play=true` 会立即开始播放；prepare warm-up 也会用静音 play 触发解码。
-  Future<void> open(String source, {bool play = true});
+  Future<void> open(
+    String source, {
+    bool play = true,
+    Duration? start,
+    Map<String, String>? httpHeaders,
+  });
 
   Future<void> play();
 
@@ -106,10 +111,17 @@ class MediaKitPlayerSession implements PlayerPlaybackSession {
   Stream<String> get errorStream => player.stream.error;
 
   @override
-  Future<void> open(String source, {bool play = true}) async {
-    developer.log('MediaKitPlayerSession: 开始打开视频 - source=$source, play=$play');
+  Future<void> open(
+    String source, {
+    bool play = true,
+    Duration? start,
+    Map<String, String>? httpHeaders,
+  }) async {
+    developer.log(
+      'MediaKitPlayerSession: 开始打开视频 - source=$source, play=$play, start=$start',
+    );
     try {
-      final media = Media(source);
+      final media = Media(source, start: start, httpHeaders: httpHeaders);
       developer.log('MediaKitPlayerSession: Media 对象已创建，${media.end}');
       await player.open(media, play: play);
       developer.log('MediaKitPlayerSession: 视频打开成功 - source=$source');
@@ -123,16 +135,19 @@ class MediaKitPlayerSession implements PlayerPlaybackSession {
 
   @override
   Future<void> play() {
+    developer.log('MediaKitPlayerSession: play');
     return player.play();
   }
 
   @override
   Future<void> pause() {
+    developer.log('MediaKitPlayerSession: pause');
     return player.pause();
   }
 
   @override
   Future<void> seek(Duration position) {
+    developer.log('MediaKitPlayerSession: seek - position=$position');
     return player.seek(position);
   }
 

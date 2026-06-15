@@ -9,7 +9,7 @@ class PlayerPreloadConfig {
     this.maxPreloadBytes = 2 * 1024 * 1024,
     this.preloadTimeout = const Duration(seconds: 4),
     this.preparedForwardSessionCount = 1,
-    this.retainedBackwardSessionCount = 1,
+    this.retainedBackwardSessionCount = 10,
   });
 
   /// 控制首页启动阶段的 HLS HTTP 预加载数量。
@@ -73,7 +73,7 @@ class PlayerPreloadConfig {
 
   /// 控制向前 retained media-session 数量。
   ///
-  /// 当前客户端有效上限为 1 个 previous retained session，用来覆盖主要回滑场景，同时
+  /// 当前客户端有效上限为 10 个 previous retained sessions，用来覆盖最近看过剧集的回滑场景，同时
   /// 避免形成播放器实例池。调大会增加内存和解码资源占用。除非有强真机证据，远程配置
   /// 也应保持这个 cap。
   final int retainedBackwardSessionCount;
@@ -101,12 +101,12 @@ class PlayerPreloadConfig {
   int get effectivePreparedForwardSessionCount =>
       preparedForwardSessionCount.clamp(0, 1).toInt();
 
-  /// retained previous 也被强制 cap 到 1。
+  /// retained previous 被强制 cap 到 10。
   ///
   /// 这个 cap 和 HLS preload 数量无关。previous/current/next 是交互窗口，不是缓存池；
   /// 如果随着 HLS preload count 增加，会让历史播放器实例累积并放大内存/音频风险。
   int get effectiveRetainedBackwardSessionCount =>
-      retainedBackwardSessionCount.clamp(0, 1).toInt();
+      retainedBackwardSessionCount.clamp(0, 10).toInt();
 
   int forwardHlsPreloadCountFor(bool forYou) {
     return (forYou

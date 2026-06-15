@@ -254,6 +254,7 @@ class PlayerPlaybackRenderSnapshot {
 
 class PlayerSeekBarSnapshot {
   const PlayerSeekBarSnapshot({
+    required this.currentItemId,
     required this.currentSource,
     required this.status,
     required this.hasFirstFrame,
@@ -267,11 +268,12 @@ class PlayerSeekBarSnapshot {
 
   factory PlayerSeekBarSnapshot.fromState(PlayerPlaybackState state) {
     return PlayerSeekBarSnapshot(
+      currentItemId: state.currentItemId,
       currentSource: state.currentSource,
       status: state.status,
       hasFirstFrame: state.hasFirstFrame,
       isBuffering: state.isBuffering,
-      position: state.position,
+      position: state.displayedPosition,
       duration: state.duration,
       bufferedPosition: state.bufferedPosition,
       isSeeking: state.isSeeking,
@@ -279,6 +281,7 @@ class PlayerSeekBarSnapshot {
     );
   }
 
+  final String? currentItemId;
   final String? currentSource;
   final PlayerPlaybackStatus status;
   final bool hasFirstFrame;
@@ -310,6 +313,7 @@ class PlayerSeekBarSnapshot {
   @override
   bool operator ==(Object other) {
     return other is PlayerSeekBarSnapshot &&
+        other.currentItemId == currentItemId &&
         other.currentSource == currentSource &&
         other.status == status &&
         other.hasFirstFrame == hasFirstFrame &&
@@ -323,6 +327,7 @@ class PlayerSeekBarSnapshot {
 
   @override
   int get hashCode => Object.hash(
+    currentItemId,
     currentSource,
     status,
     hasFirstFrame,
@@ -437,14 +442,17 @@ class ActivePlaybackSurfaceOverlayState
     // 否则会形成死循环：首帧未到 -> Video 隐藏 -> 原生 surface 不创建 -> 首帧永远到不了
     final showVideo =
         canShowVideoSurface &&
-        (snapshot.hasFirstFrame || showVideoBeforeFirstFrame || snapshot.status == PlayerPlaybackStatus.playing || snapshot.status == PlayerPlaybackStatus.opening);
+        (snapshot.hasFirstFrame ||
+            showVideoBeforeFirstFrame ||
+            snapshot.status == PlayerPlaybackStatus.playing ||
+            snapshot.status == PlayerPlaybackStatus.opening);
     final dimDuringDrag =
         widget.isViewportDragging &&
         widget.policy.allowVideoSurfaceOpacityAnimationDuringDrag;
     final surfaceOpacity = showVideo
         ? (dimDuringDrag ? widget.policy.videoSurfaceDimOpacityDuringDrag : 1.0)
         : 0.0;
-    
+
     // 调试：打印Video Surface的渲染条件（正式版可移除）
     // developer.log(...);
 
@@ -789,6 +797,8 @@ class PlayerSeekBarConsumer extends ConsumerWidget {
   const PlayerSeekBarConsumer({
     super.key,
     required this.sessionKey,
+    required this.itemId,
+    required this.fallbackDuration,
     required this.thumbnailAssetPath,
     required this.onSeekStart,
     required this.onSeekUpdate,
@@ -797,6 +807,8 @@ class PlayerSeekBarConsumer extends ConsumerWidget {
   });
 
   final String sessionKey;
+  final String itemId;
+  final Duration? fallbackDuration;
   final String thumbnailAssetPath;
   final VoidCallback onSeekStart;
   final ValueChanged<Duration> onSeekUpdate;
@@ -813,10 +825,24 @@ class PlayerSeekBarConsumer extends ConsumerWidget {
     final previewConfig = PlayerSeekPreviewConfig.fromPolicy(
       ref.watch(playerPerformancePolicyProvider),
     );
+    final isCurrentPlaybackItem = snapshot.currentItemId == itemId;
+    final effectiveDuration = snapshot.duration > Duration.zero
+        ? snapshot.duration
+        : fallbackDuration ?? Duration.zero;
     final showTrackLoading = snapshot.isLoading && !snapshot.isSeeking;
+    final canControlCurrentItem =
+        isCurrentPlaybackItem &&
+        snapshot.currentSource != null &&
+        (snapshot.status == PlayerPlaybackStatus.playing ||
+            snapshot.status == PlayerPlaybackStatus.paused);
     final canSeek =
-        snapshot.isSeekAllowed && !showTrackLoading && !snapshot.isError;
-    final shouldShowShell = snapshot.currentSource != null && !snapshot.isError;
+        effectiveDuration > Duration.zero &&
+        (canControlCurrentItem || !isCurrentPlaybackItem) &&
+        !showTrackLoading &&
+        !snapshot.isError;
+    final shouldShowShell =
+        !snapshot.isError &&
+        (isCurrentPlaybackItem || effectiveDuration > Duration.zero);
     if (!shouldShowShell) {
       return const SizedBox.shrink();
     }
@@ -825,21 +851,25 @@ class PlayerSeekBarConsumer extends ConsumerWidget {
         ? const Duration(milliseconds: 150)
         : Duration.zero;
     return PlayerSeekBar(
-      position: snapshot.position,
-      duration: snapshot.duration,
-      bufferedPosition: snapshot.bufferedPosition,
-      previewPosition: snapshot.seekPreviewPosition,
+      position: isCurrentPlaybackItem ? snapshot.position : Duration.zero,
+      duration: effectiveDuration,
+      bufferedPosition: isCurrentPlaybackItem
+          ? snapshot.bufferedPosition
+          : Duration.zero,
+      previewPosition: isCurrentPlaybackItem
+          ? snapshot.seekPreviewPosition
+          : null,
       thumbnailAssetPath: thumbnailAssetPath,
       previewConfig: previewConfig,
-      isPassiveTrack: snapshot.duration <= Duration.zero,
+      isPassiveTrack: effectiveDuration <= Duration.zero,
       trackFadeDuration: trackFadeDuration,
       isDragging: snapshot.isSeeking,
-      showTrackLoading: showTrackLoading,
+      showTrackLoading: isCurrentPlaybackItem && showTrackLoading,
       enabled: canSeek,
-      onDragStart: onSeekStart,
-      onDragUpdate: onSeekUpdate,
-      onDragEnd: onSeekEnd,
-      onDragCancel: onSeekCancel,
+      onDragStart: canControlCurrentItem ? onSeekStart : null,
+      onDragUpdate: canControlCurrentItem ? onSeekUpdate : null,
+      onDragEnd: canControlCurrentItem ? onSeekEnd : null,
+      onDragCancel: canControlCurrentItem ? onSeekCancel : null,
     );
   }
 }

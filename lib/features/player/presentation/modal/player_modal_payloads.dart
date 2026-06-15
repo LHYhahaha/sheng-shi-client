@@ -33,8 +33,8 @@ class PlayerRechargeUnlockModalPayload {
     required this.dramaId,
     required this.episodeNo,
     required this.shortTitle,
-    this.cover,
-    this.episodeId,
+    required this.cover,
+    required this.episodeId,
   });
 
   final String sessionKey;
@@ -43,6 +43,6 @@ class PlayerRechargeUnlockModalPayload {
   final int dramaId;
   final int episodeNo;
   final String shortTitle;
-  final String? cover;
-  final int? episodeId;
+  final String cover;
+  final int episodeId;
 }

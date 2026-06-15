@@ -12,6 +12,7 @@ import '../../../core/toast/app_toast_provider.dart';
 import '../../../core/toast/app_toast_service.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../app/router/route_names.dart';
+import '../../membership/presentation/membership_route_result.dart';
 import '../domain/player_feed.dart';
 import '../presentation/modal/player_modal_channels.dart';
 import '../presentation/modal/player_modal_payloads.dart';
@@ -76,7 +77,31 @@ class PlayerUnlockModalCoordinator {
         );
       case PlayerOverlaySheetIntent.membership:
         // 纯会员剧：直接跳转到会员开通页面
-        await context.pushNamed(RouteNames.membership);
+        final result = await context.pushNamed<MembershipRouteResult>(
+          RouteNames.membership,
+        );
+        if (!context.mounted ||
+            result != MembershipRouteResult.purchaseCompleted) {
+          return;
+        }
+        final flowResult = await _engine.continueAfterRechargeSuccess(
+          item: item,
+          grantedCoinPackage: false,
+          grantedMembershipPackage: true,
+        );
+        if (!context.mounted) {
+          return;
+        }
+        if (flowResult.didActivateMembership) {
+          _appToast.success(context.l10n.playerMembershipActivated);
+          return;
+        }
+        await presentSheetIntent(
+          context,
+          item,
+          flowResult.sheetIntent,
+          launchedByAutoSheet: launchedByAutoSheet,
+        );
     }
   }
 
@@ -130,6 +155,12 @@ class PlayerUnlockModalCoordinator {
       return;
     }
 
+    final episodeId = int.tryParse(item.episode.id);
+    if (episodeId == null) {
+      debugPrint('[PlayerUnlock] episode id parse failed: ${item.episode.id}');
+      return;
+    }
+
     final request = _buildRequest(
       channel: PlayerModalChannels.rechargeUnlock,
       type: AppModalType.recharge,
@@ -143,7 +174,7 @@ class PlayerUnlockModalCoordinator {
             ? item.content.playTitle
             : item.content.title,
         cover: item.content.posterAssetPath,
-        episodeId: int.tryParse(item.episode.id),
+        episodeId: episodeId,
       ),
     );
 

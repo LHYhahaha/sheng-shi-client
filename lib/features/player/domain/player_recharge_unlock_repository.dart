@@ -9,6 +9,7 @@ abstract interface class PlayerRechargeUnlockRepository {
   Future<PlayerRechargeUnlockOffer> fetchOffer({
     required String itemId,
     required int requiredCoins,
+    bool isMember = false,
   });
 
   /// 使用金币解锁剧集。
@@ -20,7 +21,7 @@ abstract interface class PlayerRechargeUnlockRepository {
     required int dramaId,
     required int episodeNo,
     required String shortTitle,
-    String? cover,
-    int? episodeId,
+    required String cover,
+    required int episodeId,
   });
 }

@@ -24,8 +24,11 @@ import '../../application/player_unlock_modal_coordinator.dart';
 import '../../application/player_rebuild_diagnostics.dart';
 import '../../application/player_ui_controller.dart';
 import '../../application/player_viewport_controller.dart';
+import '../../data/dto/watch_progress_dto.dart';
+import '../../data/playback_progress_repository_provider.dart';
 import '../../data/player_content_repository_provider.dart';
 import '../../data/player_remote_data_source_provider.dart';
+import '../../../membership/presentation/membership_route_result.dart';
 import '../../domain/player_access_presentation.dart';
 import '../../domain/player_performance_policy.dart';
 import '../../domain/player_content.dart';
@@ -38,12 +41,12 @@ import '../widgets/player_playback_layer.dart';
 import '../widgets/player_subtitle_overlay.dart';
 import '../widgets/player_subtitle_sheet.dart';
 
-/// 播放器 UI 宿主：纵向 [PageView] + 顶层单例 Video surface + sheet。
+/// 鎾斁鍣?UI 瀹夸富锛氱旱鍚?[PageView] + 椤跺眰鍗曚緥 Video surface + sheet銆?
 ///
-/// 职责边界：
-/// - 本文件：布局、手势转发、局部 sheet（详情/分享/倍速）、解锁弹窗委托 AppModal。
-/// - [PlayerFeedEngine]：viewport settled、权益/播放/预加载/弹窗调度（不在 drag 路径调用）。
-/// - [PlayerPlaybackController]：media_kit 真实状态（position/play/source），不含 sheet 业务。
+/// 鑱岃矗杈圭晫锛?
+/// - 鏈枃浠讹細甯冨眬銆佹墜鍔胯浆鍙戙€佸眬閮?sheet锛堣鎯?鍒嗕韩/鍊嶉€燂級銆佽В閿佸脊绐楀鎵?AppModal銆?
+/// - [PlayerFeedEngine]锛歷iewport settled銆佹潈鐩?鎾斁/棰勫姞杞?寮圭獥璋冨害锛堜笉鍦?drag 璺緞璋冪敤锛夈€?
+/// - [PlayerPlaybackController]锛歮edia_kit 鐪熷疄鐘舵€侊紙position/play/source锛夛紝涓嶅惈 sheet 涓氬姟銆?
 class PlayerPage extends ConsumerStatefulWidget {
   const PlayerPage({
     required this.dramaId,
@@ -87,14 +90,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   late final AppModalService _modalService;
   AppShellBottomNavigationVisible? _shellChrome;
   PlaybackProgress? _resumeProgress;
+  WatchProgressDto? _startupRemoteWatchProgress;
+  String? _initialResumeEpisodeId;
   bool _isSeekDragging = false;
   bool _isModalOpen = false;
   bool _isAutoAdvancing = false;
   bool _isPressingPlaybackSurface = false;
   bool _isPageScrolling = false;
   bool _didRecordFirstBuild = false;
+  bool _allowRemoteResumeEpisodeSwitch = true;
   String? _activeCoinSheetItemId;
   String? _activeRechargeSheetItemId;
+  AppLifecycleState _previousLifecycleState = AppLifecycleState.resumed;
+  bool _wasPlayingBeforeInactive = false;
+  bool _resumePlaybackOnLifecycleResume = false;
   final ValueNotifier<double> _overlayOpacityNotifier = ValueNotifier<double>(
     1.0,
   );
@@ -157,53 +166,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (!mounted) {
         return;
       }
-      
-      // 从 watch progress API 获取观看进度（所有进入播放页的场景都需要检查是否有之前的进度）
-      if (widget.dramaId != null) {
-        try {
-          final dramaId = int.tryParse(widget.dramaId!);
-          if (dramaId != null) {
-            developer.log('PlayerPage: 准备获取 watch progress，dramaId=$dramaId');
-            final dataSource = ref.read(playerRemoteDataSourceProvider);
-            final watchProgress = await dataSource.fetchWatchProgress(
-              dramaId: dramaId,
-            );
-            developer.log('PlayerPage: 获取到 watch progress=$watchProgress');
-            if (watchProgress != null && mounted) {
-              // 构建与 PlayerFeedItem 一致的 id 格式：'single:{content.id}:{episode.id}'
-              final contentId = widget.dramaId;
-              final episodeId = watchProgress.episodeId.toString();
-              _resumeProgress = PlaybackProgress(
-                itemId: 'single:$contentId:$episodeId',
-                position: Duration(seconds: watchProgress.watchSecond),
-                duration: Duration(seconds: watchProgress.durationSecond),
-                updatedAt: DateTime.now(),
-              );
-              developer.log(
-                'PlayerPage: _resumeProgress 已设置：'
-                'itemId=${_resumeProgress!.itemId}, '
-                'position=${_resumeProgress!.position.inSeconds}s, '
-                'duration=${_resumeProgress!.duration.inSeconds}s, '
-                'canResume=${_resumeProgress!.canResume}',
-              );
-              developer.log(
-                'Loaded watch progress: itemId=${_resumeProgress!.itemId}, '
-                'position=${_resumeProgress!.position.inSeconds}s, '
-                'trigger=${widget.initialPlaybackTrigger}',
-              );
-              // 立即设置待恢复的播放进度，避免播放已开始才设置
-              _playbackController.setPendingResumeProgress(_resumeProgress);
-            }
-          }
-        } catch (e) {
-          developer.log('Failed to fetch watch progress: $e', error: e);
-        }
-      }
-      
-      if (!mounted) {
-        return;
-      }
-      
+      final remoteResumeFuture = _loadRemoteResumeProgress();
+
       final uiController = ref.read(
         playerUiControllerProvider(_sessionKey).notifier,
       );
@@ -214,22 +178,22 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (widget.feedMode == PlayerFeedMode.singleDrama) {
         _syncAutoImmersiveBlockers();
       }
-      
-      // 每次进入播放页时，刷新点赞状态
+
+      // 姣忔杩涘叆鎾斁椤垫椂锛屽埛鏂扮偣璧炵姸鎬?
       if (widget.dramaId != null) {
         final likeController = ref.read(
           playerLikeControllerProvider(widget.dramaId!).notifier,
         );
         unawaited(likeController.refreshLikeStatus());
       }
-      
-      await _loadFeedForTiming();
+
+      await _loadFeedForTiming(remoteResumeFuture: remoteResumeFuture);
     });
   }
 
   @override
   void dispose() {
-    // 上报观看退出事件
+    // 涓婃姤瑙傜湅閫€鍑轰簨浠?
     unawaited(_playbackController.reportWatchProgress(eventType: 4)); // 4: exit
     WidgetsBinding.instance.removeObserver(this);
     _modalService.dismissForSource(AppModalSource.player);
@@ -256,9 +220,34 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     ref
         .read(playerUiControllerProvider(_sessionKey).notifier)
         .onRouteVisibilityChanged(state == AppLifecycleState.resumed);
+    final previous = _previousLifecycleState;
+    _previousLifecycleState = state;
     if (state == AppLifecycleState.resumed) {
+      // 浠?inactive 鎭㈠锛堝涓嬫媺鐘舵€佹爮鍚庢敹鍥烇級锛岃嫢涔嬪墠姝ｅ湪鎾斁鍒欒嚜鍔ㄦ仮澶?
+      final shouldResumePlayback =
+          _resumePlaybackOnLifecycleResume ||
+          (previous == AppLifecycleState.inactive && _wasPlayingBeforeInactive);
+      _resumePlaybackOnLifecycleResume = false;
+      _wasPlayingBeforeInactive = false;
+      if (shouldResumePlayback) {
+        unawaited(_playbackController.resumeAfterVisibilityPause());
+      }
       return;
     }
+    // 璁板綍杩涘叆 inactive 鍓嶆槸鍚︽鍦ㄦ挱鏀撅紝鐢ㄤ簬鎭㈠鏃跺垽鏂槸鍚﹂渶瑕佽嚜鍔ㄦ挱鏀?
+    if (state == AppLifecycleState.inactive) {
+      _wasPlayingBeforeInactive = ref
+          .read(playerPlaybackControllerProvider(_sessionKey))
+          .isPlaying;
+      _resumePlaybackOnLifecycleResume =
+          _resumePlaybackOnLifecycleResume || _wasPlayingBeforeInactive;
+      unawaited(_playbackController.pause());
+      return;
+    }
+    // paused/detached锛氬垏鎹㈠埌鍚庡彴锛屽畬鍏ㄦ殏鍋滃苟绉婚櫎瑙嗛鐢婚潰浠ラ噴鏀捐祫婧?
+    _resumePlaybackOnLifecycleResume =
+        _resumePlaybackOnLifecycleResume ||
+        ref.read(playerPlaybackControllerProvider(_sessionKey)).isPlaying;
     unawaited(_playbackController.pauseForVisibility());
   }
 
@@ -271,15 +260,56 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     return switch (widget.feedMode) {
       PlayerFeedMode.singleDrama => PlayerFeedConfig.singleDrama(
         dramaId: widget.dramaId!,
-        episodeId: widget.episodeId!,
+        episodeId: _initialResumeEpisodeId ?? widget.episodeId!,
       ),
       PlayerFeedMode.forYou => const PlayerFeedConfig.forYou(),
     };
   }
 
-  Future<void> _loadFeedForTiming() async {
+  Future<void> _loadRemoteResumeProgress() async {
+    if (widget.feedMode != PlayerFeedMode.singleDrama ||
+        widget.dramaId == null ||
+        !ref.read(useRemotePlayerApiProvider)) {
+      return;
+    }
+    final dramaId = int.tryParse(widget.dramaId!);
+    if (dramaId == null) {
+      return;
+    }
+    try {
+      final watchProgress = await ref
+          .read(playerRemoteDataSourceProvider)
+          .fetchWatchProgress(dramaId: dramaId);
+      if (watchProgress == null || !mounted) {
+        return;
+      }
+      final remotePosition = Duration(seconds: watchProgress.watchSecond);
+      final remoteDuration = Duration(seconds: watchProgress.durationSecond);
+      final remoteCanResume =
+          remotePosition > Duration.zero &&
+          remoteDuration > Duration.zero &&
+          remotePosition < remoteDuration - const Duration(seconds: 2);
+      _startupRemoteWatchProgress = watchProgress;
+      if (remoteCanResume) {
+        _initialResumeEpisodeId = watchProgress.episodeId.toString();
+      }
+    } catch (error) {
+      developer.log('Failed to fetch watch progress: $error', error: error);
+    }
+  }
+
+  Future<void> _loadFeedForTiming({Future<void>? remoteResumeFuture}) async {
     final feedProvider = playerFeedControllerProvider(_sessionKey);
     final feedController = ref.read(feedProvider.notifier);
+    if (remoteResumeFuture != null) {
+      await remoteResumeFuture.timeout(
+        const Duration(milliseconds: 1800),
+        onTimeout: () {},
+      );
+      if (!mounted) {
+        return;
+      }
+    }
     final config = _feedConfig;
     final stopwatch = Stopwatch()..start();
     _playbackController.recordPlaybackTiming(
@@ -295,13 +325,26 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!mounted) {
       return;
     }
-    final feedState = ref.read(feedProvider);
+    var feedState = ref.read(feedProvider);
     if (feedState.currentItem != null) {
-      // 设置待恢复的播放进度（从播放历史进入时）
-      if (_resumeProgress != null) {
+      await _applyStartupRemoteResumeProgress(feedState);
+      if (!mounted) {
+        return;
+      }
+      feedState = ref.read(feedProvider);
+      if (feedState.currentItem == null) {
+        return;
+      }
+      // 璁剧疆寰呮仮澶嶇殑鎾斁杩涘害锛堜粠鎾斁鍘嗗彶杩涘叆鏃讹級
+      final playbackState = ref.read(
+        playerPlaybackControllerProvider(_sessionKey),
+      );
+      if (_resumeProgress != null &&
+          playbackState.currentItemId == null &&
+          playbackState.currentSource == null) {
         _playbackController.setPendingResumeProgress(_resumeProgress);
       }
-      
+
       _feedEngine.initializeViewport(
         index: feedState.currentIndex,
         itemId: feedState.currentItem!.id,
@@ -326,6 +369,115 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (widget.feedMode == PlayerFeedMode.singleDrama) {
       _syncAutoImmersiveBlockers();
     }
+  }
+
+  Future<void> _applyStartupRemoteResumeProgress(
+    PlayerFeedState feedState,
+  ) async {
+    final watchProgress = _startupRemoteWatchProgress;
+    if (watchProgress == null || feedState.items.isEmpty) {
+      return;
+    }
+    _startupRemoteWatchProgress = null;
+
+    final remoteItemIndex = _indexForRemoteWatchProgress(
+      feedState.items,
+      watchProgress,
+    );
+    if (remoteItemIndex == -1) {
+      developer.log(
+        'Skip remote watch progress: target episode missing '
+        'episodeId=${watchProgress.episodeId}, '
+        'episodeNo=${watchProgress.episodeNo}',
+      );
+      return;
+    }
+
+    var targetIndex = remoteItemIndex;
+    final remotePosition = Duration(seconds: watchProgress.watchSecond);
+    final remoteDuration = Duration(seconds: watchProgress.durationSecond);
+    final canResume =
+        remotePosition > Duration.zero &&
+        remoteDuration > Duration.zero &&
+        remotePosition < remoteDuration - const Duration(seconds: 2);
+    if (!canResume && remoteItemIndex + 1 < feedState.items.length) {
+      targetIndex = remoteItemIndex + 1;
+    }
+
+    final targetItem = feedState.items[targetIndex];
+    final progress = PlaybackProgress(
+      itemId: targetItem.id,
+      position: canResume ? remotePosition : Duration.zero,
+      duration: canResume ? remoteDuration : Duration.zero,
+      updatedAt: DateTime.now(),
+    );
+    _resumeProgress = progress;
+
+    if (progress.canResume) {
+      _playbackController.setPendingResumeProgress(progress);
+      unawaited(
+        ref.read(playbackProgressRepositoryProvider).saveProgress(progress),
+      );
+    }
+
+    final playbackState = ref.read(
+      playerPlaybackControllerProvider(_sessionKey),
+    );
+    final playbackHasStarted =
+        playbackState.currentItemId != null ||
+        playbackState.currentSource != null ||
+        playbackState.position > Duration.zero ||
+        playbackState.hasFirstFrame ||
+        playbackState.hasEnded;
+    final isStaleForCurrentPlayback =
+        progress.canResume &&
+        playbackState.currentItemId == progress.itemId &&
+        (playbackState.hasEnded ||
+            playbackState.position >
+                progress.position + const Duration(seconds: 1));
+    if (isStaleForCurrentPlayback) {
+      developer.log(
+        'Skip stale remote watch progress: '
+        'itemId=${progress.itemId}, '
+        'remote=${progress.position.inSeconds}s, '
+        'current=${playbackState.position.inSeconds}s, '
+        'hasEnded=${playbackState.hasEnded}',
+      );
+      return;
+    }
+    if (progress.canResume && feedState.currentItem?.id == progress.itemId) {
+      await _playbackController.restoreCurrentProgress(progress);
+      return;
+    }
+    if (!_allowRemoteResumeEpisodeSwitch ||
+        playbackHasStarted ||
+        targetIndex == feedState.currentIndex ||
+        _isPageScrolling) {
+      return;
+    }
+    ref
+        .read(playerFeedControllerProvider(_sessionKey).notifier)
+        .setCurrentIndex(targetIndex);
+    if (_pageController.hasClients) {
+      await _pageController.animateToPage(
+        targetIndex,
+        duration: _pageTransitionDuration,
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (mounted) {
+      _settleViewportAtIndex(targetIndex);
+    }
+  }
+
+  int _indexForRemoteWatchProgress(
+    List<PlayerFeedItem> items,
+    WatchProgressDto watchProgress,
+  ) {
+    return items.indexWhere((item) {
+      return item.episode.id == watchProgress.episodeId.toString() ||
+          item.episode.number == watchProgress.episodeNo;
+    });
   }
 
   @override
@@ -459,7 +611,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       },
     );
 
-    // Defer：feed 编程切页仍直接驱动 PageController（非用户 drag），见 _closeSheetAndSelectEpisode。
+    // Defer锛歠eed 缂栫▼鍒囬〉浠嶇洿鎺ラ┍鍔?PageController锛堥潪鐢ㄦ埛 drag锛夛紝瑙?_closeSheetAndSelectEpisode銆?
     ref.listen(feedProvider.select((state) => state.currentIndex), (
       previous,
       next,
@@ -520,8 +672,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         )) {
           return;
         }
-        // 上报观看完成事件
-        unawaited(playbackController.reportWatchProgress(eventType: 6)); // 6: complete
+        // 涓婃姤瑙傜湅瀹屾垚浜嬩欢
+        unawaited(
+          playbackController.reportWatchProgress(eventType: 6),
+        ); // 6: complete
         feedEngine.markEndedHandled(next.$1!);
         if (feedSnapshot.$5) {
           unawaited(_advanceToNextFromCompletion());
@@ -715,10 +869,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                       initialTab: PlayerDetailTab.synopsis,
                     );
                   },
+                  onMetaTap: () {
+                    _showDetailSheet(
+                      item.content,
+                      initialTab: PlayerDetailTab.synopsis,
+                    );
+                  },
                   onUnlockTap: () {
                     unawaited(_showPendingUnlockActionSheet());
                   },
-                  onOpenMembership: _openMembership,
+                  onOpenMembership: () {
+                    unawaited(_openMembership());
+                  },
                   showChromeOverlays: widget.feedMode == PlayerFeedMode.forYou
                       ? true
                       : showsChromeOverlays,
@@ -763,7 +925,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               ),
             ),
           ),
-        // 字幕叠加层
+        // 瀛楀箷鍙犲姞灞?
         PlayerSubtitleOverlay(sessionKey: _sessionKey),
       ],
     );
@@ -809,6 +971,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (notification is ScrollStartNotification ||
         notification is ScrollUpdateNotification) {
       if (notification is ScrollStartNotification) {
+        _allowRemoteResumeEpisodeSwitch = false;
         _feedEngine.onScrollStart();
         final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
         _playbackController.recordPlaybackUserAction(
@@ -980,6 +1143,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _goBackFromPlayer() async {
+    await _playbackController.persistCurrentProgress();
     await _playbackController.detachSurfaceForDispose();
     await WidgetsBinding.instance.endOfFrame;
     _playbackController.markSurfaceDetached();
@@ -999,9 +1163,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _retryPlaybackForItem(PlayerFeedItem item) async {
-    // 重试前重新获取历史播放进度，因为 _pendingResumeProgress
-    // 在第一次 playItem 时已经被消费并清空（第 737 行）
-    if (widget.feedMode == PlayerFeedMode.singleDrama && widget.dramaId != null) {
+    // 閲嶈瘯鍓嶉噸鏂拌幏鍙栧巻鍙叉挱鏀捐繘搴︼紝鍥犱负 _pendingResumeProgress
+    // 鍦ㄧ涓€娆?playItem 鏃跺凡缁忚娑堣垂骞舵竻绌猴紙绗?737 琛岋級
+    if (widget.feedMode == PlayerFeedMode.singleDrama &&
+        widget.dramaId != null) {
       try {
         final dramaId = int.tryParse(widget.dramaId!);
         if (dramaId != null) {
@@ -1010,7 +1175,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             dramaId: dramaId,
           );
           if (watchProgress != null && mounted) {
-            // 重新构建与 PlayerFeedItem 一致的 id 格式：'single:{content.id}:{episode.id}'
+            // 閲嶆柊鏋勫缓涓?PlayerFeedItem 涓€鑷寸殑 id 鏍煎紡锛?single:{content.id}:{episode.id}'
             final contentId = widget.dramaId!;
             final episodeId = watchProgress.episodeId.toString();
             _resumeProgress = PlaybackProgress(
@@ -1021,13 +1186,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             );
             _playbackController.setPendingResumeProgress(_resumeProgress);
             developer.log(
-              '_retryPlaybackForItem: 重新设置恢复进度 - '
+              '_retryPlaybackForItem: 閲嶆柊璁剧疆鎭㈠杩涘害 - '
               'position=${_resumeProgress!.position.inSeconds}s',
             );
           }
         }
       } catch (e) {
-        developer.log('_retryPlaybackForItem: 获取历史进度失败 - $e');
+        developer.log('_retryPlaybackForItem: 鑾峰彇鍘嗗彶杩涘害澶辫触 - $e');
       }
     }
 
@@ -1092,7 +1257,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
   }
 
-  // TODO(engine): 选集编程跳转仍由 Page 驱动 PageController。
+  // TODO(engine): 閫夐泦缂栫▼璺宠浆浠嶇敱 Page 椹卞姩 PageController銆?
   void _closeSheetAndSelectEpisode(
     BuildContext sheetContext,
     PlayerEpisode episode,
@@ -1101,6 +1266,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!mounted) {
       return;
     }
+    _allowRemoteResumeEpisodeSwitch = false;
     final targetIndex = ref
         .read(playerFeedControllerProvider(_sessionKey).notifier)
         .selectEpisode(episode);
@@ -1123,11 +1289,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }) {
     _isModalOpen = true;
     _syncAutoImmersiveBlockers();
-    
-    // 重新获取完整的 content（包含推荐列表）
+
+    // 閲嶆柊鑾峰彇瀹屾暣鐨?content锛堝寘鍚帹鑽愬垪琛級
     final contentRepository = ref.read(playerContentRepositoryProvider);
-    final contentFuture = contentRepository.getPlayerContent(dramaId: content.id);
-    
+    final contentFuture = contentRepository.getPlayerContent(
+      dramaId: content.id,
+    );
+
     return showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -1261,7 +1429,41 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     await _presentSheetIntent(context, currentItem, intent);
   }
 
-  void _openMembership() {
-    context.push(RoutePaths.membership);
+  Future<void> _openMembership() async {
+    final item = ref
+        .read(playerFeedControllerProvider(_sessionKey))
+        .currentItem;
+    final result = await context.push<MembershipRouteResult>(
+      RoutePaths.membership,
+    );
+    if (!mounted || result != MembershipRouteResult.purchaseCompleted) {
+      return;
+    }
+    await _continueCurrentEpisodeAfterMembershipSuccess(item);
+  }
+
+  Future<void> _continueCurrentEpisodeAfterMembershipSuccess(
+    PlayerFeedItem? item,
+  ) async {
+    final currentItem =
+        item ?? ref.read(playerFeedControllerProvider(_sessionKey)).currentItem;
+    if (currentItem == null) {
+      return;
+    }
+    final flowResult = await _feedEngine.continueAfterRechargeSuccess(
+      item: currentItem,
+      grantedCoinPackage: false,
+      grantedMembershipPackage: true,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (flowResult.didActivateMembership) {
+      ref
+          .read(appToastProvider)
+          .success(context.l10n.playerMembershipActivated);
+      return;
+    }
+    await _presentSheetIntent(context, currentItem, flowResult.sheetIntent);
   }
 }

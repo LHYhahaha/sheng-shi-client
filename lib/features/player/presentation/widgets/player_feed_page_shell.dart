@@ -36,6 +36,7 @@ class PlayerFeedPageShell extends ConsumerWidget {
     required this.onMoreTap,
     required this.onUnlockTap,
     required this.onOpenMembership,
+    this.onMetaTap,
     this.showChromeOverlays = true,
     this.chromeOverlayFadeDuration = Duration.zero,
     this.useSingleDramaChromeTap = false,
@@ -63,6 +64,7 @@ class PlayerFeedPageShell extends ConsumerWidget {
   final VoidCallback onMoreTap;
   final VoidCallback onUnlockTap;
   final VoidCallback onOpenMembership;
+  final VoidCallback? onMetaTap;
   final bool showChromeOverlays;
   final Duration chromeOverlayFadeDuration;
   final bool useSingleDramaChromeTap;
@@ -141,6 +143,8 @@ class PlayerFeedPageShell extends ConsumerWidget {
                   accessPresentation == PlayerAccessPresentationState.playable
               ? PlayerSeekBarConsumer(
                   sessionKey: sessionKey,
+                  itemId: item.id,
+                  fallbackDuration: item.episode.duration,
                   thumbnailAssetPath: item.content.posterAssetPath,
                   onSeekStart: onSeekStart,
                   onSeekUpdate: onSeekUpdate,
@@ -160,11 +164,13 @@ class PlayerFeedPageShell extends ConsumerWidget {
           onEpisodesTap: onEpisodesTap,
           onShareTap: onShareTap,
           onMoreTap: onMoreTap,
+          onMetaTap: onMetaTap,
           onLikeTap: isSettledPage
               ? () {
                   ref
-                      .read(playerLikeControllerProvider(item.content.id)
-                          .notifier)
+                      .read(
+                        playerLikeControllerProvider(item.content.id).notifier,
+                      )
                       .toggleLike();
                 }
               : () {},
@@ -172,9 +178,9 @@ class PlayerFeedPageShell extends ConsumerWidget {
           unlockLabel: lockedActionLabel,
           onUnlockTap: isLockedSettledPage
               ? (accessPresentation ==
-                      PlayerAccessPresentationState.lockedMembership
-                  ? onOpenMembership
-                  : onUnlockTap)
+                        PlayerAccessPresentationState.lockedMembership
+                    ? onOpenMembership
+                    : onUnlockTap)
               : () {},
           forYouLayout: forYouLayout,
           isLiked: likeState.isLiked,

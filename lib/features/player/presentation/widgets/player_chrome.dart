@@ -32,7 +32,8 @@ class PlayerChrome extends StatefulWidget {
     required this.onShareTap,
     required this.onMoreTap,
     required this.onUnlockTap,
-    required this.onLikeTap,
+    this.onMetaTap,
+    this.onLikeTap = _noop,
     this.showUnlockButton = false,
     this.unlockLabel,
     this.overlayOpacity = 1.0,
@@ -71,6 +72,7 @@ class PlayerChrome extends StatefulWidget {
   final VoidCallback onEpisodesTap;
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
+  final VoidCallback? onMetaTap;
   final VoidCallback onUnlockTap;
   final VoidCallback onLikeTap;
   final bool showUnlockButton;
@@ -124,6 +126,8 @@ class PlayerChrome extends StatefulWidget {
   State<PlayerChrome> createState() => _PlayerChromeState();
 }
 
+void _noop() {}
+
 class _PlayerChromeState extends State<PlayerChrome> {
   bool _showPauseFeedback = false;
   Timer? _feedbackTimer;
@@ -143,6 +147,8 @@ class _PlayerChromeState extends State<PlayerChrome> {
   VoidCallback get onShareTap => widget.onShareTap;
 
   VoidCallback get onMoreTap => widget.onMoreTap;
+  
+  VoidCallback? get onMetaTap => widget.onMetaTap;
 
   VoidCallback get onUnlockTap => widget.onUnlockTap;
 
@@ -292,6 +298,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
           overlayOpacityListenable: overlayOpacityListenable,
           showChromeOverlays: showChromeOverlays,
           chromeOverlayFadeDuration: chromeOverlayFadeDuration,
+          onTap: onMetaTap,
         ),
         if (forYouLayout) ...[
           if (!showUnlockButton)
@@ -535,6 +542,7 @@ class _PlayerMetaLayer extends StatelessWidget {
     required this.overlayOpacityListenable,
     required this.showChromeOverlays,
     required this.chromeOverlayFadeDuration,
+    this.onTap,
   });
 
   final PlayerContent content;
@@ -544,6 +552,7 @@ class _PlayerMetaLayer extends StatelessWidget {
   final ValueListenable<double>? overlayOpacityListenable;
   final bool showChromeOverlays;
   final Duration chromeOverlayFadeDuration;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -566,6 +575,7 @@ class _PlayerMetaLayer extends StatelessWidget {
               child: PlayerBottomMeta(
                 content: content,
                 showChevron: !forYouLayout,
+                onTap: onTap,
               ),
             ),
           ),
@@ -916,17 +926,20 @@ class _PlayerActionRailContent extends ConsumerWidget {
         const SizedBox(height: 18),
         _ActionItem(
           icon: Icons.layers_rounded,
-          imageIcon: Image.asset("assets/images/player/episodes.png",height: 28),
+          imageIcon: Image.asset(
+            "assets/images/player/episodes.png",
+            height: 28,
+          ),
           label: context.l10n.playerEpisodes,
           onTap: onEpisodesTap,
         ),
-        const SizedBox(height: 18),
-        _ActionItem(
-          icon: Icons.reply_rounded,
-          label: context.l10n.playerShare,
-          onTap: onShareTap,
-          flipIcon: true,
-        ),
+        // const SizedBox(height: 18),
+        // _ActionItem(
+        //   icon: Icons.reply_rounded,
+        //   label: context.l10n.playerShare,
+        //   onTap: onShareTap,
+        //   flipIcon: true,
+        // ),
         // const SizedBox(height: 18),
         // _ActionItem(
         //   icon: Icons.more_horiz_rounded,
@@ -973,58 +986,82 @@ class PlayerBottomMeta extends StatelessWidget {
   const PlayerBottomMeta({
     required this.content,
     this.showChevron = true,
+    this.onTap,
     super.key,
   });
 
   final PlayerContent content;
   final bool showChevron;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          showChevron ? '${content.playTitle} >' : content.playTitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            height: 20 / 16,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            showChevron ? '${content.playTitle} >' : content.playTitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              height: 20 / 16,
+            ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Text.rich(
-          TextSpan(
-            text: _truncate(content.synopsis, 62),
-            children: [
-              TextSpan(
-                text: ' ${context.l10n.playerMore}',
-                style: const TextStyle(color: Colors.white),
-              ),
-            ],
+          const SizedBox(height: 6),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final textStyle = TextStyle(
+                color: Colors.white.withValues(alpha: 0.7),
+                fontSize: 14,
+                height: 18 / 14,
+              );
+              
+              // 检测文本是否超过2行
+              final textPainter = TextPainter(
+                text: TextSpan(text: content.synopsis, style: textStyle),
+                maxLines: 2,
+                textDirection: TextDirection.ltr,
+              );
+              textPainter.layout(maxWidth: constraints.maxWidth);
+
+              // 计算完整文本高度
+              final fullTextPainter = TextPainter(
+                text: TextSpan(text: content.synopsis, style: textStyle),
+                textDirection: TextDirection.ltr,
+              );
+              fullTextPainter.layout(maxWidth: constraints.maxWidth);
+
+              // 判断是否溢出
+              final isOverflowing = fullTextPainter.height > textPainter.height + 0.1;
+              
+              return Text.rich(
+                TextSpan(
+                  text: content.synopsis,
+                  children: isOverflowing
+                      ? [
+                          TextSpan(
+                            text: ' ${context.l10n.playerMore}',
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ]
+                      : null,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: textStyle,
+              );
+            },
           ),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.7),
-            fontSize: 14,
-            height: 18 / 14,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
-  }
-
-  String _truncate(String value, int maxLength) {
-    if (value.length <= maxLength) {
-      return value;
-    }
-
-    return '${value.substring(0, maxLength)}...';
   }
 }
 

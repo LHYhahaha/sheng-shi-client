@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/cupertino.dart';
 
 import '../auth/api_session_auth_handler.dart';
 import '../config/app_environment.dart';
@@ -30,7 +31,7 @@ class ApiClient {
     ApiRequestContext? requestContext,
     ApiRequestContextReader? requestContextReader,
     ApiSessionAuthHandler? sessionAuthHandler,
-  }) : _dio = dio ?? Dio(_defaultOptions),
+  }) : _dio = dio ?? Dio(defaultOptions),
        _requestContextReader =
            requestContextReader ??
            (() => requestContext ?? const ApiRequestContext.test()),
@@ -39,6 +40,10 @@ class ApiClient {
       InterceptorsWrapper(
         onRequest: (options, handler) {
           final context = _readRequestContext();
+          
+          // 验证 deviceId 是否有效，拒绝使用 fallback 值发送请求
+          _validateDeviceId(context.deviceId, options, handler);
+          
           options.headers.addAll(context.toBaseHeaders());
 
           if (_hasJsonBody(options)) {
@@ -118,6 +123,49 @@ class ApiClient {
   }
 
   ApiRequestContext _readRequestContext() => _requestContextReader();
+
+  /// 验证 deviceId 是否有效，拒绝使用 fallback 值发送请求
+  void _validateDeviceId(
+    String deviceId,
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) {
+    // 检查是否使用了 fallback 值
+    if (deviceId == 'install-id-pending') {
+      debugPrint(
+        '[ApiClient] ❌ Device-Id validation failed: using fallback value "$deviceId". '
+        'Request to ${options.path} will be rejected.',
+      );
+      handler.reject(
+        DioException(
+          requestOptions: options,
+          type: DioExceptionType.unknown,
+          error: StateError(
+            'Device-Id not ready. Request rejected to prevent using invalid Device-Id. '
+            'Value: "$deviceId". Ensure installIdProvider is loaded before making API calls.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // 验证是否为有效的 UUID 格式（简单检查）
+    if (!_isValidUuid(deviceId) && deviceId != 'test-install-id') {
+      debugPrint(
+        '[ApiClient] ⚠️ Device-Id might be invalid: "$deviceId". '
+        'Expected UUID format. Request to ${options.path} will proceed but may cause issues.',
+      );
+    }
+  }
+
+  /// 简单的 UUID 格式验证（UUID v4: 8-4-4-4-12 十六进制字符）
+  bool _isValidUuid(String value) {
+    final uuidRegex = RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+      caseSensitive: false,
+    );
+    return uuidRegex.hasMatch(value);
+  }
 
   Future<T> get<T>(
     String path, {
@@ -263,14 +311,18 @@ class ApiClient {
           continue;
         }
         throw apiError;
-      } catch (error, stackTrace) {
-        throw ApiException(
-          code: ApiErrorCode.unknown,
-          message: 'Unexpected client error.',
-          cause: error,
-          stackTrace: stackTrace,
-        );
-      }
+    } catch (error, stackTrace) {
+      debugPrint('[ApiClient] 未知错误: $error');
+      debugPrint('[ApiClient] 错误类型: ${error.runtimeType}');
+      debugPrint('[ApiClient] 堆栈: $stackTrace');
+      
+      throw ApiException(
+        code: ApiErrorCode.unknown,
+        message: 'Unexpected client error.',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
     }
   }
 
@@ -425,7 +477,7 @@ class ApiClient {
     return null;
   }
 
-  static BaseOptions get _defaultOptions {
+  static BaseOptions get defaultOptions {
     return BaseOptions(
       baseUrl: AppConfig.current.apiBaseUrl.toString(),
       connectTimeout: const Duration(seconds: 15),
