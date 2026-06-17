@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -295,6 +296,30 @@ class _StoreBody extends StatelessWidget {
           const SizedBox(height: 4),
           StoreTipsSection(tips: tips),
         ],
+        const SizedBox(height: 12),
+        Center(
+          child: RichText(
+            text: TextSpan(
+              style: TextStyle(
+                fontSize: 11,
+                color: Color(0xFFFFFFFF).withValues(alpha: 0.5),
+              ),
+              children: [
+                TextSpan(
+                  text: context.l10n.appCommonLegalPrivacyPolicy,
+                  recognizer: TapGestureRecognizer()
+                    ..onTap = () => context.push(RoutePaths.privacyPolicy),
+                ),
+                const TextSpan(text: '    ·    '),
+                TextSpan(
+                  text: context.l10n.appCommonLegalTermsOfUse,
+                  recognizer: TapGestureRecognizer()
+                    ..onTap = () => context.push(RoutePaths.userAgreement),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }

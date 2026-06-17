@@ -8,13 +8,14 @@ import 'package:flutter_swiper_plus/flutter_swiper_plus.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../app/shell/app_shell.dart';
 import '../../../../features/drama/domain/drama.dart';
+import '../../../../features/entitlement/application/entitlement_controller.dart';
 import '../../../../features/player/application/player_startup_preload_controller.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/media/media_resource.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
-import '../../application/home_feed_controller.dart';
 import '../../application/home_data_controller.dart';
 import '../../application/home_remote_data_provider.dart';
 
@@ -29,6 +30,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   final _scrollController = ScrollController();
   late final PlayerStartupPreloadController _startupPreloadController;
   int _remoteDataSelectedIndex = 0; // 远程数据的选中分类索引
+  int _lastScrollToTopRequest = 0; // 跟踪上次的滚动请求计数
+  ProviderSubscription<int>? _scrollToTopListener; // 监听滚动请求的订阅
 
   List image = [
     "assets/images/home/picture1.jpg",
@@ -45,12 +48,27 @@ class _HomePageState extends ConsumerState<HomePage> {
       playerStartupPreloadControllerProvider.notifier,
     );
     _scrollController.addListener(_onScroll);
+
+    // 监听滚动到顶部的请求
+    _scrollToTopListener = ref.listenManual(
+      homeScrollToTopRequestProvider,
+      (previous, next) {
+        if (next > _lastScrollToTopRequest) {
+          _lastScrollToTopRequest = next;
+          _scrollToTop();
+        }
+      },
+    );
+
     // 首页 remote 数据会在 HomeDataController 中监听 AuthState 自动加载
     // 不需要在这里手动加载 mock 数据，HomeFeedController 会根据 remote 数据的存在情况自动决定
   }
 
   @override
   void dispose() {
+    // 取消滚动请求的监听
+    _scrollToTopListener?.close();
+
     // Home 离开时只取消 startup preload，不释放播放器页 playback preload。
     // 两条预热线路作用域不同，共享释放会导致进入播放器后的相邻预热被首页 dispose 误杀。
     unawaited(_startupPreloadController.cancel(reason: 'home dispose'));
@@ -82,19 +100,9 @@ class _HomePageState extends ConsumerState<HomePage> {
       return;
     }
 
-    final feedState = ref.read(homeFeedControllerProvider);
-    if (!feedState.canLoadMore || !_scrollController.hasClients) {
-      return;
-    }
-
-    final position = _scrollController.position;
-    if (position.extentAfter < 500) {
-      ref.read(homeFeedControllerProvider.notifier).loadMore();
-    }
   }
 
   void _selectTab(int index) {
-    final feedState = ref.read(homeFeedControllerProvider);
     final remoteData = ref.read(homeRemoteDataProvider);
 
     // 如果使用远程数据，更新选中索引并滚动到顶部
@@ -121,21 +129,17 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
 
     // 使用 mock 数据的原有逻辑
-    if (feedState.selectedIndex == index ||
-        index >= feedState.categories.length) {
-      return;
-    }
+  }
 
-    unawaited(_startupPreloadController.cancel(reason: 'home category switch'));
+  /// 滚动到页面顶部
+  void _scrollToTop() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
         0,
-        duration: const Duration(milliseconds: 240),
+        duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
     }
-
-    ref.read(homeFeedControllerProvider.notifier).selectCategory(index);
   }
 
   @override
@@ -145,59 +149,36 @@ class _HomePageState extends ConsumerState<HomePage> {
     final homeDataState = ref.watch(homeDataControllerProvider);
 
     // 监听 mock 数据
-    final feedState = ref.watch(homeFeedControllerProvider);
 
     // 决定使用哪个数据源：优先使用远程数据，降级到 mock 数据
-    final useRemoteData = remoteData != null && !homeDataState.isLoading;
-    final categories = useRemoteData
-        ? remoteData.categories
-        : feedState.categories;
-    final selectedIndex = useRemoteData && categories.isNotEmpty
+    final categories = remoteData?.categories ?? const <DramaCategory>[];
+    final selectedIndex = categories.isNotEmpty
         ? math.min(_remoteDataSelectedIndex, categories.length - 1)
-        : feedState.selectedIndex;
-    if (useRemoteData && selectedIndex != _remoteDataSelectedIndex) {
+        : 0;
+    if (selectedIndex != _remoteDataSelectedIndex) {
       _remoteDataSelectedIndex = selectedIndex;
     }
 
     // 获取当前选中分类的剧卡列表
-    final items = useRemoteData
-        ? remoteData.getDramasForCategoryIndex(selectedIndex)
-        : feedState.items;
-    final selectedRemoteTab = useRemoteData
-        ? remoteData.getTabForCategoryIndex(selectedIndex)
-        : null;
+    final items =
+        remoteData?.getDramasForCategoryIndex(selectedIndex) ?? const <Drama>[];
+    final selectedRemoteTab = remoteData?.getTabForCategoryIndex(
+      selectedIndex,
+    );
 
     // 预热逻辑
-    ref.listen(homeFeedControllerProvider, (previous, next) {
-      if (!useRemoteData) {
-        final shouldPreload =
-            !next.isInitialLoading &&
-            next.initialError == null &&
-            next.items.isNotEmpty &&
-            (previous == null ||
-                previous.isInitialLoading ||
-                previous.items != next.items);
-        if (!shouldPreload) {
-          return;
-        }
-        unawaited(
-          _startupPreloadController.preloadFirstPlayableDrama(next.items.first),
-        );
-      }
-    });
-
     // 远程数据预热
-    if (useRemoteData && items.isNotEmpty) {
+    if (items.isNotEmpty) {
       unawaited(
         _startupPreloadController.preloadFirstPlayableDrama(items.first),
       );
     }
 
     // 判断加载状态
-    final isLoading = useRemoteData
-        ? homeDataState.isLoading
-        : feedState.isInitialLoading;
-    final error = useRemoteData ? homeDataState.error : feedState.initialError;
+    final isLoading =
+        homeDataState.isLoading ||
+        (remoteData == null && homeDataState.error == null);
+    final error = homeDataState.error;
     final isEmpty = items.isEmpty;
 
     return Scaffold(
@@ -206,33 +187,29 @@ class _HomePageState extends ConsumerState<HomePage> {
         bottom: false,
         child: RefreshIndicator(
           onRefresh: () async {
-            if (useRemoteData) {
-              final tab = selectedRemoteTab;
-              if (tab == null) {
-                await ref.read(homeDataControllerProvider.notifier).retry();
-              } else {
-                final selectedTabId = tab.id;
-                await ref
-                    .read(homeDataControllerProvider.notifier)
-                    .refreshHomeData();
-                if (!mounted) {
-                  return;
-                }
-
-                final refreshedRemoteData = ref.read(homeRemoteDataProvider);
-                final nextIndex =
-                    refreshedRemoteData?.tabs.indexWhere(
-                      (tab) => tab.id == selectedTabId,
-                    ) ??
-                    -1;
-                if (nextIndex != -1 && nextIndex != _remoteDataSelectedIndex) {
-                  setState(() {
-                    _remoteDataSelectedIndex = nextIndex;
-                  });
-                }
-              }
+            final tab = selectedRemoteTab;
+            if (tab == null) {
+              await ref.read(homeDataControllerProvider.notifier).retry();
             } else {
-              await ref.read(homeFeedControllerProvider.notifier).loadInitial();
+              final selectedTabId = tab.id;
+              await ref
+                  .read(homeDataControllerProvider.notifier)
+                  .refreshHomeData();
+              if (!mounted) {
+                return;
+              }
+
+              final refreshedRemoteData = ref.read(homeRemoteDataProvider);
+              final nextIndex =
+                  refreshedRemoteData?.tabs.indexWhere(
+                    (tab) => tab.id == selectedTabId,
+                  ) ??
+                  -1;
+              if (nextIndex != -1 && nextIndex != _remoteDataSelectedIndex) {
+                setState(() {
+                  _remoteDataSelectedIndex = nextIndex;
+                });
+              }
             }
           },
           child: CustomScrollView(
@@ -243,7 +220,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
                   child: _HomeTitleBar(
-                    onMembershipTap: () => context.push(RoutePaths.membership),
+                    onMembershipTap: () => context.push(RoutePaths.membershipLocation(returnToProfile: true)),
                   ),
                 ),
               ),
@@ -253,13 +230,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                   selectedTab: selectedIndex,
                   tabs: categories,
                   onTabChanged: (index) {
-                    if (useRemoteData) {
                       // 远程数据：直接更新选中索引
                       _selectTab(index);
-                    } else {
                       // mock 数据：使用原有逻辑
-                      _selectTab(index);
-                    }
                   },
                 ),
               ),
@@ -301,13 +274,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       unawaited(
                         _startupPreloadController.cancel(reason: 'home retry'),
                       );
-                      if (useRemoteData) {
-                        ref.read(homeDataControllerProvider.notifier).retry();
-                      } else {
-                        ref
-                            .read(homeFeedControllerProvider.notifier)
-                            .loadInitial();
-                      }
+                      ref.read(homeDataControllerProvider.notifier).retry();
                     },
                   ),
                 )
@@ -378,25 +345,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
               SliverToBoxAdapter(
                 child: _HomeFeedFooter(
-                  isLoading: useRemoteData
-                      ? homeDataState.isLoadingMore
-                      : feedState.isLoadingMore,
-                  hasMore: useRemoteData
-                      ? selectedRemoteTab?.hasMoreDramas == true
-                      : feedState.nextPageToken != null,
-                  error: useRemoteData
-                      ? homeDataState.loadMoreError
-                      : feedState.loadMoreError,
+                  isLoading: homeDataState.isLoadingMore,
+                  hasMore: selectedRemoteTab?.hasMoreDramas == true,
+                  error: homeDataState.loadMoreError,
                   onRetry: () {
-                    if (useRemoteData) {
-                      final tab = selectedRemoteTab;
-                      if (tab != null) {
-                        ref
-                            .read(homeDataControllerProvider.notifier)
-                            .loadMoreTab(tab.id);
-                      }
-                    } else {
-                      ref.read(homeFeedControllerProvider.notifier).loadMore();
+                    final tab = selectedRemoteTab;
+                    if (tab != null) {
+                      ref
+                          .read(homeDataControllerProvider.notifier)
+                          .loadMoreTab(tab.id);
                     }
                   },
                 ),
@@ -409,13 +366,15 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 }
 
-class _HomeTitleBar extends StatelessWidget {
+class _HomeTitleBar extends ConsumerWidget {
   const _HomeTitleBar({required this.onMembershipTap});
 
   final VoidCallback onMembershipTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isMember = ref.watch(entitlementControllerProvider).isMember;
+
     return Row(
       children: [
         Expanded(
@@ -429,14 +388,16 @@ class _HomeTitleBar extends StatelessWidget {
             ),
           ),
         ),
-        GestureDetector(
-          key: const ValueKey('home_vip_entry'),
-          onTap: onMembershipTap,
-          child: const Padding(
-            padding: EdgeInsets.only(right: 1),
-            child: _VipCrown(),
+        // 如果是会员则隐藏VIP入口
+        if (!isMember)
+          GestureDetector(
+            key: const ValueKey('home_vip_entry'),
+            onTap: onMembershipTap,
+            child: const Padding(
+              padding: EdgeInsets.only(right: 1),
+              child: _VipCrown(),
+            ),
           ),
-        ),
       ],
     );
   }

@@ -20,6 +20,7 @@ class MyListItem {
     MediaResource? coverResource,
     this.episodeId,
     this.watchSecond,
+    this.dramaStatus,
   }) : _coverResource = coverResource;
 
   /// My list 默认封面兜底。
@@ -68,4 +69,9 @@ class MyListItem {
 
   /// 观看时间。
   final int? watchSecond;
+
+  /// 短剧在架状态。
+  ///
+  /// 1: 已上架，2: 已下架。已下架的短剧点击需提示用户并禁止跳转。
+  final int? dramaStatus;
 }

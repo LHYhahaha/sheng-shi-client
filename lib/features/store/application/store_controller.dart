@@ -121,6 +121,7 @@ class StoreController extends Notifier<StoreState> {
   static const _packageName = 'com.yushi.drama.client';
   static const _coinProductType = 1;
   static const _vipProductType = 2;
+  static const _purchaseResultTimeout = Duration(seconds: 30);
 
   int _generation = 0;
   int _purchaseGeneration = 0;
@@ -300,7 +301,12 @@ class StoreController extends Notifier<StoreState> {
 
       final completer = Completer<PurchaseDetails?>();
       sub = iapService.purchaseStream.listen((details) {
-        if (details.productID == productDetails!.id && !completer.isCompleted) {
+        final isCurrentProduct = details.productID == productDetails!.id;
+        final isCancellation =
+            details.status.name == 'canceled' ||
+            details.status == PurchaseStatus.error &&
+                _isUserCancelledPurchase(details);
+        if ((isCurrentProduct || isCancellation) && !completer.isCompleted) {
           completer.complete(details);
         }
       });
@@ -311,15 +317,19 @@ class StoreController extends Notifier<StoreState> {
       final started = await iapService.buyProduct(
         product: productDetails,
         isConsumable: package.isCoinPackage,
+        applicationUserName: iapService.buildOrderApplicationUserName(
+          orderNo: paymentOrder.orderNo,
+          clientOrderNo: paymentOrder.clientOrderNo,
+        ),
       );
       if (!started) {
         throw Exception('Failed to launch IAP purchase');
       }
 
       final purchaseDetails = await completer.future.timeout(
-        const Duration(minutes: 5),
+        _purchaseResultTimeout,
         onTimeout: () {
-          debugPrint('[Store] purchase timed out.');
+          debugPrint('[Store] purchase result timed out.');
           return null;
         },
       );
@@ -328,7 +338,8 @@ class StoreController extends Notifier<StoreState> {
         return;
       }
       if (purchaseDetails == null) {
-        throw Exception('Purchase timeout or cancelled');
+        _markPurchaseCancelled(package.id);
+        return;
       }
 
       if (purchaseDetails.status == PurchaseStatus.pending) {
@@ -336,10 +347,14 @@ class StoreController extends Notifier<StoreState> {
         return;
       }
       if (purchaseDetails.status == PurchaseStatus.error) {
+        if (_isUserCancelledPurchase(purchaseDetails)) {
+          _markPurchaseCancelled(package.id);
+          return;
+        }
         throw Exception('Purchase failed: ${purchaseDetails.error}');
       }
       if (purchaseDetails.status.name == 'canceled') {
-        state = state.copyWith(purchaseStatus: StorePurchaseStatus.cancelled);
+        _markPurchaseCancelled(package.id);
         return;
       }
       if (purchaseDetails.status != PurchaseStatus.purchased &&
@@ -398,6 +413,26 @@ class StoreController extends Notifier<StoreState> {
       return;
     }
     state = state.copyWith(purchaseStatus: StorePurchaseStatus.cancelled);
+  }
+
+  void _markPurchaseCancelled(String packageId) {
+    if (state.confirmationPackageId != packageId) {
+      return;
+    }
+    state = state.copyWith(
+      purchaseStatus: StorePurchaseStatus.cancelled,
+      clearConfirmation: true,
+      clearError: true,
+    );
+  }
+
+  bool _isUserCancelledPurchase(PurchaseDetails details) {
+    final code = details.error?.code.toLowerCase();
+    final message = details.error?.message.toLowerCase();
+    return code?.contains('cancel') == true ||
+        code?.contains('user') == true ||
+        message?.contains('cancel') == true ||
+        message?.contains('user') == true;
   }
 
   bool _isCurrent(int generation) => generation == _generation;

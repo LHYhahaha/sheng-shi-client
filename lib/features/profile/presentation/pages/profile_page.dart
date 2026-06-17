@@ -75,8 +75,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     
     final state = profileState.copyWith(
       isLoggedIn: hasAccountInfo,
-      userId: authUser?.id ?? userInfoState.showId ?? profileState.userId,
-      showId: authUser?.showId ?? userInfoState.showId ?? profileState.showId,
+      userId: authUser?.id ?? userInfoState.showId,
+      showId: authUser?.showId ?? userInfoState.showId,
       nickname: authUser?.nickname ?? userInfoState.nickname,
       avatarAssetPath:
           authUser?.avatarAssetPath ?? profileState.avatarAssetPath,
@@ -93,7 +93,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       if (authState.session.isGuest) {
         authModalCoordinator.showLogin(context);
       } else {
-        context.push(RoutePaths.account);
+        // context.push(RoutePaths.account);
       }
     }
 
@@ -117,7 +117,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             const SizedBox(height: 21),
             ProfileMembershipCard(
               membership: state.membership,
-              onTap: () => context.push(RoutePaths.membership),
+              onTap: () => context.push(RoutePaths.membershipLocation(returnToProfile: true)),
             ),
             const SizedBox(height: 12),
             ProfileCoinsCard(

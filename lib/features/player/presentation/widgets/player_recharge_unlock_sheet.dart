@@ -2,7 +2,11 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../../app/router/route_paths.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
@@ -167,7 +171,8 @@ class _PlayerRechargeUnlockSheetState
     final navigator = Navigator.of(context);
 
     await controller.unlockWithCoin(
-      autoUnlockNext: false, // 可以根据实际需求设置
+      autoUnlockNext: false,
+      // 可以根据实际需求设置
       coin: state.offer?.requiredCoins ?? 0,
       dramaId: widget.dramaId,
       episodeNo: widget.episodeNo,
@@ -351,6 +356,30 @@ class _OfferContent extends ConsumerWidget {
                     height: 18 / 12,
                   ),
                 ),
+                const SizedBox(height: 8),
+                RichText(
+                  text: TextSpan(
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.white.withValues(alpha: 0.42),
+                    ),
+                    children: [
+                      TextSpan(
+                        text: context.l10n.appCommonLegalPrivacyPolicy,
+                        recognizer: TapGestureRecognizer()
+                          ..onTap = () =>
+                              context.push(RoutePaths.privacyPolicy),
+                      ),
+                      const TextSpan(text: '    ·    '),
+                      TextSpan(
+                        text: context.l10n.appCommonLegalTermsOfUse,
+                        recognizer: TapGestureRecognizer()
+                          ..onTap = () =>
+                              context.push(RoutePaths.userAgreement),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -482,7 +511,9 @@ class _RechargeHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final coinBalance = ref.watch(entitlementControllerProvider).coinBalance;
+    final entitlementState = ref.watch(entitlementControllerProvider);
+    final totalCoinBalance =
+        entitlementState.coinBalance + entitlementState.bonusBalance;
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -507,7 +538,7 @@ class _RechargeHeader extends ConsumerWidget {
                   _InlineCoinMetric(
                     key: const ValueKey('player_recharge_unlock_balance'),
                     label: '${context.l10n.playerCoinBalance}:',
-                    value: coinBalance,
+                    value: totalCoinBalance,
                   ),
                   const Spacer(),
                   GestureDetector(
@@ -667,7 +698,7 @@ class _CoinCardContent extends StatelessWidget {
           if (package.hasBonus) ...[
             const SizedBox(height: 4),
             Text(
-              '+${package.bonusCoins} ${context.l10n.playerBonus}',
+              '+${package.bonusCoins}',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.5),
                 fontSize: 10,
@@ -707,10 +738,7 @@ class _CoinPackageCardFrame extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF414143).withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: selected ? AppColors.primary : Colors.transparent,
-          width: selected ? 1.4 : 0,
-        ),
+        border: Border.all(color: Colors.transparent, width: 0),
       ),
       child: child,
     );

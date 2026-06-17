@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/router/route_paths.dart';
-import '../../features/player/application/player_playback_controller.dart';
 import '../../shared/widgets/navigation/app_bottom_navigation.dart';
 import 'app_shell_chrome.dart';
 
@@ -25,6 +24,27 @@ class _CurrentTabIndexNotifier extends Notifier<int> {
 final appShellCurrentTabIndexProvider =
     NotifierProvider<_CurrentTabIndexNotifier, int>(
   _CurrentTabIndexNotifier.new,
+);
+
+/// 首页滚动到顶部的请求计数 notifier。
+class _HomeScrollToTopNotifier extends Notifier<int> {
+  @override
+  int build() {
+    return 0;
+  }
+
+  void requestScrollToTop() {
+    state++;
+  }
+}
+
+/// 首页滚动到顶部的通知 provider。
+///
+/// 当重复点击首页 tab 时，这个 provider 会增加计数，
+/// HomePage 会监听这个变化并执行滚动到顶部的操作。
+final homeScrollToTopRequestProvider =
+    NotifierProvider<_HomeScrollToTopNotifier, int>(
+  _HomeScrollToTopNotifier.new,
 );
 
 /// 主导航 shell。
@@ -81,6 +101,13 @@ class AppShell extends ConsumerWidget {
     //         .pauseForVisibility(),
     //   );
     // }
+
+    // 检测是否重复点击首页 tab，如果是则通知首页滚动到顶部
+    if (index == navigationShell.currentIndex &&
+        index == AppShellDestinations.homeIndex) {
+      ref.read(homeScrollToTopRequestProvider.notifier).requestScrollToTop();
+    }
+
     navigationShell.goBranch(
       index,
       initialLocation: index == navigationShell.currentIndex,

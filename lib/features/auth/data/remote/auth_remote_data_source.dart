@@ -87,14 +87,22 @@ class AuthRemoteDataSource {
     );
   }
 
-  Future<AuthSessionDto> deleteAccount([
+  Future<bool> deleteAccount([
     DeleteAccountRequestDto request = const DeleteAccountRequestDto(),
   ]) {
-    return _apiClient.delete<AuthSessionDto>(
-      '/account',
+    return _apiClient.post<bool>(
+      '/api/user/delete',
       data: request.toJson(),
       authPolicy: ApiAuthPolicy.required,
-      decoder: AuthSessionDto.fromJson,
+      decoder: (data) {
+        // API 返回格式: {"code": 0, "data": {"success": true}, "message": "..."}
+        // ApiClient._extractEnvelopePayload 会自动提取 data 字段
+        // 所以 decoder 接收到的 data 是 {"success": true}
+        if (data is Map) {
+          return data['success'] == true;
+        }
+        return false;
+      },
     );
   }
 

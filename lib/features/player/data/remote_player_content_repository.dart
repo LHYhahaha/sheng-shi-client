@@ -32,10 +32,17 @@ class RemotePlayerContentRepository implements PlayerContentRepository {
       );
       final recommendations = _recommendationMapper.mapRecommendations(recommendationDtos);
       
-      return _contentMapper.mapContent(dto, recommendations: recommendations);
+      return _contentMapper.mapContent(
+        dto,
+        recommendations: recommendations,
+        recommendationsStatus: PlayerRecommendationLoadStatus.loaded,
+      );
     } catch (e) {
-      // 如果推荐获取失败，仍然返回内容（不带推荐）
-      return _contentMapper.mapContent(dto);
+      // 如果推荐获取失败，返回内容并设置状态为 error
+      return _contentMapper.mapContent(
+        dto,
+        recommendationsStatus: PlayerRecommendationLoadStatus.error,
+      );
     }
   }
 }

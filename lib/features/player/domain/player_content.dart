@@ -1,6 +1,21 @@
 import '../../entitlement/domain/episode_unlock_type.dart';
 import 'player_subtitle.dart';
 
+/// 推荐列表加载状态。
+enum PlayerRecommendationLoadStatus {
+  /// 初始状态（尚未开始加载）。
+  initial,
+
+  /// 正在加载中。
+  loading,
+
+  /// 加载成功。
+  loaded,
+
+  /// 加载失败。
+  error,
+}
+
 /// 播放器剧集内容模型。
 ///
 /// 这是播放页 chrome 和详情弹层共用的数据，不等同于首页 Drama 卡片。这里可以包含
@@ -22,6 +37,7 @@ class PlayerContent {
     this.favoriteCount = 0,
     this.likeCountDelta = 0,
     this.episodeTotal = 0,
+    this.recommendationsStatus = PlayerRecommendationLoadStatus.loaded,
   });
 
   /// 剧内容 id。
@@ -78,6 +94,11 @@ class PlayerContent {
   ///
   /// 推荐项只用于展示/跳转，不应直接加入当前播放 feed 或预热。
   final List<PlayerRecommendation> recommendations;
+
+  /// 推荐列表加载状态。
+  ///
+  /// 当推荐列表正在异步加载时，可使用此状态在 UI 中展示 loading 效果。
+  final PlayerRecommendationLoadStatus recommendationsStatus;
 
   /// 播放量。
   ///

@@ -56,29 +56,28 @@ class AccountCancellationState {
 class AccountCancellationController extends Notifier<AccountCancellationState> {
   Timer? _countdownTimer;
   late int _countdownSeconds;
+  bool _countdownStarted = false;
 
   @override
   AccountCancellationState build() {
-    ref.onDispose(_cancelCountdown);
+    ref.onDispose(() {
+      _cancelCountdown();
+      _countdownStarted = false;
+    });
     _countdownSeconds = ref.watch(accountCancellationCountdownProvider);
+    // 进入页面立即开始倒计时（用 microtask 避免 build 期间读取未初始化的 state）
+    if (!_countdownStarted) {
+      _countdownStarted = true;
+      Future.microtask(_beginCountdownIfNeeded);
+    }
     return AccountCancellationState.initial(
       countdownSeconds: _countdownSeconds,
     );
   }
 
   void setAcceptedRisk(bool value) {
-    if (!value) {
-      _cancelCountdown();
-      state = state.copyWith(
-        acceptedRisk: false,
-        remainingSeconds: _countdownSeconds,
-        clearError: true,
-      );
-      return;
-    }
-
-    state = state.copyWith(acceptedRisk: true, clearError: true);
-    _beginCountdownIfNeeded();
+    // 勾选框只控制 acceptedRisk，不再控制倒计时
+    state = state.copyWith(acceptedRisk: value, clearError: true);
   }
 
   void setSubmitting(bool value) {

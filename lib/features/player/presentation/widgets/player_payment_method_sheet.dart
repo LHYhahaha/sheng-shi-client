@@ -64,19 +64,29 @@ class PlayerPaymentMethodSheet extends ConsumerStatefulWidget {
 class _PlayerPaymentMethodSheetState
     extends ConsumerState<PlayerPaymentMethodSheet> {
   var _didCompletePurchase = false;
+  var _didDismissTerminalStatus = false;
 
   @override
   Widget build(BuildContext context) {
     final provider = playerRechargeUnlockControllerProvider(widget.sessionKey);
     ref.listen(provider.select((state) => state.status), (previous, next) {
-      if (next != PlayerRechargeUnlockStatus.success ||
-          _didCompletePurchase ||
-          !mounted) {
+      if (!mounted) {
         return;
       }
-      _didCompletePurchase = true;
-      ref.read(appToastProvider).success(context.l10n.storePurchaseSuccess);
-      widget.onPurchaseSuccess();
+      if (next == PlayerRechargeUnlockStatus.success &&
+          !_didCompletePurchase) {
+        _didCompletePurchase = true;
+        ref.read(appToastProvider).success(context.l10n.storePurchaseSuccess);
+        widget.onPurchaseSuccess();
+        return;
+      }
+      final shouldDismiss =
+          next == PlayerRechargeUnlockStatus.failed ||
+          next == PlayerRechargeUnlockStatus.cancelled;
+      if (shouldDismiss && !_didDismissTerminalStatus) {
+        _didDismissTerminalStatus = true;
+        widget.onDismiss();
+      }
     });
 
     final state = ref.watch(provider);

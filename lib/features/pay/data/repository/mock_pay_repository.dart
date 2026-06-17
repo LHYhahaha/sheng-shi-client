@@ -1,0 +1,67 @@
+import '../../domain/pay_repository.dart';
+import '../../domain/payment_order.dart';
+import '../dto/payment_order_verify_response_dto.dart';
+
+/// 模拟支付仓库实现（用于测试）
+class MockPayRepository implements PayRepository {
+  @override
+  Future<PaymentOrder> createPaymentOrder({
+    required int productId,
+    required int productType,
+    String? clientOrderNo,
+    int? episodeId,
+    int? payChannel,
+    String? scene,
+    int? shortId,
+  }) async {
+    // 模拟网络延迟
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+
+    // 将 int productType 转换为 String
+    // 1: 金币商品 -> PRODUCT_TYPE_COIN
+    // 2: 会员商品 -> PRODUCT_TYPE_MEMBERSHIP
+    final productTypeString = productType == 1
+        ? 'PRODUCT_TYPE_COIN'
+        : 'PRODUCT_TYPE_MEMBERSHIP';
+
+    // 返回模拟支付订单
+    return PaymentOrder(
+      amountMicros: 9990000,
+      channelProductId: 'com.example.product',
+      currency: 'USD',
+      expireAt: DateTime.now()
+          .add(const Duration(hours: 1))
+          .millisecondsSinceEpoch,
+      orderNo: 'mock_order_${DateTime.now().millisecondsSinceEpoch}',
+      clientOrderNo: clientOrderNo ?? 'mock_client_order',
+      orderStatus: "0",
+      orderTitle: 'Mock Order',
+      payChannel: "1",
+      priceText: '\$9.99',
+      productId: productId,
+      productType: productTypeString,
+    );
+  }
+
+  @override
+  Future<PaymentOrderVerifyResponseDto> verifyGooglePayment({
+    required String orderNo,
+    required String channelProductId,
+    required String packageName,
+    required int productType,
+    required String purchaseToken,
+    String? channelOrderId,
+    String? rawReceipt,
+  }) async {
+    // 模拟网络延迟
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+
+    // 返回模拟验证响应
+    return PaymentOrderVerifyResponseDto(
+      orderNo: orderNo,
+      orderStatus: 'ORDER_STATUS_SUCCESS',
+      channelOrderId: channelOrderId ?? 'mock_channel_order',
+      paidAt: DateTime.now(),
+    );
+  }
+}

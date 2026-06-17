@@ -36,9 +36,7 @@ class RemotePlayerFeedRepository implements PlayerFeedRepository {
           ),
         )
         .toList(growable: false);
-    final initialIndex = _episodeIndex(items, episodeId);
-    if (initialIndex <= 0) return items;
-    return [...items.sublist(initialIndex), ...items.sublist(0, initialIndex)];
+    return items;
   }
 
   @override
@@ -47,12 +45,4 @@ class RemotePlayerFeedRepository implements PlayerFeedRepository {
     return page.items.map(_feedMapper.mapForYouItem).toList(growable: false);
   }
 
-  int _episodeIndex(List<PlayerFeedItem> items, String episodeId) {
-    final requestedNumber = int.tryParse(episodeId);
-    return items.indexWhere(
-      (item) =>
-          item.episode.id == episodeId ||
-          item.episode.number == requestedNumber,
-    );
-  }
 }

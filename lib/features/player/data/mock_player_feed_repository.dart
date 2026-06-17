@@ -27,12 +27,7 @@ class MockPlayerFeedRepository implements PlayerFeedRepository {
         })
         .toList(growable: false);
 
-    final initialIndex = _episodeIndex(items, episodeId);
-    if (initialIndex <= 0) {
-      return items;
-    }
-
-    return [...items.sublist(initialIndex), ...items.sublist(0, initialIndex)];
+    return items;
   }
 
   @override
@@ -68,13 +63,6 @@ class MockPlayerFeedRepository implements PlayerFeedRepository {
     return List<PlayerFeedItem>.unmodifiable(items);
   }
 
-  int _episodeIndex(List<PlayerFeedItem> items, String episodeId) {
-    final requestedNumber = int.tryParse(episodeId);
-    return items.indexWhere((item) {
-      return item.episode.id == episodeId ||
-          item.episode.number == requestedNumber;
-    });
-  }
 }
 
 class _ForYouSpec {

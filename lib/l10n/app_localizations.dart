@@ -233,9 +233,21 @@ class AppLocalizations {
     zh: '删除 ($count)',
   );
 
+  String get myListDramaOffShelf => _remoteText(
+    'my_list.toast.drama_off_shelf',
+    en: 'This drama has been removed. Check out others.',
+    zh: '该短剧已下架，看看别的吧',
+  );
+
   // ── 个人中心 Profile ─────────────────────────────────────────────
   String get profileLogin =>
       _remoteText('profile.user.login', en: 'Log in', zh: '登录');
+
+  String get profileCopySuccess => _remoteText(
+        'profile.toast.copy_success',
+        en: 'ID copied',
+        zh: 'ID已复制',
+      );
 
   String get profileGuest => _remoteText('', en: 'Guest', zh: '游客');
 
@@ -425,21 +437,21 @@ class AppLocalizations {
 
   String get accountCancellationConfirmTitle => _remoteText(
     'delete_account.confirm.title',
-    en: 'Confirm deletion',
+    en: 'Delete account?',
     zh: '确认删除账号？',
   );
 
   String get accountCancellationConfirmMessage => _remoteText(
     'delete_account.confirm.message',
-    en: 'Account information cannot be recovered',
-    zh: '账号信息无法找回',
+    en: 'Deleted account data cannot be recovered. Do you want to continue?',
+    zh: '删除后账号信息将无法找回，请确认是否继续。',
   );
 
   String get accountCancellationConfirmCancel =>
       _remoteText('delete_account.confirm.cancel', en: 'Cancel', zh: '取消');
 
   String get accountCancellationConfirmDelete =>
-      _remoteText('delete_account.confirm.confirm', en: 'Confirm', zh: '确认');
+      _remoteText('delete_account.confirm.confirm', en: 'Confirm delete', zh: '确认删除');
 
   String get accountCancellationSuccess => _remoteText(
     'settings.toast.logged_out',
@@ -447,16 +459,16 @@ class AppLocalizations {
     zh: '账号已删除',
   );
 
-  String get accountDeletionRejectedNonZeroBalance => _remoteText(
+  String get deleteAccountToastCoinsSpentRequired => _remoteText(
     'delete_account.toast.coins_spent_required',
-    en: 'Coin balance must be zero',
-    zh: '金币余额需为 0',
+    en: 'You can delete your account after all purchased coins are spent.',
+    zh: '充值金币消耗完毕才可注销',
   );
 
   String get accountDeletionRejectedActiveMembership => _remoteText(
-    'delete_account.toast.member_expiry_required',
+    'You can delete your account after your membership expires.',
     en: 'Membership must be expired',
-    zh: '会员需已过期',
+    zh: '会员到期后才可注销',
   );
 
   // ── 认证 Auth ─────────────────────────────────────────────
@@ -486,8 +498,26 @@ class AppLocalizations {
 
   String get authTermsCopy => _remoteText(
     'login.agreement.notice',
-    en: 'By continuing, you agree to our Terms',
-    zh: '继续即表示你同意我们的用户协议',
+    en: 'By continuing, you agree to our Terms of Use and Privacy Policy.',
+    zh: '继续即表示您同意我们的使用条款和隐私政策',
+  );
+
+  String get loginAgreementPrefix => _remoteText(
+    'login.agreement.prefix',
+    en: 'By continuing, you agree to our ',
+    zh: '继续即表示您同意我们的',
+  );
+
+  String get loginAgreementConnector => _remoteText(
+    'login.agreement.connector',
+    en: ' and ',
+    zh: '和',
+  );
+
+  String get loginAgreementSuffix => _remoteText(
+    'login.agreement.suffix',
+    en: '.',
+    zh: '。',
   );
 
   String get authLoginRequiredMessage => _remoteText(
@@ -992,6 +1022,12 @@ class AppLocalizations {
     'home.empty.no_dramas',
     en: 'No episodes available yet.',
     zh: '暂无可播放剧集',
+  );
+
+  String get playerEmptyNoDramas => _remoteText(
+    'home.empty.no_dramas',
+    en: 'No dramas yet',
+    zh: '暂无短剧',
   );
 
   String get playerFeedLoadFailed => _remoteText(

@@ -173,7 +173,7 @@ class PlayerUnlockModalCoordinator {
         shortTitle: item.content.playTitle.isNotEmpty
             ? item.content.playTitle
             : item.content.title,
-        cover: item.content.posterAssetPath,
+        cover: item.content.coverUrl ?? '',
         episodeId: episodeId,
       ),
     );

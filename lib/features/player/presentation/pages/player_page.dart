@@ -711,6 +711,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           isLoading: feedSnapshot.$1,
           error: feedSnapshot.$2,
           items: feedSnapshot.$3,
+          currentIndex: feedSnapshot.$4,
           feedController: feedController,
           viewportState: viewportState,
           playbackShell: playbackShell,
@@ -729,6 +730,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     required bool isLoading,
     required Object? error,
     required List<PlayerFeedItem> items,
+    required int currentIndex,
     required PlayerFeedController feedController,
     required PlayerViewportBuildSnapshot viewportState,
     required PlayerPlaybackShellSnapshot playbackShell,
@@ -761,6 +763,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         message: context.l10n.playerFeedEmpty,
       );
     }
+    _schedulePageControllerAlignment(
+      targetIndex: currentIndex,
+      itemCount: items.length,
+      settledIndex: viewportState.settledIndex,
+    );
 
     final settledIndex = viewportState.settledIndex;
     final settledItem = settledIndex >= 0 && settledIndex < items.length
@@ -807,7 +814,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               controller: _pageController,
               physics: _isSeekDragging
                   ? const NeverScrollableScrollPhysics()
-                  : const PageScrollPhysics(),
+                  : const PageScrollPhysics(
+                      parent: ClampingScrollPhysics(),
+                    ),
               scrollDirection: Axis.vertical,
               itemCount: items.length,
               onPageChanged: feedEngine.onPageChanged,
@@ -889,8 +898,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                       widget.feedMode == PlayerFeedMode.singleDrama,
                   onExitImmersiveChrome:
                       widget.feedMode == PlayerFeedMode.singleDrama
-                      ? uiController.onImmersiveVideoTap
-                      : null,
+                          ? () {
+                              uiController.onImmersiveVideoTap();
+                              unawaited(playbackController.togglePlay());
+                            }
+                          : null,
                   onSingleDramaUserInteraction:
                       widget.feedMode == PlayerFeedMode.singleDrama
                       ? uiController.notifyUserInteraction
@@ -965,6 +977,46 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     _pagePositionNotifier.value = page;
+  }
+
+  void _schedulePageControllerAlignment({
+    required int targetIndex,
+    required int itemCount,
+    required int settledIndex,
+  }) {
+    if (targetIndex < 0 ||
+        targetIndex >= itemCount ||
+        settledIndex != targetIndex ||
+        _isPageScrolling ||
+        _isAutoAdvancing) {
+      return;
+    }
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !_pageController.hasClients ||
+          _isPageScrolling ||
+          _isAutoAdvancing) {
+        return;
+      }
+      final latestFeedState = ref.read(
+        playerFeedControllerProvider(_sessionKey),
+      );
+      final latestViewport = ref.read(
+        playerViewportControllerProvider(_sessionKey),
+      );
+      if (latestFeedState.currentIndex != targetIndex ||
+          latestViewport.settledIndex != targetIndex ||
+          latestViewport.scrollPhase != PlayerViewportScrollPhase.idle) {
+        return;
+      }
+      final currentPage = _pageController.page?.round();
+      if (currentPage == targetIndex) {
+        return;
+      }
+      _pageController.jumpToPage(targetIndex);
+      _settleViewportAtIndex(targetIndex);
+      _syncActiveVideoPagePosition();
+    });
   }
 
   bool _handlePageScrollNotification(ScrollNotification notification) {
@@ -1227,9 +1279,27 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         _isModalOpen = false;
         _activeCoinSheetItemId = null;
         _activeRechargeSheetItemId = null;
+        _restoreUnlockPaywallAfterModalIfNeeded(item);
         _syncAutoImmersiveBlockers();
       }
     }
+  }
+
+  void _restoreUnlockPaywallAfterModalIfNeeded(PlayerFeedItem item) {
+    final currentItem = ref
+        .read(playerFeedControllerProvider(_sessionKey))
+        .currentItem;
+    if (currentItem == null ||
+        currentItem.id != item.id ||
+        !currentItem.episode.isLocked ||
+        currentItem.episode.isUnavailable ||
+        _feedEngine.accessPresentationFor(currentItem) ==
+            PlayerAccessPresentationState.playable) {
+      return;
+    }
+    ref
+        .read(playerUiControllerProvider(_sessionKey).notifier)
+        .showUnlockPaywall();
   }
 
   Future<void> _presentAutoUnlockSheetForItem(PlayerFeedItem item) async {

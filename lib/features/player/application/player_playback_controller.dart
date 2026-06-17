@@ -421,6 +421,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   /// player，可以避免 media_kit_video 在 Android integration test teardown 中对已释放
   /// player 调 `setProperty`。普通业务 dispose 默认不延迟，只有 UI teardown 路径显式传入。
   static const videoSurfaceTeardownDelay = Duration(milliseconds: 450);
+  static const _restoreFloorTimeout = Duration(seconds: 12);
 
   static bool get shouldDelayVideoSurfaceTeardown {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
@@ -793,11 +794,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       status: PlayerPlaybackStatus.opening,
       hasFirstFrame: false,
       isBuffering: true,
-      position: resumeStart ?? Duration.zero,
+      position: Duration.zero,
       duration: resumeStart != null && resumeProgress != null
-          ? _effectiveDuration(resumeProgress.duration, item.episode.duration)
+          ? _resumeDisplayDuration(
+              resumeProgress.duration,
+              item.episode.duration,
+            )
           : _effectiveDuration(Duration.zero, item.episode.duration),
-      bufferedPosition: resumeStart ?? Duration.zero,
+      bufferedPosition: Duration.zero,
       isSeeking: false,
       hasEnded: false,
       currentItemId: item.id,
@@ -964,22 +968,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         source: playbackSource.playableSource,
         details: resumeStart == null
             ? 'reason=media open play=true'
-            : 'reason=resume open paused before seek',
+            : 'reason=resume open start autoplay',
       );
-      if (resumeStart == null) {
-        await _session.open(
-          playbackSource.playableSource,
-          play: true,
-          httpHeaders: playbackSource.httpHeaders,
-        );
-      } else {
-        await _session.open(
-          playbackSource.playableSource,
-          play: false,
-          start: resumeStart,
-          httpHeaders: playbackSource.httpHeaders,
-        );
-      }
+      await _session.open(
+        playbackSource.playableSource,
+        play: true,
+        start: resumeStart,
+        httpHeaders: playbackSource.httpHeaders,
+      );
       _logTiming(
         'media open end',
         itemId: item.id,
@@ -1003,10 +999,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         _lastAppliedResumeItemId = resumeProgress.itemId;
         _lastAppliedResumePosition = resumeStart;
         _resumeGuardRepairAttempts = 0;
+        _armRestoreFloor(resumeStart, generation);
         state = state.copyWith(
           position: resumeStart,
           duration: resumeProgress.duration > Duration.zero
-              ? resumeProgress.duration
+              ? _resumeDisplayDuration(
+                  resumeProgress.duration,
+                  item.episode.duration,
+                )
               : state.duration,
           bufferedPosition: state.bufferedPosition < resumeStart
               ? resumeStart
@@ -1014,7 +1014,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         );
         _currentPlaybackPosition = resumeStart;
         if (resumeProgress.duration > Duration.zero) {
-          _currentPlaybackDuration = resumeProgress.duration;
+          _currentPlaybackDuration = _resumeDisplayDuration(
+            resumeProgress.duration,
+            item.episode.duration,
+          );
         }
         if (_currentPlaybackBufferedPosition < resumeStart) {
           _currentPlaybackBufferedPosition = resumeStart;
@@ -1527,6 +1530,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (!state.isSeekAllowed || _isSessionDisposed) {
       return;
     }
+    _restoreFloorTimer?.cancel();
+    _restoreFloorPosition = null;
     _wasPlayingBeforeSeek = state.status == PlayerPlaybackStatus.playing;
     state = state.copyWith(
       isSeeking: true,
@@ -1857,14 +1862,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           'restoreMs=${restoreFloor.inMilliseconds}',
         ]),
       );
-      _repairResumePositionIfNeeded(restoreFloor, _generation, clamped);
+      final repairTarget = _currentPlaybackPosition > restoreFloor
+          ? _currentPlaybackPosition
+          : restoreFloor;
+      _repairResumePositionIfNeeded(repairTarget, _generation, clamped);
       return;
-    }
-    if (restoreFloor != null &&
-        _restoreFloorGeneration == _generation &&
-        clamped >= restoreFloor) {
-      _restoreFloorTimer?.cancel();
-      _restoreFloorPosition = null;
     }
     final last = _lastPositionUpdate;
     if (last != null &&
@@ -1948,6 +1950,16 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return fallback;
     }
     return Duration.zero;
+  }
+
+  Duration _resumeDisplayDuration(
+    Duration resumeDuration,
+    Duration? itemDuration,
+  ) {
+    if (itemDuration != null && itemDuration > Duration.zero) {
+      return itemDuration;
+    }
+    return resumeDuration;
   }
 
   PlaybackProgress? _normalizeResumeProgress(
@@ -2499,7 +2511,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     state = state.copyWith(
       position: progress.position,
       duration: progress.duration > Duration.zero
-          ? progress.duration
+          ? _resumeDisplayDuration(progress.duration, state.duration)
           : state.duration,
       bufferedPosition: state.bufferedPosition < progress.position
           ? progress.position
@@ -2507,7 +2519,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
     _currentPlaybackPosition = progress.position;
     if (progress.duration > Duration.zero) {
-      _currentPlaybackDuration = progress.duration;
+      _currentPlaybackDuration = _resumeDisplayDuration(
+        progress.duration,
+        state.duration,
+      );
     }
     if (_currentPlaybackBufferedPosition < progress.position) {
       _currentPlaybackBufferedPosition = progress.position;
@@ -2522,7 +2537,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _restoreFloorTimer?.cancel();
     _restoreFloorPosition = position;
     _restoreFloorGeneration = generation;
-    _restoreFloorTimer = Timer(const Duration(seconds: 3), () {
+    _restoreFloorTimer = Timer(_restoreFloorTimeout, () {
       if (_restoreFloorGeneration != generation) {
         return;
       }
@@ -2705,17 +2720,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
     unawaited(() async {
       try {
-        await _session.pause();
-        if (!ref.mounted || !_isCurrent(generation) || _isSessionDisposed) {
-          return;
-        }
         _armRestoreFloor(target, generation);
         await _session.seek(target);
         await Future<void>.delayed(const Duration(milliseconds: 120));
         if (!ref.mounted || !_isCurrent(generation) || _isSessionDisposed) {
           return;
         }
-        await _session.play();
       } catch (error) {
         _logTiming(
           'resume guard repair error',

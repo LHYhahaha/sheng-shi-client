@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/utils/text_over_ellipsis.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/player_like_count_provider.dart';
@@ -147,7 +148,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
   VoidCallback get onShareTap => widget.onShareTap;
 
   VoidCallback get onMoreTap => widget.onMoreTap;
-  
+
   VoidCallback? get onMetaTap => widget.onMetaTap;
 
   VoidCallback get onUnlockTap => widget.onUnlockTap;
@@ -1022,7 +1023,7 @@ class PlayerBottomMeta extends StatelessWidget {
                 fontSize: 14,
                 height: 18 / 14,
               );
-              
+
               // 检测文本是否超过2行
               final textPainter = TextPainter(
                 text: TextSpan(text: content.synopsis, style: textStyle),
@@ -1031,19 +1032,12 @@ class PlayerBottomMeta extends StatelessWidget {
               );
               textPainter.layout(maxWidth: constraints.maxWidth);
 
-              // 计算完整文本高度
-              final fullTextPainter = TextPainter(
-                text: TextSpan(text: content.synopsis, style: textStyle),
-                textDirection: TextDirection.ltr,
-              );
-              fullTextPainter.layout(maxWidth: constraints.maxWidth);
-
               // 判断是否溢出
-              final isOverflowing = fullTextPainter.height > textPainter.height + 0.1;
-              
+              final isOverflowing =
+                  limitTextLines(content.synopsis, 2) != content.synopsis;
               return Text.rich(
                 TextSpan(
-                  text: content.synopsis,
+                  text: limitTextLines(content.synopsis, 2, overText: ""),
                   children: isOverflowing
                       ? [
                           TextSpan(

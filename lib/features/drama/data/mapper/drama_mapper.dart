@@ -31,7 +31,7 @@ class DramaMapper {
               aspectRatio: aspectRatio,
             )
           : MediaResource.network(coverUrl, aspectRatio: aspectRatio),
-      viewCountLabel: dto.viewCountLabel ?? _formatViewCount(dto.viewCount),
+      viewCountLabel: _formatViewCount(dto.viewCount),
       episodeCount: dto.episodeCount,
       categoryId: dto.categoryIds.isNotEmpty ? dto.categoryIds.first : '',
       tags: dto.tags,
@@ -59,6 +59,9 @@ class DramaMapper {
     }
     if (viewCount >= 1000) {
       final thousands = viewCount / 1000;
+      if (thousands >= 999.95) {
+        return '1.0M';
+      }
       return '${thousands.toStringAsFixed(thousands >= 10 ? 0 : 1)} K';
     }
     return '$viewCount';

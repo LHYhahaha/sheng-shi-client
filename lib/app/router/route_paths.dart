@@ -11,6 +11,14 @@ abstract final class RoutePaths {
   static const store = '/store';
   static const wallet = '/wallet';
   static const membership = '/membership';
+
+  /// 构建会员页面路径，可选参数 [returnToProfile] 控制购买成功后是否跳转到"我的"页面
+  static String membershipLocation({bool returnToProfile = false}) {
+    if (returnToProfile) {
+      return '$membership?returnToProfile=true';
+    }
+    return membership;
+  }
   static const language = '/language';
   static const settings = '/settings';
   static const accountCancellation = '/settings/account-cancellation';

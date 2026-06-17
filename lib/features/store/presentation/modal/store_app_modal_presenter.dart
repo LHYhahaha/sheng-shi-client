@@ -47,8 +47,11 @@ class StoreAppModalPresenter implements AppModalPresenter {
               ref.listen(
                 storeControllerProvider.select((state) => state.purchaseStatus),
                 (previous, next) {
-                  if (next == StorePurchaseStatus.success &&
-                      previous != StorePurchaseStatus.success) {
+                  final reachedTerminalStatus =
+                      next == StorePurchaseStatus.success ||
+                      next == StorePurchaseStatus.failed ||
+                      next == StorePurchaseStatus.cancelled;
+                  if (reachedTerminalStatus && previous != next) {
                     Navigator.of(sheetContext).pop(next);
                   }
                 },

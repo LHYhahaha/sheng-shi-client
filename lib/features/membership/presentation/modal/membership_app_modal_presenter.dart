@@ -49,8 +49,11 @@ class MembershipAppModalPresenter implements AppModalPresenter {
                   (state) => state.purchaseStatus,
                 ),
                 (previous, next) {
-                  if (next == MembershipPurchaseStatus.success &&
-                      previous != MembershipPurchaseStatus.success) {
+                  final reachedTerminalStatus =
+                      next == MembershipPurchaseStatus.success ||
+                      next == MembershipPurchaseStatus.failed ||
+                      next == MembershipPurchaseStatus.cancelled;
+                  if (reachedTerminalStatus && previous != next) {
                     Navigator.of(sheetContext).pop(next);
                   }
                 },
@@ -83,6 +86,8 @@ class MembershipAppModalPresenter implements AppModalPresenter {
       MembershipPurchaseStatus.success =>
         const MembershipPurchaseModalResult.completed(),
       MembershipPurchaseStatus.cancelled =>
+        const MembershipPurchaseModalResult.cancelled(),
+      MembershipPurchaseStatus.failed =>
         const MembershipPurchaseModalResult.cancelled(),
       null =>
         featureRequest.dismissPolicy.barrierDismissible

@@ -41,6 +41,11 @@ class WalletMapper {
       showCoinIcon: dto.coinAmount + dto.bonusAmount > 0,
       detailLabel: dto.platform == null ? null : UiText.raw(dto.platform!),
       trailingSubtitle: UiText.raw(dto.status),
+      productType: dto.productType,
+      memberPeriodType: dto.memberPeriodType,
+      coin: dto.coinAmount,
+      bonusCoin: dto.bonusAmount,
+      amountText: dto.amountText,
     );
   }
 
@@ -111,7 +116,10 @@ class WalletMapper {
     final local = value.toLocal();
     return '${local.year.toString().padLeft(4, '0')}.'
         '${local.month.toString().padLeft(2, '0')}.'
-        '${local.day.toString().padLeft(2, '0')}';
+        '${local.day.toString().padLeft(2, '0')} '
+        '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}:'
+        '${local.second.toString().padLeft(2, '0')}';
   }
 }
 

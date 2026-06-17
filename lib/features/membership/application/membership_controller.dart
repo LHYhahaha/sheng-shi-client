@@ -121,6 +121,7 @@ class MembershipState {
 class MembershipController extends Notifier<MembershipState> {
   static const _packageName = 'com.yushi.drama.client';
   static const _membershipProductType = 2;
+  static const _purchaseResultTimeout = Duration(seconds: 30);
 
   int _generation = 0;
   int _purchaseGeneration = 0;
@@ -262,7 +263,12 @@ class MembershipController extends Notifier<MembershipState> {
 
       final purchaseCompleter = Completer<PurchaseDetails?>();
       sub = iapService.purchaseStream.listen((details) {
-        if (details.productID == productDetails!.id &&
+        final isCurrentProduct = details.productID == productDetails!.id;
+        final isCancellation =
+            details.status.name == 'canceled' ||
+            details.status == PurchaseStatus.error &&
+                _isUserCancelledPurchase(details);
+        if ((isCurrentProduct || isCancellation) &&
             !purchaseCompleter.isCompleted) {
           purchaseCompleter.complete(details);
         }
@@ -271,15 +277,21 @@ class MembershipController extends Notifier<MembershipState> {
       state = state.copyWith(
         purchaseStatus: MembershipPurchaseStatus.waitingPayment,
       );
-      final started = await iapService.buyProduct(product: productDetails);
+      final started = await iapService.buyProduct(
+        product: productDetails,
+        applicationUserName: iapService.buildOrderApplicationUserName(
+          orderNo: paymentOrder.orderNo,
+          clientOrderNo: paymentOrder.clientOrderNo,
+        ),
+      );
       if (!started) {
         throw Exception('Failed to launch IAP purchase');
       }
 
       final purchaseDetails = await purchaseCompleter.future.timeout(
-        const Duration(minutes: 5),
+        _purchaseResultTimeout,
         onTimeout: () {
-          debugPrint('[Membership] purchase timed out.');
+          debugPrint('[Membership] purchase result timed out.');
           return null;
         },
       );
@@ -288,7 +300,8 @@ class MembershipController extends Notifier<MembershipState> {
         return;
       }
       if (purchaseDetails == null) {
-        throw Exception('Purchase timeout or cancelled');
+        _markPurchaseCancelled(plan.id);
+        return;
       }
 
       if (purchaseDetails.status == PurchaseStatus.pending) {
@@ -298,12 +311,14 @@ class MembershipController extends Notifier<MembershipState> {
         return;
       }
       if (purchaseDetails.status == PurchaseStatus.error) {
+        if (_isUserCancelledPurchase(purchaseDetails)) {
+          _markPurchaseCancelled(plan.id);
+          return;
+        }
         throw Exception('Purchase failed: ${purchaseDetails.error}');
       }
       if (purchaseDetails.status.name == 'canceled') {
-        state = state.copyWith(
-          purchaseStatus: MembershipPurchaseStatus.cancelled,
-        );
+        _markPurchaseCancelled(plan.id);
         return;
       }
       if (purchaseDetails.status != PurchaseStatus.purchased &&
@@ -363,6 +378,26 @@ class MembershipController extends Notifier<MembershipState> {
       return;
     }
     state = state.copyWith(purchaseStatus: MembershipPurchaseStatus.cancelled);
+  }
+
+  void _markPurchaseCancelled(String planId) {
+    if (state.confirmationPlanId != planId) {
+      return;
+    }
+    state = state.copyWith(
+      purchaseStatus: MembershipPurchaseStatus.cancelled,
+      clearConfirmation: true,
+      clearError: true,
+    );
+  }
+
+  bool _isUserCancelledPurchase(PurchaseDetails details) {
+    final code = details.error?.code.toLowerCase();
+    final message = details.error?.message.toLowerCase();
+    return code?.contains('cancel') == true ||
+        code?.contains('user') == true ||
+        message?.contains('cancel') == true ||
+        message?.contains('user') == true;
   }
 
   Future<Map<String, ProductDetails>> _queryIapProducts(

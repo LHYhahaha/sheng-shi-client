@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
@@ -7,10 +8,12 @@ import '../../../../core/modal/app_modal_result.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_blocking_loading_overlay.dart';
 import '../../application/account_cancellation_controller.dart';
 import '../../application/auth_account_cancellation_coordinator.dart';
 import '../../application/auth_controller.dart';
 import '../../domain/account_deletion_exception.dart';
+import '../../../entitlement/application/entitlement_controller.dart';
 
 const _accountCancellationAssetRoot = 'assets/images/auth/account_cancellation';
 
@@ -54,8 +57,22 @@ class _AccountCancellationPageState
         return;
       }
     }
+    final shouldExitAppAfterDelete = ref
+        .read(authControllerProvider)
+        .session
+        .isGuest;
 
-    cancellationController.setSubmitting(true);
+    cancellationController
+      ..clearError()
+      ..setSubmitting(true);
+    final canDelete = await _validateDeletionRequirements(
+      l10n: l10n,
+      cancellationController: cancellationController,
+    );
+    if (!mounted || !canDelete) {
+      return;
+    }
+
     await authController.deleteAccount();
 
     if (!mounted) {
@@ -70,12 +87,48 @@ class _AccountCancellationPageState
     if (authState.failedAction == AuthFailureAction.deleteAccount ||
         authState.error != null) {
       cancellationController.setError(authState.error);
-      ref.read(appToastProvider).error(l10n.authDeleteAccountFailed);
+      ref
+          .read(appToastProvider)
+          .error(_errorMessage(context, authState.error ?? Object()));
       return;
     }
 
     ref.read(appToastProvider).success(l10n.accountCancellationSuccess);
+    if (shouldExitAppAfterDelete) {
+      await SystemNavigator.pop();
+      return;
+    }
     context.go(RoutePaths.profile);
+  }
+
+  Future<bool> _validateDeletionRequirements({
+    required AppLocalizations l10n,
+    required AccountCancellationController cancellationController,
+  }) async {
+    try {
+      await ref.read(entitlementControllerProvider.notifier).load();
+    } catch (error) {
+      cancellationController.setError(error);
+      if (mounted) {
+        ref.read(appToastProvider).error(l10n.authDeleteAccountFailed);
+      }
+      return false;
+    }
+
+    final entitlement = ref.read(entitlementControllerProvider);
+    if (entitlement.isMember) {
+      cancellationController.setSubmitting(false);
+      ref.read(appToastProvider).error(l10n.accountDeletionRejectedActiveMembership);
+      return false;
+    }
+
+    if (entitlement.coinBalance > 0) {
+      cancellationController.setSubmitting(false);
+      ref.read(appToastProvider).error(l10n.deleteAccountToastCoinsSpentRequired);
+      return false;
+    }
+
+    return true;
   }
 
   @override
@@ -149,6 +202,7 @@ class _AccountCancellationPageState
                 onSubmit: _submitDelete,
               ),
             ),
+            if (state.isSubmitting) const AppBlockingLoadingOverlay(),
           ],
         ),
       ),

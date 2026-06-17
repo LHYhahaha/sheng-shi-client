@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../app/router/route_paths.dart';
 import '../../application/auth_controller.dart';
 import '../../domain/auth_session.dart';
 import '../modal/auth_login_intent.dart';
@@ -104,7 +107,7 @@ class AuthLoginModalContent extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 18),
-        _TermsText(label: l10n.authTermsCopy),
+        const _TermsText(),
       ],
     );
   }
@@ -156,21 +159,67 @@ class _ClaimBadge extends StatelessWidget {
   }
 }
 
-class _TermsText extends StatelessWidget {
-  const _TermsText({required this.label});
+class _TermsText extends StatefulWidget {
+  const _TermsText();
 
-  final String label;
+  @override
+  State<_TermsText> createState() => _TermsTextState();
+}
+
+class _TermsTextState extends State<_TermsText> {
+  late TapGestureRecognizer _termsRecognizer;
+  late TapGestureRecognizer _privacyRecognizer;
+
+  @override
+  void initState() {
+    super.initState();
+    _termsRecognizer = TapGestureRecognizer()
+      ..onTap = () {
+        context.go(RoutePaths.userAgreement);
+      };
+    _privacyRecognizer = TapGestureRecognizer()
+      ..onTap = () {
+        context.go(RoutePaths.privacyPolicy);
+      };
+  }
+
+  @override
+  void dispose() {
+    _termsRecognizer.dispose();
+    _privacyRecognizer.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final linkColor = Colors.white.withValues(alpha: 0.7);
+    final baseStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
+      color: Colors.white.withValues(alpha: 0.7),
+      height: 1.35,
+    );
+
     return SizedBox(
       width: 268,
-      child: Text(
-        label,
+      child: RichText(
         textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: Colors.white.withValues(alpha: 0.5),
-          height: 1.35,
+        text: TextSpan(
+          style: baseStyle,
+          children: [
+            TextSpan(text: l10n.loginAgreementPrefix),
+            TextSpan(
+              text: l10n.appCommonLegalTermsOfUse,
+              style: TextStyle(color: linkColor),
+              recognizer: _termsRecognizer,
+            ),
+            TextSpan(text: l10n.loginAgreementConnector),
+            TextSpan(
+              text: l10n.appCommonLegalPrivacyPolicy,
+              style: TextStyle(color: linkColor),
+              recognizer: _privacyRecognizer,
+            ),
+            TextSpan(text: l10n.loginAgreementSuffix),
+          ],
         ),
       ),
     );

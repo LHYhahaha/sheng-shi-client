@@ -17,6 +17,7 @@ class PlayHistoryItemDto {
     this.summary,
     this.tagsName,
     this.title,
+    this.dramaStatus,
   });
 
   final int dramaId;
@@ -32,6 +33,7 @@ class PlayHistoryItemDto {
   final String? summary;
   final List<String>? tagsName;
   final String? title;
+  final int? dramaStatus;
 
   factory PlayHistoryItemDto.fromJson(Map<String, Object?> json) {
     const dtoName = 'PlayHistoryItemDto';
@@ -68,6 +70,7 @@ class PlayHistoryItemDto {
       summary: JsonFieldParser.optionalString(json, 'summary'),
       tagsName: _parseTagsName(json['tagsName']),
       title: JsonFieldParser.optionalString(json, 'title'),
+      dramaStatus: JsonFieldParser.optionalInt(json, 'dramaStatus'),
     );
   }
 

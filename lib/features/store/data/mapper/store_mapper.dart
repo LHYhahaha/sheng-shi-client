@@ -41,7 +41,7 @@ class StoreMapper {
       kind: StorePackageKind.coins,
       title: dto.productName?.isNotEmpty == true
           ? dto.productName!
-          : '${dto.coin} Coins',
+          : dto.coin,
       priceLabel: dto.priceText, // API返回的展示价格
       baseCoins: baseCoins,
       bonusCoins: bonusCoins,
@@ -49,7 +49,7 @@ class StoreMapper {
       productType: 'consumable',
       sortOrder: dto.sort,
       enabled: dto.status == 1,
-      bonusLabel: bonusCoins > 0 ? '+$bonusCoins Bonus' : null,
+      bonusLabel: bonusCoins > 0 ? '+$bonusCoins' : null,
       badgeLabel: _badgeForCoin(bonusCoins, baseCoins), // 优惠比例角标
     );
   }

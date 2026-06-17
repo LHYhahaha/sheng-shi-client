@@ -130,6 +130,7 @@ class PlayerRechargeUnlockController
   static const _packageName = 'com.yushi.drama.client';
   static const _coinProductType = 1;
   static const _membershipProductType = 2;
+  static const _purchaseResultTimeout = Duration(seconds: 30);
 
   final String sessionKey;
   int _generation = 0;
@@ -342,7 +343,12 @@ class PlayerRechargeUnlockController
       final completer = Completer<PurchaseDetails?>();
 
       sub = iapService.purchaseStream.listen((details) {
-        if (details.productID == productDetails.id && !completer.isCompleted) {
+        final isCurrentProduct = details.productID == productDetails.id;
+        final isCancellation =
+            details.status.name == 'canceled' ||
+            details.status == PurchaseStatus.error &&
+                _isUserCancelledPurchase(details);
+        if ((isCurrentProduct || isCancellation) && !completer.isCompleted) {
           completer.complete(details);
         }
       });
@@ -361,6 +367,10 @@ class PlayerRechargeUnlockController
         product: productDetails,
         isConsumable: isConsumable,
         offerToken: offerToken,
+        applicationUserName: iapService.buildOrderApplicationUserName(
+          orderNo: order.orderNo,
+          clientOrderNo: order.clientOrderNo,
+        ),
       );
       if (!started) {
         throw Exception('Failed to launch IAP purchase');
@@ -368,9 +378,9 @@ class PlayerRechargeUnlockController
 
       // 8. 等待购买结果（设置超时）
       final purchaseDetails = await completer.future.timeout(
-        const Duration(minutes: 5),
+        _purchaseResultTimeout,
         onTimeout: () {
-          debugPrint('[PlayerRecharge] 购买超时');
+          debugPrint('[PlayerRecharge] purchase result timed out');
           return null;
         },
       );
@@ -383,7 +393,8 @@ class PlayerRechargeUnlockController
 
       // 10. 处理购买结果
       if (purchaseDetails == null) {
-        throw Exception('Purchase timeout or cancelled');
+        _markPurchaseCancelled();
+        return;
       }
 
       if (purchaseDetails.status == PurchaseStatus.pending) {
@@ -391,10 +402,14 @@ class PlayerRechargeUnlockController
         return;
       }
       if (purchaseDetails.status == PurchaseStatus.error) {
+        if (_isUserCancelledPurchase(purchaseDetails)) {
+          _markPurchaseCancelled();
+          return;
+        }
         throw Exception('Purchase failed: ${purchaseDetails.error}');
       }
       if (purchaseDetails.status.name == 'canceled') {
-        state = state.copyWith(status: PlayerRechargeUnlockStatus.cancelled);
+        _markPurchaseCancelled();
         return;
       }
       if (purchaseDetails.status != PurchaseStatus.purchased &&
@@ -539,4 +554,21 @@ class PlayerRechargeUnlockController
   }
 
   bool _isCurrent(int generation) => generation == _generation;
+
+  void _markPurchaseCancelled() {
+    state = state.copyWith(
+      status: PlayerRechargeUnlockStatus.cancelled,
+      clearSelection: true,
+      clearError: true,
+    );
+  }
+
+  bool _isUserCancelledPurchase(PurchaseDetails details) {
+    final code = details.error?.code.toLowerCase();
+    final message = details.error?.message.toLowerCase();
+    return code?.contains('cancel') == true ||
+        code?.contains('user') == true ||
+        message?.contains('cancel') == true ||
+        message?.contains('user') == true;
+  }
 }

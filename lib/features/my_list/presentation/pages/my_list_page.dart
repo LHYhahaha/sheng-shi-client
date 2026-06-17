@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
+import '../../../../core/toast/app_toast_provider.dart';
+import '../../../../core/utils/text_over_ellipsis.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
@@ -184,21 +186,28 @@ class _MyListPageState extends ConsumerState<MyListPage> {
               item: item,
               choosing: state.isCollectionEditing,
               selected: state.selectedIds.contains(item.dramaId),
-              onTap: state.isCollectionEditing
-                  ? () => controller.toggleSelection(item.dramaId)
-                  : () {
-                      controller.closeAnyOpenPlayItem();
-                      // 播放历史项点击导航到播放器
-                      if (item.episodeId != null) {
-                        context.push(
-                          RoutePaths.playerLocation(
-                            dramaId: item.dramaId.toString(),
-                            episodeId: item.episodeId.toString(),
-                            trigger: 'play_history_item',
-                          ),
-                        );
-                      }
-                    },
+                    onTap: state.isCollectionEditing
+                        ? () => controller.toggleSelection(item.dramaId)
+                        : () async {
+                            // 检查短剧在架状态，已下架则提示且不跳转
+                            if (item.dramaStatus == 2) {
+                                ref.read(appToastProvider).info(l10n.myListDramaOffShelf);
+                                return;
+                            }
+                            controller.closeAnyOpenPlayItem();
+                            // 播放历史项点击导航到播放器
+                            if (item.episodeId != null) {
+                                await context.push(
+                                    RoutePaths.playerLocation(
+                                        dramaId: item.dramaId.toString(),
+                                        episodeId: item.episodeId.toString(),
+                                        trigger: 'play_history_item',
+                                    ),
+                                );
+                                // 从播放器页面返回后，刷新当前tab的数据以获取最新排序
+                                controller.load();
+                            }
+                        },
             ),
           ),
         );
@@ -712,9 +721,9 @@ class _RowCopy extends StatelessWidget {
           ),
           const SizedBox(height: 9),
           Text(
-            item.introduction,
+            limitTextLines(item.introduction, 2),
             maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+            overflow: TextOverflow.clip,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: AppColors.textPrimary.withValues(alpha: 0.5),
               fontSize: 12,

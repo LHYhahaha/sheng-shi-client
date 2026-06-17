@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../l10n/app_localizations.dart';
-import '../../../../shared/media/media_resource.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../auth/domain/auth_session.dart';
 import '../../application/profile_controller.dart';
@@ -24,7 +24,7 @@ class ProfileHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final displayName = state.isLoggedIn
-        ? state.nickname ?? state.userId
+        ? (state.nickname ?? '--')
         : l10n.profileLogin;
 
     void handleTap() {
@@ -71,7 +71,7 @@ class ProfileHeader extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'ID:${state.showId}',
+                      'ID:${state.showId ?? '--'}',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.textPrimary.withValues(alpha: 0.8),
                         fontSize: 12,
@@ -80,10 +80,24 @@ class ProfileHeader extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    Icon(
-                      Icons.copy_rounded,
-                      color: AppColors.textPrimary.withValues(alpha: 0.8),
-                      size: 12,
+                    GestureDetector(
+                      onTap: () {
+                        final showId = state.showId;
+                        if (showId != null) {
+                          Clipboard.setData(ClipboardData(text: showId));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(l10n.profileCopySuccess),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      },
+                      child: Icon(
+                        Icons.copy_rounded,
+                        color: AppColors.textPrimary.withValues(alpha: 0.8),
+                        size: 12,
+                      ),
                     ),
                   ],
                 ),

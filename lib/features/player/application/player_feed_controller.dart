@@ -129,10 +129,11 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
       if (!_isCurrent(generation)) {
         return;
       }
+      final initialIndex = _episodeIndex(loadedItems, config.episodeId);
 
       state = state.copyWith(
         items: List<PlayerFeedItem>.unmodifiable(loadedItems),
-        currentIndex: 0,
+        currentIndex: initialIndex,
         isLoading: false,
         clearError: true,
       );
@@ -181,6 +182,7 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
       if (!_isCurrent(generation)) {
         return state.currentItem;
       }
+      final refreshedIndex = _episodeIndex(loadedItems, episodeId);
 
       state = state.copyWith(
         config: PlayerFeedConfig.singleDrama(
@@ -188,7 +190,7 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
           episodeId: episodeId,
         ),
         items: List<PlayerFeedItem>.unmodifiable(loadedItems),
-        currentIndex: 0,
+        currentIndex: refreshedIndex,
         isLoading: false,
         clearError: true,
       );
@@ -301,4 +303,16 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
   }
 
   bool _isCurrent(int generation) => generation == _generation;
+
+  int _episodeIndex(List<PlayerFeedItem> items, String? episodeId) {
+    if (episodeId == null || episodeId.isEmpty || items.isEmpty) {
+      return 0;
+    }
+    final requestedNumber = int.tryParse(episodeId);
+    final index = items.indexWhere((item) {
+      return item.episode.id == episodeId ||
+          item.episode.number == requestedNumber;
+    });
+    return index == -1 ? 0 : index;
+  }
 }

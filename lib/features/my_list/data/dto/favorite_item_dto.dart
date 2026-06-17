@@ -19,6 +19,7 @@ class FavoriteItemDto {
     required this.lastWatchAt,
     required this.status,
     required this.updatedAt,
+    this.dramaStatus,
   });
 
   final int dramaId;
@@ -37,6 +38,7 @@ class FavoriteItemDto {
   final String? lastWatchAt;
   final int status;
   final String? updatedAt;
+  final int? dramaStatus;
 
   factory FavoriteItemDto.fromJson(Map<String, Object?> json) {
     const dtoName = 'FavoriteItemDto';
@@ -63,6 +65,7 @@ class FavoriteItemDto {
       lastWatchAt: JsonFieldParser.optionalString(json, 'lastWatchAt'),
       status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
       updatedAt: JsonFieldParser.optionalString(json, 'updatedAt'),
+      dramaStatus: JsonFieldParser.optionalInt(json, 'dramaStatus'),
     );
   }
 }

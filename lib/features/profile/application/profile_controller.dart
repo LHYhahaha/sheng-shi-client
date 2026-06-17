@@ -15,9 +15,9 @@ final profileControllerProvider =
 class ProfileState {
   const ProfileState({
     required this.isLoggedIn,
-    required this.userId,
-    required this.showId,
-    required this.nickname,
+    this.userId,
+    this.showId,
+    this.nickname,
     required this.avatarAssetPath,
     required this.avatarResource,
     required this.membership,
@@ -28,8 +28,8 @@ class ProfileState {
 
   const ProfileState.mock()
     : isLoggedIn = false,
-      userId = '15589299',
-      showId = '15589299',
+      userId = null,
+      showId = null,
       nickname = null,
       avatarAssetPath = authDefaultAvatarAssetPath,
       avatarResource = const MediaResource.asset(authDefaultAvatarAssetPath),
@@ -45,17 +45,18 @@ class ProfileState {
 
   /// 我的页展示用用户 id（内部 id）。
   ///
-  /// mock 游客也有默认 id。已登录时由 AuthState.user 覆盖，避免 profile mock 残留旧账号。
-  final String userId;
+  /// null 时显示 "--"。已登录时由 AuthState.user 覆盖，避免 profile mock 残留旧账号。
+  final String? userId;
 
   /// 我的页展示用 showId（展示 id）。
   ///
-  /// 这是用户可见的 id，不同于内部 userId。
-  final String showId;
+  /// null 时显示 "--"。这是用户可见的 id，不同于内部 userId。
+  final String? showId;
 
   /// 我的页展示昵称。
   ///
-  /// null 时显示游客文案。不要把登录昵称写回 ProfileController，退出登录后会残留。
+  /// null 时显示 "--"（已登录）或游客文案（未登录）。
+  /// 不要把登录昵称写回 ProfileController，退出登录后会残留。
   final String? nickname;
 
   /// 头像资源路径。
@@ -105,8 +106,8 @@ class ProfileState {
   }) {
     return ProfileState(
       isLoggedIn: isLoggedIn ?? this.isLoggedIn,
-      userId: userId ?? this.userId,
-      showId: showId ?? this.showId,
+      userId: userId,
+      showId: showId,
       nickname: nickname,
       avatarAssetPath: avatarAssetPath ?? this.avatarAssetPath,
       avatarResource: avatarResource ?? this.avatarResource,

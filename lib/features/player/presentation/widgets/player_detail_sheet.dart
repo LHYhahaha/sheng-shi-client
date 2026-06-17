@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../l10n/app_localizations.dart';
+import '../../../../app/router/route_paths.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_round_icon_button.dart';
 import '../../../../shared/widgets/app_sheet_handle.dart';
@@ -18,6 +20,7 @@ class PlayerDetailSheet extends StatefulWidget {
     required this.initialTab,
     required this.currentEpisode,
     required this.onEpisodeSelected,
+    this.recommendationsFuture,
     super.key,
   });
 
@@ -25,6 +28,7 @@ class PlayerDetailSheet extends StatefulWidget {
   final PlayerDetailTab initialTab;
   final int currentEpisode;
   final ValueChanged<PlayerEpisode> onEpisodeSelected;
+  final Future<List<PlayerRecommendation>>? recommendationsFuture;
 
   @override
   State<PlayerDetailSheet> createState() => _PlayerDetailSheetState();
@@ -139,6 +143,7 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
                             ? _SynopsisPanel(
                                 key: const ValueKey('synopsis'),
                                 content: widget.content,
+                                recommendationsFuture: widget.recommendationsFuture,
                               )
                             : _EpisodesPanel(
                                 key: const ValueKey('episodes'),
@@ -315,7 +320,7 @@ class _Header extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  content.viewCountLabel,
+                  content.viewCountLabel+context.l10n.episodeModalViews,
                   style: const TextStyle(
                     color: AppColors.primary,
                     fontSize: 12,
@@ -409,9 +414,14 @@ class _Segment extends StatelessWidget {
 }
 
 class _SynopsisPanel extends StatefulWidget {
-  const _SynopsisPanel({required this.content, super.key});
+  const _SynopsisPanel({
+    required this.content,
+    this.recommendationsFuture,
+    super.key,
+  });
 
   final PlayerContent content;
+  final Future<List<PlayerRecommendation>>? recommendationsFuture;
 
   @override
   State<_SynopsisPanel> createState() => _SynopsisPanelState();
@@ -419,6 +429,15 @@ class _SynopsisPanel extends StatefulWidget {
 
 class _SynopsisPanelState extends State<_SynopsisPanel> {
   bool _isExpanded = false;
+  Future<List<PlayerRecommendation>>? _cachedFuture;
+
+  @override
+  void didUpdateWidget(_SynopsisPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.recommendationsFuture != oldWidget.recommendationsFuture) {
+      _cachedFuture = widget.recommendationsFuture;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -428,7 +447,10 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
       fontSize: 12,
       height: 16 / 12,
     );
-    
+
+    // 确定要使用的 future
+    final future = _cachedFuture ?? widget.recommendationsFuture;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -442,17 +464,17 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
               textDirection: TextDirection.ltr,
             );
             textPainter.layout(maxWidth: constraints.maxWidth);
-            
+
             // 计算完整文本的高度
             final fullTextPainter = TextPainter(
               text: TextSpan(text: synopsis, style: textStyle),
               textDirection: TextDirection.ltr,
             );
             fullTextPainter.layout(maxWidth: constraints.maxWidth);
-            
+
             // 如果完整文本高度大于三行文本高度，说明文本溢出了
             final isOverflowing = fullTextPainter.height > textPainter.height + 0.1;
-            
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -511,35 +533,134 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
           ),
         ),
         const SizedBox(height: 10),
-        GridView.builder(
-          physics: const NeverScrollableScrollPhysics(),
-          shrinkWrap: true,
-          itemCount: widget.content.recommendations.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 16,
-            childAspectRatio: 109 / 218,
-          ),
-          itemBuilder: (context, index) {
-            return _RecommendationCard(
-              recommendation: widget.content.recommendations[index],
-            );
-          },
-        ),
+        // 根据是否有 future 来决定使用异步加载还是同步显示
+        if (future != null)
+          // 异步加载推荐列表
+          FutureBuilder<List<PlayerRecommendation>>(
+            future: future,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                // 加载中 - 显示 loading 指示器（跟首页一样）
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 32),
+                    child: SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                );
+              }
+
+              final recommendations = snapshot.data ?? [];
+              if (recommendations.isEmpty) {
+                // 加载完成但为空 - 显示空状态
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 32),
+                    child: Text(
+                      context.l10n.playerEmptyNoDramas,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 14,
+                        height: 18 / 14,
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              // 加载完成且有数据 - 显示推荐列表
+              return GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
+                itemCount: recommendations.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 16,
+                  childAspectRatio: 109 / 218,
+                ),
+                itemBuilder: (context, index) {
+                  final recommendation = recommendations[index];
+                  return _RecommendationCard(
+                    recommendation: recommendation,
+                    onTap: () {
+                      final location = RoutePaths.playerLocation(
+                        dramaId: recommendation.id,
+                        episodeId: '1',
+                        trigger: 'recommendation',
+                        userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+                      );
+                      context.push(location);
+                    },
+                  );
+                },
+              );
+            },
+          )
+        else
+          // 同步显示推荐列表
+          if (widget.content.recommendations.isEmpty)
+            // 为空 - 显示空状态
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 32),
+                child: Text(
+                  context.l10n.playerEmptyNoDramas,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 14,
+                    height: 18 / 14,
+                  ),
+                ),
+              ),
+            )
+          else
+            // 有数据 - 显示推荐列表
+            GridView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              shrinkWrap: true,
+              itemCount: widget.content.recommendations.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 16,
+                childAspectRatio: 109 / 218,
+              ),
+              itemBuilder: (context, index) {
+                final recommendation = widget.content.recommendations[index];
+                return _RecommendationCard(
+                  recommendation: recommendation,
+                  onTap: () {
+                    final location = RoutePaths.playerLocation(
+                      dramaId: recommendation.id,
+                      episodeId: '1',
+                      trigger: 'recommendation',
+                      userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+                    );
+                    context.push(location);
+                  },
+                );
+              },
+            ),
       ],
     );
   }
 }
 
 class _RecommendationCard extends StatelessWidget {
-  const _RecommendationCard({required this.recommendation});
+  const _RecommendationCard({
+    required this.recommendation,
+    this.onTap,
+  });
 
   final PlayerRecommendation recommendation;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final cardContent = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ClipRRect(
@@ -573,6 +694,16 @@ class _RecommendationCard extends StatelessWidget {
         ),
       ],
     );
+
+    if (onTap != null) {
+      return GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: cardContent,
+      );
+    }
+
+    return cardContent;
   }
 
   Widget _buildCoverImage() {

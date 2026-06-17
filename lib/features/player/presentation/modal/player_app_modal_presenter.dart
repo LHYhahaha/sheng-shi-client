@@ -101,7 +101,7 @@ class PlayerAppModalPresenter implements AppModalPresenter {
               final shortTitle = item.content.playTitle.isNotEmpty
                   ? item.content.playTitle
                   : item.content.title;
-              final cover = item.content.posterAssetPath;
+              final cover = item.content.coverUrl ?? '';
               final episodeId = int.tryParse(item.episode.id);
               
               if (episodeId == null) {

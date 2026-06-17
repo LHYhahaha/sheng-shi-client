@@ -24,7 +24,7 @@ class MyListMapper {
       currentEpisode: dto.lastEpisodeNo ?? 1,
       episodeCount: dto.episodeTotal,
       episodeId: dto.lastEpisodeId,
-
+      dramaStatus: dto.dramaStatus,
     );
   }
 
@@ -40,6 +40,7 @@ class MyListMapper {
       episodeCount: dto.episodeTotal ?? 0,
       episodeId: dto.episodeId,
       watchSecond: dto.watchSecond,
+      dramaStatus: dto.dramaStatus,
     );
   }
 

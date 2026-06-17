@@ -5,9 +5,9 @@ import '../../../core/oauth/oauth_service.dart';
 import '../domain/auth_repository.dart';
 import '../domain/auth_session.dart';
 import 'dto/auth_session_dto.dart';
+import 'dto/delete_account_request_dto.dart';
 import 'dto/login_request_dto.dart';
 import 'dto/oauth_login_request_dto.dart';
-import 'mapper/auth_mapper.dart';
 import 'remote/auth_remote_data_source.dart';
 
 /// Auth 远程 repository 骨架。
@@ -19,20 +19,17 @@ class RemoteAuthRepository
   const RemoteAuthRepository({
     required AuthRemoteDataSource remoteDataSource,
     required ApiRequestContext requestContext,
-    AuthMapper mapper = const AuthMapper(),
     AuthTokenStore? tokenStore,
     UserInfoStore? userInfoStore,
     OAuthService? oauthService,
   }) : _remoteDataSource = remoteDataSource,
        _requestContext = requestContext,
-       _mapper = mapper,
        _tokenStore = tokenStore,
        _userInfoStore = userInfoStore,
        _oauthService = oauthService;
 
   final AuthRemoteDataSource _remoteDataSource;
   final ApiRequestContext _requestContext;
-  final AuthMapper _mapper;
   final AuthTokenStore? _tokenStore;
   final UserInfoStore? _userInfoStore;
   final OAuthService? _oauthService;
@@ -115,8 +112,34 @@ class RemoteAuthRepository
 
   @override
   Future<AuthSession> deleteAccount() async {
-    final dto = await _remoteDataSource.deleteAccount();
-    return _mapper.mapSession(dto);
+    final currentToken = _tokenStore?.snapshot;
+    final shouldSignOutOAuth =
+        currentToken?.hasAccessToken == true &&
+        currentToken?.sessionKind != AuthTokenSessionKind.guest;
+    final provider = _providerFromToken(currentToken?.provider);
+
+    final success = await _remoteDataSource.deleteAccount(
+      DeleteAccountRequestDto(
+        acceptedRisk: true,
+        deviceId: _requestContext.deviceId,
+        sessionKind: currentToken?.sessionKind?.name,
+        reason: 'account_cancellation',
+      ),
+    );
+    if (!success) {
+      throw StateError('Delete account failed.');
+    }
+
+    // 清理 OAuth 登录状态
+    if (shouldSignOutOAuth) {
+      await _signOutOAuth(provider);
+    }
+
+    // 清理本地 token 和用户信息
+    await _tokenStore?.clear();
+    await _userInfoStore?.clear();
+
+    return const AuthSession.guest();
   }
 
   /// 使用 OAuth 服务获取 token，然后调用后端登录接口。

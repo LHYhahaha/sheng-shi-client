@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -31,6 +32,7 @@ class MembershipPage extends ConsumerStatefulWidget {
 class _MembershipPageState extends ConsumerState<MembershipPage> {
   bool _modalOpen = false;
   late final AppModalService _modalService;
+  late final bool _returnToProfile;
 
   @override
   void initState() {
@@ -40,6 +42,18 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
       () => ref.read(membershipControllerProvider.notifier).load(),
     );
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_returnToProfileInitialized) {
+      final uri = GoRouter.of(context).routeInformationProvider.value.uri;
+      _returnToProfile = uri.queryParameters['returnToProfile'] == 'true';
+      _returnToProfileInitialized = true;
+    }
+  }
+
+  bool _returnToProfileInitialized = false;
 
   @override
   void dispose() {
@@ -75,7 +89,22 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
                 }
                 if (MembershipModalResults.isPurchaseCompleted(result)) {
                   ref.read(appToastProvider).success(l10n.storePurchaseSuccess);
-                  _goBack(result: MembershipRouteResult.purchaseCompleted);
+                  // 根据参数决定导航行为
+                  unawaited(
+                    Future.microtask(() {
+                      if (!mounted) return;
+                      if (_returnToProfile) {
+                        // 需要从首页/store等入口进入，购买成功后跳转到"我的"页面
+                        if (context.canPop()) {
+                          context.pop();
+                        }
+                        context.go(RoutePaths.profile);
+                      } else {
+                        // 从播放器充值弹框等入口进入，按原有逻辑返回
+                        _goBack(result: MembershipRouteResult.purchaseCompleted);
+                      }
+                    }),
+                  );
                   return;
                 }
                 ref
@@ -527,9 +556,17 @@ class _MembershipBottomButton extends StatelessWidget {
                 color: Color(0xFFFFFFFF).withValues(alpha: 0.5)
               ),
               children: [
-                TextSpan(text: context.l10n.appCommonLegalPrivacyPolicy),
+                TextSpan(
+                  text: context.l10n.appCommonLegalPrivacyPolicy,
+                  recognizer: TapGestureRecognizer()
+                    ..onTap = () => context.push(RoutePaths.privacyPolicy),
+                ),
                 TextSpan(text: '    ·    '),
-                TextSpan(text: context.l10n.appCommonLegalTermsOfUse),
+                TextSpan(
+                  text: context.l10n.appCommonLegalTermsOfUse,
+                  recognizer: TapGestureRecognizer()
+                    ..onTap = () => context.push(RoutePaths.userAgreement),
+                ),
               ]
             ))
           ],

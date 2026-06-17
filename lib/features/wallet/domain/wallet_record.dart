@@ -32,6 +32,11 @@ class WalletRecord {
     this.consumptionStatus,
     this.rewardEnabled = false,
     this.rewardClaimed = false,
+    this.productType,
+    this.memberPeriodType,
+    this.coin,
+    this.bonusCoin,
+    this.amountText,
   }) : titleText = title,
        trailingLabelText = trailingLabel,
        subtitleText = subtitle,
@@ -54,6 +59,11 @@ class WalletRecord {
     this.consumptionStatus,
     this.rewardEnabled = false,
     this.rewardClaimed = false,
+    this.productType,
+    this.memberPeriodType,
+    this.coin,
+    this.bonusCoin,
+    this.amountText,
   }) : titleText = UiText.raw(title),
        trailingLabelText = UiText.raw(trailingLabel),
        subtitleText = subtitle == null ? null : UiText.raw(subtitle),
@@ -134,10 +144,46 @@ class WalletRecord {
   /// mock 阶段仅改变按钮状态；真实发放需要服务端确认后刷新钱包。
   final bool rewardClaimed;
 
+  /// 商品类型。
+  ///
+  /// 仅 transaction 类型有意义。用于判断是金币商品还是会员商品。
+  /// 'ProductType_PRODUCT_TYPE_COIN': 金币商品
+  /// 'ProductType_PRODUCT_TYPE_MEMBER': 会员商品
+  final String? productType;
+
+  /// 会员周期类型。
+  ///
+  /// 仅当 productType 为会员商品时有意义。
+  /// 'MemberPeriodType_MEMBER_PERIOD_TYPE_WEEK': 周会员
+  /// 'MemberPeriodType_MEMBER_PERIOD_TYPE_MONTH': 月会员
+  /// 'MemberPeriodType_MEMBER_PERIOD_TYPE_QUARTER': 季度会员
+  /// 'MemberPeriodType_MEMBER_PERIOD_TYPE_YEAR': 年会员
+  final String? memberPeriodType;
+
+  /// 充值金币数量。
+  ///
+  /// 仅当 productType 为金币商品时有意义。
+  final int? coin;
+
+  /// 赠送金币数量。
+  ///
+  /// 仅当 productType 为金币商品时有意义。
+  final int? bonusCoin;
+
+  /// 金额展示文本。
+  ///
+  /// 用于交易记录右侧显示的金额，已格式化为本地化字符串。
+  final String? amountText;
+
   WalletRecord copyWith({
     bool? rewardEnabled,
     bool? rewardClaimed,
     String? sourceType,
+    String? productType,
+    String? memberPeriodType,
+    int? coin,
+    int? bonusCoin,
+    String? amountText,
   }) {
     return WalletRecord(
       id: id,
@@ -155,6 +201,11 @@ class WalletRecord {
       consumptionStatus: consumptionStatus,
       rewardEnabled: rewardEnabled ?? this.rewardEnabled,
       rewardClaimed: rewardClaimed ?? this.rewardClaimed,
+      productType: productType ?? this.productType,
+      memberPeriodType: memberPeriodType ?? this.memberPeriodType,
+      coin: coin ?? this.coin,
+      bonusCoin: bonusCoin ?? this.bonusCoin,
+      amountText: amountText ?? this.amountText,
     );
   }
 }

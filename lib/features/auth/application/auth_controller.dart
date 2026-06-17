@@ -385,6 +385,7 @@ class AuthController extends Notifier<AuthState> {
       return;
     }
 
+    final previousSession = state.session;
     // 注销账号比 logout 风险更高，但状态处理仍保持一致：只有 repository 返回 guest
     // session 后才认为本地退出成功。
     state = state.copyWith(
@@ -393,7 +394,11 @@ class AuthController extends Notifier<AuthState> {
       clearFailedAction: true,
     );
     try {
-      final session = await ref.read(authRepositoryProvider).deleteAccount();
+      final repository = ref.read(authRepositoryProvider);
+      final deletedSession = await repository.deleteAccount();
+      final session = previousSession.isGuest
+          ? deletedSession
+          : await _loginDeviceAfterAccountDeletion(repository);
       state = state.copyWith(
         isLoading: false,
         session: session,
@@ -409,6 +414,23 @@ class AuthController extends Notifier<AuthState> {
         clearPendingProvider: true,
       );
     }
+  }
+
+  Future<AuthSession> _loginDeviceAfterAccountDeletion(
+    AuthRepository repository,
+  ) async {
+    final repositorySession = await repository.login(AuthProviderType.device);
+    final session = await _syncCurrentSession(
+      fallbackProvider: AuthProviderType.device,
+      fallbackSession: repositorySession,
+    );
+    if (session.user?.provider == AuthProviderType.device) {
+      return AuthSession.guest(
+        sessionId: session.sessionId,
+        guestId: session.guestId,
+      );
+    }
+    return session;
   }
 
   bool _isCurrent(int generation) => generation == _generation;

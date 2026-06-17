@@ -1,4 +1,5 @@
 import 'package:bot_toast/bot_toast.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,8 +16,8 @@ import '../../features/my_list/presentation/pages/my_list_page.dart';
 import '../../features/player/presentation/pages/player_page.dart';
 import '../../features/profile/presentation/pages/language_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
-import '../../features/profile/presentation/pages/legal_placeholder_page.dart';
 import '../../features/profile/presentation/pages/settings_page.dart';
+import '../../shared/widgets/webview_page.dart';
 import '../../l10n/app_localizations.dart';
 import '../../features/store/presentation/pages/store_page.dart';
 import '../../features/wallet/domain/wallet_record.dart';
@@ -167,14 +168,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RoutePaths.userAgreement,
         name: RouteNames.userAgreement,
-        builder: (context, state) =>
-            LegalPlaceholderPage(title: context.l10n.settingsUserAgreement),
+        builder: (context, state) {
+          final languageCode = Localizations.localeOf(context).languageCode;
+          final url = 'https://drama-wave.8y4w2vxvdffmd83.xyz/legal/terms/index.html?lang=$languageCode';
+          return WebViewPage(
+            url: url,
+            title: context.l10n.settingsUserAgreement,
+          );
+        },
       ),
       GoRoute(
         path: RoutePaths.privacyPolicy,
         name: RouteNames.privacyPolicy,
-        builder: (context, state) =>
-            LegalPlaceholderPage(title: context.l10n.settingsPrivacyPolicy),
+        builder: (context, state) {
+          final languageCode = Localizations.localeOf(context).languageCode;
+          final url = 'https://drama-wave.8y4w2vxvdffmd83.xyz/legal/privacy/index.html?lang=$languageCode';
+          return WebViewPage(
+            url: url,
+            title: context.l10n.settingsPrivacyPolicy,
+          );
+        },
       ),
       GoRoute(
         path: RoutePaths.transactionHistory,

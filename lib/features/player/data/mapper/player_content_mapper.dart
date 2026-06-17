@@ -13,6 +13,7 @@ class PlayerContentMapper {
   PlayerContent mapContent(
     PlayerContentDto dto, {
     List<PlayerRecommendation> recommendations = const [],
+    PlayerRecommendationLoadStatus recommendationsStatus = PlayerRecommendationLoadStatus.loaded,
   }) {
     return PlayerContent(
       id: dto.id.toString(),
@@ -34,6 +35,7 @@ class PlayerContentMapper {
       playCount: dto.playCount,
       favoriteCount: dto.favoriteCount,
       episodeTotal: dto.episodeTotal,
+      recommendationsStatus: recommendationsStatus,
     );
   }
 
@@ -101,12 +103,16 @@ class PlayerContentMapper {
 /// 格式化播放量为展示文案。
 String _formatPlayCount(int count) {
   if (count >= 1000000) {
-    return '${(count / 1000000).toStringAsFixed(1)}M Views';
-  } else if (count >= 1000) {
-    return '${(count / 1000).toStringAsFixed(1)}K Views';
-  } else {
-    return '$count Views';
+    return '${(count / 1000000).toStringAsFixed(1)}M';
   }
+  if (count >= 1000) {
+    final k = count / 1000;
+    if (k >= 999.95) {
+      return '1.0M';
+    }
+    return '${k.toStringAsFixed(1)}K';
+  }
+  return '$count';
 }
 
 /// 格式化收藏量为展示文案。
@@ -114,6 +120,10 @@ String _formatFavoriteCount(int count) {
   if (count >= 1000000) {
     return '${(count / 1000000).toStringAsFixed(1)}M';
   } else if (count >= 1000) {
+    final k = count / 1000;
+    if (k >= 999.95) {
+      return '1.0M';
+    }
     return '${(count / 1000).toStringAsFixed(1)}K';
   } else {
     return '$count';
