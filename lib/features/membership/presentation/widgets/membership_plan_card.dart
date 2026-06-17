@@ -1,12 +1,12 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/period_iso_parser.dart';
 import '../membership_layout.dart';
 import '../../domain/membership_plan.dart';
+import '../../application/promotion_countdown_service.dart';
 
-class MembershipPlanCard extends StatefulWidget {
+class MembershipPlanCard extends ConsumerStatefulWidget {
   const MembershipPlanCard({
     required this.plan,
     required this.selected,
@@ -21,12 +21,12 @@ class MembershipPlanCard extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<MembershipPlanCard> createState() => _MembershipPlanCardState();
+  ConsumerState<MembershipPlanCard> createState() => _MembershipPlanCardState();
 }
 
-class _MembershipPlanCardState extends State<MembershipPlanCard> {
+class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
   int _countdownSeconds = 0;
-  Timer? _timer;
+  PromotionCountdownService? _service;
 
   @override
   void initState() {
@@ -40,7 +40,6 @@ class _MembershipPlanCardState extends State<MembershipPlanCard> {
     // 当套餐 ID 或促销状态变化时，重新初始化倒计时
     if (oldWidget.plan.id != widget.plan.id ||
         oldWidget.plan.hasPromo != widget.plan.hasPromo) {
-      _cancelTimer();
       _initCountdown();
     }
   }
@@ -51,31 +50,32 @@ class _MembershipPlanCardState extends State<MembershipPlanCard> {
       setState(() => _countdownSeconds = 0);
       return;
     }
-    // 每次进入页面都从 1 小时（3600 秒）开始倒计时
-    setState(() => _countdownSeconds = 3600);
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) {
-        t.cancel();
-        return;
-      }
-      final newVal = _countdownSeconds - 1;
-      if (newVal <= 0) {
-        setState(() => _countdownSeconds = 0);
-        t.cancel();
-      } else {
-        setState(() => _countdownSeconds = newVal);
-      }
+    // 获取服务引用
+    _service = ref.read(promotionCountdownServiceProvider);
+    // 开始共享计时器（如果尚未开始）
+    _service!.startIfNeeded().then((_) {
+      if (!mounted) return;
+      // 获取当前剩余时间
+      setState(() {
+        _countdownSeconds = _service!.remainingSeconds;
+      });
     });
+    // 添加监听器，每秒更新UI
+    _service!.addListener(_updateCountdown);
   }
 
-  void _cancelTimer() {
-    _timer?.cancel();
-    _timer = null;
+  void _updateCountdown() {
+    if (!mounted) return;
+    setState(() {
+      _countdownSeconds = _service!.remainingSeconds;
+    });
   }
 
   @override
   void dispose() {
-    _cancelTimer();
+    // 使用保存的服务引用，避免在dispose后使用ref
+    _service?.removeListener(_updateCountdown);
+    _service = null;
     super.dispose();
   }
 
@@ -307,16 +307,11 @@ class _CountdownTag extends StatelessWidget {
 
   static String _formatDuration(int totalSeconds) {
     if (totalSeconds <= 0) return '';
-    final h = totalSeconds ~/ 3600;
-    final m = (totalSeconds % 3600) ~/ 60;
-    final s = totalSeconds % 60;
-    if (h > 0) {
-      return '${h.toString().padLeft(2, '0')}:'
-          '${m.toString().padLeft(2, '0')}:'
-          '${s.toString().padLeft(2, '0')}';
-    }
-    return '${m.toString().padLeft(2, '0')}:'
-        '${s.toString().padLeft(2, '0')}';
+    final duration = Duration(seconds: totalSeconds);
+    final hours = duration.inHours.toString().padLeft(2, '0');
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$hours:$minutes:$seconds';
   }
 }
 

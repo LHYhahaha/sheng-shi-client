@@ -17,6 +17,7 @@ import '../../domain/player_recharge_unlock_offer.dart';
 import '../modal/player_modal_results.dart';
 import '../modal/player_payment_method_modal_coordinator.dart';
 import 'player_payment_method_sheet.dart';
+import '../../../membership/application/promotion_countdown_service.dart';
 
 /// 播放器内充值解锁弹窗。
 ///
@@ -794,7 +795,7 @@ class _CoinPackageCard extends ConsumerWidget {
   }
 }
 
-class _PromoCountdownBadge extends ConsumerWidget {
+class _PromoCountdownBadge extends ConsumerStatefulWidget {
   const _PromoCountdownBadge({
     required this.sessionKey,
     required this.packageId,
@@ -804,16 +805,27 @@ class _PromoCountdownBadge extends ConsumerWidget {
   final String packageId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PromoCountdownBadge> createState() =>
+      _PromoCountdownBadgeState();
+}
+
+class _PromoCountdownBadgeState extends ConsumerState<_PromoCountdownBadge> {
+  @override
+  void initState() {
+    super.initState();
+    // 开始共享计时器（如果尚未开始）
+    ref
+        .read(promotionCountdownServiceProvider)
+        .startIfNeeded();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return StreamBuilder(
       stream: Stream.periodic(const Duration(seconds: 1)),
       builder: (context, snapshot) {
-        final controller = ref.read(
-          playerRechargeUnlockControllerProvider(sessionKey).notifier,
-        );
-        final remainingSeconds = controller.getPromotionRemainingSeconds(
-          packageId,
-        );
+        final service = ref.read(promotionCountdownServiceProvider);
+        final remainingSeconds = service.remainingSeconds;
         final remaining = Duration(seconds: remainingSeconds);
 
         if (remainingSeconds <= 0) {

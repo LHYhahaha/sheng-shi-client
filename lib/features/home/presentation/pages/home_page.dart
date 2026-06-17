@@ -28,6 +28,7 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage> {
   final _scrollController = ScrollController();
+  final Map<int, double> _tabScrollOffsets = <int, double>{};
   late final PlayerStartupPreloadController _startupPreloadController;
   int _remoteDataSelectedIndex = 0; // 远程数据的选中分类索引
   int _lastScrollToTopRequest = 0; // 跟踪上次的滚动请求计数
@@ -50,15 +51,15 @@ class _HomePageState extends ConsumerState<HomePage> {
     _scrollController.addListener(_onScroll);
 
     // 监听滚动到顶部的请求
-    _scrollToTopListener = ref.listenManual(
-      homeScrollToTopRequestProvider,
-      (previous, next) {
-        if (next > _lastScrollToTopRequest) {
-          _lastScrollToTopRequest = next;
-          _scrollToTop();
-        }
-      },
-    );
+    _scrollToTopListener = ref.listenManual(homeScrollToTopRequestProvider, (
+      previous,
+      next,
+    ) {
+      if (next > _lastScrollToTopRequest) {
+        _lastScrollToTopRequest = next;
+        _scrollToTop();
+      }
+    });
 
     // 首页 remote 数据会在 HomeDataController 中监听 AuthState 自动加载
     // 不需要在这里手动加载 mock 数据，HomeFeedController 会根据 remote 数据的存在情况自动决定
@@ -99,18 +100,55 @@ class _HomePageState extends ConsumerState<HomePage> {
       }
       return;
     }
+  }
 
+  void _saveCurrentTabScrollOffset(HomeRemoteData remoteData) {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+
+    final tab = remoteData.getTabForCategoryIndex(_remoteDataSelectedIndex);
+    if (tab == null) {
+      return;
+    }
+
+    _tabScrollOffsets[tab.id] = _scrollController.offset;
+  }
+
+  void _restoreScrollOffsetForTab(int tabId) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+
+      final position = _scrollController.position;
+      final savedOffset = _tabScrollOffsets[tabId] ?? 0.0;
+      final targetOffset = savedOffset
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble();
+      _scrollController.jumpTo(targetOffset);
+    });
   }
 
   void _selectTab(int index) {
     final remoteData = ref.read(homeRemoteDataProvider);
 
-    // 如果使用远程数据，更新选中索引并滚动到顶部
+    // 如果使用远程数据，更新选中索引并恢复该 tab 的滚动位置
     if (remoteData != null) {
-      if (index >= remoteData.categories.length) {
+      if (index < 0 || index >= remoteData.categories.length) {
         return;
       }
 
+      if (index == _remoteDataSelectedIndex) {
+        return;
+      }
+
+      final nextTab = remoteData.getTabForCategoryIndex(index);
+      if (nextTab == null) {
+        return;
+      }
+
+      _saveCurrentTabScrollOffset(remoteData);
       setState(() {
         _remoteDataSelectedIndex = index;
       });
@@ -118,13 +156,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       unawaited(
         _startupPreloadController.cancel(reason: 'home category switch'),
       );
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          0,
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOut,
-        );
-      }
+      _restoreScrollOffsetForTab(nextTab.id);
       return;
     }
 
@@ -133,6 +165,14 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   /// 滚动到页面顶部
   void _scrollToTop() {
+    final remoteData = ref.read(homeRemoteDataProvider);
+    if (remoteData != null) {
+      final tab = remoteData.getTabForCategoryIndex(_remoteDataSelectedIndex);
+      if (tab != null) {
+        _tabScrollOffsets[tab.id] = 0;
+      }
+    }
+
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
         0,
@@ -162,9 +202,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     // 获取当前选中分类的剧卡列表
     final items =
         remoteData?.getDramasForCategoryIndex(selectedIndex) ?? const <Drama>[];
-    final selectedRemoteTab = remoteData?.getTabForCategoryIndex(
-      selectedIndex,
-    );
+    final selectedRemoteTab = remoteData?.getTabForCategoryIndex(selectedIndex);
 
     // 预热逻辑
     // 远程数据预热
@@ -220,7 +258,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
                   child: _HomeTitleBar(
-                    onMembershipTap: () => context.push(RoutePaths.membershipLocation(returnToProfile: true)),
+                    onMembershipTap: () => context.push(
+                      RoutePaths.membershipLocation(returnToProfile: true),
+                    ),
                   ),
                 ),
               ),
@@ -230,9 +270,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                   selectedTab: selectedIndex,
                   tabs: categories,
                   onTabChanged: (index) {
-                      // 远程数据：直接更新选中索引
-                      _selectTab(index);
-                      // mock 数据：使用原有逻辑
+                    // 远程数据：直接更新选中索引
+                    _selectTab(index);
+                    // mock 数据：使用原有逻辑
                   },
                 ),
               ),

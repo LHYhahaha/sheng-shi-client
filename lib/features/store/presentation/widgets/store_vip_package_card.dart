@@ -9,6 +9,7 @@ import '../../../../shared/theme/app_spacing.dart';
 import '../../domain/store_package.dart';
 import '../../application/store_controller.dart';
 import '../../../pay/provider/iap_price_service_provider.dart';
+import '../../../membership/application/promotion_countdown_service.dart';
 
 class StoreVipPackageCard extends ConsumerWidget {
   const StoreVipPackageCard({
@@ -118,10 +119,7 @@ class StoreVipPackageCard extends ConsumerWidget {
                 Positioned(
                   right: -2,
                   top: -1,
-                  child: _PromoCountdownBadge(
-                    endTime: package.promotionExpiresAt,
-                    fallbackSeconds: package.promotionExpireSeconds,
-                  ),
+                  child: _PromoCountdownBadge(package: package),
                 ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -220,61 +218,77 @@ class StoreVipPackageCard extends ConsumerWidget {
   }
 }
 
-class _PromoCountdownBadge extends StatefulWidget {
-  const _PromoCountdownBadge({
-    required this.endTime,
-    required this.fallbackSeconds,
-  });
+class _PromoCountdownBadge extends ConsumerStatefulWidget {
+  const _PromoCountdownBadge({required this.package});
 
-  final DateTime? endTime;
-  final int fallbackSeconds;
+  final StorePackage package;
 
   @override
-  State<_PromoCountdownBadge> createState() => _PromoCountdownBadgeState();
+  ConsumerState<_PromoCountdownBadge> createState() =>
+      _PromoCountdownBadgeState();
 }
 
-class _PromoCountdownBadgeState extends State<_PromoCountdownBadge> {
-  late DateTime _endTime;
+class _PromoCountdownBadgeState extends ConsumerState<_PromoCountdownBadge> {
+  int _remainingSeconds = 0;
+  PromotionCountdownService? _service;
 
   @override
   void initState() {
     super.initState();
-    _endTime =
-        widget.endTime ??
-        DateTime.now().add(Duration(seconds: widget.fallbackSeconds));
+    // 获取服务引用
+    _service = ref.read(promotionCountdownServiceProvider);
+    // 开始共享计时器（如果尚未开始）
+    _service!.startIfNeeded().then((_) {
+      if (!mounted) return;
+      // 获取当前剩余时间
+      setState(() {
+        _remainingSeconds = _service!.remainingSeconds;
+      });
+    });
+    // 添加监听器，每秒更新UI
+    _service!.addListener(_updateCountdown);
+  }
+
+  void _updateCountdown() {
+    if (!mounted) return;
+    setState(() {
+      _remainingSeconds = _service!.remainingSeconds;
+    });
+  }
+
+  @override
+  void dispose() {
+    // 使用保存的服务引用，避免在dispose后使用ref
+    _service?.removeListener(_updateCountdown);
+    _service = null;
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<int>(
-      stream: Stream.periodic(const Duration(seconds: 1), (value) => value),
-      builder: (context, snapshot) {
-        final remainingSeconds = _endTime.difference(DateTime.now()).inSeconds;
-        if (remainingSeconds <= 0) {
-          return const SizedBox.shrink();
-        }
+    if (_remainingSeconds <= 0) {
+      return const SizedBox.shrink();
+    }
 
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 2),
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFFFF9E53), Color(0xFFFE1340), Color(0xFFFE3273)],
-            ),
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(AppRadii.sm),
-              topRight: Radius.circular(AppRadii.sm),
-            ),
-          ),
-          child: Text(
-            _formatCountdown(Duration(seconds: remainingSeconds)),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        );
-      },
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 2),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFFF9E53), Color(0xFFFE1340), Color(0xFFFE3273)],
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(AppRadii.sm),
+          topRight: Radius.circular(AppRadii.sm),
+        ),
+      ),
+      child: Text(
+        _formatCountdown(Duration(seconds: _remainingSeconds)),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 
