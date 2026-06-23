@@ -35,6 +35,7 @@ import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/domain/player_playback_source.dart';
 import 'package:drama_client/core/toast/app_toast_provider.dart';
 import 'package:drama_client/features/player/presentation/pages/player_page.dart';
+import 'package:drama_client/features/player/presentation/widgets/player_payment_method_modal_layer.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_payment_method_sheet.dart';
 import 'package:drama_client/features/player/domain/player_recharge_unlock_offer.dart';
 import '../../core/toast/recording_app_toast_service.dart';
@@ -2013,6 +2014,89 @@ void main() {
       find.byKey(const ValueKey('player_recharge_coin_coins_300')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('payment method dismiss before purchase returns dismissed result', (
+    tester,
+  ) async {
+    bool? dismissedResult;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: PlayerPaymentMethodModalLayer(
+              sessionKey: 'single-a',
+              selection: PlayerPaymentSelection.coin(
+                const PlayerRechargeCoinPackage(
+                  id: '100',
+                  baseCoins: 300,
+                  bonusCoins: 0,
+                  googleProductId: 'coins_300',
+                  googlePriceLabel: r'$2.99',
+                ),
+              ),
+              onDismissed: (result) => dismissedResult = result,
+              onPurchaseSuccess: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('player_recharge_payment_close')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(dismissedResult, isNull);
+
+    dismissedResult = false;
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: PlayerPaymentMethodModalLayer(
+              key: const ValueKey('barrier_dismiss_layer'),
+              sessionKey: 'single-a',
+              selection: PlayerPaymentSelection.coin(
+                const PlayerRechargeCoinPackage(
+                  id: '100',
+                  baseCoins: 300,
+                  bonusCoins: 0,
+                  googleProductId: 'coins_300',
+                  googlePriceLabel: r'$2.99',
+                ),
+              ),
+              onDismissed: (result) => dismissedResult = result,
+              onPurchaseSuccess: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
+
+    expect(dismissedResult, isNull);
   });
 
   testWidgets('coin package purchase continues to coin unlock confirmation', (

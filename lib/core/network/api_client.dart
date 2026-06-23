@@ -287,7 +287,7 @@ class ApiClient {
         final response = await send();
         return _decode(response, decoder);
       } on ApiException catch (error) {
-        if (await _recoverFromGuestSessionExpired(error)) {
+        if (await _recoverFromSessionExpiredBusinessCode(error)) {
           rethrow;
         }
         if (await _recoverFromSessionInvalidated(error)) {
@@ -307,7 +307,7 @@ class ApiClient {
         final apiError = error.error is ApiException
             ? error.error! as ApiException
             : ApiException.fromDio(error);
-        if (await _recoverFromGuestSessionExpired(apiError)) {
+        if (await _recoverFromSessionExpiredBusinessCode(apiError)) {
           throw apiError;
         }
         if (await _recoverFromSessionInvalidated(apiError)) {
@@ -339,13 +339,13 @@ class ApiClient {
   }
 
   /// 401 时尝试 refresh；成功返回 true 以便外层重试原请求一次。
-  Future<bool> _recoverFromGuestSessionExpired(ApiException error) async {
+  Future<bool> _recoverFromSessionExpiredBusinessCode(ApiException error) async {
     if (error.businessCode != _guestSessionExpiredBusinessCode ||
         _sessionAuthHandler == null) {
       return false;
     }
 
-    return _sessionAuthHandler!.handleGuestSessionExpired();
+    return _sessionAuthHandler!.handleSessionExpiredBusinessCode();
   }
 
   Future<bool> _recoverFromSessionInvalidated(ApiException error) async {

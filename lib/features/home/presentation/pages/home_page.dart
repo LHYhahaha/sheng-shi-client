@@ -544,6 +544,8 @@ class _HomeDramaCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visibleTags = data.tags.take(2).toList(growable: false);
+
     return Material(
       color: AppColors.surfacePanel,
       borderRadius: BorderRadius.circular(AppRadii.sm),
@@ -605,19 +607,22 @@ class _HomeDramaCard extends StatelessWidget {
                       height: 1.3,
                     ),
                   ),
-                  if (data.tags.isNotEmpty) ...[
+                  if (visibleTags.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     SizedBox(
                       height: 16,
-                      child: Row(
-                        children: [
-                          for (final tag
-                              in data.tags.take(2).toList().indexed) ...[
-                            _HomeTag(label: tag.$2),
-                            if (tag.$1 != data.tags.take(2).length - 1)
-                              const SizedBox(width: 8),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const ClampingScrollPhysics(),
+                        child: Row(
+                          children: [
+                            for (final tag in visibleTags.indexed) ...[
+                              _HomeTag(label: tag.$2),
+                              if (tag.$1 != visibleTags.length - 1)
+                                const SizedBox(width: 8),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ],
@@ -744,7 +749,7 @@ class _HomeTag extends StatelessWidget {
       child: Text(
         label,
         maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+        softWrap: false,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
           color: const Color(0xFFC5BEC9),
           fontSize: 9,

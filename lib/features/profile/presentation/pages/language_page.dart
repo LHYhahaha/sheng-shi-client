@@ -7,6 +7,7 @@ import '../../../../core/i18n/i18n.dart';
 import '../../../../core/locale/app_locale_controller.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_blocking_loading_overlay.dart';
 
 class LanguagePage extends ConsumerStatefulWidget {
   const LanguagePage({super.key});
@@ -17,6 +18,7 @@ class LanguagePage extends ConsumerStatefulWidget {
 
 class _LanguagePageState extends ConsumerState<LanguagePage> {
   String? _tempSelectedLanguageCode;
+  bool _isSwitching = false;
 
   String _getEffectiveLanguageCode() {
     final currentLocale = ref.read(appLocaleControllerProvider);
@@ -24,26 +26,52 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
   }
 
   void _onLanguageSelected(String languageCode) {
+    if (_isSwitching) {
+      return;
+    }
     setState(() {
       _tempSelectedLanguageCode = languageCode;
     });
   }
 
   Future<void> _onDone() async {
+    if (_isSwitching) {
+      return;
+    }
+
     final languageCode = _tempSelectedLanguageCode;
     if (languageCode != null) {
+      setState(() {
+        _isSwitching = true;
+      });
+
       final localeController = ref.read(appLocaleControllerProvider.notifier);
-      localeController.select(Locale(languageCode));
       try {
         await ref
             .read(i18nControllerProvider.notifier)
             .switchLanguage(languageCode);
-      } catch (_) {
-        // Keep the selected locale active even if the remote language package
-        // cannot be refreshed; AppLocalizations will fall back to bundled text.
+        await localeController.selectAndSave(Locale(languageCode));
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isSwitching = false;
+          });
+        }
       }
     }
+
     if (!mounted) return;
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(RoutePaths.profile);
+    }
+  }
+
+  void _onBack() {
+    if (_isSwitching) {
+      return;
+    }
     if (context.canPop()) {
       context.pop();
     } else {
@@ -55,33 +83,47 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
   Widget build(BuildContext context) {
     final selectedLanguageCode = _getEffectiveLanguageCode();
     final currentLocale = ref.watch(appLocaleControllerProvider);
-    final showDoneButton = _tempSelectedLanguageCode != null &&
+    final showDoneButton =
+        _tempSelectedLanguageCode != null &&
         _tempSelectedLanguageCode != currentLocale.languageCode;
 
-    return Scaffold(
-      backgroundColor: AppColors.black,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    return PopScope(
+      canPop: !_isSwitching,
+      child: Scaffold(
+        backgroundColor: AppColors.black,
+        body: Stack(
           children: [
-            _LanguageHeader(
-              title: context.l10n.languagePageTitle,
-              onDone: _onDone,
-              showDoneButton: showDoneButton,
+            AbsorbPointer(
+              absorbing: _isSwitching,
+              child: SafeArea(
+                bottom: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _LanguageHeader(
+                      title: context.l10n.languagePageTitle,
+                      onBack: _onBack,
+                      onDone: _onDone,
+                      showDoneButton: showDoneButton,
+                    ),
+                    const SizedBox(height: 12),
+                    _LanguageOption(
+                      label: 'English',
+                      selected: selectedLanguageCode == 'en',
+                      onTap: () => _onLanguageSelected('en'),
+                    ),
+                    const SizedBox(height: 28),
+                    _LanguageOption(
+                      label: '简体中文',
+                      selected: selectedLanguageCode == 'zh',
+                      onTap: () => _onLanguageSelected('zh'),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: 12),
-            _LanguageOption(
-              label: 'English',
-              selected: selectedLanguageCode == 'en',
-              onTap: () => _onLanguageSelected('en'),
-            ),
-            const SizedBox(height: 28),
-            _LanguageOption(
-              label: '简体中文',
-              selected: selectedLanguageCode == 'zh',
-              onTap: () => _onLanguageSelected('zh'),
-            ),
+            if (_isSwitching)
+              AppBlockingLoadingOverlay(label: context.l10n.loading),
           ],
         ),
       ),
@@ -92,11 +134,13 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
 class _LanguageHeader extends StatelessWidget {
   const _LanguageHeader({
     required this.title,
+    required this.onBack,
     required this.onDone,
     required this.showDoneButton,
   });
 
   final String title;
+  final VoidCallback onBack;
   final VoidCallback onDone;
   final bool showDoneButton;
 
@@ -110,13 +154,7 @@ class _LanguageHeader extends StatelessWidget {
           Positioned(
             left: 6,
             child: IconButton(
-              onPressed: () {
-                if (context.canPop()) {
-                  context.pop();
-                } else {
-                  context.go(RoutePaths.profile);
-                }
-              },
+              onPressed: onBack,
               padding: EdgeInsets.zero,
               splashColor: Colors.transparent,
               highlightColor: Colors.transparent,

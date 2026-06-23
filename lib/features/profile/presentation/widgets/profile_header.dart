@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
-import '../../../auth/domain/auth_session.dart';
+import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../application/profile_controller.dart';
 
 class ProfileHeader extends StatelessWidget {
@@ -113,18 +113,9 @@ class ProfileHeader extends StatelessWidget {
     final avatarResource = state.avatarResource;
     if (avatarResource != null) {
       if (avatarResource.isNetwork) {
-        return Image.network(
-          avatarResource.value.trim(),
+        return AppCachedNetworkImage(
+          imageUrl: avatarResource.value,
           fit: BoxFit.cover,
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) {
-              return child;
-            }
-            return Image.asset(authDefaultAvatarAssetPath, fit: BoxFit.cover);
-          },
-          errorBuilder: (context, error, stackTrace) {
-            return Image.asset(authDefaultAvatarAssetPath, fit: BoxFit.cover);
-          },
         );
       } else if (avatarResource.isAsset) {
         return Image.asset(avatarResource.value, fit: BoxFit.cover);

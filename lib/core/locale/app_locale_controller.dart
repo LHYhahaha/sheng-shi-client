@@ -23,6 +23,12 @@ class AppLocaleController extends Notifier<Locale> {
     unawaited(_saveAndLoadLanguage(languageCode));
   }
 
+  Future<void> selectAndSave(Locale locale) async {
+    final languageCode = normalizeLanguageCode(locale.languageCode);
+    state = Locale(languageCode);
+    await _saveAndLoadLanguage(languageCode);
+  }
+
   Future<void> _restoreSavedLocale() async {
     final languageCode = await readSavedLanguageCode();
     if (languageCode != state.languageCode) {

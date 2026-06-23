@@ -90,7 +90,6 @@ class I18nController extends Notifier<I18nState> {
   }
 
   Future<void> switchLanguage(String languageCode) async {
-    AppLocalizations.setRemoteStrings(null);
     state = state.copyWith(isLoading: true, error: null);
     try {
       final service = await ref.read(i18nServiceProvider.future);
@@ -102,8 +101,12 @@ class I18nController extends Notifier<I18nState> {
         isLoading: false,
       );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
-      rethrow;
+      AppLocalizations.setRemoteStrings(null);
+      state = I18nState(
+        languageCode: languageCode,
+        isLoading: false,
+        error: e.toString(),
+      );
     }
   }
 

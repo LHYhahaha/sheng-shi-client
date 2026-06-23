@@ -62,7 +62,7 @@ class _PlayerPaymentMethodModalLayerState
     super.dispose();
   }
 
-  Future<void> dismiss({bool? result = false}) async {
+  Future<void> dismiss({bool? result}) async {
     if (_isDismissing) {
       return;
     }
@@ -96,7 +96,7 @@ class _PlayerPaymentMethodModalLayerState
             child: PlayerPaymentMethodSheet(
               sessionKey: widget.sessionKey,
               selection: widget.selection,
-              onDismiss: dismiss,
+              onDismiss: () => dismiss(result: null),
               onPurchaseSuccess: widget.onPurchaseSuccess,
             ),
           ),
