@@ -91,6 +91,7 @@ class PlayerRechargeMembershipPackage {
     required this.periodLabel,
     required this.googleProductId,
     required this.googlePriceLabel,
+    this.periodIso,
     this.originalPriceLabel,
     this.isPromotional = false,
     this.description,
@@ -104,6 +105,7 @@ class PlayerRechargeMembershipPackage {
   final String periodLabel;
   final String googleProductId;
   final String googlePriceLabel;
+  final String? periodIso;
   final String? originalPriceLabel;
   final bool isPromotional;
 

@@ -63,6 +63,26 @@ void main() {
     expect(session.openedSources, [_playableSource(1)]);
   });
 
+  test('passes playback source http headers to media session', () async {
+    final session = _FakePlaybackSession();
+    final sourceRepository = _CountingPlaybackSourceRepository(
+      httpHeaders: const {'Authorization': 'Bearer token-1'},
+    );
+    final container = _createContainer(
+      session,
+      sourceRepository: sourceRepository,
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+
+    expect(session.openedSources, [_playableSource(1)]);
+    expect(session.openHttpHeaders, [
+      {'Authorization': 'Bearer token-1'},
+    ]);
+  });
+
   test('keeps poster visible until source open completes', () async {
     final openCompleter = Completer<void>();
     final session = _FakePlaybackSession(openCompleter: openCompleter);
@@ -728,10 +748,18 @@ void main() {
 
   test('single drama saves and restores mock playback progress', () async {
     final progressRepository = InMemoryPlaybackProgressRepository();
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: Duration.zero,
+    );
+    final sourceRepository = MockPlayerPlaybackSourceRepository(
+      preloadManager: preloadManager,
+    );
     final firstSession = _FakePlaybackSession();
     final firstContainer = _createContainer(
       firstSession,
+      preloadManager: preloadManager,
       progressRepository: progressRepository,
+      sourceRepository: sourceRepository,
       addDisposeTearDown: false,
     );
     final provider = playerPlaybackControllerProvider('single:drama-a:1');
@@ -746,19 +774,413 @@ void main() {
     final secondSession = _FakePlaybackSession();
     final secondContainer = _createContainer(
       secondSession,
+      preloadManager: preloadManager,
       progressRepository: progressRepository,
+      sourceRepository: sourceRepository,
       addDisposeTearDown: false,
     );
     final secondController = secondContainer.read(provider.notifier);
 
     await secondController.playItem(_item(1));
 
-    expect(secondSession.seekedPositions, [const Duration(seconds: 35)]);
+    expect(secondSession.openPlayFlags, [true]);
+    expect(secondSession.openStartPositions, [const Duration(seconds: 35)]);
+    expect(secondSession.seekedPositions, isEmpty);
     expect(
       secondContainer.read(provider).position,
       const Duration(seconds: 35),
     );
     secondContainer.dispose();
+  });
+
+  test('late duplicate resume progress does not seek again', () async {
+    final progressRepository = InMemoryPlaybackProgressRepository();
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: Duration.zero,
+    );
+    final sourceRepository = MockPlayerPlaybackSourceRepository(
+      preloadManager: preloadManager,
+    );
+    await progressRepository.saveProgress(
+      PlaybackProgress(
+        itemId: 'drama-a-ep-1',
+        position: const Duration(seconds: 35),
+        duration: const Duration(seconds: 120),
+        updatedAt: DateTime.now(),
+      ),
+    );
+    final session = _FakePlaybackSession();
+    final container = _createContainer(
+      session,
+      preloadManager: preloadManager,
+      progressRepository: progressRepository,
+      sourceRepository: sourceRepository,
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.restoreCurrentProgress(
+      PlaybackProgress(
+        itemId: 'drama-a-ep-1',
+        position: const Duration(seconds: 35),
+        duration: const Duration(seconds: 120),
+        updatedAt: DateTime.now(),
+      ),
+    );
+
+    expect(session.openPlayFlags, [true]);
+    expect(session.openStartPositions, [const Duration(seconds: 35)]);
+    expect(session.seekedPositions, isEmpty);
+  });
+
+  test('resume confirmation does not seek again at restored position', () async {
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: Duration.zero,
+    );
+    final sourceRepository = MockPlayerPlaybackSourceRepository(
+      preloadManager: preloadManager,
+    );
+    final session = _FakePlaybackSession();
+    final container = _createContainer(
+      session,
+      preloadManager: preloadManager,
+      sourceRepository: sourceRepository,
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.restoreCurrentProgress(
+      PlaybackProgress(
+        itemId: 'drama-a-ep-1',
+        position: const Duration(seconds: 35),
+        duration: const Duration(seconds: 120),
+        updatedAt: DateTime.now(),
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+
+    expect(session.seekedPositions, [const Duration(seconds: 35)]);
+  });
+
+  test('resume start does not rewind state after media position advances', () async {
+    final progressRepository = InMemoryPlaybackProgressRepository();
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: Duration.zero,
+    );
+    final sourceRepository = MockPlayerPlaybackSourceRepository(
+      preloadManager: preloadManager,
+    );
+    await progressRepository.saveProgress(
+      PlaybackProgress(
+        itemId: 'drama-a-ep-1',
+        position: const Duration(seconds: 35),
+        duration: const Duration(seconds: 120),
+        updatedAt: DateTime.now(),
+      ),
+    );
+    final session = _FakePlaybackSession(
+      positionOnOpen: const Duration(seconds: 37),
+    );
+    final container = _createContainer(
+      session,
+      preloadManager: preloadManager,
+      progressRepository: progressRepository,
+      sourceRepository: sourceRepository,
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await Future<void>.delayed(Duration.zero);
+
+    expect(session.openPlayFlags, [true]);
+    expect(session.openStartPositions, [const Duration(seconds: 35)]);
+    expect(session.seekedPositions, isEmpty);
+    expect(session.playCount, 1);
+    expect(container.read(provider).position, const Duration(seconds: 37));
+  });
+
+  test('resume confirmation does not rewind after playback advances', () async {
+    final progressRepository = InMemoryPlaybackProgressRepository();
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: Duration.zero,
+    );
+    final sourceRepository = MockPlayerPlaybackSourceRepository(
+      preloadManager: preloadManager,
+    );
+    await progressRepository.saveProgress(
+      PlaybackProgress(
+        itemId: 'drama-a-ep-1',
+        position: const Duration(seconds: 35),
+        duration: const Duration(seconds: 120),
+        updatedAt: DateTime.now(),
+      ),
+    );
+    final session = _FakePlaybackSession(emitPositionOnSeek: false);
+    final container = _createContainer(
+      session,
+      preloadManager: preloadManager,
+      progressRepository: progressRepository,
+      sourceRepository: sourceRepository,
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    session.emitPosition(const Duration(seconds: 39));
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+
+    expect(session.openStartPositions, [const Duration(seconds: 35)]);
+    expect(session.seekedPositions, isEmpty);
+    expect(container.read(provider).position, const Duration(seconds: 39));
+  });
+
+  test('resume start trusts open start without forced seek', () async {
+    final progressRepository = InMemoryPlaybackProgressRepository();
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: Duration.zero,
+    );
+    final sourceRepository = MockPlayerPlaybackSourceRepository(
+      preloadManager: preloadManager,
+    );
+    await progressRepository.saveProgress(
+      PlaybackProgress(
+        itemId: 'drama-a-ep-1',
+        position: const Duration(seconds: 35),
+        duration: const Duration(seconds: 120),
+        updatedAt: DateTime.now(),
+      ),
+    );
+    final session = _FakePlaybackSession(emitPositionOnSeek: false);
+    final container = _createContainer(
+      session,
+      preloadManager: preloadManager,
+      progressRepository: progressRepository,
+      sourceRepository: sourceRepository,
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+
+    expect(session.openPlayFlags, [true]);
+    expect(session.openStartPositions, [const Duration(seconds: 35)]);
+    expect(session.seekedPositions, isEmpty);
+    expect(session.playCount, 1);
+    expect(session.pauseCount, 0);
+  });
+
+  test('resume start clamps progress beyond item duration', () async {
+    final progressRepository = InMemoryPlaybackProgressRepository();
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: Duration.zero,
+    );
+    final sourceRepository = MockPlayerPlaybackSourceRepository(
+      preloadManager: preloadManager,
+    );
+    await progressRepository.saveProgress(
+      PlaybackProgress(
+        itemId: 'drama-a-ep-1',
+        position: const Duration(seconds: 92),
+        duration: const Duration(seconds: 161),
+        updatedAt: DateTime.now(),
+      ),
+    );
+    final session = _FakePlaybackSession();
+    final container = _createContainer(
+      session,
+      preloadManager: preloadManager,
+      progressRepository: progressRepository,
+      sourceRepository: sourceRepository,
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(
+      _item(1, duration: const Duration(seconds: 60)),
+    );
+
+    expect(session.openPlayFlags, [true]);
+    expect(session.openStartPositions, [const Duration(seconds: 57)]);
+    expect(session.seekedPositions, isEmpty);
+    expect(container.read(provider).position, const Duration(seconds: 57));
+    expect(container.read(provider).duration, const Duration(seconds: 60));
+  });
+
+  test('resume start uses item duration before media duration arrives', () async {
+    final progressRepository = InMemoryPlaybackProgressRepository();
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: Duration.zero,
+    );
+    final sourceRepository = MockPlayerPlaybackSourceRepository(
+      preloadManager: preloadManager,
+    );
+    await progressRepository.saveProgress(
+      PlaybackProgress(
+        itemId: 'drama-a-ep-1',
+        position: const Duration(seconds: 23),
+        duration: const Duration(seconds: 80),
+        updatedAt: DateTime.now(),
+      ),
+    );
+    final session = _FakePlaybackSession();
+    final container = _createContainer(
+      session,
+      preloadManager: preloadManager,
+      progressRepository: progressRepository,
+      sourceRepository: sourceRepository,
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(
+      _item(1, duration: const Duration(seconds: 60)),
+    );
+
+    expect(container.read(provider).position, const Duration(seconds: 23));
+    expect(container.read(provider).duration, const Duration(seconds: 60));
+  });
+
+  test('resume guard does not rewind after playback advances', () async {
+    final progressRepository = InMemoryPlaybackProgressRepository();
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: Duration.zero,
+    );
+    final sourceRepository = MockPlayerPlaybackSourceRepository(
+      preloadManager: preloadManager,
+    );
+    await progressRepository.saveProgress(
+      PlaybackProgress(
+        itemId: 'drama-a-ep-1',
+        position: const Duration(seconds: 23),
+        duration: const Duration(seconds: 80),
+        updatedAt: DateTime.now(),
+      ),
+    );
+    final session = _FakePlaybackSession();
+    final container = _createContainer(
+      session,
+      preloadManager: preloadManager,
+      progressRepository: progressRepository,
+      sourceRepository: sourceRepository,
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    session.emitPosition(const Duration(seconds: 26));
+    await Future<void>.delayed(Duration.zero);
+    session.emitPosition(const Duration(seconds: 21));
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+
+    expect(container.read(provider).position, const Duration(seconds: 26));
+    expect(session.seekedPositions, [const Duration(seconds: 26)]);
+  });
+
+  test('resume guard keeps blocking stale positions after advancing', () async {
+    final progressRepository = InMemoryPlaybackProgressRepository();
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: Duration.zero,
+    );
+    final sourceRepository = MockPlayerPlaybackSourceRepository(
+      preloadManager: preloadManager,
+    );
+    await progressRepository.saveProgress(
+      PlaybackProgress(
+        itemId: 'drama-a-ep-1',
+        position: const Duration(seconds: 23),
+        duration: const Duration(seconds: 80),
+        updatedAt: DateTime.now(),
+      ),
+    );
+    final session = _FakePlaybackSession();
+    final container = _createContainer(
+      session,
+      preloadManager: preloadManager,
+      progressRepository: progressRepository,
+      sourceRepository: sourceRepository,
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    session.emitPosition(const Duration(seconds: 29));
+    await Future<void>.delayed(Duration.zero);
+    session.emitPosition(const Duration(seconds: 21));
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+
+    expect(container.read(provider).position, const Duration(seconds: 29));
+    expect(session.seekedPositions, [const Duration(seconds: 29)]);
+  });
+
+  test('resume start opens at restored position without blocking', () async {
+    final progressRepository = InMemoryPlaybackProgressRepository();
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: Duration.zero,
+    );
+    final sourceRepository = MockPlayerPlaybackSourceRepository(
+      preloadManager: preloadManager,
+    );
+    await progressRepository.saveProgress(
+      PlaybackProgress(
+        itemId: 'drama-a-ep-1',
+        position: const Duration(seconds: 23),
+        duration: const Duration(seconds: 80),
+        updatedAt: DateTime.now(),
+      ),
+    );
+    final session = _FakePlaybackSession();
+    final container = _createContainer(
+      session,
+      preloadManager: preloadManager,
+      progressRepository: progressRepository,
+      sourceRepository: sourceRepository,
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+
+    expect(session.openPlayFlags, [true]);
+    expect(session.openStartPositions, [const Duration(seconds: 23)]);
+    expect(session.seekedPositions, isEmpty);
+    expect(session.playCount, 1);
+    expect(container.read(provider).position, const Duration(seconds: 23));
+  });
+
+  test('late stale resume progress does not rewind active playback', () async {
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: Duration.zero,
+    );
+    final sourceRepository = MockPlayerPlaybackSourceRepository(
+      preloadManager: preloadManager,
+    );
+    final session = _FakePlaybackSession();
+    final container = _createContainer(
+      session,
+      preloadManager: preloadManager,
+      sourceRepository: sourceRepository,
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    session.emitDuration(const Duration(seconds: 120));
+    session.emitPosition(const Duration(seconds: 45));
+    await Future<void>.delayed(Duration.zero);
+    await controller.restoreCurrentProgress(
+      PlaybackProgress(
+        itemId: 'drama-a-ep-1',
+        position: const Duration(seconds: 35),
+        duration: const Duration(seconds: 120),
+        updatedAt: DateTime.now(),
+      ),
+    );
+
+    expect(session.seekedPositions, isEmpty);
+    expect(container.read(provider).position, const Duration(seconds: 45));
   });
 
   test('for you does not restore cross-session progress', () async {
@@ -1356,13 +1778,22 @@ void main() {
     },
   );
 
-  test('same source different item is still prepared as candidate', () async {
+  test('same source different item is not opened as prepared media session', () async {
     final currentSession = _FakePlaybackSession();
     final preparedSession = _FakePlaybackSession();
     var index = 0;
     final sessions = [currentSession, preparedSession];
     PlayerPlaybackSession sessionFactory() => sessions[index++];
-    final container = _createPrepareContainer(sessionFactory);
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: Duration.zero,
+    );
+    final container = _createPrepareContainer(
+      sessionFactory,
+      sourceRepository: MockPlayerPlaybackSourceRepository(
+        preloadManager: preloadManager,
+      ),
+      preloadManager: preloadManager,
+    );
     addTearDown(container.dispose);
     final provider = playerPlaybackControllerProvider('single:drama-a:1');
     final controller = container.read(provider.notifier);
@@ -1374,12 +1805,11 @@ void main() {
     ], 0);
     await Future<void>.delayed(const Duration(milliseconds: 80));
 
-    expect(preparedSession.openedSources, [_videoUrl]);
+    expect(preparedSession.openedSources, isEmpty);
     expect(
       controller.exportTimingReport(),
-      contains('candidates=drama-a-ep-2'),
+      contains('sessionAllowedIds=drama-a-ep-1'),
     );
-    expect(controller.exportTimingReport(), isNot(contains('current_source')));
   });
 
   test(
@@ -1999,6 +2429,8 @@ ProviderContainer _createPrepareContainer(
   PlayerPlaybackSession Function() sessionFactory, {
   Duration warmUpTimeout = const Duration(milliseconds: 4000),
   PlayerPreloadConfig? preloadConfig,
+  PlayerPlaybackSourceRepository? sourceRepository,
+  PlayerPlaybackPreloadManager? preloadManager,
 }) {
   final container = ProviderContainer(
     overrides: [
@@ -2010,8 +2442,13 @@ ProviderContainer _createPrepareContainer(
         ),
       ),
       playerPlaybackPreloadManagerProvider.overrideWithValue(
-        MockPlayerPlaybackPreloadManager(preloadDelay: Duration.zero),
+        preloadManager ??
+            MockPlayerPlaybackPreloadManager(preloadDelay: Duration.zero),
       ),
+      if (sourceRepository != null)
+        playerPlaybackSourceRepositoryProvider.overrideWithValue(
+          sourceRepository,
+        ),
       if (preloadConfig != null)
         playerPreloadConfigProvider.overrideWithValue(preloadConfig),
     ],
@@ -2026,6 +2463,7 @@ PlayerFeedItem _item(
   bool hasSource = true,
   String? videoUrl,
   PlayerFeedMode mode = PlayerFeedMode.singleDrama,
+  Duration? duration,
 }) {
   final episode = PlayerEpisode(
     id: 'ep-$episodeNumber',
@@ -2035,6 +2473,7 @@ PlayerFeedItem _item(
         videoUrl ??
         (hasSource ? (episodeNumber == 1 ? _videoUrl : _secondVideoUrl) : null),
     isAvailable: isAvailable,
+    duration: duration,
   );
   final content = PlayerContent(
     id: 'drama-a',
@@ -2047,6 +2486,7 @@ PlayerFeedItem _item(
     posterAssetPath: 'assets/images/player/recommend_1.png',
     episodes: [episode],
     recommendations: const [],
+    episodeTotal: 1,
   );
   return PlayerFeedItem(
     id: '${content.id}-${episode.id}',
@@ -2067,6 +2507,9 @@ Map<String, PlaybackPreloadStatus> _preloadStatusById(
 
 class _CountingPlaybackSourceRepository
     implements PlayerPlaybackSourceRepository {
+  _CountingPlaybackSourceRepository({this.httpHeaders});
+
+  final Map<String, String>? httpHeaders;
   var resolveCount = 0;
   var preloadCount = 0;
 
@@ -2082,6 +2525,7 @@ class _CountingPlaybackSourceRepository
       expiresAt: DateTime.now().add(const Duration(minutes: 10)),
       codecHint: 'hls',
       status: PlaybackSourceStatus.resolved,
+      httpHeaders: httpHeaders,
     );
   }
 
@@ -2158,10 +2602,14 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     this.openCompleter,
     this.shouldThrowOnOpen = false,
     this.emitWidthOnOpen = true,
+    this.positionOnOpen,
+    this.emitPositionOnSeek = true,
   });
 
   final Completer<void>? openCompleter;
   final bool emitWidthOnOpen;
+  final Duration? positionOnOpen;
+  final bool emitPositionOnSeek;
   bool shouldThrowOnOpen;
   final _bufferingController = StreamController<bool>.broadcast();
   final _playingController = StreamController<bool>.broadcast();
@@ -2174,6 +2622,8 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   final _errorController = StreamController<String>.broadcast();
   final openedSources = <String>[];
   final openPlayFlags = <bool>[];
+  final openStartPositions = <Duration?>[];
+  final openHttpHeaders = <Map<String, String>?>[];
   final seekedPositions = <Duration>[];
   final rates = <double>[];
   final volumes = <double>[];
@@ -2213,9 +2663,16 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   Stream<String> get errorStream => _errorController.stream;
 
   @override
-  Future<void> open(String source, {bool play = true}) async {
+  Future<void> open(
+    String source, {
+    bool play = true,
+    Duration? start,
+    Map<String, String>? httpHeaders,
+  }) async {
     openedSources.add(source);
     openPlayFlags.add(play);
+    openStartPositions.add(start);
+    openHttpHeaders.add(httpHeaders);
     _bufferingController.add(true);
     await (openCompleter?.future ?? Future<void>.value());
     if (shouldThrowOnOpen) {
@@ -2223,6 +2680,10 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     }
     if (emitWidthOnOpen) {
       _widthController.add(1280);
+    }
+    final position = positionOnOpen;
+    if (position != null) {
+      _positionController.add(position);
     }
     _completedController.add(false);
     _playingController.add(play);
@@ -2272,6 +2733,9 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   @override
   Future<void> seek(Duration position) async {
     seekedPositions.add(position);
+    if (emitPositionOnSeek) {
+      _positionController.add(position);
+    }
     _completedController.add(false);
   }
 

@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,7 +6,9 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../../core/auth/session_cleanup_types.dart';
 import '../../entitlement/application/entitlement_controller.dart';
+import '../../pay/application/iap_pending_purchase_cleaner.dart';
 import '../../pay/application/iap_price_service.dart';
+import '../../pay/application/payment_loading_controller.dart';
 import '../../pay/provider/iap_price_service_provider.dart';
 import '../../pay/provider/iap_purchase_service_provider.dart';
 import '../../pay/provider/pay_repository_provider.dart';
@@ -28,6 +30,8 @@ enum StorePurchaseStatus {
   cancelled,
 }
 
+enum StorePurchaseFailureKind { orderCreation, payment, verification }
+
 class StoreState {
   const StoreState({
     required this.isLoading,
@@ -38,6 +42,7 @@ class StoreState {
     required this.selectedPackageId,
     required this.confirmationPackageId,
     required this.purchaseStatus,
+    required this.purchaseFailureKind,
     required this.iapProductDetails,
     this.error,
   });
@@ -51,6 +56,7 @@ class StoreState {
       selectedPackageId = null,
       confirmationPackageId = null,
       purchaseStatus = StorePurchaseStatus.idle,
+      purchaseFailureKind = null,
       iapProductDetails = const {},
       error = null;
 
@@ -62,6 +68,7 @@ class StoreState {
   final String? selectedPackageId;
   final String? confirmationPackageId;
   final StorePurchaseStatus purchaseStatus;
+  final StorePurchaseFailureKind? purchaseFailureKind;
   final Map<String, ProductDetails> iapProductDetails;
   final Object? error;
 
@@ -95,10 +102,12 @@ class StoreState {
     String? selectedPackageId,
     String? confirmationPackageId,
     StorePurchaseStatus? purchaseStatus,
+    StorePurchaseFailureKind? purchaseFailureKind,
     Map<String, ProductDetails>? iapProductDetails,
     Object? error,
     bool clearError = false,
     bool clearConfirmation = false,
+    bool clearPurchaseFailure = false,
   }) {
     return StoreState(
       isLoading: isLoading ?? this.isLoading,
@@ -111,6 +120,9 @@ class StoreState {
           ? null
           : confirmationPackageId ?? this.confirmationPackageId,
       purchaseStatus: purchaseStatus ?? this.purchaseStatus,
+      purchaseFailureKind: clearPurchaseFailure
+          ? null
+          : purchaseFailureKind ?? this.purchaseFailureKind,
       iapProductDetails: iapProductDetails ?? this.iapProductDetails,
       error: clearError ? null : error ?? this.error,
     );
@@ -122,6 +134,7 @@ class StoreController extends Notifier<StoreState> {
   static const _coinProductType = 1;
   static const _vipProductType = 2;
   static const _purchaseResultTimeout = Duration(seconds: 30);
+  static const _paymentSheetDismissDelay = Duration(milliseconds: 260);
 
   int _generation = 0;
   int _purchaseGeneration = 0;
@@ -149,10 +162,9 @@ class StoreController extends Notifier<StoreState> {
         return;
       }
 
-      // 检查用户是否已是会员
+      // Check whether the user is already a member.
       final isMember = ref.read(entitlementControllerProvider).isMember;
-
-      // 如果用户已是会员，不加载会员商品
+      // Hide VIP packages for existing members.
       final vipPackagesRaw = isMember ? <StorePackage>[] : data.vipPackages;
       final coinPackagesRaw = data.coinPackages;
 
@@ -238,6 +250,7 @@ class StoreController extends Notifier<StoreState> {
       confirmationPackageId: selectedPackage.id,
       purchaseStatus: StorePurchaseStatus.idle,
       clearError: true,
+      clearPurchaseFailure: true,
     );
   }
 
@@ -246,6 +259,7 @@ class StoreController extends Notifier<StoreState> {
     state = state.copyWith(
       purchaseStatus: StorePurchaseStatus.idle,
       clearConfirmation: true,
+      clearPurchaseFailure: true,
     );
   }
 
@@ -258,6 +272,9 @@ class StoreController extends Notifier<StoreState> {
     final purchaseGeneration = _purchaseGeneration;
     final package = state.confirmationPackage!;
     StreamSubscription<PurchaseDetails>? sub;
+    StreamSubscription<Object>? errorSub;
+    final loading = ref.read(paymentLoadingControllerProvider.notifier);
+    loading.show();
     try {
       final platformProductId = package.platformProductId;
       if (platformProductId == null || platformProductId.isEmpty) {
@@ -275,6 +292,7 @@ class StoreController extends Notifier<StoreState> {
       state = state.copyWith(
         purchaseStatus: StorePurchaseStatus.creatingOrder,
         clearError: true,
+        clearPurchaseFailure: true,
       );
 
       final productId = int.tryParse(package.id);
@@ -283,6 +301,18 @@ class StoreController extends Notifier<StoreState> {
       }
 
       final productType = _productTypeFor(package);
+      await ref
+          .read(iapPendingPurchaseCleanerProvider)
+          .cleanupBeforeCreateOrder(
+            source: 'store',
+            productIds: package.isCoinPackage
+                ? {productDetails.id}
+                : const <String>{},
+          );
+      if (!_isCurrentPurchase(purchaseGeneration, package.id)) {
+        return;
+      }
+
       final payRepository = ref.read(payRepositoryProvider);
       final paymentOrder = await payRepository.createPaymentOrder(
         productId: productId,
@@ -298,29 +328,43 @@ class StoreController extends Notifier<StoreState> {
       if (iapService == null) {
         throw Exception('IAP purchase service not available');
       }
+      final googleApplicationUserName =
+          iapService.buildOrderApplicationUserName(
+        orderNo: paymentOrder.orderNo,
+        clientOrderNo: paymentOrder.clientOrderNo,
+      );
 
       final completer = Completer<PurchaseDetails?>();
       sub = iapService.purchaseStream.listen((details) {
         final isCurrentProduct = details.productID == productDetails!.id;
+        final isPurchaseError = details.status == PurchaseStatus.error;
         final isCancellation =
             details.status.name == 'canceled' ||
             details.status == PurchaseStatus.error &&
                 _isUserCancelledPurchase(details);
-        if ((isCurrentProduct || isCancellation) && !completer.isCompleted) {
+        if ((isCurrentProduct || isCancellation || isPurchaseError) &&
+            !completer.isCompleted) {
           completer.complete(details);
+        }
+      });
+      errorSub = iapService.purchaseErrorStream.listen((error) {
+        if (!completer.isCompleted) {
+          completer.completeError(error);
         }
       });
 
       state = state.copyWith(
         purchaseStatus: StorePurchaseStatus.waitingPayment,
       );
+      await Future<void>.delayed(_paymentSheetDismissDelay);
+      if (!_isCurrentPurchase(purchaseGeneration, package.id)) {
+        return;
+      }
+
       final started = await iapService.buyProduct(
         product: productDetails,
         isConsumable: package.isCoinPackage,
-        applicationUserName: iapService.buildOrderApplicationUserName(
-          orderNo: paymentOrder.orderNo,
-          clientOrderNo: paymentOrder.clientOrderNo,
-        ),
+        applicationUserName: googleApplicationUserName,
       );
       if (!started) {
         throw Exception('Failed to launch IAP purchase');
@@ -363,7 +407,6 @@ class StoreController extends Notifier<StoreState> {
           'Unsupported purchase status: ${purchaseDetails.status}',
         );
       }
-
       state = state.copyWith(purchaseStatus: StorePurchaseStatus.verifying);
       final verifyResult = await payRepository.verifyGooglePayment(
         orderNo: paymentOrder.orderNo,
@@ -398,13 +441,23 @@ class StoreController extends Notifier<StoreState> {
     } catch (error, stackTrace) {
       debugPrint('[Store] purchase failed: $error\n$stackTrace');
       if (purchaseGeneration == _purchaseGeneration) {
+        final failureKind = switch (state.purchaseStatus) {
+          StorePurchaseStatus.creatingOrder =>
+            StorePurchaseFailureKind.orderCreation,
+          StorePurchaseStatus.verifying =>
+            StorePurchaseFailureKind.verification,
+          _ => StorePurchaseFailureKind.payment,
+        };
         state = state.copyWith(
           purchaseStatus: StorePurchaseStatus.failed,
-          error: error,
+          purchaseFailureKind: failureKind,
+          clearError: true,
         );
       }
     } finally {
       await sub?.cancel();
+      await errorSub?.cancel();
+      loading.hide();
     }
   }
 
@@ -423,6 +476,7 @@ class StoreController extends Notifier<StoreState> {
       purchaseStatus: StorePurchaseStatus.cancelled,
       clearConfirmation: true,
       clearError: true,
+      clearPurchaseFailure: true,
     );
   }
 

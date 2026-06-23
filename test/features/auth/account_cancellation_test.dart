@@ -12,6 +12,7 @@ import 'package:drama_client/features/auth/data/session_cleanup_auth_repository.
 import 'package:drama_client/features/auth/domain/account_deletion_exception.dart';
 import 'package:drama_client/features/auth/domain/auth_repository.dart';
 import 'package:drama_client/features/auth/domain/auth_session.dart';
+import 'package:drama_client/features/auth/domain/delete_account_result.dart';
 import 'package:drama_client/features/auth/presentation/pages/account_cancellation_page.dart';
 import 'package:drama_client/features/profile/presentation/pages/settings_page.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
@@ -440,10 +441,13 @@ class _CountingAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AuthSession> deleteAccount() async {
+  Future<DeleteAccountResult> deleteAccount() async {
     deleteAccountCalls += 1;
     _session = const AuthSession.guest();
-    return _session;
+    return DeleteAccountResult(
+      session: _session,
+      shouldExitApp: true,
+    );
   }
 }
 

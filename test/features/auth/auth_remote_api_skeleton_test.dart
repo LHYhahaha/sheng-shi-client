@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:drama_client/core/network/api_client.dart';
-import 'package:drama_client/core/network/api_exception.dart';
 import 'package:drama_client/core/network/api_mapping_exception.dart';
 import 'package:drama_client/core/network/api_request_context.dart';
 import 'package:drama_client/features/auth/data/auth_repository_provider.dart';
@@ -147,7 +146,7 @@ void main() {
       'logout and delete account use required auth policy',
       () async {
         final adapter = _FakeHttpClientAdapter(
-          responseData: _ok(_guestSessionJson),
+          responseData: _ok({'success': true, 'isCurrentDeviceAccount': true}),
         );
         final source = AuthRemoteDataSource(apiClient: _apiClient(adapter));
 
@@ -155,8 +154,8 @@ void main() {
         await source.deleteAccount();
 
         expect(adapter.requests.map((request) => request.path), [
-          '/auth/logout',
-          '/account',
+          '/api/user/logout',
+          '/api/user/delete',
         ]);
         expect(
           adapter.requests.every(

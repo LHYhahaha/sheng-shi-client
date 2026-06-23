@@ -2,10 +2,9 @@ import 'package:dio/dio.dart';
 import 'package:drama_client/core/network/api_client_provider.dart';
 import 'package:drama_client/core/network/api_exception.dart';
 import 'package:drama_client/core/network/api_mapping_exception.dart';
-import 'package:drama_client/features/drama/data/drama_repository_provider.dart';
-import 'package:drama_client/features/drama/data/mock_drama_repository.dart';
-import 'package:drama_client/features/drama/data/remote_drama_repository.dart';
-import 'package:drama_client/features/drama/domain/drama.dart';
+import 'package:drama_client/features/home/data/home_repository_provider.dart';
+import 'package:drama_client/features/home/data/home_remote_repository.dart';
+import 'package:drama_client/features/home/domain/drama.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -16,27 +15,13 @@ bool _hasMappingCause(Object? error) =>
     (error is ApiException && error.cause is ApiMappingException);
 
 void main() {
-  group('provider switch', () {
-    test('dramaRepositoryProvider defaults to mock', () {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-
-      expect(container.read(useRemoteDramaApiProvider), isFalse);
-      expect(
-        container.read(dramaRepositoryProvider),
-        isA<MockDramaRepository>(),
-      );
-    });
-
-    test('remote override wires RemoteDramaRepository with ApiClient', () {
+  group('provider', () {
+    test('dramaRepositoryProvider uses RemoteDramaRepository', () {
       final harness = DramaRemoteDryRunHarness();
-      harness.stubCategories([
-        {'id': 'popular', 'title': 'Popular', 'sortOrder': 1},
-      ]);
+      harness.stubHomeData(tabs: [validTabJson()]);
 
       final container = ProviderContainer(
         overrides: [
-          useRemoteDramaApiProvider.overrideWithValue(true),
           apiClientProvider.overrideWithValue(harness.apiClient),
         ],
       );
@@ -51,32 +36,23 @@ void main() {
 
   group('header injection', () {
     test(
-      'categories and feed requests include base headers without Authorization',
+      'home data request includes base headers without Authorization',
       () async {
         final harness = DramaRemoteDryRunHarness();
-        harness.stubCategories([
-          {'id': 'popular', 'title': 'Popular', 'sortOrder': 1},
-        ]);
-        harness.stubFeed(items: [validDramaItemJson()]);
+        harness.stubHomeData(tabs: [validTabJson()]);
 
-        await harness.repository.listHomeCategories();
-        await harness.repository.listHomeFeed(categoryId: 'popular');
+        await harness.repository.getHomeData();
 
-        final categoriesRequest = harness.lastRequestTo('/home/categories')!;
-        final feedRequest = harness.lastRequestTo('/home/feed')!;
+        final request = harness.lastRequestTo('/home/data')!;
 
-        for (final request in [categoriesRequest, feedRequest]) {
-          expect(request.headers['Device-Id'], harness.requestContext.deviceId);
-          expect(request.headers['Lang'], harness.requestContext.lang);
-          expect(request.headers['Platform'], harness.requestContext.platform);
-          expect(
-            request.headers['App-Version'],
-            harness.requestContext.appVersion,
-          );
-          expect(request.headers.containsKey('Authorization'), isFalse);
-        }
-
-        expect(feedRequest.queryParameters['categoryId'], 'popular');
+        expect(request.headers['Device-Id'], harness.requestContext.deviceId);
+        expect(request.headers['Lang'], harness.requestContext.lang);
+        expect(request.headers['Platform'], harness.requestContext.platform);
+        expect(
+          request.headers['App-Version'],
+          harness.requestContext.appVersion,
+        );
+        expect(request.headers.containsKey('Authorization'), isFalse);
       },
     );
   });
@@ -84,29 +60,30 @@ void main() {
   group('envelope', () {
     test('code 0 returns mapped domain models', () async {
       final harness = DramaRemoteDryRunHarness();
-      harness.stubCategories([
-        {'id': 'new', 'title': 'New', 'sortOrder': 2},
-      ]);
-      harness.stubFeed(
-        items: [validDramaItemJson(title: 'Heart Thief')],
-        nextPageToken: 'page-2',
+      harness.stubHomeData(
+        tabs: [
+          validTabJson(
+            name: 'Popular',
+            flag: 'popular',
+            dramas: [validDramaItemJson(title: 'Heart Thief')],
+          ),
+        ],
       );
 
-      final categories = await harness.repository.listHomeCategories();
-      final page = await harness.repository.listHomeFeed(categoryId: 'new');
+      final categories = await harness.repository.getHomeData();
 
-      expect(categories.single.id, 'new');
-      expect(page.items.single.id, 'found-you');
-      expect(page.items.single.title, 'Heart Thief');
-      expect(page.nextPageToken, 'page-2');
+      expect(categories.single.flag, 'popular');
+      expect(categories.single.title, 'Popular');
+      expect(categories.single.dramas.single.id, 'found-you');
+      expect(categories.single.dramas.single.title, 'Heart Thief');
     });
 
     test('code != 0 throws ApiException with businessCode', () async {
       final harness = DramaRemoteDryRunHarness();
-      harness.stubEnvelopeError('GET', '/home/feed', 3001);
+      harness.stubEnvelopeError('GET', '/home/data', 3001);
 
       await expectLater(
-        harness.repository.listHomeFeed(categoryId: 'popular'),
+        harness.repository.getHomeData(),
         throwsA(
           isA<ApiException>().having(
             (error) => error.businessCode,
@@ -117,16 +94,16 @@ void main() {
       );
     });
 
-    test('feed data type wrong throws ApiMappingException', () async {
+    test('home data type wrong throws ApiMappingException', () async {
       final harness = DramaRemoteDryRunHarness();
       harness.adapter.setResponse(
         'GET',
-        '/home/feed',
+        '/home/data',
         RecordingHttpResponse(body: apiEnvelopeSuccess('not-a-map')),
       );
 
       await expectLater(
-        harness.repository.listHomeFeed(categoryId: 'popular'),
+        harness.repository.getHomeData(),
         throwsA(predicate(_hasMappingCause, 'mapping failure')),
       );
     });
@@ -136,12 +113,12 @@ void main() {
       () async {
         final harness = DramaRemoteDryRunHarness();
         harness.adapter.fetchException = DioException(
-          requestOptions: RequestOptions(path: '/home/categories'),
+          requestOptions: RequestOptions(path: '/home/data'),
           type: DioExceptionType.connectionTimeout,
         );
 
         await expectLater(
-          harness.repository.listHomeCategories(),
+          harness.repository.getHomeData(),
           throwsA(
             isA<ApiException>().having(
               (error) => error.code,
@@ -155,109 +132,99 @@ void main() {
   });
 
   group('strict DTO', () {
-    test('missing dramaId in feed item fails mapping', () async {
+    test('missing drama id in tab fails mapping', () async {
       final harness = DramaRemoteDryRunHarness();
-      harness.stubFeed(
-        items: [
-          {'title': 'No Id', 'episodeCount': 1},
+      harness.stubHomeData(
+        tabs: [
+          validTabJson(
+            dramas: [
+              {'title': 'No Id', 'episode_total': 1},
+            ],
+          ),
         ],
       );
 
       await expectLater(
-        harness.repository.listHomeFeed(categoryId: 'popular'),
+        harness.repository.getHomeData(),
         throwsA(predicate(_hasMappingCause, 'mapping failure')),
       );
     });
 
-    test('missing category id fails mapping', () async {
+    test('missing tab flag fails mapping', () async {
       final harness = DramaRemoteDryRunHarness();
-      harness.stubCategories([
-        {'title': 'Popular', 'sortOrder': 1},
-      ]);
+      harness.stubHomeData(
+        tabs: [
+          {
+            'id': 1,
+            'name': 'Popular',
+            'sort': 1,
+            'status': 1,
+            'dramas': [],
+          },
+        ],
+      );
 
       await expectLater(
-        harness.repository.listHomeCategories(),
+        harness.repository.getHomeData(),
         throwsA(predicate(_hasMappingCause, 'mapping failure')),
       );
     });
 
     test('missing title uses display fallback', () async {
       final harness = DramaRemoteDryRunHarness();
-      harness.stubFeed(items: [validDramaItemJson(title: null)]);
+      harness.stubHomeData(
+        tabs: [
+          validTabJson(
+            dramas: [validDramaItemJson(title: null)],
+          ),
+        ],
+      );
 
-      final page = await harness.repository.listHomeFeed(categoryId: 'popular');
+      final categories = await harness.repository.getHomeData();
 
-      expect(page.items.single.title, 'Untitled');
+      expect(categories.single.dramas.single.title, 'Untitled');
     });
 
     test('missing cover uses asset fallback', () async {
       final harness = DramaRemoteDryRunHarness();
-      harness.stubFeed(
-        items: [validDramaItemJson(title: 'No Cover', coverUrl: null)],
+      harness.stubHomeData(
+        tabs: [
+          validTabJson(
+            dramas: [validDramaItemJson(title: 'No Cover', coverUrl: null)],
+          ),
+        ],
       );
 
-      final page = await harness.repository.listHomeFeed(categoryId: 'popular');
-      final drama = page.items.single;
+      final categories = await harness.repository.getHomeData();
+      final drama = categories.single.dramas.single;
 
       expect(drama.coverResource.isAsset, isTrue);
       expect(drama.coverResource.value, Drama.fallbackCoverAssetPath);
     });
   });
 
-  group('pagination and empty', () {
-    test('empty categories list succeeds', () async {
+  group('empty', () {
+    test('empty tabs list succeeds', () async {
       final harness = DramaRemoteDryRunHarness();
-      harness.stubCategories([]);
+      harness.stubHomeData(tabs: []);
 
-      final categories = await harness.repository.listHomeCategories();
+      final categories = await harness.repository.getHomeData();
 
       expect(categories, isEmpty);
     });
 
-    test('empty feed page succeeds', () async {
+    test('empty dramas in tab succeeds', () async {
       final harness = DramaRemoteDryRunHarness();
-      harness.stubFeed(items: []);
-
-      final page = await harness.repository.listHomeFeed(categoryId: 'popular');
-
-      expect(page.items, isEmpty);
-      expect(page.nextPageToken, isNull);
-    });
-
-    test('feed wrapped in items envelope key is accepted', () async {
-      final harness = DramaRemoteDryRunHarness();
-      harness.adapter.setResponse(
-        'GET',
-        '/home/categories',
-        RecordingHttpResponse(
-          body: apiEnvelopeSuccess({
-            'items': [
-              {'id': 'popular', 'title': 'Popular', 'sortOrder': 1},
-            ],
-          }),
-        ),
+      harness.stubHomeData(
+        tabs: [
+          validTabJson(dramas: []),
+        ],
       );
 
-      final categories = await harness.repository.listHomeCategories();
+      final categories = await harness.repository.getHomeData();
 
-      expect(categories, hasLength(1));
-      expect(categories.single.id, 'popular');
-    });
-  });
-
-  group('mock path unaffected', () {
-    test('USE_REMOTE_DRAMA_API false keeps mock in provider container', () {
-      final harness = DramaRemoteDryRunHarness();
-      final container = ProviderContainer(
-        overrides: [apiClientProvider.overrideWithValue(harness.apiClient)],
-      );
-      addTearDown(container.dispose);
-
-      expect(container.read(useRemoteDramaApiProvider), isFalse);
-      expect(
-        container.read(dramaRepositoryProvider),
-        isA<MockDramaRepository>(),
-      );
+      expect(categories.single.dramas, isEmpty);
     });
   });
 }
+

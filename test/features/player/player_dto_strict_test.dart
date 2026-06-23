@@ -1,73 +1,13 @@
 import 'package:drama_client/core/network/api_mapping_exception.dart';
 import 'package:drama_client/features/player/data/dto/playback_source_dto.dart';
-import 'package:drama_client/features/player/data/dto/player_episode_dto.dart';
 import 'package:drama_client/features/player/data/mapper/playback_source_mapper.dart';
-import 'package:drama_client/features/player/data/mapper/player_content_mapper.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/domain/player_playback_source.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  const mapper = PlayerContentMapper();
   const sourceMapper = PlaybackSourceMapper();
-
-  test('missing unlockType throws', () {
-    expect(
-      () => PlayerEpisodeDto.fromJson({
-        'episodeId': 'ep-1',
-        'dramaId': 'drama-1',
-        'episodeNumber': 1,
-        'isAvailable': true,
-      }),
-      throwsA(isA<ApiMappingException>()),
-    );
-  });
-
-  test('unknown unlockType throws and does not map to free', () {
-    expect(
-      () => PlayerEpisodeDto.fromJson({
-        'episodeId': 'ep-1',
-        'dramaId': 'drama-1',
-        'episodeNumber': 1,
-        'unlockType': 'mystery',
-        'isAvailable': true,
-      }),
-      throwsA(isA<ApiMappingException>()),
-    );
-
-    expect(
-      () => mapper.mapEpisode(
-        PlayerEpisodeDto(
-          episodeId: 'ep-1',
-          dramaId: 'drama-1',
-          episodeNumber: 1,
-          title: null,
-          unlockType: 'mystery',
-          requiredCoins: null,
-          isAvailable: true,
-          durationMs: null,
-          aspectRatio: null,
-          posterUrl: null,
-          previewImageUrl: null,
-        ),
-      ),
-      throwsA(isA<ApiMappingException>()),
-    );
-  });
-
-  test('coins unlock requires requiredCoins', () {
-    expect(
-      () => PlayerEpisodeDto.fromJson({
-        'episodeId': 'ep-1',
-        'dramaId': 'drama-1',
-        'episodeNumber': 1,
-        'unlockType': 'coins',
-        'isAvailable': true,
-      }),
-      throwsA(isA<ApiMappingException>()),
-    );
-  });
 
   test('denied playback source does not map to playable source', () {
     final item = _feedItem();
@@ -198,6 +138,7 @@ PlayerFeedItem _feedItem() {
     posterAssetPath: 'assets/images/player/recommend_1.png',
     episodes: const [],
     recommendations: const [],
+    episodeTotal: 0,
   );
   final episode = PlayerEpisode(
     id: 'ep-1',

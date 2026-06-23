@@ -64,15 +64,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: RoutePaths.member,
-                name: RouteNames.member,
-                builder: (context, state) => const MemberPage(),
-              ),
-            ],
-          ),
+          // StatefulShellBranch(
+          //   routes: [
+          //     GoRoute(
+          //       path: RoutePaths.member,
+          //       name: RouteNames.member,
+          //       builder: (context, state) => const MemberPage(),
+          //     ),
+          //   ],
+          // ),
           // StatefulShellBranch(
           //   routes: [
           //     GoRoute(

@@ -31,12 +31,12 @@ class AppBottomNavigation extends StatelessWidget {
       unselectedAssetPath: 'assets/navigation/home_unselected.png',
       fallbackIcon: Icons.sports_esports_rounded,
     ),
-    _BottomNavigationItem(
-      label: _BottomNavigationLabel.member,
-      selectedAssetPath: 'assets/navigation/profile_selected.png',
-      unselectedAssetPath: 'assets/navigation/profile_unselected.png',
-      fallbackIcon: Icons.card_membership_rounded,
-    ),
+    // _BottomNavigationItem(
+    //   label: _BottomNavigationLabel.member,
+    //   selectedAssetPath: 'assets/navigation/profile_selected.png',
+    //   unselectedAssetPath: 'assets/navigation/profile_unselected.png',
+    //   fallbackIcon: Icons.card_membership_rounded,
+    // ),
     // TODO: 暂时禁用 For You tab
     // _BottomNavigationItem(
     //   label: _BottomNavigationLabel.forYou,

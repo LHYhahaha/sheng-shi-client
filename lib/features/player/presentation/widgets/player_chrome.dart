@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:readmore/readmore.dart';
 
 import '../../../../core/utils/text_over_ellipsis.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -1016,42 +1017,13 @@ class PlayerBottomMeta extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final textStyle = TextStyle(
-                color: Colors.white.withValues(alpha: 0.7),
-                fontSize: 14,
-                height: 18 / 14,
-              );
-
-              // 检测文本是否超过2行
-              final textPainter = TextPainter(
-                text: TextSpan(text: content.synopsis, style: textStyle),
-                maxLines: 2,
-                textDirection: TextDirection.ltr,
-              );
-              textPainter.layout(maxWidth: constraints.maxWidth);
-
-              // 判断是否溢出
-              final isOverflowing =
-                  limitTextLines(content.synopsis, 2) != content.synopsis;
-              return Text.rich(
-                TextSpan(
-                  text: limitTextLines(content.synopsis, 2, overText: ""),
-                  children: isOverflowing
-                      ? [
-                          TextSpan(
-                            text: ' ${context.l10n.playerMore}',
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                        ]
-                      : null,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: textStyle,
-              );
-            },
+          ReadMoreText(
+            content.synopsis,
+            trimLines: 2,
+            isExpandable: false,
+            trimMode: TrimMode.Line,
+            trimCollapsedText: context.l10n.playerMore,
+            moreStyle: TextStyle(color: Colors.white, fontSize: 14),
           ),
         ],
       ),

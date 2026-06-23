@@ -57,7 +57,7 @@ class StoreModalCoordinator {
         const StorePurchaseModalResult.cancelled(),
       AppModalResultKind.dismissed =>
         const StorePurchaseModalResult.dismissed(),
-      AppModalResultKind.failed => const StorePurchaseModalResult.cancelled(),
+      AppModalResultKind.failed => const StorePurchaseModalResult.failed(),
     };
   }
 

@@ -25,7 +25,7 @@ class StoreConfirmationSheet extends StatelessWidget {
     final l10n = context.l10n;
     final languageCode = Localizations.localeOf(context).languageCode;
     final title = package.isCoinPackage
-        ? package.title
+        ? _coinOrderTitle(context, package)
         : PeriodIsoParser.localizedMembershipTitle(
             package.title,
             fallbackId: package.id,
@@ -61,5 +61,13 @@ class StoreConfirmationSheet extends StatelessWidget {
       onBuyNow: onConfirm,
       onClose: onClose,
     );
+  }
+
+  String _coinOrderTitle(BuildContext context, StorePackage package) {
+    final coinLabel = '${package.baseCoins} ${context.l10n.unitCoin}';
+    if (package.bonusCoins <= 0) {
+      return coinLabel;
+    }
+    return '${package.baseCoins} +${package.bonusCoins} ${context.l10n.unitCoin}';
   }
 }

@@ -33,10 +33,10 @@ class StoreVipPackageCard extends ConsumerWidget {
     final displayPrice = package.priceLabel;
     final displayOriginalPrice = package.originalPriceLabel;
     final showPromo = package.promotionExpireSeconds > 0;
-    final title = PeriodIsoParser.localizedMembershipTitle(
-      package.title,
+    final title = context.l10n.rechargeMembershipTitle(
+      periodIso: package.periodIso,
       fallbackId: package.id,
-      languageCode: Localizations.localeOf(context).languageCode,
+      fallbackTitle: package.title,
     );
     String? promoDescription;
 
@@ -364,19 +364,4 @@ class _BenefitGrid extends StatelessWidget {
       StoreBenefitIcon.points => "assets/images/profile/brown_points.svg",
     };
   }
-}
-
-class _VipStripePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.18)
-      ..strokeWidth = 1;
-    for (double x = size.width * 0.5; x < size.width + 90; x += 12) {
-      canvas.drawLine(Offset(x, 0), Offset(x - 54, size.height * 0.75), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

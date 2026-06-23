@@ -136,7 +136,12 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   Stream<String> get errorStream => _errorController.stream;
 
   @override
-  Future<void> open(String source, {bool play = true}) async {}
+  Future<void> open(
+    String source, {
+    bool play = true,
+    Duration? start,
+    Map<String, String>? httpHeaders,
+  }) async {}
 
   @override
   Future<void> pause() async {

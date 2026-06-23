@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:drama_client/features/drama/data/drama_repository_provider.dart';
-import 'package:drama_client/features/drama/domain/drama.dart';
-import 'package:drama_client/features/drama/domain/drama_repository.dart';
+import 'package:drama_client/features/home/data/home_repository_provider.dart';
+import 'package:drama_client/features/home/domain/drama.dart';
+import 'package:drama_client/features/home/domain/drama_repository.dart';
 import 'package:drama_client/features/home/presentation/pages/home_page.dart';
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
@@ -120,9 +120,9 @@ final _dramas = [
   Drama(
     id: 'drama-a',
     title: 'Drama A',
-    coverAssetPath: 'assets/images/home/drama_cover_figma.png',
-    viewCountLabel: '1M',
-    episodeCount: 10,
+    coverUrl: 'assets/images/home/drama_cover_figma.png',
+    playCount: '1M',
+    episodeTotal: 10,
     categoryId: 'popular',
     tags: ['Rebirth'],
     coverAspectRatio: 171 / 226,
@@ -142,6 +142,7 @@ final _content = PlayerContent(
     PlayerEpisode(id: 'ep-1', number: 1, isLocked: false, videoUrl: _videoUrl),
   ],
   recommendations: const [],
+  episodeTotal: 1,
 );
 
 final _item = PlayerFeedItem(
@@ -163,20 +164,19 @@ PlaybackPreloadState _successPreloadState() {
 
 class _FakeDramaRepository implements DramaRepository {
   @override
-  Future<List<DramaCategory>> listHomeCategories() async {
+  Future<List<DramaCategory>> getHomeData() async {
     return const [
-      DramaCategory(id: 'popular', title: 'Popular'),
-      DramaCategory(id: 'new', title: 'New'),
+      DramaCategory(
+        flag: 'popular',
+        title: 'Popular',
+        dramas: _dramas,
+      ),
+      DramaCategory(
+        flag: 'new',
+        title: 'New',
+        dramas: _dramas,
+      ),
     ];
-  }
-
-  @override
-  Future<DramaFeedPage> listHomeFeed({
-    required String categoryId,
-    String? pageToken,
-    int pageSize = 10,
-  }) async {
-    return DramaFeedPage(items: _dramas, nextPageToken: null);
   }
 }
 

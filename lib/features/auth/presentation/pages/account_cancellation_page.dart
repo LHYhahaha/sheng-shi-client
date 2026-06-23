@@ -57,10 +57,6 @@ class _AccountCancellationPageState
         return;
       }
     }
-    final shouldExitAppAfterDelete = ref
-        .read(authControllerProvider)
-        .session
-        .isGuest;
 
     cancellationController
       ..clearError()
@@ -73,19 +69,14 @@ class _AccountCancellationPageState
       return;
     }
 
-    await authController.deleteAccount();
+    final deleteResult = await authController.deleteAccount();
 
     if (!mounted) {
       return;
     }
 
-    final authState = ref.read(authControllerProvider);
-    if (authState.isLoading) {
-      cancellationController.setSubmitting(false);
-      return;
-    }
-    if (authState.failedAction == AuthFailureAction.deleteAccount ||
-        authState.error != null) {
+    if (deleteResult == null) {
+      final authState = ref.read(authControllerProvider);
       cancellationController.setError(authState.error);
       ref
           .read(appToastProvider)
@@ -94,7 +85,7 @@ class _AccountCancellationPageState
     }
 
     ref.read(appToastProvider).success(l10n.accountCancellationSuccess);
-    if (shouldExitAppAfterDelete) {
+    if (deleteResult.shouldExitApp) {
       await SystemNavigator.pop();
       return;
     }
@@ -118,13 +109,17 @@ class _AccountCancellationPageState
     final entitlement = ref.read(entitlementControllerProvider);
     if (entitlement.isMember) {
       cancellationController.setSubmitting(false);
-      ref.read(appToastProvider).error(l10n.accountDeletionRejectedActiveMembership);
+      ref
+          .read(appToastProvider)
+          .error(l10n.accountDeletionRejectedActiveMembership);
       return false;
     }
 
     if (entitlement.coinBalance > 0) {
       cancellationController.setSubmitting(false);
-      ref.read(appToastProvider).error(l10n.deleteAccountToastCoinsSpentRequired);
+      ref
+          .read(appToastProvider)
+          .error(l10n.deleteAccountToastCoinsSpentRequired);
       return false;
     }
 
@@ -139,7 +134,7 @@ class _AccountCancellationPageState
 
     final buttonLabel = state.countdownFinished
         ? l10n.accountCancellationDeleteButtonReady
-        : l10n.accountCancellationDeleteButtonCountdown(state.remainingSeconds);
+        : "${l10n.accountCancellationDeleteButtonCountdown} (${state.remainingSeconds}s)";
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0014),
@@ -323,7 +318,7 @@ class _DeletionInfoPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('account_cancellation_info_card'),
-      constraints: const BoxConstraints(minHeight: 403),
+      // constraints: const BoxConstraints(minHeight: 403),
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
       decoration: BoxDecoration(
         color: const Color(0xFF241A2D),

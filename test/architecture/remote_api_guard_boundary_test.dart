@@ -22,11 +22,11 @@ void main() {
     expect(offenders, isEmpty, reason: offenders.join('\n'));
   });
 
-  test('feature providers still default to mock via RemoteApiSwitches', () {
+  test('feature providers use remote data source by default', () {
     final dramaProvider = File(
       'lib/features/drama/data/drama_repository_provider.dart',
     ).readAsStringSync();
-    expect(dramaProvider, contains('RemoteApiSwitches.fromEnvironment'));
-    expect(dramaProvider, contains('MockDramaRepository'));
+    expect(dramaProvider, contains('RemoteDramaRepository'));
+    expect(dramaProvider, contains('DramaRemoteDataSource'));
   });
 }

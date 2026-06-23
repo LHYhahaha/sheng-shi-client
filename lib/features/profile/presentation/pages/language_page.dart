@@ -3,17 +3,60 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/i18n/i18n.dart';
 import '../../../../core/locale/app_locale_controller.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 
-class LanguagePage extends ConsumerWidget {
+class LanguagePage extends ConsumerStatefulWidget {
   const LanguagePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final selectedLocale = ref.watch(appLocaleControllerProvider);
-    final localeController = ref.read(appLocaleControllerProvider.notifier);
+  ConsumerState<LanguagePage> createState() => _LanguagePageState();
+}
+
+class _LanguagePageState extends ConsumerState<LanguagePage> {
+  String? _tempSelectedLanguageCode;
+
+  String _getEffectiveLanguageCode() {
+    final currentLocale = ref.read(appLocaleControllerProvider);
+    return _tempSelectedLanguageCode ?? currentLocale.languageCode;
+  }
+
+  void _onLanguageSelected(String languageCode) {
+    setState(() {
+      _tempSelectedLanguageCode = languageCode;
+    });
+  }
+
+  Future<void> _onDone() async {
+    final languageCode = _tempSelectedLanguageCode;
+    if (languageCode != null) {
+      final localeController = ref.read(appLocaleControllerProvider.notifier);
+      localeController.select(Locale(languageCode));
+      try {
+        await ref
+            .read(i18nControllerProvider.notifier)
+            .switchLanguage(languageCode);
+      } catch (_) {
+        // Keep the selected locale active even if the remote language package
+        // cannot be refreshed; AppLocalizations will fall back to bundled text.
+      }
+    }
+    if (!mounted) return;
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(RoutePaths.profile);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedLanguageCode = _getEffectiveLanguageCode();
+    final currentLocale = ref.watch(appLocaleControllerProvider);
+    final showDoneButton = _tempSelectedLanguageCode != null &&
+        _tempSelectedLanguageCode != currentLocale.languageCode;
 
     return Scaffold(
       backgroundColor: AppColors.black,
@@ -22,18 +65,22 @@ class LanguagePage extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _LanguageHeader(title: context.l10n.languagePageTitle),
+            _LanguageHeader(
+              title: context.l10n.languagePageTitle,
+              onDone: _onDone,
+              showDoneButton: showDoneButton,
+            ),
             const SizedBox(height: 12),
             _LanguageOption(
               label: 'English',
-              selected: selectedLocale.languageCode == 'en',
-              onTap: () => localeController.select(const Locale('en')),
+              selected: selectedLanguageCode == 'en',
+              onTap: () => _onLanguageSelected('en'),
             ),
             const SizedBox(height: 28),
             _LanguageOption(
               label: '简体中文',
-              selected: selectedLocale.languageCode == 'zh',
-              onTap: () => localeController.select(const Locale('zh')),
+              selected: selectedLanguageCode == 'zh',
+              onTap: () => _onLanguageSelected('zh'),
             ),
           ],
         ),
@@ -43,9 +90,15 @@ class LanguagePage extends ConsumerWidget {
 }
 
 class _LanguageHeader extends StatelessWidget {
-  const _LanguageHeader({required this.title});
+  const _LanguageHeader({
+    required this.title,
+    required this.onDone,
+    required this.showDoneButton,
+  });
 
   final String title;
+  final VoidCallback onDone;
+  final bool showDoneButton;
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +124,7 @@ class _LanguageHeader extends StatelessWidget {
               icon: const Icon(
                 Icons.chevron_left_rounded,
                 color: AppColors.textPrimary,
-                size: 20,
+                size: 30,
               ),
             ),
           ),
@@ -84,6 +137,28 @@ class _LanguageHeader extends StatelessWidget {
               height: 1.5,
             ),
           ),
+          if (showDoneButton)
+            Positioned(
+              right: 6,
+              child: TextButton(
+                onPressed: onDone,
+                style: ButtonStyle(
+                  padding: WidgetStateProperty.all(EdgeInsets.zero),
+                  overlayColor: WidgetStateProperty.all(Colors.transparent),
+                  minimumSize: WidgetStateProperty.all(const Size(40, 40)),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  context.l10n.languagePageButton,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: AppColors.primary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

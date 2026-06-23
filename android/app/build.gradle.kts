@@ -51,6 +51,37 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+//     开启 BuildConfig 支持，否则 buildConfigField 会报错
+    buildFeatures {
+        buildConfig = true
+    }
+
+    flavorDimensions += "channel" // Kotlin DSL 用 +=
+//
+    productFlavors {
+        create("haha") {
+            dimension = "channel"
+            applicationId = "com.yushi.drama.client"
+            resValue("string", "channel_flag", "app_developer")
+            resValue("string", "MERCHANT_ID", "329")
+            resValue("string", "VEST_PKG_ID", "1001")
+        }
+        create("tiktok") {
+            dimension = "channel"
+            applicationId = "com.yushi.drama.client"
+            resValue("string", "channel_flag", "tiktok")
+            resValue("string", "MERCHANT_ID", "319")
+            resValue("string", "VEST_PKG_ID", "1001")
+        }
+        create("kuaishou") {
+            dimension = "channel"
+            applicationId = "com.yushi.drama.client"
+            resValue("string", "channel_flag", "kuaishou")
+            resValue("string", "MERCHANT_ID", "320")
+            resValue("string", "VEST_PKG_ID", "1002")
+        }
+    }
 }
 
 flutter {

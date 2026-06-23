@@ -1,7 +1,7 @@
 import 'package:drama_client/core/network/api_mapping_exception.dart';
-import 'package:drama_client/features/drama/data/dto/drama_dto.dart';
-import 'package:drama_client/features/drama/data/mapper/drama_mapper.dart';
-import 'package:drama_client/features/drama/domain/drama.dart';
+import 'package:drama_client/features/home/data/dto/drama_dto.dart';
+import 'package:drama_client/features/home/data/mapper/home_mapper.dart';
+import 'package:drama_client/features/home/domain/drama.dart';
 import 'package:drama_client/shared/media/media_resource.dart';
 import 'package:flutter_test/flutter_test.dart';
 

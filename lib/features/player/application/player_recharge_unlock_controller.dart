@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../entitlement/application/entitlement_controller.dart';
+import '../../pay/application/iap_pending_purchase_cleaner.dart';
+import '../../pay/application/payment_loading_controller.dart';
 import '../../pay/provider/iap_purchase_service_provider.dart';
 import '../../pay/provider/pay_repository_provider.dart';
 import '../application/player_feed_controller.dart';
@@ -34,10 +36,18 @@ enum PlayerRechargeUnlockStatus {
   failed,
 }
 
+enum PlayerRechargePaymentStage { creatingOrder, waitingPayment, verifying }
+
+enum PlayerRechargePurchaseFailureKind {
+  orderCreation,
+  payment,
+  verification,
+}
+
 /// 播放器内 entitlement 充值解锁状态。
 ///
 /// 这不是播放器真实播放状态，也不是 Store 订单状态。它只管理 locked episode 金币不足
-/// 时的弹窗展示和 mock purchase 流程，成功后再通知 PlayerPage 继续 pending unlock。
+/// 时的弹窗展示和 remote purchase 流程，成功后再通知 PlayerPage 继续 pending unlock。
 class PlayerRechargeUnlockState {
   const PlayerRechargeUnlockState({
     required this.status,
@@ -45,6 +55,8 @@ class PlayerRechargeUnlockState {
     this.offer,
     this.selectedCoinPackageId,
     this.selectedMembershipPackageId,
+    this.paymentStage,
+    this.purchaseFailureKind,
     this.error,
   });
 
@@ -54,6 +66,8 @@ class PlayerRechargeUnlockState {
       offer = null,
       selectedCoinPackageId = null,
       selectedMembershipPackageId = null,
+      paymentStage = null,
+      purchaseFailureKind = null,
       error = null;
 
   final PlayerRechargeUnlockStatus status;
@@ -61,6 +75,8 @@ class PlayerRechargeUnlockState {
   final PlayerRechargeUnlockOffer? offer;
   final String? selectedCoinPackageId;
   final String? selectedMembershipPackageId;
+  final PlayerRechargePaymentStage? paymentStage;
+  final PlayerRechargePurchaseFailureKind? purchaseFailureKind;
   final Object? error;
 
   bool get isProcessing => status == PlayerRechargeUnlockStatus.processing;
@@ -99,8 +115,12 @@ class PlayerRechargeUnlockState {
     PlayerRechargeUnlockOffer? offer,
     String? selectedCoinPackageId,
     String? selectedMembershipPackageId,
+    PlayerRechargePaymentStage? paymentStage,
+    PlayerRechargePurchaseFailureKind? purchaseFailureKind,
     Object? error,
     bool clearSelection = false,
+    bool clearPaymentStage = false,
+    bool clearPurchaseFailure = false,
     bool clearError = false,
   }) {
     return PlayerRechargeUnlockState(
@@ -113,6 +133,12 @@ class PlayerRechargeUnlockState {
       selectedMembershipPackageId: clearSelection
           ? null
           : selectedMembershipPackageId ?? this.selectedMembershipPackageId,
+      paymentStage: clearPaymentStage
+          ? null
+          : paymentStage ?? this.paymentStage,
+      purchaseFailureKind: clearPurchaseFailure
+          ? null
+          : purchaseFailureKind ?? this.purchaseFailureKind,
       error: clearError ? null : error ?? this.error,
     );
   }
@@ -131,6 +157,7 @@ class PlayerRechargeUnlockController
   static const _coinProductType = 1;
   static const _membershipProductType = 2;
   static const _purchaseResultTimeout = Duration(seconds: 30);
+  static const _paymentSheetDismissDelay = Duration(milliseconds: 260);
 
   final String sessionKey;
   int _generation = 0;
@@ -160,6 +187,8 @@ class PlayerRechargeUnlockController
       offer: null,
       selectedCoinPackageId: null,
       selectedMembershipPackageId: null,
+      paymentStage: null,
+      purchaseFailureKind: null,
     );
 
     try {
@@ -180,9 +209,11 @@ class PlayerRechargeUnlockController
         status: PlayerRechargeUnlockStatus.idle,
         itemId: itemId,
         offer: offer,
-        selectedCoinPackageId: null,
-        selectedMembershipPackageId: null,
-      );
+      selectedCoinPackageId: null,
+      selectedMembershipPackageId: null,
+      paymentStage: null,
+      purchaseFailureKind: null,
+    );
     } catch (error) {
       if (!_isCurrent(generation)) {
         return;
@@ -205,9 +236,11 @@ class PlayerRechargeUnlockController
       status: PlayerRechargeUnlockStatus.selectedCoinPackage,
       selectedCoinPackageId: packageId,
       selectedMembershipPackageId: null,
+      clearPaymentStage: true,
+      clearPurchaseFailure: true,
       clearError: true,
     );
-    return _startMockPurchase();
+    return _startRemotePurchase();
   }
 
   Future<void> selectMembershipPackage(String packageId) {
@@ -223,15 +256,19 @@ class PlayerRechargeUnlockController
       status: PlayerRechargeUnlockStatus.selectedMembershipPackage,
       selectedCoinPackageId: null,
       selectedMembershipPackageId: packageId,
+      clearPaymentStage: true,
+      clearPurchaseFailure: true,
       clearError: true,
     );
-    return _startMockPurchase();
+    return _startRemotePurchase();
   }
 
   void close() {
     _purchaseGeneration++;
     state = state.copyWith(
       status: PlayerRechargeUnlockStatus.cancelled,
+      clearPaymentStage: true,
+      clearPurchaseFailure: true,
       clearError: true,
     );
   }
@@ -269,11 +306,18 @@ class PlayerRechargeUnlockController
     return remaining > 0 ? remaining : 0;
   }
 
-  Future<void> _startMockPurchase() async {
+  Future<void> _startRemotePurchase() async {
     final purchaseGeneration = ++_purchaseGeneration;
-    state = state.copyWith(status: PlayerRechargeUnlockStatus.processing);
+    state = state.copyWith(
+      status: PlayerRechargeUnlockStatus.processing,
+      paymentStage: PlayerRechargePaymentStage.creatingOrder,
+      clearPurchaseFailure: true,
+    );
 
     StreamSubscription<PurchaseDetails>? sub;
+    StreamSubscription<Object>? errorSub;
+    final loading = ref.read(paymentLoadingControllerProvider.notifier);
+    loading.show();
     try {
       // 获取选中的套餐
       final selectedCoinPackage = state.selectedCoinPackage;
@@ -296,9 +340,26 @@ class PlayerRechargeUnlockController
       if (productId == 0) {
         throw Exception('Invalid productId: $packageId');
       }
+      final selectedIapInfo = isCoinPackage
+          ? selectedCoinPackage.iapInfo
+          : selectedMembershipPackage!.iapInfo;
+      final selectedProductDetails = selectedIapInfo?.productDetails;
 
       // 3. 创建订单
       debugPrint('[PlayerRecharge] 开始创建订单: productId=$productId');
+
+      await ref
+          .read(iapPendingPurchaseCleanerProvider)
+          .cleanupBeforeCreateOrder(
+            source: 'player_recharge',
+            productIds: isCoinPackage && selectedProductDetails != null
+                ? {selectedProductDetails.id}
+                : const <String>{},
+          );
+      if (purchaseGeneration != _purchaseGeneration ||
+          state.status != PlayerRechargeUnlockStatus.processing) {
+        return;
+      }
 
       final order = await ref
           .read(payRepositoryProvider)
@@ -319,6 +380,15 @@ class PlayerRechargeUnlockController
       }
 
       // 4. 获取 IAP 购买服务
+      state = state.copyWith(
+        paymentStage: PlayerRechargePaymentStage.waitingPayment,
+      );
+      await Future<void>.delayed(_paymentSheetDismissDelay);
+      if (purchaseGeneration != _purchaseGeneration ||
+          state.status != PlayerRechargeUnlockStatus.processing) {
+        return;
+      }
+
       final iapService = ref.read(iapPurchaseServiceProvider);
       if (iapService == null) {
         throw Exception('IAP purchase service not available');
@@ -329,7 +399,7 @@ class PlayerRechargeUnlockController
           ? selectedCoinPackage.iapInfo
           : selectedMembershipPackage!.iapInfo;
 
-      final productDetails = iapInfo?.productDetails;
+      final productDetails = selectedProductDetails;
       if (productDetails == null) {
         throw Exception('IAP product details not found in iapInfo');
       }
@@ -344,12 +414,19 @@ class PlayerRechargeUnlockController
 
       sub = iapService.purchaseStream.listen((details) {
         final isCurrentProduct = details.productID == productDetails.id;
+        final isPurchaseError = details.status == PurchaseStatus.error;
         final isCancellation =
             details.status.name == 'canceled' ||
             details.status == PurchaseStatus.error &&
                 _isUserCancelledPurchase(details);
-        if ((isCurrentProduct || isCancellation) && !completer.isCompleted) {
+        if ((isCurrentProduct || isCancellation || isPurchaseError) &&
+            !completer.isCompleted) {
           completer.complete(details);
+        }
+      });
+      errorSub = iapService.purchaseErrorStream.listen((error) {
+        if (!completer.isCompleted) {
+          completer.completeError(error);
         }
       });
 
@@ -419,6 +496,9 @@ class PlayerRechargeUnlockController
         );
       }
 
+      state = state.copyWith(
+        paymentStage: PlayerRechargePaymentStage.verifying,
+      );
       debugPrint('[PlayerRecharge] purchase success, verifying order');
       final verifyResult = await ref
           .read(payRepositoryProvider)
@@ -462,13 +542,23 @@ class PlayerRechargeUnlockController
       debugPrint('[PlayerRecharge] 购买失败: $e\n$st');
 
       if (purchaseGeneration == _purchaseGeneration) {
+        final failureKind = switch (state.paymentStage) {
+          PlayerRechargePaymentStage.creatingOrder =>
+            PlayerRechargePurchaseFailureKind.orderCreation,
+          PlayerRechargePaymentStage.verifying =>
+            PlayerRechargePurchaseFailureKind.verification,
+          _ => PlayerRechargePurchaseFailureKind.payment,
+        };
         state = state.copyWith(
           status: PlayerRechargeUnlockStatus.failed,
+          purchaseFailureKind: failureKind,
           error: e,
         );
       }
     } finally {
       await sub?.cancel();
+      await errorSub?.cancel();
+      loading.hide();
     }
   }
 
@@ -559,6 +649,8 @@ class PlayerRechargeUnlockController
     state = state.copyWith(
       status: PlayerRechargeUnlockStatus.cancelled,
       clearSelection: true,
+      clearPaymentStage: true,
+      clearPurchaseFailure: true,
       clearError: true,
     );
   }

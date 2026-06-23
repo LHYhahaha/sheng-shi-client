@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client_provider.dart';
+import '../data/local/player_like_cache.dart';
 import '../data/remote/player_remote_data_source.dart';
 
 /// 播放页点赞状态 provider，按 dramaId 隔离。
@@ -60,10 +61,21 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
       apiClient: ref.watch(apiClientProvider),
     );
 
-    // 异步获取初始点赞状态
-    _loadInitialLikeState();
+    // 先从缓存读取点赞状态，避免UI闪烁
+    final cachedIsLiked = PlayerLikeCache.getCachedLikeStatus(dramaId);
+    final cachedDelta = PlayerLikeCache.getCachedLikeCountDelta(dramaId);
+    
+    // 异步获取初始点赞状态（如果缓存中没有）
+    if (cachedIsLiked == null) {
+      _loadInitialLikeState();
+    }
 
-    return const PlayerLikeState.initial();
+    return PlayerLikeState(
+      isLiked: cachedIsLiked ?? false,
+      likeCountDelta: cachedDelta,
+      isLoading: false,
+      error: null,
+    );
   }
 
   /// 加载初始点赞状态。
@@ -78,6 +90,9 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
       final isLiked = await _remoteDataSource.checkShortFollowStatus(
         dramaId: dramaIdInt,
       );
+
+      // 更新缓存
+      PlayerLikeCache.setLikeStatus(dramaId, isLiked);
 
       state = state.copyWith(isLiked: isLiked, likeCountDelta: 0);
     } catch (e) {
@@ -106,6 +121,10 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
         ? state.likeCountDelta + 1 
         : state.likeCountDelta - 1;
     
+    // 更新缓存
+    PlayerLikeCache.setLikeStatus(dramaId, newIsLiked);
+    PlayerLikeCache.updateLikeCountDelta(dramaId, newIsLiked);
+    
     state = state.copyWith(isLiked: newIsLiked, likeCountDelta: newDelta, isLoading: true, error: null);
 
     try {
@@ -124,6 +143,10 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
       final rollbackDelta = currentIsLiked 
           ? state.likeCountDelta + 1 
           : state.likeCountDelta - 1;
+      
+      // 回滚缓存
+      PlayerLikeCache.setLikeStatus(dramaId, currentIsLiked);
+      PlayerLikeCache.setLikeCountDelta(dramaId, rollbackDelta);
       
       state = state.copyWith(
         isLiked: currentIsLiked,

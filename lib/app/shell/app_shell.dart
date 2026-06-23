@@ -123,16 +123,16 @@ class AppShellDestinations {
 
   static const homeIndex = 0;
   static const gameIndex = 1;
-  static const memberIndex = 2;
-  static const myListIndex = 3;
-  static const profileIndex = 4;
+  // static const memberIndex = 2;
+  static const myListIndex = 2;
+  static const profileIndex = 3;
 
   static const paths = [
     RoutePaths.home,
     // RoutePaths.forYou,  // 暂时禁用
     RoutePaths.myList,
     RoutePaths.game,
-    RoutePaths.member,
+    // RoutePaths.member,
     RoutePaths.profile,
   ];
 }

@@ -10,7 +10,7 @@ void main() {
     final state = container.read(profileControllerProvider);
 
     expect(state.isLoggedIn, isFalse);
-    expect(state.userId, '15589299');
+    expect(state.userId, isNull);
     expect(
       state.avatarAssetPath,
       'assets/images/profile/profile_avatar_figma.png',

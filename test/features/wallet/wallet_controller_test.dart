@@ -137,11 +137,43 @@ class _FakeWalletRepository implements WalletRepository {
     }
     return data;
   }
+
+  @override
+  Future<List<WalletRecord>> fetchTransactionRecords({
+    String? pageToken,
+  }) async {
+    if (shouldThrow) {
+      throw StateError('failed');
+    }
+    return const [];
+  }
+
+  @override
+  Future<List<WalletRecord>> fetchConsumptionRecords({
+    required String status,
+    String? pageToken,
+  }) async {
+    if (shouldThrow) {
+      throw StateError('failed');
+    }
+    return const [];
+  }
+
+  @override
+  Future<List<WalletRecord>> fetchRewardCoins({
+    String? pageToken,
+  }) async {
+    if (shouldThrow) {
+      throw StateError('failed');
+    }
+    return const [];
+  }
 }
 
 const _emptyWalletData = WalletData(
   coins: 0,
   bonus: 0,
+  totalCoin: 0,
   autoUnlockNextEpisode: false,
   transactionRecords: [],
   consumptionRecords: [],

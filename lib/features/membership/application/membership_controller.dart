@@ -8,7 +8,9 @@ import '../../../core/auth/session_cleanup_types.dart';
 import '../../../core/utils/period_iso_parser.dart';
 import '../../entitlement/application/entitlement_controller.dart';
 import '../../pay/application/google_play_pricing_extractor.dart';
+import '../../pay/application/iap_pending_purchase_cleaner.dart';
 import '../../pay/application/iap_price_service.dart';
+import '../../pay/application/payment_loading_controller.dart';
 import '../../pay/provider/iap_price_service_provider.dart';
 import '../../pay/provider/iap_purchase_service_provider.dart';
 import '../../pay/provider/pay_repository_provider.dart';
@@ -31,6 +33,8 @@ enum MembershipPurchaseStatus {
   cancelled,
 }
 
+enum MembershipPurchaseFailureKind { orderCreation, payment, verification }
+
 class MembershipState {
   const MembershipState({
     required this.isLoading,
@@ -41,6 +45,7 @@ class MembershipState {
     required this.selectedPlanId,
     required this.confirmationPlanId,
     required this.purchaseStatus,
+    required this.purchaseFailureKind,
     required this.iapProductDetails,
     this.error,
   });
@@ -54,6 +59,7 @@ class MembershipState {
       selectedPlanId = null,
       confirmationPlanId = null,
       purchaseStatus = MembershipPurchaseStatus.idle,
+      purchaseFailureKind = null,
       iapProductDetails = const {},
       error = null;
 
@@ -65,6 +71,7 @@ class MembershipState {
   final String? selectedPlanId;
   final String? confirmationPlanId;
   final MembershipPurchaseStatus purchaseStatus;
+  final MembershipPurchaseFailureKind? purchaseFailureKind;
   final Map<String, ProductDetails> iapProductDetails;
   final Object? error;
 
@@ -96,10 +103,12 @@ class MembershipState {
     String? selectedPlanId,
     String? confirmationPlanId,
     MembershipPurchaseStatus? purchaseStatus,
+    MembershipPurchaseFailureKind? purchaseFailureKind,
     Map<String, ProductDetails>? iapProductDetails,
     Object? error,
     bool clearError = false,
     bool clearConfirmation = false,
+    bool clearPurchaseFailure = false,
   }) {
     return MembershipState(
       isLoading: isLoading ?? this.isLoading,
@@ -112,6 +121,9 @@ class MembershipState {
           ? null
           : confirmationPlanId ?? this.confirmationPlanId,
       purchaseStatus: purchaseStatus ?? this.purchaseStatus,
+      purchaseFailureKind: clearPurchaseFailure
+          ? null
+          : purchaseFailureKind ?? this.purchaseFailureKind,
       iapProductDetails: iapProductDetails ?? this.iapProductDetails,
       error: clearError ? null : error ?? this.error,
     );
@@ -122,6 +134,7 @@ class MembershipController extends Notifier<MembershipState> {
   static const _packageName = 'com.yushi.drama.client';
   static const _membershipProductType = 2;
   static const _purchaseResultTimeout = Duration(seconds: 30);
+  static const _paymentSheetDismissDelay = Duration(milliseconds: 260);
 
   int _generation = 0;
   int _purchaseGeneration = 0;
@@ -203,6 +216,7 @@ class MembershipController extends Notifier<MembershipState> {
       confirmationPlanId: selectedPlan.id,
       purchaseStatus: MembershipPurchaseStatus.idle,
       clearError: true,
+      clearPurchaseFailure: true,
     );
   }
 
@@ -211,6 +225,7 @@ class MembershipController extends Notifier<MembershipState> {
     state = state.copyWith(
       purchaseStatus: MembershipPurchaseStatus.idle,
       clearConfirmation: true,
+      clearPurchaseFailure: true,
     );
   }
 
@@ -223,6 +238,9 @@ class MembershipController extends Notifier<MembershipState> {
     final purchaseGeneration = _purchaseGeneration;
     final plan = state.confirmationPlan!;
     StreamSubscription<PurchaseDetails>? sub;
+    StreamSubscription<Object>? errorSub;
+    final loading = ref.read(paymentLoadingControllerProvider.notifier);
+    loading.show();
     try {
       final platformProductId = plan.platformProductId;
       if (platformProductId == null || platformProductId.isEmpty) {
@@ -243,9 +261,20 @@ class MembershipController extends Notifier<MembershipState> {
       state = state.copyWith(
         purchaseStatus: MembershipPurchaseStatus.creatingOrder,
         clearError: true,
+        clearPurchaseFailure: true,
       );
 
       final payRepository = ref.read(payRepositoryProvider);
+      await ref
+          .read(iapPendingPurchaseCleanerProvider)
+          .cleanupBeforeCreateOrder(
+            source: 'membership',
+            productIds: const <String>{},
+          );
+      if (!_isCurrentPurchase(purchaseGeneration, plan.id)) {
+        return;
+      }
+
       final paymentOrder = await payRepository.createPaymentOrder(
         productId: int.tryParse(plan.id) ?? 0,
         productType: _membershipProductType,
@@ -264,19 +293,30 @@ class MembershipController extends Notifier<MembershipState> {
       final purchaseCompleter = Completer<PurchaseDetails?>();
       sub = iapService.purchaseStream.listen((details) {
         final isCurrentProduct = details.productID == productDetails!.id;
+        final isPurchaseError = details.status == PurchaseStatus.error;
         final isCancellation =
             details.status.name == 'canceled' ||
             details.status == PurchaseStatus.error &&
                 _isUserCancelledPurchase(details);
-        if ((isCurrentProduct || isCancellation) &&
+        if ((isCurrentProduct || isCancellation || isPurchaseError) &&
             !purchaseCompleter.isCompleted) {
           purchaseCompleter.complete(details);
+        }
+      });
+      errorSub = iapService.purchaseErrorStream.listen((error) {
+        if (!purchaseCompleter.isCompleted) {
+          purchaseCompleter.completeError(error);
         }
       });
 
       state = state.copyWith(
         purchaseStatus: MembershipPurchaseStatus.waitingPayment,
       );
+      await Future<void>.delayed(_paymentSheetDismissDelay);
+      if (!_isCurrentPurchase(purchaseGeneration, plan.id)) {
+        return;
+      }
+
       final started = await iapService.buyProduct(
         product: productDetails,
         applicationUserName: iapService.buildOrderApplicationUserName(
@@ -363,13 +403,23 @@ class MembershipController extends Notifier<MembershipState> {
     } catch (error, stackTrace) {
       debugPrint('[Membership] purchase failed: $error\n$stackTrace');
       if (purchaseGeneration == _purchaseGeneration) {
+        final failureKind = switch (state.purchaseStatus) {
+          MembershipPurchaseStatus.creatingOrder =>
+            MembershipPurchaseFailureKind.orderCreation,
+          MembershipPurchaseStatus.verifying =>
+            MembershipPurchaseFailureKind.verification,
+          _ => MembershipPurchaseFailureKind.payment,
+        };
         state = state.copyWith(
           purchaseStatus: MembershipPurchaseStatus.failed,
-          error: error,
+          purchaseFailureKind: failureKind,
+          clearError: true,
         );
       }
     } finally {
       await sub?.cancel();
+      await errorSub?.cancel();
+      loading.hide();
     }
   }
 
@@ -388,6 +438,7 @@ class MembershipController extends Notifier<MembershipState> {
       purchaseStatus: MembershipPurchaseStatus.cancelled,
       clearConfirmation: true,
       clearError: true,
+      clearPurchaseFailure: true,
     );
   }
 
@@ -550,7 +601,7 @@ class MembershipController extends Notifier<MembershipState> {
     }
     final daily = priceMicros / 1000000.0 / days;
     final roundedUp = (daily * 100).ceil() / 100;
-    return '${_formatCurrency(currencyCode, currencySymbol, roundedUp)}/day';
+    return _formatCurrency(currencyCode, currencySymbol, roundedUp);
   }
 
   String _formatCurrency(

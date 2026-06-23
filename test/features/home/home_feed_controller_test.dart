@@ -1,6 +1,6 @@
-import 'package:drama_client/features/drama/data/drama_repository_provider.dart';
-import 'package:drama_client/features/drama/domain/drama.dart';
-import 'package:drama_client/features/drama/domain/drama_repository.dart';
+import 'package:drama_client/features/home/data/home_repository_provider.dart';
+import 'package:drama_client/features/home/domain/drama.dart';
+import 'package:drama_client/features/home/domain/drama_repository.dart';
 import 'package:drama_client/features/home/application/home_feed_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,7 +15,7 @@ void main() {
 
     expect(state.isInitialLoading, isFalse);
     expect(state.initialError, isNull);
-    expect(state.categories.map((category) => category.id), ['popular']);
+    expect(state.categories.map((category) => category.flag), ['popular']);
     expect(state.items.map((item) => item.id), ['drama-1']);
   });
 
@@ -67,33 +67,27 @@ class _FakeDramaRepository implements DramaRepository {
   final List<Drama> items;
 
   @override
-  Future<List<DramaCategory>> listHomeCategories() async {
+  Future<List<DramaCategory>> getHomeData() async {
     if (shouldThrow) {
       throw StateError('failed');
     }
-    return const [DramaCategory(id: 'popular', title: 'Popular')];
-  }
-
-  @override
-  Future<DramaFeedPage> listHomeFeed({
-    required String categoryId,
-    String? pageToken,
-    int pageSize = 10,
-  }) async {
-    if (shouldThrow) {
-      throw StateError('failed');
-    }
-    return DramaFeedPage(items: items, nextPageToken: null);
+    return [
+      DramaCategory(
+        flag: 'popular',
+        title: 'Popular',
+        dramas: items,
+      ),
+    ];
   }
 }
 
 final _drama = Drama(
   id: 'drama-1',
   title: 'Drama 1',
-  coverAssetPath: 'assets/images/home/drama_cover_figma.png',
-  viewCountLabel: '1 M',
-  episodeCount: 10,
-  categoryId: 'popular',
+  coverUrl: 'assets/images/home/drama_cover_figma.png',
+  playCount: 1000000,
+  episodeTotal: 10,
   tags: ['Rebirth'],
   coverAspectRatio: 171 / 226,
 );
+

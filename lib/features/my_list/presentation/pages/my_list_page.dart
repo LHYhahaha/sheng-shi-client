@@ -13,6 +13,7 @@ import '../../../../core/utils/text_over_ellipsis.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
+import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../application/my_list_controller.dart';
 import '../../domain/my_list_item.dart';
 
@@ -152,14 +153,13 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     }
 
     if (state.isEmpty) {
-      return _EmptyMyList(
-        description: l10n.myListEmptyDescription,
-        actionLabel: l10n.myListWatchPopular,
-        onActionTap: () => context.go(RoutePaths.home),
-      );
+      final isCollection = state.selectedTab == MyListTab.collection;
+      final emptyText = isCollection
+          ? l10n.myListEmptyFollowing
+          : l10n.myListEmptyHistory;
+      return _EmptyMyList(description: emptyText);
     }
 
-    final isPlayList = state.selectedTab == MyListTab.play;
     return ListView.separated(
       padding: EdgeInsets.fromLTRB(
         16,
@@ -186,28 +186,30 @@ class _MyListPageState extends ConsumerState<MyListPage> {
               item: item,
               choosing: state.isCollectionEditing,
               selected: state.selectedIds.contains(item.dramaId),
-                    onTap: state.isCollectionEditing
-                        ? () => controller.toggleSelection(item.dramaId)
-                        : () async {
-                            // 检查短剧在架状态，已下架则提示且不跳转
-                            if (item.dramaStatus == 2) {
-                                ref.read(appToastProvider).info(l10n.myListDramaOffShelf);
-                                return;
-                            }
-                            controller.closeAnyOpenPlayItem();
-                            // 播放历史项点击导航到播放器
-                            if (item.episodeId != null) {
-                                await context.push(
-                                    RoutePaths.playerLocation(
-                                        dramaId: item.dramaId.toString(),
-                                        episodeId: item.episodeId.toString(),
-                                        trigger: 'play_history_item',
-                                    ),
-                                );
-                                // 从播放器页面返回后，刷新当前tab的数据以获取最新排序
-                                controller.load();
-                            }
-                        },
+              onTap: state.isCollectionEditing
+                  ? () => controller.toggleSelection(item.dramaId)
+                  : () async {
+                      // 检查短剧在架状态，已下架则提示且不跳转
+                      if (item.dramaStatus == 2) {
+                        ref
+                            .read(appToastProvider)
+                            .info(l10n.myListDramaOffShelf);
+                        return;
+                      }
+                      controller.closeAnyOpenPlayItem();
+                      // 播放历史项点击导航到播放器
+                      if (item.episodeId != null) {
+                        await context.push(
+                          RoutePaths.playerLocation(
+                            dramaId: item.dramaId.toString(),
+                            episodeId: item.episodeId.toString(),
+                            trigger: 'play_history_item',
+                          ),
+                        );
+                        // 从播放器页面返回后，刷新当前tab的数据以获取最新排序
+                        controller.load();
+                      }
+                    },
             ),
           ),
         );
@@ -324,7 +326,7 @@ class _HeaderMoreMenu extends StatelessWidget {
           value: _HeaderMenuAction.edit,
           height: 38,
           child: Text(
-            context.l10n.myListEdit,
+            context.l10n.edit,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: AppColors.textPrimary,
               fontSize: 14,
@@ -656,22 +658,12 @@ class _CoverImage extends StatelessWidget {
   Widget _buildCoverImage(String assetPath) {
     // 判断是否是网络 URL
     if (assetPath.startsWith('http://') || assetPath.startsWith('https://')) {
-      return Image.network(
-        assetPath,
+      return AppCachedNetworkImage(
+        imageUrl: assetPath,
         fit: BoxFit.cover,
         width: 74,
         height: 101,
         filterQuality: FilterQuality.medium,
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            width: 74,
-            height: 101,
-            color: Colors.black,
-            child: const Center(
-              child: Icon(Icons.image_not_supported, color: Colors.grey),
-            ),
-          );
-        },
       );
     }
 
@@ -817,7 +809,7 @@ class _DeleteBar extends StatelessWidget {
                         : AppColors.textPrimary.withValues(alpha: 0.42),
                     size: 18,
                   ),
-                  label: Text(context.l10n.myListDeleteCount(count)),
+                  label: Text('${context.l10n.myListDelete} ($count)'),
                   style: TextButton.styleFrom(
                     foregroundColor: enabled
                         ? AppColors.textPrimary
@@ -843,106 +835,24 @@ class _DeleteBar extends StatelessWidget {
 }
 
 class _EmptyMyList extends StatelessWidget {
-  const _EmptyMyList({
-    required this.description,
-    required this.actionLabel,
-    required this.onActionTap,
-  });
+  const _EmptyMyList({required this.description});
 
   final String description;
-  final String actionLabel;
-  final VoidCallback onActionTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 84),
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const _EmptyIllustration(),
-            const SizedBox(height: 28),
-            Text(
-              description,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
-                fontSize: 14,
-                height: 21 / 14,
-              ),
-            ),
-            const SizedBox(height: 28),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: onActionTap,
-              child: Container(
-                width: 275,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  actionLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: AppColors.textPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    height: 24 / 16,
-                  ),
-                ),
-              ),
-            ),
-          ],
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Text(
+          description,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: AppColors.textSecondary,
+            fontSize: 14,
+            height: 21 / 14,
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _EmptyIllustration extends StatelessWidget {
-  const _EmptyIllustration();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.square(
-      dimension: 120,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: 92,
-            height: 74,
-            decoration: BoxDecoration(
-              color: AppColors.surfacePanel.withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: AppColors.textPrimary.withValues(alpha: 0.08),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 30,
-            child: Container(
-              width: 66,
-              height: 10,
-              decoration: BoxDecoration(
-                color: AppColors.textPrimary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-          ),
-          Icon(
-            Icons.movie_filter_outlined,
-            color: AppColors.textPrimary.withValues(alpha: 0.3),
-            size: 42,
-          ),
-        ],
       ),
     );
   }

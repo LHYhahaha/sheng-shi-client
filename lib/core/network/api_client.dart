@@ -287,6 +287,12 @@ class ApiClient {
         final response = await send();
         return _decode(response, decoder);
       } on ApiException catch (error) {
+        if (await _recoverFromGuestSessionExpired(error)) {
+          rethrow;
+        }
+        if (await _recoverFromSessionInvalidated(error)) {
+          rethrow;
+        }
         if (await _recoverFromUnauthorized(
           error,
           hasRetriedAfterRefresh,
@@ -301,6 +307,12 @@ class ApiClient {
         final apiError = error.error is ApiException
             ? error.error! as ApiException
             : ApiException.fromDio(error);
+        if (await _recoverFromGuestSessionExpired(apiError)) {
+          throw apiError;
+        }
+        if (await _recoverFromSessionInvalidated(apiError)) {
+          throw apiError;
+        }
         if (await _recoverFromUnauthorized(
           apiError,
           hasRetriedAfterRefresh,
@@ -311,7 +323,7 @@ class ApiClient {
           continue;
         }
         throw apiError;
-    } catch (error, stackTrace) {
+      } catch (error, stackTrace) {
       debugPrint('[ApiClient] 未知错误: $error');
       debugPrint('[ApiClient] 错误类型: ${error.runtimeType}');
       debugPrint('[ApiClient] 堆栈: $stackTrace');
@@ -327,6 +339,25 @@ class ApiClient {
   }
 
   /// 401 时尝试 refresh；成功返回 true 以便外层重试原请求一次。
+  Future<bool> _recoverFromGuestSessionExpired(ApiException error) async {
+    if (error.businessCode != _guestSessionExpiredBusinessCode ||
+        _sessionAuthHandler == null) {
+      return false;
+    }
+
+    return _sessionAuthHandler!.handleGuestSessionExpired();
+  }
+
+  Future<bool> _recoverFromSessionInvalidated(ApiException error) async {
+    if (error.businessCode != _sessionInvalidatedBusinessCode ||
+        _sessionAuthHandler == null) {
+      return false;
+    }
+
+    await _sessionAuthHandler!.handleSessionInvalidated();
+    return true;
+  }
+
   Future<bool> _recoverFromUnauthorized(
     ApiException error,
     bool hasRetriedAfterRefresh,
@@ -489,6 +520,8 @@ class ApiClient {
   }
 
   static const _authPolicyExtraKey = 'apiAuthPolicy';
+  static const _guestSessionExpiredBusinessCode = 1006;
+  static const _sessionInvalidatedBusinessCode = 1007;
 }
 
 /// 标记 refresh 请求，避免 refresh 自身 401 时再次进入 refresh 死循环。

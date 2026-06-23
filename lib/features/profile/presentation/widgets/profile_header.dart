@@ -114,13 +114,16 @@ class ProfileHeader extends StatelessWidget {
     if (avatarResource != null) {
       if (avatarResource.isNetwork) {
         return Image.network(
-          avatarResource.value,
+          avatarResource.value.trim(),
           fit: BoxFit.cover,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) {
+              return child;
+            }
+            return Image.asset(authDefaultAvatarAssetPath, fit: BoxFit.cover);
+          },
           errorBuilder: (context, error, stackTrace) {
-            return Image.asset(
-              authDefaultAvatarAssetPath,
-              fit: BoxFit.cover,
-            );
+            return Image.asset(authDefaultAvatarAssetPath, fit: BoxFit.cover);
           },
         );
       } else if (avatarResource.isAsset) {

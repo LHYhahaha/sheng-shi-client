@@ -7,7 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
-
+import '../../../../core/modal/app_modal_result.dart';
+import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../core/utils/period_iso_parser.dart';
@@ -81,7 +82,27 @@ class _PlayerRechargeUnlockSheetState
       return;
     }
     if (PlayerModalResults.isPaymentCompleted(result)) {
+      ref.read(appToastProvider).success(context.l10n.storePurchaseSuccess);
       Navigator.of(context).pop(true);
+      return;
+    }
+    if (PlayerModalResults.isCancelled(result)) {
+      ref.read(appToastProvider).info(context.l10n.storePurchaseCancelled);
+      return;
+    }
+    if (result.kind == AppModalResultKind.failed) {
+      final state = ref.read(
+        playerRechargeUnlockControllerProvider(widget.sessionKey),
+      );
+      final message =
+          state.purchaseFailureKind ==
+                  PlayerRechargePurchaseFailureKind.orderCreation ||
+              state.purchaseFailureKind ==
+                  PlayerRechargePurchaseFailureKind.verification ||
+              state.paymentStage == PlayerRechargePaymentStage.verifying
+          ? context.l10n.networkError
+          : context.l10n.storePurchaseFailed;
+      ref.read(appToastProvider).error(message);
     }
   }
 
@@ -221,6 +242,72 @@ class _LoadingOrError extends StatelessWidget {
   }
 }
 
+class _RechargeTipsSection extends StatelessWidget {
+  const _RechargeTipsSection({super.key});
+
+  List<String> _paymentNoteItems(AppLocalizations l10n) {
+    return l10n.membershipPaymentNote
+        .split('\n')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .map((item) {
+          final match = RegExp(r'^\d+\.?\s*(.*)').firstMatch(item);
+          return match != null ? match.group(1)! : item;
+        })
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final items = _paymentNoteItems(context.l10n);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          context.l10n.storeTips,
+          style: textTheme.labelMedium?.copyWith(
+            color: AppColors.textPrimary.withValues(alpha: 0.4),
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: 6),
+        RichText(
+          text: TextSpan(
+            style: const TextStyle(fontSize: 11, color: Color(0xFFFFFFFF)),
+            children: [
+              TextSpan(
+                text: context.l10n.appCommonLegalPrivacyPolicy,
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () => context.push(RoutePaths.privacyPolicy),
+              ),
+              const TextSpan(text: '    ·    '),
+              TextSpan(
+                text: context.l10n.appCommonLegalTermsOfUse,
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () => context.push(RoutePaths.userAgreement),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        for (var index = 0; index < items.length; index++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              '${index + 1}. ${items[index]}',
+              style: textTheme.labelMedium?.copyWith(
+                color: AppColors.textPrimary.withValues(alpha: 0.4),
+                height: 1.5,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class _OfferContent extends ConsumerWidget {
   const _OfferContent({
     required this.sessionKey,
@@ -331,7 +418,7 @@ class _OfferContent extends ConsumerWidget {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        context.l10n.playerUnlockProcessing,
+                        context.l10n.storePurchaseProcessing,
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.7),
                           fontSize: 12,
@@ -348,38 +435,8 @@ class _OfferContent extends ConsumerWidget {
                     ),
                   ),
                 const SizedBox(height: 12),
-                Text(
-                  offer.tips,
-                  key: const ValueKey('player_recharge_unlock_tips'),
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.42),
-                    fontSize: 12,
-                    height: 18 / 12,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                RichText(
-                  text: TextSpan(
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.white.withValues(alpha: 0.42),
-                    ),
-                    children: [
-                      TextSpan(
-                        text: context.l10n.appCommonLegalPrivacyPolicy,
-                        recognizer: TapGestureRecognizer()
-                          ..onTap = () =>
-                              context.push(RoutePaths.privacyPolicy),
-                      ),
-                      const TextSpan(text: '    ·    '),
-                      TextSpan(
-                        text: context.l10n.appCommonLegalTermsOfUse,
-                        recognizer: TapGestureRecognizer()
-                          ..onTap = () =>
-                              context.push(RoutePaths.userAgreement),
-                      ),
-                    ],
-                  ),
+                const _RechargeTipsSection(
+                  key: ValueKey('player_recharge_unlock_tips'),
                 ),
               ],
             ),
@@ -476,7 +533,8 @@ class _CoinUnlockButton extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    '使用 $coinCost 金币解锁',
+                    '$coinCost ${context.l10n.unitCoin} '
+                    '${context.l10n.playerUnlockNow}',
                     style: const TextStyle(
                       color: Colors.black,
                       fontSize: 16,
@@ -532,13 +590,13 @@ class _RechargeHeader extends ConsumerWidget {
               child: Row(
                 children: [
                   _InlineCoinMetric(
-                    label: 'Price:',
+                    label: '${context.l10n.playerRequiredCoins}:',
                     value: offer.requiredCoins,
                   ),
                   const SizedBox(width: 34),
                   _InlineCoinMetric(
                     key: const ValueKey('player_recharge_unlock_balance'),
-                    label: '${context.l10n.playerCoinBalance}:',
+                    label: '${context.l10n.playerBalance}:',
                     value: totalCoinBalance,
                   ),
                   const Spacer(),
@@ -814,9 +872,7 @@ class _PromoCountdownBadgeState extends ConsumerState<_PromoCountdownBadge> {
   void initState() {
     super.initState();
     // 开始共享计时器（如果尚未开始）
-    ref
-        .read(promotionCountdownServiceProvider)
-        .startIfNeeded();
+    ref.read(promotionCountdownServiceProvider).startIfNeeded();
   }
 
   @override
@@ -971,10 +1027,10 @@ class _MembershipInfoArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = PeriodIsoParser.localizedMembershipTitle(
-      package.title,
+    final title = context.l10n.rechargeMembershipTitle(
+      periodIso: package.periodIso,
       fallbackId: package.id,
-      languageCode: Localizations.localeOf(context).languageCode,
+      fallbackTitle: package.title,
     );
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 17, 16, 0),
@@ -1087,13 +1143,14 @@ class _BenefitGrid extends StatelessWidget {
       ),
       itemBuilder: (context, index) {
         final benefit = visibleBenefits[index];
+        final label = _localizedLabel(context, benefit.icon);
         return Row(
           children: [
             _BenefitIcon(icon: benefit.icon),
             const SizedBox(width: 7),
             Expanded(
               child: Text(
-                benefit.label,
+                label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -1108,6 +1165,19 @@ class _BenefitGrid extends StatelessWidget {
         );
       },
     );
+  }
+
+  String _localizedLabel(BuildContext context, PlayerRechargeBenefitIcon icon) {
+    return switch (icon) {
+      PlayerRechargeBenefitIcon.series =>
+        context.l10n.rechargeBenefitUnlockDramas,
+      PlayerRechargeBenefitIcon.download =>
+        context.l10n.rechargeBenefitDownload,
+      PlayerRechargeBenefitIcon.hd => context.l10n.rechargeBenefitHd,
+      PlayerRechargeBenefitIcon.points =>
+        context.l10n.rechargeBenefitDailyPoints,
+      PlayerRechargeBenefitIcon.noAds => context.l10n.benefitNoAds,
+    };
   }
 }
 
@@ -1170,10 +1240,7 @@ class _MembershipPackageCard extends ConsumerWidget {
       );
     }
 
-    final languageCode = Localizations.localeOf(context).languageCode;
-    final description = languageCode == 'en'
-        ? package.description ?? context.l10n.playerAutoRenewCancel
-        : context.l10n.playerAutoRenewCancel;
+    final description = context.l10n.playerAutoRenewCancel;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: enabled ? onTap : null,

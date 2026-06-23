@@ -1,6 +1,10 @@
+import 'package:drama_client/features/membership/data/membership_repository_provider.dart';
+import 'package:drama_client/features/membership/domain/membership_plan.dart';
+import 'package:drama_client/features/membership/domain/membership_repository.dart';
 import 'package:drama_client/features/membership/presentation/membership_layout.dart';
 import 'package:drama_client/features/membership/presentation/pages/membership_page.dart';
 import 'package:drama_client/features/membership/presentation/widgets/membership_plan_card.dart';
+import 'package:drama_client/features/pay/application/payment_loading_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -104,9 +108,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(_weeklyCardLeft(tester), closeTo(expectedLeft, 1));
 
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Done'));
+      await tester.tap(find.byKey(const ValueKey('app_payment_close')));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(MembershipPlanCard.planKey('yearly_vip')));
@@ -146,7 +148,36 @@ void main() {
         _planDailyBarColor(tester, 'monthly_vip'),
         const Color(0xFFFADEB7),
       );
-      expect(find.text('Confirm membership'), findsOneWidget);
+      expect(find.text('Payment method'), findsOneWidget);
+      expect(find.text('Google Pay'), findsOneWidget);
+    });
+
+    testWidgets('payment loading disables membership route pop gesture', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _buildMembershipPage(
+          overrides: [
+            paymentLoadingControllerProvider.overrideWith(
+              _InitiallyLoadingPaymentLoadingController.new,
+            ),
+          ],
+        ),
+      );
+
+      expect(
+        find.descendant(
+          of: find.byType(MembershipPage),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is PopScope && widget.canPop == false,
+          ),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(find.byType(MembershipPage), findsOneWidget);
     });
   });
 
@@ -161,68 +192,24 @@ void main() {
       await tester.tap(find.text('Monthly VIP'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Confirm membership'), findsOneWidget);
+      expect(find.text('Payment method'), findsOneWidget);
+      expect(find.text('Buy now'), findsOneWidget);
     });
 
-    testWidgets('membership purchase success closes and reopens idle', (
+    testWidgets('membership purchase sheet closes from close button', (
       tester,
     ) async {
       await tester.pumpWidget(_buildMembershipPage());
       await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Monthly VIP'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Confirm membership'), findsOneWidget);
-      expect(find.text('Confirm'), findsOneWidget);
-      expect(find.text('Cancel'), findsOneWidget);
-
-      await tester.tap(find.text('Confirm'));
-      await tester.pump();
-
-      expect(find.text('Processing mock purchase...'), findsOneWidget);
-      expect(
-        tester
-            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Confirm'))
-            .onPressed,
-        isNull,
-      );
-
-      await tester.pump(const Duration(milliseconds: 250));
-      expect(find.text('Mock purchase completed.'), findsOneWidget);
-
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Join Membership'), findsOneWidget);
-      expect(find.text('Confirm membership'), findsNothing);
-
-      await tester.tap(find.text('Yearly VIP'));
-      await tester.pumpAndSettle();
-
-      expect(
-        find.text('This is a mock membership confirmation for MVP testing.'),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('membership purchase cancel closes on done', (tester) async {
-      await tester.pumpWidget(_buildMembershipPage());
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
-
       await tester.tap(find.text('Weekly VIP'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Cancel'));
+
+      await tester.tap(find.byKey(const ValueKey('app_payment_close')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Mock purchase cancelled.'), findsOneWidget);
-
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Confirm membership'), findsNothing);
+      expect(find.text('Payment method'), findsNothing);
     });
   });
 }
@@ -253,6 +240,56 @@ Color _planDailyBarColor(WidgetTester tester, String planId) {
   return bar.color;
 }
 
-Widget _buildMembershipPage() {
-  return buildAppModalTestApp(home: const MembershipPage());
+Widget _buildMembershipPage({List overrides = const []}) {
+  return buildAppModalTestApp(
+    home: const MembershipPage(),
+    overrides: [
+      membershipRepositoryProvider.overrideWithValue(
+        const _FakeMembershipRepository(),
+      ),
+      ...overrides,
+    ],
+  );
+}
+
+class _InitiallyLoadingPaymentLoadingController
+    extends PaymentLoadingController {
+  @override
+  bool build() => true;
+}
+
+class _FakeMembershipRepository implements MembershipRepository {
+  const _FakeMembershipRepository();
+
+  @override
+  Future<MembershipData> fetchMembership() async {
+    return const MembershipData(
+      isActive: false,
+      heroTitle: 'Join Membership',
+      heroSubtitle: '10M+ users upgraded',
+      plans: [
+        MembershipPlan(
+          id: 'weekly_vip',
+          title: 'Weekly VIP',
+          priceLabel: r'$14.99',
+          dailyPriceLabel: r'$2.14/day',
+          period: 'P1W',
+        ),
+        MembershipPlan(
+          id: 'monthly_vip',
+          title: 'Monthly VIP',
+          priceLabel: r'$39.99',
+          dailyPriceLabel: r'$1.33/day',
+          period: 'P1M',
+        ),
+        MembershipPlan(
+          id: 'yearly_vip',
+          title: 'Yearly VIP',
+          priceLabel: r'$99.99',
+          dailyPriceLabel: r'$0.27/day',
+          period: 'P1Y',
+        ),
+      ],
+    );
+  }
 }

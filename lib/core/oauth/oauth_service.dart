@@ -49,3 +49,12 @@ class OAuthException implements Exception {
   @override
   String toString() => 'OAuthException($provider): $message';
 }
+
+class OAuthLoginCancelledException implements Exception {
+  const OAuthLoginCancelledException(this.provider);
+
+  final String provider;
+
+  @override
+  String toString() => 'OAuthLoginCancelledException($provider)';
+}

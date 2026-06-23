@@ -39,9 +39,7 @@ class StoreMapper {
     return StorePackage(
       id: dto.productId,
       kind: StorePackageKind.coins,
-      title: dto.productName?.isNotEmpty == true
-          ? dto.productName!
-          : dto.coin,
+      title: dto.productName?.isNotEmpty == true ? dto.productName! : dto.coin,
       priceLabel: dto.priceText, // API返回的展示价格
       baseCoins: baseCoins,
       bonusCoins: bonusCoins,
@@ -65,6 +63,7 @@ class StoreMapper {
       baseCoins: 0,
       bonusCoins: 0,
       platformProductId: dto.channelProductId, // 用于IAP查询和购买
+      periodIso: _periodIso(dto.periodType, dto.periodValue),
       productType: 'subscription',
       sortOrder: dto.sort,
       enabled: dto.status == 1,
@@ -97,6 +96,17 @@ class StoreMapper {
       default:
         return 'VIP Membership';
     }
+  }
+
+  String? _periodIso(String periodType, int periodValue) {
+    if (periodValue <= 0) return null;
+    return switch (periodType) {
+      'MEMBER_PERIOD_TYPE_DAY' => 'P${periodValue}D',
+      'MEMBER_PERIOD_TYPE_WEEK' => 'P${periodValue}W',
+      'MEMBER_PERIOD_TYPE_MONTH' => 'P${periodValue}M',
+      'MEMBER_PERIOD_TYPE_YEAR' => 'P${periodValue}Y',
+      _ => null,
+    };
   }
 
   List<StorePackageBenefit> _defaultBenefits() {

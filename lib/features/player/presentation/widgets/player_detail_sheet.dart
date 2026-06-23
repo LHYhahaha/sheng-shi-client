@@ -2,12 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:readmore/readmore.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../app/router/route_paths.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_round_icon_button.dart';
 import '../../../../shared/widgets/app_sheet_handle.dart';
+import '../../data/local/player_episode_unlock_cache.dart';
 import '../../domain/player_content.dart';
 
 enum PlayerDetailTab { synopsis, episodes }
@@ -143,10 +146,12 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
                             ? _SynopsisPanel(
                                 key: const ValueKey('synopsis'),
                                 content: widget.content,
-                                recommendationsFuture: widget.recommendationsFuture,
+                                recommendationsFuture:
+                                    widget.recommendationsFuture,
                               )
                             : _EpisodesPanel(
                                 key: const ValueKey('episodes'),
+                                dramaId: widget.content.id,
                                 episodes: widget.content.episodes,
                                 currentEpisode: widget.currentEpisode,
                                 rangeStart: _rangeStart,
@@ -266,28 +271,15 @@ class _Header extends StatelessWidget {
     final posterPath = content.posterAssetPath;
 
     if (coverUrl != null && coverUrl.isNotEmpty) {
-      return Image.network(
-        coverUrl,
+      return AppCachedNetworkImage(
+        imageUrl: coverUrl,
         width: 68,
         height: 91,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return Image.asset(
-            posterPath,
-            width: 68,
-            height: 91,
-            fit: BoxFit.cover,
-          );
-        },
       );
     }
 
-    return Image.asset(
-      posterPath,
-      width: 68,
-      height: 91,
-      fit: BoxFit.cover,
-    );
+    return SizedBox( width: 68, height: 91);
   }
 
   @override
@@ -320,7 +312,7 @@ class _Header extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  content.viewCountLabel+context.l10n.episodeModalViews,
+                  content.viewCountLabel + context.l10n.episodeModalViews,
                   style: const TextStyle(
                     color: AppColors.primary,
                     fontSize: 12,
@@ -360,7 +352,7 @@ class _SegmentedControl extends StatelessWidget {
             onTap: () => onChanged(PlayerDetailTab.synopsis),
           ),
           _Segment(
-            label: context.l10n.playerEpisodes,
+            label: context.l10n.episodeModalEpisodes,
             selected: selectedTab == PlayerDetailTab.episodes,
             onTap: () => onChanged(PlayerDetailTab.episodes),
           ),
@@ -454,73 +446,25 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 使用 LayoutBuilder 动态检测文本是否溢出
-        LayoutBuilder(
-          builder: (context, constraints) {
-            // 使用 TextPainter 检测文本是否超过三行
-            final textPainter = TextPainter(
-              text: TextSpan(text: synopsis, style: textStyle),
-              maxLines: 3,
-              textDirection: TextDirection.ltr,
-            );
-            textPainter.layout(maxWidth: constraints.maxWidth);
-
-            // 计算完整文本的高度
-            final fullTextPainter = TextPainter(
-              text: TextSpan(text: synopsis, style: textStyle),
-              textDirection: TextDirection.ltr,
-            );
-            fullTextPainter.layout(maxWidth: constraints.maxWidth);
-
-            // 如果完整文本高度大于三行文本高度，说明文本溢出了
-            final isOverflowing = fullTextPainter.height > textPainter.height + 0.1;
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  synopsis,
-                  maxLines: _isExpanded ? null : 3,
-                  overflow: _isExpanded ? null : TextOverflow.ellipsis,
-                  style: textStyle,
-                ),
-                if (isOverflowing && !_isExpanded)
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _isExpanded = true;
-                      });
-                    },
-                    child: Text(
-                      ' ${context.l10n.playerMore}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        height: 16 / 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                if (_isExpanded)
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _isExpanded = false;
-                      });
-                    },
-                    child: const Text(
-                      ' Less...',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        height: 16 / 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
+        ReadMoreText(
+          synopsis,
+          trimLines: 3,
+          trimMode: TrimMode.Line,
+          trimCollapsedText: context.l10n.playerMore,
+          trimExpandedText: context.l10n.playerLess,
+          style: textStyle,
+          lessStyle: TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            height: 16 / 12,
+            fontWeight: FontWeight.w600,
+          ),
+          moreStyle: TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            height: 16 / 12,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 18),
         Text(
@@ -559,7 +503,7 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 32),
                     child: Text(
-                      context.l10n.playerEmptyNoDramas,
+                      context.l10n.emptyNoDramas,
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.5),
                         fontSize: 14,
@@ -600,60 +544,57 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
             },
           )
         else
-          // 同步显示推荐列表
-          if (widget.content.recommendations.isEmpty)
-            // 为空 - 显示空状态
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 32),
-                child: Text(
-                  context.l10n.playerEmptyNoDramas,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.5),
-                    fontSize: 14,
-                    height: 18 / 14,
-                  ),
+        // 同步显示推荐列表
+        if (widget.content.recommendations.isEmpty)
+          // 为空 - 显示空状态
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Text(
+                context.l10n.emptyNoDramas,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 14,
+                  height: 18 / 14,
                 ),
               ),
-            )
-          else
-            // 有数据 - 显示推荐列表
-            GridView.builder(
-              physics: const NeverScrollableScrollPhysics(),
-              shrinkWrap: true,
-              itemCount: widget.content.recommendations.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 16,
-                childAspectRatio: 109 / 218,
-              ),
-              itemBuilder: (context, index) {
-                final recommendation = widget.content.recommendations[index];
-                return _RecommendationCard(
-                  recommendation: recommendation,
-                  onTap: () {
-                    final location = RoutePaths.playerLocation(
-                      dramaId: recommendation.id,
-                      episodeId: '1',
-                      trigger: 'recommendation',
-                      userActionAtMs: DateTime.now().millisecondsSinceEpoch,
-                    );
-                    context.push(location);
-                  },
-                );
-              },
             ),
+          )
+        else
+          // 有数据 - 显示推荐列表
+          GridView.builder(
+            physics: const NeverScrollableScrollPhysics(),
+            shrinkWrap: true,
+            itemCount: widget.content.recommendations.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 16,
+              childAspectRatio: 109 / 218,
+            ),
+            itemBuilder: (context, index) {
+              final recommendation = widget.content.recommendations[index];
+              return _RecommendationCard(
+                recommendation: recommendation,
+                onTap: () {
+                  final location = RoutePaths.playerLocation(
+                    dramaId: recommendation.id,
+                    episodeId: '1',
+                    trigger: 'recommendation',
+                    userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+                  );
+                  context.push(location);
+                },
+              );
+            },
+          ),
       ],
     );
   }
 }
 
 class _RecommendationCard extends StatelessWidget {
-  const _RecommendationCard({
-    required this.recommendation,
-    this.onTap,
-  });
+  const _RecommendationCard({required this.recommendation, this.onTap});
 
   final PlayerRecommendation recommendation;
   final VoidCallback? onTap;
@@ -665,10 +606,7 @@ class _RecommendationCard extends StatelessWidget {
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
-          child: AspectRatio(
-            aspectRatio: 109 / 147,
-            child: _buildCoverImage(),
-          ),
+          child: AspectRatio(aspectRatio: 109 / 147, child: _buildCoverImage()),
         ),
         const SizedBox(height: 4),
         Text(
@@ -708,23 +646,15 @@ class _RecommendationCard extends StatelessWidget {
 
   Widget _buildCoverImage() {
     final path = recommendation.coverAssetPath;
-    
+
     // 判断是否是网络 URL
     if (path.startsWith('http://') || path.startsWith('https://')) {
-      return Image.network(
-        path,
+      return AppCachedNetworkImage(
+        imageUrl: path,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            color: Colors.grey[800],
-            child: const Center(
-              child: Icon(Icons.image_not_supported, color: Colors.grey),
-            ),
-          );
-        },
       );
     }
-    
+
     // 本地 asset
     return Image.asset(
       path,
@@ -743,6 +673,7 @@ class _RecommendationCard extends StatelessWidget {
 
 class _EpisodesPanel extends StatefulWidget {
   const _EpisodesPanel({
+    required this.dramaId,
     required this.episodes,
     required this.currentEpisode,
     required this.rangeStart,
@@ -752,6 +683,7 @@ class _EpisodesPanel extends StatefulWidget {
     super.key,
   });
 
+  final String dramaId;
   final List<PlayerEpisode> episodes;
   final int currentEpisode;
   final int rangeStart;
@@ -843,7 +775,7 @@ class _EpisodesPanelState extends State<_EpisodesPanel> {
     if (widget.episodes.isEmpty) {
       return Center(
         child: Text(
-          context.l10n.playerFeedEmpty,
+          context.l10n.playerNoEpisodes,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.5),
             fontSize: 14,
@@ -884,7 +816,7 @@ class _EpisodesPanelState extends State<_EpisodesPanel> {
         if (visibleEpisodes.isEmpty)
           Center(
             child: Text(
-              context.l10n.playerFeedEmpty,
+              context.l10n.playerNoEpisodes,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.5),
                 fontSize: 14,
@@ -906,6 +838,7 @@ class _EpisodesPanelState extends State<_EpisodesPanel> {
             itemBuilder: (context, index) {
               final episode = visibleEpisodes[index];
               return _EpisodeTile(
+                dramaId: widget.dramaId,
                 episode: episode,
                 selected: episode.number == widget.currentEpisode,
                 onTap: () => widget.onEpisodeSelected(episode),
@@ -956,16 +889,27 @@ class _RangeButton extends StatelessWidget {
 
 class _EpisodeTile extends StatelessWidget {
   const _EpisodeTile({
+    required this.dramaId,
     required this.episode,
     required this.selected,
     required this.onTap,
     required this.currentEpisode,
   });
 
+  final String dramaId;
   final PlayerEpisode episode;
   final bool selected;
   final VoidCallback onTap;
   final int currentEpisode;
+
+  /// 检查剧集是否已解锁（优先使用缓存）。
+  bool get isEffectivelyUnlocked {
+    return PlayerEpisodeUnlockCache.isEpisodeUnlocked(
+      dramaId,
+      episode.id,
+      episode.isLocked,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -993,7 +937,7 @@ class _EpisodeTile extends StatelessWidget {
                   : Text(
                       episode.number.toString(),
                       style: TextStyle(
-                        color: episode.isLocked || episode.isUnavailable
+                        color: !isEffectivelyUnlocked || episode.isUnavailable
                             ? Colors.white.withValues(alpha: 0.3)
                             : Colors.white,
                         fontSize: 16,
@@ -1003,7 +947,7 @@ class _EpisodeTile extends StatelessWidget {
                     ),
             ),
           ),
-          if (episode.isLocked)
+          if (!isEffectivelyUnlocked)
             Positioned(
               right: 4,
               top: 3,
@@ -1023,7 +967,7 @@ class _EpisodeTile extends StatelessWidget {
                 size: 12,
               ),
             ),
-          if (episode.isLocked && episode.number == currentEpisode + 1)
+          if (!isEffectivelyUnlocked && episode.number == currentEpisode + 1)
             const Positioned(right: 0, top: 0, child: _GiftBadge()),
         ],
       ),
@@ -1046,11 +990,7 @@ class _GiftBadge extends StatelessWidget {
           bottomLeft: Radius.circular(8),
         ),
       ),
-      child: const Icon(
-        Icons.lock_rounded,
-        color: Colors.white,
-        size: 12,
-      ),
+      child: const Icon(Icons.lock_rounded, color: Colors.white, size: 12),
     );
   }
 }

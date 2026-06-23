@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/locale/app_locale_controller.dart';
+import '../../../core/runtime/api_lang_provider.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/home_repository_provider.dart';
 import '../domain/home_data.dart';
@@ -55,6 +57,20 @@ class HomeDataController extends Notifier<HomeDataState> {
 
   @override
   HomeDataState build() {
+    ref.listen(appLocaleControllerProvider, (previous, next) {
+      final previousLang = previous == null ? null : apiLangFromLocale(previous);
+      final nextLang = apiLangFromLocale(next);
+      if (previousLang == nextLang) {
+        return;
+      }
+      if (!_loadAttempted && state.data == null) {
+        return;
+      }
+
+      _loadAttempted = true;
+      unawaited(loadHomeData());
+    });
+
     ref.listen(authControllerProvider, (previous, next) {
       final wasReady = previous != null && !previous.isLoading;
       final isReady = !next.isLoading && next.error == null;

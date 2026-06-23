@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/auth/session_cleanup_coordinator.dart';
+import '../core/auth/user_info_store.dart';
 import '../core/modal/app_modal_business_cleanup.dart';
 import '../core/modal/app_modal_provider.dart';
 import '../features/auth/application/auth_controller.dart';
@@ -20,6 +21,7 @@ final featureSessionCleanupRegistrationProvider = Provider<void>((ref) {
   final coordinator = ref.read(sessionCleanupCoordinatorProvider);
   final modalService = ref.read(appModalServiceProvider);
   final authController = ref.read(authControllerProvider.notifier);
+  final userInfoStore = ref.read(userInfoStoreProvider.notifier);
   final entitlementController = ref.read(
     entitlementControllerProvider.notifier,
   );
@@ -34,6 +36,9 @@ final featureSessionCleanupRegistrationProvider = Provider<void>((ref) {
     },
     (reason) async {
       authController.resetForSessionCleanup(reason);
+    },
+    (_) async {
+      await userInfoStore.clear();
     },
     (reason) async {
       entitlementController.resetForSessionCleanup(reason);
@@ -62,7 +67,8 @@ final featureSessionCleanupRegistrationProvider = Provider<void>((ref) {
     // Session cleanup 完成后，自动触发重新登录流程
     // 这确保 token 失效后能自动恢复到游客登录状态，并获取用户信息
     (reason) async {
-      if (reason == SessionCleanupReason.deleteAccount) {
+      if (reason == SessionCleanupReason.deleteAccount ||
+          reason == SessionCleanupReason.guestSessionExpiredExit) {
         return;
       }
       print('[FeatureSessionCleanup] Triggering re-login after cleanup for reason: $reason');

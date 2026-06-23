@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +8,7 @@ import '../../../../core/modal/app_modal_presenter.dart';
 import '../../../../core/modal/app_modal_request.dart';
 import '../../../../core/modal/app_modal_result.dart';
 import '../../../../core/modal/app_modal_root_sheet.dart';
+import '../../../pay/application/payment_loading_controller.dart';
 import '../../application/membership_controller.dart';
 import '../widgets/membership_confirmation_sheet.dart';
 import 'membership_modal_channels.dart';
@@ -40,6 +43,7 @@ class MembershipAppModalPresenter implements AppModalPresenter {
       context: modalContext,
       isScrollControlled: true,
       builder: (sheetContext) {
+        var didPop = false;
         return UncontrolledProviderScope(
           container: container,
           child: Consumer(
@@ -53,7 +57,14 @@ class MembershipAppModalPresenter implements AppModalPresenter {
                       next == MembershipPurchaseStatus.success ||
                       next == MembershipPurchaseStatus.failed ||
                       next == MembershipPurchaseStatus.cancelled;
-                  if (reachedTerminalStatus && previous != next) {
+                  final shouldCloseForPurchaseFlow =
+                      next == MembershipPurchaseStatus.creatingOrder ||
+                      next == MembershipPurchaseStatus.waitingPayment ||
+                      next == MembershipPurchaseStatus.verifying;
+                  if (!didPop &&
+                      (reachedTerminalStatus || shouldCloseForPurchaseFlow) &&
+                      previous != next) {
+                    didPop = true;
                     Navigator.of(sheetContext).pop(next);
                   }
                 },
@@ -82,18 +93,68 @@ class MembershipAppModalPresenter implements AppModalPresenter {
         );
       },
     );
-    return switch (status) {
+    final finalStatus = _shouldWaitForTerminalStatus(status)
+        ? await _waitForTerminalStatus(container)
+        : status;
+    return switch (finalStatus) {
       MembershipPurchaseStatus.success =>
         const MembershipPurchaseModalResult.completed(),
       MembershipPurchaseStatus.cancelled =>
         const MembershipPurchaseModalResult.cancelled(),
       MembershipPurchaseStatus.failed =>
-        const MembershipPurchaseModalResult.cancelled(),
+        const MembershipPurchaseModalResult.failed(),
       null =>
         featureRequest.dismissPolicy.barrierDismissible
             ? const MembershipPurchaseModalResult.dismissed()
             : const MembershipPurchaseModalResult.cancelled(),
+      MembershipPurchaseStatus.idle =>
+        const MembershipPurchaseModalResult.dismissed(),
       _ => const MembershipPurchaseModalResult.cancelled(),
     };
+  }
+
+  Future<MembershipPurchaseStatus?> _waitForTerminalStatus(
+    ProviderContainer container,
+  ) async {
+    final currentStatus = container.read(
+      membershipControllerProvider.select((state) => state.purchaseStatus),
+    );
+    if (_isTerminal(currentStatus)) {
+      return currentStatus;
+    }
+
+    final loading = container.read(paymentLoadingControllerProvider.notifier);
+    loading.show();
+    final completer = Completer<MembershipPurchaseStatus?>();
+    late final ProviderSubscription<MembershipPurchaseStatus> subscription;
+    subscription = container.listen<MembershipPurchaseStatus>(
+      membershipControllerProvider.select((state) => state.purchaseStatus),
+      (previous, next) {
+        if (_isTerminal(next) && !completer.isCompleted) {
+          completer.complete(next);
+        }
+      },
+    );
+    try {
+      return await completer.future.timeout(
+        const Duration(seconds: 45),
+        onTimeout: () => MembershipPurchaseStatus.failed,
+      );
+    } finally {
+      subscription.close();
+      loading.hide();
+    }
+  }
+
+  bool _isTerminal(MembershipPurchaseStatus status) {
+    return status == MembershipPurchaseStatus.success ||
+        status == MembershipPurchaseStatus.failed ||
+        status == MembershipPurchaseStatus.cancelled;
+  }
+
+  bool _shouldWaitForTerminalStatus(MembershipPurchaseStatus? status) {
+    return status == MembershipPurchaseStatus.creatingOrder ||
+        status == MembershipPurchaseStatus.waitingPayment ||
+        status == MembershipPurchaseStatus.verifying;
   }
 }

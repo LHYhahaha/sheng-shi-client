@@ -84,6 +84,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 if (!isGuest)
                   InkWell(
                     onTap: _isLoggingOut ? null : _logout,
+                    splashColor: Colors.transparent,
+                    highlightColor: Colors.transparent,
                     child: Container(
                       alignment: Alignment.center,
                       padding: const EdgeInsets.symmetric(vertical: 13),

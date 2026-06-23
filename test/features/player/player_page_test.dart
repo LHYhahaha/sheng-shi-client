@@ -2,29 +2,41 @@ import 'dart:async';
 
 import 'package:drama_client/app/app_root_navigator_key.dart';
 import 'package:drama_client/app/router/route_paths.dart';
+import 'package:drama_client/app/router/route_names.dart';
 import 'package:drama_client/bootstrap/app_modal_registry_bootstrap.dart';
 import 'package:drama_client/core/modal/app_modal_host.dart';
+import 'package:drama_client/core/network/api_client.dart';
+import 'package:drama_client/core/network/api_client_provider.dart';
+import 'package:drama_client/core/network/api_request_context.dart';
 import 'package:drama_client/features/entitlement/application/entitlement_controller.dart';
 import 'package:drama_client/features/entitlement/data/entitlement_repository_provider.dart';
 import 'package:drama_client/features/entitlement/data/mock_entitlement_repository.dart';
 import 'package:drama_client/features/entitlement/domain/episode_unlock_type.dart';
 import 'package:drama_client/features/entitlement/domain/user_entitlement_state.dart';
+import 'package:drama_client/features/player/data/dto/watch_progress_dto.dart';
+import 'package:drama_client/features/player/data/player_content_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
 import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
+import 'package:drama_client/features/player/data/player_remote_data_source_provider.dart';
+import 'package:drama_client/features/player/data/remote/player_remote_data_source.dart';
 import 'package:drama_client/features/player/application/player_chrome_auto_immersive_config_provider.dart';
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
+import 'package:drama_client/features/player/application/player_recharge_unlock_controller.dart';
 import 'package:drama_client/features/player/domain/player_chrome_auto_immersive_config.dart';
 import 'package:drama_client/features/player/application/player_playback_prepare_manager.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/application/player_performance_policy_provider.dart';
 import 'package:drama_client/features/player/application/player_viewport_controller.dart';
+import 'package:drama_client/features/pay/application/payment_loading_controller.dart';
 import 'package:drama_client/features/player/domain/player_performance_policy.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/domain/player_playback_source.dart';
 import 'package:drama_client/core/toast/app_toast_provider.dart';
 import 'package:drama_client/features/player/presentation/pages/player_page.dart';
+import 'package:drama_client/features/player/presentation/widgets/player_payment_method_sheet.dart';
+import 'package:drama_client/features/player/domain/player_recharge_unlock_offer.dart';
 import '../../core/toast/recording_app_toast_service.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_chrome.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_detail_sheet.dart';
@@ -144,6 +156,63 @@ void main() {
       await tester.pumpAndSettle();
     },
   );
+
+  testWidgets('remote resume switches viewport before starting playback', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+    final repository = _FakePlayerFeedRepository.unlocked();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: '1',
+          episodeId: '1',
+        ),
+        repository: repository,
+        playbackSessionFactory: () => playbackSession,
+        providerOverrides: [
+          useRemotePlayerApiProvider.overrideWithValue(true),
+          playerRemoteDataSourceProvider.overrideWithValue(
+            _FakePlayerRemoteDataSource(
+              watchProgress: WatchProgressDto(
+                dramaId: 1,
+                episodeId: 2,
+                episodeNo: 2,
+                watchSecond: 35,
+                durationSecond: 120,
+                progressPercent: 29,
+              ),
+              delay: const Duration(milliseconds: 100),
+            ),
+          ),
+          apiClientProvider.overrideWithValue(
+            ApiClient(
+              requestContext: const ApiRequestContext.test(
+                deviceId: 'test-device-id',
+                accessToken: 'test-access-token',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(playbackSession.openedSources, isEmpty);
+
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(repository.lastSingleDramaEpisodeId, '2');
+    expect(find.text('EP.02'), findsOneWidget);
+    expect(playbackSession.openedSources, [_mockSecondVideoUrl]);
+    expect(
+      playbackSession.seekedPositions,
+      contains(const Duration(seconds: 35)),
+    );
+  });
 
   testWidgets('shows retry when playback open fails', (tester) async {
     await tester.pumpWidget(
@@ -1429,6 +1498,38 @@ void main() {
     );
   });
 
+  testWidgets('returning from auto membership route restores locked episode action', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
+        ),
+        repository: _FakePlayerFeedRepository.membershipLocked(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    for (var i = 0; i < 30; i += 1) {
+      if (find.text('Membership').evaluate().isNotEmpty) {
+        break;
+      }
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    expect(find.text('Membership'), findsOneWidget);
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+
+    expect(find.text('EP.02'), findsOneWidget);
+    expect(find.text('Member unlock'), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_unlock_button')), findsOneWidget);
+  });
+
   testWidgets('coin episode already unlocked can play', (tester) async {
     await tester.pumpWidget(
       _buildPlayerApp(
@@ -2048,6 +2149,86 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('cancelled player payment sheet offers purchase again', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container
+        .read(playerRechargeUnlockControllerProvider('single-a').notifier)
+        .close();
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: PlayerPaymentMethodSheet(
+              sessionKey: 'single-a',
+              selection: PlayerPaymentSelection.coin(
+                const PlayerRechargeCoinPackage(
+                  id: '100',
+                  baseCoins: 300,
+                  bonusCoins: 0,
+                  googleProductId: 'coins_300',
+                  googlePriceLabel: r'$2.99',
+                ),
+              ),
+              onDismiss: () {},
+              onPurchaseSuccess: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Payment canceled'), findsNothing);
+    expect(
+      tester.widget<FilledButton>(
+        find.byKey(const ValueKey('player_recharge_payment_buy_now')),
+      ).onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets('payment loading disables player route pop gesture', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: '/for-you',
+        repository: _FakePlayerFeedRepository.unlocked(),
+        providerOverrides: [
+          paymentLoadingControllerProvider.overrideWith(
+            _InitiallyLoadingPaymentLoadingController.new,
+          ),
+        ],
+      ),
+    );
+
+    expect(
+      find.descendant(
+        of: find.byType(PlayerPage),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is PopScope && widget.canPop == false,
+        ),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('membership package success from recharge sheet plays episode', (
     tester,
   ) async {
@@ -2544,6 +2725,30 @@ void main() {
     expect(find.text('EP.01'), findsNothing);
   });
 
+  testWidgets('single drama starts at requested episode and swipes back in order', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
+        ),
+        repository: _FakePlayerFeedRepository.unlocked(),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('EP.02'), findsOneWidget);
+
+    await tester.drag(find.byType(PageView), const Offset(0, 500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('EP.01'), findsOneWidget);
+    expect(find.text('EP.03'), findsNothing);
+  });
+
   testWidgets('completed playback is ignored while a sheet is open', (
     tester,
   ) async {
@@ -2824,6 +3029,12 @@ final _singleDramaAutoImmersiveDisabledOverrides = [
   ),
 ];
 
+class _InitiallyLoadingPaymentLoadingController
+    extends PaymentLoadingController {
+  @override
+  bool build() => true;
+}
+
 const _mockVideoUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
 const _mockSecondVideoUrl = 'https://test-streams.mux.dev/tos_ismc/main.m3u8';
 const _mockThirdVideoUrl =
@@ -2864,7 +3075,11 @@ Widget _buildPlayerApp({
       ),
       GoRoute(
         path: RoutePaths.membership,
-        builder: (context, state) => const Scaffold(body: Text('Membership')),
+        name: RouteNames.membership,
+        builder: (context, state) => Scaffold(
+          appBar: AppBar(leading: const BackButton()),
+          body: const Text('Membership'),
+        ),
       ),
     ],
   );
@@ -2967,12 +3182,14 @@ class _FakePlayerFeedRepository implements PlayerFeedRepository {
   final List<PlayerFeedItem> items;
   final bool shouldReturnEmpty;
   bool shouldThrowOnce;
+  String? lastSingleDramaEpisodeId;
 
   @override
   Future<List<PlayerFeedItem>> listSingleDramaFeed({
     required String dramaId,
     required String episodeId,
   }) async {
+    lastSingleDramaEpisodeId = episodeId;
     if (shouldThrowOnce) {
       shouldThrowOnce = false;
       throw StateError('failed');
@@ -2981,15 +3198,7 @@ class _FakePlayerFeedRepository implements PlayerFeedRepository {
       return const [];
     }
 
-    final requestedNumber = int.tryParse(episodeId);
-    final index = items.indexWhere((item) {
-      return item.episode.id == episodeId ||
-          item.episode.number == requestedNumber;
-    });
-    if (index <= 0) {
-      return items;
-    }
-    return [...items.sublist(index), ...items.sublist(0, index)];
+    return items;
   }
 
   @override
@@ -3005,6 +3214,40 @@ class _FakePlayerFeedRepository implements PlayerFeedRepository {
         )
         .toList(growable: false);
   }
+}
+
+class _FakePlayerRemoteDataSource extends PlayerRemoteDataSource {
+  _FakePlayerRemoteDataSource({
+    required this.watchProgress,
+    this.delay = Duration.zero,
+  }) : super(apiClient: ApiClient());
+
+  final WatchProgressDto? watchProgress;
+  final Duration delay;
+
+  @override
+  Future<WatchProgressDto?> fetchWatchProgress({required int dramaId}) async {
+    if (delay > Duration.zero) {
+      await Future<void>.delayed(delay);
+    }
+    return watchProgress;
+  }
+
+  @override
+  Future<bool> checkShortFollowStatus({required int dramaId}) async {
+    return false;
+  }
+
+  @override
+  Future<void> reportWatchProgress({
+    required bool autoUnlockNext,
+    required int dramaId,
+    required int durationSecond,
+    int? episodeId,
+    required int episodeNo,
+    required int eventType,
+    required int watchSecond,
+  }) async {}
 }
 
 List<PlayerFeedItem> _items({
@@ -3140,6 +3383,7 @@ PlayerContent _content(List<PlayerEpisode> episodes) {
     posterAssetPath: 'assets/images/player/recommend_1.png',
     episodes: episodes,
     recommendations: const [],
+    episodeTotal: episodes.length,
   );
 }
 
@@ -3220,7 +3464,12 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   }
 
   @override
-  Future<void> open(String source, {bool play = true}) async {
+  Future<void> open(
+    String source, {
+    bool play = true,
+    Duration? start,
+    Map<String, String>? httpHeaders,
+  }) async {
     openedSources.add(source);
     _bufferingController.add(true);
     await (openCompleter?.future ?? Future<void>.value());

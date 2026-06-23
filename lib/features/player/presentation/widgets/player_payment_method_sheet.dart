@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../core/utils/period_iso_parser.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/app_payment_method_sheet.dart';
@@ -23,7 +22,11 @@ class PlayerPaymentSelection {
   String titleFor(BuildContext context) {
     final coin = coinPackage;
     if (coin != null) {
-      return '${coin.baseCoins} Coins';
+      final coinLabel = '${coin.baseCoins} ${context.l10n.unitCoin}';
+      if (coin.bonusCoins <= 0) {
+        return coinLabel;
+      }
+      return '${coin.baseCoins} +${coin.bonusCoins} ${context.l10n.unitCoin}';
     }
     final package = membershipPackage!;
     return PeriodIsoParser.localizedMembershipTitle(
@@ -65,18 +68,33 @@ class _PlayerPaymentMethodSheetState
     extends ConsumerState<PlayerPaymentMethodSheet> {
   var _didCompletePurchase = false;
   var _didDismissTerminalStatus = false;
+  var _didDismissForGooglePayment = false;
 
   @override
   Widget build(BuildContext context) {
     final provider = playerRechargeUnlockControllerProvider(widget.sessionKey);
+    ref.listen(provider.select((state) => state.paymentStage), (
+      previous,
+      next,
+    ) {
+      if (!mounted || _didDismissForGooglePayment) {
+        return;
+      }
+      if (next == PlayerRechargePaymentStage.creatingOrder ||
+          next == PlayerRechargePaymentStage.waitingPayment ||
+          next == PlayerRechargePaymentStage.verifying) {
+        _didDismissForGooglePayment = true;
+        widget.onDismiss();
+      }
+    });
     ref.listen(provider.select((state) => state.status), (previous, next) {
       if (!mounted) {
         return;
       }
       if (next == PlayerRechargeUnlockStatus.success &&
+          !_didDismissForGooglePayment &&
           !_didCompletePurchase) {
         _didCompletePurchase = true;
-        ref.read(appToastProvider).success(context.l10n.storePurchaseSuccess);
         widget.onPurchaseSuccess();
         return;
       }
@@ -93,8 +111,7 @@ class _PlayerPaymentMethodSheetState
     final isProcessing = state.isProcessing;
     final isComplete =
         state.status == PlayerRechargeUnlockStatus.success ||
-        state.status == PlayerRechargeUnlockStatus.failed ||
-        state.status == PlayerRechargeUnlockStatus.cancelled;
+        state.status == PlayerRechargeUnlockStatus.failed;
     final statusLabel = switch (state.status) {
       PlayerRechargeUnlockStatus.processing =>
         context.l10n.storePurchaseProcessing,

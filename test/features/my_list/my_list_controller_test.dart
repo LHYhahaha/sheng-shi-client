@@ -16,7 +16,7 @@ void main() {
     expect(state.selectedTab, MyListTab.collection);
     expect(state.isLoading, isFalse);
     expect(state.error, isNull);
-    expect(state.items.map((item) => item.id), ['collection-1']);
+    expect(state.items.map((item) => item.dramaId), [1]);
   });
 
   test('switches tabs and reloads play items', () async {
@@ -26,7 +26,7 @@ void main() {
 
     await controller.load();
     controller.enterCollectionEdit();
-    controller.toggleSelection('collection-1');
+    controller.toggleSelection(1);
 
     await controller.selectTab(MyListTab.play);
     final state = container.read(myListControllerProvider);
@@ -34,7 +34,7 @@ void main() {
     expect(state.selectedTab, MyListTab.play);
     expect(state.isCollectionEditing, isFalse);
     expect(state.selectedIds, isEmpty);
-    expect(state.items.map((item) => item.id), ['play-1', 'play-2']);
+    expect(state.items.map((item) => item.dramaId), [2, 3]);
   });
 
   test('deletes selected collection items', () async {
@@ -44,7 +44,7 @@ void main() {
 
     await controller.load();
     controller.enterCollectionEdit();
-    controller.toggleSelection('collection-1');
+    controller.toggleSelection(1);
     controller.deleteSelected();
     final state = container.read(myListControllerProvider);
 
@@ -62,8 +62,8 @@ void main() {
 
     await controller.load();
     controller.enterCollectionEdit();
-    controller.toggleSelection('collection-1');
-    controller.toggleSelection('collection-2');
+    controller.toggleSelection(1);
+    controller.toggleSelection(2);
     controller.deleteSelected();
     final state = container.read(myListControllerProvider);
 
@@ -78,12 +78,12 @@ void main() {
     final controller = container.read(myListControllerProvider.notifier);
 
     await controller.selectTab(MyListTab.play);
-    controller.openPlayItem('play-1');
-    controller.deleteItem('play-1');
+    controller.openPlayItem(2);
+    controller.deleteItem(2);
     final state = container.read(myListControllerProvider);
 
     expect(state.openPlayItemId, isNull);
-    expect(state.items.map((item) => item.id), ['play-2']);
+    expect(state.items.map((item) => item.dramaId), [3]);
   });
 
   test('deleting last play item enters empty state', () async {
@@ -92,7 +92,7 @@ void main() {
     final controller = container.read(myListControllerProvider.notifier);
 
     await controller.selectTab(MyListTab.play);
-    controller.deleteItem('play-1');
+    controller.deleteItem(2);
     final state = container.read(myListControllerProvider);
 
     expect(state.selectedTab, MyListTab.play);
@@ -116,7 +116,7 @@ void main() {
     state = container.read(myListControllerProvider);
 
     expect(state.error, isNull);
-    expect(state.items.map((item) => item.id), ['collection-1']);
+    expect(state.items.map((item) => item.dramaId), [1]);
   });
 }
 
@@ -151,17 +151,20 @@ class _FakeMyListRepository implements MyListRepository {
   }
 
   @override
-  Future<void> deleteFavorite({required String dramaId}) async {}
+  Future<void> deleteFavorite({required int dramaId}) async {}
 
   @override
-  Future<void> deleteFavorites({required List<String> dramaIds}) async {}
+  Future<void> deleteFavorites({required List<int> dramaIds}) async {}
 
   @override
-  Future<void> deletePlayHistory({required String historyId}) async {}
+  Future<void> deletePlayHistory({required int historyId}) async {}
+
+  @override
+  Future<void> deletePlayHistories({required List<int> historyIds}) async {}
 }
 
 const _collectionItem = MyListItem(
-  id: 'collection-1',
+  dramaId: 1,
   title: 'Collection 1',
   introduction: 'Intro',
   coverAssetPath: 'assets/images/my_list/cover_1.png',
@@ -170,7 +173,7 @@ const _collectionItem = MyListItem(
 );
 
 const _playItemA = MyListItem(
-  id: 'play-1',
+  dramaId: 2,
   title: 'Play 1',
   introduction: 'Intro',
   coverAssetPath: 'assets/images/my_list/cover_1.png',
@@ -179,7 +182,7 @@ const _playItemA = MyListItem(
 );
 
 const _collectionItemB = MyListItem(
-  id: 'collection-2',
+  dramaId: 2,
   title: 'Collection 2',
   introduction: 'Intro',
   coverAssetPath: 'assets/images/my_list/cover_2.png',
@@ -188,7 +191,7 @@ const _collectionItemB = MyListItem(
 );
 
 const _playItemB = MyListItem(
-  id: 'play-2',
+  dramaId: 3,
   title: 'Play 2',
   introduction: 'Intro',
   coverAssetPath: 'assets/images/my_list/cover_2.png',

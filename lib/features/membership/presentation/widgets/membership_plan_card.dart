@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/period_iso_parser.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../membership_layout.dart';
 import '../../domain/membership_plan.dart';
 import '../../application/promotion_countdown_service.dart';
@@ -85,15 +86,10 @@ class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
     final plan = widget.plan;
     final selected = widget.selected;
     final languageCode = Localizations.localeOf(context).languageCode;
-    final title = PeriodIsoParser.localizedMembershipTitle(
-      plan.title,
+    final title = context.l10n.membershipPlanTitle(
       periodIso: plan.period ?? plan.regularPeriodIso,
       fallbackId: plan.id,
-      languageCode: languageCode,
-    );
-    final dailyPriceLabel = PeriodIsoParser.localizedDailyPriceLabel(
-      plan.dailyPriceLabel,
-      languageCode: languageCode,
+      fallbackTitle: plan.title,
     );
 
     return Semantics(
@@ -192,7 +188,7 @@ class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
                       : Colors.white.withValues(alpha: 0.08),
                   child: Center(
                     child: Text(
-                      dailyPriceLabel,
+                      "${plan.dailyPriceLabel}/${context.l10n.membershipDay}",
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: textTheme.labelSmall?.copyWith(

@@ -1,6 +1,7 @@
 import '../domain/account_deletion_exception.dart';
 import '../domain/auth_repository.dart';
 import '../domain/auth_session.dart';
+import '../domain/delete_account_result.dart';
 
 /// Auth mock 仓库。
 ///
@@ -17,6 +18,12 @@ class MockAuthRepository
 
   /// 测试用：模拟服务端拒绝注销（余额不为 0 / 仍为会员等）。
   AccountDeletionRejectedException? forcedDeleteRejection;
+
+  /// 测试用：模拟注销接口返回的 shouldExitApp 值。
+  ///
+  /// 默认值为 true，模拟游客或当前设备账号注销后退出App的场景。
+  /// 测试三方登录注销场景时可设置为 false。
+  bool mockDeleteAccountShouldExitApp = true;
 
   @override
   Future<AuthSession> login(AuthProviderType provider) async {
@@ -56,7 +63,7 @@ class MockAuthRepository
   }
 
   @override
-  Future<AuthSession> deleteAccount() async {
+  Future<DeleteAccountResult> deleteAccount() async {
     await Future<void>.delayed(const Duration(milliseconds: 50));
     final rejection = forcedDeleteRejection;
     if (rejection != null) {
@@ -66,6 +73,9 @@ class MockAuthRepository
       sessionId: 'guest-sess-mock',
       guestId: 'guest-mock',
     );
-    return _session;
+    return DeleteAccountResult(
+      session: _session,
+      shouldExitApp: mockDeleteAccountShouldExitApp,
+    );
   }
 }

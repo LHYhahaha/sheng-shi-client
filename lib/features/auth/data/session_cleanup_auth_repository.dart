@@ -2,6 +2,7 @@ import '../../../core/auth/session_cleanup_coordinator.dart';
 import '../../../core/auth/user_info_store.dart';
 import '../domain/auth_repository.dart';
 import '../domain/auth_session.dart';
+import '../domain/delete_account_result.dart';
 
 /// 在 logout/delete 成功后触发统一 session cleanup。
 ///
@@ -41,10 +42,10 @@ class SessionCleanupAuthRepository
   }
 
   @override
-  Future<AuthSession> deleteAccount() async {
-    final session = await delegate.deleteAccount();
+  Future<DeleteAccountResult> deleteAccount() async {
+    final result = await delegate.deleteAccount();
     await _userInfoStore?.clear();
     await _sessionCleanup.cleanup(SessionCleanupReason.deleteAccount);
-    return session;
+    return result;
   }
 }

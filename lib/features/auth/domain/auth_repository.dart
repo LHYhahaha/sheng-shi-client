@@ -1,4 +1,5 @@
 import 'auth_session.dart';
+import 'delete_account_result.dart';
 
 /// 认证仓库边界。
 ///
@@ -9,7 +10,10 @@ abstract interface class AuthRepository {
 
   Future<AuthSession> logout();
 
-  Future<AuthSession> deleteAccount();
+  /// 注销账号。
+  ///
+  /// 返回 [DeleteAccountResult]，包含注销后的 session 和是否需要退出App的标识。
+  Future<DeleteAccountResult> deleteAccount();
 }
 
 abstract interface class CurrentAuthSessionSynchronizer {

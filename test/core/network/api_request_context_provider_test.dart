@@ -21,7 +21,7 @@ void main() {
     'request context is composed from install id, lang, platform, app version and token',
     () async {
       final storage = InMemoryInstallIdStorage();
-      await storage.write('device-realistic');
+      await storage.write('11111111-1111-4111-8111-111111111111');
       final container = ProviderContainer(
         overrides: [
           installIdStorageProvider.overrideWithValue(storage),
@@ -34,15 +34,15 @@ void main() {
       await container.read(installIdProvider.future);
       container
           .read(appLocaleControllerProvider.notifier)
-          .select(const Locale('es'));
+          .select(const Locale('zh'));
       await container
           .read(authTokenStoreProvider.notifier)
           .save(const AuthTokenSnapshot(accessToken: 'token-1'));
 
       final context = container.read(apiRequestContextProvider);
 
-      expect(context.deviceId, 'device-realistic');
-      expect(context.lang, 'es');
+      expect(context.deviceId, '11111111-1111-4111-8111-111111111111');
+      expect(context.lang, 'zh');
       expect(context.platform, 'ios');
       expect(context.appVersion, '9.9.9');
       expect(context.accessToken, 'token-1');
@@ -55,7 +55,7 @@ void main() {
 
     container
         .read(appLocaleControllerProvider.notifier)
-        .select(const Locale('zh'));
+        .select(const Locale('es'));
 
     expect(container.read(apiRequestContextProvider).lang, 'en');
   });
@@ -65,10 +65,13 @@ void main() {
       responseData: {'code': 0, 'message': 'success', 'data': null},
     );
     final storage = InMemoryInstallIdStorage();
-    await storage.write('install-abc');
+    await storage.write('22222222-2222-4222-8222-222222222222');
     final container = ProviderContainer(
       overrides: [
         installIdStorageProvider.overrideWithValue(storage),
+        installIdProvider.overrideWith(
+          (ref) async => '22222222-2222-4222-8222-222222222222',
+        ),
         apiAppVersionProvider.overrideWithValue('3.0.0'),
         apiPlatformProvider.overrideWithValue('android'),
         apiClientProvider.overrideWith((ref) {
@@ -85,7 +88,7 @@ void main() {
     await container.read(installIdProvider.future);
     container
         .read(appLocaleControllerProvider.notifier)
-        .select(const Locale('pt'));
+        .select(const Locale('zh'));
 
     await container
         .read(apiClientProvider)
@@ -95,8 +98,11 @@ void main() {
           decoder: (_) {},
         );
 
-    expect(adapter.lastOptions?.headers['Device-Id'], 'install-abc');
-    expect(adapter.lastOptions?.headers['Lang'], 'pt');
+    expect(
+      adapter.lastOptions?.headers['Device-Id'],
+      '22222222-2222-4222-8222-222222222222',
+    );
+    expect(adapter.lastOptions?.headers['Lang'], 'zh');
     expect(adapter.lastOptions?.headers['Platform'], 'android');
     expect(adapter.lastOptions?.headers['App-Version'], '3.0.0');
     expect(adapter.lastOptions?.headers.containsKey('Authorization'), isFalse);
@@ -108,7 +114,9 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
-        installIdStorageProvider.overrideWithValue(InMemoryInstallIdStorage()),
+        installIdProvider.overrideWith(
+          (ref) async => '33333333-3333-4333-8333-333333333333',
+        ),
         apiAppVersionProvider.overrideWithValue('1.0.0'),
         apiPlatformProvider.overrideWithValue('web'),
         apiClientProvider.overrideWith((ref) {
@@ -151,7 +159,9 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
-        installIdStorageProvider.overrideWithValue(InMemoryInstallIdStorage()),
+        installIdProvider.overrideWith(
+          (ref) async => '44444444-4444-4444-8444-444444444444',
+        ),
         apiClientProvider.overrideWith((ref) {
           final dio = Dio()..httpClientAdapter = adapter;
           return ApiClient(

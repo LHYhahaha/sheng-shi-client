@@ -12,6 +12,7 @@ import '../../../../core/modal/app_modal_source.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../pay/application/payment_loading_controller.dart';
 import '../../application/membership_controller.dart';
 import '../../application/membership_modal_coordinator.dart';
 import '../../domain/membership_plan.dart';
@@ -38,17 +39,20 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
   void initState() {
     super.initState();
     _modalService = ref.read(appModalServiceProvider);
-    Future.microtask(
-      () => ref.read(membershipControllerProvider.notifier).load(),
+    final membershipController = ref.read(
+      membershipControllerProvider.notifier,
     );
+    unawaited(Future.microtask(membershipController.load));
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_returnToProfileInitialized) {
-      final uri = GoRouter.of(context).routeInformationProvider.value.uri;
-      _returnToProfile = uri.queryParameters['returnToProfile'] == 'true';
+      final uri = GoRouter.maybeOf(
+        context,
+      )?.routeInformationProvider.value.uri;
+      _returnToProfile = uri?.queryParameters['returnToProfile'] == 'true';
       _returnToProfileInitialized = true;
     }
   }
@@ -65,6 +69,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(membershipControllerProvider);
     final controller = ref.read(membershipControllerProvider.notifier);
+    final isPaymentLoading = ref.watch(paymentLoadingControllerProvider);
     final topInset = MediaQuery.paddingOf(context).top;
     final l10n = context.l10n;
 
@@ -101,11 +106,31 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
                         context.go(RoutePaths.profile);
                       } else {
                         // 从播放器充值弹框等入口进入，按原有逻辑返回
-                        _goBack(result: MembershipRouteResult.purchaseCompleted);
+                        _goBack(
+                          result: MembershipRouteResult.purchaseCompleted,
+                        );
                       }
                     }),
                   );
                   return;
+                }
+                final purchaseState = ref.read(membershipControllerProvider);
+                final purchaseFailureKind = purchaseState.purchaseFailureKind;
+                if (MembershipModalResults.isFailed(result)) {
+                  final message =
+                      purchaseFailureKind ==
+                              MembershipPurchaseFailureKind.orderCreation ||
+                          purchaseFailureKind ==
+                              MembershipPurchaseFailureKind.verification ||
+                          purchaseState.purchaseStatus ==
+                              MembershipPurchaseStatus.verifying
+                      ? l10n.networkError
+                      : l10n.storePurchaseFailed;
+                  ref.read(appToastProvider).error(message);
+                } else if (MembershipModalResults.isCancelled(result)) {
+                  ref
+                      .read(appToastProvider)
+                      .info(l10n.storePurchaseCancelled);
                 }
                 ref
                     .read(membershipControllerProvider.notifier)
@@ -119,6 +144,9 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) {
+          return;
+        }
+        if (isPaymentLoading) {
           return;
         }
         _goBack();
@@ -142,7 +170,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
                 height: MembershipLayout.navButtonSize,
                 child: IconButton(
                   onPressed: () => _goBack(),
-                  icon: const Icon(Icons.chevron_left_rounded, size: 36),
+                  icon: const Icon(Icons.chevron_left_rounded, size: 30),
                   color: AppColors.textPrimary,
                   padding: EdgeInsets.zero,
                 ),
@@ -204,7 +232,7 @@ class _MembershipBody extends StatelessWidget {
         child: Center(
           child: TextButton(
             onPressed: controller.retry,
-            child: Text(context.l10n.feedLoadFailed),
+            child: Text(context.l10n.retry),
           ),
         ),
       );
@@ -507,9 +535,7 @@ class _MembershipBottomButton extends StatelessWidget {
             topLeft: Radius.circular(25),
             topRight: Radius.circular(25),
           ),
-          border: Border(
-            top: BorderSide(color: Color(0xFF3B3B3B), width: 1),
-          ),
+          border: Border(top: BorderSide(color: Color(0xFF3B3B3B), width: 1)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.3),
@@ -550,25 +576,27 @@ class _MembershipBottomButton extends StatelessWidget {
               ),
             ),
             SizedBox(height: 10),
-            RichText(text: TextSpan(
-              style: TextStyle(
-                fontSize: 11,
-                color: Color(0xFFFFFFFF).withValues(alpha: 0.5)
+            RichText(
+              text: TextSpan(
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFFFFFFFF).withValues(alpha: 0.5),
+                ),
+                children: [
+                  TextSpan(
+                    text: context.l10n.appCommonLegalPrivacyPolicy,
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = () => context.push(RoutePaths.privacyPolicy),
+                  ),
+                  TextSpan(text: '    ·    '),
+                  TextSpan(
+                    text: context.l10n.appCommonLegalTermsOfUse,
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = () => context.push(RoutePaths.userAgreement),
+                  ),
+                ],
               ),
-              children: [
-                TextSpan(
-                  text: context.l10n.appCommonLegalPrivacyPolicy,
-                  recognizer: TapGestureRecognizer()
-                    ..onTap = () => context.push(RoutePaths.privacyPolicy),
-                ),
-                TextSpan(text: '    ·    '),
-                TextSpan(
-                  text: context.l10n.appCommonLegalTermsOfUse,
-                  recognizer: TapGestureRecognizer()
-                    ..onTap = () => context.push(RoutePaths.userAgreement),
-                ),
-              ]
-            ))
+            ),
           ],
         ),
       ),

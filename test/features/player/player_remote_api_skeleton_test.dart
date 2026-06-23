@@ -9,7 +9,6 @@ import 'package:drama_client/core/network/api_client.dart';
 import 'package:drama_client/core/network/api_exception.dart';
 import 'package:drama_client/core/network/api_mapping_exception.dart';
 import 'package:drama_client/core/network/api_request_context.dart';
-import 'package:drama_client/features/entitlement/domain/episode_unlock_type.dart';
 import 'package:drama_client/features/player/data/dto/playback_source_dto.dart';
 import 'package:drama_client/features/player/data/dto/player_content_dto.dart';
 import 'package:drama_client/features/player/data/dto/player_episode_dto.dart';
@@ -39,19 +38,17 @@ void main() {
 
   test('player content dto maps to PlayerContent and episodes', () {
     final content = contentMapper.mapContent(
-      _detailDto(episodes: [_coinEpisode]),
+      _playerContentDto(episodes: [_contentCoinEpisode]),
     );
 
-    expect(content.id, 'found-you');
+    expect(content.id, '1');
     expect(content.title, 'Found You');
     expect(content.synopsis, 'Remote synopsis');
-    expect(content.viewCountLabel, '12.4M Views');
+    expect(content.viewCountLabel, '52 episodes');
     expect(content.episodes, hasLength(1));
-    expect(content.episodes.single.id, 'ep-4');
-    expect(content.episodes.single.unlockType, EpisodeUnlockType.coins);
-    expect(content.episodes.single.requiredCoins, 30);
-    expect(content.episodes.single.isLocked, isTrue);
-    expect(content.episodes.single.videoAspectRatio, 16 / 9);
+    expect(content.episodes.single.id, '4');
+    expect(content.episodes.single.number, 4);
+    expect(content.episodes.single.isAvailable, isTrue);
     expect(content.episodes.single.duration, const Duration(seconds: 60));
   });
 
@@ -183,35 +180,36 @@ void main() {
   test('remote content repository combines detail and episode list', () async {
     final repository = RemotePlayerContentRepository(
       remoteDataSource: _FakePlayerRemoteDataSource(
-        detail: _detailDto(),
-        episodes: [_freeEpisode, _coinEpisode],
+        detail: _playerContentDto(
+          episodes: [_contentFreeEpisode, _contentCoinEpisode],
+        ),
       ),
     );
 
-    final content = await repository.getPlayerContent(dramaId: 'found-you');
+    final content = await repository.getPlayerContent(dramaId: '1');
 
-    expect(content.id, 'found-you');
-    expect(content.episodes.map((episode) => episode.id), ['ep-1', 'ep-4']);
+    expect(content.id, '1');
+    expect(content.episodes.map((episode) => episode.id), ['1', '4']);
   });
 
   test(
-    'remote feed repository maps single drama feed with stable ids',
+    'remote feed repository maps single drama feed with stable ids in episode order',
     () async {
       final repository = RemotePlayerFeedRepository(
         remoteDataSource: _FakePlayerRemoteDataSource(
-          detail: _detailDto(),
-          episodes: [_freeEpisode, _coinEpisode],
+          detail: _playerContentDto(
+            episodes: [_contentFreeEpisode, _contentCoinEpisode],
+          ),
         ),
       );
 
       final items = await repository.listSingleDramaFeed(
-        dramaId: 'found-you',
+        dramaId: '1',
         episodeId: '4',
       );
 
-      expect(items.first.id, 'single:found-you:ep-4');
-      expect(items.first.episode.number, 4);
-      expect(items.last.id, 'single:found-you:ep-1');
+      expect(items.map((item) => item.id), ['single:1:1', 'single:1:4']);
+      expect(items.map((item) => item.episode.number), [1, 4]);
     },
   );
 
@@ -226,7 +224,7 @@ void main() {
               episodeId: 'ep-1',
               reason: 'rank',
               rankingScore: 98,
-              drama: _detailDto(),
+              drama: _playerContentDto(),
               episode: _freeEpisode,
             ),
           ],
@@ -256,6 +254,7 @@ void main() {
           ),
         ),
         preloadManager: preloadManager,
+        httpHeaders: const {'Authorization': 'Bearer token-1'},
       );
       final item = _feedItem();
 
@@ -263,6 +262,7 @@ void main() {
       final preloaded = await repository.preload(item);
 
       expect(resolved.remoteUrl, 'https://cdn.example.com/a.m3u8');
+      expect(resolved.httpHeaders, {'Authorization': 'Bearer token-1'});
       expect(preloaded.status, PlaybackPreloadStatus.success);
       expect(preloadManager.preloadCount, 1);
     },
@@ -410,62 +410,91 @@ PlaybackSourceDto _playbackSource({
   );
 }
 
-PlayerContentDto _detailDto({List<PlayerEpisodeDto> episodes = const []}) {
+PlayerContentDto _playerContentDto({List<PlayerEpisodeDto> episodes = const []}) {
   return PlayerContentDto(
-    dramaId: 'found-you',
+    id: 1,
+    coverUrl: 'https://cdn.example.com/poster.jpg',
     title: 'Found You',
-    description: 'Remote synopsis',
-    posterUrl: 'https://cdn.example.com/poster.jpg',
-    backgroundUrl: 'https://cdn.example.com/background.jpg',
-    totalEpisodes: 52,
-    tags: const ['Rebirth'],
-    viewCount: 12400000,
-    viewCountLabel: '12.4M Views',
-    likeCountLabel: '43.2K',
+    summary: 'Remote synopsis',
+    categoryIds: const [],
+    tagIds: const [],
+    trailerEpisodeNum: 0,
+    pricePerEpisode: 0,
+    isVipOnly: 0,
+    status: 1,
+    languageMask: 'en',
+    subtitleLangs: 'en',
+    playCount: 52000000,
+    favoriteCount: 1200,
+    episodeTotal: 52,
+    onlineAt: '2024-01-01',
     episodes: episodes,
   );
 }
 
+const _contentFreeEpisode = PlayerEpisodeDto(
+  id: 1,
+  episodeNo: 1,
+  videoName: 'ep-1.mp4',
+  sourceUrl: 'https://cdn.example.com/ep-1.m3u8',
+  durationSec: 60,
+  status: 1,
+  publishedAt: '2024-01-01',
+  subtitles: [],
+  isUnlocked: 1,
+  isVipOnly: 0,
+);
+
+const _contentCoinEpisode = PlayerEpisodeDto(
+  id: 4,
+  episodeNo: 4,
+  videoName: 'ep-4.mp4',
+  sourceUrl: 'https://cdn.example.com/ep-4.m3u8',
+  durationSec: 60,
+  status: 1,
+  publishedAt: '2024-01-01',
+  subtitles: [],
+  isUnlocked: 0,
+  isVipOnly: 0,
+);
+
 const _freeEpisode = PlayerEpisodeDto(
-  episodeId: 'ep-1',
-  dramaId: 'found-you',
-  episodeNumber: 1,
-  title: 'EP.01',
-  unlockType: 'free',
-  requiredCoins: null,
-  isAvailable: true,
-  durationMs: 60000,
-  aspectRatio: 16 / 9,
-  posterUrl: null,
-  previewImageUrl: null,
+  id: 1,
+  episodeNo: 1,
+  videoName: 'ep-1.mp4',
+  sourceUrl: 'https://cdn.example.com/ep-1.m3u8',
+  durationSec: 60,
+  status: 1,
+  publishedAt: '2024-01-01',
+  subtitles: [],
+  isUnlocked: 1,
+  isVipOnly: 0,
 );
 
 const _coinEpisode = PlayerEpisodeDto(
-  episodeId: 'ep-4',
-  dramaId: 'found-you',
-  episodeNumber: 4,
-  title: 'EP.04',
-  unlockType: 'coins',
-  requiredCoins: 30,
-  isAvailable: true,
-  durationMs: 60000,
-  aspectRatio: 16 / 9,
-  posterUrl: null,
-  previewImageUrl: null,
+  id: 4,
+  episodeNo: 4,
+  videoName: 'ep-4.mp4',
+  sourceUrl: 'https://cdn.example.com/ep-4.m3u8',
+  durationSec: 60,
+  status: 1,
+  publishedAt: '2024-01-01',
+  subtitles: [],
+  isUnlocked: 0,
+  isVipOnly: 0,
 );
 
 const _unavailableEpisode = PlayerEpisodeDto(
-  episodeId: 'ep-9',
-  dramaId: 'found-you',
-  episodeNumber: 9,
-  title: 'EP.09',
-  unlockType: 'free',
-  requiredCoins: null,
-  isAvailable: false,
-  durationMs: null,
-  aspectRatio: null,
-  posterUrl: null,
-  previewImageUrl: null,
+  id: 9,
+  episodeNo: 9,
+  videoName: 'ep-9.mp4',
+  sourceUrl: 'https://cdn.example.com/ep-9.m3u8',
+  durationSec: 0,
+  status: 0,
+  publishedAt: '2024-01-01',
+  subtitles: [],
+  isUnlocked: 0,
+  isVipOnly: 0,
 );
 
 PlayerFeedItem _feedItem() {
@@ -480,6 +509,7 @@ PlayerFeedItem _feedItem() {
     posterAssetPath: 'assets/images/player/recommend_1.png',
     episodes: const [],
     recommendations: const [],
+    episodeTotal: 0,
   );
   final episode = PlayerEpisode(
     id: 'ep-1',
@@ -498,32 +528,27 @@ PlayerFeedItem _feedItem() {
 class _FakePlayerRemoteDataSource implements PlayerRemoteDataSource {
   _FakePlayerRemoteDataSource({
     PlayerContentDto? detail,
-    List<PlayerEpisodeDto>? episodes,
     PlayerFeedPageDto? forYouPage,
-  }) : detail = detail ?? _detailDto(),
-       episodes = episodes ?? const <PlayerEpisodeDto>[],
+  }) : detail = detail ?? _playerContentDto(),
        forYouPage =
            forYouPage ??
            const PlayerFeedPageDto(items: [], nextPageToken: null);
 
   final PlayerContentDto detail;
-  final List<PlayerEpisodeDto> episodes;
   final PlayerFeedPageDto forYouPage;
 
   @override
-  Future<PlayerContentDto> getDramaDetail({required String dramaId}) async {
+  Future<PlayerContentDto> fetchDramaDetail({required int dramaId}) async {
     return detail;
-  }
-
-  @override
-  Future<List<PlayerEpisodeDto>> listEpisodes({required String dramaId}) async {
-    return episodes;
   }
 
   @override
   Future<PlayerFeedPageDto> listForYouFeed({String? pageToken}) async {
     return forYouPage;
   }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _FakePlaybackSourceRemoteDataSource

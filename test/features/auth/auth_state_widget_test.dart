@@ -7,6 +7,7 @@ import 'package:drama_client/core/modal/app_modal_host.dart';
 import 'package:drama_client/features/auth/data/auth_repository_provider.dart';
 import 'package:drama_client/features/auth/domain/auth_repository.dart';
 import 'package:drama_client/features/auth/domain/auth_session.dart';
+import 'package:drama_client/features/auth/domain/delete_account_result.dart';
 import 'package:drama_client/features/auth/presentation/pages/account_page.dart';
 import 'package:drama_client/features/auth/presentation/pages/auth_page.dart';
 import 'package:drama_client/features/profile/presentation/pages/profile_page.dart';
@@ -289,12 +290,15 @@ class _WidgetAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AuthSession> deleteAccount() async {
+  Future<DeleteAccountResult> deleteAccount() async {
     if (failDelete) {
       throw StateError('delete failed');
     }
     _session = const AuthSession.guest();
-    return _session;
+    return DeleteAccountResult(
+      session: _session,
+      shouldExitApp: true,
+    );
   }
 }
 

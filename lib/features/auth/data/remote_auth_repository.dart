@@ -4,6 +4,7 @@ import '../../../core/network/api_request_context.dart';
 import '../../../core/oauth/oauth_service.dart';
 import '../domain/auth_repository.dart';
 import '../domain/auth_session.dart';
+import '../domain/delete_account_result.dart';
 import 'dto/auth_session_dto.dart';
 import 'dto/delete_account_request_dto.dart';
 import 'dto/login_request_dto.dart';
@@ -111,14 +112,14 @@ class RemoteAuthRepository
   }
 
   @override
-  Future<AuthSession> deleteAccount() async {
+  Future<DeleteAccountResult> deleteAccount() async {
     final currentToken = _tokenStore?.snapshot;
+    final isGuest = currentToken?.sessionKind == AuthTokenSessionKind.guest;
     final shouldSignOutOAuth =
-        currentToken?.hasAccessToken == true &&
-        currentToken?.sessionKind != AuthTokenSessionKind.guest;
+        currentToken?.hasAccessToken == true && !isGuest;
     final provider = _providerFromToken(currentToken?.provider);
 
-    final success = await _remoteDataSource.deleteAccount(
+    final response = await _remoteDataSource.deleteAccount(
       DeleteAccountRequestDto(
         acceptedRisk: true,
         deviceId: _requestContext.deviceId,
@@ -126,7 +127,8 @@ class RemoteAuthRepository
         reason: 'account_cancellation',
       ),
     );
-    if (!success) {
+
+    if (!response.success) {
       throw StateError('Delete account failed.');
     }
 
@@ -139,7 +141,16 @@ class RemoteAuthRepository
     await _tokenStore?.clear();
     await _userInfoStore?.clear();
 
-    return const AuthSession.guest();
+    // 根据业务逻辑决定是否需要退出App
+    // - 游客状态：直接退出App
+    // - 三方登录且 isCurrentDeviceAccount == true：退出App
+    // - 三方登录且 isCurrentDeviceAccount == false：返回me页面
+    final shouldExitApp = isGuest || response.isCurrentDeviceAccount;
+
+    return DeleteAccountResult(
+      session: const AuthSession.guest(),
+      shouldExitApp: shouldExitApp,
+    );
   }
 
   /// 使用 OAuth 服务获取 token，然后调用后端登录接口。
@@ -168,7 +179,7 @@ class RemoteAuthRepository
 
         if (oauthToken == null) {
           print('[RemoteAuthRepository] _loginWithOAuth: user cancelled login');
-          throw Exception('User cancelled OAuth login');
+          throw OAuthLoginCancelledException(provider.name);
         }
 
         print(

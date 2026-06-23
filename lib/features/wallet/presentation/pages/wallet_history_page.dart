@@ -7,6 +7,7 @@ import '../../../../core/i18n/ui_text.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_spacing.dart';
+import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../application/wallet_controller.dart';
 import '../../domain/wallet_record.dart';
 
@@ -296,21 +297,13 @@ class _ConsumptionRecordRow extends StatelessWidget {
   /// 构建封面图片
   Widget _buildPosterImage() {
     // 如果有网络图片资源，使用网络图片
-    if (record.posterResource != null &&
-        record.posterResource!.isNetwork) {
+    if (record.posterResource != null && record.posterResource!.isNetwork) {
       final url = record.posterResource!.value;
-      return Image.network(
-        url,
+      return AppCachedNetworkImage(
+        imageUrl: url,
         width: 53,
         height: 73,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return _buildErrorPlaceholder();
-        },
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return _buildLoadingPlaceholder();
-        },
       );
     }
 
@@ -323,25 +316,6 @@ class _ConsumptionRecordRow extends StatelessWidget {
       errorBuilder: (context, error, stackTrace) {
         return _buildErrorPlaceholder();
       },
-    );
-  }
-
-  /// 构建加载中的占位符
-  Widget _buildLoadingPlaceholder() {
-    return Container(
-      width: 53,
-      height: 73,
-      color: Colors.grey[800],
-      child: const Center(
-        child: SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: Colors.white54,
-          ),
-        ),
-      ),
     );
   }
 
@@ -481,11 +455,12 @@ class _CoinRewardRecordRow extends StatelessWidget {
         ),
         const SizedBox(width: AppSpacing.md),
         Text(
-          record.trailingLabel == "1"
-              ? context.l10n.claimCoinsTypeRechargeBonus
-              : record.trailingLabel == "2"
-              ? context.l10n.consumptionHistorySpent
-              : context.l10n.consumptionHistoryExpired,
+          // record.trailingLabel == "1"
+          //     ?
+          context.l10n.claimCoinsTypeRechargeBonus,
+          // : record.trailingLabel == "2"
+          // ? context.l10n.consumptionHistorySpent
+          // : context.l10n.consumptionHistoryExpired,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -505,49 +480,51 @@ class _HistoryRecordRow extends StatelessWidget {
   final WalletRecord record;
 
   /// 根据 memberPeriodType 生成会员标题
-  String _getMembershipTitle() {
-    if (record.memberPeriodType == null) return 'Membership';
+  String _getMembershipTitle(BuildContext context) {
+    if (record.memberPeriodType == null) {
+      return context.l10n.transactionHistoryMembership;
+    }
 
     // 处理可能的枚举格式
     final periodType = record.memberPeriodType!;
+    String member = context.l10n.transactionHistoryMembership;
     if (periodType.contains('WEEK')) {
-      return 'Membership(Weekly)';
+      return '$member(${context.l10n.transactionHistoryWeekly})';
     } else if (periodType.contains('MONTH')) {
-      return 'Membership(Monthly)';
+      return '$member(${context.l10n.transactionHistoryMonthly})';
     } else if (periodType.contains('QUARTER')) {
-      return 'Membership(Quarterly)';
+      return '$member(${context.l10n.transactionHistoryQuarterly})';
     } else if (periodType.contains('YEAR')) {
-      return 'Membership(Yearly)';
+      return '$member(${context.l10n.transactionHistoryYearly})';
     } else {
-      return 'Membership';
+      return member;
     }
   }
 
   /// 根据 coin 和 bonusCoin 生成金币标题
-  String _getCoinTitle() {
+  String _getCoinTitle(BuildContext context) {
     final coin = record.coin ?? 0;
     final bonusCoin = record.bonusCoin ?? 0;
 
     if (bonusCoin == 0) {
-      return '$coin Coins';
+      return '$coin ${context.l10n.unitCoin}';
     } else {
-      return '$coin Coins + $bonusCoin';
+      return '$coin ${context.l10n.unitCoin} + $bonusCoin';
     }
   }
 
   /// 获取显示标题
-  String _getDisplayTitle() {
+  String _getDisplayTitle(BuildContext context) {
     // 如果 productType 是会员商品
-    if (record.productType != null &&
-        record.productType!.contains('MEMBER')) {
-      return _getMembershipTitle();
+    if (record.productType != null && record.productType!.contains('MEMBER')) {
+      return _getMembershipTitle(context);
     }
     // 如果 productType 是金币商品或有 coin/bonusCoin 信息
     else if ((record.productType != null &&
             record.productType!.contains('COIN')) ||
         record.coin != null ||
         record.bonusCoin != null) {
-      return _getCoinTitle();
+      return _getCoinTitle(context);
     }
     // 否则使用默认标题
     else {
@@ -557,7 +534,7 @@ class _HistoryRecordRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayTitle = _getDisplayTitle();
+    final displayTitle = _getDisplayTitle(context);
     final displayAmount = record.amountText ?? record.trailingLabel;
 
     return Row(

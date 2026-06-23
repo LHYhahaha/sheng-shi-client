@@ -6,15 +6,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('apiLangFromLocale', () {
-    test('supports en es pt hi', () {
+    test('supports en zh', () {
       expect(apiLangFromLocale(const Locale('en')), 'en');
-      expect(apiLangFromLocale(const Locale('es')), 'es');
-      expect(apiLangFromLocale(const Locale('pt')), 'pt');
-      expect(apiLangFromLocale(const Locale('hi')), 'hi');
+      expect(apiLangFromLocale(const Locale('zh')), 'zh');
     });
 
     test('unsupported language falls back to en', () {
-      expect(apiLangFromLocale(const Locale('zh')), 'en');
+      expect(apiLangFromLocale(const Locale('es')), 'en');
       expect(apiLangFromLocale(const Locale('fr')), 'en');
     });
   });
@@ -27,12 +25,12 @@ void main() {
 
     container
         .read(appLocaleControllerProvider.notifier)
-        .select(const Locale('es'));
-    expect(container.read(apiLangProvider), 'es');
+        .select(const Locale('zh'));
+    expect(container.read(apiLangProvider), 'zh');
 
     container
         .read(appLocaleControllerProvider.notifier)
-        .select(const Locale('zh'));
+        .select(const Locale('es'));
     expect(container.read(apiLangProvider), 'en');
   });
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +8,7 @@ import '../../../../core/modal/app_modal_presenter.dart';
 import '../../../../core/modal/app_modal_request.dart';
 import '../../../../core/modal/app_modal_result.dart';
 import '../../../../core/modal/app_modal_root_sheet.dart';
+import '../../../pay/application/payment_loading_controller.dart';
 import '../../application/store_controller.dart';
 import '../widgets/store_confirmation_sheet.dart';
 import 'store_modal_channels.dart';
@@ -40,6 +43,7 @@ class StoreAppModalPresenter implements AppModalPresenter {
       context: modalContext,
       isScrollControlled: true,
       builder: (sheetContext) {
+        var didPop = false;
         return UncontrolledProviderScope(
           container: container,
           child: Consumer(
@@ -51,7 +55,14 @@ class StoreAppModalPresenter implements AppModalPresenter {
                       next == StorePurchaseStatus.success ||
                       next == StorePurchaseStatus.failed ||
                       next == StorePurchaseStatus.cancelled;
-                  if (reachedTerminalStatus && previous != next) {
+                  final shouldCloseForPurchaseFlow =
+                      next == StorePurchaseStatus.creatingOrder ||
+                      next == StorePurchaseStatus.waitingPayment ||
+                      next == StorePurchaseStatus.verifying;
+                  if (!didPop &&
+                      (reachedTerminalStatus || shouldCloseForPurchaseFlow) &&
+                      previous != next) {
+                    didPop = true;
                     Navigator.of(sheetContext).pop(next);
                   }
                 },
@@ -80,16 +91,65 @@ class StoreAppModalPresenter implements AppModalPresenter {
         );
       },
     );
-    return switch (status) {
+    final finalStatus = _shouldWaitForTerminalStatus(status)
+        ? await _waitForTerminalStatus(container)
+        : status;
+    return switch (finalStatus) {
       StorePurchaseStatus.success => const StorePurchaseModalResult.completed(),
-      StorePurchaseStatus.failed => const StorePurchaseModalResult.cancelled(),
+      StorePurchaseStatus.failed => const StorePurchaseModalResult.failed(),
       StorePurchaseStatus.cancelled =>
         const StorePurchaseModalResult.cancelled(),
       null =>
         featureRequest.dismissPolicy.barrierDismissible
             ? const StorePurchaseModalResult.dismissed()
             : const StorePurchaseModalResult.cancelled(),
+      StorePurchaseStatus.idle => const StorePurchaseModalResult.dismissed(),
       _ => const StorePurchaseModalResult.cancelled(),
     };
+  }
+
+  Future<StorePurchaseStatus?> _waitForTerminalStatus(
+    ProviderContainer container,
+  ) async {
+    final currentStatus = container.read(
+      storeControllerProvider.select((state) => state.purchaseStatus),
+    );
+    if (_isTerminal(currentStatus)) {
+      return currentStatus;
+    }
+
+    final loading = container.read(paymentLoadingControllerProvider.notifier);
+    loading.show();
+    final completer = Completer<StorePurchaseStatus?>();
+    late final ProviderSubscription<StorePurchaseStatus> subscription;
+    subscription = container.listen<StorePurchaseStatus>(
+      storeControllerProvider.select((state) => state.purchaseStatus),
+      (previous, next) {
+        if (_isTerminal(next) && !completer.isCompleted) {
+          completer.complete(next);
+        }
+      },
+    );
+    try {
+      return await completer.future.timeout(
+        const Duration(seconds: 45),
+        onTimeout: () => StorePurchaseStatus.failed,
+      );
+    } finally {
+      subscription.close();
+      loading.hide();
+    }
+  }
+
+  bool _isTerminal(StorePurchaseStatus status) {
+    return status == StorePurchaseStatus.success ||
+        status == StorePurchaseStatus.failed ||
+        status == StorePurchaseStatus.cancelled;
+  }
+
+  bool _shouldWaitForTerminalStatus(StorePurchaseStatus? status) {
+    return status == StorePurchaseStatus.creatingOrder ||
+        status == StorePurchaseStatus.waitingPayment ||
+        status == StorePurchaseStatus.verifying;
   }
 }

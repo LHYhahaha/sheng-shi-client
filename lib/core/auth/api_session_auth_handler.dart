@@ -1,6 +1,9 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../locale/app_locale_controller.dart';
 import '../network/api_client.dart';
+import '../toast/app_toast_provider.dart';
 import 'auth_refresh_coordinator.dart';
 import 'auth_refresh_executor_provider.dart';
 import 'auth_token_store.dart';
@@ -15,6 +18,15 @@ final apiSessionAuthHandlerProvider =
         sessionCleanup: ref.watch(sessionCleanupCoordinatorProvider),
         // 使用工厂函数创建执行器，传入 ApiClient
         refreshExecutor: createAuthRefreshExecutor(apiClient),
+        onGuestSessionExpired: () async {
+          final locale = ref.read(appLocaleControllerProvider);
+          final message = locale.languageCode == 'zh'
+              ? '登录过期'
+              : 'Session expired';
+          ref.read(appToastProvider).warning(message);
+          await Future<void>.delayed(const Duration(milliseconds: 800));
+          await SystemNavigator.pop();
+        },
       );
     });
 
@@ -32,17 +44,21 @@ class ApiSessionAuthHandler {
     required AuthTokenSnapshot Function() readToken,
     required SessionCleanupCoordinator sessionCleanup,
     required AuthRefreshExecutor refreshExecutor,
+    Future<void> Function()? onGuestSessionExpired,
   }) : _refreshCoordinator = refreshCoordinator,
        _tokenStore = tokenStore,
        _readToken = readToken,
        _sessionCleanup = sessionCleanup,
-       _refreshExecutor = refreshExecutor;
+       _refreshExecutor = refreshExecutor,
+       _onGuestSessionExpired = onGuestSessionExpired;
 
   final AuthRefreshCoordinator _refreshCoordinator;
   final AuthTokenStore _tokenStore;
   final AuthTokenSnapshot Function() _readToken;
   final SessionCleanupCoordinator _sessionCleanup;
   final AuthRefreshExecutor _refreshExecutor;
+  final Future<void> Function()? _onGuestSessionExpired;
+  Future<void>? _guestSessionExpiredInFlight;
 
   /// 处理 401 Unauthorized 响应。
   ///
@@ -111,5 +127,35 @@ class ApiSessionAuthHandler {
       await _sessionCleanup.cleanup(SessionCleanupReason.refreshFailed);
       return false;
     }
+  }
+
+  Future<void> handleSessionInvalidated() {
+    return _sessionCleanup.cleanup(SessionCleanupReason.sessionExpired);
+  }
+
+  Future<bool> handleGuestSessionExpired() async {
+    final current = _readToken();
+    if (current.sessionKind != AuthTokenSessionKind.guest ||
+        _onGuestSessionExpired == null) {
+      return false;
+    }
+
+    _guestSessionExpiredInFlight ??= _handleGuestSessionExpiredOnce()
+        .catchError((Object error, StackTrace stackTrace) {
+          print(
+            '[ApiSessionAuthHandler] guest session expired handler failed: '
+            '$error',
+          );
+        })
+        .whenComplete(() {
+          _guestSessionExpiredInFlight = null;
+        });
+    await _guestSessionExpiredInFlight;
+    return true;
+  }
+
+  Future<void> _handleGuestSessionExpiredOnce() async {
+    await _sessionCleanup.cleanup(SessionCleanupReason.guestSessionExpiredExit);
+    await _onGuestSessionExpired!();
   }
 }

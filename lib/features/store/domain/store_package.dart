@@ -19,6 +19,7 @@ class StorePackage {
     this.currencyCode,
     this.originalPriceMicros,
     this.platformProductId,
+    this.periodIso,
     this.basePlanId,
     this.offerId,
     this.productType,
@@ -78,6 +79,9 @@ class StorePackage {
   ///
   /// 真实 IAP 下单使用平台商品 id，不要用展示标题反查。
   final String? platformProductId;
+
+  /// Subscription period in ISO 8601 format, such as P1W / P1M / P3M / P1Y.
+  final String? periodIso;
 
   /// Google Play base plan id。
   ///
@@ -152,6 +156,7 @@ class StorePackage {
     String? currencyCode,
     int? originalPriceMicros,
     String? platformProductId,
+    String? periodIso,
     String? basePlanId,
     String? offerId,
     String? productType,
@@ -178,6 +183,7 @@ class StorePackage {
       currencyCode: currencyCode ?? this.currencyCode,
       originalPriceMicros: originalPriceMicros ?? this.originalPriceMicros,
       platformProductId: platformProductId ?? this.platformProductId,
+      periodIso: periodIso ?? this.periodIso,
       basePlanId: basePlanId ?? this.basePlanId,
       offerId: offerId ?? this.offerId,
       productType: productType ?? this.productType,

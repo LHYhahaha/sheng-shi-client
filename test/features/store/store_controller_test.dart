@@ -1,11 +1,13 @@
-import 'package:drama_client/features/entitlement/application/entitlement_controller.dart';
 import 'package:drama_client/features/store/application/store_controller.dart';
+import 'package:drama_client/features/store/data/store_repository_provider.dart';
+import 'package:drama_client/features/store/domain/store_package.dart';
+import 'package:drama_client/features/store/domain/store_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('loads store packages from repository', () async {
-    final container = ProviderContainer();
+    final container = _container();
     addTearDown(container.dispose);
 
     await container.read(storeControllerProvider.notifier).load();
@@ -13,13 +15,13 @@ void main() {
     final state = container.read(storeControllerProvider);
     expect(state.isLoading, isFalse);
     expect(state.error, isNull);
-    expect(state.coinPackages, hasLength(3));
-    expect(state.vipPackages, hasLength(2));
+    expect(state.coinPackages, hasLength(2));
+    expect(state.vipPackages, hasLength(1));
     expect(state.selectedPackage?.id, 'coins_2000');
   });
 
-  test('selects package and opens mock confirmation state', () async {
-    final container = ProviderContainer();
+  test('selects package and opens confirmation state', () async {
+    final container = _container();
     addTearDown(container.dispose);
     final controller = container.read(storeControllerProvider.notifier);
 
@@ -33,154 +35,94 @@ void main() {
 
     controller.hideConfirmation();
     expect(container.read(storeControllerProvider).confirmationPackage, isNull);
+    expect(
+      container.read(storeControllerProvider).purchaseStatus,
+      StorePurchaseStatus.idle,
+    );
   });
 
-  test('tracks mock purchase processing, success, and cancel states', () async {
-    final container = ProviderContainer();
+  test('cancel purchase only affects idle confirmation flow', () async {
+    final container = _container();
     addTearDown(container.dispose);
     final controller = container.read(storeControllerProvider.notifier);
 
     await controller.load();
     controller.showConfirmation();
-
-    final purchase = controller.confirmMockPurchase();
-    expect(
-      container.read(storeControllerProvider).purchaseStatus,
-      StorePurchaseStatus.processing,
-    );
-
-    await purchase;
-    expect(
-      container.read(storeControllerProvider).purchaseStatus,
-      StorePurchaseStatus.success,
-    );
-
-    controller.hideConfirmation();
-    controller.showConfirmation();
-    controller.cancelMockPurchase();
+    controller.cancelPurchase();
 
     expect(
       container.read(storeControllerProvider).purchaseStatus,
       StorePurchaseStatus.cancelled,
     );
+
+    controller.hideConfirmation();
+    expect(
+      container.read(storeControllerProvider).purchaseStatus,
+      StorePurchaseStatus.idle,
+    );
   });
 
-  test('ignores repeated actions while purchase is processing', () async {
-    final container = ProviderContainer();
+  test('confirm purchase fails fast when user info is missing', () async {
+    final container = _container();
     addTearDown(container.dispose);
     final controller = container.read(storeControllerProvider.notifier);
 
     await controller.load();
     controller.showConfirmation();
+    await controller.confirmPurchase();
 
-    final purchase = controller.confirmMockPurchase();
-    controller.confirmMockPurchase();
-    controller.cancelMockPurchase();
-
-    expect(
-      container.read(storeControllerProvider).purchaseStatus,
-      StorePurchaseStatus.processing,
-    );
-
-    await purchase;
-    expect(
-      container.read(storeControllerProvider).purchaseStatus,
-      StorePurchaseStatus.success,
-    );
-
-    controller.cancelMockPurchase();
-    expect(
-      container.read(storeControllerProvider).purchaseStatus,
-      StorePurchaseStatus.success,
-    );
+    final state = container.read(storeControllerProvider);
+    expect(state.purchaseStatus, StorePurchaseStatus.failed);
+    expect(state.error, isNotNull);
   });
+}
 
-  test(
-    'resets purchase status when confirmation is closed or reopened',
-    () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final controller = container.read(storeControllerProvider.notifier);
-
-      await controller.load();
-      controller.showConfirmation();
-      controller.cancelMockPurchase();
-      expect(
-        container.read(storeControllerProvider).purchaseStatus,
-        StorePurchaseStatus.cancelled,
-      );
-
-      controller.hideConfirmation();
-      var state = container.read(storeControllerProvider);
-      expect(state.confirmationPackage, isNull);
-      expect(state.purchaseStatus, StorePurchaseStatus.idle);
-
-      controller.selectPackage('coins_3000_bonus');
-      controller.showConfirmation();
-      state = container.read(storeControllerProvider);
-
-      expect(state.confirmationPackage?.id, 'coins_3000_bonus');
-      expect(state.purchaseStatus, StorePurchaseStatus.idle);
-    },
+ProviderContainer _container() {
+  return ProviderContainer(
+    overrides: [
+      storeRepositoryProvider.overrideWithValue(const _FakeStoreRepository()),
+    ],
   );
+}
 
-  test(
-    'closing confirmation cancels pending mock purchase completion',
-    () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final controller = container.read(storeControllerProvider.notifier);
+class _FakeStoreRepository implements StoreRepository {
+  const _FakeStoreRepository();
 
-      await controller.load();
-      controller.showConfirmation();
-
-      final purchase = controller.confirmMockPurchase();
-      controller.hideConfirmation();
-      await purchase;
-
-      final state = container.read(storeControllerProvider);
-      expect(state.confirmationPackage, isNull);
-      expect(state.purchaseStatus, StorePurchaseStatus.idle);
-    },
-  );
-
-  test(
-    'coin purchase success grants coins to shared entitlement state',
-    () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final controller = container.read(storeControllerProvider.notifier);
-
-      await controller.load();
-      controller.selectPackage('coins_3000_bonus');
-      controller.showConfirmation();
-      await controller.confirmMockPurchase();
-
-      expect(
-        container.read(storeControllerProvider).purchaseStatus,
-        StorePurchaseStatus.success,
-      );
-      expect(container.read(entitlementControllerProvider).coinBalance, 7300);
-    },
-  );
-
-  test(
-    'vip purchase success grants membership to shared entitlement state',
-    () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final controller = container.read(storeControllerProvider.notifier);
-
-      await controller.load();
-      controller.selectPackage('weekly_vip_intro');
-      controller.showConfirmation();
-      await controller.confirmMockPurchase();
-
-      expect(
-        container.read(storeControllerProvider).purchaseStatus,
-        StorePurchaseStatus.success,
-      );
-      expect(container.read(entitlementControllerProvider).isMember, isTrue);
-    },
-  );
+  @override
+  Future<StoreRechargeData> fetchRechargeData() async {
+    return const StoreRechargeData(
+      balance: 60,
+      coinPackages: [
+        StorePackage(
+          id: 'coins_2000',
+          kind: StorePackageKind.coins,
+          title: '2000',
+          baseCoins: 2000,
+          priceLabel: r'$19.99',
+        ),
+        StorePackage(
+          id: 'coins_3000_bonus',
+          kind: StorePackageKind.coins,
+          title: '3000',
+          baseCoins: 3000,
+          bonusCoins: 300,
+          bonusLabel: '+300 Bonus',
+          priceLabel: r'$29.99',
+        ),
+      ],
+      vipPackages: [
+        StorePackage(
+          id: 'weekly_vip',
+          kind: StorePackageKind.vip,
+          title: 'Weekly VIP',
+          priceLabel: r'$14.99',
+        ),
+      ],
+      tips: StoreTips(
+        linksLabel: 'Privacy policy',
+        subscriptionNote: 'Auto renew. Cancel anytime.',
+        items: ['Prices may vary by region.'],
+      ),
+    );
+  }
 }

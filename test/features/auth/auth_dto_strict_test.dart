@@ -1,6 +1,7 @@
 import 'package:drama_client/core/network/api_mapping_exception.dart';
 import 'package:drama_client/features/auth/data/dto/auth_session_dto.dart';
 import 'package:drama_client/features/auth/data/dto/auth_token_dto.dart';
+import 'package:drama_client/features/auth/data/dto/user_info_dto.dart';
 import 'package:drama_client/features/auth/data/mapper/auth_mapper.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -70,5 +71,21 @@ void main() {
     );
 
     expect(session.isLoggedIn, isFalse);
+  });
+
+  test('user info accepts avatar url aliases', () {
+    final camelCase = UserInfoDto.fromJson({
+      'showId': '10001',
+      'nickname': 'Guest',
+      'avatarUrl': 'https://cdn.example.com/avatar-camel.jpg',
+    });
+    final snakeCase = UserInfoDto.fromJson({
+      'showId': '10002',
+      'nickname': 'Guest',
+      'avatar_url': 'https://cdn.example.com/avatar-snake.jpg',
+    });
+
+    expect(camelCase.avatar, 'https://cdn.example.com/avatar-camel.jpg');
+    expect(snakeCase.avatar, 'https://cdn.example.com/avatar-snake.jpg');
   });
 }

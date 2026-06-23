@@ -16,7 +16,7 @@ class PlayerPaymentMethodModalLayer extends StatefulWidget {
 
   final String sessionKey;
   final PlayerPaymentSelection selection;
-  final VoidCallback onDismissed;
+  final ValueChanged<bool?> onDismissed;
   final VoidCallback onPurchaseSuccess;
 
   @override
@@ -62,14 +62,14 @@ class _PlayerPaymentMethodModalLayerState
     super.dispose();
   }
 
-  Future<void> dismiss() async {
+  Future<void> dismiss({bool? result = false}) async {
     if (_isDismissing) {
       return;
     }
     _isDismissing = true;
     await _controller.reverse();
     if (mounted) {
-      widget.onDismissed();
+      widget.onDismissed(result);
     }
   }
 
@@ -82,7 +82,7 @@ class _PlayerPaymentMethodModalLayerState
             opacity: _barrierOpacity,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: dismiss,
+              onTap: () => dismiss(result: null),
               child: const ColoredBox(color: Color(0x73000000)),
             ),
           ),

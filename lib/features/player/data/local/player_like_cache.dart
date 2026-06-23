@@ -55,6 +55,12 @@ class PlayerLikeCache {
     }
   }
 
+  /// 直接设置点赞数变化。
+  /// 用于回滚操作或批量更新。
+  static void setLikeCountDelta(String dramaId, int delta) {
+    _likeCountDeltaCache[dramaId] = delta.clamp(0, double.infinity).toInt();
+  }
+
   /// 清除指定 dramaId 的缓存。
   static void clearCache(String dramaId) {
     _likeStatusCache.remove(dramaId);

@@ -16,4 +16,9 @@ abstract final class MembershipModalResults {
     return result is MembershipPurchaseModalResult &&
         result.kind == AppModalResultKind.dismissed;
   }
+
+  static bool isFailed(AppModalResult result) {
+    return result is MembershipPurchaseModalResult &&
+        result.kind == AppModalResultKind.failed;
+  }
 }

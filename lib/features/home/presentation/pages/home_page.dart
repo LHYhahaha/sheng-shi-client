@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -11,11 +10,11 @@ import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell.dart';
 import '../../../../features/drama/domain/drama.dart';
 import '../../../../features/entitlement/application/entitlement_controller.dart';
-import '../../../../features/player/application/player_startup_preload_controller.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/media/media_resource.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
+import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../application/home_data_controller.dart';
 import '../../application/home_remote_data_provider.dart';
 
@@ -29,7 +28,6 @@ class HomePage extends ConsumerStatefulWidget {
 class _HomePageState extends ConsumerState<HomePage> {
   final _scrollController = ScrollController();
   final Map<int, double> _tabScrollOffsets = <int, double>{};
-  late final PlayerStartupPreloadController _startupPreloadController;
   int _remoteDataSelectedIndex = 0; // 远程数据的选中分类索引
   int _lastScrollToTopRequest = 0; // 跟踪上次的滚动请求计数
   ProviderSubscription<int>? _scrollToTopListener; // 监听滚动请求的订阅
@@ -45,9 +43,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   @override
   void initState() {
     super.initState();
-    _startupPreloadController = ref.read(
-      playerStartupPreloadControllerProvider.notifier,
-    );
     _scrollController.addListener(_onScroll);
 
     // 监听滚动到顶部的请求
@@ -70,9 +65,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     // 取消滚动请求的监听
     _scrollToTopListener?.close();
 
-    // Home 离开时只取消 startup preload，不释放播放器页 playback preload。
-    // 两条预热线路作用域不同，共享释放会导致进入播放器后的相邻预热被首页 dispose 误杀。
-    unawaited(_startupPreloadController.cancel(reason: 'home dispose'));
     _scrollController
       ..removeListener(_onScroll)
       ..dispose();
@@ -153,9 +145,6 @@ class _HomePageState extends ConsumerState<HomePage> {
         _remoteDataSelectedIndex = index;
       });
 
-      unawaited(
-        _startupPreloadController.cancel(reason: 'home category switch'),
-      );
       _restoreScrollOffsetForTab(nextTab.id);
       return;
     }
@@ -203,14 +192,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     final items =
         remoteData?.getDramasForCategoryIndex(selectedIndex) ?? const <Drama>[];
     final selectedRemoteTab = remoteData?.getTabForCategoryIndex(selectedIndex);
-
-    // 预热逻辑
-    // 远程数据预热
-    if (items.isNotEmpty) {
-      unawaited(
-        _startupPreloadController.preloadFirstPlayableDrama(items.first),
-      );
-    }
 
     // 判断加载状态
     final isLoading =
@@ -278,7 +259,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
               SliverToBoxAdapter(
                 child: Container(
-                  margin: EdgeInsets.only(bottom: 10),
+                  margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
                     color: Colors.black,
                     borderRadius: BorderRadius.circular(20),
@@ -288,11 +269,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                     itemBuilder: (BuildContext context, int index) {
                       return Image.asset(image[index], fit: BoxFit.fill);
                     },
-                    indicatorLayout: PageIndicatorLayout.COLOR,
                     autoplay: true,
                     itemCount: image.length,
-                    pagination: SwiperPagination(),
-                    control: SwiperControl(),
+                    // 隐藏底部指示器
+                    pagination: null,
+                    // 隐藏左右按钮
+                    control: null,
                   ),
                 ),
               ),
@@ -311,9 +293,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                   hasScrollBody: true,
                   child: _HomeErrorState(
                     onRetry: () {
-                      unawaited(
-                        _startupPreloadController.cancel(reason: 'home retry'),
-                      );
                       ref.read(homeDataControllerProvider.notifier).retry();
                     },
                   ),
@@ -323,7 +302,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   hasScrollBody: false,
                   child: Center(
                     child: Text(
-                      context.l10n.feedEmpty,
+                      context.l10n.emptyNoDramas,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.textMuted,
                       ),
@@ -661,37 +640,17 @@ class _HomeCoverImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (resource.isNetwork) {
-      return Image.network(
-        resource.value,
+      return AppCachedNetworkImage(
+        imageUrl: resource.value,
         cacheWidth: cacheWidth,
         fit: BoxFit.cover,
         alignment: Alignment.topCenter,
         filterQuality: FilterQuality.low,
-        errorBuilder: (context, error, stackTrace) {
-          return _FallbackCoverImage(cacheWidth: cacheWidth);
-        },
       );
     }
 
     return Image.asset(
       resource.value,
-      cacheWidth: cacheWidth,
-      fit: BoxFit.cover,
-      alignment: Alignment.topCenter,
-      filterQuality: FilterQuality.low,
-    );
-  }
-}
-
-class _FallbackCoverImage extends StatelessWidget {
-  const _FallbackCoverImage({required this.cacheWidth});
-
-  final int cacheWidth;
-
-  @override
-  Widget build(BuildContext context) {
-    return Image.asset(
-      Drama.fallbackCoverAssetPath,
       cacheWidth: cacheWidth,
       fit: BoxFit.cover,
       alignment: Alignment.topCenter,
@@ -776,7 +735,6 @@ class _HomeTag extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 16,
-      constraints: const BoxConstraints(maxWidth: 65),
       padding: const EdgeInsets.symmetric(horizontal: 6),
       alignment: Alignment.center,
       decoration: BoxDecoration(
@@ -848,7 +806,7 @@ class _HomeFeedFooter extends StatelessWidget {
               : error != null
               ? TextButton(onPressed: onRetry, child: Text(context.l10n.retry))
               : Text(
-                  hasMore ? '' : context.l10n.feedEmpty,
+                  hasMore ? '' : context.l10n.feedNoMore,
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),

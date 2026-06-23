@@ -107,7 +107,7 @@ class AuthLoginModalContent extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 18),
-        const _TermsText(),
+        const AuthTermsText(),
       ],
     );
   }
@@ -159,14 +159,16 @@ class _ClaimBadge extends StatelessWidget {
   }
 }
 
-class _TermsText extends StatefulWidget {
-  const _TermsText();
+class AuthTermsText extends StatefulWidget {
+  const AuthTermsText({this.width = 268, super.key});
+
+  final double? width;
 
   @override
-  State<_TermsText> createState() => _TermsTextState();
+  State<AuthTermsText> createState() => _AuthTermsTextState();
 }
 
-class _TermsTextState extends State<_TermsText> {
+class _AuthTermsTextState extends State<AuthTermsText> {
   late TapGestureRecognizer _termsRecognizer;
   late TapGestureRecognizer _privacyRecognizer;
 
@@ -175,11 +177,11 @@ class _TermsTextState extends State<_TermsText> {
     super.initState();
     _termsRecognizer = TapGestureRecognizer()
       ..onTap = () {
-        context.go(RoutePaths.userAgreement);
+        context.push(RoutePaths.userAgreement);
       };
     _privacyRecognizer = TapGestureRecognizer()
       ..onTap = () {
-        context.go(RoutePaths.privacyPolicy);
+        context.push(RoutePaths.privacyPolicy);
       };
   }
 
@@ -200,19 +202,25 @@ class _TermsTextState extends State<_TermsText> {
     );
 
     return SizedBox(
-      width: 268,
+      width: widget.width,
       child: RichText(
         textAlign: TextAlign.center,
         text: TextSpan(
           style: baseStyle,
           children: [
-            TextSpan(text: l10n.loginAgreementPrefix),
+            TextSpan(
+              text: l10n.loginAgreementPrefix,
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
+            ),
             TextSpan(
               text: l10n.appCommonLegalTermsOfUse,
               style: TextStyle(color: linkColor),
               recognizer: _termsRecognizer,
             ),
-            TextSpan(text: l10n.loginAgreementConnector),
+            TextSpan(
+              text: l10n.loginAgreementConnector,
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
+            ),
             TextSpan(
               text: l10n.appCommonLegalPrivacyPolicy,
               style: TextStyle(color: linkColor),

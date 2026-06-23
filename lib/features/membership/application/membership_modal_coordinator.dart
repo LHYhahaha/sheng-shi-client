@@ -58,7 +58,7 @@ class MembershipModalCoordinator {
       AppModalResultKind.dismissed =>
         const MembershipPurchaseModalResult.dismissed(),
       AppModalResultKind.failed =>
-        const MembershipPurchaseModalResult.cancelled(),
+        const MembershipPurchaseModalResult.failed(),
     };
   }
 

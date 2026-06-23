@@ -123,6 +123,8 @@ final class StorePurchaseModalResult extends AppModalResult {
 
   const StorePurchaseModalResult.dismissed()
     : super(AppModalResultKind.dismissed);
+
+  const StorePurchaseModalResult.failed() : super(AppModalResultKind.failed);
 }
 
 /// Membership 购买确认弹窗结果（O4）。
@@ -135,6 +137,9 @@ final class MembershipPurchaseModalResult extends AppModalResult {
 
   const MembershipPurchaseModalResult.dismissed()
     : super(AppModalResultKind.dismissed);
+
+  const MembershipPurchaseModalResult.failed()
+    : super(AppModalResultKind.failed);
 }
 
 /// 队列或系统策略拒绝展示（O5）。

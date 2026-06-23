@@ -1,18 +1,50 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final appLocaleControllerProvider =
     NotifierProvider<AppLocaleController, Locale>(AppLocaleController.new);
 
-/// 应用语言控制器。
-///
-/// 当前只在内存中切换固定语言包，用于 MVP 验证。接持久化时应在这里统一读写，
-/// 不要让页面直接保存 Locale，避免启动语言、系统语言和用户选择互相覆盖。
 class AppLocaleController extends Notifier<Locale> {
+  static const preferenceKey = 'app_locale_language_code';
+  static const defaultLanguageCode = 'en';
+
   @override
-  Locale build() => const Locale('en');
+  Locale build() {
+    unawaited(_restoreSavedLocale());
+    return const Locale(defaultLanguageCode);
+  }
 
   void select(Locale locale) {
-    state = locale;
+    final languageCode = normalizeLanguageCode(locale.languageCode);
+    state = Locale(languageCode);
+    unawaited(_saveAndLoadLanguage(languageCode));
+  }
+
+  Future<void> _restoreSavedLocale() async {
+    final languageCode = await readSavedLanguageCode();
+    if (languageCode != state.languageCode) {
+      state = Locale(languageCode);
+    }
+  }
+
+  Future<void> _saveAndLoadLanguage(String languageCode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(preferenceKey, languageCode);
+  }
+
+  static Future<String> readSavedLanguageCode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return normalizeLanguageCode(prefs.getString(preferenceKey));
+  }
+
+  static String normalizeLanguageCode(String? languageCode) {
+    final normalized = languageCode?.toLowerCase();
+    return switch (normalized) {
+      'zh' || 'zh_cn' || 'zh-cn' || 'zh_hans' || 'zh-hans' => 'zh',
+      _ => defaultLanguageCode,
+    };
   }
 }

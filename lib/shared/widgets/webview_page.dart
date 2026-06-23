@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../../app/router/route_paths.dart';
 import '../../shared/theme/app_colors.dart';
 
 class WebViewPage extends ConsumerStatefulWidget {
@@ -48,7 +49,13 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
         backgroundColor: AppColors.black,
         leading: IconButton(
           icon: const Icon(Icons.chevron_left_rounded, color: AppColors.textPrimary, size: 28),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+              return;
+            }
+            context.go(RoutePaths.profile);
+          },
         ),
         title: Text(
           widget.title,

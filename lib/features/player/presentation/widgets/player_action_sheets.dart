@@ -75,114 +75,6 @@ class PlayerShareSheet extends StatelessWidget {
   }
 }
 
-/// 旧版通用金币解锁弹窗，已由 [PlayerCoinUnlockSheet] 与 [PlayerRechargeUnlockSheet] 替代。
-///
-/// 当前播放器解锁流程经 [PlayerFeedEngine] 调度，请勿在新代码中引用。
-@Deprecated(
-  'Use PlayerCoinUnlockSheet or PlayerRechargeUnlockSheet via PlayerFeedEngine.',
-)
-class PlayerUnlockSheet extends StatefulWidget {
-  const PlayerUnlockSheet({super.key});
-
-  @override
-  State<PlayerUnlockSheet> createState() => _PlayerUnlockSheetState();
-}
-
-class _PlayerUnlockSheetState extends State<PlayerUnlockSheet> {
-  bool _autoNext = true;
-
-  @override
-  Widget build(BuildContext context) {
-    return _CompactPlayerSheet(
-      height: 260,
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Text.rich(
-                TextSpan(
-                  text: '${context.l10n.playerPrice} ',
-                  children: const [
-                    WidgetSpan(
-                      alignment: PlaceholderAlignment.middle,
-                      child: Icon(
-                        Icons.monetization_on,
-                        color: AppColors.gold,
-                        size: 14,
-                      ),
-                    ),
-                    TextSpan(text: ' 60'),
-                  ],
-                ),
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.55),
-                  fontSize: 12,
-                  height: 16 / 12,
-                ),
-              ),
-              const Spacer(),
-              Text.rich(
-                TextSpan(
-                  text: '${context.l10n.playerBalance} ',
-                  children: const [
-                    WidgetSpan(
-                      alignment: PlaceholderAlignment.middle,
-                      child: Icon(
-                        Icons.monetization_on,
-                        color: AppColors.gold,
-                        size: 14,
-                      ),
-                    ),
-                    TextSpan(text: ' 60'),
-                  ],
-                ),
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.55),
-                  fontSize: 12,
-                  height: 16 / 12,
-                ),
-              ),
-              const SizedBox(width: 12),
-              _CloseButton(onTap: () => Navigator.of(context).pop()),
-            ],
-          ),
-          const SizedBox(height: 30),
-          AppPrimaryButton(
-            label: context.l10n.playerPlay,
-            icon: Icons.play_arrow_rounded,
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          const SizedBox(height: 24),
-          Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  context.l10n.playerAutoNext,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.45),
-                    fontSize: 12,
-                    height: 16 / 12,
-                  ),
-                ),
-              ),
-              Switch.adaptive(
-                value: _autoNext,
-                activeThumbColor: Colors.white,
-                activeTrackColor: AppColors.primary,
-                onChanged: (value) => setState(() => _autoNext = value),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class PlayerCoinUnlockSheet extends ConsumerWidget {
   const PlayerCoinUnlockSheet({
     required this.price,
@@ -210,12 +102,12 @@ class PlayerCoinUnlockSheet extends ConsumerWidget {
                 TextSpan(
                   text: '${context.l10n.playerPrice} ',
                   children: [
-                    const WidgetSpan(
+                    WidgetSpan(
                       alignment: PlaceholderAlignment.middle,
-                      child: Icon(
-                        Icons.monetization_on,
-                        color: AppColors.gold,
-                        size: 14,
+                      child: Image.asset(
+                        'assets/images/profile/coin.png',
+                        width: 16,
+                        height: 16,
                       ),
                     ),
                     TextSpan(text: ' $price'),
@@ -224,7 +116,7 @@ class PlayerCoinUnlockSheet extends ConsumerWidget {
                 key: const ValueKey('player_coin_unlock_price'),
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.58),
-                  fontSize: 12,
+                  fontSize: 14,
                   height: 16 / 12,
                 ),
               ),
@@ -233,12 +125,12 @@ class PlayerCoinUnlockSheet extends ConsumerWidget {
                 TextSpan(
                   text: '${context.l10n.playerBalance} ',
                   children: [
-                    const WidgetSpan(
+                    WidgetSpan(
                       alignment: PlaceholderAlignment.middle,
-                      child: Icon(
-                        Icons.monetization_on,
-                        color: AppColors.gold,
-                        size: 14,
+                      child: Image.asset(
+                        'assets/images/profile/coin.png',
+                        width: 16,
+                        height: 16,
                       ),
                     ),
                     TextSpan(text: ' $balance'),
@@ -247,7 +139,7 @@ class PlayerCoinUnlockSheet extends ConsumerWidget {
                 key: const ValueKey('player_coin_unlock_balance'),
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.58),
-                  fontSize: 12,
+                  fontSize: 14,
                   height: 16 / 12,
                 ),
               ),
@@ -272,7 +164,7 @@ class PlayerCoinUnlockSheet extends ConsumerWidget {
             children: [
               Expanded(
                 child: Text(
-                  context.l10n.playerAutoNext,
+                  context.l10n.autoUnlockNext,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

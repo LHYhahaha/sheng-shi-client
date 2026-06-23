@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:drama_client/app/router/route_paths.dart';
+import 'package:drama_client/core/network/api_client.dart';
 import 'package:drama_client/features/auth/data/auth_repository_provider.dart';
 import 'package:drama_client/features/auth/domain/auth_repository.dart';
 import 'package:drama_client/features/auth/domain/auth_session.dart';
+import 'package:drama_client/features/auth/domain/delete_account_result.dart';
 import 'package:drama_client/features/entitlement/data/entitlement_repository_provider.dart';
 import 'package:drama_client/features/entitlement/data/mock_entitlement_repository.dart';
 import 'package:drama_client/features/auth/presentation/pages/account_page.dart';
@@ -13,8 +15,14 @@ import 'package:drama_client/features/my_list/domain/my_list_repository.dart';
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
 import 'package:drama_client/features/player/application/player_playback_prepare_manager.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
+import 'package:drama_client/features/player/data/mock_player_content_repository.dart';
+import 'package:drama_client/features/player/data/mock_player_feed_repository.dart';
 import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
+import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
+import 'package:drama_client/features/player/data/player_remote_data_source_provider.dart';
+import 'package:drama_client/features/player/data/remote/player_remote_data_source.dart';
+import 'package:drama_client/features/player/presentation/pages/player_page.dart';
 import 'package:drama_client/features/profile/presentation/pages/language_page.dart';
 import 'package:drama_client/features/store/presentation/pages/store_page.dart';
 import 'package:drama_client/features/wallet/domain/wallet_record.dart';
@@ -624,6 +632,57 @@ void main() {
     expect(forYouSession.pauseCount, greaterThanOrEqualTo(2));
   });
 
+  testWidgets('resumes player playback after repeated background switches', (
+    tester,
+  ) async {
+    final sessions = <_FakePlaybackSession>[];
+    await tester.pumpWidget(
+      buildAppModalTestApp(
+        home: const PlayerPage.forYou(),
+        overrides: [
+          playerFeedRepositoryProvider.overrideWithValue(
+            const MockPlayerFeedRepository(
+              contentRepository: MockPlayerContentRepository(),
+            ),
+          ),
+          playerPlaybackSessionFactoryProvider.overrideWithValue(() {
+            final session = _FakePlaybackSession();
+            sessions.add(session);
+            return session;
+          }),
+          playerPlaybackPreloadManagerProvider.overrideWithValue(
+            MockPlayerPlaybackPreloadManager(preloadDelay: Duration.zero),
+          ),
+          playerPlaybackPrepareManagerFactoryProvider.overrideWithValue(
+            NoopPlayerPlaybackPrepareManager.new,
+          ),
+          playerRemoteDataSourceProvider.overrideWithValue(
+            _NoopPlayerRemoteDataSource(),
+          ),
+        ],
+      ),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    final forYouSession = sessions.first;
+
+    for (var i = 0; i < 3; i += 1) {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+    }
+
+    expect(forYouSession.pauseCount, greaterThanOrEqualTo(3));
+    expect(forYouSession.playCount, greaterThanOrEqualTo(3));
+    expect(
+      find.byKey(const ValueKey('player_center_play_button')),
+      findsNothing,
+    );
+  });
+
   testWidgets('opens home drama as single drama feed and swipes episodes', (
     tester,
   ) async {
@@ -1199,7 +1258,12 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   Stream<String> get errorStream => _errorController.stream;
 
   @override
-  Future<void> open(String source, {bool play = true}) async {
+  Future<void> open(
+    String source, {
+    bool play = true,
+    Duration? start,
+    Map<String, String>? httpHeaders,
+  }) async {
     _bufferingController.add(false);
     _completedController.add(false);
     _playingController.add(play);
@@ -1256,6 +1320,21 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   }
 }
 
+class _NoopPlayerRemoteDataSource extends PlayerRemoteDataSource {
+  _NoopPlayerRemoteDataSource() : super(apiClient: ApiClient());
+
+  @override
+  Future<void> reportWatchProgress({
+    required bool autoUnlockNext,
+    required int dramaId,
+    required int durationSecond,
+    int? episodeId,
+    required int episodeNo,
+    required int eventType,
+    required int watchSecond,
+  }) async {}
+}
+
 Future<void> _pumpAutoUnlockSheet(WidgetTester tester) async {
   for (var i = 0; i < 80; i += 1) {
     await tester.pump(const Duration(milliseconds: 100));
@@ -1303,7 +1382,12 @@ class _SignedInAuthRepository implements AuthRepository {
   Future<AuthSession> logout() async => const AuthSession.guest();
 
   @override
-  Future<AuthSession> deleteAccount() async => const AuthSession.guest();
+  Future<DeleteAccountResult> deleteAccount() async {
+    return const DeleteAccountResult(
+      session: AuthSession.guest(),
+      shouldExitApp: false,
+    );
+  }
 }
 
 class _EmptyMyListRepository implements MyListRepository {
@@ -1315,13 +1399,16 @@ class _EmptyMyListRepository implements MyListRepository {
   }
 
   @override
-  Future<void> deleteFavorite({required String dramaId}) async {}
+  Future<void> deleteFavorite({required int dramaId}) async {}
 
   @override
-  Future<void> deleteFavorites({required List<String> dramaIds}) async {}
+  Future<void> deleteFavorites({required List<int> dramaIds}) async {}
 
   @override
-  Future<void> deletePlayHistory({required String historyId}) async {}
+  Future<void> deletePlayHistory({required int historyId}) async {}
+
+  @override
+  Future<void> deletePlayHistories({required List<int> historyIds}) async {}
 }
 
 class _EmptyWalletRepository implements WalletRepository {
@@ -1332,10 +1419,33 @@ class _EmptyWalletRepository implements WalletRepository {
     return const WalletData(
       coins: 0,
       bonus: 0,
+      totalCoin: 0,
       autoUnlockNextEpisode: false,
       transactionRecords: [],
       consumptionRecords: [],
       coinRecords: [],
     );
+  }
+
+  @override
+  Future<List<WalletRecord>> fetchTransactionRecords({
+    String? pageToken,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<List<WalletRecord>> fetchConsumptionRecords({
+    required String status,
+    String? pageToken,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<List<WalletRecord>> fetchRewardCoins({
+    String? pageToken,
+  }) async {
+    return const [];
   }
 }

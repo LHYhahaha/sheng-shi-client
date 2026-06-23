@@ -6,7 +6,6 @@ import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell.dart';
 import '../../../../core/auth/user_info_store.dart';
 import '../../../auth/application/auth_controller.dart';
-import '../../../auth/application/auth_modal_coordinator.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../../../core/network/proxy_config.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -50,7 +49,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final authState = ref.watch(authControllerProvider);
     final entitlementState = ref.watch(entitlementControllerProvider);
     final userInfoState = ref.watch(userInfoStoreProvider);
-    final authModalCoordinator = ref.read(authModalCoordinatorProvider);
     final authUser = authState.user;
 
     // 监听 Tab 索引变化，每次切换到 Profile Tab 时刷新权益数据
@@ -65,7 +63,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     // 金币数据来自 entitlementState（/api/user/entitlements 接口）
     final totalCoins =
         entitlementState.coinBalance + entitlementState.bonusBalance;
-    final hasAccountInfo = authUser != null || userInfoState.hasUserInfo;
+    final hasLinkedAccount = !authState.session.isGuest;
     
     // 优先使用 authUser 的 avatarResource，否则使用 userInfoState.avatar 构建网络头像
     final avatarResource = authUser?.avatarResource ??
@@ -74,7 +72,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             : profileState.avatarResource);
     
     final state = profileState.copyWith(
-      isLoggedIn: hasAccountInfo,
+      isLoggedIn: hasLinkedAccount,
       userId: authUser?.id ?? userInfoState.showId,
       showId: authUser?.showId ?? userInfoState.showId,
       nickname: authUser?.nickname ?? userInfoState.nickname,
@@ -91,7 +89,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
     void onHeaderTap() {
       if (authState.session.isGuest) {
-        authModalCoordinator.showLogin(context);
+        context.push(RoutePaths.auth);
       } else {
         // context.push(RoutePaths.account);
       }
@@ -108,7 +106,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               state: state,
               onLoginTap: () {
                 if (authState.session.isGuest) {
-                  authModalCoordinator.showLogin(context);
+                  context.push(RoutePaths.auth);
                 }
               },
               onAccountTap: () => context.push(RoutePaths.account),

@@ -105,6 +105,8 @@ class AppLocalizations {
     return _interpolate(value, text.args);
   }
 
+
+
   String _interpolate(String value, Map<String, Object?> args) {
     for (final entry in args.entries) {
       value = value.replaceAll('{${entry.key}}', entry.value.toString());
@@ -115,9 +117,18 @@ class AppLocalizations {
     return value;
   }
 
+  String _replaceWords( {required String removeWord, required String word ,required String originWord}){
+    String text = "";
+    if(originWord.contains(removeWord)){
+      text = originWord.replaceAll(removeWord, word);
+      return text;
+    }
+    return originWord;
+  }
+
   // ── 通用 ─────────────────────────────────────────────
   String get appTitle =>
-      _remoteText('appTitle', en: 'Drama Client', zh: '短剧客户端');
+      _remoteText('appTitle', en: 'NovaShort', zh: 'NovaShort');
 
   String get retry => _remoteText('common.action.retry', en: 'Retry', zh: '重试');
 
@@ -126,6 +137,13 @@ class AppLocalizations {
 
   String get noData =>
       _remoteText('common.status.no_data', en: 'No data', zh: '暂无数据');
+
+  String get emptyNoDramas => _remoteText(
+    'home.empty.no_dramas',
+    en: 'No dramas yet',
+    zh: '暂无短剧',
+  );
+
   String get paymentModalMethodGooglePay => _remoteText(
     'payment_modal.method.google_pay',
     en: 'Google Pay',
@@ -137,11 +155,8 @@ class AppLocalizations {
     zh: '订单详情',
   );
 
-  String get paymentModalAmountTotal => _remoteText(
-    'payment_modal.amount.total',
-    en: 'Total',
-    zh: '合计',
-  );
+  String get paymentModalAmountTotal =>
+      _remoteText('payment_modal.amount.total', en: 'Total', zh: '合计');
 
   String get appCommonLegalPrivacyPolicy => _remoteText(
     'app.common.legal.privacy_policy',
@@ -153,6 +168,14 @@ class AppLocalizations {
     'app.common.legal.terms_of_use',
     en: 'Terms of Use',
     zh: '使用条款',
+  );
+
+  String get edit => _remoteText('common.action.edit', en: 'Edit', zh: '编辑');
+
+  String get autoUnlockNext => _remoteText(
+    'app.common.setting.auto_unlock_next',
+    en: 'Play the next episode automatically',
+    zh: '自动播放下一集',
   );
 
   // ── 导航 ─────────────────────────────────────────────
@@ -175,36 +198,28 @@ class AppLocalizations {
       _remoteText('home.nav.member', en: 'Member', zh: '会员');
 
   // ── 首页 Feed ─────────────────────────────────────────────
-  String get feedEmpty => _remoteText(
-    'home.empty.no_dramas',
-    en: 'There is no content for now~',
-    zh: '暂无内容',
-  );
 
   String get feedLoadFailed =>
-      _remoteText('common.action.retry', en: 'Load failed', zh: '加载失败');
+      _remoteText('common.action.retry', en: 'Retry', zh: '重试');
 
   String get feedNoMore =>
       _remoteText('home.state.no_more', en: 'No more content', zh: '没有更多了');
 
   String get exclusive =>
-      _remoteText('home.state.exclusive', en: 'exclusive', zh: '专享');
+      _remoteText('home.state.exclusive', en: 'VIP', zh: 'VIP');
 
   // ── 片单 My List ─────────────────────────────────────────────
   String get myListCollectionTab =>
       _remoteText('my_list.tab.following', en: 'Following', zh: '在追');
 
   String get myListPlayTab =>
-      _remoteText('my_list.tab.history', en: 'Play list', zh: '播放列表');
+      _remoteText('my_list.tab.history', en: 'Play list', zh: '观看历史');
 
   String get myListChoose =>
       _remoteText('my_list.action.select', en: 'Choose', zh: '选择');
 
   String get myListCancel =>
       _remoteText('my_list.action.cancel', en: 'Cancel', zh: '取消');
-
-  String get myListEdit =>
-      _remoteText('my_list.action.select', en: 'Edit', zh: '编辑');
 
   String get myListDelete =>
       _remoteText('my_list.action.remove', en: 'Delete', zh: '删除');
@@ -227,27 +242,36 @@ class AppLocalizations {
     zh: '观看热门短剧',
   );
 
-  String myListDeleteCount(int count) => _remoteText(
-    'my_list.action.remove',
-    en: 'Delete ($count)',
-    zh: '删除 ($count)',
-  );
+  // String myListDeleteCount(int count) => _remoteText(
+  //   'my_list.action.remove',
+  //   en: 'Delete ($count)',
+  //   zh: '删除 ($count)',
+  // );
 
   String get myListDramaOffShelf => _remoteText(
     'my_list.toast.drama_off_shelf',
-    en: 'This drama has been removed. Check out others.',
-    zh: '该短剧已下架，看看别的吧',
+    en: 'This drama has been taken down and is temporarily unavailable.',
+    zh: '该短剧已下架，暂时无法观看',
+  );
+
+  String get myListEmptyFollowing => _remoteText(
+    'my_list.empty.following',
+    en: 'No followed dramas yet. Go explore Home.',
+    zh: '暂无在追剧集，去首页逛逛吧',
+  );
+
+  String get myListEmptyHistory => _remoteText(
+    'my_list.empty.history',
+    en: 'No watch history yet. Go explore Home.',
+    zh: '暂无观看历史，去首页逛逛吧',
   );
 
   // ── 个人中心 Profile ─────────────────────────────────────────────
   String get profileLogin =>
-      _remoteText('profile.user.login', en: 'Log in', zh: '登录');
+      _remoteText('profile.user.login', en: 'Log in >', zh: '登录');
 
-  String get profileCopySuccess => _remoteText(
-        'profile.toast.copy_success',
-        en: 'ID copied',
-        zh: 'ID已复制',
-      );
+  String get profileCopySuccess =>
+      _remoteText('profile.toast.copy_success', en: 'ID copied', zh: 'ID已复制');
 
   String get profileGuest => _remoteText('', en: 'Guest', zh: '游客');
 
@@ -311,6 +335,9 @@ class AppLocalizations {
   String get languagePageTitle =>
       _remoteText('language_page.title.language', en: 'Language', zh: '语言');
 
+  String get languagePageButton =>
+      _remoteText('language_page.button.done', en: 'Done', zh: '完成');
+
   String get profileMember =>
       _remoteText('profile.user.member', en: 'Member', zh: '会员');
 
@@ -321,11 +348,8 @@ class AppLocalizations {
   String get settingsTitle =>
       _remoteText('settings.title', en: 'Settings', zh: '设置');
 
-  String get settingsButtonLogout => _remoteText(
-    'settings.button.logout',
-    en: 'Log Out',
-    zh: '登出',
-  );
+  String get settingsButtonLogout =>
+      _remoteText('settings.button.logout', en: 'Log Out', zh: '登出');
   String get settingsDeleteAccount => _remoteText(
     'settings.entry.delete_account',
     en: 'Delete Account',
@@ -365,8 +389,8 @@ class AppLocalizations {
 
   String get accountCancellationInfoPersonalSubtitle => _remoteText(
     'delete_account.checklist.personal_desc',
-    en: 'Your personal information will be deleted',
-    zh: '你的个人信息将被删除',
+    en: 'Your personal information, including email address and nickname, will be deleted.',
+    zh: '您的个人信息（邮箱地址和昵称）将被删除',
   );
 
   String get accountCancellationInfoAccountBalanceTitle => _remoteText(
@@ -413,14 +437,14 @@ class AppLocalizations {
 
   String get accountCancellationRiskLogoutDevices => _remoteText(
     'delete_account.notice.bottom',
-    en: 'Please log out from other devices',
-    zh: '请先在其他设备退出该账号',
+    en: 'To ensure proper access, please log out from this account on other devices. ',
+    zh: '为确保正常访问，请先在其他设备退出登录。',
   );
 
   String get accountCancellationRiskDeletionFinal => _remoteText(
-    'delete_account.confirm.message',
-    en: 'All information will be deleted',
-    zh: '该账号的所有信息将被删除',
+    'delete_account.notice2.bottom',
+    en: 'All information in this account will be deleted and cannot be recovered.',
+    zh: '本账号所有信息将被删除且无法找回。',
   );
 
   String get accountCancellationAcceptRisk => _remoteText(
@@ -450,8 +474,11 @@ class AppLocalizations {
   String get accountCancellationConfirmCancel =>
       _remoteText('delete_account.confirm.cancel', en: 'Cancel', zh: '取消');
 
-  String get accountCancellationConfirmDelete =>
-      _remoteText('delete_account.confirm.confirm', en: 'Confirm delete', zh: '确认删除');
+  String get accountCancellationConfirmDelete => _remoteText(
+    'delete_account.confirm.confirm',
+    en: 'Confirm delete',
+    zh: '确认删除',
+  );
 
   String get accountCancellationSuccess => _remoteText(
     'settings.toast.logged_out',
@@ -508,17 +535,11 @@ class AppLocalizations {
     zh: '继续即表示您同意我们的',
   );
 
-  String get loginAgreementConnector => _remoteText(
-    'login.agreement.connector',
-    en: ' and ',
-    zh: '和',
-  );
+  String get loginAgreementConnector =>
+      _remoteText('login.agreement.connector', en: ' & ', zh: '和');
 
-  String get loginAgreementSuffix => _remoteText(
-    'login.agreement.suffix',
-    en: '.',
-    zh: '。',
-  );
+  String get loginAgreementSuffix =>
+      _remoteText('login.agreement.suffix', en: '.', zh: '。');
 
   String get authLoginRequiredMessage => _remoteText(
     'app',
@@ -577,6 +598,18 @@ class AppLocalizations {
     zh: '登录失败，请重试。',
   );
 
+  String get authLoginCanceled => _remoteText(
+    'login.toast.canceled',
+    en: 'Login cancelled',
+    zh: '\u767b\u5f55\u5df2\u53d6\u6d88',
+  );
+
+  String get authLoginFailedRetryLater => _remoteText(
+    'login.toast.failed_retry_later',
+    en: 'Login failed. Please try again later.',
+    zh: '\u767b\u5f55\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5',
+  );
+
   // ── 钱包 Wallet ─────────────────────────────────────────────
   String get walletTitle =>
       _remoteText('wallet.title.my_wallet', en: 'My Wallet', zh: '钱包');
@@ -605,11 +638,6 @@ class AppLocalizations {
   String get walletMenuClaimCoins =>
       _remoteText('wallet.menu.claim_coins', en: 'Reward Coins', zh: '奖励金币');
 
-  String get walletAutoUnlockNextEpisode => _remoteText(
-    'app.common.setting.auto_unlock_next',
-    en: 'Unlock next episode automatically',
-    zh: '自动解锁下一集',
-  );
 
   String get walletHistoryEmpty => _remoteText(
     'wallet.history.empty',
@@ -684,7 +712,7 @@ class AppLocalizations {
 
   // ── 商店 Store ─────────────────────────────────────────────
   String get storeTitle =>
-      _remoteText('membership_page.title.join', en: 'Store', zh: '商店');
+      _remoteText('store_page.title.store', en: 'Store', zh: '商店');
 
   String get storeRestore =>
       _remoteText('wallet.menu.transaction_history', en: 'Restore', zh: '恢复购买');
@@ -715,26 +743,26 @@ class AppLocalizations {
 
   String get storePurchaseProcessing => _remoteText(
     'payment.status.confirming',
-    en: 'Processing purchase...',
-    zh: '正在处理购买...',
+    en: 'Confirming payment',
+    zh: '确认支付中',
   );
 
   String get storePurchaseSuccess => _remoteText(
-    'payment.status.success',
-    en: 'Purchase successful',
-    zh: '购买成功',
+    'app.payment.status.success',
+    en: 'Payment successful',
+    zh: '支付成功',
   );
 
   String get storePurchaseFailed => _remoteText(
-    'payment.status.failed_retry',
-    en: 'Purchase failed. Please try again.',
-    zh: '购买失败，请重试',
+    'app.payment.status.failed_retry',
+    en: 'Payment failed. Please try again.',
+    zh: '支付失败，请重试',
   );
 
   String get storePurchaseCancelled => _remoteText(
-    'payment.status.canceled',
-    en: 'Purchase cancelled',
-    zh: '购买已取消',
+    'app.payment.status.canceled',
+    en: 'Payment canceled',
+    zh: '支付已取消',
   );
 
   String get storePaymentNote => _remoteText(
@@ -762,18 +790,6 @@ class AppLocalizations {
     zh: '立即开通',
   );
 
-  String get membershipConfirmPurchase => _remoteText(
-    'membership_page.button.join_now',
-    en: 'Confirm membership',
-    zh: '确认开通会员',
-  );
-
-  String get membershipMockPaymentNote => _remoteText(
-    'membership_page.tips.title',
-    en: 'This is a mock membership confirmation',
-    zh: '这是模拟会员确认',
-  );
-
   String get membershipWeekly =>
       _remoteText('membership_page.plan.weekly', en: 'Weekly VIP', zh: '周会员');
 
@@ -790,7 +806,25 @@ class AppLocalizations {
       _remoteText('membership_page.plan.yearly', en: 'Yearly VIP', zh: '年会员');
 
   String get membershipDay =>
-      _remoteText('membership_page.unit.day', en: 'Day', zh: '天');
+      _remoteText('membership_page.unit.day', en: 'Day', zh: '日');
+
+  String membershipPlanTitle({
+    String? periodIso,
+    String? fallbackId,
+    String? fallbackTitle,
+  }) {
+    return switch (_membershipPeriodKind(
+      periodIso,
+      fallbackId,
+      fallbackTitle,
+    )) {
+      _MembershipPeriodKind.weekly => membershipWeekly,
+      _MembershipPeriodKind.monthly => membershipMonthly,
+      _MembershipPeriodKind.quarterly => membershipQuarterly,
+      _MembershipPeriodKind.yearly => membershipYearly,
+      null => fallbackTitle ?? fallbackId ?? '',
+    };
+  }
 
   String get membershipUserUpgradedCount => _remoteText(
     'membership_page.user.upgraded_count',
@@ -806,39 +840,46 @@ class AppLocalizations {
 
   // ── 会员权益 Benefits ─────────────────────────────────────────────
   String get benefitSeriesTitle => _remoteText(
-    'membership.benefit.series.title',
-    en: 'Unlimited access to ',
-    zh: '无限访问 ',
+    'membership_page.benefit.free_dramas',
+    en: 'Watch 8000+ dramas for free',
+    zh: '8000+部剧集免费看',
   );
 
   String get benefitSeriesHighlight => _remoteText(
-    'membership.benefit.series.highlight',
-    en: '8,000+ series',
-    zh: '8000+ 短剧',
+    'membership_page.benefit.weekly_new',
+    en: '50+ new dramas added every week',
+    zh: '每周稳定上新50+部新剧',
   );
 
   String get benefitSeriesDescription => _remoteText(
-    'membership.benefit.series.desc',
-    en: '55+ fresh dramas every week',
-    zh: '每周 55+ 部新剧',
+    'membership_page.benefit.daily_points',
+    en: 'Daily VIP Points',
+    zh: '每日会员积分',
   );
 
   String get benefitDownload =>
-      _remoteText('membership.benefit.download', en: 'Download', zh: '下载');
+      _remoteText('membership_page.benefit.download', en: 'Download', zh: '下载');
 
   String get benefitMembersOnly => _remoteText(
-    'membership.benefit.members_only',
-    en: 'Members-only dramas',
-    zh: '会员专享短剧',
+    'membership_page.benefit.exclusive_dramas',
+    en: 'VIP-exclusive Dramas',
+    zh: '会员专享剧',
   );
 
   String get benefitHd => _remoteText(
-    'membership.benefit.hd',
-    en: '1080p quality',
-    zh: '1080p 高清画质',
+    'membership_page.benefit.hd',
+    en: '1080p Quality',
+    zh: '1080p画质',
   );
 
+  String get benefitNoAds =>
+      _remoteText('membership_page.benefit.no_ads', en: 'Ad-free', zh: '免广告');
+
   // ── 会员提示 Tips ─────────────────────────────────────────────
+
+  String get membershipTips =>
+      _remoteText('membership_page.tips.title', en: 'Tips', zh: '提示');
+
   /// "Auto-renews. Cancel anytime."
   String get membershipAutoRenewCancel => _remoteText(
     'app.common.membership.auto_renew_cancel',
@@ -865,16 +906,44 @@ class AppLocalizations {
       _remoteText('recharge_modal.product.bonus', en: 'Bonus', zh: '赠送');
 
   String get rechargeVipWeek =>
-      _remoteText('recharge_modal.vip.week', en: 'Weekly', zh: '每周');
+      _remoteText('recharge_modal.vip.week', en: 'Weekly', zh: '周');
 
   String get rechargeVipMonth =>
-      _remoteText('recharge_modal.vip.month', en: 'Monthly', zh: '每月');
+      _remoteText('recharge_modal.vip.month', en: 'Monthly', zh: '月');
 
   String get rechargeVipQuarter =>
-      _remoteText('recharge_modal.vip.quarter', en: 'Quarterly', zh: '每季度');
+      _remoteText('recharge_modal.vip.quarter', en: 'Quarterly', zh: '季');
 
   String get rechargeVipYear =>
-      _remoteText('recharge_modal.vip.year', en: 'Yearly', zh: '每年');
+      _remoteText('recharge_modal.vip.year', en: 'Yearly', zh: '年');
+
+  String get rechargeVipMember =>
+      _remoteText('recharge_modal.vip.member', en: 'VIP', zh: '会员');
+
+  String rechargeMembershipTitle({
+    String? periodIso,
+    String? fallbackId,
+    String? fallbackTitle,
+  }) {
+    final period = switch (_membershipPeriodKind(
+      periodIso,
+      fallbackId,
+      fallbackTitle,
+    )) {
+      _MembershipPeriodKind.weekly => rechargeVipWeek,
+      _MembershipPeriodKind.monthly => rechargeVipMonth,
+      _MembershipPeriodKind.quarterly => rechargeVipQuarter,
+      _MembershipPeriodKind.yearly => rechargeVipYear,
+      null => null,
+    };
+    if (period == null) {
+      return fallbackTitle ?? fallbackId ?? rechargeVipMember;
+    }
+    if (locale.languageCode == 'zh') {
+      return '$period$rechargeVipMember';
+    }
+    return '$period $rechargeVipMember';
+  }
 
   String get rechargeBenefitDailyPoints => _remoteText(
     'recharge_modal.benefit.daily_points',
@@ -906,12 +975,17 @@ class AppLocalizations {
 
   String get playerMore =>
       _remoteText('player.synopsis.more', en: 'More', zh: '更多');
+  String get playerLess =>
+      _remoteText('player.synopsis.less', en: 'Less', zh: '收起');
 
   String get playerDownload =>
       _remoteText('player.action.share', en: 'Download', zh: '下载');
 
-  String get playerNext =>
-      _remoteText('player.header.episode_index', en: 'Next', zh: '下一集');
+  String  playerEpisode(String text) =>
+      _replaceWords(
+          removeWord: 'X',
+          word: text,
+          originWord: _remoteText('player.header.episode_index', en: 'Episode X', zh: '第X集'));
 
   String get playerWatchNow =>
       _remoteText('player.unlock.cta', en: 'Watch Now', zh: '立即观看');
@@ -919,8 +993,6 @@ class AppLocalizations {
   String get playerSpeed =>
       _remoteText('player.header.speed', en: 'Speed', zh: '倍速');
 
-  String get playerSynopsis =>
-      _remoteText('episode_modal.tab.synopsis', en: 'Synopsis', zh: '简介');
 
   String get playerMoreLikeThis => _remoteText(
     'episode_modal.recommend.more_like_this',
@@ -930,9 +1002,6 @@ class AppLocalizations {
 
   String get playerUnlockNow =>
       _remoteText('player.unlock.cta', en: 'Unlock Now', zh: '立即解锁');
-
-  String get playerConfirmUnlock =>
-      _remoteText('player.unlock.cta', en: 'Confirm unlock', zh: '确认解锁');
 
   String get playerMemberUnlock => _remoteText(
     'player.unlock.member_unlock',
@@ -946,14 +1015,10 @@ class AppLocalizations {
   String get playerPlay =>
       _remoteText('unlock_modal.button.play_episode', en: 'Play', zh: '播放');
 
-  String get playerAutoNext => _remoteText(
-    'app.common.setting.auto_unlock_next',
-    en: 'Play the next episode automatically',
-    zh: '自动播放下一集',
-  );
+
 
   String get playerPrice =>
-      _remoteText('player.unlock.cta', en: 'Price:', zh: '价格:');
+      _remoteText('player.unlock.price', en: 'Price:', zh: '价格:');
 
   String get playerBalance =>
       _remoteText('app.common.label.balance', en: 'Balance:', zh: '余额:');
@@ -964,8 +1029,6 @@ class AppLocalizations {
   String get playerRequiredCoins =>
       _remoteText('app.common.unit.coin', en: 'Required', zh: '所需金币');
 
-  String get playerCoinBalance =>
-      _remoteText('app.common.label.balance', en: 'Balance', zh: '余额');
 
   String get playerCoinPackages =>
       _remoteText('payment_modal.button.buy_now', en: 'Coins', zh: '金币充值');
@@ -988,11 +1051,11 @@ class AppLocalizations {
     zh: '自动续费 · 可随时取消',
   );
 
-  String get playerUnlockProcessing => _remoteText(
-    'payment.status.confirming',
-    en: 'Processing purchase...',
-    zh: '正在处理购买...',
-  );
+  // String get playerUnlockProcessing => _remoteText(
+  //   'payment.status.confirming',
+  //   en: 'Processing purchase...',
+  //   zh: '正在处理购买...',
+  // );
 
   String get playerUnlockFailed => _remoteText(
     'payment.status.failed_retry',
@@ -1018,26 +1081,20 @@ class AppLocalizations {
     zh: '会员已开通',
   );
 
-  String get playerFeedEmpty => _remoteText(
-    'home.empty.no_dramas',
+  String get playerNoEpisodes => _remoteText(
+    'player.episodes.unavailable',
     en: 'No episodes available yet.',
     zh: '暂无可播放剧集',
-  );
-
-  String get playerEmptyNoDramas => _remoteText(
-    'home.empty.no_dramas',
-    en: 'No dramas yet',
-    zh: '暂无短剧',
   );
 
   String get playerFeedLoadFailed => _remoteText(
     'player.state.playback_failed',
     en: 'Player failed to load.',
-    zh: '播放内容加载失败',
+    zh: '播放失败，请重试',
   );
 
   String get playerEpisodeUnavailable => _remoteText(
-    'player.state.playback_failed',
+    'player.state.episode_unavailable',
     en: 'This episode is unavailable.',
     zh: '本集暂不可播放',
   );
@@ -1074,7 +1131,7 @@ class AppLocalizations {
       _remoteText('share_modal.title.share', en: 'Share', zh: '分享');
 
   // ── 剧集弹窗 Episode Modal ─────────────────────────────────────────────
-  String get episodeModalSynopsis =>
+  String get playerSynopsis =>
       _remoteText('episode_modal.tab.synopsis', en: 'Synopsis', zh: '简介');
 
   String get episodeModalEpisodes =>
@@ -1122,14 +1179,12 @@ class AppLocalizations {
       _remoteText('app.common.unit.view', en: 'Views', zh: '播放量');
 
   String get unitBonusCoin =>
-      _remoteText('app.common.unit.bonus_coin', en: 'Bonus Coins', zh: '赠币');
+      _remoteText('app.common.unit.bonus_coin', en: 'Bonus Coins', zh: '赠送金币');
 
   String get unitCoin =>
       _remoteText('app.common.unit.coin', en: 'Coins', zh: '金币');
 
   // ── 奖励金币 Claim Coins ─────────────────────────────────────────────
-  String get claimCoinsTitle =>
-      _remoteText('claim_coins.title', en: 'Reward Coins', zh: '奖励金币');
 
   String get claimCoinsName =>
       _remoteText('claim_coins.reward.name', en: 'Reward Coins', zh: '奖励金币');
@@ -1175,12 +1230,42 @@ class AppLocalizations {
     zh: '当前为模拟确认',
   );
 
-  String accountCancellationDeleteButtonCountdown(int seconds) => _remoteText(
+  String get accountCancellationDeleteButtonCountdown => _remoteText(
     'delete_account.button.confirm_deletion',
-    en: 'Delete account (${seconds}s)',
-    zh: '删除账号（${seconds}s）',
+    en: 'Delete account',
+    zh: '删除账号',
   );
+
+  _MembershipPeriodKind? _membershipPeriodKind(
+    String? periodIso,
+    String? fallbackId,
+    String? fallbackTitle,
+  ) {
+    final iso = periodIso?.toUpperCase();
+    if (iso == 'P1W') return _MembershipPeriodKind.weekly;
+    if (iso == 'P1M') return _MembershipPeriodKind.monthly;
+    if (iso == 'P3M') return _MembershipPeriodKind.quarterly;
+    if (iso == 'P1Y') return _MembershipPeriodKind.yearly;
+
+    final normalized = '${fallbackId ?? ''} ${fallbackTitle ?? ''}'
+        .toLowerCase();
+    if (normalized.contains('quarter') || normalized.contains('season')) {
+      return _MembershipPeriodKind.quarterly;
+    }
+    if (normalized.contains('year') || normalized.contains('annual')) {
+      return _MembershipPeriodKind.yearly;
+    }
+    if (normalized.contains('month')) {
+      return _MembershipPeriodKind.monthly;
+    }
+    if (normalized.contains('week')) {
+      return _MembershipPeriodKind.weekly;
+    }
+    return null;
+  }
 }
+
+enum _MembershipPeriodKind { weekly, monthly, quarterly, yearly }
 
 extension AppLocalizationsX on BuildContext {
   AppLocalizations get l10n => AppLocalizations.of(this);

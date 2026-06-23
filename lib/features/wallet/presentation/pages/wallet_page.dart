@@ -155,13 +155,13 @@ class _WalletBody extends ConsumerWidget {
           children: [
             Expanded(
               child: _WalletBalanceColumn(
-                amount: state.coins,
+                amount: entitlementState.coinBalance,
                 label: context.l10n.walletCoins,
               ),
             ),
             Expanded(
               child: _WalletBalanceColumn(
-                amount: state.bonus,
+                amount: entitlementState.bonusBalance,
                 label: context.l10n.walletBonus,
               ),
             ),
@@ -203,7 +203,7 @@ class _WalletBody extends ConsumerWidget {
         ),
         const SizedBox(height: 28),
         _WalletSwitchRow(
-          label: context.l10n.walletAutoUnlockNextEpisode,
+          label: context.l10n.autoUnlockNext,
           value: entitlementState.autoUnlockEnabled,
           onChanged: onAutoUnlockChanged,
         ),

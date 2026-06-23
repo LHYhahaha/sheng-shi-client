@@ -13,6 +13,7 @@ import '../../../../core/modal/app_modal_service.dart';
 import '../../../../core/modal/app_modal_source.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../pay/application/payment_loading_controller.dart';
 import '../../application/player_feed_controller.dart';
 import '../../application/player_feed_engine.dart';
 import '../../application/player_feed_engine_access_flow.dart';
@@ -504,6 +505,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final showsPaywall = ref.watch(
       uiProvider.select((state) => state.showsPaywall),
     );
+    final isPaymentLoading = ref.watch(paymentLoadingControllerProvider);
     final showsChromeOverlays = ref.watch(
       uiProvider.select((state) => state.showsChromeOverlays),
     );
@@ -690,6 +692,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         canPop:
             widget.feedMode == PlayerFeedMode.forYou &&
             !widget.hideShellNavigation &&
+            !isPaymentLoading &&
             !showsPaywall,
         onPopInvokedWithResult: (didPop, result) {
           if (didPop) {
@@ -760,7 +763,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (items.isEmpty) {
       return PlayerStateMessage(
         icon: Icons.movie_filter_rounded,
-        message: context.l10n.playerFeedEmpty,
+        message: context.l10n.noData,
       );
     }
     _schedulePageControllerAlignment(
@@ -814,9 +817,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               controller: _pageController,
               physics: _isSeekDragging
                   ? const NeverScrollableScrollPhysics()
-                  : const PageScrollPhysics(
-                      parent: ClampingScrollPhysics(),
-                    ),
+                  : const PageScrollPhysics(parent: ClampingScrollPhysics()),
               scrollDirection: Axis.vertical,
               itemCount: items.length,
               onPageChanged: feedEngine.onPageChanged,
@@ -898,11 +899,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                       widget.feedMode == PlayerFeedMode.singleDrama,
                   onExitImmersiveChrome:
                       widget.feedMode == PlayerFeedMode.singleDrama
-                          ? () {
-                              uiController.onImmersiveVideoTap();
-                              unawaited(playbackController.togglePlay());
-                            }
-                          : null,
+                      ? () {
+                          uiController.onImmersiveVideoTap();
+                          unawaited(playbackController.togglePlay());
+                        }
+                      : null,
                   onSingleDramaUserInteraction:
                       widget.feedMode == PlayerFeedMode.singleDrama
                       ? uiController.notifyUserInteraction

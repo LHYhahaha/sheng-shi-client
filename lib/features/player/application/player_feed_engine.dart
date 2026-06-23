@@ -450,24 +450,6 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     return const PlayerUnlockFlowResult();
   }
 
-  Future<void> grantRechargeSelection({
-    required bool selectedCoinPackage,
-    required bool selectedMembershipPackage,
-    required int? coinPackageTotalCoins,
-  }) async {
-    final entitlement = ref.read(entitlementControllerProvider.notifier);
-    if (selectedCoinPackage && coinPackageTotalCoins != null) {
-      await entitlement.grantMockCoins(
-        amount: coinPackageTotalCoins,
-        source: 'player_recharge_unlock_sheet',
-      );
-    } else if (selectedMembershipPackage) {
-      await entitlement.grantMockMembership(
-        source: 'player_recharge_unlock_sheet',
-      );
-    }
-  }
-
   PlayerOverlaySheetIntent _sheetIntentForDecision(
     EpisodeAccessDecision decision,
     PlayerFeedItem item,

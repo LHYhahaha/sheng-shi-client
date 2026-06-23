@@ -213,15 +213,21 @@ class PlayerPlaybackRenderSnapshot {
 
   bool get shouldAttachVideoSurface =>
       surfaceLifecycle == PlayerVideoSurfaceLifecycle.attached;
+
   bool get canMountVideoSurface =>
       shouldAttachVideoSurface && videoController != null;
+
   bool get isError => status == PlayerPlaybackStatus.error;
+
   bool get isOpening => status == PlayerPlaybackStatus.opening;
+
   bool get isLoading =>
       currentSource != null &&
       !isError &&
       (isOpening || isBuffering || !hasFirstFrame);
+
   bool get isPlaying => status == PlayerPlaybackStatus.playing;
+
   bool get canTogglePlayback =>
       status == PlayerPlaybackStatus.playing ||
       status == PlayerPlaybackStatus.paused;
@@ -293,16 +299,20 @@ class PlayerSeekBarSnapshot {
   final Duration? seekPreviewPosition;
 
   bool get isError => status == PlayerPlaybackStatus.error;
+
   bool get isOpening => status == PlayerPlaybackStatus.opening;
+
   bool get isLoading =>
       currentSource != null &&
       !isError &&
       (isOpening || isBuffering || !hasFirstFrame);
+
   bool get isSeekAllowed =>
       currentSource != null &&
       duration > Duration.zero &&
       (status == PlayerPlaybackStatus.playing ||
           status == PlayerPlaybackStatus.paused);
+
   bool get canShowPassiveTrack =>
       currentSource != null &&
       !isError &&
@@ -1116,7 +1126,9 @@ class PlayerTopBarContent extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 key: const ValueKey('player_episode_label'),
-                'EP.${episodeNumber.toString().padLeft(2, '0')}',
+                context.l10n.playerEpisode(
+                  episodeNumber.toString().padLeft(2, '0'),
+                ),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -1125,22 +1137,22 @@ class PlayerTopBarContent extends StatelessWidget {
               ),
               const Spacer(),
               // 字幕按钮
-              GestureDetector(
-                key: const ValueKey('player_subtitle_button'),
-                behavior: HitTestBehavior.opaque,
-                onTap: onSubtitleTap,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 6,
-                  ),
-                  child: const Icon(
-                    Icons.closed_caption_rounded,
-                    color: Colors.white,
-                    size: 22,
-                  ),
-                ),
-              ),
+              // GestureDetector(
+              //   key: const ValueKey('player_subtitle_button'),
+              //   behavior: HitTestBehavior.opaque,
+              //   onTap: onSubtitleTap,
+              //   child: Padding(
+              //     padding: const EdgeInsets.symmetric(
+              //       horizontal: 8,
+              //       vertical: 6,
+              //     ),
+              //     child: const Icon(
+              //       Icons.closed_caption_rounded,
+              //       color: Colors.white,
+              //       size: 22,
+              //     ),
+              //   ),
+              // ),
               // const SizedBox(width: 4),
               // // 倍速按钮
               // GestureDetector(

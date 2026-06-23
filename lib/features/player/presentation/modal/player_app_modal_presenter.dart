@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,6 +9,7 @@ import '../../../../core/modal/app_modal_request.dart';
 import '../../../../core/modal/app_modal_result.dart';
 import '../../../../core/modal/app_modal_root_sheet.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
+import '../../../pay/application/payment_loading_controller.dart';
 import '../../domain/player_feed.dart';
 import '../../application/player_feed_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
@@ -63,7 +66,9 @@ class PlayerAppModalPresenter implements AppModalPresenter {
 
     final modalContext = resolveAppModalPresentationContext(context);
     final container = ProviderScope.containerOf(modalContext, listen: false);
-    final balance = container.read(entitlementControllerProvider).coinBalance;
+    final balance =
+        container.read(entitlementControllerProvider).coinBalance +
+        container.read(entitlementControllerProvider).bonusBalance;
     final sessionKey = payload.sessionKey;
     final itemId = payload.itemId;
     final price = payload.price;
@@ -103,9 +108,11 @@ class PlayerAppModalPresenter implements AppModalPresenter {
                   : item.content.title;
               final cover = item.content.coverUrl ?? '';
               final episodeId = int.tryParse(item.episode.id);
-              
+
               if (episodeId == null) {
-                debugPrint('[_presentCoinUnlock] episode id parse failed: ${item.episode.id}');
+                debugPrint(
+                  '[_presentCoinUnlock] episode id parse failed: ${item.episode.id}',
+                );
                 navigator.pop(false);
                 return;
               }
@@ -197,6 +204,7 @@ class PlayerAppModalPresenter implements AppModalPresenter {
     }
 
     final modalContext = resolveAppModalPresentationContext(context);
+    final container = ProviderScope.containerOf(modalContext, listen: false);
     final purchased = await showGeneralDialog<bool>(
       context: modalContext,
       barrierDismissible: request.dismissPolicy.barrierDismissible,
@@ -211,13 +219,37 @@ class PlayerAppModalPresenter implements AppModalPresenter {
           child: PlayerPaymentMethodModalLayer(
             sessionKey: payload.sessionKey,
             selection: payload.selection,
-            onDismissed: () => Navigator.of(dialogContext).pop(false),
+            onDismissed: (result) => Navigator.of(dialogContext).pop(result),
             onPurchaseSuccess: () => Navigator.of(dialogContext).pop(true),
           ),
         );
       },
     );
 
+    final rechargeProvider = playerRechargeUnlockControllerProvider(
+      payload.sessionKey,
+    );
+    final rechargeState = container.read(rechargeProvider);
+    if (_shouldWaitForPlayerPaymentTerminalStatus(rechargeState)) {
+      final finalStatus = await _waitForPlayerPaymentTerminalStatus(
+        container,
+        payload.sessionKey,
+      );
+      return switch (finalStatus) {
+        PlayerRechargeUnlockStatus.success =>
+          const PaymentModalResult.completed(),
+        PlayerRechargeUnlockStatus.failed => const PaymentModalResult.failed(),
+        PlayerRechargeUnlockStatus.cancelled =>
+          const PaymentModalResult.cancelled(),
+        _ => const PaymentModalResult.cancelled(),
+      };
+    }
+    if (rechargeState.status == PlayerRechargeUnlockStatus.failed) {
+      return const PaymentModalResult.failed();
+    }
+    if (rechargeState.status == PlayerRechargeUnlockStatus.cancelled) {
+      return const PaymentModalResult.cancelled();
+    }
     if (purchased == true) {
       return const PaymentModalResult.completed();
     }
@@ -225,5 +257,55 @@ class PlayerAppModalPresenter implements AppModalPresenter {
       return const PaymentModalResult.dismissed();
     }
     return const PaymentModalResult.cancelled();
+  }
+
+  Future<PlayerRechargeUnlockStatus?> _waitForPlayerPaymentTerminalStatus(
+    ProviderContainer container,
+    String sessionKey,
+  ) async {
+    final provider = playerRechargeUnlockControllerProvider(sessionKey);
+    final currentStatus = container.read(
+      provider.select((state) => state.status),
+    );
+    if (_isPlayerPaymentTerminal(currentStatus)) {
+      return currentStatus;
+    }
+
+    final loading = container.read(paymentLoadingControllerProvider.notifier);
+    loading.show();
+    final completer = Completer<PlayerRechargeUnlockStatus?>();
+    late final ProviderSubscription<PlayerRechargeUnlockStatus> subscription;
+    subscription = container.listen<PlayerRechargeUnlockStatus>(
+      provider.select((state) => state.status),
+      (previous, next) {
+        if (_isPlayerPaymentTerminal(next) && !completer.isCompleted) {
+          completer.complete(next);
+        }
+      },
+    );
+    try {
+      return await completer.future.timeout(
+        const Duration(seconds: 45),
+        onTimeout: () => PlayerRechargeUnlockStatus.failed,
+      );
+    } finally {
+      subscription.close();
+      loading.hide();
+    }
+  }
+
+  bool _isPlayerPaymentTerminal(PlayerRechargeUnlockStatus status) {
+    return status == PlayerRechargeUnlockStatus.success ||
+        status == PlayerRechargeUnlockStatus.failed ||
+        status == PlayerRechargeUnlockStatus.cancelled;
+  }
+
+  bool _shouldWaitForPlayerPaymentTerminalStatus(
+    PlayerRechargeUnlockState state,
+  ) {
+    return state.status == PlayerRechargeUnlockStatus.processing &&
+        (state.paymentStage == PlayerRechargePaymentStage.creatingOrder ||
+            state.paymentStage == PlayerRechargePaymentStage.waitingPayment ||
+            state.paymentStage == PlayerRechargePaymentStage.verifying);
   }
 }

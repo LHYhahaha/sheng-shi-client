@@ -9,6 +9,7 @@ import '../../entitlement/application/entitlement_controller.dart';
 import '../data/auth_repository_provider.dart';
 import '../domain/auth_repository.dart';
 import '../domain/auth_session.dart';
+import '../domain/delete_account_result.dart';
 
 /// APP 启动时的 token 初始化 provider。
 ///
@@ -380,12 +381,11 @@ class AuthController extends Notifier<AuthState> {
     }
   }
 
-  Future<void> deleteAccount() async {
+  Future<DeleteAccountResult?> deleteAccount() async {
     if (state.isLoading) {
-      return;
+      return null;
     }
 
-    final previousSession = state.session;
     // 注销账号比 logout 风险更高，但状态处理仍保持一致：只有 repository 返回 guest
     // session 后才认为本地退出成功。
     state = state.copyWith(
@@ -395,10 +395,12 @@ class AuthController extends Notifier<AuthState> {
     );
     try {
       final repository = ref.read(authRepositoryProvider);
-      final deletedSession = await repository.deleteAccount();
-      final session = previousSession.isGuest
-          ? deletedSession
+      final result = await repository.deleteAccount();
+
+      final session = result.shouldExitApp
+          ? result.session
           : await _loginDeviceAfterAccountDeletion(repository);
+
       state = state.copyWith(
         isLoading: false,
         session: session,
@@ -406,6 +408,8 @@ class AuthController extends Notifier<AuthState> {
         clearPendingProvider: true,
         clearFailedAction: true,
       );
+
+      return result;
     } catch (error) {
       state = state.copyWith(
         isLoading: false,
@@ -413,6 +417,7 @@ class AuthController extends Notifier<AuthState> {
         failedAction: AuthFailureAction.deleteAccount,
         clearPendingProvider: true,
       );
+      return null;
     }
   }
 
@@ -452,12 +457,11 @@ class AuthController extends Notifier<AuthState> {
 
     final candidate = await synchronizer.syncCurrentSession();
     await ref.read(entitlementControllerProvider.notifier).load();
-    final entitlement = ref.read(entitlementControllerProvider);
     final syncedToken = ref.read(authTokenStoreProvider);
 
     final provider =
         _providerFromToken(syncedToken.provider) ?? fallbackProvider;
-    if (provider == AuthProviderType.device && entitlement.isGuest) {
+    if (syncedToken.sessionKind != AuthTokenSessionKind.authenticated) {
       return AuthSession.guest(
         sessionId: syncedToken.subjectId,
         guestId: syncedToken.guestId,

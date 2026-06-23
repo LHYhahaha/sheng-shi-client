@@ -13,6 +13,7 @@ import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_spacing.dart';
+import '../../../pay/application/payment_loading_controller.dart';
 import '../../application/store_controller.dart';
 import '../../application/store_modal_coordinator.dart';
 import '../modal/store_modal_results.dart';
@@ -50,6 +51,7 @@ class _StorePageState extends ConsumerState<StorePage> {
     final l10n = context.l10n;
     final state = ref.watch(storeControllerProvider);
     final controller = ref.read(storeControllerProvider.notifier);
+    final isPaymentLoading = ref.watch(paymentLoadingControllerProvider);
 
     ref.watch(storeModalCoordinatorProvider);
 
@@ -77,67 +79,88 @@ class _StorePageState extends ConsumerState<StorePage> {
                   _returnAfterPurchaseSuccess();
                   return;
                 }
+                final purchaseState = ref.read(storeControllerProvider);
+                final purchaseFailureKind = purchaseState.purchaseFailureKind;
+                if (StoreModalResults.isFailed(result)) {
+                  final message =
+                      purchaseFailureKind ==
+                              StorePurchaseFailureKind.orderCreation ||
+                          purchaseFailureKind ==
+                              StorePurchaseFailureKind.verification ||
+                          purchaseState.purchaseStatus ==
+                              StorePurchaseStatus.verifying
+                      ? l10n.networkError
+                      : l10n.storePurchaseFailed;
+                  ref.read(appToastProvider).error(message);
+                } else if (StoreModalResults.isCancelled(result)) {
+                  ref
+                      .read(appToastProvider)
+                      .info(l10n.storePurchaseCancelled);
+                }
                 ref.read(storeControllerProvider.notifier).hideConfirmation();
               }),
         );
       },
     );
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF040404),
-      body: SafeArea(
-        bottom: false,
-        child: Stack(
-          children: [
-            Positioned(
-              top: -121,
-              left: -8,
-              child: _StoreGlow(
-                width: 338,
-                height: 215,
-                color: AppColors.primary.withValues(alpha: 0.28),
-              ),
-            ),
-            Positioned(
-              top: -121,
-              left: -94,
-              child: _StoreGlow(
-                width: 287,
-                height: 215,
-                color: const Color(0xFF75154A).withValues(alpha: 0.35),
-              ),
-            ),
-            Column(
-              children: [
-                _StoreHeader(
-                  title: l10n.storeTitle,
-                  restoreLabel: l10n.storeRestore,
-                  onBack: () {
-                    if (context.canPop()) {
-                      context.pop();
-                    } else {
-                      context.go(RoutePaths.profile);
-                    }
-                  },
-                  onRestore: () {
-                    ref
-                        .read(appToastProvider)
-                        .info(l10n.storeRestoreUnavailable);
-                  },
+    return PopScope(
+      canPop: !isPaymentLoading,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop || isPaymentLoading) {
+          return;
+        }
+        _goBack();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF040404),
+        body: SafeArea(
+          bottom: false,
+          child: Stack(
+            children: [
+              Positioned(
+                top: -121,
+                left: -8,
+                child: _StoreGlow(
+                  width: 338,
+                  height: 215,
+                  color: AppColors.primary.withValues(alpha: 0.28),
                 ),
-                Expanded(
-                  child: _StoreBody(
-                    state: state,
-                    onRetry: controller.retry,
-                    onSelect: (id) {
-                      controller.selectPackage(id);
-                      controller.showConfirmation();
+              ),
+              Positioned(
+                top: -121,
+                left: -94,
+                child: _StoreGlow(
+                  width: 287,
+                  height: 215,
+                  color: const Color(0xFF75154A).withValues(alpha: 0.35),
+                ),
+              ),
+              Column(
+                children: [
+                  _StoreHeader(
+                    title: l10n.storeTitle,
+                    restoreLabel: l10n.storeRestore,
+                    onBack: _goBack,
+                    onRestore: () {
+                      ref
+                          .read(appToastProvider)
+                          .info(l10n.storeRestoreUnavailable);
                     },
                   ),
-                ),
-              ],
-            ),
-          ],
+                  Expanded(
+                    child: _StoreBody(
+                      state: state,
+                      onRetry: controller.retry,
+                      onSelect: (id) {
+                        controller.selectPackage(id);
+                        controller.showConfirmation();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -150,6 +173,14 @@ class _StorePageState extends ConsumerState<StorePage> {
       return;
     }
     // 返回到 Profile 页面
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(RoutePaths.profile);
+    }
+  }
+
+  void _goBack() {
     if (context.canPop()) {
       context.pop();
     } else {
@@ -181,7 +212,7 @@ class _StoreHeader extends StatelessWidget {
           children: [
             IconButton(
               onPressed: onBack,
-              icon: const Icon(Icons.chevron_left_rounded, size: 20),
+              icon: const Icon(Icons.chevron_left_rounded, size: 26),
               color: AppColors.textPrimary,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints.tightFor(width: 40, height: 40),
@@ -197,28 +228,29 @@ class _StoreHeader extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(
-              width: 58,
-              child: TextButton(
-                onPressed: onRestore,
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  foregroundColor: const Color(0x99F2F2F2),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  minimumSize: const Size(58, 40),
-                ),
-                child: Text(
-                  restoreLabel,
-                  textAlign: TextAlign.right,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: const Color(0x99F2F2F2),
-                    height: 1.5,
-                  ),
-                ),
-              ),
-            ),
+            SizedBox(width: 58)
+            // SizedBox(
+            //   width: 58,
+            //   child: TextButton(
+            //     onPressed: onRestore,
+            //     style: TextButton.styleFrom(
+            //       padding: EdgeInsets.zero,
+            //       foregroundColor: const Color(0x99F2F2F2),
+            //       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            //       minimumSize: const Size(58, 40),
+            //     ),
+            //     child: Text(
+            //       restoreLabel,
+            //       textAlign: TextAlign.right,
+            //       maxLines: 1,
+            //       overflow: TextOverflow.ellipsis,
+            //       style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            //         color: const Color(0x99F2F2F2),
+            //         height: 1.5,
+            //       ),
+            //     ),
+            //   ),
+            // ),
           ],
         ),
       ),
@@ -292,34 +324,7 @@ class _StoreBody extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
         ],
-        if (tips != null) ...[
-          const SizedBox(height: 4),
-          StoreTipsSection(tips: tips),
-        ],
-        const SizedBox(height: 12),
-        Center(
-          child: RichText(
-            text: TextSpan(
-              style: TextStyle(
-                fontSize: 11,
-                color: Color(0xFFFFFFFF).withValues(alpha: 0.5),
-              ),
-              children: [
-                TextSpan(
-                  text: context.l10n.appCommonLegalPrivacyPolicy,
-                  recognizer: TapGestureRecognizer()
-                    ..onTap = () => context.push(RoutePaths.privacyPolicy),
-                ),
-                const TextSpan(text: '    ·    '),
-                TextSpan(
-                  text: context.l10n.appCommonLegalTermsOfUse,
-                  recognizer: TapGestureRecognizer()
-                    ..onTap = () => context.push(RoutePaths.userAgreement),
-                ),
-              ],
-            ),
-          ),
-        ),
+        if (tips != null) ...[const SizedBox(height: 4), StoreTipsSection()],
       ],
     );
   }

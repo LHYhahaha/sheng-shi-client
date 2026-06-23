@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:drama_client/features/drama/domain/drama.dart';
+import 'package:drama_client/features/home/domain/drama.dart';
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/application/player_startup_preload_controller.dart';
@@ -338,12 +338,11 @@ ProviderContainer _createContainer({
 final _drama = Drama(
   id: 'drama-a',
   title: 'Drama A',
-  coverAssetPath: 'assets/images/home/drama_cover_figma.png',
-  viewCountLabel: '1M',
-  episodeCount: 10,
-  categoryId: 'popular',
+  coverUrl: 'assets/images/home/drama_cover_figma.png',
+  playCount: '1M',
+  episodeTotal: 10,
   tags: const ['Rebirth'],
-  coverAspectRatio: 171 / 226,
+  coverAspectRatio: 171 / 226, summary: '', sort: 1, trailerEpisodeNum: 1, status: 1,
 );
 
 final _content = PlayerContent(
@@ -365,6 +364,7 @@ final _content = PlayerContent(
     ),
   ],
   recommendations: const [],
+  episodeTotal: 2,
 );
 
 final _item = PlayerFeedItem(
@@ -517,7 +517,12 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   Stream<String> get errorStream => _errorController.stream;
 
   @override
-  Future<void> open(String source, {bool play = true}) async {
+  Future<void> open(
+    String source, {
+    bool play = true,
+    Duration? start,
+    Map<String, String>? httpHeaders,
+  }) async {
     openedSources.add(source);
     _playingController.add(play);
     _widthController.add(720);

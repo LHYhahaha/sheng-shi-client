@@ -4,6 +4,7 @@ import 'package:drama_client/features/auth/application/auth_controller.dart';
 import 'package:drama_client/features/auth/data/auth_repository_provider.dart';
 import 'package:drama_client/features/auth/domain/auth_repository.dart';
 import 'package:drama_client/features/auth/domain/auth_session.dart';
+import 'package:drama_client/features/auth/domain/delete_account_result.dart';
 import 'package:drama_client/features/entitlement/application/entitlement_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -63,8 +64,11 @@ class _SignedInAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AuthSession> deleteAccount() async {
+  Future<DeleteAccountResult> deleteAccount() async {
     _session = const AuthSession.guest();
-    return _session;
+    return DeleteAccountResult(
+      session: _session,
+      shouldExitApp: true,
+    );
   }
 }

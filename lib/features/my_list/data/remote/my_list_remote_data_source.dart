@@ -72,7 +72,7 @@ class MyListRemoteDataSource {
   Future<FavoriteMutationDto> deletePlayHistory({required int historyId}) {
     return _apiClient.post<FavoriteMutationDto>(
       '/api/user/watch/history/delete',
-      data: {"historyId": historyId},
+      data: {"dramaId": historyId},
       authPolicy: ApiAuthPolicy.required,
       decoder: FavoriteMutationDto.fromJson,
     );

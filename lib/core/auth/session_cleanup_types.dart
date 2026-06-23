@@ -5,6 +5,7 @@ enum SessionCleanupReason {
   refreshFailed,
   sessionExpired,
   unauthorized,
+  guestSessionExpiredExit,
 }
 
 typedef SessionCleanupHook = Future<void> Function(SessionCleanupReason reason);

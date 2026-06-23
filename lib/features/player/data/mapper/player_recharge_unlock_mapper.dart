@@ -29,8 +29,8 @@ class PlayerRechargeUnlockMapper {
       membershipPackages: isMember
           ? []
           : memberProducts
-              .map((p) => mapMemberProduct(p as MemberProductDto, iapDetails))
-              .toList(),
+                .map((p) => mapMemberProduct(p as MemberProductDto, iapDetails))
+                .toList(),
       benefits: _defaultBenefits(),
       tips:
           'Coins are used to unlock paid episodes.\nVIP membership unlocks eligible dramas during the active period.',
@@ -76,6 +76,7 @@ class PlayerRechargeUnlockMapper {
       periodLabel: _periodLabel(dto.periodType, dto.periodValue),
       googleProductId: dto.channelProductId,
       googlePriceLabel: iapInfo?.displayPrice ?? dto.priceText,
+      periodIso: _periodIso(dto.periodType, dto.periodValue),
       originalPriceLabel: iapInfo?.displayOriginalPrice,
       isPromotional: hasIapPromo,
       description: hasIapPromo ? dto.promotionText : null,
@@ -99,6 +100,17 @@ class PlayerRechargeUnlockMapper {
       default:
         return 'Unknown';
     }
+  }
+
+  static String? _periodIso(String periodType, int periodValue) {
+    if (periodValue <= 0) return null;
+    return switch (periodType) {
+      'MEMBER_PERIOD_TYPE_DAY' => 'P${periodValue}D',
+      'MEMBER_PERIOD_TYPE_WEEK' => 'P${periodValue}W',
+      'MEMBER_PERIOD_TYPE_MONTH' => 'P${periodValue}M',
+      'MEMBER_PERIOD_TYPE_YEAR' => 'P${periodValue}Y',
+      _ => null,
+    };
   }
 
   static List<PlayerRechargeBenefit> _defaultBenefits() {

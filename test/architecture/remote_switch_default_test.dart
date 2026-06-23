@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:drama_client/features/auth/data/auth_repository_provider.dart';
-import 'package:drama_client/features/drama/data/drama_repository_provider.dart';
 import 'package:drama_client/features/entitlement/data/entitlement_repository_provider.dart';
 import 'package:drama_client/features/membership/data/membership_repository_provider.dart';
 import 'package:drama_client/features/my_list/data/my_list_repository_provider.dart';
@@ -23,7 +22,6 @@ void main() {
     final container = ProviderContainer();
     addTearDown(container.dispose);
 
-    expect(container.read(useRemoteDramaApiProvider), isFalse);
     expect(container.read(useRemotePlayerApiProvider), isFalse);
     expect(container.read(useRemoteMyListApiProvider), isFalse);
     expect(container.read(useRemoteWalletApiProvider), isFalse);

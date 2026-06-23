@@ -38,7 +38,7 @@ class UserInfoDto {
           JsonFieldParser.optionalString(map, 'nickname') ??
           JsonFieldParser.optionalString(map, 'nickName') ??
           _requiredShowId(map),
-      avatar: JsonFieldParser.optionalString(map, 'avatar'),
+      avatar: _optionalAvatar(map),
       language: JsonFieldParser.optionalString(map, 'language'),
       status: JsonFieldParser.optionalInt(map, 'status'),
       vipExpireAt: JsonFieldParser.optionalString(map, 'vipExpireAt'),
@@ -70,4 +70,10 @@ String _requiredShowId(Map<String, Object?> map) {
     return JsonFieldParser.requireString(map, 'showId', dtoName: 'UserInfoDto');
   }
   return showId;
+}
+
+String? _optionalAvatar(Map<String, Object?> map) {
+  return JsonFieldParser.optionalString(map, 'avatar') ??
+      JsonFieldParser.optionalString(map, 'avatarUrl') ??
+      JsonFieldParser.optionalString(map, 'avatar_url');
 }

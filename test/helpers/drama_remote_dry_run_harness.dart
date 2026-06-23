@@ -45,25 +45,18 @@ class DramaRemoteDryRunHarness {
   late final DramaRemoteDataSource remoteDataSource;
   late final RemoteDramaRepository repository;
 
-  void stubCategories(List<Map<String, Object?>> items) {
-    adapter.setResponse(
-      'GET',
-      '/home/categories',
-      RecordingHttpResponse(body: apiEnvelopeSuccess(items)),
-    );
-  }
-
-  void stubFeed({
-    required List<Map<String, Object?>> items,
-    String? nextPageToken,
+  void stubHomeData({
+    required List<Map<String, Object?>> tabs,
   }) {
     adapter.setResponse(
       'GET',
-      '/home/feed',
+      '/home/data',
       RecordingHttpResponse(
         body: apiEnvelopeSuccess({
-          'items': items,
-          'nextPageToken': ?nextPageToken,
+          'id': 1,
+          'name': 'Home',
+          'status': 1,
+          'tabs': tabs,
         }),
       ),
     );
@@ -91,18 +84,39 @@ class DramaRemoteDryRunHarness {
   DramaRepository get repositoryInterface => repository;
 }
 
-/// 契约级 drama 条目（strict dramaId）。
+/// 契约级 drama 条目（strict id）。
 Map<String, Object?> validDramaItemJson({
-  String dramaId = 'found-you',
+  String id = 'found-you',
   String? title,
   String? coverUrl,
-  int episodeCount = 52,
+  int episodeTotal = 52,
 }) => {
-  'dramaId': dramaId,
+  'id': id,
   'title': ?title,
-  'coverUrl': ?coverUrl,
-  'episodeCount': episodeCount,
-  'tags': <String>[],
-  'badges': <String>[],
-  'categoryIds': <String>['popular'],
+  'cover_url': ?coverUrl,
+  'episode_total': episodeTotal,
+  'sort': 1,
+  'summary': '',
+  'play_count': 84100000,
+  'trailer_episode_num': 2,
+  'is_vip_only': 0,
+  'status': 1,
 };
+
+/// 契约级 tab 条目。
+Map<String, Object?> validTabJson({
+  int id = 1,
+  String name = 'Popular',
+  String flag = 'popular',
+  int sort = 1,
+  int status = 1,
+  List<Map<String, Object?>>? dramas,
+}) => {
+  'id': id,
+  'name': name,
+  'flag': flag,
+  'sort': sort,
+  'status': status,
+  'dramas': dramas ?? [validDramaItemJson()],
+};
+

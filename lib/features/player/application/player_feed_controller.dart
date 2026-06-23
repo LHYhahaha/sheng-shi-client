@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/player_feed_repository_provider.dart';
+import '../data/local/player_episode_unlock_cache.dart';
 import '../domain/player_content.dart';
 import '../domain/player_feed.dart';
 import '../../entitlement/domain/episode_unlock_type.dart';
@@ -294,6 +295,9 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
     state = state.copyWith(
       items: List<PlayerFeedItem>.unmodifiable(updatedItems),
     );
+
+    // 更新解锁状态缓存，避免UI闪烁
+    PlayerEpisodeUnlockCache.setUnlockStatus(dramaId, episodeId, true);
 
     debugPrint(
       '[PlayerFeed] 已更新剧集播放地址: dramaId=$dramaId, '

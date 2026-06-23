@@ -4,6 +4,7 @@ import '../../../../core/network/api_client.dart';
 import '../dto/auth_session_dto.dart';
 import '../dto/auth_token_dto.dart';
 import '../dto/delete_account_request_dto.dart';
+import '../dto/delete_account_response_dto.dart';
 import '../dto/login_request_dto.dart';
 import '../dto/logout_request_dto.dart';
 import '../dto/oauth_login_request_dto.dart';
@@ -87,21 +88,24 @@ class AuthRemoteDataSource {
     );
   }
 
-  Future<bool> deleteAccount([
+  Future<DeleteAccountResponseDto> deleteAccount([
     DeleteAccountRequestDto request = const DeleteAccountRequestDto(),
   ]) {
-    return _apiClient.post<bool>(
+    return _apiClient.post<DeleteAccountResponseDto>(
       '/api/user/delete',
       data: request.toJson(),
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) {
-        // API 返回格式: {"code": 0, "data": {"success": true}, "message": "..."}
+        // API 返回格式: {"code": 0, "data": {"isCurrentDeviceAccount": true, "success": true}, "message": "..."}
         // ApiClient._extractEnvelopePayload 会自动提取 data 字段
-        // 所以 decoder 接收到的 data 是 {"success": true}
-        if (data is Map) {
-          return data['success'] == true;
+        // 所以 decoder 接收到的 data 是 {"isCurrentDeviceAccount": true, "success": true}
+        if (data is Map<String, dynamic>) {
+          return DeleteAccountResponseDto.fromJson(data);
         }
-        return false;
+        return const DeleteAccountResponseDto(
+          isCurrentDeviceAccount: false,
+          success: false,
+        );
       },
     );
   }

@@ -16,8 +16,8 @@ class MembershipBenefitsPanel extends StatelessWidget {
     MembershipBenefit(
       iconPath: 'assets/images/membership/membership_series.png',
       title: l10n.benefitSeriesTitle,
-      highlight: l10n.benefitSeriesHighlight,
-      description: l10n.benefitSeriesDescription,
+      // highlight: l10n.benefitSeriesHighlight,
+      description: l10n.benefitSeriesHighlight,
     ),
     MembershipBenefit(
       iconPath: 'assets/images/membership/membership_download.png',
@@ -257,7 +257,7 @@ class _MembershipTips extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(context.l10n.storeTips, style: style),
+        Text(context.l10n.membershipTips, style: style),
         const SizedBox(height: 6),
         Text(tips.subscriptionNote, style: style),
         const SizedBox(height: 6),

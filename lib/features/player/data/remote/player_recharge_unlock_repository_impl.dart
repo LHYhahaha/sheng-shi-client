@@ -1,4 +1,4 @@
-﻿import '../../../../features/pay/application/iap_price_service.dart';
+import '../../../../features/pay/application/iap_price_service.dart';
 import '../../../../features/pay/domain/iap_product_info.dart';
 import '../dto/player_episode_unlock_dto.dart';
 import '../mapper/player_recharge_unlock_mapper.dart';
@@ -9,7 +9,6 @@ import 'player_remote_data_source.dart';
 /// 播放器充值解锁弹窗的真实数据来源。
 ///
 /// 复用 Store 模块的 API 接口获取套餐数据，并查询 IAP 价格（含促销信息）。
-/// 保持 Mock 购买流程，不影响现有的解锁逻辑和 Entitlement 判断。
 class PlayerRechargeUnlockRepositoryImpl
     implements PlayerRechargeUnlockRepository {
   const PlayerRechargeUnlockRepositoryImpl({

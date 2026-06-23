@@ -89,9 +89,8 @@ class PlayerFeedPageShell extends ConsumerWidget {
         : null;
 
     // 获取点赞状态
-    final likeState = isSettledPage
-        ? ref.watch(playerLikeControllerProvider(item.content.id))
-        : const PlayerLikeState.initial();
+    // 始终监听 provider，避免在页面稳定时从初始状态切换到真实状态导致闪烁
+    final likeState = ref.watch(playerLikeControllerProvider(item.content.id));
 
     final isLockedSettledPage =
         isSettledPage &&

@@ -198,15 +198,6 @@ class PlayerUnlockModalCoordinator {
     final selectedCoinPackage = rechargeState.selectedCoinPackage;
     final selectedMembershipPackage = rechargeState.selectedMembershipPackage;
 
-    await _engine.grantRechargeSelection(
-      selectedCoinPackage: selectedCoinPackage != null,
-      selectedMembershipPackage: selectedMembershipPackage != null,
-      coinPackageTotalCoins: selectedCoinPackage?.totalCoins,
-    );
-    if (!context.mounted) {
-      return;
-    }
-
     final flowResult = await _engine.continueAfterRechargeSuccess(
       item: item,
       grantedCoinPackage: selectedCoinPackage != null,

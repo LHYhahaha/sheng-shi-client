@@ -61,12 +61,20 @@ class HomeRemoteData {
   }
 
   static String _formatPlayCount(int playCount) {
-    if (playCount < 1000) {
-      return playCount.toString();
+    if (playCount <= 0) {
+      return '';
     }
-    if (playCount < 1000000) {
-      return '${(playCount / 1000).toStringAsFixed(1)}K';
+    if (playCount >= 1000000) {
+      final millions = playCount / 1000000;
+      return '${millions.toStringAsFixed(millions >= 10 ? 0 : 1)} M';
     }
-    return '${(playCount / 1000000).toStringAsFixed(1)}M';
+    if (playCount >= 1000) {
+      final thousands = playCount / 1000;
+      if (thousands >= 999.95) {
+        return '1.0M';
+      }
+      return '${thousands.toStringAsFixed(thousands >= 10 ? 0 : 1)} K';
+    }
+    return '$playCount';
   }
 }

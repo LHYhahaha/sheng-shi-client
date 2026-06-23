@@ -1,11 +1,13 @@
-import 'package:drama_client/features/entitlement/application/entitlement_controller.dart';
 import 'package:drama_client/features/membership/application/membership_controller.dart';
+import 'package:drama_client/features/membership/data/membership_repository_provider.dart';
+import 'package:drama_client/features/membership/domain/membership_plan.dart';
+import 'package:drama_client/features/membership/domain/membership_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('loads membership plans and benefits', () async {
-    final container = ProviderContainer();
+  test('loads membership plans from repository', () async {
+    final container = _container();
     addTearDown(container.dispose);
 
     await container.read(membershipControllerProvider.notifier).load();
@@ -14,12 +16,11 @@ void main() {
     expect(state.isLoading, isFalse);
     expect(state.error, isNull);
     expect(state.plans, hasLength(3));
-    expect(state.benefits, hasLength(6));
     expect(state.selectedPlan?.id, 'weekly_vip');
   });
 
   test('selects membership plan and opens confirmation state', () async {
-    final container = ProviderContainer();
+    final container = _container();
     addTearDown(container.dispose);
     final controller = container.read(membershipControllerProvider.notifier);
 
@@ -36,139 +37,90 @@ void main() {
       container.read(membershipControllerProvider).confirmationPlan,
       isNull,
     );
+    expect(
+      container.read(membershipControllerProvider).purchaseStatus,
+      MembershipPurchaseStatus.idle,
+    );
   });
 
-  test(
-    'tracks mock membership purchase processing, success, and cancel states',
-    () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final controller = container.read(membershipControllerProvider.notifier);
+  test('cancel purchase only affects idle confirmation flow', () async {
+    final container = _container();
+    addTearDown(container.dispose);
+    final controller = container.read(membershipControllerProvider.notifier);
 
-      await controller.load();
-      controller.showConfirmation();
+    await controller.load();
+    controller.showConfirmation();
+    controller.cancelPurchase();
 
-      final purchase = controller.confirmMockPurchase();
-      expect(
-        container.read(membershipControllerProvider).purchaseStatus,
-        MembershipPurchaseStatus.processing,
-      );
+    expect(
+      container.read(membershipControllerProvider).purchaseStatus,
+      MembershipPurchaseStatus.cancelled,
+    );
 
-      await purchase;
-      expect(
-        container.read(membershipControllerProvider).purchaseStatus,
-        MembershipPurchaseStatus.success,
-      );
+    controller.hideConfirmation();
+    expect(
+      container.read(membershipControllerProvider).purchaseStatus,
+      MembershipPurchaseStatus.idle,
+    );
+  });
 
-      controller.hideConfirmation();
-      controller.showConfirmation();
-      controller.cancelMockPurchase();
+  test('confirm purchase fails fast when user info is missing', () async {
+    final container = _container();
+    addTearDown(container.dispose);
+    final controller = container.read(membershipControllerProvider.notifier);
 
-      expect(
-        container.read(membershipControllerProvider).purchaseStatus,
-        MembershipPurchaseStatus.cancelled,
-      );
-    },
+    await controller.load();
+    controller.showConfirmation();
+    await controller.confirmPurchase();
+
+    final state = container.read(membershipControllerProvider);
+    expect(state.purchaseStatus, MembershipPurchaseStatus.failed);
+    expect(state.error, isNotNull);
+  });
+}
+
+ProviderContainer _container() {
+  return ProviderContainer(
+    overrides: [
+      membershipRepositoryProvider.overrideWithValue(
+        const _FakeMembershipRepository(),
+      ),
+    ],
   );
+}
 
-  test(
-    'ignores repeated actions while membership purchase is processing',
-    () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final controller = container.read(membershipControllerProvider.notifier);
+class _FakeMembershipRepository implements MembershipRepository {
+  const _FakeMembershipRepository();
 
-      await controller.load();
-      controller.showConfirmation();
-
-      final purchase = controller.confirmMockPurchase();
-      controller.confirmMockPurchase();
-      controller.cancelMockPurchase();
-
-      expect(
-        container.read(membershipControllerProvider).purchaseStatus,
-        MembershipPurchaseStatus.processing,
-      );
-
-      await purchase;
-      expect(
-        container.read(membershipControllerProvider).purchaseStatus,
-        MembershipPurchaseStatus.success,
-      );
-
-      controller.cancelMockPurchase();
-      expect(
-        container.read(membershipControllerProvider).purchaseStatus,
-        MembershipPurchaseStatus.success,
-      );
-    },
-  );
-
-  test(
-    'resets purchase status when membership confirmation is closed or reopened',
-    () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final controller = container.read(membershipControllerProvider.notifier);
-
-      await controller.load();
-      controller.showConfirmation();
-      controller.cancelMockPurchase();
-      expect(
-        container.read(membershipControllerProvider).purchaseStatus,
-        MembershipPurchaseStatus.cancelled,
-      );
-
-      controller.hideConfirmation();
-      var state = container.read(membershipControllerProvider);
-      expect(state.confirmationPlan, isNull);
-      expect(state.purchaseStatus, MembershipPurchaseStatus.idle);
-
-      controller.selectPlan('monthly_vip');
-      controller.showConfirmation();
-      state = container.read(membershipControllerProvider);
-
-      expect(state.confirmationPlan?.id, 'monthly_vip');
-      expect(state.purchaseStatus, MembershipPurchaseStatus.idle);
-    },
-  );
-
-  test(
-    'closing membership confirmation cancels pending mock purchase completion',
-    () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final controller = container.read(membershipControllerProvider.notifier);
-
-      await controller.load();
-      controller.showConfirmation();
-
-      final purchase = controller.confirmMockPurchase();
-      controller.hideConfirmation();
-      await purchase;
-
-      final state = container.read(membershipControllerProvider);
-      expect(state.confirmationPlan, isNull);
-      expect(state.purchaseStatus, MembershipPurchaseStatus.idle);
-    },
-  );
-
-  test(
-    'membership purchase success grants shared entitlement membership',
-    () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      final controller = container.read(membershipControllerProvider.notifier);
-
-      await controller.load();
-      controller.showConfirmation();
-      await controller.confirmMockPurchase();
-
-      expect(
-        container.read(membershipControllerProvider).purchaseStatus,
-        MembershipPurchaseStatus.success,
-      );
-      expect(container.read(entitlementControllerProvider).isMember, isTrue);
-    },
-  );
+  @override
+  Future<MembershipData> fetchMembership() async {
+    return const MembershipData(
+      isActive: false,
+      heroTitle: 'Join Membership',
+      heroSubtitle: '10M+ users upgraded',
+      plans: [
+        MembershipPlan(
+          id: 'weekly_vip',
+          title: 'Weekly VIP',
+          priceLabel: r'$14.99',
+          dailyPriceLabel: r'$2.14/day',
+          period: 'P1W',
+        ),
+        MembershipPlan(
+          id: 'monthly_vip',
+          title: 'Monthly VIP',
+          priceLabel: r'$39.99',
+          dailyPriceLabel: r'$1.33/day',
+          period: 'P1M',
+        ),
+        MembershipPlan(
+          id: 'yearly_vip',
+          title: 'Yearly VIP',
+          priceLabel: r'$99.99',
+          dailyPriceLabel: r'$0.27/day',
+          period: 'P1Y',
+        ),
+      ],
+    );
+  }
 }

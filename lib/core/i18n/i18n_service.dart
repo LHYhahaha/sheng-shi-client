@@ -35,7 +35,7 @@ class I18nService {
   Future<LanguagePackage> initialize(String languageCode) async {
     try {
       // 获取服务器版本信息
-      final versionInfo = await _getVersionInfo();
+      final versionInfo = await _getVersionInfo(languageCode);
 
       // 检查本地缓存
       final localPackage = _getLocalPackage(languageCode);
@@ -60,7 +60,7 @@ class I18nService {
   /// 切换语言
   Future<LanguagePackage> switchLanguage(String languageCode) async {
     try {
-      final versionInfo = await _getVersionInfo();
+      final versionInfo = await _getVersionInfo(languageCode);
       final localPackage = _getLocalPackage(languageCode);
 
       if (localPackage != null &&
@@ -80,9 +80,10 @@ class I18nService {
   }
 
   /// 获取服务器版本信息
-  Future<Map<String, dynamic>> _getVersionInfo() async {
+  Future<Map<String, dynamic>> _getVersionInfo(String languageCode) async {
     return await _apiClient.get<Map<String, dynamic>>(
       '/api/i18n/version',
+      queryParameters: {'language_code': languageCode},
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) {
         if (data is Map<String, dynamic>) {
@@ -183,7 +184,7 @@ class I18nService {
   /// 检查是否需要更新
   Future<bool> needsUpdate(String languageCode) async {
     try {
-      final versionInfo = await _getVersionInfo();
+      final versionInfo = await _getVersionInfo(languageCode);
       final localPackage = _getLocalPackage(languageCode);
 
       if (localPackage == null) return true;

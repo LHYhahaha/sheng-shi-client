@@ -16,4 +16,9 @@ abstract final class StoreModalResults {
     return result is StorePurchaseModalResult &&
         result.kind == AppModalResultKind.dismissed;
   }
+
+  static bool isFailed(AppModalResult result) {
+    return result is StorePurchaseModalResult &&
+        result.kind == AppModalResultKind.failed;
+  }
 }

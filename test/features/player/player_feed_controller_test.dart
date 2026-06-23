@@ -19,6 +19,8 @@ void main() {
     expect(state.isLoading, isFalse);
     expect(state.error, isNull);
     expect(state.items, hasLength(3));
+    expect(state.items.map((item) => item.episode.number), [1, 2, 3]);
+    expect(state.currentIndex, 2);
     expect(state.currentItem?.content.id, 'drama-a');
     expect(state.currentItem?.episode.number, 3);
   });
@@ -74,6 +76,45 @@ void main() {
     controller.goNext();
     expect(container.read(provider).currentIndex, 2);
   });
+
+  test('refreshing current drama keeps requested episode index', () async {
+    final container = _createContainer();
+    final provider = playerFeedControllerProvider('single');
+    final controller = container.read(provider.notifier);
+
+    await controller.load(
+      const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: '3'),
+    );
+
+    final refreshedItem = await controller.refreshCurrentDramaAtEpisode(
+      episodeId: 'ep-3',
+    );
+    final state = container.read(provider);
+
+    expect(refreshedItem?.episode.number, 3);
+    expect(state.items.map((item) => item.episode.number), [1, 2, 3]);
+    expect(state.currentIndex, 2);
+    expect(state.currentItem?.episode.number, 3);
+  });
+
+  test(
+    'starting from a middle episode can move back to the previous episode',
+    () async {
+    final container = _createContainer();
+    final provider = playerFeedControllerProvider('single');
+    final controller = container.read(provider.notifier);
+
+    await controller.load(
+      const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: '3'),
+    );
+
+    controller.setCurrentIndex(container.read(provider).currentIndex - 1);
+    final state = container.read(provider);
+
+    expect(state.currentIndex, 1);
+    expect(state.currentItem?.episode.number, 2);
+    },
+  );
 
   test('keeps for you and single drama feed sessions isolated', () async {
     final container = _createContainer();
@@ -186,10 +227,7 @@ class _FakeFeedRepo implements PlayerFeedRepository {
           );
         })
         .toList(growable: false);
-    final index = items.indexWhere((item) => item.episode.number == 3);
-    return episodeId == '3'
-        ? [...items.sublist(index), ...items.sublist(0, index)]
-        : items;
+    return items;
   }
 
   @override
@@ -227,6 +265,7 @@ PlayerContent _content(String id) {
     posterAssetPath: 'assets/images/player/recommend_1.png',
     episodes: [_episode(1), _episode(2), _episode(3)],
     recommendations: const [],
+    episodeTotal: 3,
   );
 }
 

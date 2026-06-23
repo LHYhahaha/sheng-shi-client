@@ -85,7 +85,10 @@ class UserInfoSnapshot {
       showId:
           _nullableString(json['showId']) ?? _nullableString(json['showid']),
       nickname: _nullableString(json['nickname']),
-      avatar: _nullableString(json['avatar']),
+      avatar:
+          _nullableString(json['avatar']) ??
+          _nullableString(json['avatarUrl']) ??
+          _nullableString(json['avatar_url']),
       language: _nullableString(json['language']),
       status: _nullableInt(json['status']),
       vipExpireAt: _nullableString(json['vipExpireAt']),
@@ -171,7 +174,10 @@ class UserInfoStore extends Notifier<UserInfoSnapshot> {
       userId: _parseInt(data['userId']),
       showId: _parseString(data['showId']) ?? _parseString(data['showid']),
       nickname: _parseString(data['nickname']),
-      avatar: _parseString(data['avatar']),
+      avatar:
+          _parseString(data['avatar']) ??
+          _parseString(data['avatarUrl']) ??
+          _parseString(data['avatar_url']),
       language: _parseString(data['language']),
       status: _parseInt(data['status']),
       vipExpireAt: _parseString(data['vipExpireAt']),

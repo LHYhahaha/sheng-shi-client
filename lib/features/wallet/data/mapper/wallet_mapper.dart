@@ -35,8 +35,10 @@ class WalletMapper {
     return WalletRecord(
       id: dto.id,
       type: WalletRecordType.transaction,
-      title: dto.title == null ? _transactionTitle(dto) : UiText.raw(dto.title!),
-      dateLabel: _dateLabel(dto.createdAt),
+      title: dto.title == null
+          ? _transactionTitle(dto)
+          : UiText.raw(dto.title!),
+      dateLabel: _dateYearToDayLabel(dto.createdAt),
       trailingLabel: UiText.raw(dto.amountText ?? ''),
       showCoinIcon: dto.coinAmount + dto.bonusAmount > 0,
       detailLabel: dto.platform == null ? null : UiText.raw(dto.platform!),
@@ -82,7 +84,8 @@ class WalletMapper {
       title: RemoteTexts.walletRecordRewardCoins.uiText({
         'count': dto.bonusCoin,
       }),
-      dateLabel: _dateLabel(dto.startAt),
+      dateLabel:
+          '${_dateYearToDayLabel(dto.startAt)} - ${_dateYearToDayLabel(dto.expireAt)}',
       trailingLabel: UiText.raw(dto.status.toString()),
       showCoinIcon: true,
       rewardEnabled: dto.status == 0,
@@ -120,6 +123,14 @@ class WalletMapper {
         '${local.hour.toString().padLeft(2, '0')}:'
         '${local.minute.toString().padLeft(2, '0')}:'
         '${local.second.toString().padLeft(2, '0')}';
+  }
+
+  String _dateYearToDayLabel(DateTime? value) {
+    if (value == null) return '';
+    final local = value.toLocal();
+    return '${local.year.toString().padLeft(4, '0')}.'
+        '${local.month.toString().padLeft(2, '0')}.'
+        '${local.day.toString().padLeft(2, '0')}';
   }
 }
 

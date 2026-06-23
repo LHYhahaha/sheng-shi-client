@@ -422,6 +422,7 @@ PlayerFeedItem _item(int episodeNumber) {
     posterAssetPath: 'assets/images/player/recommend_1.png',
     episodes: [episode],
     recommendations: const [],
+    episodeTotal: 1,
   );
   return PlayerFeedItem(
     id: '${content.id}-${episode.id}',

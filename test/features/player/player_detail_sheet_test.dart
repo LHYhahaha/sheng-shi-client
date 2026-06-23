@@ -20,7 +20,7 @@ void main() {
       find.byKey(const ValueKey('player_detail_sheet_shrink')),
       findsNothing,
     );
-    expect(find.text('1-30'), findsOneWidget);
+    expect(find.text('1-2'), findsOneWidget);
   });
 
   testWidgets('expand and shrink toggle detail sheet mode controls', (
@@ -73,7 +73,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await _openDetailSheet(tester, initialTab: PlayerDetailTab.episodes);
-    expect(find.text('1-30'), findsOneWidget);
+    expect(find.text('1-2'), findsOneWidget);
     expect(find.text('More Like This'), findsNothing);
   });
 
@@ -150,6 +150,7 @@ Future<void> _openDetailSheet(
       ),
     ],
     recommendations: recommendations,
+    episodeTotal: 2,
   );
 
   await tester.pumpWidget(
