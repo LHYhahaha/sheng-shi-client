@@ -31,10 +31,13 @@ class MyListPage extends ConsumerStatefulWidget {
 
 class _MyListPageState extends ConsumerState<MyListPage> {
   AppShellBottomNavigationVisible? _shellChrome;
+  late final ScrollController _scrollController;
+  bool _didTriggerLoadMoreNearEnd = false;
 
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController()..addListener(_handleScroll);
     // 在 initState 中延迟初始化 ref 相关的东西
     Future.microtask(() {
       if (mounted) {
@@ -48,8 +51,30 @@ class _MyListPageState extends ConsumerState<MyListPage> {
 
   @override
   void dispose() {
+    _scrollController
+      ..removeListener(_handleScroll)
+      ..dispose();
     _shellChrome?.show();
     super.dispose();
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    if (_scrollController.position.extentAfter > 240) {
+      _didTriggerLoadMoreNearEnd = false;
+      return;
+    }
+    if (_didTriggerLoadMoreNearEnd) {
+      return;
+    }
+    final state = ref.read(myListControllerProvider);
+    if (!state.canLoadMore) {
+      return;
+    }
+    _didTriggerLoadMoreNearEnd = true;
+    ref.read(myListControllerProvider.notifier).loadMore();
   }
 
   @override
@@ -62,10 +87,21 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     ref.listen(appShellCurrentTabIndexProvider, (previous, current) {
       // 当切换到 MyList Tab 时刷新数据
       if (current == AppShellDestinations.myListIndex && previous != current) {
+        _didTriggerLoadMoreNearEnd = false;
         developer.log('MyList tab activated, reloading data');
         controller.load();
       }
     });
+    ref.listen(
+      myListControllerProvider.select(
+        (state) => (state.selectedTab, state.isLoading),
+      ),
+      (previous, next) {
+        if (previous?.$1 != next.$1 || next.$2) {
+          _didTriggerLoadMoreNearEnd = false;
+        }
+      },
+    );
     ref.listen(
       myListControllerProvider.select((state) => state.isCollectionEditing),
       (previous, next) {
@@ -160,7 +196,9 @@ class _MyListPageState extends ConsumerState<MyListPage> {
       return _EmptyMyList(description: emptyText);
     }
 
+    final hasFooter = state.items.isNotEmpty;
     return ListView.separated(
+      controller: _scrollController,
       padding: EdgeInsets.fromLTRB(
         16,
         15,
@@ -169,9 +207,17 @@ class _MyListPageState extends ConsumerState<MyListPage> {
             ? 108 + MediaQuery.viewPaddingOf(context).bottom
             : 24,
       ),
-      itemCount: state.items.length,
+      itemCount: state.items.length + (hasFooter ? 1 : 0),
       separatorBuilder: (context, index) => const SizedBox(height: 16),
       itemBuilder: (context, index) {
+        if (index >= state.items.length) {
+          return _MyListLoadMoreFooter(
+            isLoading: state.isLoadingMore,
+            hasMore: state.nextPageToken != null,
+            error: state.loadMoreError,
+            onRetry: () => controller.loadMore(retry: true),
+          );
+        }
         final item = state.items[index];
         return _MyListRowSwipeAction(
           // 两个 tab 都支持左滑删除，但编辑模式下禁用
@@ -198,22 +244,67 @@ class _MyListPageState extends ConsumerState<MyListPage> {
                       }
                       controller.closeAnyOpenPlayItem();
                       // 播放历史项点击导航到播放器
-                      if (item.episodeId != null) {
-                        await context.push(
-                          RoutePaths.playerLocation(
-                            dramaId: item.dramaId.toString(),
-                            episodeId: item.episodeId.toString(),
-                            trigger: 'play_history_item',
-                          ),
-                        );
+                      final isCollection =
+                          state.selectedTab == MyListTab.collection;
+                      final episodeId =
+                          item.episodeId != null && item.episodeId! > 0
+                          ? item.episodeId.toString()
+                          : '1';
+                      await context.push(
+                        RoutePaths.playerLocation(
+                          dramaId: item.dramaId.toString(),
+                          episodeId: episodeId,
+                          trigger: isCollection
+                              ? 'my_list_collection_item'
+                              : 'play_history_item',
+                        ),
+                      );
                         // 从播放器页面返回后，刷新当前tab的数据以获取最新排序
-                        controller.load();
-                      }
+                      await controller.refreshCurrentTabInPlace();
                     },
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class _MyListLoadMoreFooter extends StatelessWidget {
+  const _MyListLoadMoreFooter({
+    required this.isLoading,
+    required this.hasMore,
+    required this.error,
+    required this.onRetry,
+  });
+
+  final bool isLoading;
+  final bool hasMore;
+  final Object? error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+        child: Center(
+          child: isLoading
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : error != null
+              ? TextButton(onPressed: onRetry, child: Text(context.l10n.retry))
+              : Text(
+                  hasMore ? '' : context.l10n.feedNoMore,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+                ),
+        ),
+      ),
     );
   }
 }
@@ -391,17 +482,6 @@ class _MyListTabs extends StatelessWidget {
               child: SizedBox(height: 1),
             ),
           ),
-          Positioned(
-            left: selectedTab == MyListTab.collection ? 16 : 188,
-            bottom: 0,
-            child: ColoredBox(
-              color: AppColors.primary,
-              child: SizedBox(
-                width: selectedTab == MyListTab.collection ? 63 : 58,
-                height: 2,
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -426,13 +506,27 @@ class _TabLabel extends StatelessWidget {
       onTap: onTap,
       child: SizedBox(
         height: 28,
-        child: Text(
-          text,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: active ? AppColors.textPrimary : AppColors.textDisabled,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            height: 1.18,
+        child: IntrinsicWidth(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                text,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: active ? AppColors.textPrimary : AppColors.textDisabled,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  height: 1.18,
+                ),
+              ),
+              const Spacer(),
+              SizedBox(
+                height: 2,
+                child: ColoredBox(
+                  color: active ? AppColors.primary : Colors.transparent,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -733,11 +827,13 @@ class _RowCopy extends StatelessWidget {
               ),
               children: [
                 TextSpan(
-                  text: 'EP.${item.currentEpisode}',
+                  text: context.l10n.myListEpisode(
+                    item.currentEpisode.toString(),
+                  ),
                   style: const TextStyle(color: AppColors.primary),
                 ),
                 TextSpan(
-                  text: ' / ${item.episodeCount}',
+                  text: ' / ${context.l10n.myListEpisode2(item.episodeCount.toString())}',
                   style: const TextStyle(color: AppColors.textTertiary),
                 ),
               ],

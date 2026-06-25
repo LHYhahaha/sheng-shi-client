@@ -212,7 +212,6 @@ class PlayerUnlockModalCoordinator {
       return;
     }
     if (flowResult.didAutoUnlock) {
-      _appToast.success(context.l10n.playerUnlockedAutomatically);
       return;
     }
 

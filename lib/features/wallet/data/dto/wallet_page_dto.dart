@@ -9,31 +9,10 @@ class WalletPageDto<T> {
     T Function(Object? json) itemMapper,
   ) {
     final map = json is Map<String, Object?> ? json : const <String, Object?>{};
-    
-    // 适配两种格式：
-    // 1. 游标分页（旧格式）：直接包含 items 和 nextPageToken
-    // 2. 偏移量分页（充值记录）：包含 list 和 page 对象
-    final rawItems = map['items'] ?? 
-        (map['list'] is List ? map['list'] : null);
-    
-    // 计算 nextPageToken
-    String? nextPageToken = map['nextPageToken'] is String
-        ? map['nextPageToken'] as String
-        : null;
-    
-    // 如果没有游标token，尝试从 page 对象计算
-    if (nextPageToken == null && map['page'] is Map<String, Object?>) {
-      final pageInfo = map['page'] as Map<String, Object?>;
-      final currentPage = _int(pageInfo['page']);
-      final pageSize = _int(pageInfo['pageSize']);
-      final total = _int(pageInfo['total']);
-      
-      // 如果还有更多数据，计算下一页的页码
-      if ((currentPage + 1) * pageSize < total) {
-        nextPageToken = (currentPage + 1).toString();
-      }
-    }
-    
+    final rawItems =
+        map['items'] ?? map['list'] ?? map['records'] ?? map['rows'];
+    final nextPageToken = _string(map['nextPageToken']) ?? _nextPageToken(map);
+
     return WalletPageDto<T>(
       items: rawItems is List
           ? rawItems.map(itemMapper).toList(growable: false)
@@ -43,8 +22,63 @@ class WalletPageDto<T> {
   }
 }
 
-int _int(Object? value, {int fallback = 0}) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  return fallback;
+String? _nextPageToken(Map<String, Object?> map) {
+  final pageInfo = map['page'] is Map<String, Object?>
+      ? map['page'] as Map<String, Object?>
+      : map;
+  final currentPage = _firstInt(pageInfo, const [
+    'page',
+    'current',
+    'currentPage',
+    'pageNum',
+    'pageNo',
+  ]);
+  if (currentPage == null) {
+    return null;
+  }
+
+  final hasNext = pageInfo['hasNext'] ?? pageInfo['hasMore'];
+  if (hasNext == true) {
+    return (currentPage + 1).toString();
+  }
+
+  final pages = _firstInt(pageInfo, const ['pages', 'totalPages']);
+  if (pages != null) {
+    return currentPage < pages ? (currentPage + 1).toString() : null;
+  }
+
+  final pageSize = _firstInt(pageInfo, const [
+    'pageSize',
+    'size',
+    'page_size',
+  ]);
+  final total = _firstInt(pageInfo, const [
+    'total',
+    'totalCount',
+    'total_count',
+  ]);
+  if (pageSize != null && total != null) {
+    return currentPage * pageSize < total
+        ? (currentPage + 1).toString()
+        : null;
+  }
+
+  return null;
+}
+
+int? _firstInt(Map<String, Object?> map, List<String> keys) {
+  for (final key in keys) {
+    final value = map[key];
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) {
+      final parsed = int.tryParse(value);
+      if (parsed != null) return parsed;
+    }
+  }
+  return null;
+}
+
+String? _string(Object? value) {
+  return value is String && value.isNotEmpty ? value : null;
 }

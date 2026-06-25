@@ -19,20 +19,39 @@ class RemoteMyListRepository implements MyListRepository {
 
   @override
   Future<List<MyListItem>> fetchItems({required MyListTab tab}) async {
+    final page = await fetchPage(tab: tab);
+    return page.items;
+  }
+
+  @override
+  Future<MyListPage> fetchPage({
+    required MyListTab tab,
+    String? pageToken,
+  }) async {
     return switch (tab) {
-      MyListTab.collection => _fetchFavorites(),
-      MyListTab.play => _fetchPlayHistory(),
+      MyListTab.collection => _fetchFavorites(pageToken: pageToken),
+      MyListTab.play => _fetchPlayHistory(pageToken: pageToken),
     };
   }
 
-  Future<List<MyListItem>> _fetchFavorites() async {
-    final page = await _remoteDataSource.listFavorites();
-    return page.items.map(_mapper.mapFavorite).toList(growable: false);
+  Future<MyListPage> _fetchFavorites({String? pageToken}) async {
+    final page = await _remoteDataSource.listFavorites(
+      page: int.tryParse(pageToken ?? ''),
+    );
+    return MyListPage(
+      items: page.items.map(_mapper.mapFavorite).toList(growable: false),
+      nextPageToken: page.nextPageToken,
+    );
   }
 
-  Future<List<MyListItem>> _fetchPlayHistory() async {
-    final page = await _remoteDataSource.listPlayHistory();
-    return page.items.map(_mapper.mapPlayHistory).toList(growable: false);
+  Future<MyListPage> _fetchPlayHistory({String? pageToken}) async {
+    final page = await _remoteDataSource.listPlayHistory(
+      page: int.tryParse(pageToken ?? ''),
+    );
+    return MyListPage(
+      items: page.items.map(_mapper.mapPlayHistory).toList(growable: false),
+      nextPageToken: page.nextPageToken,
+    );
   }
 
   @override

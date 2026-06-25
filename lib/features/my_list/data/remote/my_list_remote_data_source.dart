@@ -18,8 +18,7 @@ class MyListRemoteDataSource {
   }) {
     return _apiClient.get<MyListPageDto<FavoriteItemDto>>(
       '/api/user/short/follow/list',
-      queryParameters: <String, Object?>{'page': page, 'pageSize': pageSize}
-        ..removeWhere((_, value) => value == null),
+      queryParameters: <String, Object?>{'page.page': page ?? 1, 'page.pageSize': 20}..removeWhere((_, value) => value == null),
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) => MyListPageDto.favoritesFromJson(
         JsonFieldParser.requireMap(data, dtoName: 'FavoriteItemDto'),
@@ -54,13 +53,10 @@ class MyListRemoteDataSource {
     );
   }
 
-  Future<MyListPageDto<PlayHistoryItemDto>> listPlayHistory({
-    int? page,
-    int? pageSize,
-  }) {
+  Future<MyListPageDto<PlayHistoryItemDto>> listPlayHistory({int? page}) {
     return _apiClient.get<MyListPageDto<PlayHistoryItemDto>>(
       '/api/user/watch/history/list',
-      queryParameters: <String, Object?>{'page': page, 'pageSize': pageSize}
+      queryParameters: <String, Object?>{'page.page': page ?? 1, 'page.pageSize': 20}
         ..removeWhere((_, value) => value == null),
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) => MyListPageDto.playHistoryFromJson(

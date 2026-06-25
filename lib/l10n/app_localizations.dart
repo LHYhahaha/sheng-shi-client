@@ -224,6 +224,18 @@ class AppLocalizations {
   String get myListDelete =>
       _remoteText('my_list.action.remove', en: 'Delete', zh: '删除');
 
+  String  myListEpisode(String text) =>
+      _replaceWords(
+          removeWord: 'X',
+          word: text,
+          originWord: _remoteText('my_list.episode_index', en: 'EP.X', zh: '第X集'));
+
+  String  myListEpisode2(String text) =>
+      _replaceWords(
+          removeWord: 'X',
+          word: text,
+          originWord: _remoteText('my_list.episode_index2', en: 'EP.X', zh: 'X集'));
+
   String get myListEmptyTitle => _remoteText(
     'my_list.empty.following',
     en: 'Nothing here yet',

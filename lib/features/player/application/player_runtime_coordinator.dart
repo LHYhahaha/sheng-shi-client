@@ -12,6 +12,7 @@ import 'player_playback_controller.dart';
 import 'player_rebuild_diagnostics.dart';
 import 'player_overlay_orchestrator.dart';
 import 'player_performance_policy_provider.dart';
+import 'player_recharge_unlock_controller.dart';
 import 'player_ui_controller.dart';
 import 'player_viewport_controller.dart';
 
@@ -227,6 +228,19 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
         // 上报观看开始事件
         unawaited(_playbackController.reportWatchProgress(eventType: 1)); // 1: start
       case EpisodeAccessDecisionType.autoUnlockAndPlay:
+        final unlocked = await _unlockCurrentItemWithCoinApi(
+          item,
+          autoUnlockNext: true,
+        );
+        if (unlocked) {
+          return;
+        }
+        if (!isCurrentFeedItem(item)) {
+          return;
+        }
+        ref
+            .read(playerOverlayOrchestratorProvider(sessionKey).notifier)
+            .markDismissed(item.id);
         await _quiesceItemForAccessOverlay(
           item,
           reason: decision.reason ?? 'auto unlock pending',
@@ -375,6 +389,59 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
     required String reason,
   }) async {
     await _quiesceItemForAccessOverlay(item, reason: reason);
+  }
+
+  Future<bool> _unlockCurrentItemWithCoinApi(
+    PlayerFeedItem item, {
+    required bool autoUnlockNext,
+  }) async {
+    if (!isCurrentFeedItem(item)) {
+      return false;
+    }
+
+    await ref
+        .read(playerRechargeUnlockControllerProvider(sessionKey).notifier)
+        .unlockWithCoin(
+          autoUnlockNext: autoUnlockNext,
+          coin: item.episode.requiredCoins,
+          dramaId: int.tryParse(item.content.id) ?? 0,
+          episodeNo: item.episode.number,
+          shortTitle: item.content.playTitle.isNotEmpty
+              ? item.content.playTitle
+              : item.content.title,
+          cover: item.content.coverUrl ?? '',
+          episodeId: int.tryParse(item.episode.id) ?? 0,
+        );
+
+    final unlockState = ref.read(
+      playerRechargeUnlockControllerProvider(sessionKey),
+    );
+    if (unlockState.status != PlayerRechargeUnlockStatus.success) {
+      return false;
+    }
+
+    final currentItem =
+        ref.read(playerFeedControllerProvider(sessionKey)).currentItem;
+    final unlockedItem = currentItem?.id == item.id ? currentItem! : item;
+    final decision = ref
+        .read(entitlementControllerProvider.notifier)
+        .evaluateAccess(
+          dramaId: unlockedItem.content.id,
+          episodeId: unlockedItem.episode.id,
+          itemId: unlockedItem.id,
+          unlockType: unlockedItem.episode.unlockType,
+          price: unlockedItem.episode.requiredCoins,
+          isUnavailable: unlockedItem.episode.isUnavailable,
+        );
+    if (decision.type != EpisodeAccessDecisionType.allowPlay) {
+      return false;
+    }
+    await _handleAccessDecision(
+      unlockedItem,
+      decision,
+      autoPresentSheet: false,
+    );
+    return true;
   }
 
   PlayerAccessPresentationState accessPresentationFor(PlayerFeedItem item) {

@@ -317,7 +317,7 @@ class PlayerRechargeUnlockController
     StreamSubscription<PurchaseDetails>? sub;
     StreamSubscription<Object>? errorSub;
     final loading = ref.read(paymentLoadingControllerProvider.notifier);
-    loading.show();
+    loading.show(label: PaymentLoadingLabel.loading);
     try {
       // 获取选中的套餐
       final selectedCoinPackage = state.selectedCoinPackage;
@@ -440,6 +440,7 @@ class PlayerRechargeUnlockController
         debugPrint('[PlayerRecharge] 使用 offerToken: $offerToken');
       }
 
+      loading.hide();
       final started = await iapService.buyProduct(
         product: productDetails,
         isConsumable: isConsumable,
@@ -499,6 +500,7 @@ class PlayerRechargeUnlockController
       state = state.copyWith(
         paymentStage: PlayerRechargePaymentStage.verifying,
       );
+      loading.show();
       debugPrint('[PlayerRecharge] purchase success, verifying order');
       final verifyResult = await ref
           .read(payRepositoryProvider)

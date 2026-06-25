@@ -111,7 +111,7 @@ class MockWalletRepository implements WalletRepository {
   }
 
   @override
-  Future<List<WalletRecord>> fetchTransactionRecords({
+  Future<WalletRecordPage> fetchTransactionRecords({
     String? pageToken,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 80));
@@ -155,11 +155,14 @@ class MockWalletRepository implements WalletRepository {
       ),
     ];
 
-    return mockDtos.map(_mapper.mapTransaction).toList(growable: false);
+    return WalletRecordPage(
+      items: mockDtos.map(_mapper.mapTransaction).toList(growable: false),
+      nextPageToken: null,
+    );
   }
 
   @override
-  Future<List<WalletRecord>> fetchConsumptionRecords({
+  Future<WalletRecordPage> fetchConsumptionRecords({
     required String status,
     String? pageToken,
   }) async {
@@ -204,11 +207,14 @@ class MockWalletRepository implements WalletRepository {
       ),
     ];
 
-    return mockDtos.map(_mapper.mapConsumption).toList(growable: false);
+    return WalletRecordPage(
+      items: mockDtos.map(_mapper.mapConsumption).toList(growable: false),
+      nextPageToken: null,
+    );
   }
 
   @override
-  Future<List<WalletRecord>> fetchRewardCoins({String? pageToken}) async {
+  Future<WalletRecordPage> fetchRewardCoins({String? pageToken}) async {
     await Future<void>.delayed(const Duration(milliseconds: 80));
 
     const mockDtos = [
@@ -244,6 +250,9 @@ class MockWalletRepository implements WalletRepository {
       ),
     ];
 
-    return mockDtos.map(_mapper.mapReward).toList(growable: false);
+    return WalletRecordPage(
+      items: mockDtos.map(_mapper.mapReward).toList(growable: false),
+      nextPageToken: null,
+    );
   }
 }

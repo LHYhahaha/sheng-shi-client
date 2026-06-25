@@ -36,6 +36,7 @@ class AppConfig {
       AppEnvironment.dev => AppConfig(
         environment: environment,
         apiBaseUrl: Uri.parse('https://gateway-api.8y4w2vxvdffmd83.xyz'),
+        //http://192.168.1.15:8888
       ),
       AppEnvironment.staging => AppConfig(
         environment: environment,
@@ -43,7 +44,7 @@ class AppConfig {
       ),
       AppEnvironment.prod => AppConfig(
         environment: environment,
-        apiBaseUrl: Uri.parse('https://api.example.com'),
+        apiBaseUrl: Uri.parse('https://gateway-api.3ype43hnuvw82h67e523.xyz'),
       ),
     };
   }

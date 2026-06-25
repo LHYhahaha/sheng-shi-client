@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:readmore/readmore.dart';
 
 import '../../../../core/utils/text_over_ellipsis.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -18,9 +17,9 @@ abstract final class _PlayerLayoutMetrics {
   static const singleActionRailBottom = 161.0;
   static const forYouWatchNowBottom = 24.0;
   static const forYouMetaGap = 58.0;
-  static const singleBottomFrameHeight = 32.0;
-  static const singleMetaBottom = 58.0;
-  static const singleSeekBarBottom = 10.0;
+  static const singleBottomFrameHeight = 24.0;
+  static const singleMetaBottom = 34.0;
+  static const singleSeekBarBottom = 17.0;
 }
 
 class PlayerChrome extends StatefulWidget {
@@ -256,15 +255,15 @@ class _PlayerChromeState extends State<PlayerChrome> {
               onTap: _handleVideoTap,
             ),
           ),
-        if (!forYouLayout) ...[
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: bottomFrameHeight,
-            child: const ColoredBox(color: Color(0xFF141414)),
-          ),
-        ],
+        // if (!forYouLayout) ...[
+        //   Positioned(
+        //     left: 0,
+        //     right: 0,
+        //     bottom: 0,
+        //     height: bottomFrameHeight,
+        //     child: const ColoredBox(color: Color(0xFF141414)),
+        //   ),
+        // ],
         if (showUnlockButton)
           _PlayerUnlockOverlay(
             label: unlockLabel ?? context.l10n.playerUnlockNow,
@@ -274,72 +273,75 @@ class _PlayerChromeState extends State<PlayerChrome> {
         else if (showCenterPlayButton)
           _CenterPlayButton(onTap: onTogglePlay),
         if (_showPauseFeedback) const _PauseFeedbackIcon(),
-        _PlayerActionRailLayer(
-          bottomInset: bottomInset,
-          forYouLayout: forYouLayout,
-          overlayOpacity: overlayOpacity,
-          overlayOpacityListenable: overlayOpacityListenable,
-          likeCountLabel: content.likeCountLabel,
-          dramaId: content.id,
-          onEpisodesTap: onEpisodesTap,
-          onShareTap: onShareTap,
-          onMoreTap: onMoreTap,
-          onLikeTap: onLikeTap,
-          isLiked: isLiked,
-          isLikeLoading: isLikeLoading,
-          showChromeOverlays: showChromeOverlays,
-          chromeOverlayFadeDuration: chromeOverlayFadeDuration,
-        ),
-        _PlayerMetaLayer(
-          content: content,
-          bottom: forYouLayout
-              ? forYouMetaBottom
-              : bottomInset + _PlayerLayoutMetrics.singleMetaBottom,
-          forYouLayout: forYouLayout,
-          overlayOpacity: overlayOpacity,
-          overlayOpacityListenable: overlayOpacityListenable,
-          showChromeOverlays: showChromeOverlays,
-          chromeOverlayFadeDuration: chromeOverlayFadeDuration,
-          onTap: onMetaTap,
-        ),
-        if (forYouLayout) ...[
-          if (!showUnlockButton)
-            _PlayerWatchNowLayer(
-              bottom: forYouWatchNowBottom,
-              overlayOpacity: overlayOpacity,
-              overlayOpacityListenable: overlayOpacityListenable,
-              onTap: onWatchNowTap,
-            ),
-        ] else ...[
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: bottomInset + _PlayerLayoutMetrics.singleSeekBarBottom,
-            child: RepaintBoundary(
-              key: const ValueKey('player_seekbar_repaint_boundary'),
-              child:
-                  seekBar ??
-                  (canSeek || duration > Duration.zero || showTrackLoading
-                      ? PlayerSeekBar(
-                          position: position,
-                          duration: duration,
-                          bufferedPosition: bufferedPosition,
-                          previewPosition: seekPreviewPosition,
-                          thumbnailAssetPath: content.posterAssetPath,
-                          previewConfig: PlayerSeekPreviewConfig.fromPolicy(
-                            PlayerPerformancePolicy.stable,
-                          ),
-                          isDragging: isSeeking,
-                          showTrackLoading: showTrackLoading,
-                          enabled: canSeek,
-                          onDragStart: onSeekStart,
-                          onDragUpdate: onSeekUpdate,
-                          onDragEnd: onSeekEnd,
-                          onDragCancel: onSeekCancel,
-                        )
-                      : const SizedBox.shrink()),
-            ),
+        // 沉浸模式下所有 UI（操作栏、元信息、进度条）一起隐藏，显示时一起显示
+        if (showChromeOverlays) ...[
+          _PlayerActionRailLayer(
+            bottomInset: bottomInset,
+            forYouLayout: forYouLayout,
+            overlayOpacity: overlayOpacity,
+            overlayOpacityListenable: overlayOpacityListenable,
+            likeCountLabel: content.likeCountLabel,
+            dramaId: content.id,
+            onEpisodesTap: onEpisodesTap,
+            onShareTap: onShareTap,
+            onMoreTap: onMoreTap,
+            onLikeTap: onLikeTap,
+            isLiked: isLiked,
+            isLikeLoading: isLikeLoading,
+            showChromeOverlays: showChromeOverlays,
+            chromeOverlayFadeDuration: chromeOverlayFadeDuration,
           ),
+          _PlayerMetaLayer(
+            content: content,
+            bottom: forYouLayout
+                ? forYouMetaBottom
+                : bottomInset + _PlayerLayoutMetrics.singleMetaBottom,
+            forYouLayout: forYouLayout,
+            overlayOpacity: overlayOpacity,
+            overlayOpacityListenable: overlayOpacityListenable,
+            showChromeOverlays: showChromeOverlays,
+            chromeOverlayFadeDuration: chromeOverlayFadeDuration,
+            onTap: onMetaTap,
+          ),
+          if (forYouLayout) ...[
+            if (!showUnlockButton)
+              _PlayerWatchNowLayer(
+                bottom: forYouWatchNowBottom,
+                overlayOpacity: overlayOpacity,
+                overlayOpacityListenable: overlayOpacityListenable,
+                onTap: onWatchNowTap,
+              ),
+          ] else ...[
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: bottomInset + _PlayerLayoutMetrics.singleSeekBarBottom,
+              child: RepaintBoundary(
+                key: const ValueKey('player_seekbar_repaint_boundary'),
+                child:
+                    seekBar ??
+                    (canSeek || duration > Duration.zero || showTrackLoading
+                        ? PlayerSeekBar(
+                            position: position,
+                            duration: duration,
+                            bufferedPosition: bufferedPosition,
+                            previewPosition: seekPreviewPosition,
+                            thumbnailAssetPath: content.posterAssetPath,
+                            previewConfig: PlayerSeekPreviewConfig.fromPolicy(
+                              PlayerPerformancePolicy.stable,
+                            ),
+                            isDragging: isSeeking,
+                            showTrackLoading: showTrackLoading,
+                            enabled: canSeek,
+                            onDragStart: onSeekStart,
+                            onDragUpdate: onSeekUpdate,
+                            onDragEnd: onSeekEnd,
+                            onDragCancel: onSeekCancel,
+                          )
+                        : const SizedBox.shrink()),
+              ),
+            ),
+          ],
         ],
       ],
     );
@@ -560,7 +562,7 @@ class _PlayerMetaLayer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Positioned(
       left: 16,
-      right: 91,
+      right: 80,
       bottom: bottom,
       child: AnimatedOpacity(
         key: const ValueKey('player_chrome_visibility_meta'),
@@ -1005,29 +1007,154 @@ class PlayerBottomMeta extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            showChevron ? '${content.playTitle} >' : content.playTitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              height: 20 / 16,
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  content.playTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    height: 20 / 16,
+                  ),
+                ),
+              ),
+              Text(
+                showChevron ? ' >' : "",
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  height: 20 / 16,
+                ),
+              ),
+            ],
           ),
+
           const SizedBox(height: 6),
-          ReadMoreText(
-            content.synopsis,
-            trimLines: 2,
-            isExpandable: false,
-            trimMode: TrimMode.Line,
-            trimCollapsedText: context.l10n.playerMore,
-            moreStyle: TextStyle(color: Colors.white, fontSize: 14),
+          _SynopsisPreviewText(
+            text: content.synopsis,
+            moreLabel: context.l10n.playerMore,
           ),
         ],
       ),
     );
+  }
+}
+
+class _SynopsisPreviewText extends StatelessWidget {
+  const _SynopsisPreviewText({
+    required this.text,
+    required this.moreLabel,
+  });
+
+  final String text;
+  final String moreLabel;
+
+  static const _maxLines = 2;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = DefaultTextStyle.of(context).style.merge(
+      const TextStyle(
+        color: Colors.white,
+        fontSize: 14,
+        height: 18 / 14,
+      ),
+    );
+    final moreStyle = style.merge(const TextStyle(color: Colors.white));
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth;
+        if (text.isEmpty || maxWidth <= 0 || !maxWidth.isFinite) {
+          return const SizedBox.shrink();
+        }
+
+        final direction = Directionality.of(context);
+        final textScaler = MediaQuery.textScalerOf(context);
+        if (_fits(
+          text: text,
+          suffix: '',
+          maxWidth: maxWidth,
+          direction: direction,
+          textScaler: textScaler,
+          style: style,
+          moreStyle: moreStyle,
+        )) {
+          return Text(
+            text,
+            maxLines: _maxLines,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          );
+        }
+
+        final suffix = '... $moreLabel';
+        var low = 0;
+        var high = text.length;
+        while (low < high) {
+          final mid = (low + high + 1) >> 1;
+          if (_fits(
+            text: text.substring(0, mid).trimRight(),
+            suffix: suffix,
+            maxWidth: maxWidth,
+            direction: direction,
+            textScaler: textScaler,
+            style: style,
+            moreStyle: moreStyle,
+          )) {
+            low = mid;
+          } else {
+            high = mid - 1;
+          }
+        }
+
+        return RichText(
+          maxLines: _maxLines,
+          overflow: TextOverflow.clip,
+          textScaler: textScaler,
+          text: TextSpan(
+            style: style,
+            children: [
+              TextSpan(text: text.substring(0, low).trimRight()),
+              TextSpan(text: suffix, style: moreStyle),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  bool _fits({
+    required String text,
+    required String suffix,
+    required double maxWidth,
+    required TextDirection direction,
+    required TextScaler textScaler,
+    required TextStyle style,
+    required TextStyle moreStyle,
+  }) {
+    final painter = TextPainter(
+      maxLines: _maxLines,
+      textDirection: direction,
+      textScaler: textScaler,
+      text: TextSpan(
+        style: style,
+        children: [
+          TextSpan(text: text),
+          if (suffix.isNotEmpty) TextSpan(text: suffix, style: moreStyle),
+        ],
+      ),
+    )..layout(maxWidth: maxWidth);
+
+    return !painter.didExceedMaxLines;
   }
 }
 

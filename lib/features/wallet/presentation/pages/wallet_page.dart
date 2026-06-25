@@ -80,7 +80,7 @@ class _WalletHeader extends StatelessWidget {
           children: [
             IconButton(
               onPressed: onBack,
-              icon: const Icon(Icons.chevron_left_rounded, size: 20),
+              icon: const Icon(Icons.chevron_left_rounded, size: 30),
               color: AppColors.textPrimary,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints.tightFor(width: 40, height: 40),

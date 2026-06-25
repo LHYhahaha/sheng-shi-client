@@ -24,17 +24,20 @@ class RemoteWalletRepository implements WalletRepository {
   }
 
   @override
-  Future<List<WalletRecord>> fetchTransactionRecords({
+  Future<WalletRecordPage> fetchTransactionRecords({
     String? pageToken,
   }) async {
-    final pageDto = await _remoteDataSource.listTransactions(pageToken: pageToken);
-    return pageDto.items
-        .map(_mapper.mapTransaction)
-        .toList(growable: false);
+    final pageDto = await _remoteDataSource.listTransactions(
+      pageToken: pageToken,
+    );
+    return WalletRecordPage(
+      items: pageDto.items.map(_mapper.mapTransaction).toList(growable: false),
+      nextPageToken: pageDto.nextPageToken,
+    );
   }
 
   @override
-  Future<List<WalletRecord>> fetchConsumptionRecords({
+  Future<WalletRecordPage> fetchConsumptionRecords({
     required String status,
     String? pageToken,
   }) async {
@@ -42,18 +45,22 @@ class RemoteWalletRepository implements WalletRepository {
       status: status,
       pageToken: pageToken,
     );
-    return pageDto.items
-        .map(_mapper.mapConsumption)
-        .toList(growable: false);
+    return WalletRecordPage(
+      items: pageDto.items.map(_mapper.mapConsumption).toList(growable: false),
+      nextPageToken: pageDto.nextPageToken,
+    );
   }
 
   @override
-  Future<List<WalletRecord>> fetchRewardCoins({
+  Future<WalletRecordPage> fetchRewardCoins({
     String? pageToken,
   }) async {
-    final pageDto = await _remoteDataSource.listRewardCoins(pageToken: pageToken);
-    return pageDto.items
-        .map(_mapper.mapReward)
-        .toList(growable: false);
+    final pageDto = await _remoteDataSource.listRewardCoins(
+      pageToken: pageToken,
+    );
+    return WalletRecordPage(
+      items: pageDto.items.map(_mapper.mapReward).toList(growable: false),
+      nextPageToken: pageDto.nextPageToken,
+    );
   }
 }

@@ -162,13 +162,13 @@ class _LanguageHeader extends StatelessWidget {
               icon: const Icon(
                 Icons.chevron_left_rounded,
                 color: AppColors.textPrimary,
-                size: 30,
+                size: 28,
               ),
             ),
           ),
           Text(
             title,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: AppColors.textPrimary,
               fontSize: 16,
               fontWeight: FontWeight.w500,

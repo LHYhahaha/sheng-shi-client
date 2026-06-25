@@ -10,7 +10,6 @@ import '../runtime/app_version_provider.dart';
 import '../runtime/install_id_provider.dart';
 import 'api_client.dart';
 import 'api_request_context.dart';
-import 'proxy_config.dart';
 
 /// 渠道配置Provider（异步加载）
 final channelConfigProvider = FutureProvider<ChannelConfig>((ref) async {
@@ -58,14 +57,9 @@ const _installIdLoadingFallback = 'install-id-pending';
 /// 使用 autoDispose 确保在代理配置变化时能够重新创建
 final apiClientProvider = Provider.autoDispose<ApiClient>((ref) {
   // 监听代理配置变化
-  final proxyState = ref.watch(proxyConfigProvider);
   
   // 创建 Dio 实例并配置代理
   final dio = Dio(ApiClient.defaultOptions);
-  if (proxyState.isEnabled && proxyState.proxyAddress != null) {
-    configureDioProxy(dio, proxyState.proxyAddress);
-  }
-
   // 创建 ApiClient，但先不传 sessionAuthHandler
   final apiClient = ApiClient(
     dio: dio,

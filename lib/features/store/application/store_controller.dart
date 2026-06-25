@@ -274,7 +274,7 @@ class StoreController extends Notifier<StoreState> {
     StreamSubscription<PurchaseDetails>? sub;
     StreamSubscription<Object>? errorSub;
     final loading = ref.read(paymentLoadingControllerProvider.notifier);
-    loading.show();
+    loading.show(label: PaymentLoadingLabel.loading);
     try {
       final platformProductId = package.platformProductId;
       if (platformProductId == null || platformProductId.isEmpty) {
@@ -361,6 +361,7 @@ class StoreController extends Notifier<StoreState> {
         return;
       }
 
+      loading.hide();
       final started = await iapService.buyProduct(
         product: productDetails,
         isConsumable: package.isCoinPackage,
@@ -408,6 +409,7 @@ class StoreController extends Notifier<StoreState> {
         );
       }
       state = state.copyWith(purchaseStatus: StorePurchaseStatus.verifying);
+      loading.show();
       final verifyResult = await payRepository.verifyGooglePayment(
         orderNo: paymentOrder.orderNo,
         channelProductId: purchaseDetails.productID,

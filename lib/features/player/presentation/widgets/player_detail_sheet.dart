@@ -312,7 +312,7 @@ class _Header extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  content.viewCountLabel + context.l10n.episodeModalViews,
+                  "${content.viewCountLabel} ${context.l10n.episodeModalViews}",
                   style: const TextStyle(
                     color: AppColors.primary,
                     fontSize: 12,

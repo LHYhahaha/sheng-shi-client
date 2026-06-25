@@ -90,7 +90,12 @@ class ProfileMembershipCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
-                  _JoinButton(enabled: !isActive, label: l10n.profileJoin),
+                  isActive
+                      ? SizedBox()
+                      : _JoinButton(
+                          enabled: !isActive,
+                          label: l10n.profileJoin,
+                        ),
                 ],
               ),
             ),
@@ -192,7 +197,7 @@ class _BenefitItem extends StatelessWidget {
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: const Color(0xFFFFEBC3).withValues(alpha: 0.65),
-              fontSize: 9,
+              fontSize: 10,
               height: 1.2,
             ),
           ),

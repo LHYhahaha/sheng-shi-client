@@ -24,8 +24,11 @@ class MyListState {
     required this.items,
     required this.selectedIds,
     required this.isLoading,
+    required this.isLoadingMore,
     required this.openPlayItemId,
+    this.nextPageToken,
     this.error,
+    this.loadMoreError,
   });
 
   const MyListState.initial()
@@ -34,8 +37,11 @@ class MyListState {
       items = const [],
       selectedIds = const {},
       isLoading = true,
+      isLoadingMore = false,
       openPlayItemId = null,
-      error = null;
+      nextPageToken = null,
+      error = null,
+      loadMoreError = null;
 
   /// 当前选中的片单 tab。
   ///
@@ -65,10 +71,16 @@ class MyListState {
   /// loading 会退出编辑并清空 selection/open item，确保新数据到来前没有旧交互状态。
   final bool isLoading;
 
+  final bool isLoadingMore;
+
   /// 当前 tab 加载失败的错误。
   ///
   /// 只用于整页 retry，不表示删除失败。后续删除接口失败应有独立动作错误或回滚机制。
   final Object? error;
+
+  final Object? loadMoreError;
+
+  final String? nextPageToken;
 
   /// 播放列表当前打开滑动删除动作的 item id。
   ///
@@ -76,6 +88,14 @@ class MyListState {
   final int? openPlayItemId;
 
   bool get isEmpty => !isLoading && error == null && items.isEmpty;
+
+  bool get canLoadMore =>
+      !isLoading &&
+      !isLoadingMore &&
+      error == null &&
+      loadMoreError == null &&
+      nextPageToken != null &&
+      !isCollectionEditing;
 
   int get selectedCount => selectedIds.length;
 
@@ -87,8 +107,13 @@ class MyListState {
     List<MyListItem>? items,
     Set<int>? selectedIds,
     bool? isLoading,
+    bool? isLoadingMore,
     Object? error,
     bool clearError = false,
+    Object? loadMoreError,
+    bool clearLoadMoreError = false,
+    String? nextPageToken,
+    bool clearNextPageToken = false,
     int? openPlayItemId,
     bool clearOpenPlayItemId = false,
   }) {
@@ -98,7 +123,14 @@ class MyListState {
       items: items ?? this.items,
       selectedIds: selectedIds ?? this.selectedIds,
       isLoading: isLoading ?? this.isLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       error: clearError ? null : error ?? this.error,
+      loadMoreError: clearLoadMoreError
+          ? null
+          : loadMoreError ?? this.loadMoreError,
+      nextPageToken: clearNextPageToken
+          ? null
+          : nextPageToken ?? this.nextPageToken,
       openPlayItemId: clearOpenPlayItemId
           ? null
           : openPlayItemId ?? this.openPlayItemId,
@@ -112,6 +144,7 @@ class MyListState {
 /// 是为了后续接真实收藏/播放历史接口时能在这里统一处理乐观更新、失败回滚和重试。
 class MyListController extends Notifier<MyListState> {
   int _generation = 0;
+  bool _isLoadMoreRequestInFlight = false;
 
   @override
   MyListState build() => const MyListState.initial();
@@ -119,33 +152,41 @@ class MyListController extends Notifier<MyListState> {
   /// 清空登录态片单缓存，下次进入 tab 会重新 load。
   void resetForSessionCleanup(SessionCleanupReason reason) {
     ++_generation;
+    _isLoadMoreRequestInFlight = false;
     state = const MyListState.initial();
   }
 
   Future<void> load() async {
     final generation = ++_generation;
+    _isLoadMoreRequestInFlight = false;
     // 重新加载会退出编辑并关闭已打开的播放列表滑动项。列表来源变了以后继续保留
     // selection/open item 会让删除操作命中不存在或错误的条目。
     state = state.copyWith(
       isLoading: true,
+      isLoadingMore: false,
       isCollectionEditing: false,
       selectedIds: const {},
       clearError: true,
+      clearLoadMoreError: true,
+      clearNextPageToken: true,
       clearOpenPlayItemId: true,
     );
 
     try {
-      final items = await ref
+      final page = await ref
           .read(myListRepositoryProvider)
-          .fetchItems(tab: state.selectedTab);
+          .fetchPage(tab: state.selectedTab);
       if (!_isCurrent(generation)) {
         return;
       }
 
       state = state.copyWith(
-        items: List<MyListItem>.unmodifiable(items),
+        items: List<MyListItem>.unmodifiable(page.items),
+        nextPageToken: page.nextPageToken,
+        clearNextPageToken: page.nextPageToken == null,
         isLoading: false,
         clearError: true,
+        clearLoadMoreError: true,
       );
     } catch (error) {
       if (!_isCurrent(generation)) {
@@ -155,13 +196,111 @@ class MyListController extends Notifier<MyListState> {
       state = state.copyWith(
         items: const [],
         isLoading: false,
+        isLoadingMore: false,
         error: error,
+        clearLoadMoreError: true,
+        clearNextPageToken: true,
         clearOpenPlayItemId: true,
       );
     }
   }
 
   Future<void> retry() => load();
+
+  Future<void> refreshCurrentTabInPlace() async {
+    if (state.isLoading || state.isLoadingMore || state.error != null) {
+      return;
+    }
+
+    final generation = ++_generation;
+    final tab = state.selectedTab;
+    final targetItemCount = state.items.length;
+    _isLoadMoreRequestInFlight = true;
+
+    try {
+      final repository = ref.read(myListRepositoryProvider);
+      var page = await repository.fetchPage(tab: tab);
+      final refreshedItems = <MyListItem>[...page.items];
+      var nextPageToken = page.nextPageToken;
+
+      while (nextPageToken != null && refreshedItems.length < targetItemCount) {
+        page = await repository.fetchPage(tab: tab, pageToken: nextPageToken);
+        refreshedItems.addAll(page.items);
+        nextPageToken = page.nextPageToken;
+      }
+
+      if (!_isCurrent(generation) || state.selectedTab != tab) {
+        return;
+      }
+
+      state = state.copyWith(
+        items: List<MyListItem>.unmodifiable(refreshedItems),
+        nextPageToken: nextPageToken,
+        clearNextPageToken: nextPageToken == null,
+        clearLoadMoreError: true,
+        clearOpenPlayItemId: true,
+      );
+    } catch (_) {
+      if (!_isCurrent(generation) || state.selectedTab != tab) {
+        return;
+      }
+      state = state.copyWith(clearOpenPlayItemId: true);
+    } finally {
+      _isLoadMoreRequestInFlight = false;
+    }
+  }
+
+  Future<void> loadMore({bool retry = false}) async {
+    if (_isLoadMoreRequestInFlight) {
+      return;
+    }
+    if (retry) {
+      if (state.isLoading ||
+          state.isLoadingMore ||
+          state.error != null ||
+          state.nextPageToken == null ||
+          state.isCollectionEditing) {
+        return;
+      }
+    } else if (!state.canLoadMore) {
+      return;
+    }
+
+    final generation = _generation;
+    final pageToken = state.nextPageToken;
+    final tab = state.selectedTab;
+    if (pageToken == null) {
+      return;
+    }
+
+    _isLoadMoreRequestInFlight = true;
+    state = state.copyWith(isLoadingMore: true, clearLoadMoreError: true);
+
+    try {
+      final page = await ref
+          .read(myListRepositoryProvider)
+          .fetchPage(tab: tab, pageToken: pageToken);
+      if (!_isCurrent(generation) || state.selectedTab != tab) {
+        return;
+      }
+
+      state = state.copyWith(
+        items: List<MyListItem>.unmodifiable([...state.items, ...page.items]),
+        nextPageToken: page.nextPageToken,
+        clearNextPageToken: page.nextPageToken == null,
+        isLoadingMore: false,
+        clearLoadMoreError: true,
+      );
+    } catch (error) {
+      if (!_isCurrent(generation) || state.selectedTab != tab) {
+        return;
+      }
+
+      state = state.copyWith(isLoadingMore: false, loadMoreError: error);
+    } finally {
+      _isLoadMoreRequestInFlight = false;
+    }
+  }
 
   Future<void> selectTab(MyListTab tab) async {
     if (state.selectedTab == tab) {

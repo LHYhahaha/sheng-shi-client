@@ -28,8 +28,7 @@ class WalletRemoteDataSource {
   }) {
     return _apiClient.get<WalletPageDto<WalletTransactionRecordDto>>(
       '/api/payment/recharge/records',
-      queryParameters: <String, Object?>{'pageToken': pageToken}
-        ..removeWhere((_, value) => value == null),
+      queryParameters: _pageData(pageToken),
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) =>
           WalletPageDto.fromJson(data, WalletTransactionRecordDto.fromJson),
@@ -42,8 +41,7 @@ class WalletRemoteDataSource {
   }) {
     return _apiClient.get<WalletPageDto<WalletConsumptionRecordDto>>(
       '/api/payment/coin/consume-records',
-      queryParameters: <String, Object?>{'pageToken': pageToken}
-        ..removeWhere((_, value) => value == null),
+      queryParameters: _pageData(pageToken),
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) =>
           WalletPageDto.fromJson(data, WalletConsumptionRecordDto.fromJson),
@@ -55,12 +53,16 @@ class WalletRemoteDataSource {
   }) {
     return _apiClient.get<WalletPageDto<WalletRewardCoinRecordDto>>(
       '/api/payment/bonus-coin/records',
-      queryParameters: <String, Object?>{'pageToken': pageToken}
-        ..removeWhere((_, value) => value == null),
+      queryParameters: _pageData(pageToken),
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) =>
           WalletPageDto.fromJson(data, WalletRewardCoinRecordDto.fromJson),
     );
+  }
+
+  Map<String, Object?> _pageData(String? pageToken) {
+    final page = int.tryParse(pageToken ?? '') ?? 1;
+    return {'page.page': page ?? 1, 'page.pageSize': 20};
   }
 
   Future<WalletRewardCoinRecordDto> claimRewardCoin({required String id}) {

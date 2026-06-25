@@ -544,7 +544,7 @@ class _HomeDramaCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visibleTags = data.tags.take(2).toList(growable: false);
+    final visibleTags = data.tags;
 
     return Material(
       color: AppColors.surfacePanel,
@@ -611,19 +611,7 @@ class _HomeDramaCard extends StatelessWidget {
                     const SizedBox(height: 8),
                     SizedBox(
                       height: 16,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        physics: const ClampingScrollPhysics(),
-                        child: Row(
-                          children: [
-                            for (final tag in visibleTags.indexed) ...[
-                              _HomeTag(label: tag.$2),
-                              if (tag.$1 != visibleTags.length - 1)
-                                const SizedBox(width: 8),
-                            ],
-                          ],
-                        ),
-                      ),
+                      child: _HomeTagsRow(tags: visibleTags),
                     ),
                   ],
                 ],
@@ -736,6 +724,16 @@ class _HomeTag extends StatelessWidget {
 
   final String label;
 
+  static const horizontalPadding = 12.0;
+
+  static TextStyle? textStyle(BuildContext context) {
+    return Theme.of(context).textTheme.labelSmall?.copyWith(
+      color: const Color(0xFFC5BEC9),
+      fontSize: 9,
+      height: 1.3,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -750,13 +748,80 @@ class _HomeTag extends StatelessWidget {
         label,
         maxLines: 1,
         softWrap: false,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: const Color(0xFFC5BEC9),
-          fontSize: 9,
-          height: 1.3,
-        ),
+        style: textStyle(context),
       ),
     );
+  }
+}
+
+class _HomeTagsRow extends StatelessWidget {
+  const _HomeTagsRow({required this.tags});
+
+  static const _gap = 8.0;
+
+  final List<String> tags;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final visibleTags = _visibleTagsForWidth(context, constraints.maxWidth);
+        return Row(
+          children: [
+            for (final tag in visibleTags.indexed) ...[
+              _HomeTag(label: tag.$2),
+              if (tag.$1 != visibleTags.length - 1) const SizedBox(width: _gap),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  List<String> _visibleTagsForWidth(BuildContext context, double maxWidth) {
+    if (!maxWidth.isFinite || maxWidth <= 0) {
+      return const [];
+    }
+
+    final textDirection = Directionality.of(context);
+    final textScaler = MediaQuery.textScalerOf(context);
+    final style = _HomeTag.textStyle(context);
+    final visibleTags = <String>[];
+    var usedWidth = 0.0;
+
+    for (final tag in tags) {
+      final tagWidth =
+          _measureTextWidth(
+            tag,
+            style: style,
+            textDirection: textDirection,
+            textScaler: textScaler,
+          ) +
+          _HomeTag.horizontalPadding;
+      final nextWidth = usedWidth + (visibleTags.isEmpty ? 0 : _gap) + tagWidth;
+      if (nextWidth > maxWidth) {
+        break;
+      }
+      visibleTags.add(tag);
+      usedWidth = nextWidth;
+    }
+
+    return visibleTags;
+  }
+
+  double _measureTextWidth(
+    String text, {
+    required TextStyle? style,
+    required TextDirection textDirection,
+    required TextScaler textScaler,
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: 1,
+      textDirection: textDirection,
+      textScaler: textScaler,
+    )..layout();
+    return painter.width;
   }
 }
 

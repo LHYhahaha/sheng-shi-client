@@ -4,7 +4,7 @@
     <base-config>
         <trust-anchors>
             <certificates src="system" />
-            <certificates src="user" />
+            <!-- <certificates src="user" /> -->
         </trust-anchors>
     </base-config>
     <!-- 允许明文流量（HTTP） -->

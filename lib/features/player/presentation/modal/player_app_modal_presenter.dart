@@ -9,7 +9,6 @@ import '../../../../core/modal/app_modal_request.dart';
 import '../../../../core/modal/app_modal_result.dart';
 import '../../../../core/modal/app_modal_root_sheet.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
-import '../../../pay/application/payment_loading_controller.dart';
 import '../../domain/player_feed.dart';
 import '../../application/player_feed_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
@@ -271,8 +270,6 @@ class PlayerAppModalPresenter implements AppModalPresenter {
       return currentStatus;
     }
 
-    final loading = container.read(paymentLoadingControllerProvider.notifier);
-    loading.show();
     final completer = Completer<PlayerRechargeUnlockStatus?>();
     late final ProviderSubscription<PlayerRechargeUnlockStatus> subscription;
     subscription = container.listen<PlayerRechargeUnlockStatus>(
@@ -290,7 +287,6 @@ class PlayerAppModalPresenter implements AppModalPresenter {
       );
     } finally {
       subscription.close();
-      loading.hide();
     }
   }
 

@@ -69,7 +69,9 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(membershipControllerProvider);
     final controller = ref.read(membershipControllerProvider.notifier);
-    final isPaymentLoading = ref.watch(paymentLoadingControllerProvider);
+    final isPaymentLoading = ref.watch(
+      paymentLoadingControllerProvider.select((state) => state.isVisible),
+    );
     final topInset = MediaQuery.paddingOf(context).top;
     final l10n = context.l10n;
 

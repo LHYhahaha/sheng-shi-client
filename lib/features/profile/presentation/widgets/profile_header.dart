@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/svg.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
+import '../../../auth/domain/auth_session.dart';
 import '../../application/profile_controller.dart';
 
 class ProfileHeader extends StatelessWidget {
@@ -67,39 +69,41 @@ class ProfileHeader extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 1),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'ID:${state.showId ?? '--'}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textPrimary.withValues(alpha: 0.8),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w300,
-                        height: 1.3,
+                GestureDetector(
+                  onTap: () {
+                    final showId = state.showId;
+                    if (showId != null) {
+                      Clipboard.setData(ClipboardData(text: showId));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(l10n.profileCopySuccess),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'ID:${state.showId ?? '--'}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textPrimary.withValues(alpha: 0.8),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w300,
+                          height: 1.3,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    GestureDetector(
-                      onTap: () {
-                        final showId = state.showId;
-                        if (showId != null) {
-                          Clipboard.setData(ClipboardData(text: showId));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(l10n.profileCopySuccess),
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
-                        }
-                      },
-                      child: Icon(
-                        Icons.copy_rounded,
-                        color: AppColors.textPrimary.withValues(alpha: 0.8),
-                        size: 12,
+                      const SizedBox(width: 4),
+                      SvgPicture.asset(
+                        'assets/images/profile/copy.svg',
+                        colorFilter: ColorFilter.mode(
+                          AppColors.textPrimary.withValues(alpha: 0.8),
+                          BlendMode.srcIn,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -116,6 +120,10 @@ class ProfileHeader extends StatelessWidget {
         return AppCachedNetworkImage(
           imageUrl: avatarResource.value,
           fit: BoxFit.cover,
+          errorWidget: Image.asset(
+            authDefaultAvatarAssetPath,
+            fit: BoxFit.cover,
+          ),
         );
       } else if (avatarResource.isAsset) {
         return Image.asset(avatarResource.value, fit: BoxFit.cover);

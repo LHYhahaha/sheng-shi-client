@@ -25,26 +25,92 @@ class WalletHistoryPage extends ConsumerStatefulWidget {
 }
 
 class _WalletHistoryPageState extends ConsumerState<WalletHistoryPage> {
+  late final ScrollController _scrollController;
+  bool _didTriggerLoadMoreNearEnd = false;
+
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
-      final controller = ref.read(walletControllerProvider.notifier);
-      switch (widget.type) {
-        case WalletRecordType.transaction:
-          controller.loadTransactionRecords();
-        case WalletRecordType.consumption:
-          controller.loadConsumptionRecords(status: 'spent');
-        case WalletRecordType.coins:
-          controller.loadRewardCoins();
+    _scrollController = ScrollController()..addListener(_handleScroll);
+    Future.microtask(_loadInitial);
+  }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_handleScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    if (_scrollController.position.extentAfter > 240) {
+      _didTriggerLoadMoreNearEnd = false;
+      return;
+    }
+    if (_didTriggerLoadMoreNearEnd) {
+      return;
+    }
+    final state = ref.read(walletControllerProvider);
+    if (!state.canLoadMore(widget.type)) {
+      return;
+    }
+    _didTriggerLoadMoreNearEnd = true;
+    ref.read(walletControllerProvider.notifier).loadMoreRecords(widget.type);
+  }
+
+  void _handleLoadMoreStateChanged(bool? previous, bool next) {
+    if (next) {
+      return;
+    }
+    _didTriggerLoadMoreNearEnd = false;
+    _checkNearEndAfterFrame();
+  }
+
+  void _handleInitialLoadingStateChanged(bool? previous, bool next) {
+    _didTriggerLoadMoreNearEnd = false;
+    if (!next) {
+      _checkNearEndAfterFrame();
+    }
+  }
+
+  void _checkNearEndAfterFrame() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
       }
+      _handleScroll();
     });
+  }
+
+  void _loadInitial() {
+    _didTriggerLoadMoreNearEnd = false;
+    final controller = ref.read(walletControllerProvider.notifier);
+    switch (widget.type) {
+      case WalletRecordType.transaction:
+        controller.loadTransactionRecords();
+      case WalletRecordType.consumption:
+        controller.loadConsumptionRecords(status: 'spent');
+      case WalletRecordType.coins:
+        controller.loadRewardCoins();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(walletControllerProvider);
     final controller = ref.read(walletControllerProvider.notifier);
+    ref.listen(
+      walletControllerProvider.select((state) => state.isLoading),
+      _handleInitialLoadingStateChanged,
+    );
+    ref.listen(
+      walletControllerProvider.select((state) => state.isHistoryLoadingMore),
+      _handleLoadMoreStateChanged,
+    );
     final title = switch (widget.type) {
       WalletRecordType.transaction => context.l10n.transactionHistoryTitle,
       WalletRecordType.consumption => context.l10n.consumptionHistoryTitle,
@@ -71,7 +137,10 @@ class _WalletHistoryPageState extends ConsumerState<WalletHistoryPage> {
               child: _HistoryBody(
                 state: state,
                 type: widget.type,
-                onRetry: controller.retry,
+                scrollController: _scrollController,
+                onRetry: _loadInitial,
+                onLoadMoreRetry: () =>
+                    controller.loadMoreRecords(widget.type, retry: true),
                 onClaimReward: controller.claimReward,
               ),
             ),
@@ -98,7 +167,7 @@ class _HistoryHeader extends StatelessWidget {
           children: [
             IconButton(
               onPressed: onBack,
-              icon: const Icon(Icons.chevron_left_rounded, size: 20),
+              icon: const Icon(Icons.chevron_left_rounded, size: 30),
               color: AppColors.textPrimary,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints.tightFor(width: 40, height: 40),
@@ -126,13 +195,17 @@ class _HistoryBody extends StatelessWidget {
   const _HistoryBody({
     required this.state,
     required this.type,
+    required this.scrollController,
     required this.onRetry,
+    required this.onLoadMoreRetry,
     required this.onClaimReward,
   });
 
   final WalletState state;
   final WalletRecordType type;
+  final ScrollController scrollController;
   final VoidCallback onRetry;
+  final VoidCallback onLoadMoreRetry;
   final ValueChanged<String> onClaimReward;
 
   @override
@@ -159,8 +232,10 @@ class _HistoryBody extends StatelessWidget {
     }
 
     final records = state.recordsFor(type);
+    final hasFooter = records.isNotEmpty;
 
     return ListView(
+      controller: scrollController,
       padding: EdgeInsets.fromLTRB(
         16,
         12,
@@ -170,7 +245,7 @@ class _HistoryBody extends StatelessWidget {
       children: [
         if (records.isEmpty)
           const _HistoryEmptyState()
-        else
+        else ...[
           for (var index = 0; index < records.length; index++) ...[
             switch (type) {
               WalletRecordType.consumption => _ConsumptionRecordRow(
@@ -187,7 +262,56 @@ class _HistoryBody extends StatelessWidget {
             if (index != records.length - 1)
               SizedBox(height: type == WalletRecordType.consumption ? 20 : 20),
           ],
+          if (hasFooter) ...[
+            const SizedBox(height: 16),
+            _HistoryLoadMoreFooter(
+              isLoading: state.isHistoryLoadingMore,
+              hasMore: state.nextPageTokenFor(type) != null,
+              error: state.historyLoadMoreError,
+              onRetry: onLoadMoreRetry,
+            ),
+          ],
+        ],
       ],
+    );
+  }
+}
+
+class _HistoryLoadMoreFooter extends StatelessWidget {
+  const _HistoryLoadMoreFooter({
+    required this.isLoading,
+    required this.hasMore,
+    required this.error,
+    required this.onRetry,
+  });
+
+  final bool isLoading;
+  final bool hasMore;
+  final Object? error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+        child: Center(
+          child: isLoading
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : error != null
+              ? TextButton(onPressed: onRetry, child: Text(context.l10n.retry))
+              : Text(
+                  hasMore ? '' : context.l10n.feedNoMore,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
+                ),
+        ),
+      ),
     );
   }
 }

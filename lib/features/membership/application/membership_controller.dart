@@ -240,7 +240,7 @@ class MembershipController extends Notifier<MembershipState> {
     StreamSubscription<PurchaseDetails>? sub;
     StreamSubscription<Object>? errorSub;
     final loading = ref.read(paymentLoadingControllerProvider.notifier);
-    loading.show();
+    loading.show(label: PaymentLoadingLabel.loading);
     try {
       final platformProductId = plan.platformProductId;
       if (platformProductId == null || platformProductId.isEmpty) {
@@ -317,6 +317,7 @@ class MembershipController extends Notifier<MembershipState> {
         return;
       }
 
+      loading.hide();
       final started = await iapService.buyProduct(
         product: productDetails,
         applicationUserName: iapService.buildOrderApplicationUserName(
@@ -371,6 +372,7 @@ class MembershipController extends Notifier<MembershipState> {
       state = state.copyWith(
         purchaseStatus: MembershipPurchaseStatus.verifying,
       );
+      loading.show();
       final verifyResult = await payRepository.verifyGooglePayment(
         orderNo: paymentOrder.orderNo,
         channelProductId: purchaseDetails.productID,

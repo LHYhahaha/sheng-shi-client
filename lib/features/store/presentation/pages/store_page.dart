@@ -51,7 +51,9 @@ class _StorePageState extends ConsumerState<StorePage> {
     final l10n = context.l10n;
     final state = ref.watch(storeControllerProvider);
     final controller = ref.read(storeControllerProvider.notifier);
-    final isPaymentLoading = ref.watch(paymentLoadingControllerProvider);
+    final isPaymentLoading = ref.watch(
+      paymentLoadingControllerProvider.select((state) => state.isVisible),
+    );
 
     ref.watch(storeModalCoordinatorProvider);
 
@@ -212,7 +214,7 @@ class _StoreHeader extends StatelessWidget {
           children: [
             IconButton(
               onPressed: onBack,
-              icon: const Icon(Icons.chevron_left_rounded, size: 26),
+              icon: const Icon(Icons.chevron_left_rounded, size: 28),
               color: AppColors.textPrimary,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints.tightFor(width: 40, height: 40),

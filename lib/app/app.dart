@@ -42,7 +42,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
 
   @override
   Future<bool> didPopRoute() async {
-    if (ref.read(paymentLoadingControllerProvider)) {
+    if (ref.read(paymentLoadingControllerProvider).isVisible) {
       return true;
     }
     return false;
@@ -102,7 +102,12 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       ],
       builder: (context, child) {
         final wrapped = botToastBuilder(context, child);
-        final isPaymentLoading = ref.watch(paymentLoadingControllerProvider);
+        final paymentLoading = ref.watch(paymentLoadingControllerProvider);
+        final isPaymentLoading = paymentLoading.isVisible;
+        final paymentLoadingLabel =
+            paymentLoading.label == PaymentLoadingLabel.loading
+            ? context.l10n.loading
+            : context.l10n.storePurchaseProcessing;
         return PopScope(
           canPop: !isPaymentLoading,
           child: Stack(
@@ -110,7 +115,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
               AppModalHost(child: wrapped),
               if (isPaymentLoading)
                 AppBlockingLoadingOverlay(
-                  label: context.l10n.storePurchaseProcessing,
+                  label: paymentLoadingLabel,
                 ),
             ],
           ),

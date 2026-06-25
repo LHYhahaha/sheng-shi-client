@@ -22,6 +22,9 @@ import '../widgets/profile_menu_row.dart';
 /// 金币数据来自 EntitlementController（/api/user/entitlements 接口），
 /// 不再单独请求 /api/payment/wallet。
 /// 登录身份、昵称和头像以 AuthState 为准。
+const bool _debugProxyMenuEnabled =
+    bool.fromEnvironment('ENABLE_CHARLES_PROXY_MENU');
+
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
 
@@ -134,7 +137,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               iconAssetPath: 'assets/images/profile/setting.png',
               onTap: () => context.push(RoutePaths.settings),
             ),
-            Consumer(
+            if (_debugProxyMenuEnabled)
+              Consumer(
               builder: (context, ref, _) {
                 final proxyState = ref.watch(proxyConfigProvider);
                 final subtitle = proxyState.isEnabled

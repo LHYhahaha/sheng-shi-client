@@ -1,7 +1,22 @@
 import 'my_list_item.dart';
 
+class MyListPage {
+  const MyListPage({required this.items, required this.nextPageToken});
+
+  final List<MyListItem> items;
+  final String? nextPageToken;
+}
+
 abstract interface class MyListRepository {
-  Future<List<MyListItem>> fetchItems({required MyListTab tab});
+  Future<MyListPage> fetchPage({
+    required MyListTab tab,
+    String? pageToken,
+  });
+
+  Future<List<MyListItem>> fetchItems({required MyListTab tab}) async {
+    final page = await fetchPage(tab: tab);
+    return page.items;
+  }
 
   /// 删除单个收藏。
   ///

@@ -10,7 +10,6 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_blocking_loading_overlay.dart';
 import '../../application/account_cancellation_controller.dart';
-import '../../application/auth_account_cancellation_coordinator.dart';
 import '../../application/auth_controller.dart';
 import '../../domain/account_deletion_exception.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
@@ -34,11 +33,10 @@ class _AccountCancellationPageState
       return;
     }
 
-    final coordinator = ref.read(authAccountCancellationCoordinatorProvider);
-    final result = await coordinator.showDeleteConfirm(
-      title: l10n.accountCancellationConfirmTitle,
+    final result = await _showDeleteConfirmSheet(
+      title: l10n.accountCancellationTitle,
       message: l10n.accountCancellationConfirmMessage,
-      confirmLabel: l10n.accountCancellationConfirmDelete,
+      confirmLabel: 'Confirm',
       cancelLabel: l10n.accountCancellationConfirmCancel,
     );
 
@@ -90,6 +88,31 @@ class _AccountCancellationPageState
       return;
     }
     context.go(RoutePaths.profile);
+  }
+
+  Future<ConfirmResult> _showDeleteConfirmSheet({
+    required String title,
+    required String message,
+    required String confirmLabel,
+    required String cancelLabel,
+  }) async {
+    final result = await showModalBottomSheet<ConfirmResult>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.68),
+      constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width),
+      isDismissible: true,
+      enableDrag: true,
+      builder: (sheetContext) {
+        return _DeleteConfirmSheet(
+          title: title,
+          message: message,
+          confirmLabel: confirmLabel,
+          cancelLabel: cancelLabel,
+        );
+      },
+    );
+    return result ?? ConfirmResult.dismissed;
   }
 
   Future<bool> _validateDeletionRequirements({
@@ -246,6 +269,123 @@ class _AccountCancellationPageState
   }
 }
 
+class _DeleteConfirmSheet extends StatelessWidget {
+  const _DeleteConfirmSheet({
+    required this.title,
+    required this.message,
+    required this.confirmLabel,
+    required this.cancelLabel,
+  });
+
+  final String title;
+  final String message;
+  final String confirmLabel;
+  final String cancelLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.paddingOf(context).bottom;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(16, 19, 16, 18 + bottomPadding),
+      decoration: const BoxDecoration(
+        color: Color(0xFF1F1F22),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            title,
+            key: const ValueKey('account_cancellation_confirm_title'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              height: 22 / 16,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.92),
+                fontSize: 13,
+                height: 18 / 13,
+              ),
+            ),
+          ),
+          const SizedBox(height: 34),
+          Row(
+            children: [
+              Expanded(
+                child: _DeleteConfirmActionButton(
+                  key: const ValueKey('account_cancellation_confirm_cancel'),
+                  label: cancelLabel,
+                  backgroundColor: const Color(0xFFFF0D83),
+                  onPressed: () {
+                    Navigator.of(context).pop(ConfirmResult.cancelled);
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _DeleteConfirmActionButton(
+                  key: const ValueKey('account_cancellation_confirm_submit'),
+                  label: confirmLabel,
+                  backgroundColor: const Color(0xFF3F3F42),
+                  onPressed: () {
+                    Navigator.of(context).pop(ConfirmResult.confirmed);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeleteConfirmActionButton extends StatelessWidget {
+  const _DeleteConfirmActionButton({
+    super.key,
+    required this.label,
+    required this.backgroundColor,
+    required this.onPressed,
+  });
+
+  final String label;
+  final Color backgroundColor;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44,
+      child: FilledButton(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          backgroundColor: backgroundColor,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
+          padding: EdgeInsets.zero,
+          textStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            height: 18 / 14,
+          ),
+        ),
+        child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
+    );
+  }
+}
+
 class _AccountCancellationHeader extends StatelessWidget {
   const _AccountCancellationHeader({required this.title});
 
@@ -276,16 +416,16 @@ class _AccountCancellationHeader extends StatelessWidget {
               icon: const Icon(
                 Icons.chevron_left_rounded,
                 color: AppColors.textPrimary,
-                size: 24,
+                size: 28,
               ),
             ),
           ),
           Text(
             title,
-            style: const TextStyle(
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: AppColors.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+              // fontSize: 16,
+              // fontWeight: FontWeight.w500,
               height: 22 / 16,
             ),
           ),

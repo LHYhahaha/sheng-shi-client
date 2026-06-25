@@ -152,10 +152,10 @@ class _SettingsHeader extends StatelessWidget {
           ),
           Text(
             title,
-            style: const TextStyle(
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: AppColors.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
+              // fontSize: 18,
+              // fontWeight: FontWeight.w700,
               height: 22 / 18,
             ),
           ),

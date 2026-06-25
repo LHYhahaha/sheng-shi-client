@@ -8,7 +8,6 @@ import '../../../../core/modal/app_modal_presenter.dart';
 import '../../../../core/modal/app_modal_request.dart';
 import '../../../../core/modal/app_modal_result.dart';
 import '../../../../core/modal/app_modal_root_sheet.dart';
-import '../../../pay/application/payment_loading_controller.dart';
 import '../../application/store_controller.dart';
 import '../widgets/store_confirmation_sheet.dart';
 import 'store_modal_channels.dart';
@@ -118,8 +117,6 @@ class StoreAppModalPresenter implements AppModalPresenter {
       return currentStatus;
     }
 
-    final loading = container.read(paymentLoadingControllerProvider.notifier);
-    loading.show();
     final completer = Completer<StorePurchaseStatus?>();
     late final ProviderSubscription<StorePurchaseStatus> subscription;
     subscription = container.listen<StorePurchaseStatus>(
@@ -137,7 +134,6 @@ class StoreAppModalPresenter implements AppModalPresenter {
       );
     } finally {
       subscription.close();
-      loading.hide();
     }
   }
 

@@ -377,7 +377,7 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     if (latestItem == null || !_canExecuteUserInitiatedRuntime(latestItem)) {
       return false;
     }
-    return _unlockCurrentItemWithCoinApi(latestItem, autoUnlockNext: false);
+    return _unlockCurrentItemWithCoinApi(latestItem, autoUnlockNext: true);
   }
 
   /// Recharge sheet 鎴愬姛锛氬彂鏀?mock 鏉冪泭骞跺喅瀹氫笅涓€姝?sheet 鎴栫洿鎺ユ挱鏀俱€?

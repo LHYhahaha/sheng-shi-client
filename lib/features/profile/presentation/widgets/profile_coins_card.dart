@@ -101,6 +101,7 @@ class ProfileCoinsCard extends StatelessWidget {
                     l10n.profileTopUp,
                     style: textTheme.labelMedium?.copyWith(
                       color: AppColors.textPrimary,
+                      fontSize: 12,
                       height: 1.3,
                     ),
                   ),

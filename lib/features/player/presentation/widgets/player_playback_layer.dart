@@ -467,9 +467,10 @@ class ActivePlaybackSurfaceOverlayState
     // developer.log(...);
 
     final mediaQuery = MediaQuery.of(context);
-    final bottomFrameHeight = widget.forYouLayout
-        ? mediaQuery.padding.bottom
-        : mediaQuery.padding.bottom + 79;
+    final bottomFrameHeight = PlayerChrome.videoViewportBottomInset(
+      forYouLayout: widget.forYouLayout,
+      bottomInset: mediaQuery.padding.bottom,
+    );
 
     final videoChild = controller == null
         ? const SizedBox.shrink()

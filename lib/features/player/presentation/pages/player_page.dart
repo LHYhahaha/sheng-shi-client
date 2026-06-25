@@ -505,7 +505,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final showsPaywall = ref.watch(
       uiProvider.select((state) => state.showsPaywall),
     );
-    final isPaymentLoading = ref.watch(paymentLoadingControllerProvider);
+    final isPaymentLoading = ref.watch(
+      paymentLoadingControllerProvider.select((state) => state.isVisible),
+    );
     final showsChromeOverlays = ref.watch(
       uiProvider.select((state) => state.showsChromeOverlays),
     );
@@ -1315,9 +1317,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     if (result.didAutoUnlock) {
-      ref
-          .read(appToastProvider)
-          .success(context.l10n.playerUnlockedAutomatically);
       return;
     }
     await _presentSheetIntent(

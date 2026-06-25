@@ -11,11 +11,21 @@ class MockMyListRepository implements MyListRepository {
 
   @override
   Future<List<MyListItem>> fetchItems({required MyListTab tab}) async {
+    final page = await fetchPage(tab: tab);
+    return page.items;
+  }
+
+  @override
+  Future<MyListPage> fetchPage({
+    required MyListTab tab,
+    String? pageToken,
+  }) async {
     await Future<void>.delayed(const Duration(milliseconds: 220));
-    return switch (tab) {
+    final List<MyListItem> items = switch (tab) {
       MyListTab.collection => List.unmodifiable(_collectionItems),
       MyListTab.play => List.unmodifiable(_playItems),
     };
+    return MyListPage(items: items, nextPageToken: null);
   }
 
   @override

@@ -23,5 +23,5 @@ final myListRepositoryProvider = Provider<MyListRepository>((ref) {
       ),
     );
   }
-  return  MockMyListRepository();
+  return MockMyListRepository();
 });

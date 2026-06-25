@@ -82,6 +82,8 @@ class ApiClient {
           if (options.data != null) {
             print('[ApiClient] Body: ${options.data}');
           }
+          print('[ApiClient] Body queryParameters: ${options.queryParameters}');
+
           print('[ApiClient] ==============================');
           
           handler.next(options);
