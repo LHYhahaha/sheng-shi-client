@@ -10,12 +10,14 @@ class StoreCoinPackageCard extends StatelessWidget {
     required this.package,
     required this.selected,
     required this.onTap,
+    this.width = 160,
     super.key,
   });
 
   final StorePackage package;
   final bool selected;
   final VoidCallback onTap;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +30,7 @@ class StoreCoinPackageCard extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          width: 160,
+          width: width,
           height: 85,
           decoration: BoxDecoration(
             color: const Color(0x80414143),
@@ -58,8 +60,9 @@ class StoreCoinPackageCard extends StatelessWidget {
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(
                                   color: AppColors.textPrimary,
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.bold,
                                   height: 1.3,
+                                  fontSize: 18,
                                 ),
                           ),
                         ),
@@ -74,6 +77,7 @@ class StoreCoinPackageCard extends StatelessWidget {
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: AppColors.textPrimary.withValues(alpha: 0.5),
                           height: 1.3,
+                          fontWeight: FontWeight.normal,
                         ),
                       ),
                     ],
@@ -84,7 +88,10 @@ class StoreCoinPackageCard extends StatelessWidget {
                         package.priceLabel,
                         maxLines: 1,
                         style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(color: AppColors.textPrimary),
+                            ?.copyWith(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.normal,
+                            ),
                       ),
                     ),
                   ],

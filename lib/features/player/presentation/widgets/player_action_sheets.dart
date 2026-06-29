@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/svg.dart';
 
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_sheet_handle.dart';
 import '../../../../shared/widgets/app_primary_button.dart';
+import '../../../../shared/widgets/custom_switch.dart';
 
 class PlayerShareSheet extends StatelessWidget {
   const PlayerShareSheet({super.key});
@@ -98,6 +100,17 @@ class PlayerCoinUnlockSheet extends ConsumerWidget {
         children: [
           Row(
             children: [
+              Spacer(),
+              _CloseButton(
+                key: const ValueKey('player_coin_unlock_close'),
+                onTap: () => Navigator.of(context).pop(false),
+              ),
+            ],
+          ),
+          SizedBox(height: 2),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
               Text.rich(
                 TextSpan(
                   text: '${context.l10n.playerPrice} ',
@@ -110,20 +123,23 @@ class PlayerCoinUnlockSheet extends ConsumerWidget {
                         height: 16,
                       ),
                     ),
-                    TextSpan(text: ' $price'),
+                    TextSpan(
+                      text: ' $price',
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ],
                 ),
                 key: const ValueKey('player_coin_unlock_price'),
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.58),
+                  color: Colors.white.withValues(alpha: 0.5),
                   fontSize: 14,
                   height: 16 / 12,
+                  fontWeight: FontWeight.normal,
                 ),
               ),
-              const Spacer(),
               Text.rich(
                 TextSpan(
-                  text: '${context.l10n.playerBalance} ',
+                  text: '${context.l10n.playerBalance}: ',
                   children: [
                     WidgetSpan(
                       alignment: PlaceholderAlignment.middle,
@@ -133,52 +149,58 @@ class PlayerCoinUnlockSheet extends ConsumerWidget {
                         height: 16,
                       ),
                     ),
-                    TextSpan(text: ' $balance'),
+                    TextSpan(
+                      text: ' $balance',
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ],
                 ),
                 key: const ValueKey('player_coin_unlock_balance'),
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.58),
+                  color: Colors.white.withValues(alpha: 0.5),
                   fontSize: 14,
                   height: 16 / 12,
+                  fontWeight: FontWeight.normal,
                 ),
-              ),
-              const SizedBox(width: 12),
-              _CloseButton(
-                key: const ValueKey('player_coin_unlock_close'),
-                onTap: () => Navigator.of(context).pop(false),
               ),
             ],
           ),
-          const SizedBox(height: 30),
-          AppPrimaryButton(
-            key: const ValueKey('player_coin_unlock_confirm'),
-            label: context.l10n.playerPlay,
-            icon: Icons.play_arrow_rounded,
-            onPressed: onConfirm,
+          const SizedBox(height: 28),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: AppPrimaryButton(
+              key: const ValueKey('player_coin_unlock_confirm'),
+              label: context.l10n.playerPlay,
+              icon: Icons.play_arrow_rounded,
+              onPressed: onConfirm,
+            ),
           ),
           const SizedBox(height: 24),
-          Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 45),
+            child: Divider(
+              color: Colors.white.withValues(alpha: 0.08),
+              height: 1,
+            ),
+          ),
           const SizedBox(height: 20),
           Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Expanded(
-                child: Text(
-                  context.l10n.autoUnlockNext,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.45),
-                    fontSize: 12,
-                    height: 16 / 12,
-                  ),
+              Text(
+                context.l10n.autoUnlockNext,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.45),
+                  fontSize: 12,
+                  height: 16 / 12,
                 ),
               ),
-              Switch.adaptive(
+              SizedBox(width: 27),
+              CustomSwitch(
                 key: const ValueKey('player_coin_unlock_auto_next_switch'),
                 value: autoUnlockEnabled,
-                activeThumbColor: Colors.white,
-                activeTrackColor: AppColors.primary,
                 onChanged: (value) {
                   unawaited(
                     ref
@@ -381,11 +403,9 @@ class _CompactPlayerSheet extends StatelessWidget {
           width: double.infinity,
           child: Column(
             children: [
-              const SizedBox(height: 8),
-              const AppSheetHandle(),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
                   child: child,
                 ),
               ),
@@ -453,20 +473,10 @@ class _CloseButton extends StatelessWidget {
       onTap: onTap,
       child: SizedBox.square(
         dimension: 40,
-        child: Center(
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.08),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.close_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
+        child: SvgPicture.asset(
+          "assets/images/player/close.svg",
+          width: 40,
+          height: 40,
         ),
       ),
     );

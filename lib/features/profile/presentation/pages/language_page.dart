@@ -106,13 +106,11 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
                       onDone: _onDone,
                       showDoneButton: showDoneButton,
                     ),
-                    const SizedBox(height: 12),
                     _LanguageOption(
                       label: 'English',
                       selected: selectedLanguageCode == 'en',
                       onTap: () => _onLanguageSelected('en'),
                     ),
-                    const SizedBox(height: 28),
                     _LanguageOption(
                       label: '简体中文',
                       selected: selectedLanguageCode == 'zh',
@@ -219,38 +217,36 @@ class _LanguageOption extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: SizedBox(
-        height: 24,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.textPrimary,
-                    fontSize: 16,
-                    height: 1.5,
-                  ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16,vertical: 15),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
+                  height: 1.5,
+                  fontWeight: FontWeight.normal,
                 ),
               ),
-              if (selected)
-                Container(
-                  width: 18,
-                  height: 18,
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_rounded,
-                    color: AppColors.textPrimary,
-                    size: 14,
-                  ),
+            ),
+            if (selected)
+              Container(
+                width: 18,
+                height: 18,
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
                 ),
-            ],
-          ),
+                child: const Icon(
+                  Icons.check_rounded,
+                  color: AppColors.textPrimary,
+                  size: 14,
+                ),
+              ),
+          ],
         ),
       ),
     );

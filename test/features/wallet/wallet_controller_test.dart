@@ -34,6 +34,39 @@ void main() {
     expect(state.coinRecords, isEmpty);
   });
 
+  test('loads more transaction records when next page exists', () async {
+    final repository = _FakeWalletRepository(
+      _emptyWalletData,
+      transactionPages: [
+        WalletRecordPage(
+          items: [_transactionRecordA],
+          nextPageToken: '2',
+        ),
+        WalletRecordPage(
+          items: [_transactionRecordB],
+          nextPageToken: null,
+        ),
+      ],
+    );
+    final container = _createContainer(repository);
+    final controller = container.read(walletControllerProvider.notifier);
+
+    await controller.loadTransactionRecords();
+    var state = container.read(walletControllerProvider);
+    expect(state.transactionRecords.map((record) => record.id), ['tx-a']);
+    expect(state.transactionNextPageToken, '2');
+
+    await controller.loadMoreRecords(WalletRecordType.transaction);
+    state = container.read(walletControllerProvider);
+
+    expect(state.transactionRecords.map((record) => record.id), [
+      'tx-a',
+      'tx-b',
+    ]);
+    expect(state.transactionNextPageToken, isNull);
+    expect(state.isHistoryLoadingMore, isFalse);
+  });
+
   test('keeps wallet error retryable', () async {
     final repository = _FakeWalletRepository(_emptyWalletData)
       ..shouldThrow = true;
@@ -125,9 +158,17 @@ ProviderContainer _createContainer(WalletRepository repository) {
 }
 
 class _FakeWalletRepository implements WalletRepository {
-  _FakeWalletRepository(this.data);
+  _FakeWalletRepository(
+    this.data, {
+    this.transactionPages,
+    this.consumptionPages,
+    this.rewardPages,
+  });
 
   final WalletData data;
+  final List<WalletRecordPage>? transactionPages;
+  final List<WalletRecordPage>? consumptionPages;
+  final List<WalletRecordPage>? rewardPages;
   bool shouldThrow = false;
 
   @override
@@ -139,36 +180,64 @@ class _FakeWalletRepository implements WalletRepository {
   }
 
   @override
-  Future<List<WalletRecord>> fetchTransactionRecords({
+  Future<WalletRecordPage> fetchTransactionRecords({
     String? pageToken,
   }) async {
     if (shouldThrow) {
       throw StateError('failed');
     }
-    return const [];
+    final pageIndex = (int.tryParse(pageToken ?? '1') ?? 1) - 1;
+    if (transactionPages != null) {
+      return transactionPages![pageIndex];
+    }
+    return const WalletRecordPage(items: [], nextPageToken: null);
   }
 
   @override
-  Future<List<WalletRecord>> fetchConsumptionRecords({
+  Future<WalletRecordPage> fetchConsumptionRecords({
     required String status,
     String? pageToken,
   }) async {
     if (shouldThrow) {
       throw StateError('failed');
     }
-    return const [];
+    final pageIndex = (int.tryParse(pageToken ?? '1') ?? 1) - 1;
+    if (consumptionPages != null) {
+      return consumptionPages![pageIndex];
+    }
+    return const WalletRecordPage(items: [], nextPageToken: null);
   }
 
   @override
-  Future<List<WalletRecord>> fetchRewardCoins({
+  Future<WalletRecordPage> fetchRewardCoins({
     String? pageToken,
   }) async {
     if (shouldThrow) {
       throw StateError('failed');
     }
-    return const [];
+    final pageIndex = (int.tryParse(pageToken ?? '1') ?? 1) - 1;
+    if (rewardPages != null) {
+      return rewardPages![pageIndex];
+    }
+    return const WalletRecordPage(items: [], nextPageToken: null);
   }
 }
+
+final _transactionRecordA = WalletRecord.raw(
+  id: 'tx-a',
+  type: WalletRecordType.transaction,
+  title: 'Coins A',
+  dateLabel: '2026.06.24',
+  trailingLabel: r'$1.99',
+);
+
+final _transactionRecordB = WalletRecord.raw(
+  id: 'tx-b',
+  type: WalletRecordType.transaction,
+  title: 'Coins B',
+  dateLabel: '2026.06.24',
+  trailingLabel: r'$2.99',
+);
 
 const _emptyWalletData = WalletData(
   coins: 0,

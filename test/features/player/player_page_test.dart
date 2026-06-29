@@ -3116,7 +3116,10 @@ final _singleDramaAutoImmersiveDisabledOverrides = [
 class _InitiallyLoadingPaymentLoadingController
     extends PaymentLoadingController {
   @override
-  bool build() => true;
+  PaymentLoadingState build() => const PaymentLoadingState(
+    isVisible: true,
+    label: PaymentLoadingLabel.confirmingPayment,
+  );
 }
 
 const _mockVideoUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';

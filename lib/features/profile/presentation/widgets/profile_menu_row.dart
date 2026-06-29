@@ -24,8 +24,9 @@ class ProfileMenuRow extends StatelessWidget {
       onTap: enabled ? onTap : null,
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
-      child: SizedBox(
-        height: subtitle != null ? 52 : 40,
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 14),
+        // subtitle != null ? 52 : 40,
         child: Row(
           crossAxisAlignment: subtitle != null 
               ? CrossAxisAlignment.start 
@@ -76,7 +77,7 @@ class ProfileMenuRow extends StatelessWidget {
                   : EdgeInsets.zero,
               child: Icon(
                 Icons.chevron_right_rounded,
-                color: AppColors.textPrimary.withValues(alpha: 0.55),
+                color: Color(0XFF818181).withValues(alpha: 0.7),
                 size: 20,
               ),
             ),

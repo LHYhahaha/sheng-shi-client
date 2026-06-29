@@ -208,6 +208,7 @@ class _BenefitRow extends StatelessWidget {
                     color: _gold.withValues(alpha: 0.6),
                     fontSize: 14,
                     height: 1.3,
+                    fontWeight: FontWeight.normal
                   ),
                   children: [
                     TextSpan(text: benefit.title),
@@ -229,6 +230,7 @@ class _BenefitRow extends StatelessWidget {
                     color: _gold.withValues(alpha: 0.4),
                     fontSize: 12,
                     height: 1.3,
+                      fontWeight: FontWeight.normal
                   ),
                 ),
               ],
@@ -252,6 +254,7 @@ class _MembershipTips extends StatelessWidget {
       color: Colors.white.withValues(alpha: 0.4),
       fontSize: 12,
       height: 1.5,
+      fontWeight: FontWeight.normal
     );
 
     return Column(

@@ -1,46 +1,84 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../theme/app_colors.dart';
-import '../theme/app_spacing.dart';
 
-/// 通用空态组件。
-///
-/// 用于简单页面空列表。业务强定制空态仍可单独实现，不要为了复用牺牲页面语义。
 class AppEmptyState extends StatelessWidget {
   const AppEmptyState({
-    required this.title,
     required this.message,
-    this.icon = Icons.inbox_outlined,
+    this.buttonLabel,
+    this.onButtonPressed,
+    this.assetPath = defaultAssetPath,
+    this.imageSize = 120,
+    this.spacing = 6,
+    this.buttonTopSpacing = 20,
+    this.buttonWidth = 228,
+    this.padding = EdgeInsets.zero,
+    this.textStyle,
     super.key,
   });
 
-  /// 空态标题。
-  final String title;
+  static const defaultAssetPath = 'assets/images/home/empty_icon.svg';
 
-  /// 空态说明。
   final String message;
-
-  /// 空态图标。
-  final IconData icon;
+  final String? buttonLabel;
+  final VoidCallback? onButtonPressed;
+  final String assetPath;
+  final double imageSize;
+  final double spacing;
+  final double buttonTopSpacing;
+  final double buttonWidth;
+  final EdgeInsetsGeometry padding;
+  final TextStyle? textStyle;
 
   @override
   Widget build(BuildContext context) {
+    final effectiveTextStyle =
+        textStyle ??
+        Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: AppColors.textPrimary.withValues(alpha: 0.3),
+          fontSize: 12,
+          height: 16 / 12,
+        );
+    final showButton = buttonLabel != null && onButtonPressed != null;
+
     return Padding(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      padding: padding,
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(icon, color: AppColors.textMuted, size: 40),
-          const SizedBox(height: AppSpacing.md),
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+          SvgPicture.asset(
+            assetPath,
+            width: imageSize,
+            height: imageSize,
+            fit: BoxFit.contain,
           ),
+          SizedBox(height: spacing),
+          Text(message, textAlign: TextAlign.center, style: effectiveTextStyle),
+          if (showButton) ...[
+            SizedBox(height: buttonTopSpacing),
+            SizedBox(
+              width: buttonWidth,
+              height: 32,
+              child: FilledButton(
+                onPressed: onButtonPressed,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    height: 16 / 12,
+                  ),
+                ),
+                child: Text(buttonLabel!),
+              ),
+            ),
+          ],
         ],
       ),
     );

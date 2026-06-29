@@ -34,6 +34,15 @@ class ProfileMembershipCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xff220B04),
         borderRadius: BorderRadius.circular(AppRadii.sm),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.transparent,
+            const Color(0xff220B04),
+            const Color(0xff220B04),
+          ],
+        ),
       ),
       child: Column(
         children: [

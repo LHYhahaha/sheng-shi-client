@@ -145,4 +145,4 @@ class PlayerRechargeBenefit {
 /// 权益 icon 语义。
 ///
 /// domain 层不依赖 Flutter IconData，避免业务模型和 Material UI 绑定。
-enum PlayerRechargeBenefitIcon { series, download, hd, points, noAds }
+enum PlayerRechargeBenefitIcon { series, download, hd, points }

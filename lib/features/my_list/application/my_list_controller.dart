@@ -99,6 +99,10 @@ class MyListState {
 
   int get selectedCount => selectedIds.length;
 
+  bool get areAllItemsSelected =>
+      items.isNotEmpty &&
+      items.every((item) => selectedIds.contains(item.dramaId));
+
   bool get canEditCollection => true;
 
   MyListState copyWith({
@@ -347,12 +351,30 @@ class MyListController extends Notifier<MyListState> {
     state = state.copyWith(selectedIds: Set<int>.unmodifiable(selectedIds));
   }
 
+  void toggleSelectAll() {
+    if (!state.isCollectionEditing) {
+      return;
+    }
+
+    if (state.areAllItemsSelected) {
+      state = state.copyWith(selectedIds: const {});
+      return;
+    }
+
+    state = state.copyWith(
+      selectedIds: Set<int>.unmodifiable(
+        state.items.map((item) => item.dramaId),
+      ),
+    );
+  }
+
   Future<void> deleteSelected() async {
     if (state.selectedIds.isEmpty) {
       return;
     }
 
     final selectedDramaIds = state.selectedIds;
+    final tab = state.selectedTab;
 
     // 乐观更新：先本地删除
     state = state.copyWith(
@@ -367,14 +389,16 @@ class MyListController extends Notifier<MyListState> {
     // 调用远程接口
     try {
       final repository = ref.read(myListRepositoryProvider);
-      final isCollection = state.selectedTab == MyListTab.collection;
+      final isCollection = tab == MyListTab.collection;
       
       if (isCollection) {
         // 收藏列表：使用 dramaId 删除
         await repository.deleteFavorites(dramaIds: selectedDramaIds.toList());
       } else {
         // 播放历史：使用 dramaId 删除
-        await repository.deletePlayHistories(historyIds: selectedDramaIds.toList());
+        await repository.deletePlayHistories(
+          historyIds: selectedDramaIds.toList(),
+        );
       }
     } catch (error) {
       // 删除失败时重新加载列表
@@ -383,6 +407,8 @@ class MyListController extends Notifier<MyListState> {
   }
 
   Future<void> deleteItem(int dramaId) async {
+    final tab = state.selectedTab;
+
     state = state.copyWith(
       items: List<MyListItem>.unmodifiable(
         state.items.where((item) => item.dramaId != dramaId),
@@ -396,7 +422,7 @@ class MyListController extends Notifier<MyListState> {
     // 调用远程接口
     try {
       final repository = ref.read(myListRepositoryProvider);
-      final isCollection = state.selectedTab == MyListTab.collection;
+      final isCollection = tab == MyListTab.collection;
 
       if (isCollection) {
         // 收藏列表：使用 dramaId 删除

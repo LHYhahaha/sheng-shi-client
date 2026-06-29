@@ -7,7 +7,6 @@ import '../../../../app/shell/app_shell.dart';
 import '../../../../core/auth/user_info_store.dart';
 import '../../../auth/application/auth_controller.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
-import '../../../../core/network/proxy_config.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/media/media_resource.dart';
 import '../../../../shared/theme/app_colors.dart';
@@ -22,9 +21,6 @@ import '../widgets/profile_menu_row.dart';
 /// 金币数据来自 EntitlementController（/api/user/entitlements 接口），
 /// 不再单独请求 /api/payment/wallet。
 /// 登录身份、昵称和头像以 AuthState 为准。
-const bool _debugProxyMenuEnabled =
-    bool.fromEnvironment('ENABLE_CHARLES_PROXY_MENU');
-
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
 
@@ -136,21 +132,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               title: l10n.profileSettings,
               iconAssetPath: 'assets/images/profile/setting.png',
               onTap: () => context.push(RoutePaths.settings),
-            ),
-            if (_debugProxyMenuEnabled)
-              Consumer(
-              builder: (context, ref, _) {
-                final proxyState = ref.watch(proxyConfigProvider);
-                final subtitle = proxyState.isEnabled
-                    ? '代理已开启 (${proxyState.proxyAddress})'
-                    : '未开启';
-                return ProfileMenuRow(
-                  title: '抓包代理 (Charles)',
-                  subtitle: subtitle,
-                  iconAssetPath: 'assets/images/profile/setting.png',
-                  onTap: () => showProxyConfigDialog(context, ref),
-                );
-              },
             ),
           ],
         ),

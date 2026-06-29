@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:drama_client/features/my_list/data/dto/favorite_item_dto.dart';
+import 'package:drama_client/features/my_list/data/dto/my_list_page_dto.dart';
 import 'package:drama_client/features/my_list/data/dto/play_history_item_dto.dart';
 import 'package:drama_client/features/my_list/data/mapper/my_list_mapper.dart';
 import 'package:drama_client/features/my_list/data/mock_my_list_repository.dart';
@@ -20,7 +21,7 @@ void main() {
     expect(item.introduction, 'Favorite intro');
     expect(item.currentEpisode, 6);
     expect(item.episodeCount, 52);
-    expect(item.coverAssetPath, MyListItem.fallbackCoverAssetPath);
+    expect(item.coverAssetPath, 'https://cdn.example.com/fav.jpg');
     expect(item.coverResource.type, MediaResourceType.network);
     expect(item.coverResource.value, 'https://cdn.example.com/fav.jpg');
     expect(item.coverResource.aspectRatio, 0.72);
@@ -34,7 +35,7 @@ void main() {
     expect(item.introduction, '');
     expect(item.currentEpisode, 2);
     expect(item.episodeCount, 0);
-    expect(item.coverAssetPath, MyListItem.fallbackCoverAssetPath);
+    expect(item.coverAssetPath, 'https://cdn.example.com/history.jpg');
     expect(item.coverResource.type, MediaResourceType.network);
   });
 
@@ -43,7 +44,7 @@ void main() {
       const FavoriteItemDto(
         dramaId: 1,
         title: 'No Cover',
-        description: null,
+        summary: null,
         coverUrl: null,
         coverAspectRatio: null,
         episodeTotal: 10,
@@ -64,8 +65,29 @@ void main() {
     expect(item.coverResource.value, MyListItem.fallbackCoverAssetPath);
   });
 
+  test('page dto computes next page token from page object', () {
+    final page = MyListPageDto.favoritesFromJson({
+      'list': [
+        {
+          'dramaId': 1,
+          'title': 'Remote Favorite',
+          'description': 'Favorite intro',
+          'coverUrl': 'https://cdn.example.com/fav.jpg',
+          'episodeTotal': 52,
+          'latestEpisodeNumber': 6,
+        },
+      ],
+      'page': {'page': 1, 'pageSize': 20, 'total': 21},
+    });
+
+    expect(page.items, hasLength(1));
+    expect(page.nextPageToken, '2');
+  });
+
   test('provider defaults to mock repository', () {
-    final container = ProviderContainer();
+    final container = ProviderContainer(
+      overrides: [useRemoteMyListApiProvider.overrideWithValue(false)],
+    );
     addTearDown(container.dispose);
 
     expect(
@@ -78,7 +100,7 @@ void main() {
 const _favoriteDto = FavoriteItemDto(
   dramaId: 1,
   title: 'Remote Favorite',
-  description: 'Favorite intro',
+  summary: 'Favorite intro',
   coverUrl: 'https://cdn.example.com/fav.jpg',
   coverAspectRatio: 0.72,
   episodeTotal: 52,
@@ -88,7 +110,7 @@ const _favoriteDto = FavoriteItemDto(
   createdAt: null,
   followSource: 0,
   lastEpisodeId: 0,
-  lastEpisodeNo: 0,
+  lastEpisodeNo: 6,
   lastWatchAt: null,
   status: 0,
   updatedAt: null,
@@ -103,4 +125,6 @@ const _historyDto = PlayHistoryItemDto(
   watchCount: 1,
   progressPercent: 20,
   lastWatchAt: null,
+  coverUrl: 'https://cdn.example.com/history.jpg',
+  title: 'EP. 2',
 );

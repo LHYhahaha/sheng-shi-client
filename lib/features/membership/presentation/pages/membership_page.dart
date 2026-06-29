@@ -49,9 +49,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_returnToProfileInitialized) {
-      final uri = GoRouter.maybeOf(
-        context,
-      )?.routeInformationProvider.value.uri;
+      final uri = GoRouter.maybeOf(context)?.routeInformationProvider.value.uri;
       _returnToProfile = uri?.queryParameters['returnToProfile'] == 'true';
       _returnToProfileInitialized = true;
     }
@@ -130,9 +128,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
                       : l10n.storePurchaseFailed;
                   ref.read(appToastProvider).error(message);
                 } else if (MembershipModalResults.isCancelled(result)) {
-                  ref
-                      .read(appToastProvider)
-                      .info(l10n.storePurchaseCancelled);
+                  ref.read(appToastProvider).info(l10n.storePurchaseCancelled);
                 }
                 ref
                     .read(membershipControllerProvider.notifier)
@@ -162,7 +158,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
             if (state.hasContent)
               _MembershipHeroContent(
                 title: context.l10n.membershipTitle,
-                subtitle: state.heroSubtitle,
+                subtitle: context.l10n.membershipUpgraded,
               ),
             Positioned(
               top: topInset,
@@ -292,33 +288,25 @@ class _MembershipBody extends StatelessWidget {
                 );
               },
             ),
-            const SizedBox(
-              height:
-                  MembershipLayout.planDescriptionTop -
-                  MembershipLayout.planCardsTop -
-                  MembershipLayout.planCardHeight,
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: MembershipLayout.horizontalPadding,
-              ),
-              child: SizedBox(
-                height: 18,
-                child: Center(
-                  child: Text(
-                    selectedPlan?.description ?? '',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: const Color(0xFF767676),
-                      fontSize: 12,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            const SizedBox(height: 12),
+            // Padding(
+            //   padding: const EdgeInsets.symmetric(
+            //     horizontal: MembershipLayout.horizontalPadding,
+            //   ),
+            //   child: Center(
+            //     child: Text(
+            //       selectedPlan?.description ?? '',
+            //       maxLines: 1,
+            //       overflow: TextOverflow.ellipsis,
+            //       textAlign: TextAlign.center,
+            //       style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            //         color: const Color(0xFF767676),
+            //         fontSize: 12,
+            //         height: 1.5,
+            //       ),
+            //     ),
+            //   ),
+            // ),
             SizedBox(
               height:
                   MembershipLayout.benefitsPanelTop -
@@ -346,29 +334,47 @@ class _MembershipPlanCardsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: MembershipLayout.planCardHeight,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.none,
-        padding: const EdgeInsets.symmetric(
-          horizontal: MembershipLayout.horizontalPadding,
-        ),
-        child: Row(
-          children: [
-            for (var index = 0; index < plans.length; index++) ...[
-              if (index > 0)
-                const SizedBox(width: MembershipLayout.planCardGap),
-              MembershipPlanCard(
-                key: MembershipPlanCard.planKey(plans[index].id),
-                plan: plans[index],
-                selected: selectedPlanId == plans[index].id,
-                onTap: () => onPlanTap(plans[index].id),
-              ),
-            ],
-          ],
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const visibleCardCount = 3;
+        const visibleGapCount = 3;
+        final contentWidth =
+            constraints.maxWidth - MembershipLayout.horizontalPadding * 2;
+        final cardWidth =
+            (contentWidth - MembershipLayout.planCardGap * visibleGapCount) /
+            visibleCardCount;
+        final cardHeight =
+            cardWidth *
+            MembershipLayout.planCardHeight /
+            MembershipLayout.planCardWidth;
+
+        return SizedBox(
+          height: cardHeight,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            padding: const EdgeInsets.symmetric(
+              horizontal: MembershipLayout.horizontalPadding,
+            ),
+            child: Row(
+              children: [
+                for (var index = 0; index < plans.length; index++) ...[
+                  if (index > 0)
+                    const SizedBox(width: MembershipLayout.planCardGap),
+                  MembershipPlanCard(
+                    key: MembershipPlanCard.planKey(plans[index].id),
+                    plan: plans[index],
+                    selected: selectedPlanId == plans[index].id,
+                    width: cardWidth,
+                    height: cardHeight,
+                    onTap: () => onPlanTap(plans[index].id),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -426,6 +432,7 @@ class _MembershipHeroContent extends StatelessWidget {
                       color: Colors.white,
                       fontSize: 11,
                       height: 1.5,
+                      fontWeight: FontWeight.normal,
                     ),
                   ),
                 ),
@@ -486,6 +493,11 @@ class _AvatarDots extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const colors = [Color(0xFFE6CFA6), Color(0xFFB58E7A), Color(0xFF72564B)];
+    const images = [
+      "assets/images/membership/1.png",
+      "assets/images/membership/2.png",
+      "assets/images/membership/3.png",
+    ];
 
     return SizedBox(
       width: 32,
@@ -501,6 +513,7 @@ class _AvatarDots extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: colors[index],
                   shape: BoxShape.circle,
+                  image: DecorationImage(image: AssetImage(images[index])),
                   border: Border.all(color: MembershipLayout.background),
                 ),
               ),
@@ -550,17 +563,22 @@ class _MembershipBottomButton extends StatelessWidget {
           children: [
             Text(
               context.l10n.membershipAutoRenewCancel,
-              style: TextStyle(color: Color(0XFFE6CFA6), fontSize: 14),
+              style: TextStyle(
+                color: Color(0XFFE6CFA6).withValues(alpha: 0.5),
+                fontSize: 12,
+                fontWeight: FontWeight.normal,
+              ),
             ),
             SizedBox(height: 20),
             GestureDetector(
               onTap: onPurchase,
               child: Container(
-                height: 50,
+                height: 46,
                 width: double.infinity,
+                margin: EdgeInsets.symmetric(horizontal: 15),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(25),
+                  borderRadius: BorderRadius.circular(8),
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
@@ -571,8 +589,8 @@ class _MembershipBottomButton extends StatelessWidget {
                   context.l10n.membershipBuyNow,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     color: const Color(0xFF1B1B1C),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),

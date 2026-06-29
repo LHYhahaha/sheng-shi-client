@@ -1395,7 +1395,16 @@ class _EmptyMyListRepository implements MyListRepository {
 
   @override
   Future<List<MyListItem>> fetchItems({required MyListTab tab}) async {
-    return const [];
+    final page = await fetchPage(tab: tab);
+    return page.items;
+  }
+
+  @override
+  Future<MyListPage> fetchPage({
+    required MyListTab tab,
+    String? pageToken,
+  }) async {
+    return const MyListPage(items: [], nextPageToken: null);
   }
 
   @override
@@ -1428,24 +1437,24 @@ class _EmptyWalletRepository implements WalletRepository {
   }
 
   @override
-  Future<List<WalletRecord>> fetchTransactionRecords({
+  Future<WalletRecordPage> fetchTransactionRecords({
     String? pageToken,
   }) async {
-    return const [];
+    return const WalletRecordPage(items: [], nextPageToken: null);
   }
 
   @override
-  Future<List<WalletRecord>> fetchConsumptionRecords({
+  Future<WalletRecordPage> fetchConsumptionRecords({
     required String status,
     String? pageToken,
   }) async {
-    return const [];
+    return const WalletRecordPage(items: [], nextPageToken: null);
   }
 
   @override
-  Future<List<WalletRecord>> fetchRewardCoins({
+  Future<WalletRecordPage> fetchRewardCoins({
     String? pageToken,
   }) async {
-    return const [];
+    return const WalletRecordPage(items: [], nextPageToken: null);
   }
 }

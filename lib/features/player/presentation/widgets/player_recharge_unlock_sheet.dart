@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
@@ -81,8 +82,11 @@ class _PlayerRechargeUnlockSheetState
     if (!mounted) {
       return;
     }
-    if (PlayerModalResults.isPaymentCompleted(result)) {
-      ref.read(appToastProvider).success(context.l10n.storePurchaseSuccess);
+    final rechargeState = ref.read(
+      playerRechargeUnlockControllerProvider(widget.sessionKey),
+    );
+    if (PlayerModalResults.isPaymentCompleted(result) ||
+        rechargeState.status == PlayerRechargeUnlockStatus.success) {
       Navigator.of(context).pop(true);
       return;
     }
@@ -91,15 +95,13 @@ class _PlayerRechargeUnlockSheetState
       return;
     }
     if (result.kind == AppModalResultKind.failed) {
-      final state = ref.read(
-        playerRechargeUnlockControllerProvider(widget.sessionKey),
-      );
       final message =
-          state.purchaseFailureKind ==
+          rechargeState.purchaseFailureKind ==
                   PlayerRechargePurchaseFailureKind.orderCreation ||
-              state.purchaseFailureKind ==
+              rechargeState.purchaseFailureKind ==
                   PlayerRechargePurchaseFailureKind.verification ||
-              state.paymentStage == PlayerRechargePaymentStage.verifying
+              rechargeState.paymentStage ==
+                  PlayerRechargePaymentStage.verifying
           ? context.l10n.networkError
           : context.l10n.storePurchaseFailed;
       ref.read(appToastProvider).error(message);
@@ -270,12 +272,17 @@ class _RechargeTipsSection extends StatelessWidget {
           style: textTheme.labelMedium?.copyWith(
             color: AppColors.textPrimary.withValues(alpha: 0.4),
             height: 1.5,
+            fontWeight: FontWeight.normal,
           ),
         ),
         const SizedBox(height: 6),
         RichText(
           text: TextSpan(
-            style: const TextStyle(fontSize: 11, color: Color(0xFFFFFFFF)),
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFFFFFFFF),
+              fontWeight: FontWeight.normal,
+            ),
             children: [
               TextSpan(
                 text: context.l10n.appCommonLegalPrivacyPolicy,
@@ -300,6 +307,7 @@ class _RechargeTipsSection extends StatelessWidget {
               style: textTheme.labelMedium?.copyWith(
                 color: AppColors.textPrimary.withValues(alpha: 0.4),
                 height: 1.5,
+                fontWeight: FontWeight.normal,
               ),
             ),
           ),
@@ -343,7 +351,7 @@ class _OfferContent extends ConsumerWidget {
             physics: const BouncingScrollPhysics(),
             padding: EdgeInsets.fromLTRB(
               16,
-              92,
+              74,
               16,
               28 + MediaQuery.paddingOf(context).bottom,
             ),
@@ -370,21 +378,33 @@ class _OfferContent extends ConsumerWidget {
                 const SizedBox(height: 19),
                 SizedBox(
                   height: 85,
-                  child: ListView.separated(
-                    clipBehavior: Clip.none,
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    itemCount: offer.coinPackages.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(width: 8),
-                    itemBuilder: (context, index) {
-                      final package = offer.coinPackages[index];
-                      return _CoinPackageCard(
-                        sessionKey: sessionKey,
-                        package: package,
-                        selected: state.selectedCoinPackageId == package.id,
-                        enabled: !isProcessing,
-                        onTap: () => onCoinTap(package.id),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      const gap = 8.0;
+                      const visibleCardCount = 2.2;
+                      const visibleGapCount = 2;
+                      final cardWidth =
+                          (constraints.maxWidth - gap * visibleGapCount) /
+                          visibleCardCount;
+
+                      return ListView.separated(
+                        clipBehavior: Clip.none,
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: offer.coinPackages.length,
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(width: gap),
+                        itemBuilder: (context, index) {
+                          final package = offer.coinPackages[index];
+                          return _CoinPackageCard(
+                            sessionKey: sessionKey,
+                            package: package,
+                            selected: state.selectedCoinPackageId == package.id,
+                            enabled: !isProcessing,
+                            width: cardWidth,
+                            onTap: () => onCoinTap(package.id),
+                          );
+                        },
                       );
                     },
                   ),
@@ -582,11 +602,11 @@ class _RechargeHeader extends ConsumerWidget {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 15),
         child: Column(
           children: [
             SizedBox(
-              height: 48,
+              // height: 48,
               child: Row(
                 children: [
                   _InlineCoinMetric(
@@ -603,29 +623,16 @@ class _RechargeHeader extends ConsumerWidget {
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: onClose,
-                    child: Container(
-                      key: const ValueKey('player_recharge_unlock_close'),
-                      width: 44,
-                      height: 44,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.1),
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.close_rounded,
-                        color: AppColors.textPrimary,
-                        size: 24,
-                      ),
+                    child: SvgPicture.asset(
+                      "assets/images/player/close.svg",
+                      width: 40,
+                      height: 40,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 16),
             Divider(height: 1, color: Colors.white.withValues(alpha: 0.09)),
           ],
         ),
@@ -655,6 +662,7 @@ class _InlineCoinMetric extends StatelessWidget {
             color: Colors.white.withValues(alpha: 0.5),
             fontSize: 14,
             height: 18 / 14,
+            fontWeight: FontWeight.normal,
           ),
         ),
         const SizedBox(width: 6),
@@ -665,7 +673,7 @@ class _InlineCoinMetric extends StatelessWidget {
           style: const TextStyle(
             color: AppColors.textPrimary,
             fontSize: 14,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.normal,
             height: 18 / 14,
           ),
         ),
@@ -690,7 +698,7 @@ class _CoinAmountText extends StatelessWidget {
           width: fontSize + 2,
           height: fontSize + 2,
         ),
-        const SizedBox(width: 5),
+        const SizedBox(width: 2),
         Flexible(
           child: Text(
             '$value',
@@ -699,7 +707,7 @@ class _CoinAmountText extends StatelessWidget {
             style: TextStyle(
               color: AppColors.textPrimary,
               fontSize: fontSize,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.bold,
               height: 1.3,
             ),
           ),
@@ -762,6 +770,7 @@ class _CoinCardContent extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.5),
                 fontSize: 10,
                 height: 13 / 10,
+                fontWeight: FontWeight.normal,
               ),
             ),
           ],
@@ -774,6 +783,7 @@ class _CoinCardContent extends StatelessWidget {
                 color: AppColors.textPrimary,
                 fontSize: 12,
                 height: 16 / 12,
+                fontWeight: FontWeight.normal,
               ),
             ),
           ),
@@ -784,15 +794,20 @@ class _CoinCardContent extends StatelessWidget {
 }
 
 class _CoinPackageCardFrame extends StatelessWidget {
-  const _CoinPackageCardFrame({required this.selected, required this.child});
+  const _CoinPackageCardFrame({
+    required this.selected,
+    required this.width,
+    required this.child,
+  });
 
   final bool selected;
+  final double width;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 160,
+      width: width,
       height: 85,
       decoration: BoxDecoration(
         color: const Color(0xFF414143).withValues(alpha: 0.5),
@@ -810,6 +825,7 @@ class _CoinPackageCard extends ConsumerWidget {
     required this.package,
     required this.selected,
     required this.enabled,
+    required this.width,
     required this.onTap,
   });
 
@@ -817,6 +833,7 @@ class _CoinPackageCard extends ConsumerWidget {
   final PlayerRechargeCoinPackage package;
   final bool selected;
   final bool enabled;
+  final double width;
   final VoidCallback onTap;
 
   @override
@@ -833,6 +850,7 @@ class _CoinPackageCard extends ConsumerWidget {
         children: [
           _CoinPackageCardFrame(
             selected: selected,
+            width: width,
             child: _CoinCardContent(
               package: package,
               displayPrice: displayPrice,
@@ -892,7 +910,9 @@ class _PromoCountdownBadgeState extends ConsumerState<_PromoCountdownBadge> {
           key: const ValueKey('player_recharge_promo_badge'),
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
           decoration: const BoxDecoration(
-            color: Color(0xFFFF5964),
+            gradient: LinearGradient(
+              colors: [Color(0xFFFF9E53), Color(0xFFFE1340), Color(0xFFFE3273)],
+            ),
             borderRadius: BorderRadius.only(
               topRight: Radius.circular(8),
               bottomLeft: Radius.circular(8),
@@ -985,7 +1005,7 @@ class _MembershipPriceBlock extends StatelessWidget {
           style: const TextStyle(
             color: Color(0xFF51210F),
             fontSize: 20,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             height: 25 / 20,
           ),
         ),
@@ -1048,11 +1068,22 @@ class _MembershipInfoArea extends StatelessWidget {
                   style: const TextStyle(
                     color: Color(0xFF51210F),
                     fontSize: 18,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.bold,
                     height: 23 / 18,
                   ),
                 ),
                 const SizedBox(height: 8),
+                Text(
+                  description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: const Color(0xFF51210F).withValues(alpha: 0.55),
+                    fontSize: 10,
+                    fontWeight: FontWeight.normal,
+                    height: 13 / 10,
+                  ),
+                ),
                 // 展示促销文案（如果有），否则展示description
                 if (promoDescription != null)
                   Text(
@@ -1062,19 +1093,7 @@ class _MembershipInfoArea extends StatelessWidget {
                     style: TextStyle(
                       color: const Color(0xFF51210F).withValues(alpha: 0.55),
                       fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      height: 13 / 10,
-                    ),
-                  )
-                else
-                  Text(
-                    description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: const Color(0xFF51210F).withValues(alpha: 0.55),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.normal,
                       height: 13 / 10,
                     ),
                   ),
@@ -1102,24 +1121,41 @@ class _BenefitIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 18,
-      height: 18,
-      decoration: const BoxDecoration(
-        color: Color(0xFF9B604E),
-        shape: BoxShape.circle,
-      ),
+      // width: 18,
+      // height: 18,
+      // decoration: const BoxDecoration(
+      //   color: Color(0xFF9B604E),
+      //   shape: BoxShape.circle,
+      // ),
       alignment: Alignment.center,
-      child: Icon(_iconFor(icon), color: const Color(0xFFFFE7C0), size: 12),
+      child: SvgPicture.asset(
+        _iconFor(icon),
+        width: 20,
+        height: 20,
+        fit: BoxFit.contain,
+      ),
     );
   }
 
-  IconData _iconFor(PlayerRechargeBenefitIcon icon) {
+  // IconData _iconFor(PlayerRechargeBenefitIcon icon) {
+  //   return switch (icon) {
+  //     PlayerRechargeBenefitIcon.series => Icons.video_library_rounded,
+  //     PlayerRechargeBenefitIcon.download => Icons.download_rounded,
+  //     PlayerRechargeBenefitIcon.hd => Icons.hd_rounded,
+  //     PlayerRechargeBenefitIcon.points => Icons.stars_rounded,
+  //     PlayerRechargeBenefitIcon.noAds => Icons.block_rounded,
+  //   };
+  // }
+
+  String _iconFor(PlayerRechargeBenefitIcon icon) {
     return switch (icon) {
-      PlayerRechargeBenefitIcon.series => Icons.video_library_rounded,
-      PlayerRechargeBenefitIcon.download => Icons.download_rounded,
-      PlayerRechargeBenefitIcon.hd => Icons.hd_rounded,
-      PlayerRechargeBenefitIcon.points => Icons.stars_rounded,
-      PlayerRechargeBenefitIcon.noAds => Icons.block_rounded,
+      PlayerRechargeBenefitIcon.series =>
+        "assets/images/profile/brown_series.svg",
+      PlayerRechargeBenefitIcon.download =>
+        "assets/images/profile/brown_download.svg",
+      PlayerRechargeBenefitIcon.hd => "assets/images/profile/brown_hd.svg",
+      PlayerRechargeBenefitIcon.points =>
+        "assets/images/profile/brown_points.svg",
     };
   }
 }
@@ -1147,7 +1183,7 @@ class _BenefitGrid extends StatelessWidget {
         return Row(
           children: [
             _BenefitIcon(icon: benefit.icon),
-            const SizedBox(width: 7),
+            const SizedBox(width: 2),
             Expanded(
               child: Text(
                 label,
@@ -1156,7 +1192,7 @@ class _BenefitGrid extends StatelessWidget {
                 style: const TextStyle(
                   color: Color(0xFF77442E),
                   fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.normal,
                   height: 16 / 12,
                 ),
               ),
@@ -1176,7 +1212,6 @@ class _BenefitGrid extends StatelessWidget {
       PlayerRechargeBenefitIcon.hd => context.l10n.rechargeBenefitHd,
       PlayerRechargeBenefitIcon.points =>
         context.l10n.rechargeBenefitDailyPoints,
-      PlayerRechargeBenefitIcon.noAds => context.l10n.benefitNoAds,
     };
   }
 }

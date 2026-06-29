@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:flutter_svg/svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
@@ -14,6 +15,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
+import '../../../../shared/widgets/app_empty_state.dart';
 import '../../application/my_list_controller.dart';
 import '../../domain/my_list_item.dart';
 
@@ -77,6 +79,48 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     ref.read(myListControllerProvider.notifier).loadMore();
   }
 
+  void _scheduleFillShortListCheck() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      final state = ref.read(myListControllerProvider);
+      if (!state.canLoadMore) {
+        return;
+      }
+      if (state.items.isEmpty) {
+        _didTriggerLoadMoreNearEnd = false;
+        ref.read(myListControllerProvider.notifier).refreshCurrentTabInPlace();
+        return;
+      }
+      if (!_scrollController.hasClients) {
+        return;
+      }
+
+      final position = _scrollController.position;
+      if (position.maxScrollExtent <= 0) {
+        _didTriggerLoadMoreNearEnd = false;
+        ref.read(myListControllerProvider.notifier).refreshCurrentTabInPlace();
+      }
+    });
+  }
+
+  Future<void> _deleteSelectedAndFillIfShort(
+    MyListController controller,
+  ) async {
+    await controller.deleteSelected();
+    _scheduleFillShortListCheck();
+  }
+
+  Future<void> _deleteItemAndFillIfShort(
+    MyListController controller,
+    int dramaId,
+  ) async {
+    await controller.deleteItem(dramaId);
+    _scheduleFillShortListCheck();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -99,6 +143,30 @@ class _MyListPageState extends ConsumerState<MyListPage> {
       (previous, next) {
         if (previous?.$1 != next.$1 || next.$2) {
           _didTriggerLoadMoreNearEnd = false;
+        }
+      },
+    );
+    ref.listen(
+      myListControllerProvider.select(
+        (state) => (
+          state.items.length,
+          state.nextPageToken,
+          state.isCollectionEditing,
+          state.isLoading,
+          state.isLoadingMore,
+          state.error,
+          state.loadMoreError,
+        ),
+      ),
+      (previous, next) {
+        final didListShrink = previous != null && next.$1 < previous.$1;
+        final didBecomeLoadable =
+            previous?.$3 == true && !next.$3 ||
+            previous?.$4 == true && !next.$4 ||
+            previous?.$5 == true && !next.$5 ||
+            previous?.$2 != next.$2;
+        if (didListShrink || didBecomeLoadable) {
+          _scheduleFillShortListCheck();
         }
       },
     );
@@ -130,8 +198,10 @@ class _MyListPageState extends ConsumerState<MyListPage> {
                   _MyListHeader(
                     choosing: state.isCollectionEditing,
                     canEdit: state.canEditCollection,
+                    allSelected: state.areAllItemsSelected,
                     onEdit: controller.enterCollectionEdit,
                     onCancel: controller.cancelCollectionEdit,
+                    onSelectAll: controller.toggleSelectAll,
                   ),
                   _MyListTabs(
                     selectedTab: state.selectedTab,
@@ -148,7 +218,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
                 bottom: 0,
                 child: _DeleteBar(
                   count: state.selectedCount,
-                  onDelete: controller.deleteSelected,
+                  onDelete: () => _deleteSelectedAndFillIfShort(controller),
                 ),
               ),
           ],
@@ -223,7 +293,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
           // 两个 tab 都支持左滑删除，但编辑模式下禁用
           enabled: !state.isCollectionEditing,
           item: item,
-          onDelete: () => controller.deleteItem(item.dramaId),
+          onDelete: () => _deleteItemAndFillIfShort(controller, item.dramaId),
           onOpened: () => controller.openPlayItem(item.dramaId),
           onClosed: () => controller.closeOpenPlayItem(item.dramaId),
           child: Padding(
@@ -259,7 +329,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
                               : 'play_history_item',
                         ),
                       );
-                        // 从播放器页面返回后，刷新当前tab的数据以获取最新排序
+                      // 从播放器页面返回后，刷新当前tab的数据以获取最新排序
                       await controller.refreshCurrentTabInPlace();
                     },
             ),
@@ -313,14 +383,18 @@ class _MyListHeader extends StatelessWidget {
   const _MyListHeader({
     required this.choosing,
     required this.canEdit,
+    required this.allSelected,
     required this.onEdit,
     required this.onCancel,
+    required this.onSelectAll,
   });
 
   final bool choosing;
   final bool canEdit;
+  final bool allSelected;
   final VoidCallback onEdit;
   final VoidCallback onCancel;
+  final VoidCallback onSelectAll;
 
   @override
   Widget build(BuildContext context) {
@@ -361,10 +435,33 @@ class _MyListHeader extends StatelessWidget {
                 ),
               ),
             ),
+          if (choosing)
+            Positioned(
+              left: 16,
+              top: 18,
+              child: TextButton(
+                onPressed: onSelectAll,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.textDisabled,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(82, 36),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  allSelected ? l10n.myListDeselectAll : l10n.myListSelectAll,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                    color: Color(0XFF909090),
+                    height: 1.1,
+                  ),
+                ),
+              ),
+            ),
           if (showTrailing)
             Positioned(
               right: 16,
-              top: choosing ? 23 : 18,
+              top: choosing ? 18 : 22,
               child: choosing
                   ? TextButton(
                       onPressed: onCancel,
@@ -377,8 +474,9 @@ class _MyListHeader extends StatelessWidget {
                       child: Text(
                         l10n.myListCancel,
                         style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                          color: Color(0XFF909090),
                           height: 1.1,
                         ),
                       ),
@@ -398,48 +496,46 @@ class _HeaderMoreMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<_HeaderMenuAction>(
-      onSelected: (action) {
-        switch (action) {
-          case _HeaderMenuAction.edit:
-            onEdit();
-        }
-      },
-      color: AppColors.surfacePanel,
-      elevation: 0,
-      offset: const Offset(-4, 34),
-      padding: EdgeInsets.zero,
-      splashRadius: 1,
-      tooltip: '',
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      itemBuilder: (context) => [
-        PopupMenuItem<_HeaderMenuAction>(
-          value: _HeaderMenuAction.edit,
-          height: 38,
-          child: Text(
-            context.l10n.edit,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-      ],
-      child: const SizedBox(
-        width: 32,
-        height: 32,
-        child: Icon(
-          Icons.more_horiz_rounded,
-          color: AppColors.textPrimary,
-          size: 24,
-        ),
+    return
+    // PopupMenuButton<_HeaderMenuAction>(
+    // onSelected: (action) {
+    //   switch (action) {
+    //     case _HeaderMenuAction.edit:
+    //       onEdit();
+    //   }
+    // },
+    // color: AppColors.surfacePanel,
+    // elevation: 0,
+    // offset: const Offset(-4, 34),
+    // padding: EdgeInsets.zero,
+    // splashRadius: 1,
+    // tooltip: '',
+    // shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    // itemBuilder: (context) => [
+    //   PopupMenuItem<_HeaderMenuAction>(
+    //     value: _HeaderMenuAction.edit,
+    //     height: 38,
+    //     child: Text(
+    //       context.l10n.edit,
+    //       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+    //         color: AppColors.textPrimary,
+    //         fontSize: 14,
+    //         fontWeight: FontWeight.w500,
+    //       ),
+    //     ),
+    //   ),
+    // ],
+    GestureDetector(
+      onTap: () => onEdit(),
+      child: SvgPicture.asset(
+        "assets/images/my_list/mylist_edit.svg",
+        width: 24,
+        height: 24,
       ),
     );
   }
 }
 
-enum _HeaderMenuAction { edit }
 
 class _MyListTabs extends StatelessWidget {
   const _MyListTabs({required this.selectedTab, required this.onSelected});
@@ -458,19 +554,21 @@ class _MyListTabs extends StatelessWidget {
           Positioned(
             left: 16,
             top: 0,
-            child: _TabLabel(
-              text: l10n.myListCollectionTab,
-              active: selectedTab == MyListTab.collection,
-              onTap: () => onSelected(MyListTab.collection),
-            ),
-          ),
-          Positioned(
-            left: 188,
-            top: 0,
-            child: _TabLabel(
-              text: l10n.myListPlayTab,
-              active: selectedTab == MyListTab.play,
-              onTap: () => onSelected(MyListTab.play),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _TabLabel(
+                  text: l10n.myListCollectionTab,
+                  active: selectedTab == MyListTab.collection,
+                  onTap: () => onSelected(MyListTab.collection),
+                ),
+                const SizedBox(width: 32),
+                _TabLabel(
+                  text: l10n.myListPlayTab,
+                  active: selectedTab == MyListTab.play,
+                  onTap: () => onSelected(MyListTab.play),
+                ),
+              ],
             ),
           ),
           const Positioned(
@@ -513,9 +611,11 @@ class _TabLabel extends StatelessWidget {
               Text(
                 text,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: active ? AppColors.textPrimary : AppColors.textDisabled,
+                  color: active
+                      ? AppColors.textPrimary
+                      : AppColors.textDisabled,
                   fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.normal,
                   height: 1.18,
                 ),
               ),
@@ -580,10 +680,11 @@ class _MyListRowSwipeAction extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
-                    Icons.delete_rounded,
-                    color: AppColors.textPrimary,
-                    size: 22,
+                  SvgPicture.asset(
+                    "assets/images/my_list/delete_white.svg",
+                    width: 18,
+                    height: 18,
+                    fit: BoxFit.contain,
                   ),
                   const SizedBox(height: 3),
                   Text(
@@ -591,7 +692,7 @@ class _MyListRowSwipeAction extends StatelessWidget {
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: AppColors.textPrimary,
                       fontSize: 10,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                       height: 1.1,
                     ),
                   ),
@@ -736,6 +837,14 @@ class _CoverImage extends StatelessWidget {
       child: Stack(
         children: [
           _buildCoverImage(assetPath),
+          const Positioned(
+            left: 0,
+            bottom: 0,
+            child: ColoredBox(
+              color: Color(0x33FFFFFF),
+              child: SizedBox(width: 74, height: 2),
+            ),
+          ),
           Positioned(
             left: 0,
             bottom: 0,
@@ -833,7 +942,8 @@ class _RowCopy extends StatelessWidget {
                   style: const TextStyle(color: AppColors.primary),
                 ),
                 TextSpan(
-                  text: ' / ${context.l10n.myListEpisode2(item.episodeCount.toString())}',
+                  text:
+                      ' / ${context.l10n.myListEpisode2(item.episodeCount.toString())}',
                   style: const TextStyle(color: AppColors.textTertiary),
                 ),
               ],
@@ -898,13 +1008,22 @@ class _DeleteBar extends StatelessWidget {
               child: Center(
                 child: TextButton.icon(
                   onPressed: enabled ? onDelete : null,
-                  icon: Icon(
-                    Icons.delete_outline_rounded,
+                  icon: SvgPicture.asset(
+                    "assets/images/my_list/delete.svg",
+                    width: 18,
+                    height: 18,
+                    fit: BoxFit.contain,
                     color: enabled
                         ? AppColors.textPrimary
                         : AppColors.textPrimary.withValues(alpha: 0.42),
-                    size: 18,
                   ),
+                  // Icon(
+                  //   Icons.delete_outline_rounded,
+                  //   color: enabled
+                  //       ? AppColors.textPrimary
+                  //       : AppColors.textPrimary.withValues(alpha: 0.42),
+                  //   size: 18,
+                  // ),
                   label: Text('${context.l10n.myListDelete} ($count)'),
                   style: TextButton.styleFrom(
                     foregroundColor: enabled
@@ -940,13 +1059,12 @@ class _EmptyMyList extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Text(
-          description,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.textSecondary,
-            fontSize: 14,
-            height: 21 / 14,
+        child: AppEmptyState(
+          message: description,
+          textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: AppColors.textMuted,
+            fontSize: 12,
+            height: 16 / 12,
           ),
         ),
       ),

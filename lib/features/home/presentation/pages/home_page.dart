@@ -15,6 +15,7 @@ import '../../../../shared/media/media_resource.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
+import '../../../../shared/widgets/app_empty_state.dart';
 import '../../application/home_data_controller.dart';
 import '../../application/home_remote_data_provider.dart';
 
@@ -259,22 +260,39 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
               SliverToBoxAdapter(
                 child: Container(
-                  margin: const EdgeInsets.only(bottom: 10),
+                  margin: const EdgeInsets.only(
+                    bottom: 10,
+                    left: 14,
+                    right: 14,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   height: 200,
-                  child: Swiper(
-                    itemBuilder: (BuildContext context, int index) {
-                      return Image.asset(image[index], fit: BoxFit.fill);
-                    },
-                    autoplay: true,
-                    itemCount: image.length,
-                    // 隐藏底部指示器
-                    pagination: null,
-                    // 隐藏左右按钮
-                    control: null,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Swiper(
+                      itemBuilder: (BuildContext context, int index) {
+                        return Image.asset(image[index], fit: BoxFit.fill);
+                      },
+                      autoplay: true,
+                      itemCount: image.length,
+                      // 隐藏底部指示器
+                      pagination: const SwiperPagination(
+                        alignment: Alignment.bottomCenter,
+                        margin: EdgeInsets.only(bottom: 10),
+                        builder: DotSwiperPaginationBuilder(
+                          color: Color(0x66FFFFFF),
+                          activeColor: Colors.white,
+                          size: 6,
+                          activeSize: 6,
+                          space: 5,
+                        ),
+                      ),
+                      // 隐藏左右按钮
+                      control: null,
+                    ),
                   ),
                 ),
               ),
@@ -301,12 +319,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(
-                    child: Text(
-                      context.l10n.emptyNoDramas,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textMuted,
-                      ),
-                    ),
+                    child: AppEmptyState(message: context.l10n.emptyNoDramas),
                   ),
                 )
               else
@@ -398,7 +411,7 @@ class _HomeTitleBar extends ConsumerWidget {
       children: [
         Expanded(
           child: Text(
-            'KillgBox',
+            context.l10n.appTitle,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               color: AppColors.textPrimary,
               fontSize: 15,
@@ -547,7 +560,7 @@ class _HomeDramaCard extends StatelessWidget {
     final visibleTags = data.tags;
 
     return Material(
-      color: AppColors.surfacePanel,
+      color: Color(0XFF1C1821),
       borderRadius: BorderRadius.circular(AppRadii.sm),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -603,6 +616,7 @@ class _HomeDramaCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: AppColors.textOnCard,
+                      fontWeight: FontWeight.normal,
                       fontSize: 12,
                       height: 1.3,
                     ),
@@ -699,9 +713,9 @@ class _ViewCount extends StatelessWidget {
         // const Icon(Icons.play_arrow, color: AppColors.textPrimary, size: 14),
         Image.asset(
           'assets/images/home/home_views.png',
-          width: 10,
-          height: 10,
-          cacheWidth: (10 * MediaQuery.devicePixelRatioOf(context)).round(),
+          width: 8,
+          height: 8,
+          cacheWidth: (8 * MediaQuery.devicePixelRatioOf(context)).round(),
           fit: BoxFit.contain,
           filterQuality: FilterQuality.low,
         ),
@@ -709,8 +723,9 @@ class _ViewCount extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: AppColors.textPrimary,
-            fontSize: 11,
+            color: AppColors.textOnCard,
+            fontWeight: FontWeight.normal,
+            fontSize: 9,
             height: 1,
           ),
         ),
@@ -728,7 +743,7 @@ class _HomeTag extends StatelessWidget {
 
   static TextStyle? textStyle(BuildContext context) {
     return Theme.of(context).textTheme.labelSmall?.copyWith(
-      color: const Color(0xFFC5BEC9),
+      color: const Color(0xFFE3E3E3).withValues(alpha: 0.6),
       fontSize: 9,
       height: 1.3,
     );
@@ -741,7 +756,7 @@ class _HomeTag extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: const Color(0x3DD9D9D9),
+        color: const Color(0x3DD9D9D9).withValues(alpha: 0.24),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(

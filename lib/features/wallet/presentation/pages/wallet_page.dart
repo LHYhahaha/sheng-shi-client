@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router/route_paths.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/custom_switch.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/wallet_controller.dart';
 
@@ -239,6 +240,7 @@ class _WalletBalanceColumn extends StatelessWidget {
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
             color: const Color(0xFFBFBFBF),
             height: 1.5,
+            fontWeight: FontWeight.normal,
           ),
         ),
       ],
@@ -270,12 +272,13 @@ class _WalletMenuRow extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: AppColors.textPrimary,
                   height: 1.5,
+                  fontWeight: FontWeight.normal,
                 ),
               ),
             ),
             Icon(
               Icons.chevron_right_rounded,
-              color: Colors.white.withValues(alpha: 0.45),
+              color: Color(0XFF818181).withValues(alpha: 0.7),
               size: 24,
             ),
           ],
@@ -313,15 +316,26 @@ class _WalletSwitchRow extends StatelessWidget {
               ),
             ),
           ),
-          Switch(
+          CustomSwitch(
             value: value,
             onChanged: onChanged,
-            activeThumbColor: AppColors.textPrimary,
-            activeTrackColor: AppColors.primary,
-            inactiveThumbColor: AppColors.textPrimary,
-            inactiveTrackColor: Colors.white.withValues(alpha: 0.25),
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
+          )
+          // Switch(
+          //   value: value,
+          //   onChanged: onChanged,
+          //   activeThumbColor: AppColors.textPrimary,
+          //   activeTrackColor: AppColors.primary,
+          //   inactiveThumbColor: AppColors.textPrimary,
+          //   inactiveTrackColor: Colors.white.withValues(alpha: 0.25),
+          //   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          //   // 边框颜色
+          //   trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+          //     // if (states.contains(WidgetState.selected)) {
+          //     //   return AppColors.primary; // 开启时边框
+          //     // }
+          //     return Colors.transparent; // 关闭时边框
+          //   }),
+          // ),
         ],
       ),
     );

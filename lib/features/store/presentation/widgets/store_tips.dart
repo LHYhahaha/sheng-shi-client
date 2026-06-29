@@ -41,12 +41,17 @@ class StoreTipsSection extends StatelessWidget {
           style: textTheme.labelMedium?.copyWith(
             color: AppColors.textPrimary.withValues(alpha: 0.4),
             height: 1.5,
+            fontWeight: FontWeight.normal,
           ),
         ),
         const SizedBox(height: 6),
         RichText(
           text: TextSpan(
-            style: TextStyle(fontSize: 11, color: Color(0xFFFFFFFF)),
+            style: TextStyle(
+              fontSize: 11,
+              color: Color(0xFFFFFFFF),
+              fontWeight: FontWeight.normal,
+            ),
             children: [
               TextSpan(
                 text: context.l10n.appCommonLegalPrivacyPolicy,
@@ -69,6 +74,7 @@ class StoreTipsSection extends StatelessWidget {
             style: textTheme.labelMedium?.copyWith(
               color: AppColors.textPrimary.withValues(alpha: 0.4),
               height: 1.5,
+                fontWeight: FontWeight.normal
             ),
           ),
         const SizedBox(height: 6),
@@ -80,6 +86,7 @@ class StoreTipsSection extends StatelessWidget {
               style: textTheme.labelMedium?.copyWith(
                 color: AppColors.textPrimary.withValues(alpha: 0.4),
                 height: 1.5,
+                  fontWeight: FontWeight.normal
               ),
             ),
           ),

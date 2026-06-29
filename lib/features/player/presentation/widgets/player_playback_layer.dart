@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../../l10n/app_localizations.dart';
@@ -503,7 +504,13 @@ class ActivePlaybackSurfaceOverlayState
       );
     }
 
-    final opacityChild = buildOpacityChild(videoChild);
+    final surfaceBorderRadius = widget.forYouLayout
+        ? const BorderRadius.vertical(bottom: Radius.circular(10))
+        : const BorderRadius.vertical(bottom: Radius.circular(16));
+    final opacityChild = ClipRRect(
+      borderRadius: surfaceBorderRadius,
+      child: buildOpacityChild(videoChild),
+    );
 
     if (!widget.policy.allowVideoSurfaceFollowDuringDrag) {
       return Positioned(
@@ -961,15 +968,13 @@ class CenterPlayButton extends StatelessWidget {
         child: Container(
           width: 70,
           height: 70,
+          padding: EdgeInsets.all(23),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.48),
+            color: Colors.black.withValues(alpha: 0.7),
             shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
           ),
-          child: const Icon(
-            Icons.play_arrow_rounded,
-            color: Colors.white,
-            size: 46,
-          ),
+          child: SvgPicture.asset('assets/images/player/pause.svg'),
         ),
       ),
     );
@@ -1107,27 +1112,25 @@ class PlayerTopBarContent extends StatelessWidget {
           key: const ValueKey('player_single_top_bar'),
           height: PlayerTopBarMetrics.height,
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               GestureDetector(
                 key: const ValueKey('player_back_button'),
                 behavior: HitTestBehavior.opaque,
                 onTap: onBackTap,
-                child: const SizedBox.square(
-                  dimension: PlayerTopBarMetrics.height,
-                  child: Center(
-                    child: Icon(
-                      Icons.chevron_left,
-                      color: Colors.white,
-                      size: PlayerTopBarMetrics.backIconSize,
-                    ),
+                child: Center(
+                  child: Icon(
+                    Icons.chevron_left,
+                    color: Colors.white,
+                    size: PlayerTopBarMetrics.backIconSize,
                   ),
                 ),
               ),
-              const SizedBox(width: 4),
+              // const SizedBox(width: 4),
               Text(
                 key: const ValueKey('player_episode_label'),
-                context.l10n.playerEpisode(
+                context.l10n.myListEpisode(
                   episodeNumber.toString().padLeft(2, '0'),
                 ),
                 style: const TextStyle(

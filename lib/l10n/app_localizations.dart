@@ -221,6 +221,15 @@ class AppLocalizations {
   String get myListCancel =>
       _remoteText('my_list.action.cancel', en: 'Cancel', zh: '取消');
 
+  String get myListSelectAll =>
+      _remoteText('my_list.action.select_all', en: 'Select all', zh: '全选');
+
+  String get myListDeselectAll => _remoteText(
+    'my_list.action.deselect_all',
+    en: 'Deselect all',
+    zh: '取消全选',
+  );
+
   String get myListDelete =>
       _remoteText('my_list.action.remove', en: 'Delete', zh: '删除');
 
@@ -788,6 +797,12 @@ class AppLocalizations {
     'membership_page.title.join',
     en: 'Join Membership',
     zh: '开通会员',
+  );
+
+  String get membershipUpgraded => _remoteText(
+    'membership_page.upgraded',
+    en: '10M+ users upgraded',
+    zh: '1000 万+ 用户已升级',
   );
 
   String get membershipBenefits => _remoteText(

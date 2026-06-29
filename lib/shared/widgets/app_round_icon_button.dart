@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app_tap_target.dart';
 
@@ -54,18 +55,23 @@ class AppRoundIconButton extends StatelessWidget {
     return AppTapTarget(
       semanticLabel: semanticLabel,
       onTap: onTap,
-      child: Container(
+      child: SvgPicture.asset(
+        "assets/images/player/close.svg",
         width: size,
         height: size,
-        decoration: BoxDecoration(
-          color: backgroundColor ?? Colors.white.withValues(alpha: 0.08),
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: borderColor ?? Colors.white.withValues(alpha: 0.08),
-          ),
-        ),
-        child: Icon(icon, color: iconColor, size: iconSize),
       ),
+      // Container(
+      //   width: size,
+      //   height: size,
+      //   decoration: BoxDecoration(
+      //     color: backgroundColor ?? Colors.white.withValues(alpha: 0.08),
+      //     shape: BoxShape.circle,
+      //     border: Border.all(
+      //       color: borderColor ?? Colors.white.withValues(alpha: 0.08),
+      //     ),
+      //   ),
+      //   child: Icon(icon, color: iconColor, size: iconSize),
+      // ),
     );
   }
 }

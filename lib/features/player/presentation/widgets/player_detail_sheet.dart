@@ -1,13 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:readmore/readmore.dart';
 
 import '../../../../l10n/app_localizations.dart';
-import '../../../../app/router/route_paths.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
+import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_round_icon_button.dart';
 import '../../../../shared/widgets/app_sheet_handle.dart';
 import '../../data/local/player_episode_unlock_cache.dart';
@@ -23,6 +22,7 @@ class PlayerDetailSheet extends StatefulWidget {
     required this.initialTab,
     required this.currentEpisode,
     required this.onEpisodeSelected,
+    required this.onRecommendationSelected,
     this.recommendationsFuture,
     super.key,
   });
@@ -31,6 +31,7 @@ class PlayerDetailSheet extends StatefulWidget {
   final PlayerDetailTab initialTab;
   final int currentEpisode;
   final ValueChanged<PlayerEpisode> onEpisodeSelected;
+  final ValueChanged<PlayerRecommendation> onRecommendationSelected;
   final Future<List<PlayerRecommendation>>? recommendationsFuture;
 
   @override
@@ -43,7 +44,7 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
   static const _expandedSize = 0.93;
   static const _minSize = 0.42;
   static const _maxSize = 0.95;
-  static const _topChromeHeight = 78.0;
+  static const _topChromeHeight = 66.0;
 
   late final DraggableScrollableController _sheetController;
   late PlayerDetailTab _selectedTab = widget.initialTab;
@@ -146,6 +147,8 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
                             ? _SynopsisPanel(
                                 key: const ValueKey('synopsis'),
                                 content: widget.content,
+                                onRecommendationSelected:
+                                    widget.onRecommendationSelected,
                                 recommendationsFuture:
                                     widget.recommendationsFuture,
                               )
@@ -242,7 +245,7 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
                       // ),
                       Positioned(
                         right: 16,
-                        top: 22,
+                        top: 18,
                         child: AppRoundIconButton(
                           key: const ValueKey('player_detail_sheet_close'),
                           icon: Icons.close_rounded,
@@ -279,13 +282,13 @@ class _Header extends StatelessWidget {
       );
     }
 
-    return SizedBox( width: 68, height: 91);
+    return SizedBox(width: 68, height: 91);
   }
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
@@ -293,35 +296,32 @@ class _Header extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  content.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    height: 20 / 16,
-                  ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                content.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  height: 20 / 16,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  "${content.viewCountLabel} ${context.l10n.episodeModalViews}",
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    height: 16 / 12,
-                  ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "${content.viewCountLabel} ${context.l10n.episodeModalViews}",
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  height: 16 / 12,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ],
@@ -408,11 +408,13 @@ class _Segment extends StatelessWidget {
 class _SynopsisPanel extends StatefulWidget {
   const _SynopsisPanel({
     required this.content,
+    required this.onRecommendationSelected,
     this.recommendationsFuture,
     super.key,
   });
 
   final PlayerContent content;
+  final ValueChanged<PlayerRecommendation> onRecommendationSelected;
   final Future<List<PlayerRecommendation>>? recommendationsFuture;
 
   @override
@@ -435,9 +437,10 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
   Widget build(BuildContext context) {
     final synopsis = widget.content.synopsis;
     final textStyle = TextStyle(
-      color: Colors.white.withValues(alpha: 0.42),
+      color: Colors.white.withValues(alpha: 0.4),
       fontSize: 12,
       height: 16 / 12,
+      fontWeight: FontWeight.normal
     );
 
     // 确定要使用的 future
@@ -466,7 +469,7 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 24),
         Text(
           context.l10n.playerMoreLikeThis,
           style: const TextStyle(
@@ -502,14 +505,7 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
                 return Center(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 32),
-                    child: Text(
-                      context.l10n.emptyNoDramas,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        fontSize: 14,
-                        height: 18 / 14,
-                      ),
-                    ),
+                    child: AppEmptyState(message: context.l10n.emptyNoDramas),
                   ),
                 );
               }
@@ -530,13 +526,7 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
                   return _RecommendationCard(
                     recommendation: recommendation,
                     onTap: () {
-                      final location = RoutePaths.playerLocation(
-                        dramaId: recommendation.id,
-                        episodeId: '1',
-                        trigger: 'recommendation',
-                        userActionAtMs: DateTime.now().millisecondsSinceEpoch,
-                      );
-                      context.push(location);
+                      widget.onRecommendationSelected(recommendation);
                     },
                   );
                 },
@@ -550,14 +540,7 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
           Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 32),
-              child: Text(
-                context.l10n.emptyNoDramas,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 14,
-                  height: 18 / 14,
-                ),
-              ),
+              child: AppEmptyState(message: context.l10n.emptyNoDramas),
             ),
           )
         else
@@ -577,13 +560,7 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
               return _RecommendationCard(
                 recommendation: recommendation,
                 onTap: () {
-                  final location = RoutePaths.playerLocation(
-                    dramaId: recommendation.id,
-                    episodeId: '1',
-                    trigger: 'recommendation',
-                    userActionAtMs: DateTime.now().millisecondsSinceEpoch,
-                  );
-                  context.push(location);
+                  widget.onRecommendationSelected(recommendation);
                 },
               );
             },
@@ -649,10 +626,7 @@ class _RecommendationCard extends StatelessWidget {
 
     // 判断是否是网络 URL
     if (path.startsWith('http://') || path.startsWith('https://')) {
-      return AppCachedNetworkImage(
-        imageUrl: path,
-        fit: BoxFit.cover,
-      );
+      return AppCachedNetworkImage(imageUrl: path, fit: BoxFit.cover);
     }
 
     // 本地 asset

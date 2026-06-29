@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/svg.dart';
 
 import '../../../../core/utils/text_over_ellipsis.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -18,7 +19,7 @@ abstract final class _PlayerLayoutMetrics {
   static const forYouWatchNowBottom = 24.0;
   static const forYouMetaGap = 58.0;
   static const singleBottomFrameHeight = 24.0;
-  static const singleMetaBottom = 34.0;
+  static const singleMetaBottom = 38.0;
   static const singleSeekBarBottom = 17.0;
 }
 
@@ -399,7 +400,7 @@ class _PlayerPosterLayer extends StatelessWidget {
       child: ClipRRect(
         borderRadius: forYouLayout
             ? const BorderRadius.vertical(bottom: Radius.circular(10))
-            : BorderRadius.zero,
+            : const BorderRadius.vertical(bottom: Radius.circular(16)),
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -442,7 +443,7 @@ class _PlayerGradientLayer extends StatelessWidget {
           child: ClipRRect(
             borderRadius: forYouLayout
                 ? const BorderRadius.vertical(bottom: Radius.circular(10))
-                : BorderRadius.zero,
+                : const BorderRadius.vertical(bottom: Radius.circular(16)),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -1018,7 +1019,7 @@ class PlayerBottomMeta extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w400,
                     height: 20 / 16,
                   ),
                 ),
@@ -1030,7 +1031,7 @@ class PlayerBottomMeta extends StatelessWidget {
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w400,
                   height: 20 / 16,
                 ),
               ),
@@ -1049,10 +1050,7 @@ class PlayerBottomMeta extends StatelessWidget {
 }
 
 class _SynopsisPreviewText extends StatelessWidget {
-  const _SynopsisPreviewText({
-    required this.text,
-    required this.moreLabel,
-  });
+  const _SynopsisPreviewText({required this.text, required this.moreLabel});
 
   final String text;
   final String moreLabel;
@@ -1062,8 +1060,8 @@ class _SynopsisPreviewText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = DefaultTextStyle.of(context).style.merge(
-      const TextStyle(
-        color: Colors.white,
+      TextStyle(
+        color: Colors.white.withValues(alpha: 0.7),
         fontSize: 14,
         height: 18 / 14,
       ),
@@ -1124,7 +1122,17 @@ class _SynopsisPreviewText extends StatelessWidget {
             style: style,
             children: [
               TextSpan(text: text.substring(0, low).trimRight()),
-              TextSpan(text: suffix, style: moreStyle),
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: '... ',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  TextSpan(text: suffix.split("... ")[1], style: moreStyle),
+                ],
+              ),
             ],
           ),
         );
@@ -1303,21 +1311,21 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
                           fit: StackFit.expand,
                           children: [
                             ColoredBox(
-                              color: Colors.white.withValues(alpha: 0.25),
+                              color: Colors.white.withValues(alpha: 0.3),
                             ),
                             if (!widget.isPassiveTrack)
                               FractionallySizedBox(
                                 alignment: Alignment.centerLeft,
                                 widthFactor: buffered,
                                 child: ColoredBox(
-                                  color: Colors.white.withValues(alpha: 0.28),
+                                  color: Colors.white.withValues(alpha: 0.5),
                                 ),
                               ),
                             FractionallySizedBox(
                               alignment: Alignment.centerLeft,
                               widthFactor: widget.isPassiveTrack ? 0 : progress,
                               child: ColoredBox(
-                                color: Colors.white.withValues(alpha: 0.78),
+                                color: Colors.white.withValues(alpha: 0.5),
                               ),
                             ),
                             if (widget.showTrackLoading && !widget.isDragging)
@@ -1541,7 +1549,7 @@ class _ActionItem extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                     height: 16 / 12,
                   ),
                 ),
@@ -1594,10 +1602,12 @@ class _LikeActionItem extends StatelessWidget {
                   ),
                 )
               else
-                Icon(
-                  isLiked ? Icons.star_rounded : Icons.star_outline_rounded,
-                  color: isLiked ? const Color(0xFFFFD700) : Colors.white,
-                  size: 30,
+                Image.asset(
+                  isLiked
+                      ? "assets/images/player/click_like.png"
+                      : "assets/images/player/unclick_like.png",
+                  width: 28,
+                  height: 28,
                 ),
               const SizedBox(height: 3),
               Flexible(
@@ -1609,7 +1619,7 @@ class _LikeActionItem extends StatelessWidget {
                   style: TextStyle(
                     color: isLiked ? const Color(0xFFFFD700) : Colors.white,
                     fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                     height: 16 / 12,
                   ),
                 ),

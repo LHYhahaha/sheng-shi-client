@@ -8,6 +8,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
+import '../../../../shared/widgets/app_empty_state.dart';
 import '../../application/wallet_controller.dart';
 import '../../domain/wallet_record.dart';
 
@@ -234,6 +235,10 @@ class _HistoryBody extends StatelessWidget {
     final records = state.recordsFor(type);
     final hasFooter = records.isNotEmpty;
 
+    if (records.isEmpty) {
+      return  const _HistoryEmptyState();
+    }
+
     return ListView(
       controller: scrollController,
       padding: EdgeInsets.fromLTRB(
@@ -324,12 +329,8 @@ class _HistoryEmptyState extends StatelessWidget {
     return SizedBox(
       height: 180,
       child: Center(
-        child: Text(
-          context.l10n.walletHistoryEmpty,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Colors.white.withValues(alpha: 0.5),
-            height: 1.5,
-          ),
+        child: AppEmptyState(
+          message: context.l10n.walletHistoryEmpty,
         ),
       ),
     );
@@ -490,6 +491,7 @@ class _ConsumptionRecordRow extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: Colors.white.withValues(alpha: 0.5),
                   height: 1.5,
+                  fontWeight: FontWeight.normal,
                 ),
               ),
               const SizedBox(height: 4),
@@ -500,6 +502,7 @@ class _ConsumptionRecordRow extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: Colors.white.withValues(alpha: 0.5),
                   height: 1.5,
+                  fontWeight: FontWeight.normal,
                 ),
               ),
             ],
@@ -531,6 +534,7 @@ class _ConsumptionRecordRow extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: Colors.white.withValues(alpha: 0.5),
                   height: 1.5,
+                  fontWeight: FontWeight.normal,
                 ),
               ),
           ],
@@ -550,6 +554,8 @@ class _CoinRewardRecordRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
+        Image.asset('assets/images/profile/coin.png', width: 26, height: 26),
+        SizedBox(width: 8),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -572,6 +578,7 @@ class _CoinRewardRecordRow extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: Colors.white.withValues(alpha: 0.5),
                   height: 1.5,
+                  fontWeight: FontWeight.normal,
                 ),
               ),
             ],
@@ -589,7 +596,7 @@ class _CoinRewardRecordRow extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: AppColors.textPrimary,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.normal,
             height: 1.5,
           ),
         ),
@@ -662,7 +669,7 @@ class _HistoryRecordRow extends StatelessWidget {
     final displayAmount = record.amountText ?? record.trailingLabel;
 
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
           child: Column(
@@ -687,6 +694,7 @@ class _HistoryRecordRow extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w500,
+                        fontSize: 16,
                         height: 1.5,
                       ),
                     ),
@@ -701,6 +709,8 @@ class _HistoryRecordRow extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: Colors.white.withValues(alpha: 0.5),
                   height: 1.5,
+                  fontSize: 12,
+                  fontWeight: FontWeight.normal,
                 ),
               ),
             ],
@@ -713,9 +723,10 @@ class _HistoryRecordRow extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.right,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.textPrimary,
+            color: AppColors.textPrimary.withValues(alpha: 0.5),
             fontWeight: FontWeight.w500,
             height: 1.5,
+            fontSize: 14,
           ),
         ),
       ],

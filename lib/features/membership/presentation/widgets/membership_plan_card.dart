@@ -12,6 +12,8 @@ class MembershipPlanCard extends ConsumerStatefulWidget {
     required this.plan,
     required this.selected,
     required this.onTap,
+    this.width = MembershipLayout.planCardWidth,
+    this.height = MembershipLayout.planCardHeight,
     super.key,
   });
 
@@ -20,6 +22,8 @@ class MembershipPlanCard extends ConsumerStatefulWidget {
   final MembershipPlan plan;
   final bool selected;
   final VoidCallback onTap;
+  final double width;
+  final double height;
 
   @override
   ConsumerState<MembershipPlanCard> createState() => _MembershipPlanCardState();
@@ -92,32 +96,38 @@ class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
       fallbackTitle: plan.title,
     );
 
-    return Semantics(
-      button: true,
-      selected: selected,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          width: MembershipLayout.planCardWidth,
-          height: MembershipLayout.planCardHeight,
+    return SizedBox(
+      width: widget.width,
+      height: widget.height,
+      child: FittedBox(
+        fit: BoxFit.contain,
+        child: Semantics(
+          button: true,
+          selected: selected,
+          child: GestureDetector(
+            onTap: widget.onTap,
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              width: MembershipLayout.planCardWidth,
+              height: MembershipLayout.planCardHeight,
           decoration: BoxDecoration(
             color: const Color(0xFF1B1B1C),
+            image: DecorationImage(
+              image: AssetImage("assets/images/membership/vip_product_bac.png"),
+            ),
             borderRadius: BorderRadius.circular(
               MembershipLayout.planCardRadius,
             ),
-            border: Border.all(
-              color: selected ? _gold : Colors.white.withValues(alpha: 0.24),
-            ),
+            border: Border.all(color: selected ? _gold : Colors.transparent),
           ),
           clipBehavior: Clip.antiAlias,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(8, 28, 8, 25),
+                padding: const EdgeInsets.fromLTRB(8, 24, 8, 25),
                 child: Column(
                   children: [
                     Row(),
@@ -133,7 +143,7 @@ class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
                         height: 1.2,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 15),
 
                     // 原价（划掉）—— 有促销时显示续费原价
                     if (plan.hasPromo && plan.regularPriceLabel != null)
@@ -142,6 +152,7 @@ class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
                         style: textTheme.labelMedium?.copyWith(
                           color: Colors.white.withValues(alpha: 0.5),
                           fontSize: 12,
+                          fontWeight: FontWeight.normal,
                           decoration: TextDecoration.lineThrough,
                           decorationColor: Colors.white.withValues(alpha: 0.5),
                           height: 1.2,
@@ -156,12 +167,13 @@ class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
                           decoration: TextDecoration.lineThrough,
                           decorationColor: Colors.white.withValues(alpha: 0.5),
                           height: 1.2,
+                          fontWeight: FontWeight.normal,
                         ),
                       )
                     else
                       const SizedBox(height: 14),
 
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
 
                     // 主价格（促销价 或 原价）
                     _PlanPriceText(
@@ -197,6 +209,7 @@ class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
                             : Colors.white.withValues(alpha: 0.7),
                         fontSize: 10,
                         height: 1.2,
+                        fontWeight: FontWeight.normal,
                       ),
                     ),
                   ),
@@ -211,6 +224,8 @@ class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
                   child: _CountdownTag(seconds: _countdownSeconds),
                 ),
             ],
+          ),
+            ),
           ),
         ),
       ),
@@ -245,7 +260,7 @@ class _PlanPriceText extends StatelessWidget {
                 style: textTheme.bodyMedium?.copyWith(
                   color: color,
                   fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.normal,
                   height: 1.2,
                 ),
               ),
@@ -254,7 +269,7 @@ class _PlanPriceText extends StatelessWidget {
               style: textTheme.headlineSmall?.copyWith(
                 color: color,
                 fontSize: 24,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.bold,
                 height: 1.1,
               ),
             ),

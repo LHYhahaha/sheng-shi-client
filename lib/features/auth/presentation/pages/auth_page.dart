@@ -117,10 +117,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
 }
 
 class _LoginBody extends StatelessWidget {
-  const _LoginBody({
-    required this.isLoading,
-    required this.onFacebookPressed,
-  });
+  const _LoginBody({required this.isLoading, required this.onFacebookPressed});
 
   final bool isLoading;
   final VoidCallback? onFacebookPressed;
@@ -136,11 +133,9 @@ class _LoginBody extends StatelessWidget {
       child: Column(
         children: [
           const Spacer(flex: 145),
-          Image.asset(
-            'assets/images/profile/logo.png',
-            width: 62,
-            height: 62,
-          ),
+          ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.asset('assets/images/profile/logo.png', width: 62, height: 62)),
           const SizedBox(height: 13),
           Text(
             context.l10n.appTitle,
@@ -180,7 +175,6 @@ class _FacebookLoginButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      height: 41,
       child: FilledButton.icon(
         key: const ValueKey('auth_facebook_button'),
         onPressed: isLoading ? null : onPressed,
@@ -192,22 +186,23 @@ class _FacebookLoginButton extends StatelessWidget {
                   color: AppColors.textPrimary,
                 ),
               )
-            : const Icon(Icons.facebook_rounded, size: 21),
+            : const Icon(Icons.facebook_rounded, size: 26),
         label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
         style: FilledButton.styleFrom(
+          padding: EdgeInsets.symmetric(vertical: 10),
           backgroundColor: const Color(0xFF5981EF),
           foregroundColor: AppColors.textPrimary,
-          disabledBackgroundColor: const Color(0xFF5981EF).withValues(
-            alpha: 0.65,
-          ),
+          disabledBackgroundColor: const Color(
+            0xFF5981EF,
+          ).withValues(alpha: 0.65),
           disabledForegroundColor: AppColors.textPrimary.withValues(
             alpha: 0.75,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
           ),
           textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontSize: 13,
+            fontSize: 14,
             fontWeight: FontWeight.w700,
             height: 1.2,
           ),

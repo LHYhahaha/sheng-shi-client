@@ -301,18 +301,29 @@ class _StoreBody extends StatelessWidget {
       children: [
         SizedBox(
           height: 85,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
-            itemCount: state.coinPackages.length,
-            separatorBuilder: (context, index) =>
-                const SizedBox(width: AppSpacing.sm),
-            itemBuilder: (context, index) {
-              final package = state.coinPackages[index];
-              return StoreCoinPackageCard(
-                package: package,
-                selected: state.selectedPackageId == package.id,
-                onTap: () => onSelect(package.id),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const visibleCardCount = 2.2;
+              const visibleGapCount = 2;
+              final cardWidth =
+                  (constraints.maxWidth - AppSpacing.sm * visibleGapCount) /
+                  visibleCardCount;
+
+              return ListView.separated(
+                scrollDirection: Axis.horizontal,
+                clipBehavior: Clip.none,
+                itemCount: state.coinPackages.length,
+                separatorBuilder: (context, index) =>
+                    const SizedBox(width: AppSpacing.sm),
+                itemBuilder: (context, index) {
+                  final package = state.coinPackages[index];
+                  return StoreCoinPackageCard(
+                    package: package,
+                    selected: state.selectedPackageId == package.id,
+                    width: cardWidth,
+                    onTap: () => onSelect(package.id),
+                  );
+                },
               );
             },
           ),

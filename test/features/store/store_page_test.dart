@@ -126,7 +126,10 @@ Widget _buildStorePage({
 class _InitiallyLoadingPaymentLoadingController
     extends PaymentLoadingController {
   @override
-  bool build() => true;
+  PaymentLoadingState build() => const PaymentLoadingState(
+    isVisible: true,
+    label: PaymentLoadingLabel.confirmingPayment,
+  );
 }
 
 class _FakeStoreRepository implements StoreRepository {

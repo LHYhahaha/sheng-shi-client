@@ -51,6 +51,8 @@ class JsonFieldParser {
     final value = json[key];
     if (value is String && value.isNotEmpty) {
       return value;
+    }else{
+      return value.toString();
     }
     throw ApiMappingException(
       dtoName: dtoName,

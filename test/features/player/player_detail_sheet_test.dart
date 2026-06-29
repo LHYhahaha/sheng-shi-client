@@ -183,6 +183,7 @@ Future<void> _openDetailSheet(
                           }
                           Navigator.of(sheetContext).pop();
                         },
+                        onRecommendationSelected: (_) {},
                       );
                     },
                   );

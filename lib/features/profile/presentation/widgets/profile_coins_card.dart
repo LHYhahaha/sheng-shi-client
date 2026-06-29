@@ -24,12 +24,11 @@ class ProfileCoinsCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
-      height: 90,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
-        color: AppColors.surface.withValues(alpha: 0.52),
+        color: Color(0XFF140A1D),
         borderRadius: BorderRadius.circular(AppRadii.sm),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: Color(0XFF312838),width: 0.5),
       ),
       child: Column(
         children: [
@@ -41,6 +40,7 @@ class ProfileCoinsCard extends StatelessWidget {
                   style: textTheme.labelMedium?.copyWith(
                     color: AppColors.textPrimary.withValues(alpha: 0.5),
                     height: 1.5,
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
               ),
@@ -55,13 +55,14 @@ class ProfileCoinsCard extends StatelessWidget {
                     style: textTheme.labelMedium?.copyWith(
                       color: AppColors.textPrimary.withValues(alpha: 0.5),
                       height: 1.5,
+                      fontWeight: FontWeight.normal,
                     ),
                   ),
                 ),
               ),
             ],
           ),
-          const Spacer(),
+          SizedBox(height: AppSpacing.md),
           Row(
             children: [
               Image.asset(
@@ -103,6 +104,7 @@ class ProfileCoinsCard extends StatelessWidget {
                       color: AppColors.textPrimary,
                       fontSize: 12,
                       height: 1.3,
+                      fontWeight: FontWeight.normal,
                     ),
                   ),
                 ),

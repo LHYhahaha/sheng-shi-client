@@ -274,7 +274,7 @@ void main() {
       expect(find.text('Delete account'), findsOneWidget);
     });
 
-    testWidgets('delete tap shows AppModal confirm', (tester) async {
+    testWidgets('delete tap shows bottom confirm sheet', (tester) async {
       await tester.pumpWidget(
         _buildRouterTestApp(
           initialLocation: RoutePaths.accountCancellation,
@@ -293,10 +293,12 @@ void main() {
         find.byKey(const ValueKey('account_cancellation_delete_button')),
       );
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
 
-      expect(find.text('Delete account?'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('account_cancellation_confirm_title')),
+        findsOneWidget,
+      );
       expect(
         find.text(
           'Deleted account data cannot be recovered. Do you want to continue?',
@@ -326,9 +328,11 @@ void main() {
         find.byKey(const ValueKey('account_cancellation_delete_button')),
       );
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Cancel'));
+      await tester.tap(
+        find.byKey(const ValueKey('account_cancellation_confirm_cancel')),
+      );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -365,10 +369,11 @@ void main() {
         find.byKey(const ValueKey('account_cancellation_delete_button')),
       );
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Confirm delete'));
+      await tester.tap(
+        find.byKey(const ValueKey('account_cancellation_confirm_submit')),
+      );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -446,7 +451,7 @@ class _CountingAuthRepository implements AuthRepository {
     _session = const AuthSession.guest();
     return DeleteAccountResult(
       session: _session,
-      shouldExitApp: true,
+      shouldExitApp: false,
     );
   }
 }

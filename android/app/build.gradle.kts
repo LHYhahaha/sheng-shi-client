@@ -53,14 +53,14 @@ android {
     }
 
 //     开启 BuildConfig 支持，否则 buildConfigField 会报错
-//    buildFeatures {
-//        buildConfig = true
-//    }
-//
-//    flavorDimensions += "channel" // Kotlin DSL 用 +=
-//
-//    productFlavors {
-//
+    buildFeatures {
+        buildConfig = true
+    }
+
+    flavorDimensions += "channel" // Kotlin DSL 用 +=
+
+    productFlavors {
+
 //        create("GF") {
 //            dimension = "channel"
 //            applicationId = "com.yushi.drama.client"
@@ -69,14 +69,14 @@ android {
 //            resValue("string", "VEST_PKG_ID", "1001")
 //        }
 
-//        create("haha") {
-//            dimension = "channel"
-//            applicationId = "com.yushi.drama.client"
-//            resValue("string", "channel_flag", "app_developer")
-//            resValue("string", "MERCHANT_ID", "329")
-//            resValue("string", "VEST_PKG_ID", "1001")
-//        }
-//
+        create("haha") {
+            dimension = "channel"
+            applicationId = "com.yushi.drama.client"
+            resValue("string", "channel_flag", "app_developer")
+            resValue("string", "MERCHANT_ID", "329")
+            resValue("string", "VEST_PKG_ID", "1001")
+        }
+
 //        create("douyin_pro") {
 //            dimension = "channel"
 //            applicationId = "com.yushi.drama.client"
@@ -91,21 +91,21 @@ android {
 //            resValue("string", "MERCHANT_ID", "332")
 //            resValue("string", "VEST_PKG_ID", "1001")
 //        }
-//        create("tiktok_dev") {
-//            dimension = "channel"
-//            applicationId = "com.yushi.drama.client"
-//            resValue("string", "channel_flag", "tiktok")
-//            resValue("string", "MERCHANT_ID", "319")
-//            resValue("string", "VEST_PKG_ID", "1001")
-//        }
-//        create("kuaishou_dev") {
-//            dimension = "channel"
-//            applicationId = "com.yushi.drama.client"
-//            resValue("string", "channel_flag", "kuaishou")
-//            resValue("string", "MERCHANT_ID", "320")
-//            resValue("string", "VEST_PKG_ID", "1002")
-//        }
-//    }
+        create("tiktok_dev") {
+            dimension = "channel"
+            applicationId = "com.yushi.drama.client"
+            resValue("string", "channel_flag", "tiktok")
+            resValue("string", "MERCHANT_ID", "319")
+            resValue("string", "VEST_PKG_ID", "1001")
+        }
+        create("kuaishou_dev") {
+            dimension = "channel"
+            applicationId = "com.yushi.drama.client"
+            resValue("string", "channel_flag", "kuaishou")
+            resValue("string", "MERCHANT_ID", "320")
+            resValue("string", "VEST_PKG_ID", "1002")
+        }
+    }
 }
 
 flutter {

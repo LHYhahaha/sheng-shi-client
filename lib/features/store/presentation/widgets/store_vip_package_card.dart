@@ -125,7 +125,7 @@ class StoreVipPackageCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 17, 16, 0),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -140,8 +140,9 @@ class StoreVipPackageCard extends ConsumerWidget {
                                 style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(
                                       color: _ink,
-                                      fontWeight: FontWeight.w800,
+                                      fontWeight: FontWeight.bold,
                                       height: 1.5,
+                                      fontSize: 18,
                                     ),
                               ),
                               const SizedBox(height: 9),
@@ -152,7 +153,8 @@ class StoreVipPackageCard extends ConsumerWidget {
                                 style: Theme.of(context).textTheme.labelSmall
                                     ?.copyWith(
                                       fontSize: 10,
-                                      color: _ink.withValues(alpha: 0.5),
+                                      fontWeight: FontWeight.normal,
+                                      color: _ink.withValues(alpha: 0.6),
                                     ),
                               ),
                               // 展示促销文案（替换footnote），没有促销则不展示
@@ -162,7 +164,8 @@ class StoreVipPackageCard extends ConsumerWidget {
                                   style: Theme.of(context).textTheme.labelSmall
                                       ?.copyWith(
                                         fontSize: 10,
-                                        color: _ink.withValues(alpha: 0.5),
+                                        color: _ink.withValues(alpha: 0.6),
+                                        fontWeight: FontWeight.normal,
                                       ),
                                 ),
                             ],
@@ -177,8 +180,9 @@ class StoreVipPackageCard extends ConsumerWidget {
                               style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(
                                     color: _priceInk,
-                                    fontWeight: FontWeight.w800,
+                                    fontWeight: FontWeight.bold,
                                     height: 1.5,
+                                    fontSize: 18,
                                   ),
                             ),
                             if (showPromo && displayOriginalPrice != null)
@@ -186,6 +190,7 @@ class StoreVipPackageCard extends ConsumerWidget {
                                 displayOriginalPrice,
                                 style: Theme.of(context).textTheme.labelMedium
                                     ?.copyWith(
+                                      fontWeight: FontWeight.normal,
                                       color: _priceInk.withValues(alpha: 0.6),
                                       decoration: TextDecoration.lineThrough,
                                       decorationColor: _priceInk.withValues(
@@ -338,6 +343,7 @@ class _BenefitGrid extends StatelessWidget {
                   color: _ink,
                   fontSize: 11,
                   height: 1.5,
+                  fontWeight: FontWeight.normal,
                 ),
               ),
             ),

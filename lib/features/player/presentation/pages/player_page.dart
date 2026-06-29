@@ -96,6 +96,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isSeekDragging = false;
   bool _isModalOpen = false;
   bool _isAutoAdvancing = false;
+  bool _isOpeningRecommendation = false;
   bool _isPressingPlaybackSurface = false;
   bool _isPageScrolling = false;
   bool _didRecordFirstBuild = false;
@@ -231,7 +232,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       _resumePlaybackOnLifecycleResume = false;
       _wasPlayingBeforeInactive = false;
       if (shouldResumePlayback) {
-        unawaited(_playbackController.resumeAfterVisibilityPause());
+        unawaited(_resumePlaybackAfterLifecyclePause());
       }
       return;
     }
@@ -255,6 +256,26 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   @override
   void didHaveMemoryPressure() {
     unawaited(_playbackController.releaseSessionWindow());
+  }
+
+  Future<void> _resumePlaybackAfterLifecyclePause() async {
+    await _playbackController.resumeAfterVisibilityPause();
+    if (!mounted) {
+      return;
+    }
+    _restoreChromeAfterReturningToPlayer();
+  }
+
+  void _restoreChromeAfterReturningToPlayer() {
+    if (widget.feedMode != PlayerFeedMode.singleDrama) {
+      return;
+    }
+    final uiController = ref.read(
+      playerUiControllerProvider(_sessionKey).notifier,
+    );
+    uiController.showDefaultChrome();
+    _syncAutoImmersiveBlockers();
+    uiController.notifyUserInteraction();
   }
 
   PlayerFeedConfig get _feedConfig {
@@ -1217,6 +1238,50 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
   }
 
+  Future<void> _openRecommendationFromDetailSheet(
+    BuildContext sheetContext,
+    PlayerRecommendation recommendation,
+  ) async {
+    if (_isOpeningRecommendation) {
+      return;
+    }
+    _isOpeningRecommendation = true;
+    try {
+      if (Navigator.of(sheetContext).canPop()) {
+        Navigator.of(sheetContext).pop();
+      }
+
+      final shouldResumeWhenRecommendationReturns = ref
+          .read(playerPlaybackControllerProvider(_sessionKey))
+          .isPlaying;
+      await _playbackController.pauseForVisibility();
+      if (!mounted) {
+        return;
+      }
+
+      final location = RoutePaths.playerLocation(
+        dramaId: recommendation.id,
+        episodeId: '1',
+        trigger: 'recommendation',
+        userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+      );
+      await context.push<void>(location);
+      if (!mounted) {
+        return;
+      }
+      if (shouldResumeWhenRecommendationReturns &&
+          _previousLifecycleState == AppLifecycleState.resumed) {
+        await _playbackController.resumeAfterVisibilityPause();
+        if (!mounted) {
+          return;
+        }
+      }
+      _restoreChromeAfterReturningToPlayer();
+    } finally {
+      _isOpeningRecommendation = false;
+    }
+  }
+
   Future<void> _retryPlaybackForItem(PlayerFeedItem item) async {
     // 閲嶈瘯鍓嶉噸鏂拌幏鍙栧巻鍙叉挱鏀捐繘搴︼紝鍥犱负 _pendingResumeProgress
     // 鍦ㄧ涓€娆?playItem 鏃跺凡缁忚娑堣垂骞舵竻绌猴紙绗?737 琛岋級
@@ -1391,6 +1456,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   1,
               onEpisodeSelected: (episode) {
                 _closeSheetAndSelectEpisode(sheetContext, episode);
+              },
+              onRecommendationSelected: (recommendation) {
+                unawaited(
+                  _openRecommendationFromDetailSheet(
+                    sheetContext,
+                    recommendation,
+                  ),
+                );
               },
             );
           },

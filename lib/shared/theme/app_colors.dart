@@ -17,6 +17,6 @@ abstract final class AppColors {
   static const textMuted = Color(0xFF7B7084);
   static const textDisabled = Color(0xFF909090);
   static const textTertiary = Color(0xFFAEAEAE);
-  static const navigationInactive = Color(0xFF807F7F);
+  static const navigationInactive = Color(0xFF58525F);
   static const divider = Color(0xFF302137);
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/svg.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../theme/app_colors.dart';
@@ -62,7 +63,7 @@ class AppPaymentMethodSheet extends StatelessWidget {
                           style: const TextStyle(
                             color: AppColors.textPrimary,
                             fontSize: 18,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
@@ -70,27 +71,14 @@ class AppPaymentMethodSheet extends StatelessWidget {
                   ),
                   Positioned(
                     right: 16,
-                    top: 20,
+                    top: 18,
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: isProcessing ? null : onClose,
-                      child: Container(
-                        key: closeButtonKey,
+                      child: SvgPicture.asset(
+                        "assets/images/player/close.svg",
                         width: 40,
                         height: 40,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.08),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.12),
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.close_rounded,
-                          color: AppColors.textPrimary,
-                          size: 30,
-                        ),
                       ),
                     ),
                   ),
@@ -100,7 +88,7 @@ class AppPaymentMethodSheet extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 19,
+                  vertical: 17,
                 ),
                 child: Row(
                   children: [
@@ -112,13 +100,13 @@ class AppPaymentMethodSheet extends StatelessWidget {
                       height: 22,
                       fit: BoxFit.contain,
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     Text(
                       context.l10n.paymentModalMethodGooglePay,
                       style: TextStyle(
                         color: AppColors.textPrimary,
                         fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.normal,
                         height: 1.25,
                       ),
                     ),
@@ -137,41 +125,41 @@ class AppPaymentMethodSheet extends StatelessWidget {
                       valueKey: const ValueKey('app_payment_order_title'),
                     ),
                     const SizedBox(height: 22),
-                    _PaymentDetailRow(label: '${context.l10n.paymentModalAmountTotal}:', value: totalLabel),
+                    _PaymentDetailRow(
+                      label: '${context.l10n.paymentModalAmountTotal}:',
+                      value: totalLabel,
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 40),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 50),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 338),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: FilledButton(
-                      key: buyButtonKey,
-                      onPressed: isProcessing
-                          ? null
-                          : isComplete
-                          ? onClose
-                          : onBuyNow,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        disabledBackgroundColor: AppColors.primary.withValues(
-                          alpha: 0.58,
-                        ),
-                        foregroundColor: AppColors.textPrimary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                padding: const EdgeInsets.symmetric(horizontal: 30),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    key: buyButtonKey,
+                    onPressed: isProcessing
+                        ? null
+                        : isComplete
+                        ? onClose
+                        : onBuyNow,
+                    style: FilledButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 13),
+                      backgroundColor: AppColors.primary,
+                      disabledBackgroundColor: AppColors.primary.withValues(
+                        alpha: 0.58,
                       ),
-                      child: _PaymentButtonContent(
-                        isProcessing: isProcessing,
-                        label: isProcessing || isComplete
-                            ? statusLabel
-                            : context.l10n.storeBuyNow,
+                      foregroundColor: AppColors.textPrimary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
+                    ),
+                    child: _PaymentButtonContent(
+                      isProcessing: isProcessing,
+                      label: isProcessing || isComplete
+                          ? statusLabel
+                          : context.l10n.storeBuyNow,
                     ),
                   ),
                 ),
@@ -193,15 +181,16 @@ class _PaymentRadio extends StatelessWidget {
     return Container(
       width: 18,
       height: 18,
+      padding: EdgeInsets.all(2),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: AppColors.primary,
+        color: Colors.transparent,
         border: Border.all(color: Colors.white, width: 1.4),
       ),
       alignment: Alignment.center,
       child: Container(
-        width: 13,
-        height: 13,
+        width: 12,
+        height: 12,
         decoration: const BoxDecoration(
           shape: BoxShape.circle,
           color: AppColors.primary,
@@ -228,8 +217,8 @@ class _PaymentButtonContent extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
           height: 1.25,
         ),
       );
@@ -286,6 +275,7 @@ class _PaymentDetailRow extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.5),
               fontSize: 14,
               height: 1.25,
+              fontWeight: FontWeight.normal,
             ),
           ),
         ),

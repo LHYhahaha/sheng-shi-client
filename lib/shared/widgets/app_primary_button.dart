@@ -38,7 +38,22 @@ class AppPrimaryButton extends StatelessWidget {
 
     return SizedBox(
       width: double.infinity,
-      child: FilledButton(onPressed: onPressed, child: child),
+      child: FilledButton(
+        style: FilledButton.styleFrom(
+          padding: EdgeInsets.symmetric(vertical: 13)
+          // backgroundColor: AppColors.primary,
+          // foregroundColor: AppColors.textPrimary,
+          // disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.45),
+          // shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          // textStyle: const TextStyle(
+          //   fontSize: 14,
+          //   fontWeight: FontWeight.w700,
+          //   height: 18 / 14,
+          // ),
+        ),
+        onPressed: onPressed,
+        child: child,
+      ),
     );
   }
 }

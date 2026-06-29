@@ -21,7 +21,7 @@ abstract final class MembershipLayout {
   static const horizontalPadding = 16.0;
   static const planCardWidth = 109.0;
   static const planCardHeight = 156.0;
-  static const planCardGap = 8.0;
+  static const planCardGap = 6.0;
   static const planCardRadius = 12.0;
 
   /// 三张套餐卡 + 间距总宽（375 屏下左右各 16 边距）。
