@@ -124,86 +124,90 @@ class StoreVipPackageCard extends ConsumerWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(
+                                        color: _ink,
+                                        fontWeight: FontWeight.bold,
+                                        height: 1.5,
+                                        fontSize: 18,
+                                      ),
+                                ),
+                                const SizedBox(height: 9),
+                                Text(
+                                  context.l10n.playerAutoRenewCancel,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.labelSmall
+                                      ?.copyWith(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.normal,
+                                        color: _ink.withValues(alpha: 0.6),
+                                      ),
+                                ),
+                                if (promoDescription != null)
+                                  Text(
+                                    promoDescription,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          fontSize: 10,
+                                          color: _ink.withValues(alpha: 0.6),
+                                          fontWeight: FontWeight.normal,
+                                        ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                                displayPrice,
                                 style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(
-                                      color: _ink,
+                                      color: _priceInk,
                                       fontWeight: FontWeight.bold,
                                       height: 1.5,
                                       fontSize: 18,
                                     ),
                               ),
-                              const SizedBox(height: 9),
-                              Text(
-                                context.l10n.playerAutoRenewCancel,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.normal,
-                                      color: _ink.withValues(alpha: 0.6),
-                                    ),
-                              ),
-                              // 展示促销文案（替换footnote），没有促销则不展示
-                              if (promoDescription != null)
+                              if (showPromo && displayOriginalPrice != null)
                                 Text(
-                                  promoDescription,
-                                  style: Theme.of(context).textTheme.labelSmall
+                                  displayOriginalPrice,
+                                  style: Theme.of(context).textTheme.labelMedium
                                       ?.copyWith(
-                                        fontSize: 10,
-                                        color: _ink.withValues(alpha: 0.6),
                                         fontWeight: FontWeight.normal,
+                                        color: _priceInk.withValues(alpha: 0.6),
+                                        decoration: TextDecoration.lineThrough,
+                                        decorationColor: _priceInk.withValues(
+                                          alpha: 0.6,
+                                        ),
                                       ),
                                 ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              displayPrice, // 使用谷歌返回的价格或API返回的价格
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(
-                                    color: _priceInk,
-                                    fontWeight: FontWeight.bold,
-                                    height: 1.5,
-                                    fontSize: 18,
-                                  ),
-                            ),
-                            if (showPromo && displayOriginalPrice != null)
-                              Text(
-                                displayOriginalPrice,
-                                style: Theme.of(context).textTheme.labelMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.normal,
-                                      color: _priceInk.withValues(alpha: 0.6),
-                                      decoration: TextDecoration.lineThrough,
-                                      decorationColor: _priceInk.withValues(
-                                        alpha: 0.6,
-                                      ),
-                                    ),
-                              ),
-                          ],
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                  const Spacer(),
                   Container(
                     height: 60,
                     padding: const EdgeInsets.symmetric(

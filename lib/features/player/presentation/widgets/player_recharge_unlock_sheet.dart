@@ -12,6 +12,8 @@ import '../../../../core/modal/app_modal_result.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/theme/app_radii.dart';
+import '../../../../shared/theme/app_spacing.dart';
 import '../../../../core/utils/period_iso_parser.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
@@ -100,8 +102,7 @@ class _PlayerRechargeUnlockSheetState
                   PlayerRechargePurchaseFailureKind.orderCreation ||
               rechargeState.purchaseFailureKind ==
                   PlayerRechargePurchaseFailureKind.verification ||
-              rechargeState.paymentStage ==
-                  PlayerRechargePaymentStage.verifying
+              rechargeState.paymentStage == PlayerRechargePaymentStage.verifying
           ? context.l10n.networkError
           : context.l10n.storePurchaseFailed;
       ref.read(appToastProvider).error(message);
@@ -483,26 +484,26 @@ class _OfferContent extends ConsumerWidget {
           top: 0,
           child: _RechargeHeader(offer: offer, onClose: onClose),
         ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: 24,
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    const Color(0x001D1D20),
-                    const Color(0xFF1D1D20).withValues(alpha: 0.96),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
+        // Positioned(
+        //   left: 0,
+        //   right: 0,
+        //   bottom: 0,
+        //   height: 24,
+        //   child: IgnorePointer(
+        //     child: DecoratedBox(
+        //       decoration: BoxDecoration(
+        //         gradient: LinearGradient(
+        //           begin: Alignment.topCenter,
+        //           end: Alignment.bottomCenter,
+        //           colors: [
+        //             const Color(0x001D1D20),
+        //             const Color(0xFF1D1D20).withValues(alpha: 0.96),
+        //           ],
+        //         ),
+        //       ),
+        //     ),
+        //   ),
+        // ),
       ],
     );
   }
@@ -908,23 +909,22 @@ class _PromoCountdownBadgeState extends ConsumerState<_PromoCountdownBadge> {
 
         return Container(
           key: const ValueKey('player_recharge_promo_badge'),
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 2),
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               colors: [Color(0xFFFF9E53), Color(0xFFFE1340), Color(0xFFFE3273)],
             ),
             borderRadius: BorderRadius.only(
-              topRight: Radius.circular(8),
-              bottomLeft: Radius.circular(8),
+              bottomLeft: Radius.circular(AppRadii.sm),
+              topRight: Radius.circular(AppRadii.sm),
             ),
           ),
           child: Text(
             _formatCountdown(remaining),
-            style: const TextStyle(
-              color: AppColors.textPrimary,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Colors.white,
               fontSize: 10,
               fontWeight: FontWeight.w600,
-              height: 15 / 10,
             ),
           ),
         );
@@ -937,43 +937,6 @@ class _PromoCountdownBadgeState extends ConsumerState<_PromoCountdownBadge> {
     final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$hours:$minutes:$seconds';
-  }
-}
-
-class _MembershipCardBackground extends StatelessWidget {
-  const _MembershipCardBackground({required this.selected});
-
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: selected ? AppColors.primary : Colors.transparent,
-          width: selected ? 1.4 : 0,
-        ),
-        gradient: const LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [Color(0xFFFFE6BD), Color(0xFFFFECC9), Color(0xFFFFD68E)],
-        ),
-      ),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.white.withValues(alpha: 0.28),
-              Colors.white.withValues(alpha: 0.02),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -996,17 +959,16 @@ class _MembershipPriceBlock extends StatelessWidget {
     final originalPrice = displayOriginalPrice ?? package.originalPriceLabel;
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Text(
           price,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-            color: Color(0xFF51210F),
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            height: 25 / 20,
+            color: Color(0xFF411803),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            height: 1.5,
           ),
         ),
         if (showPromo && originalPrice != null)
@@ -1015,12 +977,10 @@ class _MembershipPriceBlock extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: const Color(0xFF51210F).withValues(alpha: 0.42),
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              height: 16 / 12,
+              color: const Color(0xFF411803).withValues(alpha: 0.6),
+              fontWeight: FontWeight.normal,
               decoration: TextDecoration.lineThrough,
-              decorationColor: const Color(0xFF51210F).withValues(alpha: 0.42),
+              decorationColor: const Color(0xFF411803).withValues(alpha: 0.6),
             ),
           ),
       ],
@@ -1053,12 +1013,13 @@ class _MembershipInfoArea extends StatelessWidget {
       fallbackTitle: package.title,
     );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 17, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
@@ -1066,41 +1027,37 @@ class _MembershipInfoArea extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Color(0xFF51210F),
+                    color: Color(0xFF401908),
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    height: 23 / 18,
+                    height: 1.5,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 9),
                 Text(
                   description,
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: const Color(0xFF51210F).withValues(alpha: 0.55),
+                    color: const Color(0xFF401908).withValues(alpha: 0.6),
                     fontSize: 10,
                     fontWeight: FontWeight.normal,
-                    height: 13 / 10,
                   ),
                 ),
-                // 展示促销文案（如果有），否则展示description
                 if (promoDescription != null)
                   Text(
                     promoDescription!,
-                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: const Color(0xFF51210F).withValues(alpha: 0.55),
+                      color: const Color(0xFF401908).withValues(alpha: 0.6),
                       fontSize: 10,
                       fontWeight: FontWeight.normal,
-                      height: 13 / 10,
                     ),
                   ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           _MembershipPriceBlock(
             package: package,
             showPromo: showPromo,
@@ -1167,33 +1124,32 @@ class _BenefitGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visibleBenefits = benefits.take(4).toList();
     return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: visibleBenefits.length,
+      padding: EdgeInsets.zero,
+      itemCount: benefits.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        mainAxisExtent: 22,
-        crossAxisSpacing: 8,
+        mainAxisExtent: 23,
+        crossAxisSpacing: 13,
       ),
       itemBuilder: (context, index) {
-        final benefit = visibleBenefits[index];
+        final benefit = benefits[index];
         final label = _localizedLabel(context, benefit.icon);
         return Row(
           children: [
             _BenefitIcon(icon: benefit.icon),
-            const SizedBox(width: 2),
+            const SizedBox(width: AppSpacing.xs),
             Expanded(
               child: Text(
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  color: Color(0xFF77442E),
-                  fontSize: 12,
+                  color: Color(0xFF401908),
+                  fontSize: 11,
                   fontWeight: FontWeight.normal,
-                  height: 16 / 12,
+                  height: 1.5,
                 ),
               ),
             ),
@@ -1223,16 +1179,11 @@ class _MembershipBenefitBand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: Container(
-        height: 60,
-        decoration: BoxDecoration(
-          color: const Color(0xFFF9DBB0).withValues(alpha: 0.78),
-          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(8)),
-        ),
-        child: _BenefitGrid(benefits: benefits),
-      ),
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+      color: const Color(0x33FFF8E7),
+      child: _BenefitGrid(benefits: benefits),
     );
   }
 }
@@ -1276,37 +1227,66 @@ class _MembershipPackageCard extends ConsumerWidget {
     }
 
     final description = context.l10n.playerAutoRenewCancel;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: enabled ? onTap : null,
-      child: SizedBox(
-        key: ValueKey('player_recharge_membership_${package.id}'),
-        width: double.infinity,
-        height: 159,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: _MembershipCardBackground(selected: selected),
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: enabled ? onTap : null,
+        child: AnimatedContainer(
+          key: ValueKey('player_recharge_membership_${package.id}'),
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          width: double.infinity,
+          height: 159,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFFFFF0D9), Color(0xFFF3CA92)],
             ),
-            _MembershipInfoArea(
-              package: package,
-              description: description,
-              showPromo: showPromo,
-              promoDescription: promoDescription,
-              displayPrice: displayPrice,
-              displayOriginalPrice: displayOriginalPrice,
-            ),
-            _MembershipBenefitBand(benefits: benefits),
-            if (showPromo)
+            borderRadius: BorderRadius.circular(AppRadii.sm),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
               Positioned(
-                right: 0,
                 top: 0,
-                child: _PromoCountdownBadge(
-                  sessionKey: sessionKey,
-                  packageId: package.id,
+                right: 0,
+                child: Image.asset(
+                  'assets/images/profile/vip_v.png',
+                  height: 98,
+                  fit: BoxFit.contain,
                 ),
               ),
-          ],
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: _MembershipInfoArea(
+                      package: package,
+                      description: description,
+                      showPromo: showPromo,
+                      promoDescription: promoDescription,
+                      displayPrice: displayPrice,
+                      displayOriginalPrice: displayOriginalPrice,
+                    ),
+                  ),
+                  _MembershipBenefitBand(benefits: benefits),
+                ],
+              ),
+              if (showPromo)
+                Positioned(
+                  right: -2,
+                  top: -1,
+                  child: _PromoCountdownBadge(
+                    sessionKey: sessionKey,
+                    packageId: package.id,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

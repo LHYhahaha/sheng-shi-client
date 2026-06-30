@@ -278,16 +278,16 @@ class _HomePageState extends ConsumerState<HomePage> {
                       },
                       autoplay: true,
                       itemCount: image.length,
-                      // 隐藏底部指示器
-                      pagination: const SwiperPagination(
+                      pagination: SwiperPagination(
                         alignment: Alignment.bottomCenter,
                         margin: EdgeInsets.only(bottom: 10),
-                        builder: DotSwiperPaginationBuilder(
-                          color: Color(0x66FFFFFF),
-                          activeColor: Colors.white,
-                          size: 6,
-                          activeSize: 6,
-                          space: 5,
+                        builder: SwiperCustomPagination(
+                          builder: (context, config) {
+                            return _HomeBannerSliderIndicator(
+                              activeIndex: config.activeIndex,
+                              itemCount: config.itemCount,
+                            );
+                          },
                         ),
                       ),
                       // 隐藏左右按钮
@@ -391,6 +391,46 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeBannerSliderIndicator extends StatelessWidget {
+  const _HomeBannerSliderIndicator({
+    required this.activeIndex,
+    required this.itemCount,
+  });
+
+  final int activeIndex;
+  final int itemCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final alignmentX = itemCount <= 1
+        ? 0.0
+        : -1.0 + (2.0 * activeIndex / (itemCount - 1));
+
+    return Container(
+      width: 72,
+      height: 4,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.24),
+        borderRadius: BorderRadius.circular(2),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: AnimatedAlign(
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment(alignmentX, 0),
+        child: Container(
+          width: 24,
+          height: 4,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(2),
           ),
         ),
       ),

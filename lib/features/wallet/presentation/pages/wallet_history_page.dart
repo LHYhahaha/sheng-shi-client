@@ -212,14 +212,17 @@ class _HistoryBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (state.isLoading) {
-      return const Center(
-        child: SizedBox.square(
-          dimension: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: AppColors.primary,
+      return Column(
+        children: [
+          SizedBox(height: 240),
+          SizedBox.square(
+            dimension: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.primary,
+            ),
           ),
-        ),
+        ],
       );
     }
 
@@ -326,12 +329,10 @@ class _HistoryEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 180,
-      child: Center(
-        child: AppEmptyState(
-          message: context.l10n.walletHistoryEmpty,
-        ),
+    return Padding(
+      padding: const EdgeInsets.only(top: 200),
+      child: AppEmptyState(
+        message: context.l10n.walletHistoryEmpty,
       ),
     );
   }
