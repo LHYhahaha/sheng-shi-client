@@ -250,6 +250,24 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
     return state.currentIndex;
   }
 
+  /// 更新推荐流中的指定 item 当前剧集，同时保留推荐列表顺序和 PageView index。
+  PlayerFeedItem? updateItemEpisode({
+    required String itemId,
+    required PlayerEpisode episode,
+  }) {
+    final itemIndex = state.items.indexWhere((item) => item.id == itemId);
+    if (itemIndex == -1) {
+      return null;
+    }
+    final updatedItems = [...state.items];
+    final updatedItem = updatedItems[itemIndex].copyWith(episode: episode);
+    updatedItems[itemIndex] = updatedItem;
+    state = state.copyWith(
+      items: List<PlayerFeedItem>.unmodifiable(updatedItems),
+    );
+    return updatedItem;
+  }
+
   /// 更新指定剧集的播放地址。
   ///
   /// 在金币解锁成功后调用，将服务端返回的 sourceUrl 写入对应的 episode，

@@ -2,7 +2,7 @@ import '../../../../core/network/json_field_parser.dart';
 import 'player_episode_dto.dart';
 
 /// 播放器剧详情远程 DTO。
-/// 
+///
 /// 接收短剧详情 API 返回的数据格式，包含剧的完整信息和所有集数。
 class PlayerContentDto {
   const PlayerContentDto({
@@ -12,6 +12,7 @@ class PlayerContentDto {
     required this.summary,
     required this.categoryIds,
     required this.tagIds,
+    this.tagsName = const [],
     required this.trailerEpisodeNum,
     required this.pricePerEpisode,
     required this.isVipOnly,
@@ -31,6 +32,7 @@ class PlayerContentDto {
   final String summary;
   final List<int> categoryIds;
   final List<int> tagIds;
+  final List<String> tagsName;
   final int trailerEpisodeNum;
   final int pricePerEpisode;
   final int isVipOnly;
@@ -51,12 +53,16 @@ class PlayerContentDto {
       summary: JsonFieldParser.optionalString(json, 'summary') ?? '',
       categoryIds: _parseIntList(json['category_ids']),
       tagIds: _parseIntList(json['tag_ids']),
-      trailerEpisodeNum: JsonFieldParser.optionalInt(json, 'trailer_episode_num') ?? 0,
-      pricePerEpisode: JsonFieldParser.optionalInt(json, 'price_per_episode') ?? 0,
+      tagsName: _parseStringList(json['tags_name']),
+      trailerEpisodeNum:
+          JsonFieldParser.optionalInt(json, 'trailer_episode_num') ?? 0,
+      pricePerEpisode:
+          JsonFieldParser.optionalInt(json, 'price_per_episode') ?? 0,
       isVipOnly: JsonFieldParser.optionalInt(json, 'is_vip_only') ?? 0,
       status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
       languageMask: JsonFieldParser.optionalString(json, 'language_mask') ?? '',
-      subtitleLangs: JsonFieldParser.optionalString(json, 'subtitle_langs') ?? '',
+      subtitleLangs:
+          JsonFieldParser.optionalString(json, 'subtitle_langs') ?? '',
       playCount: JsonFieldParser.optionalInt(json, 'play_count') ?? 0,
       favoriteCount: JsonFieldParser.optionalInt(json, 'favorite_count') ?? 0,
       episodeTotal: JsonFieldParser.optionalInt(json, 'episode_total') ?? 0,
@@ -68,6 +74,15 @@ class PlayerContentDto {
   static List<int> _parseIntList(Object? value) {
     if (value is! List) return const <int>[];
     return value.whereType<int>().toList(growable: false);
+  }
+
+  static List<String> _parseStringList(Object? value) {
+    if (value is! List) return const <String>[];
+    return value
+        .whereType<String>()
+        .where((tag) => tag.trim().isNotEmpty)
+        .map((tag) => tag.trim())
+        .toList(growable: false);
   }
 
   static List<PlayerEpisodeDto> _parseEpisodes(Object? value) {

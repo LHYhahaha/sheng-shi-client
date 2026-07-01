@@ -157,7 +157,8 @@ class PlayerFeedPageShell extends ConsumerWidget {
           onWatchNowTap:
               shell != null &&
                   shell.canTogglePlayback &&
-                  shell.status == PlayerPlaybackStatus.paused
+                  shell.currentItemId == item.id &&
+                  accessPresentation == PlayerAccessPresentationState.playable
               ? onWatchNowTap
               : () {},
           onEpisodesTap: onEpisodesTap,

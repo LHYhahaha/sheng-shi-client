@@ -13,6 +13,7 @@ import '../../features/member/presentation/pages/member_page.dart';
 import '../../features/membership/presentation/pages/membership_page.dart';
 import '../../features/my_list/presentation/pages/my_list_page.dart';
 import '../../features/player/presentation/pages/player_page.dart';
+import '../../features/player/domain/for_you_player_handoff.dart';
 import '../../features/profile/presentation/pages/language_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/profile/presentation/pages/settings_page.dart';
@@ -101,6 +102,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final userActionAtMs = int.tryParse(
             state.uri.queryParameters['userActionAtMs'] ?? '',
           );
+          final forYouHandoff = state.extra is ForYouPlayerHandoff
+              ? state.extra! as ForYouPlayerHandoff
+              : null;
 
           // 单剧播放器是 shell 外 route，进入时隐藏/显示底部导航由 PlayerPage 的
           // hideShellNavigation 和 dispose 处理。这里仅传递触发来源和点击时间，
@@ -112,6 +116,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             initialUserActionAt: userActionAtMs == null
                 ? null
                 : DateTime.fromMillisecondsSinceEpoch(userActionAtMs),
+            forYouHandoff: forYouHandoff,
           );
         },
       ),

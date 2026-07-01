@@ -17,6 +17,7 @@ import '../../../pay/application/payment_loading_controller.dart';
 import '../../application/player_feed_controller.dart';
 import '../../application/player_feed_engine.dart';
 import '../../application/player_feed_engine_access_flow.dart';
+import '../../application/for_you_playback_progress_controller.dart';
 import '../../application/player_like_controller.dart';
 import '../../application/player_overlay_orchestrator.dart';
 import '../../application/player_performance_policy_provider.dart';
@@ -31,6 +32,7 @@ import '../../data/player_content_repository_provider.dart';
 import '../../data/player_remote_data_source_provider.dart';
 import '../../../membership/presentation/membership_route_result.dart';
 import '../../domain/player_access_presentation.dart';
+import '../../domain/for_you_player_handoff.dart';
 import '../../domain/player_performance_policy.dart';
 import '../../domain/player_content.dart';
 import '../../domain/player_feed.dart';
@@ -56,6 +58,7 @@ class PlayerPage extends ConsumerStatefulWidget {
     this.hideShellNavigation = false,
     this.initialPlaybackTrigger,
     this.initialUserActionAt,
+    this.forYouHandoff,
     super.key,
   });
 
@@ -65,7 +68,8 @@ class PlayerPage extends ConsumerStatefulWidget {
       feedMode = PlayerFeedMode.forYou,
       hideShellNavigation = false,
       initialPlaybackTrigger = 'for_you_tab',
-      initialUserActionAt = null;
+      initialUserActionAt = null,
+      forYouHandoff = null;
 
   final String? dramaId;
   final String? episodeId;
@@ -73,6 +77,7 @@ class PlayerPage extends ConsumerStatefulWidget {
   final bool hideShellNavigation;
   final String? initialPlaybackTrigger;
   final DateTime? initialUserActionAt;
+  final ForYouPlayerHandoff? forYouHandoff;
 
   @override
   ConsumerState<PlayerPage> createState() => _PlayerPageState();
@@ -97,6 +102,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isModalOpen = false;
   bool _isAutoAdvancing = false;
   bool _isOpeningRecommendation = false;
+  bool _isOpeningForYouPlayer = false;
   bool _isPressingPlaybackSurface = false;
   bool _isPageScrolling = false;
   bool _didRecordFirstBuild = false;
@@ -291,6 +297,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   Future<void> _loadRemoteResumeProgress() async {
     if (widget.feedMode != PlayerFeedMode.singleDrama ||
         widget.dramaId == null ||
+        widget.forYouHandoff != null ||
         !ref.read(useRemotePlayerApiProvider)) {
       return;
     }
@@ -349,7 +356,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
     var feedState = ref.read(feedProvider);
     if (feedState.currentItem != null) {
-      await _applyStartupRemoteResumeProgress(feedState);
+      if (widget.forYouHandoff != null) {
+        _applyInitialForYouHandoffProgress(feedState);
+      } else {
+        await _applyStartupRemoteResumeProgress(feedState);
+      }
       if (!mounted) {
         return;
       }
@@ -390,6 +401,39 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
     if (widget.feedMode == PlayerFeedMode.singleDrama) {
       _syncAutoImmersiveBlockers();
+    }
+  }
+
+  void _applyInitialForYouHandoffProgress(PlayerFeedState feedState) {
+    final handoff = widget.forYouHandoff;
+    if (handoff == null || feedState.currentItem == null) {
+      return;
+    }
+    final targetIndex = feedState.items.indexWhere(
+      (item) => item.episode.id == handoff.episodeId,
+    );
+    if (targetIndex != -1 && targetIndex != feedState.currentIndex) {
+      ref
+          .read(playerFeedControllerProvider(_sessionKey).notifier)
+          .setCurrentIndex(targetIndex);
+      feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+    }
+    final targetItem = feedState.currentItem;
+    if (targetItem == null) {
+      return;
+    }
+    final duration = handoff.duration > Duration.zero
+        ? handoff.duration
+        : targetItem.episode.duration ?? Duration.zero;
+    final progress = PlaybackProgress(
+      itemId: targetItem.id,
+      position: handoff.position,
+      duration: duration,
+      updatedAt: DateTime.now(),
+    );
+    _resumeProgress = progress;
+    if (progress.canResume) {
+      _playbackController.setPendingResumeProgress(progress);
     }
   }
 
@@ -580,9 +624,35 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         if (next.index < 0 || next.index >= latestFeedState.items.length) {
           return;
         }
-        final settledItem = latestFeedState.items[next.index];
+        var settledItem = latestFeedState.items[next.index];
         if (settledItem.id != next.itemId) {
           return;
+        }
+        if (widget.feedMode == PlayerFeedMode.forYou) {
+          final cached = ref
+              .read(forYouPlaybackProgressControllerProvider.notifier)
+              .snapshotFor(settledItem.content.id);
+          if (cached != null) {
+            if (settledItem.episode.id != cached.episode.id) {
+              settledItem =
+                  ref
+                      .read(feedProvider.notifier)
+                      .updateItemEpisode(
+                        itemId: settledItem.id,
+                        episode: cached.episode,
+                      ) ??
+                  settledItem;
+            }
+            final progress = PlaybackProgress(
+              itemId: settledItem.id,
+              position: cached.position,
+              duration: cached.duration,
+              updatedAt: cached.updatedAt,
+            );
+            if (progress.canResume) {
+              playbackController.setPendingResumeProgress(progress);
+            }
+          }
         }
         final accessPlayable =
             feedEngine.accessPresentationFor(settledItem) ==
@@ -684,6 +754,54 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
 
     ref.listen(
+      playerPlaybackControllerProvider(sessionKey).select(
+        (state) => (
+          state.currentItemId,
+          state.currentSource,
+          state.position,
+          state.duration,
+          state.hasEnded,
+        ),
+      ),
+      (previous, next) {
+        if (next.$1 == null ||
+            next.$2 == null ||
+            (next.$3 <= Duration.zero && !next.$5)) {
+          return;
+        }
+        final latestFeed = ref.read(feedProvider);
+        PlayerFeedItem? playingItem;
+        for (final candidate in latestFeed.items) {
+          if (candidate.id == next.$1) {
+            playingItem = candidate;
+            break;
+          }
+        }
+        if (playingItem == null) {
+          return;
+        }
+        final handoff = widget.forYouHandoff;
+        if (widget.feedMode != PlayerFeedMode.forYou && handoff == null) {
+          return;
+        }
+        ref
+            .read(forYouPlaybackProgressControllerProvider.notifier)
+            .save(
+              ForYouPlaybackSnapshot(
+                originItemId: handoff?.originItemId ?? playingItem.id,
+                dramaId: playingItem.content.id,
+                episode: playingItem.episode,
+                position: next.$3,
+                duration: next.$4 > Duration.zero
+                    ? next.$4
+                    : playingItem.episode.duration ?? Duration.zero,
+                updatedAt: DateTime.now(),
+              ),
+            );
+      },
+    );
+
+    ref.listen(
       playerPlaybackControllerProvider(
         sessionKey,
       ).select((state) => (state.currentItemId, state.hasEnded)),
@@ -702,7 +820,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           playbackController.reportWatchProgress(eventType: 6),
         ); // 6: complete
         feedEngine.markEndedHandled(next.$1!);
-        if (feedSnapshot.$5) {
+        if (widget.feedMode == PlayerFeedMode.forYou) {
+          final completedItem = ref.read(feedProvider).currentItem;
+          if (completedItem != null) {
+            unawaited(
+              _openForYouItemInPlayer(completedItem, rewindFromEnd: true),
+            );
+          }
+        } else if (feedSnapshot.$5) {
           unawaited(_advanceToNextFromCompletion());
         }
       },
@@ -775,6 +900,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         ),
       );
     }
+
     if (error != null) {
       return PlayerStateMessage(
         icon: Icons.refresh_rounded,
@@ -887,7 +1013,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                     playbackController.cancelSeek();
                   },
                   onWatchNowTap: () {
-                    unawaited(playbackController.togglePlay());
+                    unawaited(
+                      _openForYouItemInPlayer(item, rewindFromEnd: false),
+                    );
                   },
                   onEpisodesTap: () {
                     _showDetailSheet(
@@ -1178,6 +1306,96 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     context.go(RoutePaths.home);
   }
 
+  Future<void> _openForYouItemInPlayer(
+    PlayerFeedItem item, {
+    required bool rewindFromEnd,
+  }) async {
+    if (_isOpeningForYouPlayer ||
+        widget.feedMode != PlayerFeedMode.forYou ||
+        !mounted) {
+      return;
+    }
+    final playbackState = ref.read(
+      playerPlaybackControllerProvider(_sessionKey),
+    );
+    final isCurrentPlayableItem =
+        playbackState.currentItemId == item.id &&
+        playbackState.currentSource != null &&
+        (playbackState.status == PlayerPlaybackStatus.playing ||
+            playbackState.status == PlayerPlaybackStatus.paused);
+    if (!isCurrentPlayableItem) {
+      return;
+    }
+
+    _isOpeningForYouPlayer = true;
+    try {
+      final effectiveDuration = playbackState.duration > Duration.zero
+          ? playbackState.duration
+          : item.episode.duration ?? Duration.zero;
+      final initialPosition = rewindFromEnd
+          ? Duration(
+              milliseconds: (effectiveDuration - const Duration(seconds: 5))
+                  .inMilliseconds
+                  .clamp(0, effectiveDuration.inMilliseconds),
+            )
+          : playbackState.position;
+      final handoff = ForYouPlayerHandoff(
+        id: '${item.id}:${DateTime.now().microsecondsSinceEpoch}',
+        originItemId: item.id,
+        dramaId: item.content.id,
+        episodeId: item.episode.id,
+        position: initialPosition,
+        duration: effectiveDuration,
+      );
+      ref
+          .read(forYouPlaybackProgressControllerProvider.notifier)
+          .save(
+            ForYouPlaybackSnapshot(
+              originItemId: item.id,
+              dramaId: item.content.id,
+              episode: item.episode,
+              position: initialPosition,
+              duration: effectiveDuration,
+              updatedAt: DateTime.now(),
+            ),
+          );
+
+      await _playbackController.pauseForVisibility();
+      if (!mounted) {
+        return;
+      }
+      final location = RoutePaths.playerLocation(
+        dramaId: item.content.id,
+        episodeId: item.episode.id,
+        trigger: rewindFromEnd ? 'for_you_complete' : 'for_you_watch_now',
+        userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+      );
+      final returned = await context.push<ForYouPlaybackSnapshot>(
+        location,
+        extra: handoff,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (returned != null) {
+        ref
+            .read(forYouPlaybackProgressControllerProvider.notifier)
+            .save(returned);
+      }
+    } finally {
+      _isOpeningForYouPlayer = false;
+    }
+  }
+
+  Duration _forYouResumePosition(Duration position, Duration duration) {
+    if (duration > Duration.zero &&
+        position >= duration - const Duration(seconds: 1)) {
+      final rewind = duration - const Duration(seconds: 5);
+      return rewind > Duration.zero ? rewind : Duration.zero;
+    }
+    return position;
+  }
+
   Future<void> _advanceToNextFromCompletion() async {
     if (_isAutoAdvancing || !mounted) {
       return;
@@ -1219,8 +1437,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _goBackFromPlayer() async {
+    final handoffResult = _currentForYouHandoffSnapshot();
     await _playbackController.persistCurrentProgress();
     await _playbackController.detachSurfaceForDispose();
+    if (handoffResult != null) {
+      await _synchronizeForYouBeforeReturn(handoffResult);
+    }
     await WidgetsBinding.instance.endOfFrame;
     _playbackController.markSurfaceDetached();
     if (PlayerPlaybackController.shouldDelayVideoSurfaceTeardown) {
@@ -1232,10 +1454,77 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     if (context.canPop()) {
-      context.pop();
+      context.pop(handoffResult);
     } else {
       context.go(RoutePaths.home);
     }
+  }
+
+  Future<void> _synchronizeForYouBeforeReturn(
+    ForYouPlaybackSnapshot snapshot,
+  ) async {
+    final handoff = widget.forYouHandoff;
+    if (handoff == null) {
+      return;
+    }
+    ref.read(forYouPlaybackProgressControllerProvider.notifier).save(snapshot);
+    final updatedItem = ref
+        .read(
+          playerFeedControllerProvider(
+            PlayerPlaybackSessionKeys.forYouTab,
+          ).notifier,
+        )
+        .updateItemEpisode(
+          itemId: handoff.originItemId,
+          episode: snapshot.episode,
+        );
+    if (updatedItem == null) {
+      return;
+    }
+    await ref
+        .read(
+          playerPlaybackControllerProvider(
+            PlayerPlaybackSessionKeys.forYouTab,
+          ).notifier,
+        )
+        .synchronizeExternalProgress(
+          item: updatedItem,
+          position: _forYouResumePosition(snapshot.position, snapshot.duration),
+          duration: snapshot.duration,
+        );
+  }
+
+  ForYouPlaybackSnapshot? _currentForYouHandoffSnapshot() {
+    final handoff = widget.forYouHandoff;
+    if (handoff == null) {
+      return null;
+    }
+    final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
+    final feed = ref.read(playerFeedControllerProvider(_sessionKey));
+    PlayerFeedItem? currentItem;
+    for (final item in feed.items) {
+      if (item.id == playback.currentItemId) {
+        currentItem = item;
+        break;
+      }
+    }
+    if (currentItem == null || playback.currentSource == null) {
+      return ref
+          .read(forYouPlaybackProgressControllerProvider.notifier)
+          .snapshotFor(handoff.dramaId);
+    }
+    final snapshot = ForYouPlaybackSnapshot(
+      originItemId: handoff.originItemId,
+      dramaId: currentItem.content.id,
+      episode: currentItem.episode,
+      position: playback.position,
+      duration: playback.duration > Duration.zero
+          ? playback.duration
+          : currentItem.episode.duration ?? Duration.zero,
+      updatedAt: DateTime.now(),
+    );
+    ref.read(forYouPlaybackProgressControllerProvider.notifier).save(snapshot);
+    return snapshot;
   }
 
   Future<void> _openRecommendationFromDetailSheet(

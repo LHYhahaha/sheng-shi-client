@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
 
-import '../../../../core/utils/text_over_ellipsis.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/player_like_count_provider.dart';
@@ -14,7 +13,7 @@ import '../../domain/player_performance_policy.dart';
 import '../../domain/player_seek_preview_config.dart';
 
 abstract final class _PlayerLayoutMetrics {
-  static const forYouActionRailBottom = 160.0;
+  static const forYouActionRailBottom = 104.0;
   static const singleActionRailBottom = 161.0;
   static const forYouWatchNowBottom = 24.0;
   static const forYouMetaGap = 58.0;
@@ -35,6 +34,7 @@ class PlayerChrome extends StatefulWidget {
     required this.onMoreTap,
     required this.onUnlockTap,
     this.onMetaTap,
+    this.onSearchTap = _noop,
     this.onLikeTap = _noop,
     this.showUnlockButton = false,
     this.unlockLabel,
@@ -75,6 +75,7 @@ class PlayerChrome extends StatefulWidget {
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
   final VoidCallback? onMetaTap;
+  final VoidCallback onSearchTap;
   final VoidCallback onUnlockTap;
   final VoidCallback onLikeTap;
   final bool showUnlockButton;
@@ -151,6 +152,8 @@ class _PlayerChromeState extends State<PlayerChrome> {
   VoidCallback get onMoreTap => widget.onMoreTap;
 
   VoidCallback? get onMetaTap => widget.onMetaTap;
+
+  VoidCallback get onSearchTap => widget.onSearchTap;
 
   VoidCallback get onUnlockTap => widget.onUnlockTap;
 
@@ -244,6 +247,11 @@ class _PlayerChromeState extends State<PlayerChrome> {
             bottomFrameHeight: bottomFrameHeight,
             forYouLayout: forYouLayout,
           ),
+        if (forYouLayout && showChromeOverlays)
+          _PlayerSearchButton(
+            top: mediaQuery.padding.top + 8,
+            onTap: onSearchTap,
+          ),
         if (isPlaying || showCenterPlayButton)
           Positioned(
             left: 0,
@@ -265,7 +273,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
         //     child: const ColoredBox(color: Color(0xFF141414)),
         //   ),
         // ],
-        if (showUnlockButton)
+        if (showUnlockButton && !forYouLayout)
           _PlayerUnlockOverlay(
             label: unlockLabel ?? context.l10n.playerUnlockNow,
             bottomInset: bottomFrameHeight,
@@ -305,13 +313,12 @@ class _PlayerChromeState extends State<PlayerChrome> {
             onTap: onMetaTap,
           ),
           if (forYouLayout) ...[
-            if (!showUnlockButton)
-              _PlayerWatchNowLayer(
-                bottom: forYouWatchNowBottom,
-                overlayOpacity: overlayOpacity,
-                overlayOpacityListenable: overlayOpacityListenable,
-                onTap: onWatchNowTap,
-              ),
+            _PlayerWatchNowLayer(
+              bottom: forYouWatchNowBottom,
+              overlayOpacity: overlayOpacity,
+              overlayOpacityListenable: overlayOpacityListenable,
+              onTap: onWatchNowTap,
+            ),
           ] else ...[
             Positioned(
               left: 16,
@@ -523,6 +530,7 @@ class _PlayerActionRailLayer extends StatelessWidget {
               child: _PlayerActionRailContent(
                 likeCountLabel: likeCountLabel,
                 dramaId: dramaId,
+                forYouLayout: forYouLayout,
                 onEpisodesTap: onEpisodesTap,
                 onShareTap: onShareTap,
                 onMoreTap: onMoreTap,
@@ -579,7 +587,8 @@ class _PlayerMetaLayer extends StatelessWidget {
               opacityListenable: overlayOpacityListenable,
               child: PlayerBottomMeta(
                 content: content,
-                showChevron: !forYouLayout,
+                showChevron: true,
+                showTags: forYouLayout,
                 onTap: onTap,
               ),
             ),
@@ -896,6 +905,7 @@ class _PlayerActionRailContent extends ConsumerWidget {
   const _PlayerActionRailContent({
     required this.likeCountLabel,
     required this.dramaId,
+    required this.forYouLayout,
     required this.onEpisodesTap,
     required this.onShareTap,
     required this.onMoreTap,
@@ -906,6 +916,7 @@ class _PlayerActionRailContent extends ConsumerWidget {
 
   final String likeCountLabel;
   final String dramaId;
+  final bool forYouLayout;
   final VoidCallback onEpisodesTap;
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
@@ -929,29 +940,56 @@ class _PlayerActionRailContent extends ConsumerWidget {
           onTap: onLikeTap,
         ),
         const SizedBox(height: 18),
-        _ActionItem(
-          icon: Icons.layers_rounded,
-          imageIcon: Image.asset(
-            "assets/images/player/episodes.png",
-            height: 28,
+        if (forYouLayout)
+          _ActionItem(
+            icon: Icons.share_rounded,
+            imageIcon: Image.asset(
+              'assets/images/player/share.png',
+              width: 28,
+              height: 28,
+            ),
+            label: context.l10n.playerShare,
+            onTap: onShareTap,
+          )
+        else
+          _ActionItem(
+            icon: Icons.layers_rounded,
+            imageIcon: Image.asset(
+              'assets/images/player/episodes.png',
+              height: 28,
+            ),
+            label: context.l10n.playerEpisodes,
+            onTap: onEpisodesTap,
           ),
-          label: context.l10n.playerEpisodes,
-          onTap: onEpisodesTap,
-        ),
-        // const SizedBox(height: 18),
-        // _ActionItem(
-        //   icon: Icons.reply_rounded,
-        //   label: context.l10n.playerShare,
-        //   onTap: onShareTap,
-        //   flipIcon: true,
-        // ),
-        // const SizedBox(height: 18),
-        // _ActionItem(
-        //   icon: Icons.more_horiz_rounded,
-        //   label: context.l10n.playerMore,
-        //   onTap: onMoreTap,
-        // ),
       ],
+    );
+  }
+}
+
+class _PlayerSearchButton extends StatelessWidget {
+  const _PlayerSearchButton({required this.top, required this.onTap});
+
+  final double top;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: top,
+      right: 16,
+      child: GestureDetector(
+        key: const ValueKey('player_for_you_search_button'),
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: SvgPicture.asset(
+            'assets/images/player/search.svg',
+            width: 24,
+            height: 24,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -991,12 +1029,14 @@ class PlayerBottomMeta extends StatelessWidget {
   const PlayerBottomMeta({
     required this.content,
     this.showChevron = true,
+    this.showTags = false,
     this.onTap,
     super.key,
   });
 
   final PlayerContent content;
   final bool showChevron;
+  final bool showTags;
   final VoidCallback? onTap;
 
   @override
@@ -1037,7 +1077,10 @@ class PlayerBottomMeta extends StatelessWidget {
               ),
             ],
           ),
-
+          if (showTags && content.tags.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            SizedBox(height: 16, child: _PlayerTagsRow(tags: content.tags)),
+          ],
           const SizedBox(height: 6),
           _SynopsisPreviewText(
             text: content.synopsis,
@@ -1046,6 +1089,96 @@ class PlayerBottomMeta extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _PlayerTag extends StatelessWidget {
+  const _PlayerTag({required this.label});
+
+  static const horizontalPadding = 12.0;
+
+  final String label;
+
+  static TextStyle? textStyle(BuildContext context) {
+    return Theme.of(context).textTheme.labelSmall?.copyWith(
+      color: const Color(0xFFE3E3E3).withValues(alpha: 0.6),
+      fontSize: 9,
+      height: 1.3,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 16,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: const Color(0x3DD9D9D9).withValues(alpha: 0.24),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        softWrap: false,
+        style: textStyle(context),
+      ),
+    );
+  }
+}
+
+class _PlayerTagsRow extends StatelessWidget {
+  const _PlayerTagsRow({required this.tags});
+
+  static const _gap = 8.0;
+
+  final List<String> tags;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final visibleTags = _visibleTagsForWidth(context, constraints.maxWidth);
+        return Row(
+          children: [
+            for (final tag in visibleTags.indexed) ...[
+              _PlayerTag(label: tag.$2),
+              if (tag.$1 != visibleTags.length - 1) const SizedBox(width: _gap),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  List<String> _visibleTagsForWidth(BuildContext context, double maxWidth) {
+    if (!maxWidth.isFinite || maxWidth <= 0) {
+      return const [];
+    }
+
+    final textDirection = Directionality.of(context);
+    final textScaler = MediaQuery.textScalerOf(context);
+    final style = _PlayerTag.textStyle(context);
+    final visibleTags = <String>[];
+    var usedWidth = 0.0;
+
+    for (final tag in tags) {
+      final painter = TextPainter(
+        text: TextSpan(text: tag, style: style),
+        maxLines: 1,
+        textDirection: textDirection,
+        textScaler: textScaler,
+      )..layout();
+      final tagWidth = painter.width + _PlayerTag.horizontalPadding;
+      final nextWidth = usedWidth + (visibleTags.isEmpty ? 0 : _gap) + tagWidth;
+      if (nextWidth > maxWidth) {
+        break;
+      }
+      visibleTags.add(tag);
+      usedWidth = nextWidth;
+    }
+
+    return visibleTags;
   }
 }
 

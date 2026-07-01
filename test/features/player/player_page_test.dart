@@ -32,6 +32,7 @@ import 'package:drama_client/features/pay/application/payment_loading_controller
 import 'package:drama_client/features/player/domain/player_performance_policy.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
+import 'package:drama_client/features/player/domain/for_you_player_handoff.dart';
 import 'package:drama_client/features/player/domain/player_playback_source.dart';
 import 'package:drama_client/core/toast/app_toast_provider.dart';
 import 'package:drama_client/features/player/presentation/pages/player_page.dart';
@@ -50,6 +51,89 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  testWidgets(
+    'for you watch now opens single drama at current position',
+    (tester) async {
+      final repository = _FakePlayerFeedRepository.unlocked();
+      final sessions = <_FakePlaybackSession>[];
+
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          initialLocation: '/for-you',
+          repository: repository,
+          playbackSessionFactory: () {
+            final session = _FakePlaybackSession();
+            sessions.add(session);
+            return session;
+          },
+          providerOverrides: [
+            playerRemoteDataSourceProvider.overrideWithValue(
+              _FakePlayerRemoteDataSource(watchProgress: null),
+            ),
+          ],
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      final forYouSession = sessions.first;
+      forYouSession.emitDuration(const Duration(seconds: 120));
+      forYouSession.emitPosition(const Duration(seconds: 37));
+      await tester.pump();
+
+      await tester.tap(find.text('Watch Now').first);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      expect(repository.lastSingleDramaEpisodeId, 'ep-1');
+      expect(sessions, hasLength(2));
+      expect(
+        sessions.last.openStartPositions,
+        contains(const Duration(seconds: 37)),
+      );
+      expect(find.byKey(const ValueKey('player_back_button')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'for you completion opens single drama five seconds before the end',
+    (tester) async {
+      final sessions = <_FakePlaybackSession>[];
+
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          initialLocation: '/for-you',
+          repository: _FakePlayerFeedRepository.unlocked(),
+          playbackSessionFactory: () {
+            final session = _FakePlaybackSession();
+            sessions.add(session);
+            return session;
+          },
+          providerOverrides: [
+            playerRemoteDataSourceProvider.overrideWithValue(
+              _FakePlayerRemoteDataSource(watchProgress: null),
+            ),
+          ],
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      sessions.first.emitDuration(const Duration(seconds: 120));
+      sessions.first.emitPosition(const Duration(seconds: 120));
+      sessions.first.emitCompleted(true);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      expect(sessions, hasLength(2));
+      expect(
+        sessions.last.openStartPositions,
+        contains(const Duration(seconds: 115)),
+      );
+      expect(find.byKey(const ValueKey('player_back_button')), findsOneWidget);
+    },
+  );
+
   testWidgets('feed empty shows empty state', (tester) async {
     await tester.pumpWidget(
       _buildPlayerApp(repository: _FakePlayerFeedRepository.empty()),
@@ -3153,6 +3237,9 @@ Widget _buildPlayerApp({
           return PlayerPage(
             dramaId: state.pathParameters['dramaId']!,
             episodeId: state.pathParameters['episodeId']!,
+            forYouHandoff: state.extra is ForYouPlayerHandoff
+                ? state.extra! as ForYouPlayerHandoff
+                : null,
           );
         },
       ),
@@ -3494,6 +3581,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   final _widthController = StreamController<int?>.broadcast();
   final _errorController = StreamController<String>.broadcast();
   final openedSources = <String>[];
+  final openStartPositions = <Duration?>[];
   final seekedPositions = <Duration>[];
   final rates = <double>[];
   int pauseCount = 0;
@@ -3558,6 +3646,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     Map<String, String>? httpHeaders,
   }) async {
     openedSources.add(source);
+    openStartPositions.add(start);
     _bufferingController.add(true);
     await (openCompleter?.future ?? Future<void>.value());
     if (shouldThrowOnOpen) {

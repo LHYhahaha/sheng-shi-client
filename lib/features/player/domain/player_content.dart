@@ -33,6 +33,7 @@ class PlayerContent {
     this.coverUrl,
     required this.episodes,
     required this.recommendations,
+    this.tags = const [],
     this.playCount = 0,
     this.favoriteCount = 0,
     this.likeCountDelta = 0,
@@ -94,6 +95,9 @@ class PlayerContent {
   ///
   /// 推荐项只用于展示/跳转，不应直接加入当前播放 feed 或预热。
   final List<PlayerRecommendation> recommendations;
+
+  /// 内容标签，仅用于播放器信息区展示。
+  final List<String> tags;
 
   /// 推荐列表加载状态。
   ///

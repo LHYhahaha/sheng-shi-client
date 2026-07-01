@@ -592,6 +592,77 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     await _restoreProgressIfNeeded(normalized, _generation);
   }
 
+  /// 应用标准播放页回传的权威进度，并保证 For You 画面重新挂载后自动播放。
+  Future<void> synchronizeExternalProgress({
+    required PlayerFeedItem item,
+    required Duration position,
+    required Duration duration,
+  }) async {
+    if (_isSessionDisposed) {
+      return;
+    }
+    final effectiveDuration = duration > Duration.zero
+        ? duration
+        : item.episode.duration ?? Duration.zero;
+    final maxPosition = effectiveDuration > Duration.zero
+        ? effectiveDuration
+        : position;
+    final target = position < Duration.zero
+        ? Duration.zero
+        : position > maxPosition
+        ? maxPosition
+        : position;
+    final usesCurrentSource =
+        state.currentItemId == item.id &&
+        state.currentSource != null &&
+        _usesCurrentMediaSource(item);
+
+    if (usesCurrentSource) {
+      _visibilityDetachEpoch += 1;
+      _pauseWhenOpenCompletes = false;
+      _accessOverlayPausedItemId = null;
+      ++_generation;
+      await _session.seek(target);
+      if (!ref.mounted) {
+        return;
+      }
+      _currentPlaybackPosition = target;
+      if (effectiveDuration > Duration.zero) {
+        _currentPlaybackDuration = effectiveDuration;
+      }
+      await _session.play();
+      if (!ref.mounted) {
+        return;
+      }
+      state = state.copyWith(
+        status: PlayerPlaybackStatus.playing,
+        position: target,
+        duration: effectiveDuration > Duration.zero
+            ? effectiveDuration
+            : state.duration,
+        hasEnded: false,
+        isBuffering: !state.hasFirstFrame,
+        videoController: _session.videoController,
+        surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
+      );
+      return;
+    }
+
+    if (target > Duration.zero && effectiveDuration > Duration.zero) {
+      _pendingResumeProgress = PlaybackProgress(
+        itemId: item.id,
+        position: target,
+        duration: effectiveDuration,
+        updatedAt: DateTime.now(),
+      );
+    } else {
+      _pendingResumeProgress = null;
+    }
+    // 外部 handoff 是权威状态，不能被 playItem 的 500ms UI 防抖误吞。
+    _lastPlayItemRequest = null;
+    await playItem(item);
+  }
+
   @override
   PlayerPlaybackState build() {
     _session = ref.read(playerPlaybackSessionFactoryProvider).call();
@@ -737,6 +808,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     final isSameSource =
         state.currentItemId == item.id &&
         state.currentSource != null &&
+        _usesCurrentMediaSource(item) &&
         state.status != PlayerPlaybackStatus.error;
     if (isSameSource && !state.hasEnded) {
       _applyMetadataDurationFallback(item.episode.duration);

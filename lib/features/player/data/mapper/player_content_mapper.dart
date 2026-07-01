@@ -13,7 +13,8 @@ class PlayerContentMapper {
   PlayerContent mapContent(
     PlayerContentDto dto, {
     List<PlayerRecommendation> recommendations = const [],
-    PlayerRecommendationLoadStatus recommendationsStatus = PlayerRecommendationLoadStatus.loaded,
+    PlayerRecommendationLoadStatus recommendationsStatus =
+        PlayerRecommendationLoadStatus.loaded,
   }) {
     return PlayerContent(
       id: dto.id.toString(),
@@ -32,6 +33,7 @@ class PlayerContentMapper {
           )
           .toList(growable: false),
       recommendations: recommendations,
+      tags: List<String>.unmodifiable(dto.tagsName),
       playCount: dto.playCount,
       favoriteCount: dto.favoriteCount,
       episodeTotal: dto.episodeTotal,
