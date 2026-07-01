@@ -211,7 +211,7 @@ class EntitlementController extends Notifier<UserEntitlementState> {
   }) {
     final updatedUnlockedIds = Set<String>.from(state.unlockedEpisodeIds)
       ..add(episodeId);
-    
+
     state = state.copyWith(
       coinBalance: coinBalance,
       bonusBalance: bonusBalance,
@@ -220,7 +220,7 @@ class EntitlementController extends Notifier<UserEntitlementState> {
       clearInFlightUnlock: true,
       clearLastUnlockError: true,
     );
-    
+
     debugPrint(
       '[Entitlement] 金币解锁成功，已更新状态: episodeId=$episodeId, '
       'coinBalance=$coinBalance, bonusBalance=$bonusBalance',
@@ -309,7 +309,7 @@ class EntitlementController extends Notifier<UserEntitlementState> {
 
     // 解锁扣费仅以 coinBalance 为准；bonusBalance 当前不参与 affordability 判断。
     // 真实阶段余额/会员/已解锁集须由服务端 entitlement refresh 更新，客户端不得本地累加。
-    if (state.coinBalance < price) {
+    if (state.coinBalance + state.bonusBalance < price) {
       return _decision(
         type: EpisodeAccessDecisionType.showRechargeDialog,
         dramaId: dramaId,

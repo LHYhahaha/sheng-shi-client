@@ -165,7 +165,7 @@ class IapPurchaseService {
             );
 
       if (isConsumable) {
-        await _iap.buyConsumable(purchaseParam: purchaseParam);
+        await _iap.buyConsumable(purchaseParam: purchaseParam,autoConsume: false);
       } else {
         await _iap.buyNonConsumable(purchaseParam: purchaseParam);
       }

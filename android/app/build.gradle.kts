@@ -1,8 +1,16 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use(keystoreProperties::load)
 }
 
 android {
@@ -27,28 +35,21 @@ android {
         versionName = flutter.versionName
     }
 
-//    signingConfigs {
-//        create("release") {
-//            keyAlias = "upload"
-//            keyPassword = "123456"
-//            storeFile = file("keystore.jks")
-//            storePassword = "123456"
-//        }
-//    }
-//
-//    buildTypes {
-//        release {
-//            signingConfig = signingConfigs.getByName("release")
-//            isMinifyEnabled = false
-//            isShrinkResources = false
-//        }
-//    }
+    signingConfigs {
+        create("release") {
+            keyAlias = keystoreProperties.getProperty("keyAlias")
+            keyPassword = keystoreProperties.getProperty("keyPassword")
+            storeFile = keystoreProperties.getProperty("storeFile")?.let(::file)
+            storePassword = keystoreProperties.getProperty("storePassword")
+        }
+    }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("release")
+        }
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -61,13 +62,13 @@ android {
 
     productFlavors {
 
-//        create("GF") {
-//            dimension = "channel"
-//            applicationId = "com.yushi.drama.client"
-//            resValue("string", "channel_flag", "GF_001")
-//            resValue("string", "MERCHANT_ID", "333")
-//            resValue("string", "VEST_PKG_ID", "1001")
-//        }
+        create("GF") {
+            dimension = "channel"
+            applicationId = "com.yushi.drama.client"
+            resValue("string", "channel_flag", "GF_001")
+            resValue("string", "MERCHANT_ID", "333")
+            resValue("string", "VEST_PKG_ID", "1001")
+        }
 
         create("haha") {
             dimension = "channel"
