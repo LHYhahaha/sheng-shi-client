@@ -933,16 +933,16 @@ class AppLocalizations {
       _remoteText('recharge_modal.product.bonus', en: 'Bonus', zh: '赠送');
 
   String get rechargeVipWeek =>
-      _remoteText('recharge_modal.vip.week', en: 'Weekly', zh: '周');
+      _remoteText('recharge_modal.vip.week', en: 'Weekly VIP', zh: '周会员');
 
   String get rechargeVipMonth =>
-      _remoteText('recharge_modal.vip.month', en: 'Monthly', zh: '月');
+      _remoteText('recharge_modal.vip.month', en: 'Monthly VIP', zh: '月会员');
 
   String get rechargeVipQuarter =>
-      _remoteText('recharge_modal.vip.quarter', en: 'Quarterly', zh: '季');
+      _remoteText('recharge_modal.vip.quarter', en: 'Quarterly VIP', zh: '季会员');
 
   String get rechargeVipYear =>
-      _remoteText('recharge_modal.vip.year', en: 'Yearly', zh: '年');
+      _remoteText('recharge_modal.vip.year', en: 'Yearly VIP', zh: '年会员');
 
   String get rechargeVipMember =>
       _remoteText('recharge_modal.vip.member', en: 'VIP', zh: '会员');
