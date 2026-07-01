@@ -75,32 +75,20 @@ class MembershipBenefitsPanel extends StatelessWidget {
       child: Stack(
         children: [
           Positioned.fill(
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(40),
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                color: Color(0xFF121212),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(40)),
               ),
-              child: Image.asset(
-                'assets/images/membership/membership_benefits_panel_bg.png',
-                fit: BoxFit.fill,
-                alignment: Alignment.topCenter,
-                errorBuilder: (context, error, stackTrace) {
-                  return DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          const Color(0xFF1A1816),
-                          MembershipLayout.background,
-                        ],
-                      ),
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(40),
-                      ),
-                    ),
-                  );
-                },
-              ),
+            ),
+          ),
+          const Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            child: IgnorePointer(
+              child: CustomPaint(painter: _BenefitsPanelTopBorderPainter()),
             ),
           ),
           Padding(
@@ -124,7 +112,7 @@ class MembershipBenefitsPanel extends StatelessWidget {
                         style: textTheme.bodyMedium?.copyWith(
                           color: _gold,
                           fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                           height: 1.5,
                         ),
                       ),
@@ -149,6 +137,47 @@ class MembershipBenefitsPanel extends StatelessWidget {
   }
 }
 
+class _BenefitsPanelTopBorderPainter extends CustomPainter {
+  const _BenefitsPanelTopBorderPainter();
+
+  static const _radius = 40.0;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0.5, _radius)
+      ..arcToPoint(
+        const Offset(_radius, 0.5),
+        radius: const Radius.circular(_radius),
+      )
+      ..lineTo(size.width - _radius, 0.5)
+      ..arcToPoint(
+        Offset(size.width - 0.5, _radius),
+        radius: const Radius.circular(_radius),
+      );
+
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Color(0x4DD6BE94),
+          Color(0x4DD6BE94),
+          Color(0x00D6BE94),
+          Color(0x00D6BE94),
+        ],
+        stops: [0, 0.0033, 0.0624, 1],
+      ).createShader(Offset.zero & size);
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_BenefitsPanelTopBorderPainter oldDelegate) => false;
+}
+
 class _BenefitTitleLine extends StatelessWidget {
   const _BenefitTitleLine({this.reverse = false});
 
@@ -157,15 +186,24 @@ class _BenefitTitleLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const gold = Color(0xFFE6CFA6);
-    final colors = reverse
-        ? [Colors.transparent, gold.withValues(alpha: 0.22)]
-        : [gold.withValues(alpha: 0.22), Colors.transparent];
 
     return SizedBox(
       width: MembershipLayout.benefitsTitleLineWidth,
       height: 1,
       child: DecoratedBox(
-        decoration: BoxDecoration(gradient: LinearGradient(colors: colors)),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: reverse ? Alignment.centerLeft : Alignment.centerRight,
+            end: reverse ? Alignment.centerRight : Alignment.centerLeft,
+            colors: [
+              Colors.transparent,
+              gold.withValues(alpha: 0.12),
+              gold.withValues(alpha: 0.3),
+              gold.withValues(alpha: 0.3),
+            ],
+            stops: const [0, 0.35, 0.72, 1],
+          ),
+        ),
       ),
     );
   }

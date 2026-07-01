@@ -422,7 +422,7 @@ class _MembershipHeroContent extends StatelessWidget {
             child: Row(
               children: [
                 const _AvatarDots(),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
                 Expanded(
                   child: Text(
                     subtitle,
@@ -492,29 +492,32 @@ class _AvatarDots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const colors = [Color(0xFFE6CFA6), Color(0xFFB58E7A), Color(0xFF72564B)];
     const images = [
-      "assets/images/membership/1.png",
-      "assets/images/membership/2.png",
-      "assets/images/membership/3.png",
+      'assets/images/membership/1.png',
+      'assets/images/membership/2.png',
+      'assets/images/membership/3.png',
     ];
 
     return SizedBox(
-      width: 32,
-      height: 16,
+      width: 56,
+      height: 24,
       child: Stack(
         children: [
-          for (var index = 0; index < colors.length; index++)
+          for (var index = 0; index < images.length; index++)
             Positioned(
-              left: index * 10.0,
+              left: index * 16.0,
               child: Container(
-                width: 16,
-                height: 16,
+                width: 24,
+                height: 24,
                 decoration: BoxDecoration(
-                  color: colors[index],
                   shape: BoxShape.circle,
-                  image: DecorationImage(image: AssetImage(images[index])),
-                  border: Border.all(color: MembershipLayout.background),
+                  border: Border.all(
+                    color: MembershipLayout.background,
+                    width: 3,
+                  ),
+                ),
+                child: ClipOval(
+                  child: Image.asset(images[index], fit: BoxFit.cover),
                 ),
               ),
             ),

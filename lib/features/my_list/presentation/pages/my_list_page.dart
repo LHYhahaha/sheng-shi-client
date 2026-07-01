@@ -187,41 +187,38 @@ class _MyListPageState extends ConsumerState<MyListPage> {
       backgroundColor: AppColors.black,
       body: SafeArea(
         bottom: false,
-        child: Stack(
-          children: [
-            SlidableAutoCloseBehavior(
-              closeWhenOpened: true,
-              closeWhenTapped: true,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _MyListHeader(
-                    choosing: state.isCollectionEditing,
-                    canEdit: state.canEditCollection,
-                    allSelected: state.areAllItemsSelected,
-                    onEdit: controller.enterCollectionEdit,
-                    onCancel: controller.cancelCollectionEdit,
-                    onSelectAll: controller.toggleSelectAll,
-                  ),
-                  _MyListTabs(
-                    selectedTab: state.selectedTab,
-                    onSelected: controller.selectTab,
-                  ),
-                  Expanded(child: _buildBody(l10n, state, controller)),
-                ],
+        child: SlidableAutoCloseBehavior(
+          closeWhenOpened: true,
+          closeWhenTapped: true,
+          child: Column(
+            children: [
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _MyListHeader(
+                      choosing: state.isCollectionEditing,
+                      canEdit: state.canEditCollection,
+                      allSelected: state.areAllItemsSelected,
+                      onEdit: controller.enterCollectionEdit,
+                      onCancel: controller.cancelCollectionEdit,
+                      onSelectAll: controller.toggleSelectAll,
+                    ),
+                    _MyListTabs(
+                      selectedTab: state.selectedTab,
+                      onSelected: controller.selectTab,
+                    ),
+                    Expanded(child: _buildBody(l10n, state, controller)),
+                  ],
+                ),
               ),
-            ),
-            if (state.isCollectionEditing)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: _DeleteBar(
+              if (state.isCollectionEditing)
+                _DeleteBar(
                   count: state.selectedCount,
                   onDelete: () => _deleteSelectedAndFillIfShort(controller),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -437,14 +434,13 @@ class _MyListHeader extends StatelessWidget {
             ),
           if (choosing)
             Positioned(
-              left: 16,
+              left: 14,
               top: 18,
               child: TextButton(
                 onPressed: onSelectAll,
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.textDisabled,
                   padding: EdgeInsets.zero,
-                  minimumSize: const Size(82, 36),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 child: Text(
@@ -536,7 +532,6 @@ class _HeaderMoreMenu extends StatelessWidget {
   }
 }
 
-
 class _MyListTabs extends StatelessWidget {
   const _MyListTabs({required this.selectedTab, required this.onSelected});
 
@@ -576,7 +571,7 @@ class _MyListTabs extends StatelessWidget {
             right: 0,
             bottom: 0,
             child: ColoredBox(
-              color: AppColors.divider,
+              color: Color(0XFF242424),
               child: SizedBox(height: 1),
             ),
           ),
@@ -1056,16 +1051,14 @@ class _EmptyMyList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: AppEmptyState(
-          message: description,
-          textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.textMuted,
-            fontSize: 12,
-            height: 16 / 12,
-          ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 120, 32, 0),
+      child: AppEmptyState(
+        message: description,
+        textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: AppColors.textMuted,
+          fontSize: 12,
+          height: 16 / 12,
         ),
       ),
     );
