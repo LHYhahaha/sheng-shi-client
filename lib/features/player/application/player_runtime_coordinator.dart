@@ -95,6 +95,11 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
     }
     final feedProvider = playerFeedControllerProvider(sessionKey);
     final latestFeedState = ref.read(feedProvider);
+    final previousItem = previousItemId == null
+        ? null
+        : latestFeedState.items
+              .where((candidate) => candidate.id == previousItemId)
+              .firstOrNull;
     if (latestFeedState.currentIndex != index) {
       _feedController.setCurrentIndex(index);
     }
@@ -112,8 +117,17 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
         toIndex: index,
       );
       // 上报切集事件
-      if (playbackTrigger == 'swipe_next' || playbackTrigger == 'swipe_previous' || playbackTrigger == 'auto_next') {
-        unawaited(_playbackController.reportWatchProgress(eventType: 5)); // 5: switchEpisode
+      if (playbackTrigger == 'swipe_next' ||
+          playbackTrigger == 'swipe_previous' ||
+          playbackTrigger == 'auto_next') {
+        if (previousItem != null) {
+          unawaited(
+            _playbackController.reportWatchProgress(
+              eventType: 5,
+              item: previousItem,
+            ),
+          ); // 5: switchEpisode
+        }
       }
     }
 
@@ -226,7 +240,9 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
           resumeIfCurrentSource: true,
         );
         // 上报观看开始事件
-        unawaited(_playbackController.reportWatchProgress(eventType: 1)); // 1: start
+        unawaited(
+          _playbackController.reportWatchProgress(eventType: 1),
+        ); // 1: start
       case EpisodeAccessDecisionType.autoUnlockAndPlay:
         final unlocked = await _unlockCurrentItemWithCoinApi(
           item,
@@ -420,8 +436,9 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
       return false;
     }
 
-    final currentItem =
-        ref.read(playerFeedControllerProvider(sessionKey)).currentItem;
+    final currentItem = ref
+        .read(playerFeedControllerProvider(sessionKey))
+        .currentItem;
     final unlockedItem = currentItem?.id == item.id ? currentItem! : item;
     final decision = ref
         .read(entitlementControllerProvider.notifier)

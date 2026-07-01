@@ -5,7 +5,7 @@ import '../../theme/app_colors.dart';
 
 /// 应用底部主导航。
 ///
-/// 只服务四个 shell tab。播放器全屏、My List 编辑等场景应通过 shell chrome provider
+/// 只服务五个 shell tab。播放器全屏、My List 编辑等场景应通过 shell chrome provider
 /// 隐藏它，不要在单个页面里复制导航栏。
 class AppBottomNavigation extends StatelessWidget {
   const AppBottomNavigation({
@@ -26,24 +26,17 @@ class AppBottomNavigation extends StatelessWidget {
       fallbackIcon: Icons.home_rounded,
     ),
     _BottomNavigationItem(
-      label: _BottomNavigationLabel.game,
-      selectedAssetPath: 'assets/navigation/home_selected.png',
-      unselectedAssetPath: 'assets/navigation/home_unselected.png',
-      fallbackIcon: Icons.sports_esports_rounded,
+      label: _BottomNavigationLabel.forYou,
+      selectedAssetPath: 'assets/navigation/for_you_selected.png',
+      unselectedAssetPath: 'assets/navigation/for_you_unselected.png',
+      fallbackIcon: Icons.play_circle_fill_rounded,
     ),
-    // _BottomNavigationItem(
-    //   label: _BottomNavigationLabel.member,
-    //   selectedAssetPath: 'assets/navigation/profile_selected.png',
-    //   unselectedAssetPath: 'assets/navigation/profile_unselected.png',
-    //   fallbackIcon: Icons.card_membership_rounded,
-    // ),
-    // TODO: 暂时禁用 For You tab
-    // _BottomNavigationItem(
-    //   label: _BottomNavigationLabel.forYou,
-    //   selectedAssetPath: 'assets/navigation/for_you_selected.png',
-    //   unselectedAssetPath: 'assets/navigation/for_you_unselected.png',
-    //   fallbackIcon: Icons.play_circle_fill_rounded,
-    // ),
+    _BottomNavigationItem(
+      label: _BottomNavigationLabel.member,
+      selectedAssetPath: 'assets/navigation/huiyuan__selected.png',
+      unselectedAssetPath: 'assets/navigation/huiyuan_unselected.png',
+      fallbackIcon: Icons.card_membership_rounded,
+    ),
     _BottomNavigationItem(
       label: _BottomNavigationLabel.myList,
       selectedAssetPath: 'assets/navigation/my_list_selected.png',
@@ -78,10 +71,7 @@ class AppBottomNavigation extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF0A0014),
         border: const Border(
-          top: BorderSide(
-            color: Color(0x14FFFFFF),
-            width: 1,
-          ),
+          top: BorderSide(color: Color(0x14FFFFFF), width: 1),
         ),
       ),
       child: SizedBox(

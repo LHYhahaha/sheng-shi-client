@@ -62,11 +62,10 @@ class PlayerRemoteDataSource {
         .toList(growable: false);
   }
 
-  Future<PlayerFeedPageDto> listForYouFeed({String? pageToken}) {
+  Future<PlayerFeedPageDto> listForYouFeed({int page = 1, int pageSize = 20}) {
     return _apiClient.get<PlayerFeedPageDto>(
-      '/feed/for-you',
-      queryParameters: <String, Object?>{'pageToken': pageToken}
-        ..removeWhere((_, value) => value == null),
+      '/api/home/play/recommend',
+      queryParameters: <String, Object?>{'page': page, 'page_size': pageSize},
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) => PlayerFeedPageDto.fromJson(
         JsonFieldParser.requireMap(data, dtoName: 'PlayerFeedPageDto'),

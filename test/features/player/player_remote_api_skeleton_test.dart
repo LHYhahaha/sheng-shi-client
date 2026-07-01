@@ -59,6 +59,59 @@ void main() {
     expect(episode.isAvailable, isFalse);
   });
 
+  test('for you page dto parses paged drama response and active episode', () {
+    final page = PlayerFeedPageDto.fromJson({
+      'page': 2,
+      'page_size': 20,
+      'total': 45,
+      'dramas': [
+        {
+          'id': 154,
+          'cover_url': 'https://example.com/154.jpg',
+          'title': 'Drama 154',
+          'summary': '',
+          'play_count': 1000000,
+          'trailer_episode_num': 5,
+          'is_vip_only': 1,
+          'status': 1,
+          'episode_total': 3,
+          'episode_id': 502,
+          'episode_no': 2,
+          'episodes': [
+            {
+              'id': 501,
+              'episode_no': 1,
+              'source_url': 'https://example.com/501.m3u8',
+              'status': 1,
+              'is_unlocked': 1,
+              'is_vip_only': 0,
+              'subtitles': <Object?>[],
+            },
+            {
+              'id': 502,
+              'episode_no': 2,
+              'source_url': 'https://example.com/502.m3u8',
+              'status': 1,
+              'is_unlocked': 1,
+              'is_vip_only': 0,
+              'subtitles': <Object?>[],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(page.page, 2);
+    expect(page.pageSize, 20);
+    expect(page.total, 45);
+    expect(page.hasMore, isTrue);
+    expect(page.items, hasLength(1));
+    expect(page.items.single.dramaId, '154');
+    expect(page.items.single.episodeId, '502');
+    expect(page.items.single.episode.id, 502);
+    expect(page.items.single.drama.episodes, hasLength(2));
+  });
+
   test('playback source dto maps cache key with sourceId and expiry', () {
     final item = _feedItem();
     final expiresAt = DateTime.now().add(const Duration(minutes: 10));
@@ -228,7 +281,9 @@ void main() {
               episode: _freeEpisode,
             ),
           ],
-          nextPageToken: 'next',
+          page: 1,
+          pageSize: 20,
+          total: 21,
         ),
       ),
     );
@@ -410,7 +465,9 @@ PlaybackSourceDto _playbackSource({
   );
 }
 
-PlayerContentDto _playerContentDto({List<PlayerEpisodeDto> episodes = const []}) {
+PlayerContentDto _playerContentDto({
+  List<PlayerEpisodeDto> episodes = const [],
+}) {
   return PlayerContentDto(
     id: 1,
     coverUrl: 'https://cdn.example.com/poster.jpg',
@@ -530,9 +587,7 @@ class _FakePlayerRemoteDataSource implements PlayerRemoteDataSource {
     PlayerContentDto? detail,
     PlayerFeedPageDto? forYouPage,
   }) : detail = detail ?? _playerContentDto(),
-       forYouPage =
-           forYouPage ??
-           const PlayerFeedPageDto(items: [], nextPageToken: null);
+       forYouPage = forYouPage ?? const PlayerFeedPageDto(items: []);
 
   final PlayerContentDto detail;
   final PlayerFeedPageDto forYouPage;
@@ -543,7 +598,10 @@ class _FakePlayerRemoteDataSource implements PlayerRemoteDataSource {
   }
 
   @override
-  Future<PlayerFeedPageDto> listForYouFeed({String? pageToken}) async {
+  Future<PlayerFeedPageDto> listForYouFeed({
+    int page = 1,
+    int pageSize = 20,
+  }) async {
     return forYouPage;
   }
 

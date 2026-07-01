@@ -852,7 +852,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           'windowItemsAfter=${_windowItemsText()}',
         ]),
       );
-      if (prepared != null && !(resumeStart != null && resumeProgressWasPending)) {
+      if (prepared != null &&
+          !(resumeStart != null && resumeProgressWasPending)) {
         final hitEvent = prepared.kind == PreparedPlaybackSessionKind.retained
             ? 'retained hit previous'
             : 'prepared hit next';
@@ -1130,18 +1131,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       direction: 1,
       count: config.effectivePreparedForwardSessionCount,
       skipped: <String>[],
-    )
-        .where((item) => !_usesCurrentMediaSource(item))
-        .toList(growable: false);
+    ).where((item) => !_usesCurrentMediaSource(item)).toList(growable: false);
     final sessionBackwardCandidates = _preloadCandidatesInDirection(
       items,
       currentIndex,
       direction: -1,
       count: config.effectiveRetainedBackwardSessionCount,
       skipped: <String>[],
-    )
-        .where((item) => !_usesCurrentMediaSource(item))
-        .toList(growable: false);
+    ).where((item) => !_usesCurrentMediaSource(item)).toList(growable: false);
 
     // HLS preload count 控制 HTTP playlist/segment 预热，不控制 prepared session window。
     // prepared session 持有播放器和解码资源，扩大到多个 next/previous 会提高内存、
@@ -1444,11 +1441,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   Future<void> reportWatchProgress({
     required int eventType,
     bool autoUnlockNext = false,
+    PlayerFeedItem? item,
   }) async {
     unawaited(
       _reportWatchProgress(
         eventType: eventType,
         autoUnlockNext: autoUnlockNext,
+        item: item,
       ),
     );
   }
@@ -1460,6 +1459,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   Future<void> _reportWatchProgress({
     required int eventType,
     bool autoUnlockNext = false,
+    PlayerFeedItem? item,
   }) async {
     if (_isSessionDisposed ||
         state.currentItemId == null ||
@@ -1469,7 +1469,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
     try {
       final feedState = ref.read(playerFeedControllerProvider(sessionKey));
-      final currentItem = feedState.currentItem;
+      final currentItem = item ?? feedState.currentItem;
       if (currentItem == null) {
         return;
       }
@@ -1969,10 +1969,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (progress == null || !progress.canResume) {
       return null;
     }
-    final effectiveDuration = _effectiveDuration(
-      Duration.zero,
-      itemDuration,
-    );
+    final effectiveDuration = _effectiveDuration(Duration.zero, itemDuration);
     if (effectiveDuration <= Duration.zero) {
       return progress;
     }
