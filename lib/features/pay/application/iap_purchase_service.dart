@@ -25,6 +25,7 @@ class IapPurchaseService {
   PayRemoteDataSource? _payRemoteDataSource;
 
   Stream<PurchaseDetails> get purchaseStream => _purchaseController.stream;
+
   Stream<Object> get purchaseErrorStream => _purchaseErrorController.stream;
 
   void _setup() {
@@ -81,8 +82,7 @@ class IapPurchaseService {
 
     try {
       sub = purchaseStream.listen((details) {
-        final purchaseToken =
-            details.verificationData.serverVerificationData;
+        final purchaseToken = details.verificationData.serverVerificationData;
         final key = [
           details.productID,
           details.purchaseID,
@@ -165,7 +165,10 @@ class IapPurchaseService {
             );
 
       if (isConsumable) {
-        await _iap.buyConsumable(purchaseParam: purchaseParam);
+        await _iap.buyConsumable(
+          purchaseParam: purchaseParam,
+          autoConsume: false,
+        );
       } else {
         await _iap.buyNonConsumable(purchaseParam: purchaseParam);
       }
@@ -284,8 +287,8 @@ class IapPurchaseService {
   Future<void> consumePurchase(PurchaseDetails details) async {
     try {
       if (Platform.isAndroid) {
-        final androidAddition =
-            _iap.getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
+        final androidAddition = _iap
+            .getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
         await androidAddition.consumePurchase(details);
         debugPrint('[IapPurchase] Purchase consumed: ${details.productID}');
         return;
