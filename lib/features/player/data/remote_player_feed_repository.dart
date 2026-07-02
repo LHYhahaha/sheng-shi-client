@@ -4,7 +4,8 @@ import 'mapper/player_feed_mapper.dart';
 import 'remote/player_remote_data_source.dart';
 
 /// 播放 feed 远程 repository。
-class RemotePlayerFeedRepository implements PlayerFeedRepository {
+class RemotePlayerFeedRepository
+    implements PlayerFeedRepository, PagedForYouFeedRepository {
   const RemotePlayerFeedRepository({
     required PlayerRemoteDataSource remoteDataSource,
     PlayerFeedMapper feedMapper = const PlayerFeedMapper(),
@@ -41,8 +42,28 @@ class RemotePlayerFeedRepository implements PlayerFeedRepository {
 
   @override
   Future<List<PlayerFeedItem>> listForYouFeed() async {
-    final page = await _remoteDataSource.listForYouFeed();
-    return page.items.map(_feedMapper.mapForYouItem).toList(growable: false);
+    final result = await listForYouFeedPage(page: 1);
+    return result.items;
   }
 
+  @override
+  Future<PlayerFeedPage> listForYouFeedPage({
+    required int page,
+    int pageSize = 20,
+  }) async {
+    final dto = await _remoteDataSource.listForYouFeed(
+      page: page,
+      pageSize: pageSize,
+    );
+    final items = dto.items
+        .map(_feedMapper.mapForYouItem)
+        .toList(growable: false);
+    return PlayerFeedPage(
+      items: items,
+      page: dto.page,
+      pageSize: dto.pageSize,
+      total: dto.total,
+      hasMore: dto.hasMore && items.isNotEmpty,
+    );
+  }
 }

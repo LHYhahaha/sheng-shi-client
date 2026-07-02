@@ -969,7 +969,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   : const PageScrollPhysics(parent: ClampingScrollPhysics()),
               scrollDirection: Axis.vertical,
               itemCount: items.length,
-              onPageChanged: feedEngine.onPageChanged,
+              onPageChanged: (index) {
+                feedEngine.onPageChanged(index);
+                if (widget.feedMode == PlayerFeedMode.forYou &&
+                    index == items.length - 1) {
+                  unawaited(feedController.loadMore());
+                }
+              },
               itemBuilder: (context, index) {
                 final item = items[index];
                 final isSettledPage = index == viewportState.settledIndex;

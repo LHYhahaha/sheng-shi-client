@@ -102,3 +102,31 @@ abstract interface class PlayerFeedRepository {
 
   Future<List<PlayerFeedItem>> listForYouFeed();
 }
+
+/// 支持分页加载的 For You feed 仓库能力。
+///
+/// 与 [PlayerFeedRepository] 分开定义，避免单剧 feed 和不需要分页的本地实现被迫维护
+/// page 状态。调用方可以在仓库支持该能力时逐页追加，否则退化为一次性列表。
+abstract interface class PagedForYouFeedRepository {
+  Future<PlayerFeedPage> listForYouFeedPage({
+    required int page,
+    int pageSize = 20,
+  });
+}
+
+/// For You feed 的领域分页结果。
+class PlayerFeedPage {
+  const PlayerFeedPage({
+    required this.items,
+    required this.page,
+    required this.pageSize,
+    required this.total,
+    required this.hasMore,
+  });
+
+  final List<PlayerFeedItem> items;
+  final int page;
+  final int pageSize;
+  final int total;
+  final bool hasMore;
+}

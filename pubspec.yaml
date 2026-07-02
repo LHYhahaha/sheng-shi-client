@@ -69,5 +69,6 @@ flutter:
     - assets/images/player/
     - assets/images/profile/
     - assets/images/membership/
+    - assets/images/search/
     - assets/images/auth/account_cancellation/
     - assets/navigation/

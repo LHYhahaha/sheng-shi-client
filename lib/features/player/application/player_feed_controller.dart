@@ -27,7 +27,11 @@ class PlayerFeedState {
     required this.items,
     required this.currentIndex,
     required this.isLoading,
+    this.isLoadingMore = false,
+    this.hasMore = false,
+    this.nextPage = 2,
     this.error,
+    this.loadMoreError,
   });
 
   const PlayerFeedState.initial()
@@ -35,7 +39,11 @@ class PlayerFeedState {
       items = const [],
       currentIndex = 0,
       isLoading = true,
-      error = null;
+      isLoadingMore = false,
+      hasMore = false,
+      nextPage = 2,
+      error = null,
+      loadMoreError = null;
 
   /// 当前 feed 的加载配置。
   ///
@@ -61,10 +69,22 @@ class PlayerFeedState {
   /// PlayerPlaybackState 管理。
   final bool isLoading;
 
+  /// For You 是否正在追加下一页。
+  final bool isLoadingMore;
+
+  /// For You 服务端是否还有下一页。
+  final bool hasMore;
+
+  /// 下一次追加请求使用的页码。
+  final int nextPage;
+
   /// feed 加载错误。
   ///
   /// 只表示列表/详情加载失败，不表示媒体播放失败。媒体错误在 PlayerPlaybackState。
   final Object? error;
+
+  /// 追加分页失败不会清空已经可播放的列表，错误单独保存在这里。
+  final Object? loadMoreError;
 
   PlayerFeedItem? get currentItem {
     if (items.isEmpty || currentIndex >= items.length) {
@@ -81,15 +101,26 @@ class PlayerFeedState {
     List<PlayerFeedItem>? items,
     int? currentIndex,
     bool? isLoading,
+    bool? isLoadingMore,
+    bool? hasMore,
+    int? nextPage,
     Object? error,
     bool clearError = false,
+    Object? loadMoreError,
+    bool clearLoadMoreError = false,
   }) {
     return PlayerFeedState(
       config: config ?? this.config,
       items: items ?? this.items,
       currentIndex: currentIndex ?? this.currentIndex,
       isLoading: isLoading ?? this.isLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      hasMore: hasMore ?? this.hasMore,
+      nextPage: nextPage ?? this.nextPage,
       error: clearError ? null : error ?? this.error,
+      loadMoreError: clearLoadMoreError
+          ? null
+          : loadMoreError ?? this.loadMoreError,
     );
   }
 }
@@ -114,19 +145,33 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
       items: const [],
       currentIndex: 0,
       isLoading: true,
+      isLoadingMore: false,
+      hasMore: false,
+      nextPage: 2,
       clearError: true,
+      clearLoadMoreError: true,
     );
 
     try {
       final repository = ref.read(playerFeedRepositoryProvider);
-      final items = switch (config.mode) {
-        PlayerFeedMode.singleDrama => repository.listSingleDramaFeed(
-          dramaId: config.dramaId!,
-          episodeId: config.episodeId!,
-        ),
-        PlayerFeedMode.forYou => repository.listForYouFeed(),
-      };
-      final loadedItems = await items;
+      final pagedRepository = repository is PagedForYouFeedRepository
+          ? repository as PagedForYouFeedRepository
+          : null;
+      final PlayerFeedPage? forYouPage;
+      final List<PlayerFeedItem> loadedItems;
+      if (config.mode == PlayerFeedMode.forYou && pagedRepository != null) {
+        forYouPage = await pagedRepository.listForYouFeedPage(page: 1);
+        loadedItems = forYouPage.items;
+      } else {
+        forYouPage = null;
+        loadedItems = await switch (config.mode) {
+          PlayerFeedMode.singleDrama => repository.listSingleDramaFeed(
+            dramaId: config.dramaId!,
+            episodeId: config.episodeId!,
+          ),
+          PlayerFeedMode.forYou => repository.listForYouFeed(),
+        };
+      }
       if (!_isCurrent(generation)) {
         return;
       }
@@ -136,7 +181,10 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
         items: List<PlayerFeedItem>.unmodifiable(loadedItems),
         currentIndex: initialIndex,
         isLoading: false,
+        hasMore: forYouPage?.hasMore ?? false,
+        nextPage: (forYouPage?.page ?? 1) + 1,
         clearError: true,
+        clearLoadMoreError: true,
       );
     } catch (error) {
       if (!_isCurrent(generation)) {
@@ -149,6 +197,54 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
         isLoading: false,
         error: error,
       );
+    }
+  }
+
+  /// 在 For You 到达列表末尾后追加下一页。
+  ///
+  /// 已有列表始终保留；重复触发、无下一页、非 For You 或仓库不支持分页时直接返回。
+  Future<void> loadMore() async {
+    final config = state.config;
+    final repository = ref.read(playerFeedRepositoryProvider);
+    final pagedRepository = repository is PagedForYouFeedRepository
+        ? repository as PagedForYouFeedRepository
+        : null;
+    if (config?.mode != PlayerFeedMode.forYou ||
+        state.isLoading ||
+        state.isLoadingMore ||
+        !state.hasMore ||
+        pagedRepository == null) {
+      return;
+    }
+
+    final generation = _generation;
+    final requestedPage = state.nextPage;
+    state = state.copyWith(isLoadingMore: true, clearLoadMoreError: true);
+
+    try {
+      final page = await pagedRepository.listForYouFeedPage(
+        page: requestedPage,
+      );
+      if (!_isCurrent(generation)) {
+        return;
+      }
+
+      final knownIds = state.items.map((item) => item.id).toSet();
+      final newItems = page.items
+          .where((item) => knownIds.add(item.id))
+          .toList(growable: false);
+      state = state.copyWith(
+        items: List<PlayerFeedItem>.unmodifiable([...state.items, ...newItems]),
+        isLoadingMore: false,
+        hasMore: page.hasMore,
+        nextPage: page.page + 1,
+        clearLoadMoreError: true,
+      );
+    } catch (error) {
+      if (!_isCurrent(generation)) {
+        return;
+      }
+      state = state.copyWith(isLoadingMore: false, loadMoreError: error);
     }
   }
 

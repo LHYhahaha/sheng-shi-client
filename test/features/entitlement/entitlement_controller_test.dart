@@ -7,6 +7,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'load failure falls back to guest-safe state without throwing',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          entitlementRepositoryProvider.overrideWith((ref) {
+            throw StateError('entitlement service unavailable');
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(entitlementControllerProvider.notifier).load();
+
+      final state = container.read(entitlementControllerProvider);
+      expect(state.isGuest, isTrue);
+      expect(state.isMember, isFalse);
+      expect(state.coinBalance, 0);
+    },
+  );
+
   group('EntitlementController decision matrix', () {
     test('free episode allows guest/member/non-member', () async {
       for (final repository in <MockEntitlementRepository>[

@@ -40,6 +40,28 @@ void main() {
     expect(state.currentItem?.content.id, 'drama-b');
   });
 
+  test('loads more for you items and stops after the last page', () async {
+    final repository = _PagedFakeFeedRepo();
+    final container = _createContainer(repository);
+    final provider = playerFeedControllerProvider('for-you-paged');
+    final controller = container.read(provider.notifier);
+
+    await controller.load(const PlayerFeedConfig.forYou());
+    var state = container.read(provider);
+    expect(state.items.map((item) => item.id), ['page-1']);
+    expect(state.hasMore, isTrue);
+    expect(state.nextPage, 2);
+
+    await controller.loadMore();
+    state = container.read(provider);
+    expect(state.items.map((item) => item.id), ['page-1', 'page-2']);
+    expect(state.hasMore, isFalse);
+    expect(state.nextPage, 3);
+
+    await controller.loadMore();
+    expect(repository.requestedPages, [1, 2]);
+  });
+
   test('selects episode by moving to an existing feed item', () async {
     final container = _createContainer();
     final provider = playerFeedControllerProvider('single');
@@ -100,19 +122,19 @@ void main() {
   test(
     'starting from a middle episode can move back to the previous episode',
     () async {
-    final container = _createContainer();
-    final provider = playerFeedControllerProvider('single');
-    final controller = container.read(provider.notifier);
+      final container = _createContainer();
+      final provider = playerFeedControllerProvider('single');
+      final controller = container.read(provider.notifier);
 
-    await controller.load(
-      const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: '3'),
-    );
+      await controller.load(
+        const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: '3'),
+      );
 
-    controller.setCurrentIndex(container.read(provider).currentIndex - 1);
-    final state = container.read(provider);
+      controller.setCurrentIndex(container.read(provider).currentIndex - 1);
+      final state = container.read(provider);
 
-    expect(state.currentIndex, 1);
-    expect(state.currentItem?.episode.number, 2);
+      expect(state.currentIndex, 1);
+      expect(state.currentItem?.episode.number, 2);
     },
   );
 
@@ -250,6 +272,33 @@ class _FakeFeedRepo implements PlayerFeedRepository {
         episode: _episode(1),
       ),
     ];
+  }
+}
+
+class _PagedFakeFeedRepo extends _FakeFeedRepo
+    implements PagedForYouFeedRepository {
+  final List<int> requestedPages = [];
+
+  @override
+  Future<PlayerFeedPage> listForYouFeedPage({
+    required int page,
+    int pageSize = 20,
+  }) async {
+    requestedPages.add(page);
+    return PlayerFeedPage(
+      items: [
+        PlayerFeedItem(
+          id: 'page-$page',
+          mode: PlayerFeedMode.forYou,
+          content: _content('drama-$page'),
+          episode: _episode(1),
+        ),
+      ],
+      page: page,
+      pageSize: pageSize,
+      total: 2,
+      hasMore: page < 2,
+    );
   }
 }
 

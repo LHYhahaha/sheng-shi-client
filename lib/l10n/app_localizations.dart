@@ -1006,6 +1006,9 @@ class AppLocalizations {
   String get playerLess =>
       _remoteText('player.synopsis.less', en: 'Less', zh: '收起');
 
+  String get playerCollapse =>
+      _remoteText('player.synopsis.collapse', en: 'Collapse', zh: '收起');
+
   String get playerDownload =>
       _remoteText('player.action.share', en: 'Download', zh: '下载');
 

@@ -586,6 +586,7 @@ class _PlayerMetaLayer extends StatelessWidget {
                     content: content,
                     showChevron: true,
                     showTags: forYouLayout,
+                    expandableSynopsis: forYouLayout,
                     onTap: onTap,
                   ),
                   if (forYouLayout) ...[
@@ -983,7 +984,7 @@ class _WatchNowButton extends StatelessWidget {
         height: 36,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.54),
+          color: Colors.white.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(3),
         ),
         child: Text(
@@ -1005,6 +1006,7 @@ class PlayerBottomMeta extends StatelessWidget {
     required this.content,
     this.showChevron = true,
     this.showTags = false,
+    this.expandableSynopsis = false,
     this.onTap,
     super.key,
   });
@@ -1012,6 +1014,7 @@ class PlayerBottomMeta extends StatelessWidget {
   final PlayerContent content;
   final bool showChevron;
   final bool showTags;
+  final bool expandableSynopsis;
   final VoidCallback? onTap;
 
   @override
@@ -1060,6 +1063,8 @@ class PlayerBottomMeta extends StatelessWidget {
           _SynopsisPreviewText(
             text: content.synopsis,
             moreLabel: context.l10n.playerMore,
+            collapseLabel: context.l10n.playerLess,
+            expandable: expandableSynopsis,
           ),
         ],
       ),
@@ -1156,13 +1161,45 @@ class _PlayerTagsRow extends StatelessWidget {
   }
 }
 
-class _SynopsisPreviewText extends StatelessWidget {
-  const _SynopsisPreviewText({required this.text, required this.moreLabel});
+class _SynopsisPreviewText extends StatefulWidget {
+  const _SynopsisPreviewText({
+    required this.text,
+    required this.moreLabel,
+    required this.collapseLabel,
+    required this.expandable,
+  });
 
   final String text;
   final String moreLabel;
+  final String collapseLabel;
+  final bool expandable;
 
+  @override
+  State<_SynopsisPreviewText> createState() => _SynopsisPreviewTextState();
+}
+
+class _SynopsisPreviewTextState extends State<_SynopsisPreviewText> {
   static const _maxLines = 2;
+
+  bool _isExpanded = false;
+
+  @override
+  void didUpdateWidget(covariant _SynopsisPreviewText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text ||
+        (oldWidget.expandable && !widget.expandable)) {
+      _isExpanded = false;
+    }
+  }
+
+  void _toggle() {
+    if (!widget.expandable) {
+      return;
+    }
+    setState(() {
+      _isExpanded = !_isExpanded;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1178,14 +1215,36 @@ class _SynopsisPreviewText extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
-        if (text.isEmpty || maxWidth <= 0 || !maxWidth.isFinite) {
+        if (widget.text.isEmpty || maxWidth <= 0 || !maxWidth.isFinite) {
           return const SizedBox.shrink();
         }
 
         final direction = Directionality.of(context);
         final textScaler = MediaQuery.textScalerOf(context);
+        if (widget.expandable && _isExpanded) {
+          return RichText(
+            textScaler: textScaler,
+            text: TextSpan(
+              style: style,
+              children: [
+                TextSpan(text: widget.text),
+                const TextSpan(text: ' '),
+                WidgetSpan(
+                  alignment: PlaceholderAlignment.baseline,
+                  baseline: TextBaseline.alphabetic,
+                  child: GestureDetector(
+                    key: const ValueKey('player_synopsis_collapse'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _toggle,
+                    child: Text(widget.collapseLabel, style: moreStyle),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
         if (_fits(
-          text: text,
+          text: widget.text,
           suffix: '',
           maxWidth: maxWidth,
           direction: direction,
@@ -1194,20 +1253,20 @@ class _SynopsisPreviewText extends StatelessWidget {
           moreStyle: moreStyle,
         )) {
           return Text(
-            text,
+            widget.text,
             maxLines: _maxLines,
             overflow: TextOverflow.ellipsis,
             style: style,
           );
         }
 
-        final suffix = '... $moreLabel';
+        final suffix = '... ${widget.moreLabel}';
         var low = 0;
-        var high = text.length;
+        var high = widget.text.length;
         while (low < high) {
           final mid = (low + high + 1) >> 1;
           if (_fits(
-            text: text.substring(0, mid).trimRight(),
+            text: widget.text.substring(0, mid).trimRight(),
             suffix: suffix,
             maxWidth: maxWidth,
             direction: direction,
@@ -1228,7 +1287,7 @@ class _SynopsisPreviewText extends StatelessWidget {
           text: TextSpan(
             style: style,
             children: [
-              TextSpan(text: text.substring(0, low).trimRight()),
+              TextSpan(text: widget.text.substring(0, low).trimRight()),
               TextSpan(
                 children: [
                   TextSpan(
@@ -1237,7 +1296,19 @@ class _SynopsisPreviewText extends StatelessWidget {
                       color: Colors.white.withValues(alpha: 0.7),
                     ),
                   ),
-                  TextSpan(text: suffix.split("... ")[1], style: moreStyle),
+                  if (widget.expandable)
+                    WidgetSpan(
+                      alignment: PlaceholderAlignment.baseline,
+                      baseline: TextBaseline.alphabetic,
+                      child: GestureDetector(
+                        key: const ValueKey('player_synopsis_more'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _toggle,
+                        child: Text(widget.moreLabel, style: moreStyle),
+                      ),
+                    )
+                  else
+                    TextSpan(text: widget.moreLabel, style: moreStyle),
                 ],
               ),
             ],

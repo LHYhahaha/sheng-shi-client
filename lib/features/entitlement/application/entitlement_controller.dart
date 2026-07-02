@@ -44,7 +44,19 @@ class EntitlementController extends Notifier<UserEntitlementState> {
   }
 
   Future<void> load() async {
-    state = await ref.read(entitlementRepositoryProvider).fetchState();
+    try {
+      state = await ref.read(entitlementRepositoryProvider).fetchState();
+    } catch (error, stackTrace) {
+      final autoUnlockEnabled = state.autoUnlockEnabled;
+      state = const UserEntitlementState.guest().copyWith(
+        autoUnlockEnabled: autoUnlockEnabled,
+      );
+      debugPrint(
+        '[EntitlementController] Failed to load entitlements; '
+        'using guest-safe state: $error',
+      );
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   /// 判定某集当前应该播放、跳会员、弹金币确认、弹充值，还是等待。
@@ -211,7 +223,7 @@ class EntitlementController extends Notifier<UserEntitlementState> {
   }) {
     final updatedUnlockedIds = Set<String>.from(state.unlockedEpisodeIds)
       ..add(episodeId);
-    
+
     state = state.copyWith(
       coinBalance: coinBalance,
       bonusBalance: bonusBalance,
@@ -220,7 +232,7 @@ class EntitlementController extends Notifier<UserEntitlementState> {
       clearInFlightUnlock: true,
       clearLastUnlockError: true,
     );
-    
+
     debugPrint(
       '[Entitlement] 金币解锁成功，已更新状态: episodeId=$episodeId, '
       'coinBalance=$coinBalance, bonusBalance=$bonusBalance',
