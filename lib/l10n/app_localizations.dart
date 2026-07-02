@@ -105,8 +105,6 @@ class AppLocalizations {
     return _interpolate(value, text.args);
   }
 
-
-
   String _interpolate(String value, Map<String, Object?> args) {
     for (final entry in args.entries) {
       value = value.replaceAll('{${entry.key}}', entry.value.toString());
@@ -117,9 +115,13 @@ class AppLocalizations {
     return value;
   }
 
-  String _replaceWords( {required String removeWord, required String word ,required String originWord}){
+  String _replaceWords({
+    required String removeWord,
+    required String word,
+    required String originWord,
+  }) {
     String text = "";
-    if(originWord.contains(removeWord)){
+    if (originWord.contains(removeWord)) {
       text = originWord.replaceAll(removeWord, word);
       return text;
     }
@@ -138,17 +140,15 @@ class AppLocalizations {
   String get noData =>
       _remoteText('common.status.no_data', en: 'No data', zh: '暂无数据');
 
-  String get emptyNoDramas => _remoteText(
-    'home.empty.no_dramas',
-    en: 'No dramas yet',
-    zh: '暂无短剧',
-  );
+  String get emptyNoDramas =>
+      _remoteText('home.empty.no_dramas', en: 'No dramas yet', zh: '暂无短剧');
 
   String get paymentModalMethodGooglePay => _remoteText(
     'payment_modal.method.google_pay',
     en: 'Google Pay',
     zh: 'Google Pay',
   );
+
   String get paymentModalOrderDetails => _remoteText(
     'payment_modal.order.details',
     en: 'Order details',
@@ -233,17 +233,17 @@ class AppLocalizations {
   String get myListDelete =>
       _remoteText('my_list.action.remove', en: 'Delete', zh: '删除');
 
-  String  myListEpisode(String text) =>
-      _replaceWords(
-          removeWord: 'X',
-          word: text,
-          originWord: _remoteText('my_list.episode_index', en: 'EP.X', zh: '第X集'));
+  String myListEpisode(String text) => _replaceWords(
+    removeWord: 'X',
+    word: text,
+    originWord: _remoteText('my_list.episode_index', en: 'EP.X', zh: '第X集'),
+  );
 
-  String  myListEpisode2(String text) =>
-      _replaceWords(
-          removeWord: 'X',
-          word: text,
-          originWord: _remoteText('my_list.episode_index2', en: 'EP.X', zh: 'X集'));
+  String myListEpisode2(String text) => _replaceWords(
+    removeWord: 'X',
+    word: text,
+    originWord: _remoteText('my_list.episode_index2', en: 'EP.X', zh: 'X集'),
+  );
 
   String get myListEmptyTitle => _remoteText(
     'my_list.empty.following',
@@ -371,6 +371,7 @@ class AppLocalizations {
 
   String get settingsButtonLogout =>
       _remoteText('settings.button.logout', en: 'Log Out', zh: '登出');
+
   String get settingsDeleteAccount => _remoteText(
     'settings.entry.delete_account',
     en: 'Delete Account',
@@ -658,7 +659,6 @@ class AppLocalizations {
 
   String get walletMenuClaimCoins =>
       _remoteText('wallet.menu.claim_coins', en: 'Reward Coins', zh: '奖励金币');
-
 
   String get walletHistoryEmpty => _remoteText(
     'wallet.history.empty',
@@ -1002,24 +1002,27 @@ class AppLocalizations {
 
   String get playerMore =>
       _remoteText('player.synopsis.more', en: 'More', zh: '更多');
+
   String get playerLess =>
       _remoteText('player.synopsis.less', en: 'Less', zh: '收起');
 
   String get playerDownload =>
       _remoteText('player.action.share', en: 'Download', zh: '下载');
 
-  String  playerEpisode(String text) =>
-      _replaceWords(
-          removeWord: 'X',
-          word: text,
-          originWord: _remoteText('player.header.episode_index', en: 'Episode X', zh: '第X集'));
+  String playerEpisode(String text) => _replaceWords(
+    removeWord: 'X',
+    word: text,
+    originWord: _remoteText(
+      'player.header.episode_index',
+      en: 'Episode X',
+      zh: '第X集',
+    ),
+  );
 
-  String get playerWatchNow =>
-      _remoteText('player.unlock.cta', en: 'Watch Now', zh: '立即观看');
+  String get playerWatchNow => _remoteText('', en: 'Watch Now', zh: '立即观看');
 
   String get playerSpeed =>
       _remoteText('player.header.speed', en: 'Speed', zh: '倍速');
-
 
   String get playerMoreLikeThis => _remoteText(
     'episode_modal.recommend.more_like_this',
@@ -1042,8 +1045,6 @@ class AppLocalizations {
   String get playerPlay =>
       _remoteText('unlock_modal.button.play_episode', en: 'Play', zh: '播放');
 
-
-
   String get playerPrice =>
       _remoteText('player.unlock.price', en: 'Price:', zh: '价格:');
 
@@ -1055,7 +1056,6 @@ class AppLocalizations {
 
   String get playerRequiredCoins =>
       _remoteText('app.common.unit.coin', en: 'Required', zh: '所需金币');
-
 
   String get playerCoinPackages =>
       _remoteText('payment_modal.button.buy_now', en: 'Coins', zh: '金币充值');
