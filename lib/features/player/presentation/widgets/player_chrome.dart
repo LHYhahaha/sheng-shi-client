@@ -16,7 +16,6 @@ abstract final class _PlayerLayoutMetrics {
   static const forYouActionRailBottom = 104.0;
   static const singleActionRailBottom = 161.0;
   static const forYouWatchNowBottom = 24.0;
-  static const forYouMetaGap = 58.0;
   static const singleBottomFrameHeight = 24.0;
   static const singleMetaBottom = 38.0;
   static const singleSeekBarBottom = 17.0;
@@ -224,8 +223,6 @@ class _PlayerChromeState extends State<PlayerChrome> {
     );
     final forYouWatchNowBottom =
         bottomInset + _PlayerLayoutMetrics.forYouWatchNowBottom;
-    final forYouMetaBottom =
-        forYouWatchNowBottom + _PlayerLayoutMetrics.forYouMetaGap;
 
     return Stack(
       fit: StackFit.expand,
@@ -303,23 +300,17 @@ class _PlayerChromeState extends State<PlayerChrome> {
           _PlayerMetaLayer(
             content: content,
             bottom: forYouLayout
-                ? forYouMetaBottom
+                ? forYouWatchNowBottom
                 : bottomInset + _PlayerLayoutMetrics.singleMetaBottom,
             forYouLayout: forYouLayout,
+            onWatchNowTap: onWatchNowTap,
             overlayOpacity: overlayOpacity,
             overlayOpacityListenable: overlayOpacityListenable,
             showChromeOverlays: showChromeOverlays,
             chromeOverlayFadeDuration: chromeOverlayFadeDuration,
             onTap: onMetaTap,
           ),
-          if (forYouLayout) ...[
-            _PlayerWatchNowLayer(
-              bottom: forYouWatchNowBottom,
-              overlayOpacity: overlayOpacity,
-              overlayOpacityListenable: overlayOpacityListenable,
-              onTap: onWatchNowTap,
-            ),
-          ] else ...[
+          if (!forYouLayout) ...[
             Positioned(
               left: 16,
               right: 16,
@@ -551,6 +542,7 @@ class _PlayerMetaLayer extends StatelessWidget {
     required this.content,
     required this.bottom,
     required this.forYouLayout,
+    required this.onWatchNowTap,
     required this.overlayOpacity,
     required this.overlayOpacityListenable,
     required this.showChromeOverlays,
@@ -561,6 +553,7 @@ class _PlayerMetaLayer extends StatelessWidget {
   final PlayerContent content;
   final double bottom;
   final bool forYouLayout;
+  final VoidCallback onWatchNowTap;
   final double overlayOpacity;
   final ValueListenable<double>? overlayOpacityListenable;
   final bool showChromeOverlays;
@@ -571,7 +564,7 @@ class _PlayerMetaLayer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Positioned(
       left: 16,
-      right: 80,
+      right: 90,
       bottom: bottom,
       child: AnimatedOpacity(
         key: const ValueKey('player_chrome_visibility_meta'),
@@ -585,45 +578,27 @@ class _PlayerMetaLayer extends StatelessWidget {
             child: _OverlayOpacity(
               opacity: overlayOpacity,
               opacityListenable: overlayOpacityListenable,
-              child: PlayerBottomMeta(
-                content: content,
-                showChevron: true,
-                showTags: forYouLayout,
-                onTap: onTap,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  PlayerBottomMeta(
+                    content: content,
+                    showChevron: true,
+                    showTags: forYouLayout,
+                    onTap: onTap,
+                  ),
+                  if (forYouLayout) ...[
+                    const SizedBox(height: 12),
+                    RepaintBoundary(
+                      key: const ValueKey('player_watch_now_repaint_boundary'),
+                      child: _WatchNowButton(onTap: onWatchNowTap),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PlayerWatchNowLayer extends StatelessWidget {
-  const _PlayerWatchNowLayer({
-    required this.bottom,
-    required this.overlayOpacity,
-    required this.overlayOpacityListenable,
-    required this.onTap,
-  });
-
-  final double bottom;
-  final double overlayOpacity;
-  final ValueListenable<double>? overlayOpacityListenable;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      left: 16,
-      right: 98,
-      bottom: bottom,
-      child: RepaintBoundary(
-        key: const ValueKey('player_watch_now_repaint_boundary'),
-        child: _OverlayOpacity(
-          opacity: overlayOpacity,
-          opacityListenable: overlayOpacityListenable,
-          child: _WatchNowButton(onTap: onTap),
         ),
       ),
     );
@@ -1081,7 +1056,7 @@ class PlayerBottomMeta extends StatelessWidget {
             const SizedBox(height: 6),
             SizedBox(height: 16, child: _PlayerTagsRow(tags: content.tags)),
           ],
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           _SynopsisPreviewText(
             text: content.synopsis,
             moreLabel: context.l10n.playerMore,
@@ -1101,7 +1076,7 @@ class _PlayerTag extends StatelessWidget {
 
   static TextStyle? textStyle(BuildContext context) {
     return Theme.of(context).textTheme.labelSmall?.copyWith(
-      color: const Color(0xFFE3E3E3).withValues(alpha: 0.6),
+      color: Colors.white.withValues(alpha: 0.8),
       fontSize: 9,
       height: 1.3,
     );
@@ -1110,11 +1085,10 @@ class _PlayerTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 16,
-      padding: const EdgeInsets.symmetric(horizontal: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: const Color(0x3DD9D9D9).withValues(alpha: 0.24),
+        color: Colors.white.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
