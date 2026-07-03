@@ -1662,6 +1662,71 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     return detachSurfaceForVisibility(syncState: syncState);
   }
 
+  /// 页面播放器之间交接时的轻量暂停。
+  ///
+  /// 与 [pauseForVisibility] 不同，这里不等待 prepared window、HLS preload 和本地
+  /// 进度写入完成，也不释放当前 media session。For You 仍存活在路由下方时，可以在
+  /// 返回后复用同一个 source，只做 seek + play。
+  Future<void> pauseForRouteHandoff() async {
+    if (_isSessionDisposed) {
+      return;
+    }
+    ++_visibilityDetachEpoch;
+    _pauseWhenOpenCompletes = true;
+    _accessOverlayPausedItemId = null;
+    unawaited(_persistProgressIfNeeded());
+    ++_generation;
+    await _session.pause();
+    if (!ref.mounted) {
+      return;
+    }
+    state = state.copyWith(
+      status:
+          state.currentSource == null ||
+              state.status == PlayerPlaybackStatus.blocked ||
+              state.status == PlayerPlaybackStatus.waitUnlock ||
+              state.status == PlayerPlaybackStatus.unavailable ||
+              state.status == PlayerPlaybackStatus.error ||
+              state.status == PlayerPlaybackStatus.idle
+          ? state.status
+          : PlayerPlaybackStatus.paused,
+      isBuffering: false,
+      surfaceLifecycle: PlayerVideoSurfaceLifecycle.detaching,
+      clearVideoController: true,
+    );
+
+    // 这些资源不参与当前 source 的快速恢复，可以后台释放，不能阻塞路由跳转。
+    unawaited(_releaseSessionWindowFor('route handoff'));
+    unawaited(_disposePreloads());
+  }
+
+  /// 返回上一个播放器页面前只暂停并卸载当前 Surface。
+  ///
+  /// route pop 后 provider dispose 会完成强释放；这里不把释放耗时放在返回手势的关键
+  /// 路径上。
+  Future<void> detachSurfaceForRoutePop() async {
+    if (_isSessionDisposed) {
+      return;
+    }
+    ++_visibilityDetachEpoch;
+    _pauseWhenOpenCompletes = true;
+    _accessOverlayPausedItemId = null;
+    unawaited(_persistProgressIfNeeded());
+    ++_generation;
+    await _session.pause();
+    if (!ref.mounted) {
+      return;
+    }
+    state = state.copyWith(
+      status: state.status == PlayerPlaybackStatus.playing
+          ? PlayerPlaybackStatus.paused
+          : state.status,
+      isBuffering: false,
+      surfaceLifecycle: PlayerVideoSurfaceLifecycle.disposing,
+      clearVideoController: true,
+    );
+  }
+
   Future<void> resumeAfterVisibilityPause() async {
     if (_isSessionDisposed ||
         state.status != PlayerPlaybackStatus.paused ||
@@ -2850,7 +2915,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   bool _usesCurrentMediaSource(PlayerFeedItem item) {
     final candidate = item.episode.videoSource;
-    if (candidate == null || state.currentItemId == item.id) {
+    if (candidate == null || state.currentItemId != item.id) {
       return false;
     }
     final currentSource = _currentPlaybackSource;

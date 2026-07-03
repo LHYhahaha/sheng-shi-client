@@ -42,8 +42,8 @@ class ConfirmAppModalPresenter implements AppModalPresenter {
           },
           child: AlertDialog(
             key: ValueKey('app_modal_confirm_${request.requestId}'),
-            title: Text(request.title),
-            content: Text(request.message),
+            title: request.title.isEmpty ? null : Text(request.title),
+            content: request.message.isEmpty ? null : Text(request.message),
             actions: [
               TextButton(
                 onPressed: () {

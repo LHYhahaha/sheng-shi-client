@@ -102,6 +102,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isModalOpen = false;
   bool _isAutoAdvancing = false;
   bool _isOpeningRecommendation = false;
+  bool _isOpeningSearch = false;
   bool _isOpeningForYouPlayer = false;
   bool _isPressingPlaybackSurface = false;
   bool _isPageScrolling = false;
@@ -653,6 +654,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               playbackController.setPendingResumeProgress(progress);
             }
           }
+          if (ref.read(useRemotePlayerApiProvider)) {
+            final dramaId = int.tryParse(settledItem.content.id);
+            if (dramaId != null && dramaId > 0) {
+              ref.read(playerDramaDetailCacheProvider).prefetch(dramaId);
+            }
+          }
         }
         final accessPlayable =
             feedEngine.accessPresentationFor(settledItem) ==
@@ -1023,6 +1030,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                       _openForYouItemInPlayer(item, rewindFromEnd: false),
                     );
                   },
+                  onSearchTap: widget.feedMode == PlayerFeedMode.forYou
+                      ? () => unawaited(_openSearch())
+                      : null,
                   onEpisodesTap: () {
                     _showDetailSheet(
                       item.content,
@@ -1366,7 +1376,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             ),
           );
 
-      await _playbackController.pauseForVisibility();
+      await _playbackController.pauseForRouteHandoff();
       if (!mounted) {
         return;
       }
@@ -1387,6 +1397,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         ref
             .read(forYouPlaybackProgressControllerProvider.notifier)
             .save(returned);
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) {
+          return;
+        }
+        await _synchronizeReturnedForYouProgress(returned);
       }
     } finally {
       _isOpeningForYouPlayer = false;
@@ -1444,14 +1459,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   Future<void> _goBackFromPlayer() async {
     final handoffResult = _currentForYouHandoffSnapshot();
-    await _playbackController.persistCurrentProgress();
-    await _playbackController.detachSurfaceForDispose();
     if (handoffResult != null) {
-      await _synchronizeForYouBeforeReturn(handoffResult);
+      await _playbackController.detachSurfaceForRoutePop();
+    } else {
+      // 非 For You 入口保留原来的强释放顺序，避免改变首页进入普通播放页的行为。
+      await _playbackController.persistCurrentProgress();
+      await _playbackController.detachSurfaceForDispose();
     }
     await WidgetsBinding.instance.endOfFrame;
     _playbackController.markSurfaceDetached();
-    if (PlayerPlaybackController.shouldDelayVideoSurfaceTeardown) {
+    if (handoffResult == null &&
+        PlayerPlaybackController.shouldDelayVideoSurfaceTeardown) {
       await Future<void>.delayed(
         PlayerPlaybackController.videoSurfaceTeardownDelay,
       );
@@ -1466,13 +1484,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
   }
 
-  Future<void> _synchronizeForYouBeforeReturn(
+  Future<void> _synchronizeReturnedForYouProgress(
     ForYouPlaybackSnapshot snapshot,
   ) async {
-    final handoff = widget.forYouHandoff;
-    if (handoff == null) {
-      return;
-    }
     ref.read(forYouPlaybackProgressControllerProvider.notifier).save(snapshot);
     final updatedItem = ref
         .read(
@@ -1481,7 +1495,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           ).notifier,
         )
         .updateItemEpisode(
-          itemId: handoff.originItemId,
+          itemId: snapshot.originItemId,
           episode: snapshot.episode,
         );
     if (updatedItem == null) {
@@ -1574,6 +1588,31 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       _restoreChromeAfterReturningToPlayer();
     } finally {
       _isOpeningRecommendation = false;
+    }
+  }
+
+  Future<void> _openSearch() async {
+    if (_isOpeningSearch ||
+        widget.feedMode != PlayerFeedMode.forYou ||
+        !mounted) {
+      return;
+    }
+    _isOpeningSearch = true;
+    try {
+      await _playbackController.pauseForVisibility();
+      if (!mounted) {
+        return;
+      }
+
+      await context.push<void>(RoutePaths.search);
+      if (!mounted) {
+        return;
+      }
+      if (_previousLifecycleState == AppLifecycleState.resumed) {
+        await _playbackController.resumeAfterVisibilityPause();
+      }
+    } finally {
+      _isOpeningSearch = false;
     }
   }
 

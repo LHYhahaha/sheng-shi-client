@@ -36,6 +36,7 @@ class PlayerFeedPageShell extends ConsumerWidget {
     required this.onMoreTap,
     required this.onUnlockTap,
     required this.onOpenMembership,
+    this.onSearchTap,
     this.onMetaTap,
     this.showChromeOverlays = true,
     this.chromeOverlayFadeDuration = Duration.zero,
@@ -64,6 +65,7 @@ class PlayerFeedPageShell extends ConsumerWidget {
   final VoidCallback onMoreTap;
   final VoidCallback onUnlockTap;
   final VoidCallback onOpenMembership;
+  final VoidCallback? onSearchTap;
   final VoidCallback? onMetaTap;
   final bool showChromeOverlays;
   final Duration chromeOverlayFadeDuration;
@@ -174,6 +176,7 @@ class PlayerFeedPageShell extends ConsumerWidget {
                       .toggleLike();
                 }
               : () {},
+          onSearchTap: onSearchTap ?? () {},
           showUnlockButton: isLockedSettledPage,
           unlockLabel: lockedActionLabel,
           onUnlockTap: isLockedSettledPage

@@ -1,4 +1,5 @@
 import '../../../entitlement/domain/episode_unlock_type.dart';
+import '../../../../core/utils/compact_count_formatter.dart';
 import '../../domain/player_content.dart';
 import '../../domain/player_subtitle.dart';
 import '../dto/player_content_dto.dart';
@@ -21,8 +22,8 @@ class PlayerContentMapper {
       title: dto.title.isNotEmpty ? dto.title : _displayTitleFallback,
       playTitle: dto.title.isNotEmpty ? dto.title : _displayTitleFallback,
       synopsis: dto.summary,
-      viewCountLabel: _formatPlayCount(dto.playCount),
-      likeCountLabel: _formatFavoriteCount(dto.favoriteCount),
+      viewCountLabel: formatCompactCount(dto.playCount),
+      likeCountLabel: formatCompactCount(dto.favoriteCount),
       backgroundAssetPath: 'assets/images/player/player_background.png',
       posterAssetPath: 'assets/images/player/detail_cover.png',
       coverUrl: dto.coverUrl.isNotEmpty ? dto.coverUrl : null,
@@ -99,35 +100,5 @@ class PlayerContentMapper {
 
     // 需要解锁的剧集（isVipOnly=0 且 isUnlocked=0）
     return EpisodeUnlockType.coins;
-  }
-}
-
-/// 格式化播放量为展示文案。
-String _formatPlayCount(int count) {
-  if (count >= 1000000) {
-    return '${(count / 1000000).toStringAsFixed(1)}M';
-  }
-  if (count >= 1000) {
-    final k = count / 1000;
-    if (k >= 999.95) {
-      return '1.0M';
-    }
-    return '${k.toStringAsFixed(1)}K';
-  }
-  return '$count';
-}
-
-/// 格式化收藏量为展示文案。
-String _formatFavoriteCount(int count) {
-  if (count >= 1000000) {
-    return '${(count / 1000000).toStringAsFixed(1)}M';
-  } else if (count >= 1000) {
-    final k = count / 1000;
-    if (k >= 999.95) {
-      return '1.0M';
-    }
-    return '${(count / 1000).toStringAsFixed(1)}K';
-  } else {
-    return '$count';
   }
 }

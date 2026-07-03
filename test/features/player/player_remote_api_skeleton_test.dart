@@ -17,7 +17,6 @@ import 'package:drama_client/features/player/data/dto/player_feed_page_dto.dart'
 import 'package:drama_client/features/player/data/mapper/playback_source_mapper.dart';
 import 'package:drama_client/features/player/data/mapper/player_content_mapper.dart';
 import 'package:drama_client/features/player/data/mock_player_content_repository.dart';
-import 'package:drama_client/features/player/data/mock_player_feed_repository.dart';
 import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
 import 'package:drama_client/features/player/data/player_content_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
@@ -386,21 +385,13 @@ void main() {
     },
   );
 
-  test('player providers default to mock repositories', () {
+  test('player feed provider always uses remote repository', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);
 
     expect(
-      container.read(playerContentRepositoryProvider),
-      isA<MockPlayerContentRepository>(),
-    );
-    expect(
       container.read(playerFeedRepositoryProvider),
-      isA<MockPlayerFeedRepository>(),
-    );
-    expect(
-      container.read(playerPlaybackSourceRepositoryProvider),
-      isA<MockPlayerPlaybackSourceRepository>(),
+      isA<RemotePlayerFeedRepository>(),
     );
   });
 

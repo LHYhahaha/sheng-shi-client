@@ -6,6 +6,7 @@ abstract final class RouteNames {
   static const game = 'game';
   static const member = 'member';
   static const profile = 'profile';
+  static const search = 'search';
   static const auth = 'auth';
   static const account = 'account';
   static const store = 'store';

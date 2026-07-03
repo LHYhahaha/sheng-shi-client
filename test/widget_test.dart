@@ -16,13 +16,14 @@ import 'package:drama_client/features/player/application/player_playback_control
 import 'package:drama_client/features/player/application/player_playback_prepare_manager.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/data/mock_player_content_repository.dart';
-import 'package:drama_client/features/player/data/mock_player_feed_repository.dart';
 import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_remote_data_source_provider.dart';
 import 'package:drama_client/features/player/data/remote/player_remote_data_source.dart';
 import 'package:drama_client/features/player/presentation/pages/player_page.dart';
+import 'package:drama_client/features/player/domain/player_content.dart';
+import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/profile/presentation/pages/language_page.dart';
 import 'package:drama_client/features/store/presentation/pages/store_page.dart';
 import 'package:drama_client/features/wallet/domain/wallet_record.dart';
@@ -641,7 +642,7 @@ void main() {
         home: const PlayerPage.forYou(),
         overrides: [
           playerFeedRepositoryProvider.overrideWithValue(
-            const MockPlayerFeedRepository(
+            const _TestPlayerFeedRepository(
               contentRepository: MockPlayerContentRepository(),
             ),
           ),
@@ -1335,6 +1336,45 @@ class _NoopPlayerRemoteDataSource extends PlayerRemoteDataSource {
   }) async {}
 }
 
+class _TestPlayerFeedRepository implements PlayerFeedRepository {
+  const _TestPlayerFeedRepository({required this.contentRepository});
+
+  final PlayerContentRepository contentRepository;
+
+  @override
+  Future<List<PlayerFeedItem>> listSingleDramaFeed({
+    required String dramaId,
+    required String episodeId,
+  }) async {
+    final content = await contentRepository.getPlayerContent(dramaId: dramaId);
+    return content.episodes
+        .map(
+          (episode) => PlayerFeedItem(
+            id: '${content.id}-${episode.id}',
+            mode: PlayerFeedMode.singleDrama,
+            content: content,
+            episode: episode,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<PlayerFeedItem>> listForYouFeed() async {
+    final content = await contentRepository.getPlayerContent(
+      dramaId: 'found-you',
+    );
+    return [
+      PlayerFeedItem(
+        id: 'test-for-you-${content.id}',
+        mode: PlayerFeedMode.forYou,
+        content: content,
+        episode: content.episodes.first,
+      ),
+    ];
+  }
+}
+
 Future<void> _pumpAutoUnlockSheet(WidgetTester tester) async {
   for (var i = 0; i < 80; i += 1) {
     await tester.pump(const Duration(milliseconds: 100));
@@ -1437,9 +1477,7 @@ class _EmptyWalletRepository implements WalletRepository {
   }
 
   @override
-  Future<WalletRecordPage> fetchTransactionRecords({
-    String? pageToken,
-  }) async {
+  Future<WalletRecordPage> fetchTransactionRecords({String? pageToken}) async {
     return const WalletRecordPage(items: [], nextPageToken: null);
   }
 
@@ -1452,9 +1490,7 @@ class _EmptyWalletRepository implements WalletRepository {
   }
 
   @override
-  Future<WalletRecordPage> fetchRewardCoins({
-    String? pageToken,
-  }) async {
+  Future<WalletRecordPage> fetchRewardCoins({String? pageToken}) async {
     return const WalletRecordPage(items: [], nextPageToken: null);
   }
 }

@@ -1,3 +1,4 @@
+import '../../../../core/utils/compact_count_formatter.dart';
 import '../../domain/drama.dart';
 import '../../../../shared/media/media_resource.dart';
 import '../dto/drama_category_dto.dart';
@@ -31,7 +32,12 @@ class DramaMapper {
               aspectRatio: aspectRatio,
             )
           : MediaResource.network(coverUrl, aspectRatio: aspectRatio),
-      viewCountLabel: _formatViewCount(dto.viewCount),
+      viewCountLabel: formatCompactCount(
+        dto.viewCount,
+        emptyWhenNonPositive: true,
+        spaceBeforeSuffix: true,
+        omitFractionForTenOrMore: true,
+      ),
       episodeCount: dto.episodeCount,
       categoryId: dto.categoryIds.isNotEmpty ? dto.categoryIds.first : '',
       tags: dto.tags,
@@ -47,23 +53,5 @@ class DramaMapper {
       items: dto.items.map(mapDrama).toList(growable: false),
       nextPageToken: dto.nextPageToken,
     );
-  }
-
-  String _formatViewCount(int? viewCount) {
-    if (viewCount == null || viewCount <= 0) {
-      return '';
-    }
-    if (viewCount >= 1000000) {
-      final millions = viewCount / 1000000;
-      return '${millions.toStringAsFixed(millions >= 10 ? 0 : 1)} M';
-    }
-    if (viewCount >= 1000) {
-      final thousands = viewCount / 1000;
-      if (thousands >= 999.95) {
-        return '1.0M';
-      }
-      return '${thousands.toStringAsFixed(thousands >= 10 ? 0 : 1)} K';
-    }
-    return '$viewCount';
   }
 }

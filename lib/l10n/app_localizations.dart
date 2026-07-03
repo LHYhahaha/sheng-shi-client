@@ -143,6 +143,36 @@ class AppLocalizations {
   String get emptyNoDramas =>
       _remoteText('home.empty.no_dramas', en: 'No dramas yet', zh: '暂无短剧');
 
+  String get searchHint =>
+      _remoteText('search.input.hint', en: 'Search for a drama', zh: '搜索短剧');
+
+  String get searchHistory =>
+      _remoteText('search.history.title', en: 'Search History', zh: '搜索历史');
+
+  String get searchHistoryCancel =>
+      _remoteText('search.history.cancel', en: 'Cancel', zh: '取消');
+
+  String get searchHistoryClearAll =>
+      _remoteText('search.history.clear_all', en: 'Clear all', zh: '全部清除');
+
+  String get searchHistoryClearConfirm => _remoteText(
+    'search.history.clear_confirm',
+    en: 'Clear all search history?',
+    zh: '确认清空全部搜索历史？',
+  );
+
+  String get searchHistoryConfirm =>
+      _remoteText('search.history.confirm', en: 'Confirm', zh: '确定');
+
+  String get searchHot =>
+      _remoteText('search.ranking.hot_searches', en: 'Top Searched', zh: '热搜榜');
+
+  String get searchTrending =>
+      _remoteText('search.ranking.hot_plays', en: 'Most Trending', zh: '热播榜');
+
+  String get searchNewReleases =>
+      _remoteText('search.ranking.new_online', en: 'New Releases', zh: '上新榜');
+
   String get paymentModalMethodGooglePay => _remoteText(
     'payment_modal.method.google_pay',
     en: 'Google Pay',

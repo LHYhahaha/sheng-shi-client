@@ -51,16 +51,96 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  testWidgets('for you search pauses on leave and always plays on return', (
+    tester,
+  ) async {
+    final session = _FakePlaybackSession();
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.forYou,
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => session,
+        providerOverrides: [
+          playerRemoteDataSourceProvider.overrideWithValue(
+            _FakePlayerRemoteDataSource(watchProgress: null),
+          ),
+        ],
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    session.emitPlaying(false);
+    await tester.pump();
+    final pauseCountBeforeSearch = session.pauseCount;
+    final playCountBeforeSearch = session.playCount;
+    await tester.tap(
+      find.byKey(const ValueKey('player_for_you_search_button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Search'), findsOneWidget);
+    expect(session.pauseCount, greaterThan(pauseCountBeforeSearch));
+
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Search'), findsNothing);
+    expect(session.playCount, greaterThan(playCountBeforeSearch));
+  });
+
+  testWidgets('for you watch now opens single drama at current position', (
+    tester,
+  ) async {
+    final repository = _FakePlayerFeedRepository.unlocked();
+    final sessions = <_FakePlaybackSession>[];
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: '/for-you',
+        repository: repository,
+        playbackSessionFactory: () {
+          final session = _FakePlaybackSession();
+          sessions.add(session);
+          return session;
+        },
+        providerOverrides: [
+          playerRemoteDataSourceProvider.overrideWithValue(
+            _FakePlayerRemoteDataSource(watchProgress: null),
+          ),
+        ],
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final forYouSession = sessions.first;
+    forYouSession.emitDuration(const Duration(seconds: 120));
+    forYouSession.emitPosition(const Duration(seconds: 37));
+    await tester.pump();
+
+    await tester.tap(find.text('Watch Now').first);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastSingleDramaEpisodeId, 'ep-1');
+    expect(sessions, hasLength(2));
+    expect(
+      sessions.last.openStartPositions,
+      contains(const Duration(seconds: 37)),
+    );
+    expect(find.byKey(const ValueKey('player_back_button')), findsOneWidget);
+  });
+
   testWidgets(
-    'for you watch now opens single drama at current position',
+    'returning from watch now resumes for you at latest player position',
     (tester) async {
-      final repository = _FakePlayerFeedRepository.unlocked();
       final sessions = <_FakePlaybackSession>[];
 
       await tester.pumpWidget(
         _buildPlayerApp(
           initialLocation: '/for-you',
-          repository: repository,
+          repository: _FakePlayerFeedRepository.unlocked(),
           playbackSessionFactory: () {
             final session = _FakePlaybackSession();
             sessions.add(session);
@@ -76,22 +156,26 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
 
-      final forYouSession = sessions.first;
-      forYouSession.emitDuration(const Duration(seconds: 120));
-      forYouSession.emitPosition(const Duration(seconds: 37));
+      sessions.first.emitDuration(const Duration(seconds: 120));
+      sessions.first.emitPosition(const Duration(seconds: 37));
       await tester.pump();
-
       await tester.tap(find.text('Watch Now').first);
       await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
 
-      expect(repository.lastSingleDramaEpisodeId, 'ep-1');
-      expect(sessions, hasLength(2));
+      sessions.last.emitDuration(const Duration(seconds: 120));
+      sessions.last.emitPosition(const Duration(seconds: 68));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('player_back_button')));
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Watch Now'), findsOneWidget);
       expect(
-        sessions.last.openStartPositions,
-        contains(const Duration(seconds: 37)),
+        sessions.first.seekedPositions,
+        contains(const Duration(seconds: 68)),
       );
-      expect(find.byKey(const ValueKey('player_back_button')), findsOneWidget);
+      expect(sessions.first.playCount, greaterThan(0));
     },
   );
 
@@ -1583,37 +1667,41 @@ void main() {
     );
   });
 
-  testWidgets('returning from auto membership route restores locked episode action', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      _buildPlayerApp(
-        initialLocation: RoutePaths.playerLocation(
-          dramaId: 'drama-a',
-          episodeId: '2',
+  testWidgets(
+    'returning from auto membership route restores locked episode action',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          initialLocation: RoutePaths.playerLocation(
+            dramaId: 'drama-a',
+            episodeId: '2',
+          ),
+          repository: _FakePlayerFeedRepository.membershipLocked(),
         ),
-        repository: _FakePlayerFeedRepository.membershipLocked(),
-      ),
-    );
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pumpAndSettle();
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
 
-    for (var i = 0; i < 30; i += 1) {
-      if (find.text('Membership').evaluate().isNotEmpty) {
-        break;
+      for (var i = 0; i < 30; i += 1) {
+        if (find.text('Membership').evaluate().isNotEmpty) {
+          break;
+        }
+        await tester.pump(const Duration(milliseconds: 100));
       }
-      await tester.pump(const Duration(milliseconds: 100));
-    }
 
-    expect(find.text('Membership'), findsOneWidget);
+      expect(find.text('Membership'), findsOneWidget);
 
-    await tester.tap(find.byType(BackButton));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
 
-    expect(find.text('EP.02'), findsOneWidget);
-    expect(find.text('Member unlock'), findsOneWidget);
-    expect(find.byKey(const ValueKey('player_unlock_button')), findsOneWidget);
-  });
+      expect(find.text('EP.02'), findsOneWidget);
+      expect(find.text('Member unlock'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('player_unlock_button')),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('coin episode already unlocked can play', (tester) async {
     await tester.pumpWidget(
@@ -2100,88 +2188,89 @@ void main() {
     );
   });
 
-  testWidgets('payment method dismiss before purchase returns dismissed result', (
-    tester,
-  ) async {
-    bool? dismissedResult;
-    await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-          ],
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: Scaffold(
-            body: PlayerPaymentMethodModalLayer(
-              sessionKey: 'single-a',
-              selection: PlayerPaymentSelection.coin(
-                const PlayerRechargeCoinPackage(
-                  id: '100',
-                  baseCoins: 300,
-                  bonusCoins: 0,
-                  googleProductId: 'coins_300',
-                  googlePriceLabel: r'$2.99',
+  testWidgets(
+    'payment method dismiss before purchase returns dismissed result',
+    (tester) async {
+      bool? dismissedResult;
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: PlayerPaymentMethodModalLayer(
+                sessionKey: 'single-a',
+                selection: PlayerPaymentSelection.coin(
+                  const PlayerRechargeCoinPackage(
+                    id: '100',
+                    baseCoins: 300,
+                    bonusCoins: 0,
+                    googleProductId: 'coins_300',
+                    googlePriceLabel: r'$2.99',
+                  ),
                 ),
+                onDismissed: (result) => dismissedResult = result,
+                onPurchaseSuccess: () {},
               ),
-              onDismissed: (result) => dismissedResult = result,
-              onPurchaseSuccess: () {},
             ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(const ValueKey('player_recharge_payment_close')),
-    );
-    await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('player_recharge_payment_close')),
+      );
+      await tester.pumpAndSettle();
 
-    expect(dismissedResult, isNull);
+      expect(dismissedResult, isNull);
 
-    dismissedResult = false;
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-    await tester.pumpWidget(
-      ProviderScope(
-        child: MaterialApp(
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-          ],
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: Scaffold(
-            body: PlayerPaymentMethodModalLayer(
-              key: const ValueKey('barrier_dismiss_layer'),
-              sessionKey: 'single-a',
-              selection: PlayerPaymentSelection.coin(
-                const PlayerRechargeCoinPackage(
-                  id: '100',
-                  baseCoins: 300,
-                  bonusCoins: 0,
-                  googleProductId: 'coins_300',
-                  googlePriceLabel: r'$2.99',
+      dismissedResult = false;
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: PlayerPaymentMethodModalLayer(
+                key: const ValueKey('barrier_dismiss_layer'),
+                sessionKey: 'single-a',
+                selection: PlayerPaymentSelection.coin(
+                  const PlayerRechargeCoinPackage(
+                    id: '100',
+                    baseCoins: 300,
+                    bonusCoins: 0,
+                    googleProductId: 'coins_300',
+                    googlePriceLabel: r'$2.99',
+                  ),
                 ),
+                onDismissed: (result) => dismissedResult = result,
+                onPurchaseSuccess: () {},
               ),
-              onDismissed: (result) => dismissedResult = result,
-              onPurchaseSuccess: () {},
             ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tapAt(const Offset(20, 20));
-    await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(20, 20));
+      await tester.pumpAndSettle();
 
-    expect(dismissedResult, isNull);
-  });
+      expect(dismissedResult, isNull);
+    },
+  );
 
   testWidgets('coin package purchase continues to coin unlock confirmation', (
     tester,
@@ -2359,9 +2448,11 @@ void main() {
 
     expect(find.text('Payment canceled'), findsNothing);
     expect(
-      tester.widget<FilledButton>(
-        find.byKey(const ValueKey('player_recharge_payment_buy_now')),
-      ).onPressed,
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('player_recharge_payment_buy_now')),
+          )
+          .onPressed,
       isNotNull,
     );
   });
@@ -2893,29 +2984,30 @@ void main() {
     expect(find.text('EP.01'), findsNothing);
   });
 
-  testWidgets('single drama starts at requested episode and swipes back in order', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      _buildPlayerApp(
-        initialLocation: RoutePaths.playerLocation(
-          dramaId: 'drama-a',
-          episodeId: '2',
+  testWidgets(
+    'single drama starts at requested episode and swipes back in order',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          initialLocation: RoutePaths.playerLocation(
+            dramaId: 'drama-a',
+            episodeId: '2',
+          ),
+          repository: _FakePlayerFeedRepository.unlocked(),
         ),
-        repository: _FakePlayerFeedRepository.unlocked(),
-      ),
-    );
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pumpAndSettle();
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
 
-    expect(find.text('EP.02'), findsOneWidget);
+      expect(find.text('EP.02'), findsOneWidget);
 
-    await tester.drag(find.byType(PageView), const Offset(0, 500));
-    await tester.pumpAndSettle();
+      await tester.drag(find.byType(PageView), const Offset(0, 500));
+      await tester.pumpAndSettle();
 
-    expect(find.text('EP.01'), findsOneWidget);
-    expect(find.text('EP.03'), findsNothing);
-  });
+      expect(find.text('EP.01'), findsOneWidget);
+      expect(find.text('EP.03'), findsNothing);
+    },
+  );
 
   testWidgets('completed playback is ignored while a sheet is open', (
     tester,
@@ -3246,6 +3338,13 @@ Widget _buildPlayerApp({
       GoRoute(
         path: '/for-you',
         builder: (context, state) => const PlayerPage.forYou(),
+      ),
+      GoRoute(
+        path: RoutePaths.search,
+        builder: (context, state) => Scaffold(
+          appBar: AppBar(leading: const BackButton()),
+          body: const Center(child: Text('Search')),
+        ),
       ),
       GoRoute(
         path: RoutePaths.membership,
@@ -3620,6 +3719,10 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
 
   void emitBuffering(bool isBuffering) {
     _bufferingController.add(isBuffering);
+  }
+
+  void emitPlaying(bool isPlaying) {
+    _playingController.add(isPlaying);
   }
 
   void emitPosition(Duration position) {

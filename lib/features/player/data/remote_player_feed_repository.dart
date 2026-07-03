@@ -1,6 +1,7 @@
 import '../domain/player_feed.dart';
 import 'mapper/player_content_mapper.dart';
 import 'mapper/player_feed_mapper.dart';
+import 'player_drama_detail_cache.dart';
 import 'remote/player_remote_data_source.dart';
 
 /// 播放 feed 远程 repository。
@@ -8,13 +9,16 @@ class RemotePlayerFeedRepository
     implements PlayerFeedRepository, PagedForYouFeedRepository {
   const RemotePlayerFeedRepository({
     required PlayerRemoteDataSource remoteDataSource,
+    PlayerDramaDetailCache? dramaDetailCache,
     PlayerFeedMapper feedMapper = const PlayerFeedMapper(),
     PlayerContentMapper contentMapper = const PlayerContentMapper(),
   }) : _remoteDataSource = remoteDataSource,
+       _dramaDetailCache = dramaDetailCache,
        _feedMapper = feedMapper,
        _contentMapper = contentMapper;
 
   final PlayerRemoteDataSource _remoteDataSource;
+  final PlayerDramaDetailCache? _dramaDetailCache;
   final PlayerFeedMapper _feedMapper;
   final PlayerContentMapper _contentMapper;
 
@@ -24,7 +28,9 @@ class RemotePlayerFeedRepository
     required String episodeId,
   }) async {
     final dramaIdInt = int.tryParse(dramaId) ?? 0;
-    final dto = await _remoteDataSource.fetchDramaDetail(dramaId: dramaIdInt);
+    final dto =
+        await (_dramaDetailCache?.get(dramaIdInt) ??
+            _remoteDataSource.fetchDramaDetail(dramaId: dramaIdInt));
     final content = _contentMapper.mapContent(dto);
 
     final items = content.episodes

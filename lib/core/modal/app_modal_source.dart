@@ -3,6 +3,7 @@ enum AppModalSource {
   player,
   forYou,
   home,
+  search,
   store,
   wallet,
   membership,

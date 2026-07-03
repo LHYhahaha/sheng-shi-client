@@ -6,6 +6,7 @@ abstract final class RoutePaths {
   static const game = '/game';
   static const member = '/member';
   static const profile = '/profile';
+  static const search = '/search';
   static const auth = '/auth';
   static const account = '/account';
   static const store = '/store';
@@ -19,6 +20,7 @@ abstract final class RoutePaths {
     }
     return membership;
   }
+
   static const language = '/language';
   static const settings = '/settings';
   static const accountCancellation = '/settings/account-cancellation';

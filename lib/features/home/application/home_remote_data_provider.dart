@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/utils/compact_count_formatter.dart';
 import '../../../shared/media/media_resource.dart';
 import '../../drama/domain/drama.dart';
 import '../domain/home_data.dart';
@@ -49,7 +50,12 @@ class HomeRemoteData {
               homeDrama.coverUrl,
               aspectRatio: 0.7,
             ),
-            viewCountLabel: _formatPlayCount(homeDrama.playCount),
+            viewCountLabel: formatCompactCount(
+              homeDrama.playCount,
+              emptyWhenNonPositive: true,
+              spaceBeforeSuffix: true,
+              omitFractionForTenOrMore: true,
+            ),
             episodeCount: homeDrama.episodeTotal,
             categoryId: tab.id.toString(),
             tags: homeDrama.tags,
@@ -58,23 +64,5 @@ class HomeRemoteData {
           ),
         )
         .toList(growable: false);
-  }
-
-  static String _formatPlayCount(int playCount) {
-    if (playCount <= 0) {
-      return '';
-    }
-    if (playCount >= 1000000) {
-      final millions = playCount / 1000000;
-      return '${millions.toStringAsFixed(millions >= 10 ? 0 : 1)} M';
-    }
-    if (playCount >= 1000) {
-      final thousands = playCount / 1000;
-      if (thousands >= 999.95) {
-        return '1.0M';
-      }
-      return '${thousands.toStringAsFixed(thousands >= 10 ? 0 : 1)} K';
-    }
-    return '$playCount';
   }
 }
