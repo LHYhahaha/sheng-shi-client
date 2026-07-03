@@ -34,10 +34,12 @@ class SearchPage extends ConsumerStatefulWidget {
 
 class _SearchPageState extends ConsumerState<SearchPage> {
   static const _rankingTypes = SearchRankingType.values;
+  static const _rankingViewportFraction = 0.88;
 
   final _searchController = TextEditingController();
-  final _pageController = PageController(viewportFraction: 0.92);
+  final _rankingScrollController = ScrollController();
   Timer? _searchDebounce;
+  double _rankingViewportWidth = 0;
   _SearchViewMode _viewMode = _SearchViewMode.initial;
   SearchSortType _selectedSort = SearchSortType.hottest;
   int _selectedRanking = 0;
@@ -48,18 +50,44 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   void dispose() {
     _searchDebounce?.cancel();
     _searchController.dispose();
-    _pageController.dispose();
+    _rankingScrollController.dispose();
     super.dispose();
   }
 
   void _selectRanking(int index) {
     if (_selectedRanking == index) return;
     setState(() => _selectedRanking = index);
-    _pageController.animateToPage(
-      index,
+    _rankingScrollController.animateTo(
+      _rankingOffsetFor(index),
       duration: const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
     );
+  }
+
+  double _rankingOffsetFor(int index) {
+    if (_rankingViewportWidth <= 0) return 0;
+    final itemWidth = _rankingViewportWidth * _rankingViewportFraction;
+    final maxOffset = _rankingTypes.length * itemWidth - _rankingViewportWidth;
+    if (index <= 0) return 0;
+    if (index >= _rankingTypes.length - 1) return maxOffset;
+    return index * itemWidth - (_rankingViewportWidth - itemWidth) / 2;
+  }
+
+  void _updateSelectedRanking() {
+    if (!_rankingScrollController.hasClients) return;
+    var nearestIndex = 0;
+    var nearestDistance = double.infinity;
+    for (var index = 0; index < _rankingTypes.length; index++) {
+      final distance =
+          (_rankingScrollController.offset - _rankingOffsetFor(index)).abs();
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    }
+    if (nearestIndex != _selectedRanking) {
+      setState(() => _selectedRanking = nearestIndex);
+    }
   }
 
   void _submitSearch(String value) {
@@ -218,30 +246,46 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                               .read(searchRankingsControllerProvider.notifier)
                               .retryAll(),
                         )
-                      : PageView.builder(
-                          controller: _pageController,
-                          padEnds: false,
-                          itemCount: _rankingTypes.length,
-                          onPageChanged: (index) {
-                            setState(() => _selectedRanking = index);
-                          },
-                          itemBuilder: (context, index) {
-                            final type = _rankingTypes[index];
-                            return Padding(
-                              padding: EdgeInsets.only(
-                                left: index == 0 ? 6 : 5,
-                                right: index == _rankingTypes.length - 1
-                                    ? 6
-                                    : 5,
-                              ),
-                              child: _RankingPanel(
-                                type: type,
-                                state: state.rankingFor(type),
-                                onRetry: () => ref
-                                    .read(
-                                      searchRankingsControllerProvider.notifier,
-                                    )
-                                    .retry(type),
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            _rankingViewportWidth = constraints.maxWidth;
+                            final itemWidth =
+                                constraints.maxWidth * _rankingViewportFraction;
+                            return NotificationListener<ScrollEndNotification>(
+                              onNotification: (notification) {
+                                _updateSelectedRanking();
+                                return false;
+                              },
+                              child: ListView.builder(
+                                controller: _rankingScrollController,
+                                scrollDirection: Axis.horizontal,
+                                physics: _RankingSnapPhysics(
+                                  viewportWidth: constraints.maxWidth,
+                                  itemWidth: itemWidth,
+                                  itemCount: _rankingTypes.length,
+                                ),
+                                itemCount: _rankingTypes.length,
+                                itemBuilder: (context, index) {
+                                  final type = _rankingTypes[index];
+                                  return SizedBox(
+                                    width: itemWidth,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                      ),
+                                      child: _RankingPanel(
+                                        type: type,
+                                        state: state.rankingFor(type),
+                                        onRetry: () => ref
+                                            .read(
+                                              searchRankingsControllerProvider
+                                                  .notifier,
+                                            )
+                                            .retry(type),
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             );
                           },
@@ -291,6 +335,77 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _RankingSnapPhysics extends ScrollPhysics {
+  const _RankingSnapPhysics({
+    required this.viewportWidth,
+    required this.itemWidth,
+    required this.itemCount,
+    super.parent,
+  });
+
+  final double viewportWidth;
+  final double itemWidth;
+  final int itemCount;
+
+  @override
+  _RankingSnapPhysics applyTo(ScrollPhysics? ancestor) {
+    return _RankingSnapPhysics(
+      viewportWidth: viewportWidth,
+      itemWidth: itemWidth,
+      itemCount: itemCount,
+      parent: buildParent(ancestor),
+    );
+  }
+
+  @override
+  Simulation? createBallisticSimulation(
+    ScrollMetrics position,
+    double velocity,
+  ) {
+    if ((velocity <= 0 && position.pixels <= position.minScrollExtent) ||
+        (velocity >= 0 && position.pixels >= position.maxScrollExtent)) {
+      return super.createBallisticSimulation(position, velocity);
+    }
+
+    final targets = <double>[
+      position.minScrollExtent,
+      for (var index = 1; index < itemCount - 1; index++)
+        index * itemWidth - (viewportWidth - itemWidth) / 2,
+      position.maxScrollExtent,
+    ];
+    var target = targets.reduce(
+      (current, candidate) =>
+          (candidate - position.pixels).abs() <
+              (current - position.pixels).abs()
+          ? candidate
+          : current,
+    );
+
+    if (velocity.abs() >= minFlingVelocity) {
+      if (velocity > 0) {
+        target = targets.firstWhere(
+          (candidate) => candidate > position.pixels + 0.5,
+          orElse: () => targets.last,
+        );
+      } else {
+        target = targets.lastWhere(
+          (candidate) => candidate < position.pixels - 0.5,
+          orElse: () => targets.first,
+        );
+      }
+    }
+
+    if ((target - position.pixels).abs() < 0.5) return null;
+    return ScrollSpringSimulation(
+      spring,
+      position.pixels,
+      target,
+      velocity,
+      tolerance: toleranceFor(position),
     );
   }
 }
