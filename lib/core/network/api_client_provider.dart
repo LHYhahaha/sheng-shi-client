@@ -11,6 +11,7 @@ import '../runtime/install_id_provider.dart';
 import 'api_client.dart';
 import 'api_request_context.dart';
 import 'system_proxy_config.dart';
+import 'test_network_config.dart';
 
 final channelConfigProvider = FutureProvider<ChannelConfig>((ref) async {
   final service = ref.watch(channelConfigServiceProvider);
@@ -47,8 +48,11 @@ final apiRequestContextProvider = Provider<ApiRequestContext>((ref) {
 const _installIdLoadingFallback = 'install-id-pending';
 
 final apiClientProvider = Provider.autoDispose<ApiClient>((ref) {
-  final dio = Dio(ApiClient.defaultOptions);
-  configureDioWithSystemProxy(dio);
+  final testNetworkConfig = ref.watch(testNetworkConfigProvider);
+  final options = ApiClient.defaultOptions
+    ..baseUrl = testNetworkConfig.apiBaseUrl;
+  final dio = Dio(options);
+  configureDioWithProxy(dio, testNetworkConfig.proxy);
 
   final apiClient = ApiClient(
     dio: dio,

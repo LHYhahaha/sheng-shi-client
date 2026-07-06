@@ -20,6 +20,22 @@ import UIKit
           result(FlutterMethodNotImplemented)
         }
       }
+
+      let systemInfoChannel = FlutterMethodChannel(
+        name: "com.yushi.drama/system_info",
+        binaryMessenger: controller.binaryMessenger
+      )
+      systemInfoChannel.setMethodCallHandler { call, result in
+        switch call.method {
+        case "getSystemInfo":
+          result([
+            "region": Locale.current.regionCode ?? "",
+            "timezone": TimeZone.current.identifier,
+          ])
+        default:
+          result(FlutterMethodNotImplemented)
+        }
+      }
     }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }

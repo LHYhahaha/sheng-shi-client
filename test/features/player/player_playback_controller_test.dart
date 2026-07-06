@@ -2191,6 +2191,11 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     session.emitPosition(const Duration(seconds: 1));
     await Future<void>.delayed(Duration.zero);
+    expect(
+      container.read(provider).hasFirstFrame,
+      isFalse,
+      reason: 'audio/position may advance before the first video frame',
+    );
     controller.recordVideoSurfaceShownBeforeFirstFrame(
       itemId: 'drama-a-ep-1',
       source: _videoUrl,
@@ -2224,6 +2229,29 @@ void main() {
       controller.exportTimingReport(),
       contains('kind=recoverableNetwork'),
     );
+  });
+
+  test('HTTP 400 HLS segment error is not treated as recoverable', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    addTearDown(container.dispose);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    session.emitPosition(const Duration(seconds: 2));
+    await Future<void>.delayed(Duration.zero);
+    session.emitError(
+      'HTTP error 400 while loading segment '
+      'https://example.test/video_00001.ts',
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final state = container.read(provider);
+    expect(state.status, PlayerPlaybackStatus.error);
+    expect(state.errorKind, PlayerPlaybackErrorKind.sourceResolve);
+    expect(state.hasFirstFrame, isFalse);
+    expect(state.isBuffering, isFalse);
   });
 
   test('fatal media error still enters retryable error state', () async {

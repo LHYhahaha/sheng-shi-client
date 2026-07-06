@@ -37,12 +37,12 @@ import '../../domain/player_performance_policy.dart';
 import '../../domain/player_content.dart';
 import '../../domain/player_feed.dart';
 import '../../domain/player_playback_progress.dart';
+import '../../domain/player_subtitle.dart';
 import '../widgets/player_action_sheets.dart';
 import '../widgets/player_detail_sheet.dart';
 import '../widgets/player_feed_page_shell.dart';
 import '../widgets/player_playback_layer.dart';
 import '../widgets/player_subtitle_overlay.dart';
-import '../widgets/player_subtitle_sheet.dart';
 
 /// 鎾斁鍣?UI 瀹夸富锛氱旱鍚?[PageView] + 椤跺眰鍗曚緥 Video surface + sheet銆?
 ///
@@ -588,6 +588,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         sessionKey,
       ).select(PlayerPlaybackShellSnapshot.fromState),
     );
+    final subtitleState = ref.watch(
+      playerPlaybackControllerProvider(sessionKey).select(
+        (state) => (
+          subtitles: state.availableSubtitles,
+          currentUrl: state.currentSubtitleUrl,
+        ),
+      ),
+    );
 
     final feedState = ref.read(feedProvider);
     final feedController = ref.read(feedProvider.notifier);
@@ -873,6 +881,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           feedController: feedController,
           viewportState: viewportState,
           playbackShell: playbackShell,
+          subtitles: subtitleState.subtitles,
+          currentSubtitleUrl: subtitleState.currentUrl,
           playbackController: playbackController,
           feedEngine: feedEngine,
           performancePolicy: performancePolicy,
@@ -892,6 +902,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     required PlayerFeedController feedController,
     required PlayerViewportBuildSnapshot viewportState,
     required PlayerPlaybackShellSnapshot playbackShell,
+    required List<PlayerSubtitle> subtitles,
+    required String? currentSubtitleUrl,
     required PlayerPlaybackController playbackController,
     required PlayerFeedEngine feedEngine,
     required PlayerPerformancePolicy performancePolicy,
@@ -1101,7 +1113,19 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   unawaited(_goBackFromPlayer());
                 },
                 onSpeedTap: _showSpeedSheet,
-                onSubtitleTap: _showSubtitleSheet,
+                subtitles: subtitles,
+                currentSubtitleUrl: currentSubtitleUrl,
+                onSubtitleSelected: (subtitleUrl) {
+                  unawaited(
+                    ref
+                        .read(
+                          playerPlaybackControllerProvider(
+                            _sessionKey,
+                          ).notifier,
+                        )
+                        .setSubtitle(subtitleUrl),
+                  );
+                },
               ),
             ),
           ),
@@ -1851,25 +1875,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             );
           },
         );
-      },
-    );
-    _isModalOpen = false;
-    if (mounted) {
-      _syncAutoImmersiveBlockers();
-    }
-  }
-
-  Future<void> _showSubtitleSheet() async {
-    _isModalOpen = true;
-    _syncAutoImmersiveBlockers();
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.7),
-      isDismissible: true,
-      enableDrag: true,
-      builder: (context) {
-        return PlayerSubtitleSheet(sessionKey: _sessionKey);
       },
     );
     _isModalOpen = false;

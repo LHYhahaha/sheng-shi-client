@@ -9,11 +9,14 @@ import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.ProxySelector
 import java.net.URI
+import java.util.Locale
+import java.util.TimeZone
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.yushi.drama/channel_config"
     private val DEVICE_UUID_CHANNEL = "com.yushi.drama/device_uuid"
     private val SYSTEM_PROXY_CHANNEL = "com.yushi.drama/system_proxy"
+    private val SYSTEM_INFO_CHANNEL = "com.yushi.drama/system_info"
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -43,6 +46,21 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SYSTEM_INFO_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getSystemInfo" -> result.success(getSystemInfo())
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    private fun getSystemInfo(): Map<String, String> {
+        return mapOf(
+            "region" to Locale.getDefault().country,
+            "timezone" to TimeZone.getDefault().id,
+        )
     }
 
     private fun getChannelConfig(): Map<String, String?> {

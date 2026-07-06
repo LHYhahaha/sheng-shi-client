@@ -88,12 +88,14 @@ class RecordedHttpRequest {
     required this.path,
     required this.headers,
     required this.queryParameters,
+    required this.data,
   });
 
   final String method;
   final String path;
   final Map<String, dynamic> headers;
   final Map<String, dynamic> queryParameters;
+  final Object? data;
 
   factory RecordedHttpRequest.from(RequestOptions options) {
     return RecordedHttpRequest(
@@ -101,6 +103,7 @@ class RecordedHttpRequest {
       path: options.path,
       headers: Map<String, dynamic>.from(options.headers),
       queryParameters: Map<String, dynamic>.from(options.queryParameters),
+      data: options.data,
     );
   }
 }

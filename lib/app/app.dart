@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../bootstrap/feature_session_cleanup.dart';
 import '../bootstrap/i18n_bootstrap.dart';
+import '../core/active/app_active_reporter.dart';
 import '../core/i18n/i18n.dart';
 import '../core/locale/app_locale_controller.dart';
 import '../core/modal/app_modal_host.dart';
@@ -48,6 +49,11 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     return false;
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    ref.read(appActiveReporterProvider).onLifecycleChanged(state);
+  }
+
   Future<void> _setPreferredOrientations() async {
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -60,6 +66,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       print('[TokenInit] Starting token initialization...');
       await ref.read(authControllerProvider.notifier).load();
       print('[TokenInit] AuthController.load() completed');
+      await ref.read(appActiveReporterProvider).reportAppLaunch();
     } catch (e, stackTrace) {
       print('[TokenInit] Token initialization failed: $e');
       print('[TokenInit] Stack trace: $stackTrace');
@@ -114,9 +121,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
             children: [
               AppModalHost(child: wrapped),
               if (isPaymentLoading)
-                AppBlockingLoadingOverlay(
-                  label: paymentLoadingLabel,
-                ),
+                AppBlockingLoadingOverlay(label: paymentLoadingLabel),
             ],
           ),
         );

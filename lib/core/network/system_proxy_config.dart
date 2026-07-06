@@ -85,3 +85,18 @@ void configureDioWithSystemProxy(Dio dio) {
     },
   );
 }
+
+void configureDioWithProxy(Dio dio, SystemProxyConfig? config) {
+  if (config == null) {
+    return;
+  }
+  dio.httpClientAdapter = IOHttpClientAdapter(
+    createHttpClient: () {
+      final client = HttpClient();
+      client.findProxy = (_) => 'PROXY ${config.address}';
+      // 仅测试工具可传入此代理；方便 Charles/Proxyman 等抓取 HTTPS。
+      client.badCertificateCallback = (_, _, _) => true;
+      return client;
+    },
+  );
+}

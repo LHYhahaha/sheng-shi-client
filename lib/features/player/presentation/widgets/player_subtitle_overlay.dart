@@ -24,6 +24,7 @@ class PlayerSubtitleOverlay extends ConsumerWidget {
         viewport.scrollPhase == PlayerViewportScrollPhase.idle &&
         viewport.settledItemId == state.currentItemId &&
         state.hasFirstFrame &&
+        !state.isBuffering &&
         (state.status == PlayerPlaybackStatus.playing ||
             state.status == PlayerPlaybackStatus.paused);
     if (text.isEmpty || !canShowSubtitle) {

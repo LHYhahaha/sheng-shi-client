@@ -2013,17 +2013,6 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _lastPositionUpdate = clamped;
     _currentPlaybackPosition = clamped;
 
-    // 首帧检测：position > 0 说明解码器已经开始输出帧（HLS 流无 width 事件，用此替代）
-    if (clamped > Duration.zero && !_currentPlaybackHasFirstFrame) {
-      _currentPlaybackHasFirstFrame = true;
-      _logTiming(
-        'first frame detected (position > 0)',
-        itemId: state.currentItemId,
-        source: state.currentSource,
-        details: _timingDetails(['positionMs=${clamped.inMilliseconds}']),
-      );
-    }
-
     if (clamped > Duration.zero &&
         state.currentItemId != null &&
         _firstPositionLoggedItemIds.add(state.currentItemId!)) {
@@ -2255,6 +2244,15 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   PlayerPlaybackErrorKind _classifyPlaybackError(String error) {
     final normalized = error.toLowerCase();
+    // 明确的 HTTP 4xx 表示 source、签名或权限有问题，不是播放器重试即可恢复的
+    // 短暂网络抖动。必须先于 `.ts` / `segment` 判断，否则失败的 HLS 分片会被误判
+    // 为 recoverable，导致黑屏时 position 和字幕仍继续推进。
+    if (normalized.contains('400') ||
+        normalized.contains('401') ||
+        normalized.contains('403') ||
+        normalized.contains('404')) {
+      return PlayerPlaybackErrorKind.sourceResolve;
+    }
     if (normalized.contains('tcp') ||
         normalized.contains('ffurl') ||
         normalized.contains('segment') ||
@@ -2264,10 +2262,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         normalized.contains('timeout')) {
       return PlayerPlaybackErrorKind.recoverableNetwork;
     }
-    if (normalized.contains('source') ||
-        normalized.contains('resolve') ||
-        normalized.contains('404') ||
-        normalized.contains('403')) {
+    if (normalized.contains('source') || normalized.contains('resolve')) {
       return PlayerPlaybackErrorKind.sourceResolve;
     }
     if (normalized.contains('fatal') ||

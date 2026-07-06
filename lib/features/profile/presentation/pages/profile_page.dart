@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell.dart';
 import '../../../../core/auth/user_info_store.dart';
+import '../../../../core/network/test_network_config.dart';
+import '../../../../core/network/test_network_config_dialog.dart';
 import '../../../auth/application/auth_controller.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -63,13 +65,14 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final totalCoins =
         entitlementState.coinBalance + entitlementState.bonusBalance;
     final hasLinkedAccount = !authState.session.isGuest;
-    
+
     // 优先使用 authUser 的 avatarResource，否则使用 userInfoState.avatar 构建网络头像
-    final avatarResource = authUser?.avatarResource ??
+    final avatarResource =
+        authUser?.avatarResource ??
         (userInfoState.avatar != null && userInfoState.avatar!.isNotEmpty
             ? MediaResource.network(userInfoState.avatar!)
             : profileState.avatarResource);
-    
+
     final state = profileState.copyWith(
       isLoggedIn: hasLinkedAccount,
       userId: authUser?.id ?? userInfoState.showId,
@@ -114,7 +117,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             const SizedBox(height: 21),
             ProfileMembershipCard(
               membership: state.membership,
-              onTap: () => context.push(RoutePaths.membershipLocation(returnToProfile: true)),
+              onTap: () => context.push(
+                RoutePaths.membershipLocation(returnToProfile: true),
+              ),
             ),
             const SizedBox(height: 12),
             ProfileCoinsCard(
@@ -133,6 +138,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               iconAssetPath: 'assets/images/profile/setting.png',
               onTap: () => context.push(RoutePaths.settings),
             ),
+            if (TestNetworkTools.enabled)
+              ProfileMenuRow(
+                title: '测试网络配置 / 清理代理',
+                onTap: () => showTestNetworkConfigDialog(context, ref),
+              ),
           ],
         ),
       ),

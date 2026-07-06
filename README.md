@@ -1,5 +1,22 @@
 # Drama Client
 
+## Android 测试与正式打包
+
+开发 Debug 与测试抓包包都会显示代理与环境配置，Me 页保留入口。测试包命令：
+
+```bash
+flutter build apk --release --flavor haha --dart-define=APP_ENV=dev
+```
+
+正式 GF 包（编译期关闭代理、启动弹框、Me 页入口和域名切换）：
+
+```bash
+flutter build apk --release --flavor GF --dart-define=APP_ENV=prod
+```
+
+项目包含多个 product flavor，不要省略 `--flavor`。测试网络工具只允许在
+`APP_ENV` 不是 `prod` 时启用（Flutter 自动化测试除外）；prod 包不会读取设备上曾保存的测试代理。
+
 短剧 App Flutter 客户端。当前版本以 **mock 数据、mock 支付、mock 权益** 为默认运行模式，已完成播放器、解锁/充值/会员、全局弹窗、API 联调前基础设施等主链路封板。
 
 ## 当前封板状态

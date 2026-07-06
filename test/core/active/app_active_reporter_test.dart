@@ -1,0 +1,109 @@
+import 'package:dio/dio.dart';
+import 'package:drama_client/core/active/app_active_device_info.dart';
+import 'package:drama_client/core/active/app_active_reporter.dart';
+import 'package:drama_client/core/network/api_client.dart';
+import 'package:drama_client/core/network/api_request_context.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import '../../helpers/recording_http_adapter.dart';
+
+void main() {
+  late RecordingHttpAdapter adapter;
+  late DateTime now;
+  late AppActiveReporter reporter;
+
+  setUp(() {
+    adapter = RecordingHttpAdapter();
+    now = DateTime.utc(2026, 7, 6, 10);
+    reporter = AppActiveReporter(
+      apiClient: _apiClient(adapter),
+      deviceInfoReader: _FakeDeviceInfoReader(),
+      now: () => now,
+    );
+  });
+
+  test('reports required device fields on app launch', () async {
+    await reporter.reportAppLaunch();
+
+    expect(adapter.requests, hasLength(1));
+    final request = adapter.requests.single;
+    expect(request.method, 'POST');
+    expect(request.path, '/api/user/active/report');
+    expect(request.headers['Authorization'], 'Bearer test-token');
+    expect(request.data, {
+      'channelSource': 'tiktok',
+      'region': 'US',
+      'timezone': 'America/New_York',
+    });
+  });
+
+  test('reports an empty channelSource when channel is unavailable', () async {
+    reporter = AppActiveReporter(
+      apiClient: _apiClient(adapter),
+      deviceInfoReader: _FakeDeviceInfoReader(channelSource: ''),
+      now: () => now,
+    );
+
+    await reporter.reportAppLaunch();
+
+    expect((adapter.requests.single.data! as Map)['channelSource'], isEmpty);
+  });
+
+  test('skips reporting when session initialization failed', () async {
+    reporter = AppActiveReporter(
+      apiClient: _apiClient(adapter, accessToken: null),
+      deviceInfoReader: _FakeDeviceInfoReader(),
+      now: () => now,
+    );
+
+    await reporter.reportAppLaunch();
+
+    expect(adapter.requests, isEmpty);
+  });
+
+  test('reports again only after more than 30 minutes in background', () async {
+    await reporter.onLifecycleChanged(AppLifecycleState.paused);
+    now = now.add(const Duration(minutes: 30));
+    await reporter.onLifecycleChanged(AppLifecycleState.resumed);
+    expect(adapter.requests, isEmpty);
+
+    await reporter.onLifecycleChanged(AppLifecycleState.paused);
+    now = now.add(const Duration(minutes: 30, seconds: 1));
+    await reporter.onLifecycleChanged(AppLifecycleState.resumed);
+    expect(adapter.requests, hasLength(1));
+  });
+}
+
+class _FakeDeviceInfoReader implements AppActiveDeviceInfoReader {
+  _FakeDeviceInfoReader({this.channelSource = 'tiktok'});
+
+  final String channelSource;
+
+  @override
+  Future<AppActiveDeviceInfo> read() async {
+    return AppActiveDeviceInfo(
+      channelSource: channelSource,
+      region: 'US',
+      timezone: 'America/New_York',
+    );
+  }
+}
+
+ApiClient _apiClient(
+  RecordingHttpAdapter adapter, {
+  String? accessToken = 'test-token',
+}) {
+  final dio = Dio(BaseOptions(baseUrl: 'https://api.example.test'))
+    ..httpClientAdapter = adapter;
+  return ApiClient(
+    dio: dio,
+    requestContext: ApiRequestContext(
+      deviceId: 'test-install-id',
+      lang: 'en',
+      platform: 'android',
+      appVersion: '1.0.0',
+      accessToken: accessToken,
+    ),
+  );
+}
