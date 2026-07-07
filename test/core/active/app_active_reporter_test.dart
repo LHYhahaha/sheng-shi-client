@@ -62,6 +62,27 @@ void main() {
     expect(adapter.requests, isEmpty);
   });
 
+  test('does not throw when device info cannot be read', () async {
+    reporter = AppActiveReporter(
+      apiClient: _apiClient(adapter),
+      deviceInfoReader: _FailingDeviceInfoReader(),
+      now: () => now,
+    );
+
+    await expectLater(reporter.reportAppLaunch(), completes);
+    expect(adapter.requests, isEmpty);
+  });
+
+  test('does not throw when active report request fails', () async {
+    adapter.fetchException = DioException(
+      requestOptions: RequestOptions(path: '/api/user/active/report'),
+      type: DioExceptionType.connectionError,
+    );
+
+    await expectLater(reporter.reportAppLaunch(), completes);
+    expect(adapter.requests, hasLength(1));
+  });
+
   test('reports again only after more than 30 minutes in background', () async {
     await reporter.onLifecycleChanged(AppLifecycleState.paused);
     now = now.add(const Duration(minutes: 30));
@@ -87,6 +108,13 @@ class _FakeDeviceInfoReader implements AppActiveDeviceInfoReader {
       region: 'US',
       timezone: 'America/New_York',
     );
+  }
+}
+
+class _FailingDeviceInfoReader implements AppActiveDeviceInfoReader {
+  @override
+  Future<AppActiveDeviceInfo> read() async {
+    throw StateError('device info unavailable');
   }
 }
 

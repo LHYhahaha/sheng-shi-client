@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,7 @@ import '../../../../app/shell/app_shell_chrome.dart';
 import '../../../../core/modal/app_modal_provider.dart';
 import '../../../../core/modal/app_modal_service.dart';
 import '../../../../core/modal/app_modal_source.dart';
+import '../../../../core/network/api_exception.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../pay/application/payment_loading_controller.dart';
@@ -31,6 +33,8 @@ import '../../data/dto/watch_progress_dto.dart';
 import '../../data/playback_progress_repository_provider.dart';
 import '../../data/player_content_repository_provider.dart';
 import '../../data/player_remote_data_source_provider.dart';
+import '../../../popup/data/popup_repository_provider.dart';
+import '../../../popup/domain/popup.dart';
 import '../../../membership/presentation/membership_route_result.dart';
 import '../../domain/player_access_presentation.dart';
 import '../../domain/for_you_player_handoff.dart';
@@ -109,8 +113,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isPageScrolling = false;
   bool _didRecordFirstBuild = false;
   bool _allowRemoteResumeEpisodeSwitch = true;
+  bool _isExitRecommendationRequestInFlight = false;
   String? _activeCoinSheetItemId;
   String? _activeRechargeSheetItemId;
+  final Set<String> _exitRecommendationEpisodeIds = <String>{};
+  CancelToken? _exitRecommendationCancelToken;
+  List<PopupExitRecommendation>? _exitRecommendationRecommendations;
   AppLifecycleState _previousLifecycleState = AppLifecycleState.resumed;
   bool _wasPlayingBeforeInactive = false;
   bool _resumePlaybackOnLifecycleResume = false;
@@ -226,6 +234,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     // 涓婃姤瑙傜湅閫€鍑轰簨浠?
     unawaited(_playbackController.reportWatchProgress(eventType: 4)); // 4: exit
     WidgetsBinding.instance.removeObserver(this);
+    _cancelExitRecommendationRequestIfPending();
     _modalService.dismissForSource(AppModalSource.player);
     _overlayOrchestrator.cancelPending();
     _playbackController.detachVideoSurfaceForTeardown();
@@ -835,6 +844,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                 updatedAt: DateTime.now(),
               ),
             );
+      },
+    );
+
+    ref.listen(
+      playerPlaybackControllerProvider(
+        sessionKey,
+      ).select((state) => (state.currentItemId, state.hasFirstFrame)),
+      (previous, next) {
+        if (next.$1 == null || !next.$2) {
+          return;
+        }
+        _recordExitRecommendationEpisode(itemId: next.$1!);
       },
     );
 
@@ -1505,6 +1526,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _goBackFromPlayer() async {
+    _cancelExitRecommendationRequestIfPending();
     final handoffResult = _currentForYouHandoffSnapshot();
     if (handoffResult != null) {
       await _playbackController.detachSurfaceForRoutePop();
@@ -1529,6 +1551,84 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     } else {
       context.go(RoutePaths.home);
     }
+  }
+
+  void _recordExitRecommendationEpisode({required String itemId}) {
+    if (widget.feedMode != PlayerFeedMode.singleDrama ||
+        widget.dramaId == null) {
+      return;
+    }
+    final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+    PlayerFeedItem? playingItem;
+    for (final candidate in feedState.items) {
+      if (candidate.id == itemId) {
+        playingItem = candidate;
+        break;
+      }
+    }
+    if (playingItem == null || playingItem.content.id != widget.dramaId) {
+      return;
+    }
+    _exitRecommendationEpisodeIds.add(playingItem.episode.id);
+    if (_exitRecommendationEpisodeIds.length >= 2) {
+      _startExitRecommendationRequestIfEligible();
+    }
+  }
+
+  void _startExitRecommendationRequestIfEligible() {
+    if (widget.feedMode != PlayerFeedMode.singleDrama ||
+        widget.dramaId == null ||
+        _isExitRecommendationRequestInFlight ||
+        _exitRecommendationRecommendations != null ||
+        _exitRecommendationEpisodeIds.length < 2) {
+      return;
+    }
+    _isExitRecommendationRequestInFlight = true;
+    final cancelToken = CancelToken();
+    _exitRecommendationCancelToken = cancelToken;
+    unawaited(_loadExitRecommendation(cancelToken));
+  }
+
+  Future<void> _loadExitRecommendation(CancelToken cancelToken) async {
+    try {
+      final recommendations = await ref
+          .read(popupRepositoryProvider)
+          .fetchDetailExitRecommendations(
+            dramaId: widget.dramaId!,
+            cancelToken: cancelToken,
+          );
+      if (cancelToken.isCancelled) {
+        return;
+      }
+      if (recommendations.length >= 5) {
+        _exitRecommendationRecommendations = recommendations;
+      }
+      debugPrint(
+        '[PopupExitRecommendation] Loaded ${recommendations.length} '
+        'items for drama ${widget.dramaId}.',
+      );
+    } catch (error) {
+      if (error is ApiException && error.code == ApiErrorCode.cancelled) {
+        return;
+      }
+      debugPrint(
+        '[PopupExitRecommendation] Request failed for drama '
+        '${widget.dramaId}: $error',
+      );
+    } finally {
+      if (_exitRecommendationCancelToken == cancelToken) {
+        _exitRecommendationCancelToken = null;
+      }
+      _isExitRecommendationRequestInFlight = false;
+    }
+  }
+
+  void _cancelExitRecommendationRequestIfPending() {
+    final cancelToken = _exitRecommendationCancelToken;
+    if (cancelToken == null || cancelToken.isCancelled) {
+      return;
+    }
+    cancelToken.cancel('player exiting before exit recommendation loaded');
   }
 
   Future<void> _synchronizeReturnedForYouProgress(

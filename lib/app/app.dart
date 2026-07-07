@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,9 +15,11 @@ import '../core/modal/app_modal_host.dart';
 import '../core/network/api_client_provider.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/pay/application/payment_loading_controller.dart';
+import '../features/popup/application/popup_entry_controller.dart';
 import '../l10n/app_localizations.dart';
 import '../shared/widgets/app_blocking_loading_overlay.dart';
 import 'router/app_router.dart';
+import 'shell/app_shell.dart';
 import 'theme/app_theme.dart';
 
 class DramaClientApp extends ConsumerStatefulWidget {
@@ -51,7 +55,15 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    ref.read(appActiveReporterProvider).onLifecycleChanged(state);
+    unawaited(ref.read(appActiveReporterProvider).onLifecycleChanged(state));
+    final currentPlacement = AppShellDestinations.popupPlacementForIndex(
+      ref.read(appShellCurrentTabIndexProvider),
+    );
+    unawaited(
+      ref
+          .read(popupEntryControllerProvider.notifier)
+          .onLifecycleChanged(state, currentPlacement: currentPlacement),
+    );
   }
 
   Future<void> _setPreferredOrientations() async {
@@ -63,19 +75,46 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
 
   Future<void> _bootstrapSessionAndI18n() async {
     try {
-      print('[TokenInit] Starting token initialization...');
+      debugPrint('[TokenInit] Starting token initialization...');
       await ref.read(authControllerProvider.notifier).load();
-      print('[TokenInit] AuthController.load() completed');
-      await ref.read(appActiveReporterProvider).reportAppLaunch();
+      debugPrint('[TokenInit] AuthController.load() completed');
+      unawaited(_reportAppLaunchSafely());
+      unawaited(_requestStartupPopupSafely());
     } catch (e, stackTrace) {
-      print('[TokenInit] Token initialization failed: $e');
-      print('[TokenInit] Stack trace: $stackTrace');
+      debugPrint('[TokenInit] Token initialization failed: $e');
+      debugPrint('[TokenInit] Stack trace: $stackTrace');
     }
 
     try {
       await ref.read(i18nInitializerProvider.future);
     } catch (e) {
-      print('[I18n] I18n initialization trigger failed: $e');
+      debugPrint('[I18n] I18n initialization trigger failed: $e');
+    }
+  }
+
+  Future<void> _reportAppLaunchSafely() async {
+    try {
+      await ref.read(appActiveReporterProvider).reportAppLaunch();
+    } catch (e, stackTrace) {
+      debugPrint('[AppActiveReporter] Launch report ignored: $e');
+      debugPrint('[AppActiveReporter] Stack trace: $stackTrace');
+    }
+  }
+
+  Future<void> _requestStartupPopupSafely() async {
+    try {
+      final currentPlacement = AppShellDestinations.popupPlacementForIndex(
+        ref.read(appShellCurrentTabIndexProvider),
+      );
+      if (currentPlacement == null) {
+        return;
+      }
+      await ref
+          .read(popupEntryControllerProvider.notifier)
+          .requestForPlacement(currentPlacement);
+    } catch (e, stackTrace) {
+      debugPrint('[PopupEntryController] Startup popup ignored: $e');
+      debugPrint('[PopupEntryController] Stack trace: $stackTrace');
     }
   }
 

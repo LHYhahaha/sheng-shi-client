@@ -69,9 +69,8 @@ class AppActiveReporter {
         },
         decoder: (_) {},
       );
-    } catch (error, stackTrace) {
+    } catch (error) {
       debugPrint('[AppActiveReporter] Active report failed: $error');
-      debugPrintStack(stackTrace: stackTrace);
     } finally {
       _reportInFlight = false;
     }

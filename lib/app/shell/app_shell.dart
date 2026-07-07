@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/router/route_paths.dart';
 import '../../features/player/application/player_playback_controller.dart';
+import '../../features/popup/application/popup_entry_controller.dart';
+import '../../features/popup/domain/popup.dart';
 import '../../shared/widgets/navigation/app_bottom_navigation.dart';
 import 'app_shell_chrome.dart';
 
@@ -69,6 +71,17 @@ class _AppShellState extends ConsumerState<AppShell> {
   Future<void> _forYouVisibilityOperation = Future<void>.value();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _requestPopupForIndex(widget.navigationShell.currentIndex);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final showBottomNavigation = ref.watch(
       appShellBottomNavigationVisibleProvider,
@@ -129,6 +142,19 @@ class _AppShellState extends ConsumerState<AppShell> {
       index,
       initialLocation: index == currentIndex,
     );
+    _requestPopupForIndex(index);
+  }
+
+  void _requestPopupForIndex(int index) {
+    final placement = AppShellDestinations.popupPlacementForIndex(index);
+    if (placement == null) {
+      return;
+    }
+    unawaited(
+      ref
+          .read(popupEntryControllerProvider.notifier)
+          .requestForPlacement(placement),
+    );
   }
 }
 
@@ -148,4 +174,12 @@ class AppShellDestinations {
     RoutePaths.myList,
     RoutePaths.profile,
   ];
+
+  static PopupPlacementCode? popupPlacementForIndex(int index) {
+    return switch (index) {
+      homeIndex => PopupPlacementCode.homeEnter,
+      forYouIndex => PopupPlacementCode.recommendTabEnter,
+      _ => null,
+    };
+  }
 }
