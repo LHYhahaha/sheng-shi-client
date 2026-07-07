@@ -15,6 +15,7 @@ class PlayerEpisodeDto {
     required this.subtitles,
     required this.isUnlocked,
     required this.isVipOnly,
+    this.episodeSources = const [],
   });
 
   final int id;
@@ -25,6 +26,7 @@ class PlayerEpisodeDto {
   final int status;
   final String publishedAt;
   final List<PlayerEpisodeSubtitleDto> subtitles;
+  final List<PlayerEpisodeSourceDto> episodeSources;
 
   /// 当前用户是否已解锁该集。
   ///
@@ -48,6 +50,7 @@ class PlayerEpisodeDto {
       status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
       publishedAt: JsonFieldParser.optionalString(json, 'published_at') ?? '',
       subtitles: _parseSubtitles(json['subtitles']),
+      episodeSources: _parseEpisodeSources(json['episode_sources']),
       isUnlocked: JsonFieldParser.optionalInt(json, 'is_unlocked') ?? 0,
       isVipOnly: JsonFieldParser.optionalInt(json, 'is_vip_only') ?? 0,
     );
@@ -60,6 +63,14 @@ class PlayerEpisodeDto {
         .map(PlayerEpisodeSubtitleDto.fromJson)
         .toList(growable: false);
   }
+
+  static List<PlayerEpisodeSourceDto> _parseEpisodeSources(Object? value) {
+    if (value is! List) return const <PlayerEpisodeSourceDto>[];
+    return value
+        .whereType<Map<String, Object?>>()
+        .map(PlayerEpisodeSourceDto.fromJson)
+        .toList(growable: false);
+  }
 }
 
 /// 播放器字幕 DTO。
@@ -67,26 +78,59 @@ class PlayerEpisodeSubtitleDto {
   const PlayerEpisodeSubtitleDto({
     required this.id,
     required this.language,
+    required this.languageCode,
     required this.subtitleName,
     required this.subtitleUrl,
     required this.format,
     required this.status,
+    this.subtitlePosition = '1',
   });
 
   final int id;
   final String language;
+  final String languageCode;
   final String subtitleName;
   final String subtitleUrl;
   final String format;
   final int status;
+  final String subtitlePosition;
 
   factory PlayerEpisodeSubtitleDto.fromJson(Map<String, Object?> json) {
     return PlayerEpisodeSubtitleDto(
       id: JsonFieldParser.optionalInt(json, 'id') ?? 0,
       language: JsonFieldParser.optionalString(json, 'language') ?? '',
+      languageCode: JsonFieldParser.optionalString(json, 'language_code') ?? '',
       subtitleName: JsonFieldParser.optionalString(json, 'subtitle_name') ?? '',
       subtitleUrl: JsonFieldParser.optionalString(json, 'subtitle_url') ?? '',
       format: JsonFieldParser.optionalString(json, 'format') ?? '',
+      status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
+      subtitlePosition:
+          JsonFieldParser.optionalString(json, 'subtitle_position') ?? '1',
+    );
+  }
+}
+
+class PlayerEpisodeSourceDto {
+  const PlayerEpisodeSourceDto({
+    required this.id,
+    required this.language,
+    required this.languageCode,
+    required this.sourceUrl,
+    required this.status,
+  });
+
+  final String id;
+  final String language;
+  final String languageCode;
+  final String sourceUrl;
+  final int status;
+
+  factory PlayerEpisodeSourceDto.fromJson(Map<String, Object?> json) {
+    return PlayerEpisodeSourceDto(
+      id: json['id']?.toString() ?? '',
+      language: JsonFieldParser.optionalString(json, 'language') ?? '',
+      languageCode: JsonFieldParser.optionalString(json, 'language_code') ?? '',
+      sourceUrl: JsonFieldParser.optionalString(json, 'source_url') ?? '',
       status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
     );
   }

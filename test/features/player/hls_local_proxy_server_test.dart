@@ -68,6 +68,35 @@ void main() {
   );
 
   test(
+    'proxy serves playlist and segment prefilled by preloader cache',
+    () async {
+      final cacheStore = HlsLocalCacheStore()
+        ..write(
+          'https://cdn.example.com/hls/media.m3u8',
+          utf8.encode('#EXTM3U\n#EXTINF:4.0,\nseg-1.ts\n'),
+        )
+        ..write('https://cdn.example.com/hls/seg-1.ts', [7, 8, 9]);
+      final client = _FakeProxyHttpClient(const {});
+      final server = HlsLocalProxyServer(
+        client: client,
+        cacheStore: cacheStore,
+      );
+      addTearDown(server.stop);
+
+      final proxyUrl = await server.proxyUrlFor(
+        'https://cdn.example.com/hls/media.m3u8',
+      );
+      final playlist = await _readString(Uri.parse(proxyUrl));
+      final segmentUrl = RegExp(
+        r'http://[^\n]+/segment\?url=[^\n]+',
+      ).firstMatch(playlist)!.group(0)!;
+
+      expect(await _readBytes(Uri.parse(segmentUrl)), [7, 8, 9]);
+      expect(client.totalGetCount, 0);
+    },
+  );
+
+  test(
     'resolver falls back to remote source when proxy generation fails',
     () async {
       const remoteUrl = 'https://cdn.example.com/hls/media.m3u8';
@@ -152,6 +181,7 @@ class _FakeProxyHttpClient implements HlsLocalProxyHttpClient {
   var releasePendingCount = 0;
 
   int getCount(Uri uri) => _counts[uri.toString()] ?? 0;
+  int get totalGetCount => _counts.values.fold(0, (sum, count) => sum + count);
 
   @override
   Future<HlsLocalProxyResponse> get(

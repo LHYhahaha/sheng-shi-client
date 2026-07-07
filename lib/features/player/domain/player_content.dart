@@ -142,12 +142,16 @@ class PlayerEpisode {
     this.duration,
     this.isAvailable = true,
     this.subtitles = const [],
+    this.episodeSources = const [],
   });
 
   /// 该集可用的字幕轨道列表。
   ///
   /// 为空表示无字幕。播放器应允许关闭字幕。
   final List<PlayerSubtitle> subtitles;
+
+  /// 已将对应语言字幕烧录进画面的视频资源。
+  final List<PlayerEpisodeSource> episodeSources;
 
   /// 剧集 id。
   ///
@@ -218,6 +222,7 @@ class PlayerEpisode {
     Duration? duration,
     bool? isAvailable,
     List<PlayerSubtitle>? subtitles,
+    List<PlayerEpisodeSource>? episodeSources,
   }) {
     return PlayerEpisode(
       id: id ?? this.id,
@@ -231,6 +236,7 @@ class PlayerEpisode {
       duration: duration ?? this.duration,
       isAvailable: isAvailable ?? this.isAvailable,
       subtitles: subtitles ?? this.subtitles,
+      episodeSources: episodeSources ?? this.episodeSources,
     );
   }
 

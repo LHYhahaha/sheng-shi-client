@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client_provider.dart';
@@ -23,6 +24,7 @@ final hlsPlaylistPreloaderProvider = Provider<HlsPlaylistPreloader>((ref) {
   final preloader = HlsPlaylistPreloader(
     timeout: config.effectivePreloadTimeout,
     maxPreheatBytes: config.effectiveMaxPreloadBytes,
+    cacheStore: ref.watch(hlsLocalCacheStoreProvider),
   );
   ref.onDispose(preloader.releasePending);
   return preloader;
@@ -44,16 +46,25 @@ final playerPlaybackPreloadManagerProvider =
 /// 它只用于诊断 media_kit 是否能从本地代理获益，默认必须关闭。该开关不应作为普通
 /// 缓存策略暴露给 UI，也不能替代服务端/CDN 的 HLS 优化。
 final hlsLocalProxyConfigProvider = Provider<HlsLocalProxyConfig>((ref) {
-  // local proxy 仍是 spike，默认关闭。它会在本机起 HTTP server 并重写 HLS URL，
-  // 对 CORS、ATS/网络安全、后台生命周期和缓存一致性都有额外风险；没有真机验证前
-  // 只能通过编译期开关显式打开。
-  const enabled = bool.fromEnvironment('PLAYER_HLS_LOCAL_PROXY_SPIKE');
-  return const HlsLocalProxyConfig(enabled: enabled);
+  const forceEnabled = bool.fromEnvironment('PLAYER_HLS_LOCAL_PROXY_SPIKE');
+  const isFlutterTest = bool.fromEnvironment('FLUTTER_TEST');
+  return HlsLocalProxyConfig(
+    enabled:
+        forceEnabled ||
+        (defaultTargetPlatform == TargetPlatform.android && !isFlutterTest),
+  );
+});
+
+final hlsLocalCacheStoreProvider = Provider<HlsLocalCacheStore>((ref) {
+  return HlsLocalCacheStore();
 });
 
 final hlsLocalProxyServerProvider = Provider<HlsLocalProxyServer>((ref) {
   final config = ref.watch(hlsLocalProxyConfigProvider);
-  final server = HlsLocalProxyServer(timeout: config.timeout);
+  final server = HlsLocalProxyServer(
+    timeout: config.timeout,
+    cacheStore: ref.watch(hlsLocalCacheStoreProvider),
+  );
   ref.onDispose(() {
     unawaited(server.stop());
   });
@@ -79,6 +90,7 @@ final startupHlsPlaylistPreloaderProvider = Provider<HlsPlaylistPreloader>((
   final preloader = HlsPlaylistPreloader(
     timeout: config.effectivePreloadTimeout,
     maxPreheatBytes: config.effectiveMaxPreloadBytes,
+    cacheStore: ref.watch(hlsLocalCacheStoreProvider),
   );
   ref.onDispose(preloader.releasePending);
   return preloader;
@@ -105,12 +117,15 @@ final playerPlaybackSourceRepositoryProvider =
       // source resolve 未来会承载鉴权、签名 URL、缓存策略和埋点，入口分散会导致
       // locked/unavailable 边界和 preload release 规则不一致。
       if (ref.watch(useRemotePlayerApiProvider)) {
-        final httpHeaders = _playbackHttpHeaders(ref.watch(apiRequestContextProvider));
+        final httpHeaders = _playbackHttpHeaders(
+          ref.watch(apiRequestContextProvider),
+        );
         return RemotePlayerPlaybackSourceRepository(
           remoteDataSource: PlaybackSourceRemoteDataSource(
             apiClient: ref.watch(apiClientProvider),
           ),
           preloadManager: ref.watch(playerPlaybackPreloadManagerProvider),
+          proxyResolver: ref.watch(hlsProxyPlaybackSourceResolverProvider),
           // httpHeaders: httpHeaders,
         );
       }
@@ -129,12 +144,15 @@ final playerStartupPlaybackSourceRepositoryProvider =
       // startup 使用独立 repository 实例，确保它依赖 startup preload manager。
       // 这不是为了 mock，而是为了把首页预热和播放页预热的资源作用域拆开。
       if (ref.watch(useRemotePlayerApiProvider)) {
-        final httpHeaders = _playbackHttpHeaders(ref.watch(apiRequestContextProvider));
+        final httpHeaders = _playbackHttpHeaders(
+          ref.watch(apiRequestContextProvider),
+        );
         return RemotePlayerPlaybackSourceRepository(
           remoteDataSource: PlaybackSourceRemoteDataSource(
             apiClient: ref.watch(apiClientProvider),
           ),
           preloadManager: ref.watch(playerStartupPreloadManagerProvider),
+          proxyResolver: ref.watch(hlsProxyPlaybackSourceResolverProvider),
           // httpHeaders: httpHeaders,
         );
       }

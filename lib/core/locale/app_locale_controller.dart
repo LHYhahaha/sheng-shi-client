@@ -37,13 +37,21 @@ class AppLocaleController extends Notifier<Locale> {
   }
 
   Future<void> _saveAndLoadLanguage(String languageCode) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(preferenceKey, languageCode);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(preferenceKey, languageCode);
+    } catch (_) {
+      // Keep the in-memory locale even if local persistence is unavailable.
+    }
   }
 
   static Future<String> readSavedLanguageCode() async {
-    final prefs = await SharedPreferences.getInstance();
-    return normalizeLanguageCode(prefs.getString(preferenceKey));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return normalizeLanguageCode(prefs.getString(preferenceKey));
+    } catch (_) {
+      return defaultLanguageCode;
+    }
   }
 
   static String normalizeLanguageCode(String? languageCode) {

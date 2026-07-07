@@ -62,22 +62,56 @@ class PlayerContentMapper {
       duration: dto.durationSec > 0 ? Duration(seconds: dto.durationSec) : null,
       isAvailable: dto.status == 1,
       subtitles: _mapSubtitles(dto.subtitles),
+      episodeSources: _mapEpisodeSources(dto.episodeSources),
     );
   }
 
   /// 将 DTO 字幕列表转换为领域模型列表。
   List<PlayerSubtitle> _mapSubtitles(List<PlayerEpisodeSubtitleDto> dtos) {
     return dtos
+        .where(
+          (dto) =>
+              dto.status == 1 &&
+              dto.language.isNotEmpty &&
+              dto.subtitleUrl.isNotEmpty,
+        )
         .map((dto) {
           return PlayerSubtitle(
             id: dto.id,
             language: dto.language,
+            languageCode: dto.languageCode,
             name: dto.subtitleName,
             url: dto.subtitleUrl,
             format: dto.format.isNotEmpty ? dto.format : 'vtt',
             isDefault: dto.status == 1,
+            position: switch (dto.subtitlePosition) {
+              '2' => PlayerSubtitlePosition.middle,
+              '3' => PlayerSubtitlePosition.top,
+              _ => PlayerSubtitlePosition.bottom,
+            },
           );
         })
+        .toList(growable: false);
+  }
+
+  List<PlayerEpisodeSource> _mapEpisodeSources(
+    List<PlayerEpisodeSourceDto> dtos,
+  ) {
+    return dtos
+        .where(
+          (dto) =>
+              dto.status == 1 &&
+              dto.language.isNotEmpty &&
+              dto.sourceUrl.isNotEmpty,
+        )
+        .map(
+          (dto) => PlayerEpisodeSource(
+            id: dto.id,
+            language: dto.language,
+            languageCode: dto.languageCode,
+            url: dto.sourceUrl,
+          ),
+        )
         .toList(growable: false);
   }
 

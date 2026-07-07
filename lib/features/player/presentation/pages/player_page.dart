@@ -24,6 +24,7 @@ import '../../application/player_performance_policy_provider.dart';
 import '../../application/player_playback_controller.dart';
 import '../../application/player_unlock_modal_coordinator.dart';
 import '../../application/player_rebuild_diagnostics.dart';
+import '../../application/player_session_registry.dart';
 import '../../application/player_ui_controller.dart';
 import '../../application/player_viewport_controller.dart';
 import '../../data/dto/watch_progress_dto.dart';
@@ -175,6 +176,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (!mounted) {
         return;
       }
+      await _releaseForYouDecoderBeforeSinglePlayback();
+      if (!mounted) {
+        return;
+      }
       final remoteResumeFuture = _loadRemoteResumeProgress();
 
       final uiController = ref.read(
@@ -198,6 +203,22 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
       await _loadFeedForTiming(remoteResumeFuture: remoteResumeFuture);
     });
+  }
+
+  Future<void> _releaseForYouDecoderBeforeSinglePlayback() async {
+    if (widget.feedMode != PlayerFeedMode.singleDrama) return;
+    if (!ref
+        .read(playerSessionRegistryProvider)
+        .contains(PlayerPlaybackSessionKeys.forYouTab)) {
+      return;
+    }
+    await ref
+        .read(
+          playerPlaybackControllerProvider(
+            PlayerPlaybackSessionKeys.forYouTab,
+          ).notifier,
+        )
+        .suspendForCompetingPlayer();
   }
 
   @override
@@ -592,7 +613,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       playerPlaybackControllerProvider(sessionKey).select(
         (state) => (
           subtitles: state.availableSubtitles,
-          currentUrl: state.currentSubtitleUrl,
+          episodeSources: state.availableEpisodeSources,
+          currentLanguage: state.currentSubtitleLanguage,
         ),
       ),
     );
@@ -882,7 +904,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           viewportState: viewportState,
           playbackShell: playbackShell,
           subtitles: subtitleState.subtitles,
-          currentSubtitleUrl: subtitleState.currentUrl,
+          episodeSources: subtitleState.episodeSources,
+          currentSubtitleLanguage: subtitleState.currentLanguage,
           playbackController: playbackController,
           feedEngine: feedEngine,
           performancePolicy: performancePolicy,
@@ -903,7 +926,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     required PlayerViewportBuildSnapshot viewportState,
     required PlayerPlaybackShellSnapshot playbackShell,
     required List<PlayerSubtitle> subtitles,
-    required String? currentSubtitleUrl,
+    required List<PlayerEpisodeSource> episodeSources,
+    required String? currentSubtitleLanguage,
     required PlayerPlaybackController playbackController,
     required PlayerFeedEngine feedEngine,
     required PlayerPerformancePolicy performancePolicy,
@@ -1080,7 +1104,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                       widget.feedMode == PlayerFeedMode.singleDrama
                       ? () {
                           uiController.onImmersiveVideoTap();
-                          unawaited(playbackController.togglePlay());
                         }
                       : null,
                   onSingleDramaUserInteraction:
@@ -1114,16 +1137,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                 },
                 onSpeedTap: _showSpeedSheet,
                 subtitles: subtitles,
-                currentSubtitleUrl: currentSubtitleUrl,
-                onSubtitleSelected: (subtitleUrl) {
+                episodeSources: episodeSources,
+                currentSubtitleLanguage: currentSubtitleLanguage,
+                onSubtitleSelected: (language) {
+                  final controller = ref.read(
+                    playerPlaybackControllerProvider(_sessionKey).notifier,
+                  );
                   unawaited(
-                    ref
-                        .read(
-                          playerPlaybackControllerProvider(
-                            _sessionKey,
-                          ).notifier,
-                        )
-                        .setSubtitle(subtitleUrl),
+                    language == null
+                        ? controller.setSubtitle(null)
+                        : controller.selectSubtitleLanguage(language),
                   );
                 },
               ),

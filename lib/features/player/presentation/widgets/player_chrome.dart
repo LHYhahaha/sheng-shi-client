@@ -916,27 +916,30 @@ class _PlayerActionRailContent extends ConsumerWidget {
           onTap: onLikeTap,
         ),
         const SizedBox(height: 18),
-        if (forYouLayout)
-          _ActionItem(
-            icon: Icons.share_rounded,
-            imageIcon: Image.asset(
-              'assets/images/player/share.png',
-              width: 28,
-              height: 28,
+        if (!forYouLayout)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 18),
+            child: _ActionItem(
+              icon: Icons.layers_rounded,
+              imageIcon: Image.asset(
+                'assets/images/player/episodes.png',
+                height: 28,
+              ),
+              label: context.l10n.playerEpisodes,
+              onTap: onEpisodesTap,
             ),
-            label: context.l10n.playerShare,
-            onTap: onShareTap,
-          )
-        else
-          _ActionItem(
-            icon: Icons.layers_rounded,
-            imageIcon: Image.asset(
-              'assets/images/player/episodes.png',
-              height: 28,
-            ),
-            label: context.l10n.playerEpisodes,
-            onTap: onEpisodesTap,
           ),
+
+        _ActionItem(
+          icon: Icons.share_rounded,
+          imageIcon: Image.asset(
+            'assets/images/player/share.png',
+            width: 28,
+            height: 28,
+          ),
+          label: context.l10n.playerShare,
+          onTap: onShareTap,
+        ),
       ],
     );
   }
@@ -1489,14 +1492,14 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
                           fit: StackFit.expand,
                           children: [
                             ColoredBox(
-                              color: Colors.white.withValues(alpha: 0.3),
+                              color: Colors.white.withValues(alpha: 0.25),
                             ),
                             if (!widget.isPassiveTrack)
                               FractionallySizedBox(
                                 alignment: Alignment.centerLeft,
                                 widthFactor: buffered,
                                 child: ColoredBox(
-                                  color: Colors.white.withValues(alpha: 0.5),
+                                  color: Colors.white.withValues(alpha: 0.3),
                                 ),
                               ),
                             FractionallySizedBox(

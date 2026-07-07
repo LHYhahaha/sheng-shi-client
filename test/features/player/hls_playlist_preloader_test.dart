@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:drama_client/features/player/data/hls_playlist_preloader.dart';
+import 'package:drama_client/features/player/data/hls_local_proxy_server.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_preload_config_provider.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
@@ -91,13 +92,25 @@ void main() {
           ),
         },
       );
-      final preloader = HlsPlaylistPreloader(client: client);
+      final cacheStore = HlsLocalCacheStore();
+      final preloader = HlsPlaylistPreloader(
+        client: client,
+        cacheStore: cacheStore,
+      );
 
       final result = await preloader.prefetch(
         'https://cdn.example.test/master.m3u8',
       );
 
       expect(result.isMasterPlaylist, isTrue);
+      expect(
+        cacheStore.contains('https://cdn.example.test/master.m3u8'),
+        isTrue,
+      );
+      expect(
+        cacheStore.contains('https://cdn.example.test/low/seg1.ts'),
+        isTrue,
+      );
       expect(
         result.mediaPlaylistUrl,
         'https://cdn.example.test/low/index.m3u8',

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router/route_paths.dart';
 import '../../../../core/i18n/i18n.dart';
 import '../../../../core/locale/app_locale_controller.dart';
+import '../../application/language_options_controller.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_blocking_loading_overlay.dart';
@@ -83,6 +84,12 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
   Widget build(BuildContext context) {
     final selectedLanguageCode = _getEffectiveLanguageCode();
     final currentLocale = ref.watch(appLocaleControllerProvider);
+    final languageOptions = ref
+        .watch(languageOptionsProvider)
+        .maybeWhen(
+          data: (options) => options,
+          orElse: () => fallbackLanguageOptions,
+        );
     final showDoneButton =
         _tempSelectedLanguageCode != null &&
         _tempSelectedLanguageCode != currentLocale.languageCode;
@@ -106,16 +113,12 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
                       onDone: _onDone,
                       showDoneButton: showDoneButton,
                     ),
-                    _LanguageOption(
-                      label: 'English',
-                      selected: selectedLanguageCode == 'en',
-                      onTap: () => _onLanguageSelected('en'),
-                    ),
-                    _LanguageOption(
-                      label: '简体中文',
-                      selected: selectedLanguageCode == 'zh',
-                      onTap: () => _onLanguageSelected('zh'),
-                    ),
+                    for (final option in languageOptions)
+                      _LanguageOption(
+                        label: option.label,
+                        selected: selectedLanguageCode == option.code,
+                        onTap: () => _onLanguageSelected(option.code),
+                      ),
                   ],
                 ),
               ),
@@ -218,7 +221,7 @@ class _LanguageOption extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16,vertical: 15),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
         child: Row(
           children: [
             Expanded(

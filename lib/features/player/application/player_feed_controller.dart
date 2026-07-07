@@ -402,6 +402,7 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
       duration: item.episode.duration,
       isAvailable: item.episode.isAvailable,
       subtitles: item.episode.subtitles,
+      episodeSources: item.episode.episodeSources,
     );
 
     final updatedItems = [...state.items];

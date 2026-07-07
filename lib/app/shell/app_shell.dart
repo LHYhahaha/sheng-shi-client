@@ -102,7 +102,8 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     if (currentIndex == AppShellDestinations.forYouIndex &&
         index != AppShellDestinations.forYouIndex) {
-      _resumeForYouOnReturn = ref.read(playbackProvider).isPlaying;
+      final playback = ref.read(playbackProvider);
+      _resumeForYouOnReturn = playback.isPlaying || playback.isOpening;
       _forYouVisibilityOperation = _forYouVisibilityOperation.then((_) {
         return ref.read(playbackProvider.notifier).pauseForVisibility();
       });

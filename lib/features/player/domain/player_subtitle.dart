@@ -10,13 +10,18 @@ class PlayerSubtitle {
     required this.url,
     required this.format,
     required this.isDefault,
+    this.languageCode = '',
+    this.position = PlayerSubtitlePosition.bottom,
   });
 
   /// 字幕 id，用于切换和持久化用户选择。
   final int id;
 
-  /// 字幕语言标签（如 "en"、"zh"、"es"）。
+  /// 字幕语言展示名（如 "English"、"中文"）。
   final String language;
+
+  /// 字幕语言代码（如 "en"、"zh"），用于和 App 全局语言匹配。
+  final String languageCode;
 
   /// 字幕显示名称（如 "English"、"简体中文"）。
   final String name;
@@ -30,6 +35,9 @@ class PlayerSubtitle {
   /// 是否为默认字幕轨道。
   final bool isDefault;
 
+  /// 字幕在视频画面中的展示位置。
+  final PlayerSubtitlePosition position;
+
   @override
   bool operator ==(Object other) {
     return other is PlayerSubtitle && other.id == id;
@@ -37,6 +45,23 @@ class PlayerSubtitle {
 
   @override
   int get hashCode => id.hashCode;
+}
+
+enum PlayerSubtitlePosition { bottom, middle, top }
+
+/// 视频画面内已经烧录指定语言字幕的播放资源。
+class PlayerEpisodeSource {
+  const PlayerEpisodeSource({
+    required this.id,
+    required this.language,
+    required this.url,
+    this.languageCode = '',
+  });
+
+  final String id;
+  final String language;
+  final String languageCode;
+  final String url;
 }
 
 /// 单条字幕条目。

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_swiper_plus/flutter_swiper_plus.dart';
 import 'package:go_router/go_router.dart';
 
@@ -238,7 +239,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             slivers: [
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(17, 18, 17, 2),
                   child: _HomeTitleBar(
                     onMembershipTap: () => context.push(
                       RoutePaths.membershipLocation(returnToProfile: true),
@@ -450,13 +451,40 @@ class _HomeTitleBar extends ConsumerWidget {
     return Row(
       children: [
         Expanded(
-          child: Text(
-            context.l10n.appTitle,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppColors.textPrimary,
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
-              height: 1.5,
+          child: GestureDetector(
+            onTap: () {
+              context.push<void>(RoutePaths.search);
+            },
+            child: Container(
+              padding: EdgeInsets.symmetric(vertical: 7, horizontal: 12),
+              decoration: BoxDecoration(
+                color: Color(0XFF3A3A3A).withValues(alpha: 0.6),
+                border: Border.all(
+                  width: 0.5,
+                  color: Color(0XFF949494).withValues(alpha: 0.3),
+                ),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                children: [
+                  SvgPicture.asset(
+                    "assets/images/player/search.svg",
+                    width: 24,
+                    height: 24,
+                    color: Color(0XFFAFAFAF),
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    context.l10n.searchKeyWordHint,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Color(0XFFAFAFAF),
+                      fontSize: 14,
+                      fontWeight: FontWeight.normal,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -466,7 +494,7 @@ class _HomeTitleBar extends ConsumerWidget {
             key: const ValueKey('home_vip_entry'),
             onTap: onMembershipTap,
             child: const Padding(
-              padding: EdgeInsets.only(right: 1),
+              padding: EdgeInsets.only(right: 1, left: 7),
               child: _VipCrown(),
             ),
           ),

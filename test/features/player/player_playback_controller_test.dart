@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:drama_client/core/locale/app_locale_controller.dart';
 import 'package:drama_client/core/network/api_client.dart';
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
 import 'package:drama_client/features/player/application/player_playback_prepare_manager.dart';
@@ -17,8 +18,11 @@ import 'package:drama_client/features/player/domain/player_playback_progress.dar
 import 'package:drama_client/features/player/domain/player_playback_source.dart';
 import 'package:drama_client/features/player/domain/player_preload_config.dart';
 import 'package:drama_client/features/player/domain/player_preload_state.dart';
+import 'package:drama_client/features/player/domain/player_subtitle.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _videoUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
 const _secondVideoUrl = 'https://test-streams.mux.dev/tos_ismc/main.m3u8';
@@ -72,6 +76,258 @@ void main() {
     expect(state.status, PlayerPlaybackStatus.playing);
     expect(state.currentItemId, 'drama-a-ep-2');
   });
+
+  test(
+    'embedded subtitle language switches source and keeps position',
+    () async {
+      final session = _FakePlaybackSession();
+      final container = _createContainer(
+        session,
+        sourceRepository: _CountingPlaybackSourceRepository(),
+      );
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+      final item = _item(
+        1,
+        episodeSources: const [
+          PlayerEpisodeSource(
+            id: 'en',
+            language: 'English',
+            languageCode: 'en',
+            url: 'https://cdn.test/en.m3u8',
+          ),
+          PlayerEpisodeSource(
+            id: 'es',
+            language: 'Español',
+            languageCode: 'es',
+            url: 'https://cdn.test/es.m3u8',
+          ),
+        ],
+      );
+
+      await controller.playItem(item);
+      session.emitDuration(const Duration(seconds: 120));
+      session.emitPosition(const Duration(seconds: 35));
+      await Future<void>.delayed(Duration.zero);
+
+      await controller.selectSubtitleLanguage('Español');
+
+      expect(session.openedSources, [
+        'https://cdn.test/en.m3u8',
+        'https://cdn.test/es.m3u8',
+      ]);
+      expect(session.openStartPositions.last, const Duration(seconds: 35));
+      expect(container.read(provider).currentSubtitleLanguage, 'Español');
+    },
+  );
+
+  test(
+    'embedded subtitle language switch resumes playback after source change',
+    () async {
+      final session = _FakePlaybackSession();
+      final container = _createContainer(
+        session,
+        sourceRepository: _CountingPlaybackSourceRepository(),
+      );
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+      final item = _item(
+        1,
+        episodeSources: const [
+          PlayerEpisodeSource(
+            id: 'en',
+            language: 'English',
+            languageCode: 'en',
+            url: 'https://cdn.test/en.m3u8',
+          ),
+          PlayerEpisodeSource(
+            id: 'zh',
+            language: '中文',
+            languageCode: 'zh',
+            url: 'https://cdn.test/zh.m3u8',
+          ),
+        ],
+      );
+
+      await controller.playItem(item);
+      await controller.pause();
+
+      await controller.selectSubtitleLanguage('中文');
+
+      expect(session.openedSources, [
+        'https://cdn.test/en.m3u8',
+        'https://cdn.test/zh.m3u8',
+      ]);
+      expect(session.openPlayFlags, [true, true]);
+      expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+      expect(container.read(provider).currentSubtitleLanguage, '中文');
+    },
+  );
+
+  test(
+    'embedded subtitle language persists and falls back by episode',
+    () async {
+      final session = _FakePlaybackSession();
+      final container = _createContainer(
+        session,
+        sourceRepository: _CountingPlaybackSourceRepository(),
+      );
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      PlayerFeedItem episode(int number, List<PlayerEpisodeSource> sources) =>
+          _item(number, episodeSources: sources);
+
+      await controller.playItem(
+        episode(1, const [
+          PlayerEpisodeSource(
+            id: 'en-1',
+            language: 'English',
+            languageCode: 'en',
+            url: 'en-1',
+          ),
+          PlayerEpisodeSource(
+            id: 'es-1',
+            language: 'Español',
+            languageCode: 'es',
+            url: 'es-1',
+          ),
+        ]),
+      );
+      await controller.selectSubtitleLanguage('Español');
+      await controller.playItem(
+        episode(2, const [
+          PlayerEpisodeSource(
+            id: 'en-2',
+            language: 'English',
+            languageCode: 'en',
+            url: 'en-2',
+          ),
+          PlayerEpisodeSource(
+            id: 'es-2',
+            language: 'Español',
+            languageCode: 'es',
+            url: 'es-2',
+          ),
+        ]),
+      );
+      await controller.playItem(
+        episode(3, const [
+          PlayerEpisodeSource(
+            id: 'fr-3',
+            language: 'Français',
+            languageCode: 'fr',
+            url: 'fr-3',
+          ),
+          PlayerEpisodeSource(
+            id: 'en-3',
+            language: 'English',
+            languageCode: 'en',
+            url: 'en-3',
+          ),
+        ]),
+      );
+      await controller.playItem(
+        episode(4, const [
+          PlayerEpisodeSource(
+            id: 'fr-4',
+            language: 'Français',
+            languageCode: 'fr',
+            url: 'fr-4',
+          ),
+          PlayerEpisodeSource(
+            id: 'zh-4',
+            language: '中文',
+            languageCode: 'zh',
+            url: 'zh-4',
+          ),
+        ]),
+      );
+      await controller.playItem(
+        episode(5, const [
+          PlayerEpisodeSource(
+            id: 'fr-5',
+            language: 'Français',
+            languageCode: 'fr',
+            url: 'fr-5',
+          ),
+          PlayerEpisodeSource(
+            id: 'en-5',
+            language: 'English',
+            languageCode: 'en',
+            url: 'en-5',
+          ),
+        ]),
+      );
+
+      expect(session.openedSources, [
+        'en-1',
+        'es-1',
+        'es-2',
+        'en-3',
+        'fr-4',
+        'fr-5',
+      ]);
+      expect(container.read(provider).currentSubtitleLanguage, 'Français');
+    },
+  );
+
+  test(
+    'embedded subtitle fallback matches current app language code',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final session = _FakePlaybackSession();
+      final container = _createContainer(
+        session,
+        sourceRepository: _CountingPlaybackSourceRepository(),
+      );
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+      container
+          .read(appLocaleControllerProvider.notifier)
+          .select(const Locale('zh'));
+
+      PlayerFeedItem episode(int number, List<PlayerEpisodeSource> sources) =>
+          _item(number, episodeSources: sources);
+
+      await controller.playItem(
+        episode(1, const [
+          PlayerEpisodeSource(
+            id: 'en-1',
+            language: 'English',
+            languageCode: 'en',
+            url: 'en-1',
+          ),
+          PlayerEpisodeSource(
+            id: 'es-1',
+            language: 'Español',
+            languageCode: 'es',
+            url: 'es-1',
+          ),
+        ]),
+      );
+      await controller.selectSubtitleLanguage('Español');
+      await controller.playItem(
+        episode(2, const [
+          PlayerEpisodeSource(
+            id: 'en-2',
+            language: 'English',
+            languageCode: 'en',
+            url: 'en-2',
+          ),
+          PlayerEpisodeSource(
+            id: 'zh-2',
+            language: 'Mandarin',
+            languageCode: 'zh',
+            url: 'zh-2',
+          ),
+        ]),
+      );
+
+      expect(session.openedSources, ['en-1', 'es-1', 'zh-2']);
+      expect(container.read(provider).currentSubtitleLanguage, 'Mandarin');
+    },
+  );
 
   test('hls source resolves and opens remote url', () async {
     final session = _FakePlaybackSession();
@@ -502,6 +758,35 @@ void main() {
           PlayerVideoSurfaceLifecycle.detached,
         ]),
       );
+    },
+  );
+
+  testWidgets(
+    'For You suspension releases decoder and reopens current item on return',
+    (tester) async {
+      final currentSession = _FakePlaybackSession();
+      final resumedSession = _FakePlaybackSession();
+      var sessionIndex = 0;
+      final sessions = [currentSession, resumedSession];
+      final container = _createPrepareContainer(
+        () => sessions[sessionIndex++],
+        sourceRepository: _CountingPlaybackSourceRepository(),
+      );
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('for-you-tab');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1, mode: PlayerFeedMode.forYou));
+      await tester.runAsync(controller.suspendForCompetingPlayer);
+
+      expect(currentSession.isDisposed, isTrue);
+      expect(container.read(provider).currentSource, isNull);
+      expect(container.read(provider).status, PlayerPlaybackStatus.idle);
+
+      await tester.runAsync(controller.resumeAfterVisibilityPause);
+
+      expect(resumedSession.openedSources, [_videoUrl]);
+      expect(container.read(provider).status, PlayerPlaybackStatus.playing);
     },
   );
 
@@ -2207,6 +2492,33 @@ void main() {
     expect(report, contains('video surface shown before firstFrame'));
   });
 
+  test(
+    'sustained position progress clears loading when width does not re-emit',
+    () async {
+      final session = _FakePlaybackSession(emitWidthOnOpen: false);
+      final container = _createContainer(
+        session,
+        sourceRepository: _CountingPlaybackSourceRepository(),
+      );
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      session.emitPosition(const Duration(seconds: 1));
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+
+      final state = container.read(provider);
+      expect(state.status, PlayerPlaybackStatus.playing);
+      expect(state.hasFirstFrame, isTrue);
+      expect(state.isBuffering, isFalse);
+      expect(
+        controller.exportTimingReport(),
+        contains('first frame inferred from sustained playback progress'),
+      );
+    },
+  );
+
   test('transient HLS error after first frame stays recoverable', () async {
     final session = _FakePlaybackSession();
     final container = _createContainer(session);
@@ -2553,6 +2865,7 @@ PlayerFeedItem _item(
   String? videoUrl,
   PlayerFeedMode mode = PlayerFeedMode.singleDrama,
   Duration? duration,
+  List<PlayerEpisodeSource> episodeSources = const [],
 }) {
   final episode = PlayerEpisode(
     id: 'ep-$episodeNumber',
@@ -2563,6 +2876,7 @@ PlayerFeedItem _item(
         (hasSource ? (episodeNumber == 1 ? _videoUrl : _secondVideoUrl) : null),
     isAvailable: isAvailable,
     duration: duration,
+    episodeSources: episodeSources,
   );
   final content = PlayerContent(
     id: 'drama-a',

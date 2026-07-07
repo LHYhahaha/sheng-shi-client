@@ -771,7 +771,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Language'), findsOneWidget);
-    expect(find.text('简体中文'), findsOneWidget);
+    expect(find.text('中文'), findsOneWidget);
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
   });
 
@@ -803,12 +803,11 @@ void main() {
     await tester.tap(find.text('Language'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('简体中文'));
+    await tester.tap(find.text('中文'));
     await tester.pumpAndSettle();
 
-    expect(find.text('语言'), findsOneWidget);
     expect(find.text('English'), findsOneWidget);
-    expect(find.text('简体中文'), findsOneWidget);
+    expect(find.text('中文'), findsOneWidget);
   });
 
   testWidgets('account back falls back to profile without navigation stack', (

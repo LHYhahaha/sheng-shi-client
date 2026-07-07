@@ -3,6 +3,7 @@ import '../domain/player_playback_source.dart';
 import '../domain/player_preload_state.dart';
 import 'mapper/playback_source_mapper.dart';
 import 'remote/playback_source_remote_data_source.dart';
+import 'hls_local_proxy_server.dart';
 
 /// 播放源远程 repository 骨架。
 ///
@@ -13,16 +14,19 @@ class RemotePlayerPlaybackSourceRepository
     required PlaybackSourceRemoteDataSource remoteDataSource,
     required PlayerPlaybackPreloadManager preloadManager,
     Map<String, String>? httpHeaders,
+    HlsProxyPlaybackSourceResolver? proxyResolver,
     PlaybackSourceMapper mapper = const PlaybackSourceMapper(),
   }) : _remoteDataSource = remoteDataSource,
        _preloadManager = preloadManager,
        _httpHeaders = httpHeaders,
+       _proxyResolver = proxyResolver,
        _mapper = mapper;
 
   final PlaybackSourceRemoteDataSource _remoteDataSource;
   final PlayerPlaybackPreloadManager _preloadManager;
   final Map<String, String>? _httpHeaders;
   final PlaybackSourceMapper _mapper;
+  final HlsProxyPlaybackSourceResolver? _proxyResolver;
 
   @override
   Future<PlaybackSource> resolve(PlayerFeedItem item) async {
@@ -32,10 +36,12 @@ class RemotePlayerPlaybackSourceRepository
       throw StateError('Episode has no playable source.');
     }
 
+    final playableSource =
+        await _proxyResolver?.resolvePlayableSource(remoteUrl) ?? remoteUrl;
     return PlaybackSource(
       itemId: item.id,
       remoteUrl: remoteUrl,
-      playableSource: remoteUrl,
+      playableSource: playableSource,
       cacheKey: _cacheKey(item),
       expiresAt: DateTime.now().add(const Duration(minutes: 30)),
       codecHint: 'hls',

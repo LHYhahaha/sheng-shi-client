@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/player_playback_controller.dart';
 import '../../application/player_viewport_controller.dart';
+import '../../domain/player_subtitle.dart';
 
 /// 播放器字幕叠加层。
 ///
@@ -31,10 +32,20 @@ class PlayerSubtitleOverlay extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
+    final position = state.currentSubtitlePosition;
     return Positioned(
       left: 0,
       right: 0,
-      bottom: 160,
+      top: switch (position) {
+        PlayerSubtitlePosition.top => 100,
+        PlayerSubtitlePosition.middle => 0,
+        PlayerSubtitlePosition.bottom => null,
+      },
+      bottom: switch (position) {
+        PlayerSubtitlePosition.bottom => 160,
+        PlayerSubtitlePosition.middle => 0,
+        PlayerSubtitlePosition.top => null,
+      },
       child: Container(
         alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 70, vertical: 8),

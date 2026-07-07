@@ -477,11 +477,17 @@ class ActivePlaybackSurfaceOverlayState
 
     final videoChild = controller == null
         ? const SizedBox.shrink()
-        : Video(
+        : KeyedSubtree(
             key: const ValueKey('active_playback_video_surface'),
-            controller: controller,
-            controls: NoVideoControls,
-            fit: widget.videoFit,
+            child: Video(
+              // media_kit 的 VideoState 不会在 didUpdateWidget 中重新绑定 controller。
+              // session 切换时必须重建 VideoState，否则它仍监听旧 player，并把新 player
+              // 解码出的帧丢给已经销毁的 Surface，表现为“进度在走但画面全黑”。
+              key: ObjectKey(controller),
+              controller: controller,
+              controls: NoVideoControls,
+              fit: widget.videoFit,
+            ),
           );
 
     Widget buildOpacityChild(Widget child) {
@@ -664,6 +670,7 @@ class PlayerPlaybackControlsConsumer extends ConsumerStatefulWidget {
 class PlayerPlaybackControlsConsumerState
     extends ConsumerState<PlayerPlaybackControlsConsumer> {
   bool _showPauseFeedback = false;
+  bool _showPlayFeedback = false;
   Timer? _feedbackTimer;
   Timer? _pendingSingleTap;
   DateTime? _lastTapAt;
@@ -718,7 +725,8 @@ class PlayerPlaybackControlsConsumerState
               onTap: _handleVideoTap,
             ),
           ),
-        if (showCenterPlayButton) CenterPlayButton(onTap: widget.onTogglePlay),
+        if (showCenterPlayButton) CenterPlayButton(onTap: _playWithFeedback),
+        if (_showPlayFeedback) const PlayFeedbackIcon(),
         if (_showPauseFeedback) const PauseFeedbackIcon(),
       ],
     );
@@ -777,6 +785,7 @@ class PlayerPlaybackControlsConsumerState
           ).select((state) => state.showsChromeOverlays),
         );
         if (!showsChromeOverlays) {
+          _showTransientFeedback(_PlaybackFeedbackIcon.play);
           widget.onExitImmersiveChrome?.call();
           return;
         }
@@ -784,7 +793,7 @@ class PlayerPlaybackControlsConsumerState
         widget.onSingleDramaUserInteraction?.call();
         return;
       }
-      widget.onTogglePlay();
+      _playWithFeedback();
       widget.onSingleDramaUserInteraction?.call();
     });
   }
@@ -795,23 +804,43 @@ class PlayerPlaybackControlsConsumerState
         widget.sessionKey,
       ).select(PlayerPlaybackRenderSnapshot.fromState),
     );
-    final allowScaleFeedback = ref
-        .read(playerPerformancePolicyProvider)
-        .allowPlayPauseScaleFeedback;
     if (snapshot.isPlaying) {
-      _feedbackTimer?.cancel();
-      if (allowScaleFeedback) {
-        setState(() => _showPauseFeedback = true);
-        _feedbackTimer = Timer(const Duration(milliseconds: 420), () {
-          if (mounted) {
-            setState(() => _showPauseFeedback = false);
-          }
-        });
-      }
+      _showTransientFeedback(_PlaybackFeedbackIcon.pause);
+    } else if (snapshot.status == PlayerPlaybackStatus.paused) {
+      _showTransientFeedback(_PlaybackFeedbackIcon.play);
     }
     widget.onTogglePlay();
   }
+
+  void _playWithFeedback() {
+    _showTransientFeedback(_PlaybackFeedbackIcon.play);
+    widget.onTogglePlay();
+  }
+
+  void _showTransientFeedback(_PlaybackFeedbackIcon icon) {
+    final allowScaleFeedback = ref
+        .read(playerPerformancePolicyProvider)
+        .allowPlayPauseScaleFeedback;
+    if (icon == _PlaybackFeedbackIcon.pause && !allowScaleFeedback) {
+      return;
+    }
+    _feedbackTimer?.cancel();
+    setState(() {
+      _showPlayFeedback = icon == _PlaybackFeedbackIcon.play;
+      _showPauseFeedback = icon == _PlaybackFeedbackIcon.pause;
+    });
+    _feedbackTimer = Timer(const Duration(milliseconds: 420), () {
+      if (mounted) {
+        setState(() {
+          _showPlayFeedback = false;
+          _showPauseFeedback = false;
+        });
+      }
+    });
+  }
 }
+
+enum _PlaybackFeedbackIcon { play, pause }
 
 class PlayerSeekBarConsumer extends ConsumerWidget {
   const PlayerSeekBarConsumer({
@@ -1017,6 +1046,35 @@ class PauseFeedbackIcon extends StatelessWidget {
   }
 }
 
+class PlayFeedbackIcon extends StatelessWidget {
+  const PlayFeedbackIcon({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Center(
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.92, end: 1),
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          builder: (context, scale, child) {
+            return Transform.scale(scale: scale, child: child);
+          },
+          child: SizedBox(
+            key: const ValueKey('player_play_feedback'),
+            width: 70,
+            height: 70,
+            child: SvgPicture.asset(
+              'assets/images/player/play.svg',
+              fit: BoxFit.fill,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class PlayerTopBar extends StatelessWidget {
   const PlayerTopBar({
     super.key,
@@ -1027,7 +1085,8 @@ class PlayerTopBar extends StatelessWidget {
     required this.onBackTap,
     required this.onSpeedTap,
     required this.subtitles,
-    required this.currentSubtitleUrl,
+    required this.episodeSources,
+    required this.currentSubtitleLanguage,
     required this.onSubtitleSelected,
   });
 
@@ -1038,7 +1097,8 @@ class PlayerTopBar extends StatelessWidget {
   final VoidCallback onBackTap;
   final VoidCallback onSpeedTap;
   final List<PlayerSubtitle> subtitles;
-  final String? currentSubtitleUrl;
+  final List<PlayerEpisodeSource> episodeSources;
+  final String? currentSubtitleLanguage;
   final ValueChanged<String?> onSubtitleSelected;
 
   @override
@@ -1064,7 +1124,8 @@ class PlayerTopBar extends StatelessWidget {
             onBackTap: onBackTap,
             onSpeedTap: onSpeedTap,
             subtitles: subtitles,
-            currentSubtitleUrl: currentSubtitleUrl,
+            episodeSources: episodeSources,
+            currentSubtitleLanguage: currentSubtitleLanguage,
             onSubtitleSelected: onSubtitleSelected,
           ),
         ),
@@ -1083,7 +1144,8 @@ class PlayerTopBar extends StatelessWidget {
           onBackTap: onBackTap,
           onSpeedTap: onSpeedTap,
           subtitles: subtitles,
-          currentSubtitleUrl: currentSubtitleUrl,
+          episodeSources: episodeSources,
+          currentSubtitleLanguage: currentSubtitleLanguage,
           onSubtitleSelected: onSubtitleSelected,
         ),
       ),
@@ -1099,7 +1161,8 @@ class PlayerTopBarContent extends StatelessWidget {
     required this.onBackTap,
     required this.onSpeedTap,
     required this.subtitles,
-    required this.currentSubtitleUrl,
+    required this.episodeSources,
+    required this.currentSubtitleLanguage,
     required this.onSubtitleSelected,
   });
 
@@ -1108,7 +1171,8 @@ class PlayerTopBarContent extends StatelessWidget {
   final VoidCallback onBackTap;
   final VoidCallback onSpeedTap;
   final List<PlayerSubtitle> subtitles;
-  final String? currentSubtitleUrl;
+  final List<PlayerEpisodeSource> episodeSources;
+  final String? currentSubtitleLanguage;
   final ValueChanged<String?> onSubtitleSelected;
 
   @override
@@ -1154,12 +1218,14 @@ class PlayerTopBarContent extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              _PlayerSubtitleMenuButton(
-                key: const ValueKey('player_subtitle_button'),
-                subtitles: subtitles,
-                currentSubtitleUrl: currentSubtitleUrl,
-                onSubtitleSelected: onSubtitleSelected,
-              ),
+              if (subtitles.isNotEmpty || episodeSources.length > 1)
+                _PlayerSubtitleMenuButton(
+                  key: const ValueKey('player_subtitle_button'),
+                  subtitles: subtitles,
+                  episodeSources: episodeSources,
+                  currentSubtitleLanguage: currentSubtitleLanguage,
+                  onSubtitleSelected: onSubtitleSelected,
+                ),
               // const SizedBox(width: 4),
               // // 倍速按钮
               // GestureDetector(
@@ -1193,12 +1259,14 @@ class _PlayerSubtitleMenuButton extends StatefulWidget {
   const _PlayerSubtitleMenuButton({
     super.key,
     required this.subtitles,
-    required this.currentSubtitleUrl,
+    required this.episodeSources,
+    required this.currentSubtitleLanguage,
     required this.onSubtitleSelected,
   });
 
   final List<PlayerSubtitle> subtitles;
-  final String? currentSubtitleUrl;
+  final List<PlayerEpisodeSource> episodeSources;
+  final String? currentSubtitleLanguage;
   final ValueChanged<String?> onSubtitleSelected;
 
   @override
@@ -1211,9 +1279,10 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isVisible) return const SizedBox.shrink();
     final menuWidth = _menuWidth(context);
     return PopupMenuButton<String>(
-      enabled: widget.subtitles.isNotEmpty,
+      enabled: _isVisible,
       tooltip: '',
       color: Colors.black.withValues(alpha: 0.65),
       elevation: 0,
@@ -1236,7 +1305,7 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
             Text(
               _currentSubtitleLabel(),
               style: TextStyle(
-                color: widget.subtitles.isEmpty
+                color: !_isVisible
                     ? Colors.white.withValues(alpha: 0.5)
                     : Colors.white,
                 fontSize: 14,
@@ -1259,13 +1328,18 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
 
   static const _closedSubtitleValue = '__closed__';
   static const _menuHorizontalPadding = 20.0;
+  static const _selectedIndicatorWidth = 24.0;
   static const _menuTextStyle = TextStyle(color: Colors.white, fontSize: 14);
 
   List<PopupMenuEntry<String>> _buildMenuItems() {
+    final showsClosedOption = _showsClosedOption;
     final options = <({String label, String value})>[
-      (label: 'Closed', value: _closedSubtitleValue),
+      if (showsClosedOption) (label: 'Closed', value: _closedSubtitleValue),
       ...widget.subtitles.map(
-        (subtitle) => (label: _subtitleLabel(subtitle), value: subtitle.url),
+        (subtitle) => (label: subtitle.language, value: subtitle.language),
+      ),
+      ...widget.episodeSources.map(
+        (source) => (label: source.language, value: source.language),
       ),
     ];
 
@@ -1282,11 +1356,30 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
           value: options[index].value,
           height: 20,
           padding: EdgeInsets.zero,
-          child: Text(
-            options[index].label,
-            style: _menuTextStyle,
-            maxLines: 1,
-            softWrap: false,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  options[index].label,
+                  style: _menuTextStyle.copyWith(
+                    color: _isSelected(options[index].value)
+                        ? AppColors.primary
+                        : Colors.white,
+                    fontWeight: _isSelected(options[index].value)
+                        ? FontWeight.w600
+                        : FontWeight.w400,
+                  ),
+                  maxLines: 1,
+                  softWrap: false,
+                ),
+              ),
+              if (_isSelected(options[index].value))
+                const Icon(
+                  Icons.check_rounded,
+                  color: AppColors.primary,
+                  size: 18,
+                ),
+            ],
           ),
         ),
       ],
@@ -1297,7 +1390,11 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
     final resolvedTextStyle = DefaultTextStyle.of(
       context,
     ).style.merge(_menuTextStyle);
-    final labels = <String>['Closed', ...widget.subtitles.map(_subtitleLabel)];
+    final labels = <String>[
+      if (_showsClosedOption) 'Closed',
+      ...widget.subtitles.map((subtitle) => subtitle.language),
+      ...widget.episodeSources.map((source) => source.language),
+    ];
     var widestText = 0.0;
     for (final label in labels) {
       final painter = TextPainter(
@@ -1308,24 +1405,32 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
       )..layout();
       widestText = math.max(widestText, painter.width);
     }
-    return widestText.ceilToDouble() + _menuHorizontalPadding * 2;
+    return widestText.ceilToDouble() +
+        _menuHorizontalPadding * 2 +
+        _selectedIndicatorWidth;
   }
 
   String _currentSubtitleLabel() {
-    if (widget.currentSubtitleUrl == null) {
+    if (_showsClosedOption && widget.currentSubtitleLanguage == null) {
       return 'Subtitle: Closed';
     }
-    for (final subtitle in widget.subtitles) {
-      if (subtitle.url == widget.currentSubtitleUrl) {
-        return _subtitleLabel(subtitle);
-      }
-    }
-    return 'Subtitle: Closed';
+    return widget.currentSubtitleLanguage ?? '';
   }
 
-  static String _subtitleLabel(PlayerSubtitle subtitle) {
-    return subtitle.language.isNotEmpty ? subtitle.language : subtitle.name;
+  bool _isSelected(String value) {
+    if (value == _closedSubtitleValue) {
+      return _showsClosedOption && widget.currentSubtitleLanguage == null;
+    }
+    final current = widget.currentSubtitleLanguage;
+    return current != null &&
+        current.trim().toLowerCase() == value.trim().toLowerCase();
   }
+
+  bool get _showsClosedOption =>
+      widget.subtitles.isNotEmpty && widget.episodeSources.isEmpty;
+
+  bool get _isVisible =>
+      widget.subtitles.isNotEmpty || widget.episodeSources.length > 1;
 }
 
 class PlayerStateMessage extends StatelessWidget {

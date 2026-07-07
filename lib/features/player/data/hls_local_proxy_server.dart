@@ -107,17 +107,48 @@ class DartIoHlsLocalProxyHttpClient implements HlsLocalProxyHttpClient {
 /// 只在 proxy server 生命周期内有效，不是持久缓存。stop 时必须清空，避免 spike 数据
 /// 跨会话复用。
 class HlsLocalCacheStore {
+  HlsLocalCacheStore({this.maxBytes = 24 * 1024 * 1024});
+
+  final int maxBytes;
   final _bytesByUrl = <String, List<int>>{};
+  final _accessOrder = <String>[];
+  var _totalBytes = 0;
 
   bool contains(String url) => _bytesByUrl.containsKey(url);
 
-  List<int>? read(String url) => _bytesByUrl[url];
-
-  void write(String url, List<int> bytes) {
-    _bytesByUrl[url] = List<int>.unmodifiable(bytes);
+  List<int>? read(String url) {
+    final bytes = _bytesByUrl[url];
+    if (bytes != null) {
+      _accessOrder
+        ..remove(url)
+        ..add(url);
+    }
+    return bytes;
   }
 
-  void clear() => _bytesByUrl.clear();
+  void write(String url, List<int> bytes) {
+    final frozen = List<int>.unmodifiable(bytes);
+    final previous = _bytesByUrl[url];
+    if (previous != null) {
+      _totalBytes -= previous.length;
+    }
+    _bytesByUrl[url] = frozen;
+    _totalBytes += frozen.length;
+    _accessOrder
+      ..remove(url)
+      ..add(url);
+    while (_totalBytes > maxBytes && _accessOrder.isNotEmpty) {
+      final oldest = _accessOrder.removeAt(0);
+      final removed = _bytesByUrl.remove(oldest);
+      if (removed != null) _totalBytes -= removed.length;
+    }
+  }
+
+  void clear() {
+    _bytesByUrl.clear();
+    _accessOrder.clear();
+    _totalBytes = 0;
+  }
 }
 
 /// 本地 HLS proxy spike，用于验证“playlist 重写 + segment 本地缓存”的可行性。
@@ -152,7 +183,9 @@ class HlsLocalProxyServer {
     final server = await _ensureStarted();
     final proxyUri = Uri(
       scheme: 'http',
-      host: InternetAddress.loopbackIPv4.address,
+      // Android network security config explicitly permits localhost cleartext.
+      // 使用 127.0.0.1 会绕过该 domain rule，在部分系统上被直接拦截。
+      host: 'localhost',
       port: server.port,
       path: '/playlist.m3u8',
       queryParameters: {'url': remoteUri.toString()},
@@ -216,14 +249,26 @@ class HlsLocalProxyServer {
 
   Future<void> _proxyPlaylist(HttpRequest request, Uri remoteUri) async {
     final startedAt = DateTime.now();
-    final response = await _fetch(remoteUri);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      await _sendText(
-        request,
-        HttpStatus.badGateway,
-        'Playlist fetch failed: ${response.statusCode}',
+    final cacheKey = remoteUri.toString();
+    final cached = _cacheStore.read(cacheKey);
+    HlsLocalProxyResponse response;
+    if (cached != null) {
+      response = HlsLocalProxyResponse(
+        statusCode: HttpStatus.ok,
+        bytes: cached,
+        contentType: 'application/vnd.apple.mpegurl',
       );
-      return;
+    } else {
+      response = await _fetch(remoteUri);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        await _sendText(
+          request,
+          HttpStatus.badGateway,
+          'Playlist fetch failed: ${response.statusCode}',
+        );
+        return;
+      }
+      _cacheStore.write(cacheKey, response.bytes);
     }
     // 只重写 playlist 中的媒体 URI，不改 HLS tag。这样方便观察代理链路，
     // 也避免客户端在 spike 阶段承担完整 HLS manifest 解析职责。
@@ -240,7 +285,7 @@ class HlsLocalProxyServer {
     request.response.write(rewritten);
     await request.response.close();
     _log(
-      'playlist proxy fetch miss source=$remoteUri '
+      'playlist proxy fetch ${cached == null ? 'miss' : 'hit'} source=$remoteUri '
       'elapsedMs=${_elapsedMs(startedAt)} bytes=${response.bytes.length}',
     );
   }
@@ -356,13 +401,18 @@ String rewritePlaylist(
   String playlistBody, {
   required Uri localBaseUri,
 }) {
-  // 只改写非 tag 行。HLS tag 中可能包含 KEY、MAP、字幕或变体信息，spike 阶段不解析
-  // 这些语义，避免把本地代理误做成半套生产 manifest processor。
   final lines = const LineSplitter().convert(playlistBody);
   final rewrittenLines = lines.map((line) {
     final trimmed = line.trim();
-    if (trimmed.isEmpty || trimmed.startsWith('#')) {
+    if (trimmed.isEmpty) {
       return line;
+    }
+    if (trimmed.startsWith('#')) {
+      return _rewriteTagUri(
+        trimmed,
+        playlistUri: playlistUri,
+        localBaseUri: localBaseUri,
+      );
     }
     final resolved = playlistUri.resolve(trimmed);
     final isPlaylist = resolved.path.toLowerCase().endsWith('.m3u8');
@@ -372,6 +422,27 @@ String rewritePlaylist(
         .toString();
   });
   return rewrittenLines.join('\n');
+}
+
+String _rewriteTagUri(
+  String line, {
+  required Uri playlistUri,
+  required Uri localBaseUri,
+}) {
+  if (!line.startsWith('#EXT-X-KEY:') &&
+      !line.startsWith('#EXT-X-MAP:') &&
+      !line.startsWith('#EXT-X-MEDIA:')) {
+    return line;
+  }
+  return line.replaceAllMapped(RegExp(r'URI="([^"]+)"'), (match) {
+    final resolved = playlistUri.resolve(match.group(1)!);
+    final isPlaylist = resolved.path.toLowerCase().endsWith('.m3u8');
+    final local = localBaseUri.replace(
+      path: isPlaylist ? '/playlist.m3u8' : '/segment',
+      queryParameters: {'url': resolved.toString()},
+    );
+    return 'URI="$local"';
+  });
 }
 
 class HlsProxyPlaybackSourceResolver {

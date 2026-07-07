@@ -5,6 +5,7 @@ import 'dart:io';
 import '../domain/player_feed.dart';
 import '../domain/player_playback_source.dart';
 import '../domain/player_preload_state.dart';
+import 'hls_local_proxy_server.dart';
 
 /// HLS 预热结果。
 ///
@@ -78,6 +79,7 @@ class HlsPlaylistHttpResponse {
     required this.statusCode,
     required this.body,
     this.contentLength,
+    this.bytes,
   });
 
   /// HTTP 状态码。
@@ -92,8 +94,10 @@ class HlsPlaylistHttpResponse {
   ///
   /// 如果 HTTP client 没提供，则按 UTF-8 文本估算。
   final int? contentLength;
+  final List<int>? bytes;
 
   int get byteLength => contentLength ?? utf8.encode(body).length;
+  List<int> get rawBytes => bytes ?? utf8.encode(body);
 }
 
 abstract interface class HlsPlaylistHttpClient {
@@ -128,6 +132,7 @@ class DartIoHlsPlaylistHttpClient implements HlsPlaylistHttpClient {
         statusCode: response.statusCode,
         body: utf8.decode(bytes, allowMalformed: true),
         contentLength: bytes.length,
+        bytes: bytes,
       );
     } finally {
       _pendingRequests.remove(request);
@@ -154,12 +159,15 @@ class HlsPlaylistPreloader {
     this.timeout = const Duration(seconds: 4),
     this.maxSegments = 2,
     this.maxPreheatBytes = 2 * 1024 * 1024,
-  }) : _client = client ?? DartIoHlsPlaylistHttpClient();
+    HlsLocalCacheStore? cacheStore,
+  }) : _client = client ?? DartIoHlsPlaylistHttpClient(),
+       _cacheStore = cacheStore;
 
   /// HLS HTTP client。
   ///
   /// 通过接口注入，方便测试取消、超时和失败，不直接绑定 dart:io。
   final HlsPlaylistHttpClient _client;
+  final HlsLocalCacheStore? _cacheStore;
 
   /// 单次 playlist/segment 请求超时。
   final Duration timeout;
@@ -183,6 +191,7 @@ class HlsPlaylistPreloader {
     final playlistStartedAt = DateTime.now();
     diagnostics.add('hls master playlist fetch start');
     final response = await _getOrThrow(uri, generation: generation);
+    _cacheStore?.write(uri.toString(), response.rawBytes);
     diagnostics.add(
       'hls master playlist fetch end ${_elapsedMs(playlistStartedAt)}ms',
     );
@@ -201,6 +210,7 @@ class HlsPlaylistPreloader {
           variantUri,
           generation: generation,
         );
+        _cacheStore?.write(variantUri.toString(), mediaResponse.rawBytes);
         diagnostics.add(
           'hls media playlist fetch end ${_elapsedMs(mediaStartedAt)}ms',
         );
@@ -233,6 +243,7 @@ class HlsPlaylistPreloader {
         segmentUri,
         generation: generation,
       );
+      _cacheStore?.write(segmentUri.toString(), segmentResponse.rawBytes);
       final segmentBytes = segmentResponse.byteLength;
       segmentBytesPreheated += segmentBytes;
       preheatedSegments.add(segmentUri);
