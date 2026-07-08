@@ -93,6 +93,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   static const _autoAdvanceDuration = Duration(milliseconds: 300);
   static const _pageTransitionDuration = Duration(milliseconds: 260);
   static const _dimmedOverlayOpacity = 0.64;
+  static const _remoteResumeInitialWait = Duration(milliseconds: 450);
 
   late final PageController _pageController;
   late final String _sessionKey;
@@ -175,10 +176,23 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       toItemId: widget.episodeId == null ? null : 'ep-${widget.episodeId}',
       occurredAt: widget.initialUserActionAt,
     );
+    _playbackController.recordPlaybackTiming(
+      'player page initState complete',
+      details: [
+        'feedMode=${widget.feedMode.name}',
+        'trigger=${widget.initialPlaybackTrigger ?? 'player_route_enter'}',
+        'hasUserActionAt=${widget.initialUserActionAt != null}',
+      ].join(' '),
+    );
     if (widget.hideShellNavigation) {
       _shellChrome = ref.read(appShellBottomNavigationVisibleProvider.notifier);
     }
     Future<void>.microtask(() async {
+      final startupStopwatch = Stopwatch()..start();
+      _playbackController.recordPlaybackTiming(
+        'player startup microtask start',
+        details: 'feedMode=${widget.feedMode.name}',
+      );
       _shellChrome?.hide();
       // await ref.read(entitlementControllerProvider.notifier).load();
       if (!mounted) {
@@ -188,6 +202,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (!mounted) {
         return;
       }
+      _playbackController.recordPlaybackTiming(
+        'player startup after competing decoder release',
+        elapsed: startupStopwatch.elapsed,
+        details: 'feedMode=${widget.feedMode.name}',
+      );
       final remoteResumeFuture = _loadRemoteResumeProgress();
 
       final uiController = ref.read(
@@ -210,6 +229,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       }
 
       await _loadFeedForTiming(remoteResumeFuture: remoteResumeFuture);
+      _playbackController.recordPlaybackTiming(
+        'player startup microtask end',
+        elapsed: startupStopwatch.elapsed,
+        details: 'feedMode=${widget.feedMode.name}',
+      );
     });
   }
 
@@ -218,8 +242,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!ref
         .read(playerSessionRegistryProvider)
         .contains(PlayerPlaybackSessionKeys.forYouTab)) {
+      _playbackController.recordPlaybackTiming(
+        'release competing forYou decoder skipped',
+        details: 'reason=no_for_you_session',
+      );
       return;
     }
+    final stopwatch = Stopwatch()..start();
+    _playbackController.recordPlaybackTiming(
+      'release competing forYou decoder start',
+    );
     await ref
         .read(
           playerPlaybackControllerProvider(
@@ -227,6 +259,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           ).notifier,
         )
         .suspendForCompetingPlayer();
+    _playbackController.recordPlaybackTiming(
+      'release competing forYou decoder end',
+      elapsed: stopwatch.elapsed,
+    );
   }
 
   @override
@@ -330,16 +366,46 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         widget.dramaId == null ||
         widget.forYouHandoff != null ||
         !ref.read(useRemotePlayerApiProvider)) {
+      _playbackController.recordPlaybackTiming(
+        'remote resume skipped',
+        details: [
+          'feedMode=${widget.feedMode.name}',
+          'hasDramaId=${widget.dramaId != null}',
+          'hasHandoff=${widget.forYouHandoff != null}',
+          'useRemote=${ref.read(useRemotePlayerApiProvider)}',
+        ].join(' '),
+      );
       return;
     }
     final dramaId = int.tryParse(widget.dramaId!);
     if (dramaId == null) {
+      _playbackController.recordPlaybackTiming(
+        'remote resume skipped',
+        details: 'reason=invalid_drama_id dramaId=${widget.dramaId}',
+      );
       return;
     }
+    final stopwatch = Stopwatch()..start();
+    _playbackController.recordPlaybackTiming(
+      'remote resume fetch start',
+      details: 'dramaId=$dramaId',
+    );
     try {
       final watchProgress = await ref
           .read(playerRemoteDataSourceProvider)
           .fetchWatchProgress(dramaId: dramaId);
+      _playbackController.recordPlaybackTiming(
+        'remote resume fetch end',
+        elapsed: stopwatch.elapsed,
+        details: [
+          'dramaId=$dramaId',
+          'hasProgress=${watchProgress != null}',
+          if (watchProgress != null) 'episodeId=${watchProgress.episodeId}',
+          if (watchProgress != null) 'watchSecond=${watchProgress.watchSecond}',
+          if (watchProgress != null)
+            'durationSecond=${watchProgress.durationSecond}',
+        ].join(' '),
+      );
       if (watchProgress == null || !mounted) {
         return;
       }
@@ -354,6 +420,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         _initialResumeEpisodeId = watchProgress.episodeId.toString();
       }
     } catch (error) {
+      _playbackController.recordPlaybackTiming(
+        'remote resume fetch failed',
+        elapsed: stopwatch.elapsed,
+        error: error,
+        details: 'dramaId=$dramaId',
+      );
       developer.log('Failed to fetch watch progress: $error', error: error);
     }
   }
@@ -361,10 +433,22 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   Future<void> _loadFeedForTiming({Future<void>? remoteResumeFuture}) async {
     final feedProvider = playerFeedControllerProvider(_sessionKey);
     final feedController = ref.read(feedProvider.notifier);
+    var remoteResumeTimedOut = false;
     if (remoteResumeFuture != null) {
+      final waitStopwatch = Stopwatch()..start();
+      _playbackController.recordPlaybackTiming('remote resume wait start');
       await remoteResumeFuture.timeout(
-        const Duration(milliseconds: 1800),
-        onTimeout: () {},
+        _remoteResumeInitialWait,
+        onTimeout: () {
+          remoteResumeTimedOut = true;
+        },
+      );
+      _playbackController.recordPlaybackTiming(
+        remoteResumeTimedOut
+            ? 'remote resume wait timeout'
+            : 'remote resume wait end',
+        elapsed: waitStopwatch.elapsed,
+        details: 'budgetMs=${_remoteResumeInitialWait.inMilliseconds}',
       );
       if (!mounted) {
         return;
@@ -391,6 +475,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         _applyInitialForYouHandoffProgress(feedState);
       } else {
         await _applyStartupRemoteResumeProgress(feedState);
+        if (remoteResumeTimedOut && remoteResumeFuture != null) {
+          unawaited(_applyLateRemoteResumeProgress(remoteResumeFuture));
+        }
       }
       if (!mounted) {
         return;
@@ -433,6 +520,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (widget.feedMode == PlayerFeedMode.singleDrama) {
       _syncAutoImmersiveBlockers();
     }
+  }
+
+  Future<void> _applyLateRemoteResumeProgress(Future<void> resumeFuture) async {
+    await resumeFuture;
+    if (!mounted || _startupRemoteWatchProgress == null) {
+      return;
+    }
+    _playbackController.recordPlaybackTiming('remote resume late apply start');
+    await _applyStartupRemoteResumeProgress(
+      ref.read(playerFeedControllerProvider(_sessionKey)),
+    );
+    _playbackController.recordPlaybackTiming('remote resume late apply end');
   }
 
   void _applyInitialForYouHandoffProgress(PlayerFeedState feedState) {

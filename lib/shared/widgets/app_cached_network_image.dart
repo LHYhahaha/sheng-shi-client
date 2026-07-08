@@ -13,6 +13,7 @@ class AppCachedNetworkImage extends StatefulWidget {
     this.cacheHeight,
     this.errorWidget,
     this.placeholder,
+    this.onError,
     this.fallbackBackgroundColor = const Color(0xFF302A36),
     super.key,
   });
@@ -29,6 +30,7 @@ class AppCachedNetworkImage extends StatefulWidget {
   final int? cacheHeight;
   final Widget? errorWidget;
   final Widget? placeholder;
+  final VoidCallback? onError;
   final Color fallbackBackgroundColor;
 
   @override
@@ -71,6 +73,7 @@ class _AppCachedNetworkImageState extends State<AppCachedNetworkImage> {
           setState(() {
             _hasError = true;
           });
+          widget.onError?.call();
         }
       },
       errorWidget: (context, url, error) => _errorBox,

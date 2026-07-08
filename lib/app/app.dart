@@ -16,6 +16,7 @@ import '../core/network/api_client_provider.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/pay/application/payment_loading_controller.dart';
 import '../features/popup/application/popup_entry_controller.dart';
+import '../features/popup/presentation/widgets/popup_entry_overlay.dart';
 import '../l10n/app_localizations.dart';
 import '../shared/widgets/app_blocking_loading_overlay.dart';
 import 'router/app_router.dart';
@@ -159,6 +160,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
           child: Stack(
             children: [
               AppModalHost(child: wrapped),
+              const PopupEntryOverlay(),
               if (isPaymentLoading)
                 AppBlockingLoadingOverlay(label: paymentLoadingLabel),
             ],

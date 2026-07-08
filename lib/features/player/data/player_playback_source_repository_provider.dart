@@ -1,10 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client_provider.dart';
-import '../../../core/network/api_request_context.dart';
 import '../domain/player_playback_source.dart';
 import 'hls_playlist_preloader.dart';
 import 'hls_local_proxy_server.dart';
@@ -47,12 +45,7 @@ final playerPlaybackPreloadManagerProvider =
 /// 缓存策略暴露给 UI，也不能替代服务端/CDN 的 HLS 优化。
 final hlsLocalProxyConfigProvider = Provider<HlsLocalProxyConfig>((ref) {
   const forceEnabled = bool.fromEnvironment('PLAYER_HLS_LOCAL_PROXY_SPIKE');
-  const isFlutterTest = bool.fromEnvironment('FLUTTER_TEST');
-  return HlsLocalProxyConfig(
-    enabled:
-        forceEnabled ||
-        (defaultTargetPlatform == TargetPlatform.android && !isFlutterTest),
-  );
+  return HlsLocalProxyConfig(enabled: forceEnabled);
 });
 
 final hlsLocalCacheStoreProvider = Provider<HlsLocalCacheStore>((ref) {
@@ -117,16 +110,12 @@ final playerPlaybackSourceRepositoryProvider =
       // source resolve 未来会承载鉴权、签名 URL、缓存策略和埋点，入口分散会导致
       // locked/unavailable 边界和 preload release 规则不一致。
       if (ref.watch(useRemotePlayerApiProvider)) {
-        final httpHeaders = _playbackHttpHeaders(
-          ref.watch(apiRequestContextProvider),
-        );
         return RemotePlayerPlaybackSourceRepository(
           remoteDataSource: PlaybackSourceRemoteDataSource(
             apiClient: ref.watch(apiClientProvider),
           ),
           preloadManager: ref.watch(playerPlaybackPreloadManagerProvider),
           proxyResolver: ref.watch(hlsProxyPlaybackSourceResolverProvider),
-          // httpHeaders: httpHeaders,
         );
       }
       return MockPlayerPlaybackSourceRepository(
@@ -144,16 +133,12 @@ final playerStartupPlaybackSourceRepositoryProvider =
       // startup 使用独立 repository 实例，确保它依赖 startup preload manager。
       // 这不是为了 mock，而是为了把首页预热和播放页预热的资源作用域拆开。
       if (ref.watch(useRemotePlayerApiProvider)) {
-        final httpHeaders = _playbackHttpHeaders(
-          ref.watch(apiRequestContextProvider),
-        );
         return RemotePlayerPlaybackSourceRepository(
           remoteDataSource: PlaybackSourceRemoteDataSource(
             apiClient: ref.watch(apiClientProvider),
           ),
           preloadManager: ref.watch(playerStartupPreloadManagerProvider),
           proxyResolver: ref.watch(hlsProxyPlaybackSourceResolverProvider),
-          // httpHeaders: httpHeaders,
         );
       }
       return MockPlayerPlaybackSourceRepository(
@@ -161,12 +146,3 @@ final playerStartupPlaybackSourceRepositoryProvider =
         proxyResolver: ref.watch(hlsProxyPlaybackSourceResolverProvider),
       );
     });
-
-Map<String, String>? _playbackHttpHeaders(ApiRequestContext context) {
-  final headers = context.toBaseHeaders();
-  final token = context.accessToken;
-  if (token != null && token.isNotEmpty) {
-    headers['Authorization'] = 'Bearer $token';
-  }
-  return headers.isEmpty ? null : Map<String, String>.unmodifiable(headers);
-}

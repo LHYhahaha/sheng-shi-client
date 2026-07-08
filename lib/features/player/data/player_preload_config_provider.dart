@@ -25,9 +25,15 @@ final playerPreloadConfigProvider = Provider<PlayerPreloadConfig>((ref) {
     return merged;
   }
 
-  // Android MediaCodec 的并发能力在不同厂商机型上差异很大。部分设备即使能创建
-  // 第二套 decoder，也会出现 buffer slot 分配失败、renderFps=0、帧全部 discard。
-  // Android 因此只保留 HLS 网络预加载，不创建 next/previous media session。
+  // Android MediaCodec 的并发能力在不同厂商机型上差异很大，因此普通 stable
+  // 只保留 previous/current/next 的最小窗口；low/ultraStable 仍会通过 policy
+  // 变成 0，避免低端机持有额外播放器实例。
+  final preparedSessionCount = merged.effectivePreparedForwardSessionCount > 0
+      ? 1
+      : 0;
+  final retainedSessionCount = merged.effectiveRetainedBackwardSessionCount > 0
+      ? 1
+      : 0;
   return PlayerPreloadConfig(
     homeStartupPreloadCount: merged.homeStartupPreloadCount,
     singleDramaForwardHlsPreloadCount: merged.singleDramaForwardHlsPreloadCount,
@@ -38,8 +44,8 @@ final playerPreloadConfigProvider = Provider<PlayerPreloadConfig>((ref) {
     maxConcurrentHlsPreloads: merged.maxConcurrentHlsPreloads,
     maxPreloadBytes: merged.maxPreloadBytes,
     preloadTimeout: merged.preloadTimeout,
-    preparedForwardSessionCount: 0,
-    retainedBackwardSessionCount: 0,
+    preparedForwardSessionCount: preparedSessionCount,
+    retainedBackwardSessionCount: retainedSessionCount,
   );
 });
 

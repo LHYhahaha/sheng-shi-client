@@ -140,6 +140,15 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
 
   Future<void> load(PlayerFeedConfig config) async {
     final generation = ++_generation;
+    _logTiming(
+      'feed controller load start',
+      details: _details([
+        'session=$sessionKey',
+        'mode=${config.mode.name}',
+        'dramaId=${config.dramaId ?? 'null'}',
+        'episodeId=${config.episodeId ?? 'null'}',
+      ]),
+    );
     state = state.copyWith(
       config: config,
       items: const [],
@@ -159,11 +168,35 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
           : null;
       final PlayerFeedPage? forYouPage;
       final List<PlayerFeedItem> loadedItems;
+      final repositoryStopwatch = Stopwatch()..start();
       if (config.mode == PlayerFeedMode.forYou && pagedRepository != null) {
+        _logTiming(
+          'feed repository listForYou page start',
+          details: _details(['session=$sessionKey', 'page=1']),
+        );
         forYouPage = await pagedRepository.listForYouFeedPage(page: 1);
         loadedItems = forYouPage.items;
+        _logTiming(
+          'feed repository listForYou page end',
+          elapsed: repositoryStopwatch.elapsed,
+          details: _details([
+            'session=$sessionKey',
+            'page=${forYouPage.page}',
+            'items=${loadedItems.length}',
+            'hasMore=${forYouPage.hasMore}',
+          ]),
+        );
       } else {
         forYouPage = null;
+        _logTiming(
+          'feed repository list start',
+          details: _details([
+            'session=$sessionKey',
+            'mode=${config.mode.name}',
+            'dramaId=${config.dramaId ?? 'null'}',
+            'episodeId=${config.episodeId ?? 'null'}',
+          ]),
+        );
         loadedItems = await switch (config.mode) {
           PlayerFeedMode.singleDrama => repository.listSingleDramaFeed(
             dramaId: config.dramaId!,
@@ -171,8 +204,21 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
           ),
           PlayerFeedMode.forYou => repository.listForYouFeed(),
         };
+        _logTiming(
+          'feed repository list end',
+          elapsed: repositoryStopwatch.elapsed,
+          details: _details([
+            'session=$sessionKey',
+            'mode=${config.mode.name}',
+            'items=${loadedItems.length}',
+          ]),
+        );
       }
       if (!_isCurrent(generation)) {
+        _logTiming(
+          'feed controller load stale',
+          details: _details(['session=$sessionKey', 'generation=$generation']),
+        );
         return;
       }
       final initialIndex = _episodeIndex(loadedItems, config.episodeId);
@@ -186,10 +232,29 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
         clearError: true,
         clearLoadMoreError: true,
       );
+      _logTiming(
+        'feed controller load end',
+        details: _details([
+          'session=$sessionKey',
+          'mode=${config.mode.name}',
+          'items=${loadedItems.length}',
+          'initialIndex=$initialIndex',
+        ]),
+      );
     } catch (error) {
       if (!_isCurrent(generation)) {
         return;
       }
+      _logTiming(
+        'feed controller load failed',
+        error: error,
+        details: _details([
+          'session=$sessionKey',
+          'mode=${config.mode.name}',
+          'dramaId=${config.dramaId ?? 'null'}',
+          'episodeId=${config.episodeId ?? 'null'}',
+        ]),
+      );
 
       state = state.copyWith(
         items: const [],
@@ -422,6 +487,30 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
   }
 
   bool _isCurrent(int generation) => generation == _generation;
+
+  void _logTiming(
+    String event, {
+    Duration? elapsed,
+    Object? error,
+    String? details,
+  }) {
+    const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');
+    if (!shouldPrint) {
+      return;
+    }
+    final parts = <String>[
+      DateTime.now().toIso8601String(),
+      event,
+      if (elapsed != null) 'elapsed=${elapsed.inMilliseconds}ms',
+      ?details,
+      if (error != null) 'error=$error',
+    ];
+    debugPrint(parts.join(' '));
+  }
+
+  String _details(List<String> parts) {
+    return parts.where((part) => part.isNotEmpty).join(' ');
+  }
 
   int _episodeIndex(List<PlayerFeedItem> items, String? episodeId) {
     if (episodeId == null || episodeId.isEmpty || items.isEmpty) {

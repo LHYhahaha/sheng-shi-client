@@ -458,8 +458,19 @@ class HlsProxyPlaybackSourceResolver {
     if (!config.enabled) {
       return remoteUrl;
     }
+    final startedAt = DateTime.now();
     try {
-      return await proxyServer.proxyUrlFor(remoteUrl);
+      final proxyUrl = await proxyServer.proxyUrlFor(remoteUrl);
+      const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');
+      if (shouldPrint) {
+        debugPrint(
+          '${DateTime.now().toIso8601String()} '
+          'session=hls-local-proxy resolve playable source end '
+          'elapsedMs=${DateTime.now().difference(startedAt).inMilliseconds} '
+          'source=$remoteUrl proxy=$proxyUrl',
+        );
+      }
+      return proxyUrl;
     } catch (error) {
       // proxy 失败必须回退远端源，不能阻断播放。local proxy 是诊断 spike，
       // 任何启动端口、URL 重写或请求失败都不应扩大成业务不可播放。
@@ -468,6 +479,7 @@ class HlsProxyPlaybackSourceResolver {
         debugPrint(
           '${DateTime.now().toIso8601String()} '
           'session=hls-local-proxy fallback remote source source=$remoteUrl '
+          'elapsedMs=${DateTime.now().difference(startedAt).inMilliseconds} '
           'error=$error',
         );
       }

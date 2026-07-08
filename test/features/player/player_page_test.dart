@@ -378,9 +378,10 @@ void main() {
     expect(find.text('EP.02'), findsOneWidget);
     expect(playbackSession.openedSources, [_mockSecondVideoUrl]);
     expect(
-      playbackSession.seekedPositions,
+      playbackSession.openStartPositions,
       contains(const Duration(seconds: 35)),
     );
+    expect(playbackSession.seekedPositions, isEmpty);
   });
 
   testWidgets('shows retry when playback open fails', (tester) async {

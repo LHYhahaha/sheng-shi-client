@@ -34,7 +34,9 @@ class PreparedPlaybackSession {
     this.duration = Duration.zero,
     this.bufferedPosition = Duration.zero,
     StreamSubscription<Duration>? positionSubscription,
-  }) : _positionSubscription = positionSubscription;
+    StreamSubscription<int?>? widthSubscription,
+  }) : _positionSubscription = positionSubscription,
+       _widthSubscription = widthSubscription;
 
   /// prepared/retained session 对应的 item id。
   ///
@@ -83,11 +85,15 @@ class PreparedPlaybackSession {
   /// retained previous 的缓冲位置快照。
   final Duration bufferedPosition;
   StreamSubscription<Duration>? _positionSubscription;
+  StreamSubscription<int?>? _widthSubscription;
 
   Future<void> detachFirstFrameListener() async {
     final positionSubscription = _positionSubscription;
+    final widthSubscription = _widthSubscription;
     _positionSubscription = null;
+    _widthSubscription = null;
     await positionSubscription?.cancel();
+    await widthSubscription?.cancel();
   }
 
   Future<void> dispose() async {
@@ -154,6 +160,7 @@ class PlayerPlaybackPrepareManager {
     final generation = ++_generation;
     PlayerPlaybackSession? session;
     StreamSubscription<Duration>? positionSubscription;
+    StreamSubscription<int?>? widthSubscription;
     StreamSubscription<bool>? playingSubscription;
     StreamSubscription<bool>? bufferingSubscription;
     try {
@@ -192,6 +199,22 @@ class PlayerPlaybackPrepareManager {
             source: source.playableSource,
             details: 'positionMs=${position.inMilliseconds}',
           );
+        }
+      });
+      widthSubscription = session.widthStream.listen((width) {
+        if (width == null || width <= 0 || hasFirstFrame) {
+          return;
+        }
+        hasFirstFrame = true;
+        prepared?.hasFirstFrame = true;
+        _log(
+          'prepare first frame received (width > 0)',
+          itemId: item.id,
+          source: source.playableSource,
+          details: 'width=$width',
+        );
+        if (!firstFrameCompleter.isCompleted) {
+          firstFrameCompleter.complete();
         }
       });
       playingSubscription = session.playingStream.listen((isPlaying) {
@@ -243,6 +266,7 @@ class PlayerPlaybackPrepareManager {
         _pendingSessions.remove(item.id);
         _completeWarmUpCancel(item.id);
         await positionSubscription.cancel();
+        await widthSubscription.cancel();
         await playingSubscription.cancel();
         await bufferingSubscription.cancel();
         await session.dispose();
@@ -256,8 +280,10 @@ class PlayerPlaybackPrepareManager {
         hasFirstFrame: hasFirstFrame,
         hasPlaybackAdvanced: hasPlaybackAdvanced,
         positionSubscription: positionSubscription,
+        widthSubscription: widthSubscription,
       );
       positionSubscription = null;
+      widthSubscription = null;
       _pendingSessions.remove(item.id);
       await _put(prepared);
       await playingSubscription.cancel();
@@ -278,6 +304,7 @@ class PlayerPlaybackPrepareManager {
       _pendingSessions.remove(item.id);
       _completeWarmUpCancel(item.id);
       await positionSubscription?.cancel();
+      await widthSubscription?.cancel();
       await playingSubscription?.cancel();
       await bufferingSubscription?.cancel();
       if (session != null) {

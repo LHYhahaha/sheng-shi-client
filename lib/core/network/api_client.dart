@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/cupertino.dart';
 
@@ -20,6 +22,7 @@ import 'api_request_context.dart';
 enum ApiAuthPolicy { none, required }
 
 typedef ApiRequestContextReader = ApiRequestContext Function();
+typedef ApiChannelHeadersReader = FutureOr<Map<String, String>> Function();
 
 /// API client 的网络入口。
 ///
@@ -30,21 +33,25 @@ class ApiClient {
     Dio? dio,
     ApiRequestContext? requestContext,
     ApiRequestContextReader? requestContextReader,
+    ApiChannelHeadersReader? channelHeadersReader,
     ApiSessionAuthHandler? sessionAuthHandler,
   }) : _dio = dio ?? Dio(defaultOptions),
        _requestContextReader =
            requestContextReader ??
            (() => requestContext ?? const ApiRequestContext.test()),
+       _channelHeadersReader =
+           channelHeadersReader ?? (() => const <String, String>{}),
        _sessionAuthHandler = sessionAuthHandler {
     _dio.interceptors.add(
       InterceptorsWrapper(
-        onRequest: (options, handler) {
+        onRequest: (options, handler) async {
           final context = _readRequestContext();
-          
+
           // 验证 deviceId 是否有效，拒绝使用 fallback 值发送请求
           _validateDeviceId(context.deviceId, options, handler);
-          
+
           options.headers.addAll(context.toBaseHeaders());
+          options.headers.addAll(await _channelHeadersReader());
 
           if (_hasJsonBody(options)) {
             options.headers.putIfAbsent(
@@ -71,7 +78,7 @@ class ApiClient {
             // Only remove Authorization header if it wasn't explicitly set
             options.headers.remove('Authorization');
           }
-          
+
           // 打印完整的请求URL和详细信息
           final fullUrl = '${options.baseUrl}${options.path}';
           print('[ApiClient] ========== REQUEST ==========');
@@ -85,22 +92,28 @@ class ApiClient {
           print('[ApiClient] Body queryParameters: ${options.queryParameters}');
 
           print('[ApiClient] ==============================');
-          
+
           handler.next(options);
         },
         onResponse: (response, handler) {
-          final fullUrl = '${response.requestOptions.baseUrl}${response.requestOptions.path}';
+          final fullUrl =
+              '${response.requestOptions.baseUrl}${response.requestOptions.path}';
           print('[ApiClient] ========== RESPONSE ==========');
-          print('[ApiClient] Full URL: ${response.requestOptions.method} $fullUrl');
+          print(
+            '[ApiClient] Full URL: ${response.requestOptions.method} $fullUrl',
+          );
           print('[ApiClient] Status Code: ${response.statusCode}');
           print('[ApiClient] Data: ${response.data}');
           print('[ApiClient] ==============================');
           handler.next(response);
         },
         onError: (error, handler) {
-          final fullUrl = '${error.requestOptions.baseUrl}${error.requestOptions.path}';
+          final fullUrl =
+              '${error.requestOptions.baseUrl}${error.requestOptions.path}';
           print('[ApiClient] ========== ERROR ==========');
-          print('[ApiClient] Full URL: ${error.requestOptions.method} $fullUrl');
+          print(
+            '[ApiClient] Full URL: ${error.requestOptions.method} $fullUrl',
+          );
           print('[ApiClient] Status Code: ${error.response?.statusCode}');
           print('[ApiClient] Error: ${error.message}');
           print('[ApiClient] ==============================');
@@ -112,13 +125,14 @@ class ApiClient {
 
   final Dio _dio;
   final ApiRequestContextReader _requestContextReader;
+  final ApiChannelHeadersReader _channelHeadersReader;
   ApiSessionAuthHandler? _sessionAuthHandler;
 
   Dio get dio => _dio;
-  
+
   /// 获取当前的请求上下文
   ApiRequestContext get requestContext => _readRequestContext();
-  
+
   /// 设置 session auth handler（用于打破循环依赖）
   void setSessionAuthHandler(ApiSessionAuthHandler handler) {
     _sessionAuthHandler = handler;
@@ -326,22 +340,24 @@ class ApiClient {
         }
         throw apiError;
       } catch (error, stackTrace) {
-      debugPrint('[ApiClient] 未知错误: $error');
-      debugPrint('[ApiClient] 错误类型: ${error.runtimeType}');
-      debugPrint('[ApiClient] 堆栈: $stackTrace');
-      
-      throw ApiException(
-        code: ApiErrorCode.unknown,
-        message: 'Unexpected client error.',
-        cause: error,
-        stackTrace: stackTrace,
-      );
-    }
+        debugPrint('[ApiClient] 未知错误: $error');
+        debugPrint('[ApiClient] 错误类型: ${error.runtimeType}');
+        debugPrint('[ApiClient] 堆栈: $stackTrace');
+
+        throw ApiException(
+          code: ApiErrorCode.unknown,
+          message: 'Unexpected client error.',
+          cause: error,
+          stackTrace: stackTrace,
+        );
+      }
     }
   }
 
   /// 401 时尝试 refresh；成功返回 true 以便外层重试原请求一次。
-  Future<bool> _recoverFromSessionExpiredBusinessCode(ApiException error) async {
+  Future<bool> _recoverFromSessionExpiredBusinessCode(
+    ApiException error,
+  ) async {
     if (error.businessCode != _guestSessionExpiredBusinessCode ||
         _sessionAuthHandler == null) {
       return false;
@@ -366,7 +382,12 @@ class ApiClient {
     ApiAuthPolicy authPolicy,
     RequestOptions? requestOptions,
   ) async {
-    if (!_shouldAttemptRefresh(error, hasRetriedAfterRefresh, authPolicy, requestOptions)) {
+    if (!_shouldAttemptRefresh(
+      error,
+      hasRetriedAfterRefresh,
+      authPolicy,
+      requestOptions,
+    )) {
       return false;
     }
 

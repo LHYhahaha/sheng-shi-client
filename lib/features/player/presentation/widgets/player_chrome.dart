@@ -113,7 +113,6 @@ class PlayerChrome extends StatefulWidget {
   /// 是否正在加载点赞状态。
   final bool isLikeLoading;
 
-  @visibleForTesting
   static double videoViewportBottomInset({
     required bool forYouLayout,
     required double bottomInset,

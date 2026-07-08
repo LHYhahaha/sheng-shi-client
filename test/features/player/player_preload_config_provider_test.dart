@@ -73,8 +73,8 @@ void main() {
     expect(config.forwardHlsPreloadCountFor(false), 0);
     expect(config.maxPreloadBytes, 1024);
     expect(config.preloadTimeout, const Duration(seconds: 8));
-    expect(config.effectivePreparedForwardSessionCount, 0);
-    expect(config.effectiveRetainedBackwardSessionCount, 0);
+    expect(config.effectivePreparedForwardSessionCount, 1);
+    expect(config.effectiveRetainedBackwardSessionCount, 1);
   });
 
   test('完整 policy override 仍可显式放开（测试）', () {

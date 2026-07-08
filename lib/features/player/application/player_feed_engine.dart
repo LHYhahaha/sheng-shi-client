@@ -11,6 +11,7 @@ import 'player_feed_controller.dart';
 import 'player_feed_engine_access_flow.dart';
 import 'player_overlay_orchestrator.dart';
 import 'player_performance_policy_provider.dart';
+import 'player_playback_controller.dart';
 import 'player_recharge_unlock_controller.dart';
 import 'player_runtime_coordinator.dart';
 import 'player_ui_controller.dart';
@@ -106,6 +107,9 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
   PlayerViewportController get _viewport =>
       ref.read(playerViewportControllerProvider(sessionKey).notifier);
 
+  PlayerPlaybackController get _playback =>
+      ref.read(playerPlaybackControllerProvider(sessionKey).notifier);
+
   PlayerAccessPresentationState accessPresentationFor(PlayerFeedItem item) {
     return _runtime.accessPresentationFor(item);
   }
@@ -145,30 +149,47 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     required bool Function(PlayerFeedItem item) isCurrentFeedItem,
     required bool Function(PlayerFeedItem item) isPageActivelyMoving,
   }) async {
-    print(
-      '馃攳 [PlayerFeedEngine] onViewportSettled called - itemId: ${item.id}, index: $index, playbackTrigger: $playbackTrigger',
+    final stopwatch = Stopwatch()..start();
+    _playback.recordPlaybackTiming(
+      'engine viewport settled start',
+      itemId: item.id,
+      source: item.episode.videoSource,
+      details: [
+        'index=$index',
+        'trigger=$playbackTrigger',
+        'isModalOpen=$isModalOpen',
+        'hasActiveCoinSheet=$hasActiveCoinSheet',
+        'hasActiveRechargeSheet=$hasActiveRechargeSheet',
+        'isPageScrolling=$isPageScrolling',
+      ].join(' '),
     );
-    print(
-      '馃攳 [PlayerFeedEngine] Conditions - isModalOpen: $isModalOpen, hasActiveCoinSheet: $hasActiveCoinSheet, hasActiveRechargeSheet: $hasActiveRechargeSheet, isPageScrolling: $isPageScrolling',
-    );
-
     final viewport = ref.read(playerViewportControllerProvider(sessionKey));
-    print(
-      '馃攳 [PlayerFeedEngine] viewport.scrollPhase: ${viewport.scrollPhase}, settledItemId: ${viewport.settledItemId}, settledIndex: ${viewport.settledIndex}',
-    );
 
     if (viewport.scrollPhase != PlayerViewportScrollPhase.idle) {
-      print('馃攳 [PlayerFeedEngine] 鉂?Viewport not idle, returning');
+      _playback.recordPlaybackTiming(
+        'engine viewport settled skipped',
+        itemId: item.id,
+        source: item.episode.videoSource,
+        elapsed: stopwatch.elapsed,
+        details: 'reason=viewport_not_idle phase=${viewport.scrollPhase.name}',
+      );
       return;
     }
     if (viewport.settledItemId != item.id || viewport.settledIndex != index) {
-      print(
-        '馃攳 [PlayerFeedEngine] 鉂?Viewport settled item mismatch, returning',
+      _playback.recordPlaybackTiming(
+        'engine viewport settled skipped',
+        itemId: item.id,
+        source: item.episode.videoSource,
+        elapsed: stopwatch.elapsed,
+        details: [
+          'reason=settled_item_mismatch',
+          'viewportItemId=${viewport.settledItemId ?? 'null'}',
+          'viewportIndex=${viewport.settledIndex}',
+        ].join(' '),
       );
       return;
     }
 
-    print('馃攳 [PlayerFeedEngine] 鉁?Viewport settled, proceeding...');
     if (previousItemId != null && previousItemId != item.id) {
       // 鑷姩瑙ｉ攣寮圭獥鐨?dismiss 鍙鈥滃綋鍓嶈繖娆″仠鐣欌€濈敓鏁堛€?
       // 鐢ㄦ埛绂诲紑璇?item 鍚庯紝涓嬫鍐嶆粦鍥炴潵搴旈噸鏂板厑璁歌嚜鍔ㄥ脊鍑恒€?
@@ -182,6 +203,12 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
       previousIndex: previousIndex,
       playbackTrigger: playbackTrigger,
     );
+    _playback.recordPlaybackTiming(
+      'engine runtime settled end',
+      itemId: item.id,
+      source: item.episode.videoSource,
+      elapsed: stopwatch.elapsed,
+    );
 
     _overlay.scheduleForSettledItem(
       item: item,
@@ -194,6 +221,12 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
       isPageScrolling: isPageScrolling,
       isCurrentFeedItem: isCurrentFeedItem,
       isPageActivelyMoving: isPageActivelyMoving,
+    );
+    _playback.recordPlaybackTiming(
+      'engine viewport settled end',
+      itemId: item.id,
+      source: item.episode.videoSource,
+      elapsed: stopwatch.elapsed,
     );
   }
 
@@ -319,54 +352,81 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     required bool hasActiveCoinSheet,
     required bool hasActiveRechargeSheet,
   }) async {
-    print('馃攳 [PlayerFeedEngine] prepareAutoUnlockSheet - itemId: ${item.id}');
-    print(
-      '馃攳 [PlayerFeedEngine] Conditions check - isModalOpen: $isModalOpen, hasActiveCoinSheet: $hasActiveCoinSheet, hasActiveRechargeSheet: $hasActiveRechargeSheet',
-    );
-    print(
-      '馃攳 [PlayerFeedEngine] _canExecuteUserInitiatedRuntime: ${_canExecuteUserInitiatedRuntime(item)}',
-    );
-    print(
-      '馃攳 [PlayerFeedEngine] isLockedAutoSheetCandidate: ${isLockedAutoSheetCandidate(item)}',
+    final stopwatch = Stopwatch()..start();
+    final canExecuteRuntime = _canExecuteUserInitiatedRuntime(item);
+    final lockedAutoSheetCandidate = isLockedAutoSheetCandidate(item);
+    _playback.recordPlaybackTiming(
+      'auto unlock sheet prepare start',
+      itemId: item.id,
+      source: item.episode.videoSource,
+      details: [
+        'isModalOpen=$isModalOpen',
+        'hasActiveCoinSheet=$hasActiveCoinSheet',
+        'hasActiveRechargeSheet=$hasActiveRechargeSheet',
+        'canExecuteRuntime=$canExecuteRuntime',
+        'lockedAutoSheetCandidate=$lockedAutoSheetCandidate',
+      ].join(' '),
     );
 
-    if (!_canExecuteUserInitiatedRuntime(item) ||
+    if (!canExecuteRuntime ||
         isModalOpen ||
         hasActiveCoinSheet ||
         hasActiveRechargeSheet ||
-        !isLockedAutoSheetCandidate(item)) {
-      print(
-        '馃攳 [PlayerFeedEngine] 鉂?Conditions not met in prepareAutoUnlockSheet, returning empty result',
+        !lockedAutoSheetCandidate) {
+      _playback.recordPlaybackTiming(
+        'auto unlock sheet prepare skipped',
+        itemId: item.id,
+        source: item.episode.videoSource,
+        elapsed: stopwatch.elapsed,
       );
       return const PlayerUnlockFlowResult();
     }
-    print(
-      '馃攳 [PlayerFeedEngine] 鉁?Conditions met, proceeding with unlock flow...',
-    );
     // 瑙ｉ攣鍓嶅埛鏂版潈鐩婃暟鎹紝纭繚閲戝竵鍜屼細鍛樼姸鎬佹槸鏈€鏂扮殑
     // await ref.read(entitlementControllerProvider.notifier).load();
     final decision = evaluateAccess(item);
-    print(
-      '馃攳 [PlayerFeedEngine] evaluateAccess decision - type: ${decision.type}, reason: ${decision.reason}',
+    _playback.recordPlaybackTiming(
+      'auto unlock sheet access evaluated',
+      itemId: item.id,
+      source: item.episode.videoSource,
+      elapsed: stopwatch.elapsed,
+      details: [
+        'decision=${decision.type.name}',
+        'reason=${decision.reason ?? 'null'}',
+      ].join(' '),
     );
 
     if (decision.type == EpisodeAccessDecisionType.allowPlay) {
-      print('馃攳 [PlayerFeedEngine] Decision: allowPlay, handling decision...');
       await handleAccessDecision(item, decision, autoPresentSheet: false);
+      _playback.recordPlaybackTiming(
+        'auto unlock sheet allowPlay handled',
+        itemId: item.id,
+        source: item.episode.videoSource,
+        elapsed: stopwatch.elapsed,
+      );
       return const PlayerUnlockFlowResult();
     }
     if (decision.type == EpisodeAccessDecisionType.autoUnlockAndPlay) {
-      print(
-        '馃攳 [PlayerFeedEngine] Decision: autoUnlockAndPlay, completing coin unlock...',
-      );
       final unlocked = await completeCoinUnlock(item);
-      print('馃攳 [PlayerFeedEngine] Auto unlock result: $unlocked');
+      _playback.recordPlaybackTiming(
+        'auto unlock sheet coin unlock end',
+        itemId: item.id,
+        source: item.episode.videoSource,
+        elapsed: stopwatch.elapsed,
+        details: 'unlocked=$unlocked',
+      );
       return PlayerUnlockFlowResult(didAutoUnlock: unlocked);
     }
 
     final sheetIntent = _autoSheetIntentForDecision(decision);
-    print(
-      '馃攳 [PlayerFeedEngine] Decision: ${decision.type}, sheetIntent: $sheetIntent',
+    _playback.recordPlaybackTiming(
+      'auto unlock sheet prepare end',
+      itemId: item.id,
+      source: item.episode.videoSource,
+      elapsed: stopwatch.elapsed,
+      details: [
+        'decision=${decision.type.name}',
+        'sheetIntent=${sheetIntent.name}',
+      ].join(' '),
     );
     return PlayerUnlockFlowResult(sheetIntent: sheetIntent);
   }

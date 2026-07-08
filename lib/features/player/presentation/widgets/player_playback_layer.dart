@@ -463,7 +463,11 @@ class ActivePlaybackSurfaceOverlayState
         widget.isViewportDragging &&
         widget.policy.allowVideoSurfaceOpacityAnimationDuringDrag;
     final surfaceOpacity = showVideo
-        ? (dimDuringDrag ? widget.policy.videoSurfaceDimOpacityDuringDrag : 1.0)
+        ? !snapshot.hasFirstFrame
+              ? 0.01
+              : (dimDuringDrag
+                    ? widget.policy.videoSurfaceDimOpacityDuringDrag
+                    : 1.0)
         : 0.0;
 
     // 调试：打印Video Surface的渲染条件（正式版可移除）
@@ -1060,10 +1064,17 @@ class PlayFeedbackIcon extends StatelessWidget {
           builder: (context, scale, child) {
             return Transform.scale(scale: scale, child: child);
           },
-          child: SizedBox(
+          child: Container(
             key: const ValueKey('player_play_feedback'),
             width: 70,
             height: 70,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.3),
+                width: 0.5,
+              ),
+            ),
             child: SvgPicture.asset(
               'assets/images/player/play.svg',
               fit: BoxFit.fill,

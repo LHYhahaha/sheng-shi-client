@@ -40,6 +40,40 @@ void main() {
     expect(adapter.lastOptions!.headers.containsKey('Authorization'), isFalse);
   });
 
+  test('all requests include channel headers when available', () async {
+    final adapter = _FakeHttpClientAdapter(
+      responseData: {
+        'code': 0,
+        'message': 'success',
+        'data': {'ok': true},
+      },
+    );
+    final dio = Dio()..httpClientAdapter = adapter;
+    final client = ApiClient(
+      dio: dio,
+      requestContext: const ApiRequestContext(
+        deviceId: 'device-1',
+        lang: 'zh',
+        platform: 'android',
+        appVersion: '1.2.3',
+      ),
+      channelHeadersReader: () async => const {
+        'Channel-Flag': 'test',
+        'Merchant-Id': 'merchant-1',
+        'Vest-Pkg-Id': 'vest-1',
+      },
+    );
+
+    await client.get<Map<String, Object?>>(
+      '/wallet/balance',
+      decoder: (data) => data! as Map<String, Object?>,
+    );
+
+    expect(adapter.lastOptions!.headers['Channel-Flag'], 'test');
+    expect(adapter.lastOptions!.headers['Merchant-Id'], 'merchant-1');
+    expect(adapter.lastOptions!.headers['Vest-Pkg-Id'], 'vest-1');
+  });
+
   test('json body requests include content type', () async {
     final adapter = _FakeHttpClientAdapter(
       responseData: {'code': 0, 'message': 'success', 'data': null},

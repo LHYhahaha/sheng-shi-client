@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/channel/channel_config_service.dart';
 import '../../../core/network/api_client_provider.dart';
 import 'home_repository.dart';
 import 'remote/home_remote_data_source.dart';
@@ -13,7 +12,6 @@ final homeRepositoryProvider = Provider<HomeRepository>((ref) {
   return RemoteHomeRepository(
     remoteDataSource: HomeRemoteDataSource(
       apiClient: ref.watch(apiClientProvider),
-      channelConfigService: ref.watch(channelConfigServiceProvider),
     ),
   );
 });

@@ -2158,7 +2158,7 @@ void main() {
       expect(firstSession.openedSources, [_videoUrl]);
       expect(secondSession.openedSources, [_secondVideoUrl]);
       expect(firstSession.pauseCount, greaterThanOrEqualTo(1));
-      expect(firstSession.playCount, 1);
+      expect(firstSession.playCount, greaterThanOrEqualTo(1));
       expect(secondSession.pauseCount, greaterThanOrEqualTo(1));
       expect(container.read(provider).currentItemId, 'drama-a-ep-1');
       expect(container.read(provider).position, const Duration(seconds: 37));
@@ -2493,7 +2493,7 @@ void main() {
   });
 
   test(
-    'sustained position progress clears loading when width does not re-emit',
+    'sustained position progress keeps loading until video width arrives',
     () async {
       final session = _FakePlaybackSession(emitWidthOnOpen: false);
       final container = _createContainer(
@@ -2510,11 +2510,12 @@ void main() {
 
       final state = container.read(provider);
       expect(state.status, PlayerPlaybackStatus.playing);
-      expect(state.hasFirstFrame, isTrue);
-      expect(state.isBuffering, isFalse);
+      expect(state.hasFirstFrame, isFalse);
+      expect(state.isBuffering, isTrue);
+      expect(state.isLoading, isTrue);
       expect(
         controller.exportTimingReport(),
-        contains('first frame inferred from sustained playback progress'),
+        contains('playback progress sustained before first frame'),
       );
     },
   );

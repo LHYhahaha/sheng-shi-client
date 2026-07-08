@@ -57,6 +57,12 @@ final apiClientProvider = Provider.autoDispose<ApiClient>((ref) {
   final apiClient = ApiClient(
     dio: dio,
     requestContextReader: () => ref.read(apiRequestContextProvider),
+    channelHeadersReader: () async {
+      final channelConfig = await ref.read(channelConfigProvider.future);
+      return channelConfig.hasConfig
+          ? channelConfig.toHeaders()
+          : const <String, String>{};
+    },
     sessionAuthHandler: null,
   );
 

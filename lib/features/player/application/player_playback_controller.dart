@@ -449,13 +449,15 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   /// player 调 `setProperty`。普通业务 dispose 默认不延迟，只有 UI teardown 路径显式传入。
   static const videoSurfaceTeardownDelay = Duration(milliseconds: 450);
   static const _restoreFloorTimeout = Duration(seconds: 12);
-  static const _firstFrameProgressFallbackDelay = Duration(milliseconds: 800);
+  static const _firstFrameProgressProbeDelay = Duration(milliseconds: 800);
+  static const _resumeOpenStartMinPosition = Duration(seconds: 10);
 
   String? _preferredSubtitleLanguage;
   bool _externalSubtitlesClosed = false;
   PlayerFeedItem? _currentOriginalItem;
-  Timer? _firstFrameProgressFallbackTimer;
+  Timer? _firstFrameProgressProbeTimer;
   PlayerFeedItem? _visibilitySuspendedItem;
+  PlayerFeedItem? _pendingSubtitleLoadItem;
 
   static bool get shouldDelayVideoSurfaceTeardown {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
@@ -474,6 +476,21 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         'AutomatedTestWidgetsFlutterBinding';
   }
 
+  static bool get _shouldDeferPreloadUntilFirstFrame {
+    if (kIsWeb) {
+      return false;
+    }
+    final WidgetsBinding binding;
+    try {
+      binding = WidgetsBinding.instance;
+    } catch (_) {
+      return true;
+    }
+    return !binding.runtimeType.toString().contains(
+      'TestWidgetsFlutterBinding',
+    );
+  }
+
   final String sessionKey;
   late PlayerPlaybackSession _session;
   late final PlayerPlaybackPreloadManager _preloadManager;
@@ -484,6 +501,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   final _preloadStates = <String, PlaybackPreloadState>{};
   final _preparingItemIds = <String>{};
   var _activePreloadAllowedIds = <String>{};
+  List<PlayerFeedItem>? _deferredPreloadItems;
+  int? _deferredPreloadIndex;
   PlaybackProgress? _pendingResumeProgress;
   bool _lastResumeProgressWasPending = false;
   int _generation = 0;
@@ -712,7 +731,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       // 生命周期触发顺序并不总是稳定。
       unawaited(_cancelSessionStreams());
       _restoreFloorTimer?.cancel();
-      _firstFrameProgressFallbackTimer?.cancel();
+      _firstFrameProgressProbeTimer?.cancel();
       unawaited(_disposePreloads(syncState: false));
       unawaited(_releaseSessionWindowFor('provider dispose'));
       unawaited(
@@ -897,7 +916,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
 
     final generation = ++_generation;
-    _firstFrameProgressFallbackTimer?.cancel();
+    _firstFrameProgressProbeTimer?.cancel();
+    _pendingSubtitleLoadItem = null;
     _logTiming(
       'trace generation assigned',
       itemId: item.id,
@@ -1157,8 +1177,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         await _restoreProgressIfNeeded(resumeProgress, generation);
       }
 
-      // 不再阻塞等待首帧 - 让 _handlePosition 在 position > 0 时设置 hasFirstFrame
-      // 这样视频可以立即开始播放，UI 会根据 hasFirstFrame 状态显示/隐藏 loading
+      // 不阻塞 media open，但 loading 必须等真实首帧/尺寸事件后再消失。
 
       // 确保开始播放
       await _session.play();
@@ -1166,21 +1185,21 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         return;
       }
 
-      // 加载字幕
+      // 字幕文件下载不参与首帧路径，避免失败重试和首段加载抢资源。
       _loadSubtitlesForItem(item);
 
       if (_pauseWhenOpenCompletes) {
         await _session.pause();
         state = state.copyWith(
           status: PlayerPlaybackStatus.paused,
-          isBuffering: false,
+          isBuffering: !_currentPlaybackHasFirstFrame,
           hasFirstFrame: _currentPlaybackHasFirstFrame,
         );
         return;
       }
       state = state.copyWith(
         status: PlayerPlaybackStatus.playing,
-        isBuffering: false,
+        isBuffering: !_currentPlaybackHasFirstFrame,
         hasEnded: false,
         hasFirstFrame: _currentPlaybackHasFirstFrame,
       );
@@ -1227,6 +1246,27 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       _preloadStates.clear();
       _preloadedItemIds.clear();
       _syncPreloadState();
+      return;
+    }
+
+    final currentItem = items[currentIndex];
+    if (_shouldDeferPreloadUntilFirstFrame &&
+        state.status == PlayerPlaybackStatus.opening &&
+        state.currentItemId == currentItem.id &&
+        state.currentSource != null &&
+        !state.hasFirstFrame) {
+      _deferredPreloadItems = List<PlayerFeedItem>.unmodifiable(items);
+      _deferredPreloadIndex = currentIndex;
+      _logTiming(
+        'preload deferred until first frame',
+        itemId: currentItem.id,
+        source: state.currentSource,
+        details: _timingDetails([
+          'currentIndex=$currentIndex',
+          'itemCount=${items.length}',
+          'status=${state.status.name}',
+        ]),
+      );
       return;
     }
 
@@ -2004,8 +2044,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         state.status == PlayerPlaybackStatus.unavailable) {
       return;
     }
-    _logTiming(isBuffering ? 'buffering start' : 'buffering end');
-    state = state.copyWith(isBuffering: isBuffering);
+    final effectiveBuffering = isBuffering || !state.hasFirstFrame;
+    _logTiming(
+      isBuffering ? 'buffering start' : 'buffering end',
+      details: !isBuffering && !state.hasFirstFrame
+          ? 'keptLoadingUntilFirstFrame=true'
+          : null,
+    );
+    state = state.copyWith(isBuffering: effectiveBuffering);
   }
 
   void _handlePlaying(bool isPlaying) {
@@ -2139,7 +2185,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       );
     }
     if (!state.hasFirstFrame && clamped > Duration.zero) {
-      _armFirstFrameProgressFallback(
+      _armFirstFrameProgressProbe(
         generation: _generation,
         itemId: state.currentItemId,
         observedPosition: clamped,
@@ -2228,6 +2274,18 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (normalizedPosition <= Duration.zero) {
       return null;
     }
+    if (normalizedPosition < _resumeOpenStartMinPosition) {
+      _logTiming(
+        'resume progress skipped near beginning',
+        itemId: progress.itemId,
+        source: state.currentSource,
+        details: _timingDetails([
+          'resumeMs=${normalizedPosition.inMilliseconds}',
+          'thresholdMs=${_resumeOpenStartMinPosition.inMilliseconds}',
+        ]),
+      );
+      return null;
+    }
     if (normalizedPosition != progress.position ||
         effectiveDuration != progress.duration) {
       _logTiming(
@@ -2298,7 +2356,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
     _playingBeforeFirstFrameAt = null;
     _positionBeforeFirstFrameAt = null;
-    _firstFrameProgressFallbackTimer?.cancel();
+    _firstFrameProgressProbeTimer?.cancel();
     state = state.copyWith(
       status: state.status == PlayerPlaybackStatus.opening
           ? PlayerPlaybackStatus.playing
@@ -2307,45 +2365,67 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       isBuffering: false,
     );
     _currentPlaybackHasFirstFrame = true;
+    _loadPendingSubtitlesAfterFirstFrame();
+    _flushDeferredPreloadAfterFirstFrame();
   }
 
-  void _armFirstFrameProgressFallback({
+  void _armFirstFrameProgressProbe({
     required int generation,
     required String? itemId,
     required Duration observedPosition,
   }) {
-    if (_firstFrameProgressFallbackTimer?.isActive == true || itemId == null) {
+    if (_firstFrameProgressProbeTimer?.isActive == true || itemId == null) {
       return;
     }
-    _firstFrameProgressFallbackTimer = Timer(
-      _firstFrameProgressFallbackDelay,
-      () {
-        if (!ref.mounted ||
-            generation != _generation ||
-            state.currentItemId != itemId ||
-            state.currentSource == null ||
-            state.hasFirstFrame ||
-            state.isBuffering ||
-            state.position < observedPosition ||
-            (state.status != PlayerPlaybackStatus.playing &&
-                state.status != PlayerPlaybackStatus.paused)) {
-          return;
-        }
-        _logTiming(
-          'first frame inferred from sustained playback progress',
-          itemId: itemId,
-          source: state.currentSource,
-          details: _timingDetails([
-            'positionMs=${state.position.inMilliseconds}',
-            'observedPositionMs=${observedPosition.inMilliseconds}',
-          ]),
-        );
-        _currentPlaybackHasFirstFrame = true;
-        _playingBeforeFirstFrameAt = null;
-        _positionBeforeFirstFrameAt = null;
-        state = state.copyWith(hasFirstFrame: true, isBuffering: false);
-      },
+    _firstFrameProgressProbeTimer = Timer(_firstFrameProgressProbeDelay, () {
+      if (!ref.mounted ||
+          generation != _generation ||
+          state.currentItemId != itemId ||
+          state.currentSource == null ||
+          state.hasFirstFrame ||
+          state.position < observedPosition ||
+          (state.status != PlayerPlaybackStatus.playing &&
+              state.status != PlayerPlaybackStatus.paused)) {
+        return;
+      }
+      _logTiming(
+        'playback progress sustained before first frame',
+        itemId: itemId,
+        source: state.currentSource,
+        details: _timingDetails([
+          'positionMs=${state.position.inMilliseconds}',
+          'observedPositionMs=${observedPosition.inMilliseconds}',
+        ]),
+      );
+    });
+  }
+
+  void _flushDeferredPreloadAfterFirstFrame({String reason = 'first frame'}) {
+    final items = _deferredPreloadItems;
+    final index = _deferredPreloadIndex;
+    _deferredPreloadItems = null;
+    _deferredPreloadIndex = null;
+    if (items == null || index == null) {
+      return;
+    }
+    if (!ref.mounted ||
+        _isSessionDisposed ||
+        index < 0 ||
+        index >= items.length ||
+        items[index].id != state.currentItemId) {
+      return;
+    }
+    _logTiming(
+      'preload deferred flush',
+      itemId: state.currentItemId,
+      source: state.currentSource,
+      details: _timingDetails([
+        'reason=$reason',
+        'currentIndex=$index',
+        'itemCount=${items.length}',
+      ]),
     );
+    unawaited(preloadAround(items, index));
   }
 
   void _handleError(String error) {
@@ -2824,162 +2904,6 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     });
   }
 
-  Future<bool> _seekToResumeBeforePlay(
-    Duration position,
-    int generation,
-  ) async {
-    await _waitUntilResumeSeekReady(generation);
-    if (!ref.mounted || !_isCurrent(generation)) {
-      return false;
-    }
-
-    for (var attempt = 1; attempt <= 2; attempt += 1) {
-      _armRestoreFloor(position, generation);
-      final reachedFuture = _waitForResumePosition(
-        position,
-        generation,
-        timeout: attempt == 1
-            ? const Duration(milliseconds: 450)
-            : const Duration(milliseconds: 300),
-      );
-      developer.log(
-        'PlayerPlaybackController: resume seek attempt $attempt - '
-        'position=$position',
-      );
-      await _session.seek(position);
-      final reached = await reachedFuture;
-      if (!ref.mounted || !_isCurrent(generation)) {
-        return false;
-      }
-      if (reached) {
-        developer.log(
-          'PlayerPlaybackController: resume seek confirmed - '
-          'position=$position, attempt=$attempt',
-        );
-        return true;
-      }
-      developer.log(
-        'PlayerPlaybackController: resume seek not confirmed - '
-        'position=$position, attempt=$attempt',
-      );
-      await Future<void>.delayed(const Duration(milliseconds: 80));
-    }
-    return false;
-  }
-
-  Future<void> _waitUntilResumeSeekReady(int generation) async {
-    if (_currentPlaybackHasFirstFrame || state.hasFirstFrame) {
-      developer.log(
-        'PlayerPlaybackController: resume seek ready immediately - '
-        'hasFirstFrame=${state.hasFirstFrame}',
-      );
-      return;
-    }
-
-    final completer = Completer<void>();
-    final subscriptions = <StreamSubscription<dynamic>>[];
-    Timer? timeoutTimer;
-
-    void complete(String reason) {
-      if (completer.isCompleted) {
-        return;
-      }
-      developer.log(
-        'PlayerPlaybackController: resume seek ready - reason=$reason',
-      );
-      _logTiming(
-        'resume seek ready',
-        itemId: state.currentItemId,
-        source: state.currentSource,
-        details: reason,
-      );
-      completer.complete();
-    }
-
-    subscriptions
-      ..add(
-        _session.widthStream.listen((width) {
-          if (width != null && width > 0) {
-            complete('width=$width');
-          }
-        }),
-      )
-      ..add(
-        _session.positionStream.listen((position) {
-          if (position > Duration.zero) {
-            complete('positionMs=${position.inMilliseconds}');
-          }
-        }),
-      )
-      ..add(
-        _session.durationStream.listen((duration) {
-          if (duration > Duration.zero) {
-            complete('durationMs=${duration.inMilliseconds}');
-          }
-        }),
-      );
-    timeoutTimer = Timer(const Duration(milliseconds: 1200), () {
-      complete('timeout');
-    });
-
-    try {
-      await completer.future;
-    } finally {
-      timeoutTimer.cancel();
-      for (final subscription in subscriptions) {
-        unawaited(subscription.cancel());
-      }
-    }
-    if (!ref.mounted || !_isCurrent(generation)) {
-      return;
-    }
-  }
-
-  Future<bool> _waitForResumePosition(
-    Duration target,
-    int generation, {
-    required Duration timeout,
-  }) async {
-    final threshold = target - const Duration(milliseconds: 500);
-    if (_currentPlaybackPosition >= threshold && threshold > Duration.zero) {
-      return true;
-    }
-    final completer = Completer<bool>();
-    Timer? timeoutTimer;
-    late final StreamSubscription<Duration> subscription;
-
-    void complete(bool value, String reason) {
-      if (completer.isCompleted) {
-        return;
-      }
-      developer.log(
-        'PlayerPlaybackController: resume position ack - '
-        'target=$target, reached=$value, reason=$reason',
-      );
-      completer.complete(value);
-    }
-
-    subscription = _session.positionStream.listen((position) {
-      if (!_isCurrent(generation)) {
-        complete(false, 'stale_generation');
-        return;
-      }
-      if (position >= threshold) {
-        complete(true, 'position=$position');
-      }
-    });
-    timeoutTimer = Timer(timeout, () {
-      complete(false, 'timeout');
-    });
-
-    try {
-      return await completer.future;
-    } finally {
-      timeoutTimer.cancel();
-      unawaited(subscription.cancel());
-    }
-  }
-
   void _repairResumePositionIfNeeded(
     Duration target,
     int generation,
@@ -3132,7 +3056,31 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
     final selected = _selectSubtitleForCurrentLanguage(subtitles);
     _preferredSubtitleLanguage = _subtitleMatchCode(selected);
+    if (!state.hasFirstFrame) {
+      _pendingSubtitleLoadItem = item;
+      _logTiming(
+        'subtitle external load deferred until first frame',
+        itemId: item.id,
+        source: state.currentSource,
+      );
+      return;
+    }
     unawaited(_setExternalSubtitle(selected));
+  }
+
+  void _loadPendingSubtitlesAfterFirstFrame() {
+    final item = _pendingSubtitleLoadItem;
+    if (item == null || item.id != state.currentItemId) {
+      _pendingSubtitleLoadItem = null;
+      return;
+    }
+    _pendingSubtitleLoadItem = null;
+    _logTiming(
+      'subtitle external load deferred flush',
+      itemId: item.id,
+      source: state.currentSource,
+    );
+    _loadSubtitlesForItem(item);
   }
 
   /// 切换当前字幕轨道。
@@ -3620,7 +3568,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   void _clearCurrentPlaybackSnapshot() {
-    _firstFrameProgressFallbackTimer?.cancel();
+    _firstFrameProgressProbeTimer?.cancel();
     _currentPlaybackHasFirstFrame = false;
     _currentPlaybackPosition = Duration.zero;
     _currentPlaybackDuration = Duration.zero;

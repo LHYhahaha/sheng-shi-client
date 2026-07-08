@@ -1,19 +1,12 @@
-import 'package:dio/dio.dart';
-
-import '../../../../core/channel/channel_config_service.dart';
 import '../../../../core/network/api_client.dart';
 import '../dto/search_ranking_response_dto.dart';
 import '../dto/search_results_response_dto.dart';
 
 class SearchRemoteDataSource {
-  const SearchRemoteDataSource({
-    required ApiClient apiClient,
-    required ChannelConfigService channelConfigService,
-  }) : _apiClient = apiClient,
-       _channelConfigService = channelConfigService;
+  const SearchRemoteDataSource({required ApiClient apiClient})
+    : _apiClient = apiClient;
 
   final ApiClient _apiClient;
-  final ChannelConfigService _channelConfigService;
 
   Future<SearchRankingResponseDto> getHotSearches() {
     return _getRanking('/api/home/search/hot');
@@ -33,15 +26,6 @@ class SearchRemoteDataSource {
     required String pageSize,
     String? sortType,
   }) async {
-    final channelConfig = await _channelConfigService.getChannelConfig();
-    final options = channelConfig.hasConfig
-        ? Options(
-            headers: {
-              'Content-Type': 'application/json',
-              ...channelConfig.toHeaders(),
-            },
-          )
-        : null;
     final queryParameters = <String, Object?>{
       'keyword': keyword,
       'page': page,
@@ -53,7 +37,6 @@ class SearchRemoteDataSource {
       '/api/home/search',
       queryParameters: queryParameters,
       authPolicy: ApiAuthPolicy.required,
-      options: options,
       decoder: (data) {
         if (data is! Map) {
           throw Exception('Expected Map response, got ${data.runtimeType}');
@@ -66,20 +49,9 @@ class SearchRemoteDataSource {
   }
 
   Future<SearchRankingResponseDto> _getRanking(String path) async {
-    final channelConfig = await _channelConfigService.getChannelConfig();
-    final options = channelConfig.hasConfig
-        ? Options(
-            headers: {
-              'Content-Type': 'application/json',
-              ...channelConfig.toHeaders(),
-            },
-          )
-        : null;
-
     return _apiClient.get<SearchRankingResponseDto>(
       path,
       authPolicy: ApiAuthPolicy.required,
-      options: options,
       decoder: (data) {
         if (data is! Map) {
           throw Exception('Expected Map response, got ${data.runtimeType}');
