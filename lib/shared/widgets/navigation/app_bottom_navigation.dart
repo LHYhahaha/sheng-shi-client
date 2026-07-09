@@ -5,7 +5,7 @@ import '../../theme/app_colors.dart';
 
 /// 应用底部主导航。
 ///
-/// 只服务四个 shell tab。播放器全屏、My List 编辑等场景应通过 shell chrome provider
+/// 只服务 shell tab。播放器全屏、My List 编辑等场景应通过 shell chrome provider
 /// 隐藏它，不要在单个页面里复制导航栏。
 class AppBottomNavigation extends StatelessWidget {
   const AppBottomNavigation({
@@ -24,12 +24,6 @@ class AppBottomNavigation extends StatelessWidget {
       selectedAssetPath: 'assets/navigation/home_selected.png',
       unselectedAssetPath: 'assets/navigation/home_unselected.png',
       fallbackIcon: Icons.home_rounded,
-    ),
-    _BottomNavigationItem(
-      label: _BottomNavigationLabel.game,
-      selectedAssetPath: 'assets/navigation/home_selected.png',
-      unselectedAssetPath: 'assets/navigation/home_unselected.png',
-      fallbackIcon: Icons.sports_esports_rounded,
     ),
     // _BottomNavigationItem(
     //   label: _BottomNavigationLabel.member,
@@ -78,10 +72,7 @@ class AppBottomNavigation extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF0A0014),
         border: const Border(
-          top: BorderSide(
-            color: Color(0x14FFFFFF),
-            width: 1,
-          ),
+          top: BorderSide(color: Color(0x14FFFFFF), width: 1),
         ),
       ),
       child: SizedBox(
@@ -234,7 +225,6 @@ enum _BottomNavigationLabel {
   home,
   forYou,
   myList,
-  game,
   member,
   profile;
 
@@ -243,7 +233,6 @@ enum _BottomNavigationLabel {
       _BottomNavigationLabel.home => l10n.navHome,
       _BottomNavigationLabel.forYou => l10n.navForYou,
       _BottomNavigationLabel.myList => l10n.navMyList,
-      _BottomNavigationLabel.game => l10n.navGame,
       _BottomNavigationLabel.member => l10n.navMember,
       _BottomNavigationLabel.profile => l10n.navProfile,
     };

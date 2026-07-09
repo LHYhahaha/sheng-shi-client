@@ -23,8 +23,8 @@ class _CurrentTabIndexNotifier extends Notifier<int> {
 /// 当前 Shell Tab 索引的 provider。
 final appShellCurrentTabIndexProvider =
     NotifierProvider<_CurrentTabIndexNotifier, int>(
-  _CurrentTabIndexNotifier.new,
-);
+      _CurrentTabIndexNotifier.new,
+    );
 
 /// 首页滚动到顶部的请求计数 notifier。
 class _HomeScrollToTopNotifier extends Notifier<int> {
@@ -44,8 +44,8 @@ class _HomeScrollToTopNotifier extends Notifier<int> {
 /// HomePage 会监听这个变化并执行滚动到顶部的操作。
 final homeScrollToTopRequestProvider =
     NotifierProvider<_HomeScrollToTopNotifier, int>(
-  _HomeScrollToTopNotifier.new,
-);
+      _HomeScrollToTopNotifier.new,
+    );
 
 /// 主导航 shell。
 ///
@@ -67,9 +67,9 @@ class AppShell extends ConsumerWidget {
 
     // 延迟更新当前 Tab 索引，避免在 build 中修改 provider
     Future.microtask(() {
-      ref.read(appShellCurrentTabIndexProvider.notifier).setIndex(
-        navigationShell.currentIndex,
-      );
+      ref
+          .read(appShellCurrentTabIndexProvider.notifier)
+          .setIndex(navigationShell.currentIndex);
     });
 
     return Scaffold(
@@ -122,16 +122,14 @@ class AppShellDestinations {
   // static const forYouIndex = 1;
 
   static const homeIndex = 0;
-  static const gameIndex = 1;
-  // static const memberIndex = 2;
-  static const myListIndex = 2;
-  static const profileIndex = 3;
+  // static const memberIndex = 1;
+  static const myListIndex = 1;
+  static const profileIndex = 2;
 
   static const paths = [
     RoutePaths.home,
     // RoutePaths.forYou,  // 暂时禁用
     RoutePaths.myList,
-    RoutePaths.game,
     // RoutePaths.member,
     RoutePaths.profile,
   ];

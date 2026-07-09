@@ -8,9 +8,7 @@ import '../shell/app_shell.dart';
 import '../../features/auth/presentation/pages/account_cancellation_page.dart';
 import '../../features/auth/presentation/pages/account_page.dart';
 import '../../features/auth/presentation/pages/auth_page.dart';
-import '../../features/game/presentation/pages/game_page.dart';
 import '../../features/home/presentation/pages/home_page.dart';
-import '../../features/member/presentation/pages/member_page.dart';
 import '../../features/membership/presentation/pages/membership_page.dart';
 import '../../features/my_list/presentation/pages/my_list_page.dart';
 import '../../features/player/presentation/pages/player_page.dart';
@@ -37,7 +35,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: RoutePaths.home,
     observers: [BotToastNavigatorObserver()],
     routes: [
-      // 底部四个主 tab 使用 indexedStack 保持页面状态。
+      // 底部主 tab 使用 indexedStack 保持页面状态。
       //
       // For You 播放器因此不会因为切到 Home/Profile 就被销毁；离开 tab 时的暂停
       // 由 AppShell 统一触发，避免路由层和播放器层互相直接依赖。
@@ -52,15 +50,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: RoutePaths.home,
                 name: RouteNames.home,
                 builder: (context, state) => const HomePage(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: RoutePaths.game,
-                name: RouteNames.game,
-                builder: (context, state) => const GamePage(),
               ),
             ],
           ),
@@ -170,7 +159,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: RouteNames.userAgreement,
         builder: (context, state) {
           final languageCode = Localizations.localeOf(context).languageCode;
-          final url = 'https://drama-wave.8y4w2vxvdffmd83.xyz/legal/terms/index.html?lang=$languageCode';
+          final url =
+              'https://drama-wave.8y4w2vxvdffmd83.xyz/legal/terms/index.html?lang=$languageCode';
           return WebViewPage(
             url: url,
             title: context.l10n.settingsUserAgreement,
@@ -182,7 +172,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: RouteNames.privacyPolicy,
         builder: (context, state) {
           final languageCode = Localizations.localeOf(context).languageCode;
-          final url = 'https://drama-wave.8y4w2vxvdffmd83.xyz/legal/privacy/index.html?lang=$languageCode';
+          final url =
+              'https://drama-wave.8y4w2vxvdffmd83.xyz/legal/privacy/index.html?lang=$languageCode';
           return WebViewPage(
             url: url,
             title: context.l10n.settingsPrivacyPolicy,
