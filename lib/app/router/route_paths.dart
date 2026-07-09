@@ -12,6 +12,7 @@ abstract final class RoutePaths {
   static const store = '/store';
   static const wallet = '/wallet';
   static const membership = '/membership';
+  static const webview = '/webview';
 
   /// 构建会员页面路径，可选参数 [returnToProfile] 控制购买成功后是否跳转到"我的"页面
   static String membershipLocation({bool returnToProfile = false}) {
@@ -29,6 +30,14 @@ abstract final class RoutePaths {
   static const transactionHistory = '/wallet/transaction-history';
   static const consumptionHistory = '/wallet/consumption-history';
   static const recordCoins = '/wallet/record-coins';
+
+  static String webviewLocation({required String url, String? title}) {
+    final queryParameters = <String, String>{
+      'url': url,
+      if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
+    };
+    return Uri(path: webview, queryParameters: queryParameters).toString();
+  }
 
   static String playerLocation({
     required String dramaId,

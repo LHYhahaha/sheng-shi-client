@@ -290,11 +290,15 @@ class _PopupEntryContentState extends State<_PopupEntryContent> {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      _PopupImage(
-                        imageUrl: popup.popupImage ?? '',
-                        width: width - 8,
-                        aspectRatio: _imageAspectRatio,
-                        onError: widget.onImageError,
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _runOnceIfPresent(widget.onPlayTap),
+                        child: _PopupImage(
+                          imageUrl: popup.popupImage ?? '',
+                          width: width - 8,
+                          aspectRatio: _imageAspectRatio,
+                          onError: widget.onImageError,
+                        ),
                       ),
                     ],
                   ),

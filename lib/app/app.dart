@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../bootstrap/feature_session_cleanup.dart';
 import '../bootstrap/i18n_bootstrap.dart';
@@ -16,10 +17,12 @@ import '../core/network/api_client_provider.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/pay/application/payment_loading_controller.dart';
 import '../features/popup/application/popup_entry_controller.dart';
+import '../features/popup/domain/popup.dart';
 import '../features/popup/presentation/widgets/popup_entry_overlay.dart';
 import '../l10n/app_localizations.dart';
 import '../shared/widgets/app_blocking_loading_overlay.dart';
 import 'router/app_router.dart';
+import 'router/route_paths.dart';
 import 'shell/app_shell.dart';
 import 'theme/app_theme.dart';
 
@@ -119,6 +122,111 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     }
   }
 
+  void _handlePopupImageTap(GoRouter router, PopupConfig popup) {
+    final contentMode = popup.contentMode;
+    if (contentMode == 2) {
+      _closePopupAndOpenDrama(router, popup);
+      return;
+    }
+
+    if (contentMode != 1) {
+      _closeActivePopup();
+      return;
+    }
+
+    switch (popup.jumpType) {
+      case 1:
+        _closeActivePopup();
+        return;
+      case 2:
+        _closePopupAndOpenWebView(router, popup);
+        return;
+      case 3:
+        _closePopupAndOpenDrama(router, popup);
+        return;
+      case 4:
+        _closePopupAndOpenPageCode(router, popup);
+        return;
+      default:
+        _closeActivePopup();
+        return;
+    }
+  }
+
+  void _handlePopupPlayTap(GoRouter router, PopupConfig popup) {
+    _closePopupAndOpenDrama(router, popup);
+  }
+
+  void _closeActivePopup() {
+    ref.read(popupEntryControllerProvider.notifier).closeActivePopup();
+  }
+
+  void _finishActivePopupFlow() {
+    ref.read(popupEntryControllerProvider.notifier).finishActivePopupFlow();
+  }
+
+  void _closePopupAndOpenWebView(GoRouter router, PopupConfig popup) {
+    final url = popup.h5Url?.trim();
+    if (url == null || url.isEmpty) {
+      _closeActivePopup();
+      return;
+    }
+    _finishActivePopupFlow();
+    router.push(RoutePaths.webviewLocation(url: url, title: popup.name));
+  }
+
+  void _closePopupAndOpenDrama(GoRouter router, PopupConfig popup) {
+    final dramaId = popup.shortDramaId;
+    if (dramaId == null || dramaId <= 0) {
+      _closeActivePopup();
+      return;
+    }
+    _finishActivePopupFlow();
+    router.push(
+      RoutePaths.playerLocation(
+        dramaId: '$dramaId',
+        episodeId: '1',
+        trigger: 'popup',
+        userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+      ),
+    );
+  }
+
+  void _closePopupAndOpenPageCode(GoRouter router, PopupConfig popup) {
+    final pageCode = popup.pageCode?.trim();
+    switch (pageCode) {
+      case 'home':
+        _finishActivePopupFlow();
+        router.go(RoutePaths.home);
+        return;
+      case 'recommend_tab':
+        _finishActivePopupFlow();
+        router.go(RoutePaths.forYou);
+        return;
+      case 'vip_tab':
+        _finishActivePopupFlow();
+        router.go(RoutePaths.member);
+        return;
+      case 'vip_open':
+        _finishActivePopupFlow();
+        router.push(RoutePaths.membership);
+        return;
+      case 'recharge':
+        _finishActivePopupFlow();
+        router.push(RoutePaths.store);
+        return;
+      case 'reward_coin':
+      case 'points':
+        _finishActivePopupFlow();
+        debugPrint('[PopupEntryOverlay] Reserved page_code: $pageCode');
+        return;
+      default:
+        _closeActivePopup();
+        debugPrint('[PopupEntryOverlay] Unsupported page_code: $pageCode');
+        return;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.watch(featureSessionCleanupRegistrationProvider);
@@ -160,7 +268,10 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
           child: Stack(
             children: [
               AppModalHost(child: wrapped),
-              const PopupEntryOverlay(),
+              PopupEntryOverlay(
+                onImageTap: (popup) => _handlePopupImageTap(router, popup),
+                onPlayTap: (popup) => _handlePopupPlayTap(router, popup),
+              ),
               if (isPaymentLoading)
                 AppBlockingLoadingOverlay(label: paymentLoadingLabel),
             ],

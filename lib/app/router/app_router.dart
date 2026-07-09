@@ -152,6 +152,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const MembershipPage(),
       ),
       GoRoute(
+        path: RoutePaths.webview,
+        name: RouteNames.webview,
+        builder: (context, state) {
+          return WebViewPage(
+            url: state.uri.queryParameters['url'] ?? '',
+            title: state.uri.queryParameters['title'] ?? '',
+          );
+        },
+      ),
+      GoRoute(
         path: RoutePaths.language,
         name: RouteNames.language,
         builder: (context, state) => const LanguagePage(),
