@@ -69,6 +69,7 @@ class PopupEntryController extends Notifier<PopupEntryState> {
   int _flowDisplayedCount = 0;
   PopupPlacementCode? _flowPlacement;
   PopupConfig? _readyPopup;
+  final Set<PopupPlacementCode> _cancelledPlacements = <PopupPlacementCode>{};
 
   @override
   PopupEntryState build() {
@@ -90,6 +91,7 @@ class PopupEntryController extends Notifier<PopupEntryState> {
       return;
     }
 
+    _cancelledPlacements.remove(placement);
     state = state.copyWith(
       inFlightPlacements: {...state.inFlightPlacements, placement},
     );
@@ -98,6 +100,12 @@ class PopupEntryController extends Notifier<PopupEntryState> {
       final popups = await ref
           .read(popupRepositoryProvider)
           .fetchPopups(placement: placement);
+      if (_cancelledPlacements.contains(placement)) {
+        state = state.copyWith(
+          requestedPlacements: {...state.requestedPlacements, placement},
+        );
+        return;
+      }
       state = state.copyWith(
         requestedPlacements: {...state.requestedPlacements, placement},
         pendingPopup: null,
@@ -117,6 +125,22 @@ class PopupEntryController extends Notifier<PopupEntryState> {
         },
       );
     }
+  }
+
+  void cancelPlacementFlow(PopupPlacementCode placement) {
+    _cancelledPlacements.add(placement);
+    state = state.copyWith(
+      requestedPlacements: {...state.requestedPlacements, placement},
+    );
+    if (_flowPlacement != placement) {
+      return;
+    }
+    _flowPopups = const <PopupConfig>[];
+    _flowIndex = 0;
+    _flowDisplayedCount = 0;
+    _flowPlacement = null;
+    _readyPopup = null;
+    state = state.copyWith(pendingPopup: null, activePopup: null);
   }
 
   void dismissActivePopup() {
@@ -158,6 +182,17 @@ class PopupEntryController extends Notifier<PopupEntryState> {
     _showReadyPopupOrAdvance();
   }
 
+  void finishActivePopupFlow() {
+    if (state.activePopup == null &&
+        state.pendingPopup == null &&
+        _readyPopup == null &&
+        _flowPlacement == null) {
+      return;
+    }
+    _finishPopupFlow();
+    state = state.copyWith(activePopup: null);
+  }
+
   Future<void> onLifecycleChanged(
     AppLifecycleState lifecycleState, {
     PopupPlacementCode? currentPlacement,
@@ -182,6 +217,7 @@ class PopupEntryController extends Notifier<PopupEntryState> {
     }
 
     state = state.copyWith(requestedPlacements: const <PopupPlacementCode>{});
+    _cancelledPlacements.clear();
     if (currentPlacement != null) {
       await requestForPlacement(currentPlacement);
     }

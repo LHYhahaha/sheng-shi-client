@@ -13,6 +13,8 @@ import '../../../../core/modal/app_modal_provider.dart';
 import '../../../../core/modal/app_modal_service.dart';
 import '../../../../core/modal/app_modal_source.dart';
 import '../../../../core/network/api_exception.dart';
+import '../../../../core/locale/app_locale_controller.dart';
+import '../../../../core/runtime/api_lang_provider.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../pay/application/payment_loading_controller.dart';
@@ -110,6 +112,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isOpeningRecommendation = false;
   bool _isOpeningSearch = false;
   bool _isOpeningForYouPlayer = false;
+  bool _isReloadingForYouAfterLanguageChange = false;
   bool _isPressingPlaybackSurface = false;
   bool _isPageScrolling = false;
   bool _didRecordFirstBuild = false;
@@ -311,18 +314,21 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
     // 璁板綍杩涘叆 inactive 鍓嶆槸鍚︽鍦ㄦ挱鏀撅紝鐢ㄤ簬鎭㈠鏃跺垽鏂槸鍚﹂渶瑕佽嚜鍔ㄦ挱鏀?
     if (state == AppLifecycleState.inactive) {
-      _wasPlayingBeforeInactive = ref
-          .read(playerPlaybackControllerProvider(_sessionKey))
-          .isPlaying;
+      final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
+      _wasPlayingBeforeInactive = playback.isPlaying;
       _resumePlaybackOnLifecycleResume =
-          _resumePlaybackOnLifecycleResume || _wasPlayingBeforeInactive;
+          _resumePlaybackOnLifecycleResume ||
+          _shouldResumePlaybackWhenForYouReturns(playback) ||
+          _wasPlayingBeforeInactive;
       unawaited(_playbackController.pause());
       return;
     }
     // paused/detached锛氬垏鎹㈠埌鍚庡彴锛屽畬鍏ㄦ殏鍋滃苟绉婚櫎瑙嗛鐢婚潰浠ラ噴鏀捐祫婧?
+    final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
     _resumePlaybackOnLifecycleResume =
         _resumePlaybackOnLifecycleResume ||
-        ref.read(playerPlaybackControllerProvider(_sessionKey)).isPlaying;
+        _shouldResumePlaybackWhenForYouReturns(playback) ||
+        playback.isPlaying;
     unawaited(_playbackController.pauseForVisibility());
   }
 
@@ -337,6 +343,31 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     _restoreChromeAfterReturningToPlayer();
+  }
+
+  Future<void> _reloadForYouAfterLanguageChange() async {
+    if (_isReloadingForYouAfterLanguageChange ||
+        widget.feedMode != PlayerFeedMode.forYou) {
+      return;
+    }
+    _isReloadingForYouAfterLanguageChange = true;
+    try {
+      await _playbackController.pauseForVisibility();
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(playerViewportControllerProvider(_sessionKey));
+      await _loadFeedForTiming();
+    } finally {
+      _isReloadingForYouAfterLanguageChange = false;
+    }
+  }
+
+  bool _shouldResumePlaybackWhenForYouReturns(PlayerPlaybackState playback) {
+    if (widget.feedMode != PlayerFeedMode.forYou) {
+      return false;
+    }
+    return playback.currentSource != null || playback.isOpening;
   }
 
   void _restoreChromeAfterReturningToPlayer() {
@@ -750,6 +781,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         ].join(' '),
       );
     }
+
+    ref.listen(appLocaleControllerProvider.select(apiLangFromLocale), (
+      previous,
+      next,
+    ) {
+      if (widget.feedMode != PlayerFeedMode.forYou ||
+          previous == null ||
+          previous == next) {
+        return;
+      }
+      unawaited(_reloadForYouAfterLanguageChange());
+    });
 
     ref.listen(
       viewportProvider.select(PlayerViewportSettledSnapshot.fromState),

@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/locale/app_locale_controller.dart';
+import '../../../core/runtime/api_lang_provider.dart';
 import '../data/search_repository_provider.dart';
 import '../domain/search_results.dart';
 
@@ -34,7 +38,18 @@ class SearchResultsController extends Notifier<SearchResultsState> {
   int _generation = 0;
 
   @override
-  SearchResultsState build() => const SearchResultsState();
+  SearchResultsState build() {
+    ref.listen(appLocaleControllerProvider.select(apiLangFromLocale), (
+      previous,
+      next,
+    ) {
+      if (previous == null || previous == next || state.keyword.isEmpty) {
+        return;
+      }
+      unawaited(search(keyword: state.keyword, sortType: state.sortType));
+    });
+    return const SearchResultsState();
+  }
 
   Future<void> search({
     required String keyword,
@@ -157,7 +172,18 @@ class SearchSuggestionsController extends Notifier<SearchSuggestionsState> {
   int _generation = 0;
 
   @override
-  SearchSuggestionsState build() => const SearchSuggestionsState();
+  SearchSuggestionsState build() {
+    ref.listen(appLocaleControllerProvider.select(apiLangFromLocale), (
+      previous,
+      next,
+    ) {
+      if (previous == null || previous == next || state.keyword.isEmpty) {
+        return;
+      }
+      unawaited(search(state.keyword));
+    });
+    return const SearchSuggestionsState();
+  }
 
   void clear() {
     _generation++;

@@ -116,7 +116,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     if (currentIndex == AppShellDestinations.forYouIndex &&
         index != AppShellDestinations.forYouIndex) {
       final playback = ref.read(playbackProvider);
-      _resumeForYouOnReturn = playback.isPlaying || playback.isOpening;
+      _resumeForYouOnReturn =
+          playback.currentSource != null || playback.isOpening;
       _forYouVisibilityOperation = _forYouVisibilityOperation.then((_) {
         return ref.read(playbackProvider.notifier).pauseForVisibility();
       });
@@ -136,6 +137,17 @@ class _AppShellState extends ConsumerState<AppShell> {
     // 检测是否重复点击首页 tab，如果是则通知首页滚动到顶部
     if (index == currentIndex && index == AppShellDestinations.homeIndex) {
       ref.read(homeScrollToTopRequestProvider.notifier).requestScrollToTop();
+    }
+
+    if (index != currentIndex) {
+      final previousPlacement = AppShellDestinations.popupPlacementForIndex(
+        currentIndex,
+      );
+      if (previousPlacement != null) {
+        ref
+            .read(popupEntryControllerProvider.notifier)
+            .cancelPlacementFlow(previousPlacement);
+      }
     }
 
     widget.navigationShell.goBranch(

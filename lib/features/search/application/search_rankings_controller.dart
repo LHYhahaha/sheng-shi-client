@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/locale/app_locale_controller.dart';
+import '../../../core/runtime/api_lang_provider.dart';
 import '../data/search_repository_provider.dart';
 import '../domain/search_rankings.dart';
 
@@ -78,6 +80,15 @@ class SearchRankingsController extends Notifier<SearchRankingsState> {
 
   @override
   SearchRankingsState build() {
+    ref.listen(appLocaleControllerProvider.select(apiLangFromLocale), (
+      previous,
+      next,
+    ) {
+      if (previous == null || previous == next) {
+        return;
+      }
+      unawaited(loadRankings());
+    });
     Future.microtask(loadRankings);
     return const SearchRankingsState.initial();
   }

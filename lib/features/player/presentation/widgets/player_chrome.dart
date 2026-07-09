@@ -307,7 +307,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
             overlayOpacityListenable: overlayOpacityListenable,
             showChromeOverlays: showChromeOverlays,
             chromeOverlayFadeDuration: chromeOverlayFadeDuration,
-            onTap: onMetaTap,
+            onTap: forYouLayout ? () {} : onMetaTap,
           ),
           if (!forYouLayout) ...[
             Positioned(

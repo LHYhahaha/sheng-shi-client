@@ -761,6 +761,29 @@ void main() {
     },
   );
 
+  test(
+    'resumeAfterVisibilityPause resumes playback even when hidden from paused state',
+    () async {
+      final session = _FakePlaybackSession();
+      final container = _createContainer(session);
+      final provider = playerPlaybackControllerProvider('for-you-tab');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1, mode: PlayerFeedMode.forYou));
+      await controller.pause();
+      await controller.pauseForVisibility();
+      final playCountBeforeResume = session.playCount;
+
+      await controller.resumeAfterVisibilityPause();
+
+      final state = container.read(provider);
+      expect(state.status, PlayerPlaybackStatus.playing);
+      expect(state.currentSource, _videoUrl);
+      expect(state.surfaceLifecycle, PlayerVideoSurfaceLifecycle.attached);
+      expect(session.playCount, playCountBeforeResume + 1);
+    },
+  );
+
   testWidgets(
     'For You suspension releases decoder and reopens current item on return',
     (tester) async {

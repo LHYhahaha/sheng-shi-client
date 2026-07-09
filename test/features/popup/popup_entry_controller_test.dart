@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:drama_client/core/auth/auth_token_store.dart';
 import 'package:drama_client/core/runtime/in_memory_install_id_storage.dart';
@@ -412,6 +414,61 @@ void main() {
     },
   );
 
+  test('finishes active popup flow without showing later popups', () async {
+    const firstPopup = PopupConfig(
+      id: 1,
+      contentMode: 1,
+      popupImage: 'https://example.test/1.jpg',
+      frontPopupLimit: 1,
+    );
+    const secondPopup = PopupConfig(
+      id: 2,
+      contentMode: 1,
+      popupImage: 'https://example.test/2.jpg',
+      frontPopupLimit: 2,
+    );
+    const thirdPopup = PopupConfig(
+      id: 3,
+      contentMode: 1,
+      popupImage: 'https://example.test/3.jpg',
+      frontPopupLimit: 3,
+    );
+    final repository = _RecordingPopupRepository(
+      popups: const [firstPopup, secondPopup, thirdPopup],
+    );
+    final container = _container(repository: repository);
+    addTearDown(container.dispose);
+
+    final controller = container.read(popupEntryControllerProvider.notifier);
+    await controller.requestForPlacement(PopupPlacementCode.homeEnter);
+    controller.markPendingPopupImageReady(firstPopup);
+    controller.closeActivePopup();
+    controller.markPendingPopupImageReady(secondPopup);
+
+    expect(
+      container.read(popupEntryControllerProvider).activePopup,
+      secondPopup,
+    );
+    expect(
+      container.read(popupEntryControllerProvider).pendingPopup,
+      thirdPopup,
+    );
+
+    controller.finishActivePopupFlow();
+
+    expect(container.read(popupEntryControllerProvider).activePopup, isNull);
+    expect(container.read(popupEntryControllerProvider).pendingPopup, isNull);
+
+    controller.markPendingPopupImageReady(thirdPopup);
+
+    expect(container.read(popupEntryControllerProvider).activePopup, isNull);
+    expect(container.read(popupEntryControllerProvider).pendingPopup, isNull);
+
+    await controller.requestForPlacement(PopupPlacementCode.homeEnter);
+
+    expect(repository.calls, [PopupPlacementCode.homeEnter]);
+  });
+
   test('does not count image preload failures in popup list flow', () async {
     const failedPopup = PopupConfig(
       id: 1,
@@ -447,6 +504,77 @@ void main() {
     );
     expect(repository.events, isEmpty);
   });
+
+  test(
+    'cancels active flow and consumes placement for current cycle',
+    () async {
+      const popup = PopupConfig(
+        id: 1,
+        contentMode: 1,
+        popupImage: 'https://example.test/1.jpg',
+        frontPopupLimit: 1,
+      );
+      final repository = _RecordingPopupRepository(popup: popup);
+      final container = _container(repository: repository);
+      addTearDown(container.dispose);
+
+      final controller = container.read(popupEntryControllerProvider.notifier);
+      await controller.requestForPlacement(PopupPlacementCode.homeEnter);
+      controller.markPendingPopupImageReady(popup);
+
+      expect(container.read(popupEntryControllerProvider).activePopup, popup);
+
+      controller.cancelPlacementFlow(PopupPlacementCode.homeEnter);
+
+      expect(container.read(popupEntryControllerProvider).activePopup, isNull);
+      expect(container.read(popupEntryControllerProvider).pendingPopup, isNull);
+      expect(
+        container.read(popupEntryControllerProvider).requestedPlacements,
+        contains(PopupPlacementCode.homeEnter),
+      );
+
+      await controller.requestForPlacement(PopupPlacementCode.homeEnter);
+
+      expect(repository.calls, [PopupPlacementCode.homeEnter]);
+    },
+  );
+
+  test(
+    'ignores popup response when placement is cancelled while request is in flight',
+    () async {
+      const popup = PopupConfig(
+        id: 1,
+        contentMode: 1,
+        popupImage: 'https://example.test/1.jpg',
+        frontPopupLimit: 1,
+      );
+      final repository = _DelayedPopupRepository(popups: const [popup]);
+      final container = _container(repository: repository);
+      addTearDown(container.dispose);
+
+      final controller = container.read(popupEntryControllerProvider.notifier);
+      final request = controller.requestForPlacement(
+        PopupPlacementCode.homeEnter,
+      );
+
+      expect(repository.calls, [PopupPlacementCode.homeEnter]);
+
+      controller.cancelPlacementFlow(PopupPlacementCode.homeEnter);
+      repository.complete();
+      await request;
+
+      expect(container.read(popupEntryControllerProvider).pendingPopup, isNull);
+      expect(container.read(popupEntryControllerProvider).activePopup, isNull);
+      expect(
+        container.read(popupEntryControllerProvider).requestedPlacements,
+        contains(PopupPlacementCode.homeEnter),
+      );
+
+      await controller.requestForPlacement(PopupPlacementCode.homeEnter);
+
+      expect(repository.calls, [PopupPlacementCode.homeEnter]);
+    },
+  );
 
   test(
     'does not start another flow for the same placement while popup is active',
@@ -502,7 +630,7 @@ void main() {
 }
 
 ProviderContainer _container({
-  required _RecordingPopupRepository repository,
+  required PopupRepository repository,
   DateTime Function()? now,
   bool requestReady = true,
 }) {
@@ -566,6 +694,41 @@ class _RecordingPopupRepository implements PopupRepository {
   }
 
   static const Object _sentinel = Object();
+}
+
+class _DelayedPopupRepository implements PopupRepository {
+  _DelayedPopupRepository({required this.popups});
+
+  final List<PopupConfig> popups;
+  final List<PopupPlacementCode> calls = [];
+  final Completer<List<PopupConfig>> _completer =
+      Completer<List<PopupConfig>>();
+
+  void complete() {
+    _completer.complete(popups);
+  }
+
+  @override
+  Future<List<PopupConfig>> fetchPopups({
+    required PopupPlacementCode placement,
+  }) {
+    calls.add(placement);
+    return _completer.future;
+  }
+
+  @override
+  Future<void> reportPopupEvent({
+    required int popupId,
+    required PopupEventType eventType,
+  }) async {}
+
+  @override
+  Future<List<PopupExitRecommendation>> fetchDetailExitRecommendations({
+    required String dramaId,
+    CancelToken? cancelToken,
+  }) async {
+    return const <PopupExitRecommendation>[];
+  }
 }
 
 class _RecordedPopupEvent {
