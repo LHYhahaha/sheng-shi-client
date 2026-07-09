@@ -60,6 +60,7 @@ class PopupDto {
       pageCode: pageCode,
       shortJumpMode: shortJumpMode,
       shortDramaId: shortDramaId,
+      frontPopupLimit: frontPopupLimit,
     );
   }
 }

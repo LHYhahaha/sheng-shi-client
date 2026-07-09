@@ -8,43 +8,51 @@ import '../../helpers/fake_api_envelope.dart';
 import '../../helpers/recording_http_adapter.dart';
 
 void main() {
-  test('requests popup by placement code and maps response fields', () async {
-    final adapter = RecordingHttpAdapter();
-    adapter.setResponse(
-      'GET',
-      '/api/popup',
-      RecordingHttpResponse(
-        body: apiEnvelopeSuccess({
-          'id': 12,
-          'name': 'Home Campaign',
-          'placement_code': 'home_enter',
-          'content_mode': 1,
-          'popup_image': 'https://example.test/popup.png',
-          'show_close_button': 1,
-          'jump_type': 2,
-          'h5_url': 'https://example.test/landing',
-          'page_code': 'store',
-          'short_jump_mode': 0,
-          'short_drama_id': 99,
-        }),
-      ),
-    );
-    final source = PopupRemoteDataSource(
-      apiClient: _apiClientWith(adapter: adapter),
-    );
+  test(
+    'requests popup list by placement code and maps response fields',
+    () async {
+      final adapter = RecordingHttpAdapter();
+      adapter.setResponse(
+        'GET',
+        '/api/popup',
+        RecordingHttpResponse(
+          body: apiEnvelopeSuccess([
+            {
+              'id': 12,
+              'name': 'Home Campaign',
+              'placement_code': 'home_enter',
+              'content_mode': 1,
+              'popup_image': 'https://example.test/popup.png',
+              'show_close_button': 1,
+              'jump_type': 2,
+              'h5_url': 'https://example.test/landing',
+              'page_code': 'store',
+              'short_jump_mode': 0,
+              'short_drama_id': 99,
+              'front_popup_limit': 1,
+            },
+          ]),
+        ),
+      );
+      final source = PopupRemoteDataSource(
+        apiClient: _apiClientWith(adapter: adapter),
+      );
 
-    final dto = await source.fetchPopup(placementCode: 'home_enter');
+      final dtos = await source.fetchPopups(placementCode: 'home_enter');
 
-    expect(dto?.id, 12);
-    expect(dto?.placementCode, 'home_enter');
-    expect(dto?.popupImage, 'https://example.test/popup.png');
-    expect(dto?.jumpType, 2);
+      expect(dtos, hasLength(1));
+      expect(dtos.single.id, 12);
+      expect(dtos.single.placementCode, 'home_enter');
+      expect(dtos.single.popupImage, 'https://example.test/popup.png');
+      expect(dtos.single.jumpType, 2);
+      expect(dtos.single.frontPopupLimit, 1);
 
-    final request = adapter.requests.single;
-    expect(request.path, '/api/popup');
-    expect(request.queryParameters['placement_code'], 'home_enter');
-    expect(request.headers['Authorization'], 'Bearer token');
-  });
+      final request = adapter.requests.single;
+      expect(request.path, '/api/popup');
+      expect(request.queryParameters['placement_code'], 'home_enter');
+      expect(request.headers['Authorization'], 'Bearer token');
+    },
+  );
 
   test('maps empty popup data to null', () async {
     final adapter = RecordingHttpAdapter();
@@ -57,9 +65,29 @@ void main() {
       apiClient: _apiClientWith(adapter: adapter),
     );
 
-    final dto = await source.fetchPopup(placementCode: 'recommend_tab_enter');
+    final dtos = await source.fetchPopups(placementCode: 'recommend_tab_enter');
 
-    expect(dto, isNull);
+    expect(dtos, isEmpty);
+  });
+
+  test('reports popup event', () async {
+    final adapter = RecordingHttpAdapter();
+    adapter.setResponse(
+      'POST',
+      '/api/popup/event',
+      RecordingHttpResponse(body: apiEnvelopeSuccess(null)),
+    );
+    final source = PopupRemoteDataSource(
+      apiClient: _apiClientWith(adapter: adapter),
+    );
+
+    await source.reportPopupEvent(popupId: 12, eventType: 3);
+
+    final request = adapter.requests.single;
+    expect(request.method, 'POST');
+    expect(request.path, '/api/popup/event');
+    expect(request.data, {'popup_id': 12, 'event_type': 3});
+    expect(request.headers['Authorization'], 'Bearer token');
   });
 
   test(

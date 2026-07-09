@@ -11,23 +11,41 @@ class PopupRemoteDataSource {
 
   final ApiClient _apiClient;
 
-  Future<PopupDto?> fetchPopup({required String placementCode}) {
-    return _apiClient.get<PopupDto?>(
+  Future<List<PopupDto>> fetchPopups({required String placementCode}) {
+    return _apiClient.get<List<PopupDto>>(
       '/api/popup',
       queryParameters: <String, Object?>{'placement_code': placementCode},
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) {
         if (data == null) {
-          return null;
+          return const <PopupDto>[];
+        }
+        if (data is List) {
+          return data
+              .whereType<Map>()
+              .map((item) => PopupDto.fromJson(Map<String, Object?>.from(item)))
+              .toList(growable: false);
         }
         if (data is Map<String, Object?>) {
-          return PopupDto.fromJson(data);
+          return [PopupDto.fromJson(data)];
         }
         if (data is Map) {
-          return PopupDto.fromJson(Map<String, Object?>.from(data));
+          return [PopupDto.fromJson(Map<String, Object?>.from(data))];
         }
-        return null;
+        return const <PopupDto>[];
       },
+    );
+  }
+
+  Future<void> reportPopupEvent({
+    required int popupId,
+    required int eventType,
+  }) {
+    return _apiClient.post<void>(
+      '/api/popup/event',
+      data: <String, Object?>{'popup_id': popupId, 'event_type': eventType},
+      authPolicy: ApiAuthPolicy.required,
+      decoder: (_) {},
     );
   }
 

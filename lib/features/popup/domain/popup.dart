@@ -7,6 +7,16 @@ enum PopupPlacementCode {
   final String apiValue;
 }
 
+enum PopupEventType {
+  show(1),
+  click(2),
+  close(3);
+
+  const PopupEventType(this.apiValue);
+
+  final int apiValue;
+}
+
 class PopupConfig {
   const PopupConfig({
     this.id,
@@ -20,6 +30,7 @@ class PopupConfig {
     this.pageCode,
     this.shortJumpMode,
     this.shortDramaId,
+    this.frontPopupLimit,
   });
 
   final int? id;
@@ -33,6 +44,7 @@ class PopupConfig {
   final String? pageCode;
   final int? shortJumpMode;
   final int? shortDramaId;
+  final int? frontPopupLimit;
 }
 
 class PopupExitRecommendation {

@@ -11,13 +11,24 @@ class RemotePopupRepository implements PopupRepository {
   final PopupRemoteDataSource _remoteDataSource;
 
   @override
-  Future<PopupConfig?> fetchPopup({
+  Future<List<PopupConfig>> fetchPopups({
     required PopupPlacementCode placement,
   }) async {
-    final dto = await _remoteDataSource.fetchPopup(
+    final dtos = await _remoteDataSource.fetchPopups(
       placementCode: placement.apiValue,
     );
-    return dto?.toDomain();
+    return dtos.map((dto) => dto.toDomain()).toList(growable: false);
+  }
+
+  @override
+  Future<void> reportPopupEvent({
+    required int popupId,
+    required PopupEventType eventType,
+  }) {
+    return _remoteDataSource.reportPopupEvent(
+      popupId: popupId,
+      eventType: eventType.apiValue,
+    );
   }
 
   @override

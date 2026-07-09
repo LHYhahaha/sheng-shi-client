@@ -64,6 +64,12 @@ final popupEntryControllerProvider =
 class PopupEntryController extends Notifier<PopupEntryState> {
   static const backgroundRefreshThreshold = Duration(minutes: 30);
 
+  List<PopupConfig> _flowPopups = const <PopupConfig>[];
+  int _flowIndex = 0;
+  int _flowDisplayedCount = 0;
+  PopupPlacementCode? _flowPlacement;
+  PopupConfig? _readyPopup;
+
   @override
   PopupEntryState build() {
     return const PopupEntryState();
@@ -79,7 +85,8 @@ class PopupEntryController extends Notifier<PopupEntryState> {
     }
 
     if (state.requestedPlacements.contains(placement) ||
-        state.inFlightPlacements.contains(placement)) {
+        state.inFlightPlacements.contains(placement) ||
+        _flowPlacement == placement) {
       return;
     }
 
@@ -88,14 +95,15 @@ class PopupEntryController extends Notifier<PopupEntryState> {
     );
 
     try {
-      final popup = await ref
+      final popups = await ref
           .read(popupRepositoryProvider)
-          .fetchPopup(placement: placement);
+          .fetchPopups(placement: placement);
       state = state.copyWith(
         requestedPlacements: {...state.requestedPlacements, placement},
-        pendingPopup: _isDisplayablePopup(popup) ? popup : null,
+        pendingPopup: null,
         activePopup: null,
       );
+      _startPopupFlow(placement, popups);
     } catch (error) {
       debugPrint(
         '[PopupEntryController] Popup request failed for '
@@ -116,13 +124,20 @@ class PopupEntryController extends Notifier<PopupEntryState> {
       return;
     }
     state = state.copyWith(activePopup: null);
+    _showReadyPopupOrAdvance();
   }
 
   void markPendingPopupImageReady(PopupConfig popup) {
     if (!identical(state.pendingPopup, popup)) {
       return;
     }
-    state = state.copyWith(pendingPopup: null, activePopup: popup);
+    state = state.copyWith(pendingPopup: null);
+    if (state.activePopup != null) {
+      _readyPopup = popup;
+      return;
+    }
+    _showPopup(popup);
+    _advancePopupFlow();
   }
 
   void discardPendingPopup(PopupConfig popup) {
@@ -130,6 +145,17 @@ class PopupEntryController extends Notifier<PopupEntryState> {
       return;
     }
     state = state.copyWith(pendingPopup: null);
+    _advancePopupFlow();
+  }
+
+  void closeActivePopup() {
+    final popup = state.activePopup;
+    if (popup == null) {
+      return;
+    }
+    state = state.copyWith(activePopup: null);
+    // unawaited(_reportPopupEvent(popup, PopupEventType.close));
+    _showReadyPopupOrAdvance();
   }
 
   Future<void> onLifecycleChanged(
@@ -163,6 +189,59 @@ class PopupEntryController extends Notifier<PopupEntryState> {
 
   DateTime _now() => ref.read(popupEntryNowProvider)();
 
+  void _startPopupFlow(PopupPlacementCode placement, List<PopupConfig> popups) {
+    _flowPopups = popups;
+    _flowIndex = 0;
+    _flowDisplayedCount = 0;
+    _flowPlacement = placement;
+    _readyPopup = null;
+    _advancePopupFlow();
+  }
+
+  void _advancePopupFlow() {
+    if (_readyPopup != null || state.pendingPopup != null) {
+      return;
+    }
+    while (_flowIndex < _flowPopups.length) {
+      final popup = _flowPopups[_flowIndex];
+      _flowIndex++;
+      if (_isDisplayablePopup(popup)) {
+        state = state.copyWith(pendingPopup: popup);
+        return;
+      }
+    }
+    if (state.activePopup != null) {
+      return;
+    }
+    _finishPopupFlow();
+  }
+
+  void _finishPopupFlow() {
+    _flowPopups = const <PopupConfig>[];
+    _flowIndex = 0;
+    _flowDisplayedCount = 0;
+    _flowPlacement = null;
+    _readyPopup = null;
+    state = state.copyWith(pendingPopup: null);
+  }
+
+  void _showReadyPopupOrAdvance() {
+    final readyPopup = _readyPopup;
+    if (readyPopup == null) {
+      _advancePopupFlow();
+      return;
+    }
+    _readyPopup = null;
+    _showPopup(readyPopup);
+    _advancePopupFlow();
+  }
+
+  void _showPopup(PopupConfig popup) {
+    state = state.copyWith(activePopup: popup);
+    _flowDisplayedCount++;
+    // unawaited(_reportPopupEvent(popup, PopupEventType.show));
+  }
+
   bool _isDisplayablePopup(PopupConfig? popup) {
     if (popup == null) {
       return false;
@@ -174,10 +253,21 @@ class PopupEntryController extends Notifier<PopupEntryState> {
     if (popup.popupImage == null || popup.popupImage!.trim().isEmpty) {
       return false;
     }
-    if (contentMode == 2) {
-      return popup.shortDramaId != null && popup.shortDramaId! > 0;
+    if (popup.jumpType == 2 &&
+        (popup.h5Url == null || popup.h5Url!.trim().isEmpty)) {
+      return false;
     }
-    return true;
+    if (popup.jumpType == 3 &&
+        (popup.shortDramaId == null || popup.shortDramaId! <= 0)) {
+      return false;
+    }
+    if (contentMode == 2) {
+      if (popup.shortDramaId == null || popup.shortDramaId! <= 0) {
+        return false;
+      }
+    }
+    final frontPopupLimit = popup.frontPopupLimit;
+    return frontPopupLimit != null && _flowDisplayedCount < frontPopupLimit;
   }
 
   bool _isBackgroundState(AppLifecycleState state) {
