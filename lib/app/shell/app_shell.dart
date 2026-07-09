@@ -122,15 +122,15 @@ class AppShellDestinations {
   // static const forYouIndex = 1;
 
   static const homeIndex = 0;
-  // static const memberIndex = 1;
-  static const myListIndex = 1;
-  static const profileIndex = 2;
+  static const memberIndex = 1;
+  static const myListIndex = 2;
+  static const profileIndex = 3;
 
   static const paths = [
     RoutePaths.home,
     // RoutePaths.forYou,  // 暂时禁用
+    RoutePaths.member,
     RoutePaths.myList,
-    // RoutePaths.member,
     RoutePaths.profile,
   ];
 }

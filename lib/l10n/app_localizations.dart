@@ -1224,7 +1224,7 @@ class AppLocalizations {
 
   // ── 占位符（开发用）─────────────────────────────────────────────
   String get memberPagePlaceholder => _remoteText(
-    'membership_page.title.join',
+    'membership_page.title.test',
     en: 'Under development',
     zh: '正在开发中',
   );
