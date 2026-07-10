@@ -32,7 +32,7 @@ class RemotePopupRepository implements PopupRepository {
   }
 
   @override
-  Future<List<PopupExitRecommendation>> fetchDetailExitRecommendations({
+  Future<PopupExitRecommendationSet> fetchDetailExitRecommendations({
     required String dramaId,
     CancelToken? cancelToken,
   }) async {
@@ -40,6 +40,11 @@ class RemotePopupRepository implements PopupRepository {
       dramaId: dramaId,
       cancelToken: cancelToken,
     );
-    return dto.dramas.map((drama) => drama.toDomain()).toList(growable: false);
+    return PopupExitRecommendationSet(
+      popupId: dto.popupId,
+      recommendations: dto.dramas
+          .map((drama) => drama.toDomain())
+          .toList(growable: false),
+    );
   }
 }

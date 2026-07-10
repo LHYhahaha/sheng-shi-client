@@ -220,7 +220,9 @@ void main() {
       container.read(popupEntryControllerProvider).activePopup,
       imagePopup,
     );
-    expect(repository.events, isEmpty);
+    expect(repository.events, const [
+      _RecordedPopupEvent(12, PopupEventType.show),
+    ]);
   });
 
   test('discards pending popup when image preload fails', () async {
@@ -243,6 +245,28 @@ void main() {
     expect(repository.events, isEmpty);
   });
 
+  test('reports click event when image popup image is tapped', () async {
+    final popup = const PopupConfig(
+      id: 12,
+      contentMode: 1,
+      popupImage: 'https://example.test/image.jpg',
+      frontPopupLimit: 1,
+    );
+    final repository = _RecordingPopupRepository(popup: popup);
+    final container = _container(repository: repository);
+    addTearDown(container.dispose);
+
+    final controller = container.read(popupEntryControllerProvider.notifier);
+    await controller.requestForPlacement(PopupPlacementCode.homeEnter);
+    controller.markPendingPopupImageReady(popup);
+    controller.tapActivePopupImage(popup);
+
+    expect(repository.events, const [
+      _RecordedPopupEvent(12, PopupEventType.show),
+      _RecordedPopupEvent(12, PopupEventType.click),
+    ]);
+  });
+
   test('reports close event when active popup is closed by button', () async {
     final popup = const PopupConfig(
       id: 12,
@@ -261,7 +285,10 @@ void main() {
     controller.closeActivePopup();
 
     expect(container.read(popupEntryControllerProvider).activePopup, isNull);
-    expect(repository.events, isEmpty);
+    expect(repository.events, const [
+      _RecordedPopupEvent(12, PopupEventType.show),
+      _RecordedPopupEvent(12, PopupEventType.close),
+    ]);
   });
 
   test(
@@ -308,7 +335,9 @@ void main() {
         recommendationContainer.read(popupEntryControllerProvider).activePopup,
         recommendationPopup,
       );
-      expect(recommendationRepository.events, isEmpty);
+      expect(recommendationRepository.events, const [
+        _RecordedPopupEvent(99, PopupEventType.show),
+      ]);
     },
   );
 
@@ -359,7 +388,10 @@ void main() {
 
       expect(container.read(popupEntryControllerProvider).pendingPopup, isNull);
       expect(container.read(popupEntryControllerProvider).activePopup, isNull);
-      expect(repository.events, isEmpty);
+      expect(repository.events, const [
+        _RecordedPopupEvent(1, PopupEventType.show),
+        _RecordedPopupEvent(1, PopupEventType.close),
+      ]);
     },
   );
 
@@ -411,6 +443,11 @@ void main() {
         container.read(popupEntryControllerProvider).activePopup,
         secondPopup,
       );
+      expect(repository.events, const [
+        _RecordedPopupEvent(1, PopupEventType.show),
+        _RecordedPopupEvent(1, PopupEventType.close),
+        _RecordedPopupEvent(2, PopupEventType.show),
+      ]);
     },
   );
 
@@ -458,6 +495,11 @@ void main() {
 
     expect(container.read(popupEntryControllerProvider).activePopup, isNull);
     expect(container.read(popupEntryControllerProvider).pendingPopup, isNull);
+    expect(repository.events, const [
+      _RecordedPopupEvent(1, PopupEventType.show),
+      _RecordedPopupEvent(1, PopupEventType.close),
+      _RecordedPopupEvent(2, PopupEventType.show),
+    ]);
 
     controller.markPendingPopupImageReady(thirdPopup);
 
@@ -686,11 +728,11 @@ class _RecordingPopupRepository implements PopupRepository {
   }
 
   @override
-  Future<List<PopupExitRecommendation>> fetchDetailExitRecommendations({
+  Future<PopupExitRecommendationSet> fetchDetailExitRecommendations({
     required String dramaId,
     CancelToken? cancelToken,
   }) async {
-    return const <PopupExitRecommendation>[];
+    return const PopupExitRecommendationSet(recommendations: []);
   }
 
   static const Object _sentinel = Object();
@@ -723,11 +765,11 @@ class _DelayedPopupRepository implements PopupRepository {
   }) async {}
 
   @override
-  Future<List<PopupExitRecommendation>> fetchDetailExitRecommendations({
+  Future<PopupExitRecommendationSet> fetchDetailExitRecommendations({
     required String dramaId,
     CancelToken? cancelToken,
   }) async {
-    return const <PopupExitRecommendation>[];
+    return const PopupExitRecommendationSet(recommendations: []);
   }
 }
 

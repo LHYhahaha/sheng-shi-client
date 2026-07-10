@@ -2,14 +2,21 @@ import '../../../../core/network/json_field_parser.dart';
 import '../../domain/popup.dart';
 
 class PopupExitRecommendationResponseDto {
-  const PopupExitRecommendationResponseDto({required this.dramas});
+  const PopupExitRecommendationResponseDto({
+    required this.dramas,
+    this.popupId,
+  });
 
+  final int? popupId;
   final List<PopupExitRecommendationDto> dramas;
 
   factory PopupExitRecommendationResponseDto.fromJson(
     Map<String, Object?> json,
   ) {
     return PopupExitRecommendationResponseDto(
+      popupId:
+          JsonFieldParser.optionalInt(json, 'popup_id') ??
+          JsonFieldParser.optionalInt(json, 'id'),
       dramas: _parseDramas(json['dramas']),
     );
   }

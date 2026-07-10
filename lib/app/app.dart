@@ -123,6 +123,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   }
 
   void _handlePopupImageTap(GoRouter router, PopupConfig popup) {
+    ref.read(popupEntryControllerProvider.notifier).tapActivePopupImage(popup);
     final contentMode = popup.contentMode;
     if (contentMode == 2) {
       _closePopupAndOpenDrama(router, popup);
@@ -130,13 +131,13 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     }
 
     if (contentMode != 1) {
-      _closeActivePopup();
+      _dismissActivePopup();
       return;
     }
 
     switch (popup.jumpType) {
       case 1:
-        _closeActivePopup();
+        _dismissActivePopup();
         return;
       case 2:
         _closePopupAndOpenWebView(router, popup);
@@ -148,7 +149,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         _closePopupAndOpenPageCode(router, popup);
         return;
       default:
-        _closeActivePopup();
+        _dismissActivePopup();
         return;
     }
   }
@@ -157,8 +158,8 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     _closePopupAndOpenDrama(router, popup);
   }
 
-  void _closeActivePopup() {
-    ref.read(popupEntryControllerProvider.notifier).closeActivePopup();
+  void _dismissActivePopup() {
+    ref.read(popupEntryControllerProvider.notifier).dismissActivePopup();
   }
 
   void _finishActivePopupFlow() {
@@ -168,7 +169,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   void _closePopupAndOpenWebView(GoRouter router, PopupConfig popup) {
     final url = popup.h5Url?.trim();
     if (url == null || url.isEmpty) {
-      _closeActivePopup();
+      _dismissActivePopup();
       return;
     }
     _finishActivePopupFlow();
@@ -178,7 +179,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   void _closePopupAndOpenDrama(GoRouter router, PopupConfig popup) {
     final dramaId = popup.shortDramaId;
     if (dramaId == null || dramaId <= 0) {
-      _closeActivePopup();
+      _dismissActivePopup();
       return;
     }
     _finishActivePopupFlow();
@@ -221,7 +222,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         debugPrint('[PopupEntryOverlay] Reserved page_code: $pageCode');
         return;
       default:
-        _closeActivePopup();
+        _dismissActivePopup();
         debugPrint('[PopupEntryOverlay] Unsupported page_code: $pageCode');
         return;
     }

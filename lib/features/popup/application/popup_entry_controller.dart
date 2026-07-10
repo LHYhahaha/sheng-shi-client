@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -178,8 +180,15 @@ class PopupEntryController extends Notifier<PopupEntryState> {
       return;
     }
     state = state.copyWith(activePopup: null);
-    // unawaited(_reportPopupEvent(popup, PopupEventType.close));
+    unawaited(_reportPopupEvent(popup, PopupEventType.close));
     _showReadyPopupOrAdvance();
+  }
+
+  void tapActivePopupImage(PopupConfig popup) {
+    if (!identical(state.activePopup, popup) || popup.contentMode != 1) {
+      return;
+    }
+    unawaited(_reportPopupEvent(popup, PopupEventType.click));
   }
 
   void finishActivePopupFlow() {
@@ -275,7 +284,27 @@ class PopupEntryController extends Notifier<PopupEntryState> {
   void _showPopup(PopupConfig popup) {
     state = state.copyWith(activePopup: popup);
     _flowDisplayedCount++;
-    // unawaited(_reportPopupEvent(popup, PopupEventType.show));
+    unawaited(_reportPopupEvent(popup, PopupEventType.show));
+  }
+
+  Future<void> _reportPopupEvent(
+    PopupConfig popup,
+    PopupEventType eventType,
+  ) async {
+    final popupId = popup.id;
+    if (popupId == null) {
+      return;
+    }
+    try {
+      await ref
+          .read(popupRepositoryProvider)
+          .reportPopupEvent(popupId: popupId, eventType: eventType);
+    } catch (error) {
+      debugPrint(
+        '[PopupEntryController] Popup event report failed for '
+        '$popupId/${eventType.apiValue}: $error',
+      );
+    }
   }
 
   bool _isDisplayablePopup(PopupConfig? popup) {

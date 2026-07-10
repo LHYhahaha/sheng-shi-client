@@ -76,3 +76,13 @@ class PopupExitRecommendation {
   final int status;
   final int episodeTotal;
 }
+
+class PopupExitRecommendationSet {
+  const PopupExitRecommendationSet({
+    required this.recommendations,
+    this.popupId,
+  });
+
+  final int? popupId;
+  final List<PopupExitRecommendation> recommendations;
+}

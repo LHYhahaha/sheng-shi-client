@@ -12,7 +12,7 @@ abstract class PopupRepository {
     required PopupEventType eventType,
   });
 
-  Future<List<PopupExitRecommendation>> fetchDetailExitRecommendations({
+  Future<PopupExitRecommendationSet> fetchDetailExitRecommendations({
     required String dramaId,
     CancelToken? cancelToken,
   });

@@ -18,6 +18,9 @@ import '../../../../core/runtime/api_lang_provider.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../pay/application/payment_loading_controller.dart';
+import '../../data/player_exit_recommendation_history_repository_provider.dart';
+import '../../../auth/application/auth_controller.dart';
+import '../../../auth/domain/auth_session.dart';
 import '../../application/player_feed_controller.dart';
 import '../../application/player_feed_engine.dart';
 import '../../application/player_feed_engine_access_flow.dart';
@@ -52,6 +55,22 @@ import '../widgets/player_feed_page_shell.dart';
 import '../widgets/player_playback_layer.dart';
 import '../widgets/player_subtitle_overlay.dart';
 
+sealed class _ExitRecommendationDialogResult {
+  const _ExitRecommendationDialogResult();
+}
+
+final class _ExitRecommendationExitResult
+    extends _ExitRecommendationDialogResult {
+  const _ExitRecommendationExitResult();
+}
+
+final class _ExitRecommendationPlayResult
+    extends _ExitRecommendationDialogResult {
+  const _ExitRecommendationPlayResult(this.recommendation);
+
+  final PopupExitRecommendation recommendation;
+}
+
 /// 鎾斁鍣?UI 瀹夸富锛氱旱鍚?[PageView] + 椤跺眰鍗曚緥 Video surface + sheet銆?
 ///
 /// 鑱岃矗杈圭晫锛?
@@ -67,6 +86,8 @@ class PlayerPage extends ConsumerStatefulWidget {
     this.initialPlaybackTrigger,
     this.initialUserActionAt,
     this.forYouHandoff,
+    this.initialExitRecommendationsForTesting,
+    this.initialExitRecommendationPopupIdForTesting,
     super.key,
   });
 
@@ -77,7 +98,9 @@ class PlayerPage extends ConsumerStatefulWidget {
       hideShellNavigation = false,
       initialPlaybackTrigger = 'for_you_tab',
       initialUserActionAt = null,
-      forYouHandoff = null;
+      forYouHandoff = null,
+      initialExitRecommendationsForTesting = null,
+      initialExitRecommendationPopupIdForTesting = null;
 
   final String? dramaId;
   final String? episodeId;
@@ -86,6 +109,8 @@ class PlayerPage extends ConsumerStatefulWidget {
   final String? initialPlaybackTrigger;
   final DateTime? initialUserActionAt;
   final ForYouPlayerHandoff? forYouHandoff;
+  final List<PopupExitRecommendation>? initialExitRecommendationsForTesting;
+  final int? initialExitRecommendationPopupIdForTesting;
 
   @override
   ConsumerState<PlayerPage> createState() => _PlayerPageState();
@@ -114,8 +139,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isOpeningSearch = false;
   bool _isOpeningForYouPlayer = false;
   bool _isReloadingForYouAfterLanguageChange = false;
+  bool _isLeavingRoute = false;
   bool _isPressingPlaybackSurface = false;
   bool _isPageScrolling = false;
+  bool _isExitRecommendationHistoryLoading = true;
+  bool _hasShownExitRecommendationForDrama = false;
   bool _didRecordFirstBuild = false;
   bool _allowRemoteResumeEpisodeSwitch = true;
   bool _isExitRecommendationRequestInFlight = false;
@@ -124,6 +152,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   final Set<String> _exitRecommendationEpisodeIds = <String>{};
   CancelToken? _exitRecommendationCancelToken;
   List<PopupExitRecommendation>? _exitRecommendationRecommendations;
+  int? _exitRecommendationPopupId;
   AppLifecycleState _previousLifecycleState = AppLifecycleState.resumed;
   bool _wasPlayingBeforeInactive = false;
   bool _resumePlaybackOnLifecycleResume = false;
@@ -139,6 +168,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   PlayerUnlockModalCoordinator get _unlockModalCoordinator =>
       ref.read(playerUnlockModalCoordinatorProvider(_sessionKey));
+
+  bool get _shouldIgnoreRouteListener => _isLeavingRoute || !mounted;
 
   String _createSessionKey() {
     return switch (widget.feedMode) {
@@ -165,6 +196,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       playerOverlayOrchestratorProvider(_sessionKey).notifier,
     );
     _modalService = ref.read(appModalServiceProvider);
+    _exitRecommendationRecommendations =
+        widget.initialExitRecommendationsForTesting;
+    _exitRecommendationPopupId =
+        widget.initialExitRecommendationPopupIdForTesting;
     _playbackController.recordPlaybackTiming(
       'player page init',
       details: [
@@ -191,6 +226,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (widget.hideShellNavigation) {
       _shellChrome = ref.read(appShellBottomNavigationVisibleProvider.notifier);
     }
+    unawaited(_loadExitRecommendationHistoryState());
     Future<void>.microtask(() async {
       final startupStopwatch = Stopwatch()..start();
       _playbackController.recordPlaybackTiming(
@@ -375,6 +411,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (widget.feedMode != PlayerFeedMode.singleDrama) {
       return;
     }
+    _showDefaultChromeAndSyncImmersiveBlockers();
+  }
+
+  void _showDefaultChromeAndSyncImmersiveBlockers() {
     final uiController = ref.read(
       playerUiControllerProvider(_sessionKey).notifier,
     );
@@ -798,6 +838,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     ref.listen(
       viewportProvider.select(PlayerViewportSettledSnapshot.fromState),
       (previous, next) {
+        if (_shouldIgnoreRouteListener) {
+          return;
+        }
         if (next.itemId == null ||
             (previous?.itemId == next.itemId &&
                 previous?.generation == next.generation)) {
@@ -877,6 +920,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     ref.listen(
       overlayProvider.select((state) => state.pendingAutoSheetItemId),
       (previous, next) {
+        if (_shouldIgnoreRouteListener) {
+          return;
+        }
         if (next == null || next == previous) {
           return;
         }
@@ -900,6 +946,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       previous,
       next,
     ) {
+      if (_shouldIgnoreRouteListener) {
+        return;
+      }
       if (!_pageController.hasClients) {
         return;
       }
@@ -913,7 +962,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                 : _pageTransitionDuration,
             curve: Curves.easeOutCubic,
           );
-          if (!mounted) {
+          if (_shouldIgnoreRouteListener) {
             return;
           }
           _settleViewportAtIndex(next);
@@ -929,6 +978,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           sessionKey,
         ).select((state) => state.isPlaying),
         (previous, next) {
+          if (_shouldIgnoreRouteListener) {
+            return;
+          }
           _syncAutoImmersiveBlockers();
         },
       );
@@ -936,6 +988,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         previous,
         next,
       ) {
+        if (_shouldIgnoreRouteListener) {
+          return;
+        }
         _syncAutoImmersiveBlockers(
           isViewportDragging: next != PlayerViewportScrollPhase.idle,
         );
@@ -953,6 +1008,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         ),
       ),
       (previous, next) {
+        if (_shouldIgnoreRouteListener) {
+          return;
+        }
         if (next.$1 == null ||
             next.$2 == null ||
             (next.$3 <= Duration.zero && !next.$5)) {
@@ -995,6 +1053,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         sessionKey,
       ).select((state) => (state.currentItemId, state.hasFirstFrame)),
       (previous, next) {
+        if (_shouldIgnoreRouteListener) {
+          return;
+        }
         if (next.$1 == null || !next.$2) {
           return;
         }
@@ -1007,6 +1068,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         sessionKey,
       ).select((state) => (state.currentItemId, state.hasEnded)),
       (previous, next) {
+        if (_shouldIgnoreRouteListener) {
+          return;
+        }
         if (!feedEngine.shouldHandlePlaybackEnded(
           currentItemId: next.$1,
           hasEnded: next.$2,
@@ -1692,6 +1756,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!mounted) {
       return;
     }
+    _isLeavingRoute = true;
     if (context.canPop()) {
       context.pop(handoffResult);
     } else {
@@ -1701,7 +1766,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   void _recordExitRecommendationEpisode({required String itemId}) {
     if (widget.feedMode != PlayerFeedMode.singleDrama ||
-        widget.dramaId == null) {
+        widget.dramaId == null ||
+        _isExitRecommendationHistoryLoading ||
+        _hasShownExitRecommendationForDrama) {
       return;
     }
     final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
@@ -1724,6 +1791,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   void _startExitRecommendationRequestIfEligible() {
     if (widget.feedMode != PlayerFeedMode.singleDrama ||
         widget.dramaId == null ||
+        _isExitRecommendationHistoryLoading ||
+        _hasShownExitRecommendationForDrama ||
         _isExitRecommendationRequestInFlight ||
         _exitRecommendationRecommendations != null ||
         _exitRecommendationEpisodeIds.length < 2) {
@@ -1737,7 +1806,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   Future<void> _loadExitRecommendation(CancelToken cancelToken) async {
     try {
-      final recommendations = await ref
+      final recommendationSet = await ref
           .read(popupRepositoryProvider)
           .fetchDetailExitRecommendations(
             dramaId: widget.dramaId!,
@@ -1746,8 +1815,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (cancelToken.isCancelled) {
         return;
       }
+      final recommendations = recommendationSet.recommendations;
       if (recommendations.length >= 5) {
         _exitRecommendationRecommendations = recommendations;
+        _exitRecommendationPopupId = recommendationSet.popupId;
       }
       debugPrint(
         '[PopupExitRecommendation] Loaded ${recommendations.length} '
@@ -1778,7 +1849,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<bool> _showExitRecommendationIfAvailable() async {
-    if (widget.feedMode != PlayerFeedMode.singleDrama || _isModalOpen) {
+    if (widget.feedMode != PlayerFeedMode.singleDrama ||
+        _isModalOpen ||
+        _hasShownExitRecommendationForDrama) {
       return false;
     }
     final recommendations = _exitRecommendationRecommendations;
@@ -1788,51 +1861,159 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
     _isModalOpen = true;
     _syncAutoImmersiveBlockers();
-    final shouldExit =
-        await showGeneralDialog<bool>(
-          context: context,
-          barrierDismissible: true,
-          barrierLabel: 'Exit recommendation',
-          barrierColor: Colors.black.withValues(alpha: 0.45),
-          transitionDuration: const Duration(milliseconds: 180),
-          pageBuilder: (dialogContext, animation, secondaryAnimation) {
-            return PlayerExitRecommendationDialog(
-              recommendations: recommendations,
-              onExit: () => Navigator.of(dialogContext).pop(true),
-              onPlay: (recommendation) {
-                Navigator.of(dialogContext).pop(false);
-              },
-            );
+    _markExitRecommendationShown();
+    // TODO: Enable if player exit recommendation popup show reporting is required.
+    // _reportExitRecommendationShowIfNeeded();
+    final result = await showGeneralDialog<_ExitRecommendationDialogResult>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Exit recommendation',
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return PlayerExitRecommendationDialog(
+          recommendations: recommendations,
+          onExit: () => Navigator.of(
+            dialogContext,
+          ).pop(const _ExitRecommendationExitResult()),
+          onPlay: (recommendation) {
+            Navigator.of(
+              dialogContext,
+            ).pop(_ExitRecommendationPlayResult(recommendation));
           },
-          transitionBuilder: (context, animation, secondaryAnimation, child) {
-            final curvedAnimation = CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-              reverseCurve: Curves.easeInCubic,
-            );
-            return FadeTransition(
-              opacity: curvedAnimation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0, 0.04),
-                  end: Offset.zero,
-                ).animate(curvedAnimation),
-                child: child,
-              ),
-            );
-          },
-        ) ??
-        false;
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curvedAnimation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.04),
+              end: Offset.zero,
+            ).animate(curvedAnimation),
+            child: child,
+          ),
+        );
+      },
+    );
 
     if (!mounted) {
       return true;
     }
     _isModalOpen = false;
     _syncAutoImmersiveBlockers();
-    if (shouldExit) {
-      unawaited(_goBackFromPlayer(skipExitRecommendation: true));
+    switch (result) {
+      case _ExitRecommendationExitResult():
+        unawaited(_goBackFromPlayer(skipExitRecommendation: true));
+      case _ExitRecommendationPlayResult(:final recommendation):
+        _openRecommendationFromExitDialog(recommendation);
+      case null:
     }
     return true;
+  }
+
+  Future<void> _loadExitRecommendationHistoryState() async {
+    final dramaId = widget.dramaId;
+    if (widget.feedMode != PlayerFeedMode.singleDrama || dramaId == null) {
+      _isExitRecommendationHistoryLoading = false;
+      return;
+    }
+    final userKey = _exitRecommendationUserKey(
+      ref.read(authControllerProvider).session,
+    );
+    try {
+      final hasShown = await ref
+          .read(playerExitRecommendationHistoryRepositoryProvider)
+          .hasShown(userKey: userKey, dramaId: dramaId);
+      if (!mounted) {
+        return;
+      }
+      _hasShownExitRecommendationForDrama = hasShown;
+      if (hasShown) {
+        _cancelExitRecommendationRequestIfPending();
+      }
+    } catch (error) {
+      debugPrint(
+        '[PopupExitRecommendation] History read failed for drama '
+        '$dramaId: $error',
+      );
+    } finally {
+      if (mounted) {
+        _isExitRecommendationHistoryLoading = false;
+        _startExitRecommendationRequestIfEligible();
+      }
+    }
+  }
+
+  void _markExitRecommendationShown() {
+    final dramaId = widget.dramaId;
+    if (dramaId == null || _hasShownExitRecommendationForDrama) {
+      return;
+    }
+    _hasShownExitRecommendationForDrama = true;
+    final userKey = _exitRecommendationUserKey(
+      ref.read(authControllerProvider).session,
+    );
+    unawaited(
+      ref
+          .read(playerExitRecommendationHistoryRepositoryProvider)
+          .markShown(userKey: userKey, dramaId: dramaId),
+    );
+  }
+
+  static String _exitRecommendationUserKey(AuthSession session) {
+    final userId = session.user?.id.trim();
+    if (userId != null && userId.isNotEmpty) {
+      return 'user:$userId';
+    }
+    final guestId = session.guestId?.trim();
+    if (guestId != null && guestId.isNotEmpty) {
+      return 'guest:$guestId';
+    }
+    final sessionId = session.sessionId?.trim();
+    if (sessionId != null && sessionId.isNotEmpty) {
+      return 'session:$sessionId';
+    }
+    return 'anonymous';
+  }
+
+  void _openRecommendationFromExitDialog(
+    PopupExitRecommendation recommendation,
+  ) {
+    _cancelExitRecommendationRequestIfPending();
+    _isLeavingRoute = true;
+    final location = RoutePaths.playerLocation(
+      dramaId: '${recommendation.id}',
+      episodeId: '1',
+      trigger: 'exit_recommendation',
+      userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+    );
+    context.pushReplacement(location);
+  }
+
+  // ignore: unused_element
+  void _reportExitRecommendationShowIfNeeded() {
+    final popupId = _exitRecommendationPopupId;
+    if (popupId == null) {
+      return;
+    }
+    unawaited(() async {
+      try {
+        await ref
+            .read(popupRepositoryProvider)
+            .reportPopupEvent(popupId: popupId, eventType: PopupEventType.show);
+      } catch (error) {
+        debugPrint(
+          '[PopupExitRecommendation] Show event report failed for '
+          '$popupId: $error',
+        );
+      }
+    }());
   }
 
   Future<void> _synchronizeReturnedForYouProgress(
@@ -1899,7 +2080,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _openRecommendationFromDetailSheet(
-    BuildContext sheetContext,
     PlayerRecommendation recommendation,
   ) async {
     if (_isOpeningRecommendation) {
@@ -1907,10 +2087,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
     _isOpeningRecommendation = true;
     try {
-      if (Navigator.of(sheetContext).canPop()) {
-        Navigator.of(sheetContext).pop();
-      }
-
       final shouldResumeWhenRecommendationReturns = ref
           .read(playerPlaybackControllerProvider(_sessionKey))
           .isPlaying;
@@ -1936,7 +2112,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           return;
         }
       }
-      _restoreChromeAfterReturningToPlayer();
+      if (_isModalOpen) {
+        _showDefaultChromeAndSyncImmersiveBlockers();
+      } else {
+        _restoreChromeAfterReturningToPlayer();
+      }
     } finally {
       _isOpeningRecommendation = false;
     }
@@ -2143,12 +2323,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                 _closeSheetAndSelectEpisode(sheetContext, episode);
               },
               onRecommendationSelected: (recommendation) {
-                unawaited(
-                  _openRecommendationFromDetailSheet(
-                    sheetContext,
-                    recommendation,
-                  ),
-                );
+                unawaited(_openRecommendationFromDetailSheet(recommendation));
               },
             );
           },

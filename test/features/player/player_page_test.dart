@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:drama_client/app/app_root_navigator_key.dart';
 import 'package:drama_client/app/router/route_paths.dart';
 import 'package:drama_client/app/router/route_names.dart';
@@ -15,11 +16,13 @@ import 'package:drama_client/features/entitlement/domain/episode_unlock_type.dar
 import 'package:drama_client/features/entitlement/domain/user_entitlement_state.dart';
 import 'package:drama_client/features/player/data/dto/watch_progress_dto.dart';
 import 'package:drama_client/features/player/data/player_content_repository_provider.dart';
+import 'package:drama_client/features/player/data/player_exit_recommendation_history_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
 import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_remote_data_source_provider.dart';
 import 'package:drama_client/features/player/data/remote/player_remote_data_source.dart';
+import 'package:drama_client/features/player/data/shared_preferences_player_exit_recommendation_history_repository.dart';
 import 'package:drama_client/features/player/application/player_chrome_auto_immersive_config_provider.dart';
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
 import 'package:drama_client/features/player/application/player_recharge_unlock_controller.dart';
@@ -43,12 +46,16 @@ import '../../core/toast/recording_app_toast_service.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_chrome.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_detail_sheet.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_playback_layer.dart';
+import 'package:drama_client/features/popup/data/popup_repository.dart';
+import 'package:drama_client/features/popup/data/popup_repository_provider.dart';
+import 'package:drama_client/features/popup/domain/popup.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets('for you search pauses on leave and always plays on return', (
@@ -3206,6 +3213,119 @@ void main() {
     expect(find.byKey(const ValueKey('player_single_top_bar')), findsOneWidget);
     expect(find.text('EP.02'), findsOneWidget);
   });
+
+  testWidgets('exit recommendation play replaces current player route', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final repository = _FakePlayerFeedRepository._(
+      items: _itemsWithAccessPattern([
+        _EpisodeAccessFixture.free(1, _mockVideoUrl),
+        _EpisodeAccessFixture.free(2, _mockSecondVideoUrl),
+        _EpisodeAccessFixture.free(3, _mockThirdVideoUrl),
+      ]),
+    );
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.home,
+        repository: repository,
+        initialExitRecommendationsForTesting: _popupExitRecommendations(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Open Player'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('player_back_button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('player_exit_recommendation_dialog')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('player_exit_recommendation_play_button')),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastSingleDramaId, '101');
+
+    await tester.tap(find.byKey(const ValueKey('player_back_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_back_button')), findsNothing);
+  });
+
+  testWidgets('shown exit recommendation skips future recommendation request', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final popupRepository = _RecordingExitRecommendationPopupRepository(
+      recommendations: _popupExitRecommendations(),
+    );
+    final historyRepository =
+        SharedPreferencesPlayerExitRecommendationHistoryRepository();
+    final repository = _FakePlayerFeedRepository._(
+      items: _itemsWithAccessPattern([
+        _EpisodeAccessFixture.free(1, _mockVideoUrl),
+        _EpisodeAccessFixture.free(2, _mockSecondVideoUrl),
+        _EpisodeAccessFixture.free(3, _mockThirdVideoUrl),
+      ]),
+    );
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.home,
+        repository: repository,
+        initialExitRecommendationsForTesting: _popupExitRecommendations(),
+        providerOverrides: [
+          popupRepositoryProvider.overrideWithValue(popupRepository),
+          playerExitRecommendationHistoryRepositoryProvider.overrideWithValue(
+            historyRepository,
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Open Player'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('player_back_button')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('player_exit_recommendation_dialog')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('player_exit_recommendation_exit_button')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Home'), findsOneWidget);
+    expect(popupRepository.exitRecommendationCalls, 0);
+
+    await tester.tap(find.text('Open Player'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(PageView), const Offset(0, -500));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(popupRepository.exitRecommendationCalls, 0);
+    await tester.tap(find.byKey(const ValueKey('player_back_button')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('player_exit_recommendation_dialog')),
+      findsNothing,
+    );
+  });
 }
 
 double _topBarOpacity(WidgetTester tester) {
@@ -3314,6 +3434,8 @@ Widget _buildPlayerApp({
   List providerOverrides = const [],
   PlayerPerformancePolicy? performancePolicy,
   RecordingAppToastService? toastService,
+  List<PopupExitRecommendation>? initialExitRecommendationsForTesting,
+  int? initialExitRecommendationPopupIdForTesting,
 }) {
   final toast = toastService ?? RecordingAppToastService();
   final router = GoRouter(
@@ -3322,16 +3444,35 @@ Widget _buildPlayerApp({
     routes: [
       GoRoute(
         path: RoutePaths.home,
-        builder: (context, state) => const Scaffold(body: Text('Home')),
+        builder: (context, state) => Scaffold(
+          body: Column(
+            children: [
+              const Text('Home'),
+              TextButton(
+                onPressed: () => context.push(
+                  RoutePaths.playerLocation(dramaId: 'drama-a', episodeId: '1'),
+                ),
+                child: const Text('Open Player'),
+              ),
+            ],
+          ),
+        ),
       ),
       GoRoute(
         path: RoutePaths.player,
         builder: (context, state) {
+          final dramaId = state.pathParameters['dramaId']!;
           return PlayerPage(
-            dramaId: state.pathParameters['dramaId']!,
+            dramaId: dramaId,
             episodeId: state.pathParameters['episodeId']!,
             forYouHandoff: state.extra is ForYouPlayerHandoff
                 ? state.extra! as ForYouPlayerHandoff
+                : null,
+            initialExitRecommendationsForTesting: dramaId == 'drama-a'
+                ? initialExitRecommendationsForTesting
+                : null,
+            initialExitRecommendationPopupIdForTesting: dramaId == 'drama-a'
+                ? initialExitRecommendationPopupIdForTesting
                 : null,
           );
         },
@@ -3418,6 +3559,35 @@ final class _ViewportUpdateObserver extends ProviderObserver {
   }
 }
 
+class _RecordingExitRecommendationPopupRepository implements PopupRepository {
+  _RecordingExitRecommendationPopupRepository({required this.recommendations});
+
+  final List<PopupExitRecommendation> recommendations;
+  int exitRecommendationCalls = 0;
+
+  @override
+  Future<List<PopupConfig>> fetchPopups({
+    required PopupPlacementCode placement,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<PopupExitRecommendationSet> fetchDetailExitRecommendations({
+    required String dramaId,
+    CancelToken? cancelToken,
+  }) async {
+    exitRecommendationCalls += 1;
+    return PopupExitRecommendationSet(recommendations: recommendations);
+  }
+
+  @override
+  Future<void> reportPopupEvent({
+    required int popupId,
+    required PopupEventType eventType,
+  }) async {}
+}
+
 class _FakePlayerFeedRepository implements PlayerFeedRepository {
   _FakePlayerFeedRepository._({
     required this.items,
@@ -3456,6 +3626,7 @@ class _FakePlayerFeedRepository implements PlayerFeedRepository {
   final List<PlayerFeedItem> items;
   final bool shouldReturnEmpty;
   bool shouldThrowOnce;
+  String? lastSingleDramaId;
   String? lastSingleDramaEpisodeId;
 
   @override
@@ -3463,6 +3634,7 @@ class _FakePlayerFeedRepository implements PlayerFeedRepository {
     required String dramaId,
     required String episodeId,
   }) async {
+    lastSingleDramaId = dramaId;
     lastSingleDramaEpisodeId = episodeId;
     if (shouldThrowOnce) {
       shouldThrowOnce = false;
@@ -3659,6 +3831,26 @@ PlayerContent _content(List<PlayerEpisode> episodes) {
     recommendations: const [],
     episodeTotal: episodes.length,
   );
+}
+
+List<PopupExitRecommendation> _popupExitRecommendations() {
+  return List<PopupExitRecommendation>.generate(5, (index) {
+    final id = 101 + index;
+    return PopupExitRecommendation(
+      id: id,
+      sort: index,
+      coverUrl: '',
+      title: 'Recommended Drama $id',
+      summary: 'Summary $id',
+      tagsName: const ['Romance'],
+      categoryNames: const ['Drama'],
+      playCount: 1000 + index,
+      trailerEpisodeNum: 1,
+      isVipOnly: 0,
+      status: 1,
+      episodeTotal: 10,
+    );
+  });
 }
 
 class _FakePlaybackSession implements PlayerPlaybackSession {

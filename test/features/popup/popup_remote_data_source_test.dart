@@ -99,6 +99,7 @@ void main() {
         '/api/popup/detail/exit',
         RecordingHttpResponse(
           body: apiEnvelopeSuccess({
+            'popup_id': 88,
             'dramas': [
               {
                 'id': 451,
@@ -125,6 +126,7 @@ void main() {
       final dto = await source.fetchDetailExitPopup(dramaId: '720');
 
       expect(dto.dramas, hasLength(1));
+      expect(dto.popupId, 88);
       expect(dto.dramas.single.id, 451);
       expect(dto.dramas.single.title, 'dragon_returns_in_city_451');
       expect(dto.dramas.single.categoryNames, ['精选', 'test2']);
