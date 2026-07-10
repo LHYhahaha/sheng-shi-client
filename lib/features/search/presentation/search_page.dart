@@ -47,6 +47,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   bool _isEditingHistory = false;
 
   @override
+  void initState() {
+    super.initState();
+    Future.microtask(
+      () => ref.read(searchRankingsControllerProvider.notifier).loadRankings(),
+    );
+  }
+
+  @override
   void dispose() {
     _searchDebounce?.cancel();
     _searchController.dispose();

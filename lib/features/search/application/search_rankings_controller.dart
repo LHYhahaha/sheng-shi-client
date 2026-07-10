@@ -89,7 +89,6 @@ class SearchRankingsController extends Notifier<SearchRankingsState> {
       }
       unawaited(loadRankings());
     });
-    Future.microtask(loadRankings);
     return const SearchRankingsState.initial();
   }
 

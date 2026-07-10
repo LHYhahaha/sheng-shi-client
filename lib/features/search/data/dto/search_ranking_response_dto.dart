@@ -58,7 +58,10 @@ class SearchRankDramaDto {
       title: JsonFieldParser.optionalString(json, 'title') ?? '',
       summary: JsonFieldParser.optionalString(json, 'summary') ?? '',
       tagsName: _parseTags(json['tags_name']),
-      searchCount: JsonFieldParser.optionalInt(json, 'search_count') ?? 0,
+      searchCount:
+          JsonFieldParser.optionalInt(json, 'search_count') ??
+          JsonFieldParser.optionalInt(json, 'play_count') ??
+          0,
       trailerEpisodeNum:
           JsonFieldParser.optionalInt(json, 'trailer_episode_num') ?? 0,
       isVipOnly: JsonFieldParser.optionalInt(json, 'is_vip_only') ?? 0,

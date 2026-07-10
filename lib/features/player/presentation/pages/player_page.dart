@@ -47,6 +47,7 @@ import '../../domain/player_playback_progress.dart';
 import '../../domain/player_subtitle.dart';
 import '../widgets/player_action_sheets.dart';
 import '../widgets/player_detail_sheet.dart';
+import '../widgets/player_exit_recommendation_dialog.dart';
 import '../widgets/player_feed_page_shell.dart';
 import '../widgets/player_playback_layer.dart';
 import '../widgets/player_subtitle_overlay.dart';
@@ -1667,7 +1668,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
   }
 
-  Future<void> _goBackFromPlayer() async {
+  Future<void> _goBackFromPlayer({bool skipExitRecommendation = false}) async {
+    if (!skipExitRecommendation && await _showExitRecommendationIfAvailable()) {
+      return;
+    }
     _cancelExitRecommendationRequestIfPending();
     final handoffResult = _currentForYouHandoffSnapshot();
     if (handoffResult != null) {
@@ -1771,6 +1775,64 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     cancelToken.cancel('player exiting before exit recommendation loaded');
+  }
+
+  Future<bool> _showExitRecommendationIfAvailable() async {
+    if (widget.feedMode != PlayerFeedMode.singleDrama || _isModalOpen) {
+      return false;
+    }
+    final recommendations = _exitRecommendationRecommendations;
+    if (recommendations == null || recommendations.length < 5 || !mounted) {
+      return false;
+    }
+
+    _isModalOpen = true;
+    _syncAutoImmersiveBlockers();
+    final shouldExit =
+        await showGeneralDialog<bool>(
+          context: context,
+          barrierDismissible: true,
+          barrierLabel: 'Exit recommendation',
+          barrierColor: Colors.black.withValues(alpha: 0.45),
+          transitionDuration: const Duration(milliseconds: 180),
+          pageBuilder: (dialogContext, animation, secondaryAnimation) {
+            return PlayerExitRecommendationDialog(
+              recommendations: recommendations,
+              onExit: () => Navigator.of(dialogContext).pop(true),
+              onPlay: (recommendation) {
+                Navigator.of(dialogContext).pop(false);
+              },
+            );
+          },
+          transitionBuilder: (context, animation, secondaryAnimation, child) {
+            final curvedAnimation = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
+            return FadeTransition(
+              opacity: curvedAnimation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.04),
+                  end: Offset.zero,
+                ).animate(curvedAnimation),
+                child: child,
+              ),
+            );
+          },
+        ) ??
+        false;
+
+    if (!mounted) {
+      return true;
+    }
+    _isModalOpen = false;
+    _syncAutoImmersiveBlockers();
+    if (shouldExit) {
+      unawaited(_goBackFromPlayer(skipExitRecommendation: true));
+    }
+    return true;
   }
 
   Future<void> _synchronizeReturnedForYouProgress(

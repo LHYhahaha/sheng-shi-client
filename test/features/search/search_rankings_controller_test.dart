@@ -17,7 +17,9 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    container.read(searchRankingsControllerProvider);
+    await container
+        .read(searchRankingsControllerProvider.notifier)
+        .loadRankings();
     await _flushMicrotasks();
 
     final state = container.read(searchRankingsControllerProvider);
@@ -37,7 +39,9 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    container.read(searchRankingsControllerProvider);
+    await container
+        .read(searchRankingsControllerProvider.notifier)
+        .loadRankings();
     await _flushMicrotasks();
 
     expect(
