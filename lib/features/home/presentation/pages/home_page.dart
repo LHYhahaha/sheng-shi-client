@@ -35,9 +35,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   List image = [
     "assets/images/home/picture1.jpg",
-    "assets/images/home/picture4.jpg",
     "assets/images/home/picture2.jpg",
-    "assets/images/home/picture5.jpg",
     "assets/images/home/picture3.jpg",
   ];
 
