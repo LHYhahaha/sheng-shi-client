@@ -17,6 +17,7 @@ import '../../features/player/domain/for_you_player_handoff.dart';
 import '../../features/profile/presentation/pages/language_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/profile/presentation/pages/settings_page.dart';
+import '../../features/rewards/presentation/pages/rewards_page.dart';
 import '../../features/search/presentation/search_page.dart';
 import '../../shared/widgets/webview_page.dart';
 import '../../l10n/app_localizations.dart';
@@ -150,6 +151,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.membership,
         name: RouteNames.membership,
         builder: (context, state) => const MembershipPage(),
+      ),
+      GoRoute(
+        path: RoutePaths.rewards,
+        name: RouteNames.rewards,
+        builder: (context, state) => RewardsPage(
+          initialTab: RewardTab.fromRouteValue(
+            state.uri.queryParameters['tab'],
+          ),
+        ),
       ),
       GoRoute(
         path: RoutePaths.webview,

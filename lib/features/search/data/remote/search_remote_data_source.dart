@@ -20,6 +20,15 @@ class SearchRemoteDataSource {
     return _getRanking('/api/home/online/new');
   }
 
+  Future<void> reportSearchResultClick({required String dramaId}) {
+    return _apiClient.post<void>(
+      '/api/home/search/stat',
+      data: <String, Object?>{'drama_id': dramaId},
+      authPolicy: ApiAuthPolicy.required,
+      decoder: (_) {},
+    );
+  }
+
   Future<SearchResultsResponseDto> search({
     required String keyword,
     required String page,

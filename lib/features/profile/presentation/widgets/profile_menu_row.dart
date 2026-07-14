@@ -28,13 +28,13 @@ class ProfileMenuRow extends StatelessWidget {
         padding: EdgeInsets.symmetric(vertical: 14),
         // subtitle != null ? 52 : 40,
         child: Row(
-          crossAxisAlignment: subtitle != null 
-              ? CrossAxisAlignment.start 
+          crossAxisAlignment: subtitle != null
+              ? CrossAxisAlignment.start
               : CrossAxisAlignment.center,
           children: [
             Padding(
-              padding: subtitle != null 
-                  ? const EdgeInsets.only(top: 8.0) 
+              padding: subtitle != null
+                  ? const EdgeInsets.only(top: 8.0)
                   : EdgeInsets.zero,
               child: Image.asset(
                 iconAssetPath,
@@ -51,8 +51,9 @@ class ProfileMenuRow extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textPrimary.withValues(alpha: 0.8),
+                    style: TextStyle(
+                      color: Color(0XFFB5B2B8),
+                      fontWeight: FontWeight(400),
                       fontSize: 14,
                       height: 1.5,
                     ),
@@ -72,8 +73,8 @@ class ProfileMenuRow extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: subtitle != null 
-                  ? const EdgeInsets.only(top: 8.0) 
+              padding: subtitle != null
+                  ? const EdgeInsets.only(top: 8.0)
                   : EdgeInsets.zero,
               child: Icon(
                 Icons.chevron_right_rounded,

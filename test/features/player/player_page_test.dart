@@ -58,6 +58,41 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  testWidgets('for you like highlights and reports the current drama', (
+    tester,
+  ) async {
+    final remoteDataSource = _FakePlayerRemoteDataSource(watchProgress: null);
+    final repository = _FakePlayerFeedRepository._(items: _numericDramaItems());
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.forYou,
+        repository: repository,
+        providerOverrides: [
+          playerRemoteDataSourceProvider.overrideWithValue(remoteDataSource),
+        ],
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    final likeButton = find.byKey(const ValueKey('player_like_button_42'));
+    expect(likeButton, findsOneWidget);
+    expect(_likeIconAsset(tester, likeButton), contains('unclick_like.png'));
+
+    await tester.tap(likeButton);
+    await tester.pump();
+
+    expect(remoteDataSource.followedDramaIds, [42]);
+    expect(_likeIconAsset(tester, likeButton), contains('click_like.png'));
+
+    await tester.tap(likeButton);
+    await tester.pump();
+
+    expect(remoteDataSource.unfollowedDramaIds, [42]);
+    expect(_likeIconAsset(tester, likeButton), contains('unclick_like.png'));
+  });
+
   testWidgets('for you search pauses on leave and always plays on return', (
     tester,
   ) async {
@@ -3670,6 +3705,18 @@ class _FakePlayerRemoteDataSource extends PlayerRemoteDataSource {
 
   final WatchProgressDto? watchProgress;
   final Duration delay;
+  final List<int> followedDramaIds = [];
+  final List<int> unfollowedDramaIds = [];
+
+  @override
+  Future<void> followShort({required int dramaId}) async {
+    followedDramaIds.add(dramaId);
+  }
+
+  @override
+  Future<void> unfollowShort({required int dramaId}) async {
+    unfollowedDramaIds.add(dramaId);
+  }
 
   @override
   Future<WatchProgressDto?> fetchWatchProgress({required int dramaId}) async {
@@ -3831,6 +3878,45 @@ PlayerContent _content(List<PlayerEpisode> episodes) {
     recommendations: const [],
     episodeTotal: episodes.length,
   );
+}
+
+List<PlayerFeedItem> _numericDramaItems() {
+  return _items()
+      .map((item) {
+        final content = item.content;
+        return PlayerFeedItem(
+          id: item.id,
+          mode: item.mode,
+          content: PlayerContent(
+            id: '42',
+            title: content.title,
+            playTitle: content.playTitle,
+            synopsis: content.synopsis,
+            viewCountLabel: content.viewCountLabel,
+            likeCountLabel: content.likeCountLabel,
+            backgroundAssetPath: content.backgroundAssetPath,
+            posterAssetPath: content.posterAssetPath,
+            coverUrl: content.coverUrl,
+            episodes: content.episodes,
+            recommendations: content.recommendations,
+            tags: content.tags,
+            playCount: content.playCount,
+            favoriteCount: content.favoriteCount,
+            likeCountDelta: content.likeCountDelta,
+            episodeTotal: content.episodeTotal,
+            recommendationsStatus: content.recommendationsStatus,
+          ),
+          episode: item.episode,
+        );
+      })
+      .toList(growable: false);
+}
+
+String _likeIconAsset(WidgetTester tester, Finder likeButton) {
+  final image = tester.widget<Image>(
+    find.descendant(of: likeButton, matching: find.byType(Image)),
+  );
+  return (image.image as AssetImage).assetName;
 }
 
 List<PopupExitRecommendation> _popupExitRecommendations() {

@@ -128,10 +128,20 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               onWalletTap: () => context.push(RoutePaths.wallet),
             ),
             const SizedBox(height: 12),
+            // ProfileMenuRow(
+            //   title: l10n.profileHistory,
+            //   iconAssetPath: 'assets/images/profile/history.png',
+            //   onTap: () {},
+            // ),
             ProfileMenuRow(
               title: l10n.profileLanguage,
               enabled: state.canOpenLanguage,
               onTap: () => context.push(RoutePaths.language),
+            ),
+            ProfileMenuRow(
+              title: l10n.profileReward,
+              iconAssetPath: 'assets/images/profile/reward.png',
+              onTap: () => context.push(RoutePaths.rewardsLocation()),
             ),
             ProfileMenuRow(
               title: l10n.profileSettings,
@@ -143,6 +153,12 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 title: '测试网络配置 / 清理代理',
                 onTap: () => showTestNetworkConfigDialog(context, ref),
               ),
+
+            ProfileMenuRow(
+              title: l10n.profileFeedback,
+              iconAssetPath: 'assets/images/profile/feedback.png',
+              onTap: () {},
+            ),
           ],
         ),
       ),

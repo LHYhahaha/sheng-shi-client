@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/network/api_client_provider.dart';
 import '../data/local/player_like_cache.dart';
+import '../data/player_remote_data_source_provider.dart';
 import '../data/remote/player_remote_data_source.dart';
 
 /// 播放页点赞状态 provider，按 dramaId 隔离。
@@ -37,7 +37,12 @@ class PlayerLikeState {
   /// 错误信息。
   final String? error;
 
-  PlayerLikeState copyWith({bool? isLiked, int? likeCountDelta, bool? isLoading, String? error}) {
+  PlayerLikeState copyWith({
+    bool? isLiked,
+    int? likeCountDelta,
+    bool? isLoading,
+    String? error,
+  }) {
     return PlayerLikeState(
       isLiked: isLiked ?? this.isLiked,
       likeCountDelta: likeCountDelta ?? this.likeCountDelta,
@@ -57,14 +62,12 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
 
   @override
   PlayerLikeState build() {
-    _remoteDataSource = PlayerRemoteDataSource(
-      apiClient: ref.watch(apiClientProvider),
-    );
+    _remoteDataSource = ref.watch(playerRemoteDataSourceProvider);
 
     // 先从缓存读取点赞状态，避免UI闪烁
     final cachedIsLiked = PlayerLikeCache.getCachedLikeStatus(dramaId);
     final cachedDelta = PlayerLikeCache.getCachedLikeCountDelta(dramaId);
-    
+
     // 异步获取初始点赞状态（如果缓存中没有）
     if (cachedIsLiked == null) {
       _loadInitialLikeState();
@@ -117,15 +120,20 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
 
     // 乐观更新 UI
     final newIsLiked = !currentIsLiked;
-    final newDelta = newIsLiked 
-        ? state.likeCountDelta + 1 
+    final newDelta = newIsLiked
+        ? state.likeCountDelta + 1
         : state.likeCountDelta - 1;
-    
+
     // 更新缓存
     PlayerLikeCache.setLikeStatus(dramaId, newIsLiked);
     PlayerLikeCache.updateLikeCountDelta(dramaId, newIsLiked);
-    
-    state = state.copyWith(isLiked: newIsLiked, likeCountDelta: newDelta, isLoading: true, error: null);
+
+    state = state.copyWith(
+      isLiked: newIsLiked,
+      likeCountDelta: newDelta,
+      isLoading: true,
+      error: null,
+    );
 
     try {
       if (currentIsLiked) {
@@ -140,14 +148,14 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
       state = state.copyWith(isLoading: false);
     } catch (e) {
       // 请求失败，回滚状态
-      final rollbackDelta = currentIsLiked 
-          ? state.likeCountDelta + 1 
+      final rollbackDelta = currentIsLiked
+          ? state.likeCountDelta + 1
           : state.likeCountDelta - 1;
-      
+
       // 回滚缓存
       PlayerLikeCache.setLikeStatus(dramaId, currentIsLiked);
       PlayerLikeCache.setLikeCountDelta(dramaId, rollbackDelta);
-      
+
       state = state.copyWith(
         isLiked: currentIsLiked,
         likeCountDelta: rollbackDelta,

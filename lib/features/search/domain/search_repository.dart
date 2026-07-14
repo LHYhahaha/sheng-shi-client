@@ -10,6 +10,8 @@ abstract interface class SearchRepository {
 
   Future<SearchRankings> getRankings();
 
+  Future<void> reportSearchResultClick({required String dramaId});
+
   Future<SearchResults> search({
     required String keyword,
     String page = '1',

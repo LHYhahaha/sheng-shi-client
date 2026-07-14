@@ -45,6 +45,11 @@ class RemoteSearchRepository implements SearchRepository {
   }
 
   @override
+  Future<void> reportSearchResultClick({required String dramaId}) {
+    return _remoteDataSource.reportSearchResultClick(dramaId: dramaId);
+  }
+
+  @override
   Future<SearchResults> search({
     required String keyword,
     String page = '1',

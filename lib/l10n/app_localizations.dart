@@ -388,6 +388,12 @@ class AppLocalizations {
   String get profileSettings =>
       _remoteText('profile.menu.settings', en: 'Settings', zh: '设置');
 
+  String get profileHistory =>
+      _remoteText('profile.menu.history', en: 'History', zh: '历史');
+
+  String get profileReward =>
+      _remoteText('profile.menu.reward_center', en: 'Rewards Center', zh: '福利中心');
+
   String get languagePageTitle =>
       _remoteText('language_page.title.language', en: 'Language', zh: '语言');
 
@@ -399,6 +405,9 @@ class AppLocalizations {
 
   String get profileRenewal =>
       _remoteText('membership_page.plan.monthly', en: 'Renewal', zh: '续费');
+
+  String get profileFeedback =>
+      _remoteText('profile.menu.help_feedback', en: 'Help & Feedback', zh: '问题与帮助');
 
   // ── 设置 Settings ─────────────────────────────────────────────
   String get settingsTitle =>

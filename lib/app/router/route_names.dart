@@ -12,6 +12,7 @@ abstract final class RouteNames {
   static const store = 'store';
   static const wallet = 'wallet';
   static const membership = 'membership';
+  static const rewards = 'rewards';
   static const webview = 'webview';
   static const language = 'language';
   static const settings = 'settings';

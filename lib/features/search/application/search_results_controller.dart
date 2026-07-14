@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/locale/app_locale_controller.dart';
@@ -49,6 +50,19 @@ class SearchResultsController extends Notifier<SearchResultsState> {
       unawaited(search(keyword: state.keyword, sortType: state.sortType));
     });
     return const SearchResultsState();
+  }
+
+  Future<void> reportSearchResultClick(String dramaId) async {
+    try {
+      await ref
+          .read(searchRepositoryProvider)
+          .reportSearchResultClick(dramaId: dramaId);
+    } catch (error) {
+      debugPrint(
+        '[SearchResultsController] Search result click report failed for '
+        '$dramaId: $error',
+      );
+    }
   }
 
   Future<void> search({

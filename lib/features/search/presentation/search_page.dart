@@ -716,9 +716,17 @@ class _SubmittedSearchResults extends ConsumerWidget {
         separatorBuilder: (_, _) => const SizedBox(height: 16),
         itemBuilder: (context, index) {
           if (index < dramas.length) {
+            final drama = dramas[index];
             return _SearchDramaTile(
-              drama: dramas[index],
-              onTap: () => _openDrama(context, dramas[index].id),
+              drama: drama,
+              onTap: () {
+                unawaited(
+                  ref
+                      .read(searchResultsControllerProvider.notifier)
+                      .reportSearchResultClick(drama.id),
+                );
+                _openDrama(context, drama.id);
+              },
             );
           }
           if (state.isLoadingMore) {

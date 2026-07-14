@@ -30,106 +30,120 @@ class ProfileMembershipCard extends StatelessWidget {
         : l10n.profileBenefitsIntro;
 
     return Container(
-      padding: EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
-        color: const Color(0xff220B04),
         borderRadius: BorderRadius.circular(AppRadii.sm),
         gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.transparent,
-            const Color(0xff220B04),
-            const Color(0xff220B04),
-          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFFD69B), Color(0xFFFFF0DC)],
         ),
       ),
-      child: Column(
-        children: [
-          GestureDetector(
-            key: const ValueKey('profile_membership_entry'),
-            behavior: HitTestBehavior.opaque,
-            onTap: membership.entryEnabled && !isActive ? onTap : null,
-            child: Container(
-              margin: EdgeInsets.only(bottom: 14),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
-              decoration: BoxDecoration(
-                image: DecorationImage(
-                  fit: BoxFit.fill,
-                  image: AssetImage("assets/images/profile/membership_bac.png"),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Color(0xffffffff).withValues(alpha: 0.16),
+          borderRadius: BorderRadius.circular(AppRadii.sm),
+        ),
+        child: Column(
+          children: [
+            GestureDetector(
+              key: const ValueKey('profile_membership_entry'),
+              behavior: HitTestBehavior.opaque,
+              onTap: membership.entryEnabled && !isActive ? onTap : null,
+              child: Container(
+                margin: EdgeInsets.only(bottom: 6.2),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 18,
                 ),
-                borderRadius: BorderRadius.circular(AppRadii.sm),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 3),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: textTheme.titleMedium?.copyWith(
-                              color: const Color(0xFFFFF0CD),
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              fontStyle: FontStyle.italic,
-                              height: 1.12,
+                decoration: BoxDecoration(
+                  image: DecorationImage(
+                    // fit: BoxFit.fill,
+                    alignment: Alignment.centerRight,
+                    image: AssetImage("assets/images/profile/vip_v_brown.png"),
+                  ),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFFFD69B), Color(0xFFFFF0DC)],
+                  ),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(AppRadii.sm),
+                    topRight: Radius.circular(AppRadii.sm),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.titleMedium?.copyWith(
+                                color: const Color(0xFF421C07),
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                fontStyle: FontStyle.italic,
+                                height: 1.12,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            subtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: textTheme.labelSmall?.copyWith(
-                              color: const Color(
-                                0xFFFFE0A2,
-                              ).withValues(alpha: 0.6),
-                              fontSize: 14,
-                              height: 1.3,
+                            const SizedBox(height: 4),
+                            Text(
+                              subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: textTheme.labelSmall?.copyWith(
+                                color: const Color(
+                                  0xFF421C07,
+                                ).withValues(alpha: 0.5),
+                                fontSize: 14,
+                                height: 1.3,
+                                fontWeight: FontWeight(400),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  isActive
-                      ? SizedBox()
-                      : _JoinButton(
-                          enabled: !isActive,
-                          label: l10n.profileJoin,
-                        ),
-                ],
+                    const SizedBox(width: AppSpacing.md),
+                    isActive
+                        ? SizedBox()
+                        : _JoinButton(
+                            enabled: !isActive,
+                            label: l10n.profileJoin,
+                          ),
+                  ],
+                ),
               ),
             ),
-          ),
-          Row(
-            children: [
-              _BenefitItem(
-                iconAssetPath: 'assets/images/profile/icon_series.svg',
-                label: l10n.profileSeriesBenefit,
-              ),
-              _BenefitItem(
-                iconAssetPath: 'assets/images/profile/icon_points.svg',
-                label: l10n.profileDailyPoints,
-              ),
-              _BenefitItem(
-                iconAssetPath: 'assets/images/profile/icon_download.svg',
-                label: l10n.profileDownload,
-              ),
-              _BenefitItem(
-                iconAssetPath: 'assets/images/profile/icon_hd.svg',
-                label: l10n.profileFullHd,
-              ),
-            ],
-          ),
-        ],
+            Row(
+              children: [
+                _BenefitItem(
+                  iconAssetPath: 'assets/images/profile/brown_series.svg',
+                  label: l10n.profileSeriesBenefit,
+                ),
+                _BenefitItem(
+                  iconAssetPath: 'assets/images/profile/brown_points.svg',
+                  label: l10n.profileDailyPoints,
+                ),
+                _BenefitItem(
+                  iconAssetPath: 'assets/images/profile/brown_download.svg',
+                  label: l10n.profileDownload,
+                ),
+                _BenefitItem(
+                  iconAssetPath: 'assets/images/profile/brown_hd.svg',
+                  label: l10n.profileFullHd,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -158,19 +172,18 @@ class _JoinButton extends StatelessWidget {
       opacity: enabled ? 1 : 0.42,
       child: Container(
         width: 91,
-        height: 32,
+        height: 38,
         alignment: Alignment.center,
-        margin: const EdgeInsets.only(top: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFF0D0),
-          borderRadius: BorderRadius.circular(AppRadii.xs),
+          color: const Color(0xFF421C07),
+          borderRadius: BorderRadius.circular(6),
         ),
         child: Text(
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: enabled ? const Color(0xFF2B160A) : AppColors.black,
+            color: enabled ? const Color(0xFFFEF4E4) : AppColors.black,
             fontSize: 14,
             height: 1.25,
           ),
@@ -198,15 +211,16 @@ class _BenefitItem extends StatelessWidget {
             height: 20,
             fit: BoxFit.contain,
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 2),
           Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: const Color(0xFFFFEBC3).withValues(alpha: 0.65),
-              fontSize: 10,
+              color: const Color(0xFF743A13),
+              fontWeight: FontWeight(400),
+              fontSize: 11,
               height: 1.2,
             ),
           ),

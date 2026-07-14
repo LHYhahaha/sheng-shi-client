@@ -47,6 +47,7 @@ dependencies:
   flutter_udid: ^2.0.2
   webview_flutter: ^4.10.0
   readmore: ^3.0.0
+  gradient_borders: ^1.0.4
 
 dev_dependencies:
   flutter_test:
@@ -71,5 +72,7 @@ flutter:
     - assets/images/membership/
     - assets/images/search/
     - assets/images/common/
+    - assets/images/rewards/
     - assets/images/auth/account_cancellation/
     - assets/navigation/
+    - assets/sf-pro-display/

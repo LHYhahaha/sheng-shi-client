@@ -64,6 +64,9 @@ class _FakeSearchRepository implements SearchRepository {
   final bool failAll;
 
   @override
+  Future<void> reportSearchResultClick({required String dramaId}) async {}
+
+  @override
   Future<SearchRanking> getHotSearches() {
     return _result(SearchRankingType.hotSearches, 'hot searches');
   }

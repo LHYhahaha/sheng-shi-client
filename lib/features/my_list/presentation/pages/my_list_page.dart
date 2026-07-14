@@ -16,6 +16,8 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../search/domain/search_rankings.dart';
+import '../../application/my_list_hot_plays_controller.dart';
 import '../../application/my_list_controller.dart';
 import '../../domain/my_list_item.dart';
 
@@ -47,6 +49,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
           appShellBottomNavigationVisibleProvider.notifier,
         );
         ref.read(myListControllerProvider.notifier).load();
+        ref.read(myListHotPlaysControllerProvider.notifier).load();
       }
     });
   }
@@ -64,7 +67,11 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     if (!_scrollController.hasClients) {
       return;
     }
-    if (_scrollController.position.extentAfter > 240) {
+    // When the ranking is present, start the next My List page before the user
+    // reaches that section so newly appended list rows do not jump in above it.
+    final hasHotPlays = ref.read(myListHotPlaysControllerProvider).shouldShow;
+    final loadMoreThreshold = hasHotPlays ? 680.0 : 240.0;
+    if (_scrollController.position.extentAfter > loadMoreThreshold) {
       _didTriggerLoadMoreNearEnd = false;
       return;
     }
@@ -125,6 +132,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final state = ref.watch(myListControllerProvider);
+    final hotPlaysState = ref.watch(myListHotPlaysControllerProvider);
     final controller = ref.read(myListControllerProvider.notifier);
 
     // 监听 Tab 索引变化，当切换到 MyList Tab 时刷新数据
@@ -207,7 +215,14 @@ class _MyListPageState extends ConsumerState<MyListPage> {
                     selectedTab: state.selectedTab,
                     onSelected: controller.selectTab,
                   ),
-                  Expanded(child: _buildBody(l10n, state, controller)),
+                  Expanded(
+                    child: _buildBody(
+                      l10n,
+                      state,
+                      hotPlaysState.dramas,
+                      controller,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -230,6 +245,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
   Widget _buildBody(
     AppLocalizations l10n,
     MyListState state,
+    List<SearchRankDrama> hotPlays,
     MyListController controller,
   ) {
     if (state.isLoading) {
@@ -258,16 +274,73 @@ class _MyListPageState extends ConsumerState<MyListPage> {
       );
     }
 
+    final children = <Widget>[];
     if (state.isEmpty) {
-      final isCollection = state.selectedTab == MyListTab.collection;
-      final emptyText = isCollection
+      final emptyText = state.selectedTab == MyListTab.collection
           ? l10n.myListEmptyFollowing
           : l10n.myListEmptyHistory;
-      return _EmptyMyList(description: emptyText);
+      children.add(
+        SizedBox(height: 220, child: _EmptyMyList(description: emptyText)),
+      );
+    } else {
+      for (final item in state.items) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _MyListRowSwipeAction(
+              // 两个 tab 都支持左滑删除，但编辑模式下禁用
+              enabled: !state.isCollectionEditing,
+              item: item,
+              onDelete: () =>
+                  _deleteItemAndFillIfShort(controller, item.dramaId),
+              onOpened: () => controller.openPlayItem(item.dramaId),
+              onClosed: () => controller.closeOpenPlayItem(item.dramaId),
+              child: _MyListRow(
+                item: item,
+                choosing: state.isCollectionEditing,
+                selected: state.selectedIds.contains(item.dramaId),
+                onTap: state.isCollectionEditing
+                    ? () => controller.toggleSelection(item.dramaId)
+                    : () => _openMyListItem(l10n, state, controller, item),
+              ),
+            ),
+          ),
+        );
+      }
+      final needsLoadMoreFooter =
+          hotPlays.isEmpty ||
+          state.isLoadingMore ||
+          state.nextPageToken != null ||
+          state.loadMoreError != null;
+      if (needsLoadMoreFooter) {
+        children.add(
+          _MyListLoadMoreFooter(
+            isLoading: state.isLoadingMore,
+            hasMore: state.nextPageToken != null,
+            error: state.loadMoreError,
+            onRetry: () => controller.loadMore(retry: true),
+          ),
+        );
+      }
     }
 
-    final hasFooter = state.items.isNotEmpty;
-    return ListView.separated(
+    if (hotPlays.isNotEmpty) {
+      children.add(
+        _HotPlaysSection(
+          dramas: hotPlays,
+          onTap: (drama) => context.push(
+            RoutePaths.playerLocation(
+              dramaId: drama.id,
+              episodeId: '1',
+              trigger: 'my_list_hot_play_tap',
+              userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return ListView(
       controller: _scrollController,
       padding: EdgeInsets.fromLTRB(
         16,
@@ -277,67 +350,168 @@ class _MyListPageState extends ConsumerState<MyListPage> {
             ? 108 + MediaQuery.viewPaddingOf(context).bottom
             : 24,
       ),
-      itemCount: state.items.length + (hasFooter ? 1 : 0),
-      separatorBuilder: (context, index) => const SizedBox(height: 16),
-      itemBuilder: (context, index) {
-        if (index >= state.items.length) {
-          return _MyListLoadMoreFooter(
-            isLoading: state.isLoadingMore,
-            hasMore: state.nextPageToken != null,
-            error: state.loadMoreError,
-            onRetry: () => controller.loadMore(retry: true),
-          );
-        }
-        final item = state.items[index];
-        return _MyListRowSwipeAction(
-          // 两个 tab 都支持左滑删除，但编辑模式下禁用
-          enabled: !state.isCollectionEditing,
-          item: item,
-          onDelete: () => _deleteItemAndFillIfShort(controller, item.dramaId),
-          onOpened: () => controller.openPlayItem(item.dramaId),
-          onClosed: () => controller.closeOpenPlayItem(item.dramaId),
-          child: Padding(
-            padding: EdgeInsets.zero,
-            child: _MyListRow(
-              item: item,
-              choosing: state.isCollectionEditing,
-              selected: state.selectedIds.contains(item.dramaId),
-              onTap: state.isCollectionEditing
-                  ? () => controller.toggleSelection(item.dramaId)
-                  : () async {
-                      // 检查短剧在架状态，已下架则提示且不跳转
-                      if (item.dramaStatus == 2) {
-                        ref
-                            .read(appToastProvider)
-                            .info(l10n.myListDramaOffShelf);
-                        return;
-                      }
-                      controller.closeAnyOpenPlayItem();
-                      // 播放历史项点击导航到播放器
-                      final isCollection =
-                          state.selectedTab == MyListTab.collection;
-                      final episodeId =
-                          item.episodeId != null && item.episodeId! > 0
-                          ? item.episodeId.toString()
-                          : '1';
-                      await context.push(
-                        RoutePaths.playerLocation(
-                          dramaId: item.dramaId.toString(),
-                          episodeId: episodeId,
-                          trigger: isCollection
-                              ? 'my_list_collection_item'
-                              : 'play_history_item',
-                        ),
-                      );
-                      // 从播放器页面返回后，刷新当前tab的数据以获取最新排序
-                      await controller.refreshCurrentTabInPlace();
-                    },
-            ),
-          ),
-        );
-      },
+      children: children,
     );
   }
+
+  Future<void> _openMyListItem(
+    AppLocalizations l10n,
+    MyListState state,
+    MyListController controller,
+    MyListItem item,
+  ) async {
+    if (item.dramaStatus == 2) {
+      ref.read(appToastProvider).info(l10n.myListDramaOffShelf);
+      return;
+    }
+    controller.closeAnyOpenPlayItem();
+    final isCollection = state.selectedTab == MyListTab.collection;
+    final episodeId = item.episodeId != null && item.episodeId! > 0
+        ? item.episodeId.toString()
+        : '1';
+    await context.push(
+      RoutePaths.playerLocation(
+        dramaId: item.dramaId.toString(),
+        episodeId: episodeId,
+        trigger: isCollection ? 'my_list_collection_item' : 'play_history_item',
+      ),
+    );
+    await controller.refreshCurrentTabInPlace();
+  }
+}
+
+class _HotPlaysSection extends StatelessWidget {
+  const _HotPlaysSection({required this.dramas, required this.onTap});
+
+  final List<SearchRankDrama> dramas;
+  final ValueChanged<SearchRankDrama> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            context.l10n.searchTrending,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: AppColors.textPrimary.withValues(alpha: 0.6),
+              fontSize: 16,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const SizedBox(height: 12),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: dramas.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 9,
+              mainAxisSpacing: 14,
+              childAspectRatio: 0.57,
+            ),
+            itemBuilder: (context, index) {
+              final drama = dramas[index];
+              return _HotPlayCard(
+                drama: drama,
+                ranking: index + 1,
+                onTap: () => onTap(drama),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HotPlayCard extends StatelessWidget {
+  const _HotPlayCard({
+    required this.drama,
+    required this.ranking,
+    required this.onTap,
+  });
+
+  final SearchRankDrama drama;
+  final int ranking;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadii.xs),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  AppCachedNetworkImage(
+                    imageUrl: drama.coverUrl,
+                    fit: BoxFit.cover,
+                  ),
+                  Align(
+                    alignment: Alignment.topLeft,
+                    child: Container(
+                      width: 24,
+                      height: 14,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: _rankingColor(ranking),
+                        borderRadius: const BorderRadius.only(
+                          bottomRight: Radius.circular(4),
+                        ),
+                      ),
+                      child: Text(
+                        '$ranking',
+                        style: const TextStyle(
+                          height: 1,
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            drama.title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 12,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            drama.tags.isEmpty ? '' : drama.tags.first,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _rankingColor(int value) => switch (value) {
+    1 => const Color(0xFFFB4729),
+    2 => const Color(0xFFFBB829),
+    3 => const Color(0xFFFF007A),
+    _ => const Color(0xFF424242),
+  };
 }
 
 class _MyListLoadMoreFooter extends StatelessWidget {
@@ -535,7 +709,6 @@ class _HeaderMoreMenu extends StatelessWidget {
     );
   }
 }
-
 
 class _MyListTabs extends StatelessWidget {
   const _MyListTabs({required this.selectedTab, required this.onSelected});

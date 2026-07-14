@@ -12,7 +12,16 @@ abstract final class RoutePaths {
   static const store = '/store';
   static const wallet = '/wallet';
   static const membership = '/membership';
+  static const rewards = '/rewards';
   static const webview = '/webview';
+
+  static const rewardsCoinsTab = 'rewards-coins';
+  static const memberPointsTab = 'member-points';
+
+  /// 构建奖励中心路径；外部入口可以直接指定要展示的独立奖励页面。
+  static String rewardsLocation({String tab = rewardsCoinsTab}) {
+    return Uri(path: rewards, queryParameters: {'tab': tab}).toString();
+  }
 
   /// 构建会员页面路径，可选参数 [returnToProfile] 控制购买成功后是否跳转到"我的"页面
   static String membershipLocation({bool returnToProfile = false}) {

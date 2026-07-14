@@ -909,6 +909,7 @@ class _PlayerActionRailContent extends ConsumerWidget {
     return Column(
       children: [
         _LikeActionItem(
+          key: ValueKey('player_like_button_$dramaId'),
           label: displayLikeCountLabel,
           isLiked: isLiked,
           isLoading: isLikeLoading,
@@ -1749,6 +1750,7 @@ class _LikeActionItem extends StatelessWidget {
     required this.isLiked,
     required this.isLoading,
     required this.onTap,
+    super.key,
   });
 
   final String label;
