@@ -1,3 +1,4 @@
+import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -78,9 +79,12 @@ class _RewardsPageState extends State<RewardsPage> {
               Expanded(
                 child: IndexedStack(
                   index: _selectedTab.index,
-                  children: const [
-                    RewardsCoinsPage(useParentBackground: true),
-                    MemberPointsPage(useParentBackground: true),
+                  children: [
+                    const RewardsCoinsPage(useParentBackground: true),
+                    MemberPointsPage(
+                      useParentBackground: true,
+                      isActive: _selectedTab == RewardTab.memberPoints,
+                    ),
                   ],
                 ),
               ),
@@ -105,6 +109,8 @@ class _RewardsNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.maybeOf(context);
+
     return SizedBox(
       height: 58,
       child: Stack(
@@ -123,7 +129,8 @@ class _RewardsNavigation extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _RewardTabButton(
-                  label: 'Rewards coins',
+                  tabKey: 'rewards_coins',
+                  label: l10n.rewardsTabRewardCoins,
                   selected: selectedTab == RewardTab.rewardsCoins,
                   selectedGradientColors: const [
                     Color(0xFFC98455),
@@ -134,7 +141,8 @@ class _RewardsNavigation extends StatelessWidget {
                 ),
                 const SizedBox(width: 34),
                 _RewardTabButton(
-                  label: 'Member Points',
+                  tabKey: 'member_points',
+                  label: l10n.memberPointsTitle,
                   selected: selectedTab == RewardTab.memberPoints,
                   selectedGradientColors: const [
                     Color(0xFFAB59D1),
@@ -155,6 +163,7 @@ class _RewardsNavigation extends StatelessWidget {
 class _RewardTabButton extends StatelessWidget {
   const _RewardTabButton({
     required this.label,
+    required this.tabKey,
     required this.selected,
     required this.selectedGradientColors,
     required this.onTap,
@@ -162,6 +171,7 @@ class _RewardTabButton extends StatelessWidget {
   });
 
   final String label;
+  final String tabKey;
   final bool selected;
   final List<Color> selectedGradientColors;
   final VoidCallback onTap;
@@ -173,7 +183,7 @@ class _RewardTabButton extends StatelessWidget {
       selected: selected,
       button: true,
       child: InkWell(
-        key: Key('rewards_tab_${label.toLowerCase().replaceAll(' ', '_')}'),
+        key: Key('rewards_tab_$tabKey'),
         onTap: onTap,
         splashColor: Colors.transparent,
         highlightColor: Colors.transparent,
@@ -184,9 +194,7 @@ class _RewardTabButton extends StatelessWidget {
             children: [
               if (selected)
                 ShaderMask(
-                  key: Key(
-                    'rewards_tab_gradient_${label.toLowerCase().replaceAll(' ', '_')}',
-                  ),
+                  key: Key('rewards_tab_gradient_$tabKey'),
                   blendMode: BlendMode.srcIn,
                   shaderCallback: (bounds) => LinearGradient(
                     begin: Alignment.topCenter,
@@ -213,9 +221,7 @@ class _RewardTabButton extends StatelessWidget {
                 ),
               const SizedBox(height: 7),
               AnimatedContainer(
-                key: Key(
-                  'rewards_tab_indicator_${label.toLowerCase().replaceAll(' ', '_')}',
-                ),
+                key: Key('rewards_tab_indicator_$tabKey'),
                 duration: const Duration(milliseconds: 160),
                 width: 22,
                 height: 2,

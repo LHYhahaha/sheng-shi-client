@@ -6,6 +6,7 @@ import '../auth/auth_token_store.dart';
 import '../channel/channel_config_service.dart';
 import '../runtime/api_lang_provider.dart';
 import '../runtime/api_platform_provider.dart';
+import '../runtime/api_region_code_provider.dart';
 import '../runtime/app_version_provider.dart';
 import '../runtime/install_id_provider.dart';
 import 'api_client.dart';
@@ -36,6 +37,7 @@ final apiRequestContextProvider = Provider<ApiRequestContext>((ref) {
     lang: ref.watch(apiLangProvider),
     platform: ref.watch(apiPlatformProvider),
     appVersion: ref.watch(apiAppVersionProvider),
+    regionCode: ref.watch(apiRegionCodeProvider),
     accessToken: token.accessToken,
     refreshToken: token.refreshToken,
     accessTokenExpiresAt: token.expiresAt,

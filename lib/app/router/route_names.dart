@@ -13,6 +13,7 @@ abstract final class RouteNames {
   static const wallet = 'wallet';
   static const membership = 'membership';
   static const rewards = 'rewards';
+  static const memberPointDetails = 'member-point-details';
   static const webview = 'webview';
   static const language = 'language';
   static const settings = 'settings';

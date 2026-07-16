@@ -13,6 +13,7 @@ abstract final class RoutePaths {
   static const wallet = '/wallet';
   static const membership = '/membership';
   static const rewards = '/rewards';
+  static const memberPointDetails = '/rewards/member-point-details';
   static const webview = '/webview';
 
   static const rewardsCoinsTab = 'rewards-coins';

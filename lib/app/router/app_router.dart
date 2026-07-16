@@ -17,6 +17,7 @@ import '../../features/player/domain/for_you_player_handoff.dart';
 import '../../features/profile/presentation/pages/language_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/profile/presentation/pages/settings_page.dart';
+import '../../features/rewards/presentation/pages/member_point_details_page.dart';
 import '../../features/rewards/presentation/pages/rewards_page.dart';
 import '../../features/search/presentation/search_page.dart';
 import '../../shared/widgets/webview_page.dart';
@@ -160,6 +161,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             state.uri.queryParameters['tab'],
           ),
         ),
+      ),
+      GoRoute(
+        path: RoutePaths.memberPointDetails,
+        name: RouteNames.memberPointDetails,
+        builder: (context, state) => const MemberPointDetailsPage(),
       ),
       GoRoute(
         path: RoutePaths.webview,

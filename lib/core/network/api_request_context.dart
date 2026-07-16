@@ -1,6 +1,6 @@
 /// API 请求上下文。
 ///
-/// 基础 header（Device-Id / Lang / Platform / App-Version）由 runtime provider 注入，
+/// 基础 header（Device-Id / Lang / Platform / App-Version / Region-Code）由 runtime provider 注入，
 /// 见 [apiRequestContextProvider]。feature 不得自行拼装这些 header。
 class ApiRequestContext {
   const ApiRequestContext({
@@ -8,6 +8,7 @@ class ApiRequestContext {
     required this.lang,
     required this.platform,
     required this.appVersion,
+    this.regionCode = '',
     this.accessToken,
     this.refreshToken,
     this.accessTokenExpiresAt,
@@ -22,6 +23,7 @@ class ApiRequestContext {
     this.lang = 'en',
     this.platform = 'android',
     this.appVersion = '1.0.0',
+    this.regionCode = '',
     this.accessToken,
     this.refreshToken,
     this.accessTokenExpiresAt,
@@ -43,6 +45,9 @@ class ApiRequestContext {
 
   /// 应用版本号（如 1.0.0）。
   final String appVersion;
+
+  /// 设备地区码（如 SG）；系统未提供地区时为空字符串。
+  final String regionCode;
 
   /// 当前 access token；refresh token 不在此暴露。
   final String? accessToken;
@@ -68,6 +73,7 @@ class ApiRequestContext {
       'Lang': lang,
       'Platform': platform,
       'App-Version': appVersion,
+      'Region-Code': regionCode,
       'Accept': 'application/json',
     };
 

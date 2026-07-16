@@ -24,6 +24,7 @@ void main() {
         lang: 'zh',
         platform: 'android',
         appVersion: '1.2.3',
+        regionCode: 'SG',
       ),
     );
 
@@ -36,9 +37,28 @@ void main() {
     expect(adapter.lastOptions!.headers['Lang'], 'zh');
     expect(adapter.lastOptions!.headers['Platform'], 'android');
     expect(adapter.lastOptions!.headers['App-Version'], '1.2.3');
+    expect(adapter.lastOptions!.headers['Region-Code'], 'SG');
     expect(adapter.lastOptions!.headers['Accept'], 'application/json');
     expect(adapter.lastOptions!.headers.containsKey('Authorization'), isFalse);
   });
+
+  test(
+    'requests include an empty Region-Code when device region is unavailable',
+    () async {
+      final adapter = _FakeHttpClientAdapter(
+        responseData: {'code': 0, 'message': 'success', 'data': null},
+      );
+      final dio = Dio()..httpClientAdapter = adapter;
+      final client = ApiClient(
+        dio: dio,
+        requestContext: const ApiRequestContext.test(regionCode: ''),
+      );
+
+      await client.get<void>('/home/feed', decoder: (_) {});
+
+      expect(adapter.lastOptions!.headers['Region-Code'], '');
+    },
+  );
 
   test('all requests include channel headers when available', () async {
     final adapter = _FakeHttpClientAdapter(

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../widget/reward_rules_sheet.dart';
+
 const _gold = Color(0xFFFFD58D);
 const _muted = Color(0xFF77777B);
 const _card = Color(0xFF1B1D22);
@@ -174,16 +176,23 @@ class _CheckInPanel extends StatelessWidget {
                   ),
                 ),
               ),
-              Container(
+              GestureDetector(
                 key: const Key('rewards_coins_rules'),
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Text(
-                  'Rules',
-                  style: TextStyle(color: Color(0xFFAAA49D), fontSize: 12),
+                behavior: HitTestBehavior.opaque,
+                onTap: () => showRewardRulesSheet(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Text(
+                    'Rules',
+                    style: TextStyle(color: Color(0xFFAAA49D), fontSize: 12),
+                  ),
                 ),
               ),
             ],
