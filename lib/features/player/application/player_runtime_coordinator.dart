@@ -116,10 +116,12 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
         fromIndex: previousIndex,
         toIndex: index,
       );
-      // 上报切集事件
-      if (playbackTrigger == 'swipe_next' ||
-          playbackTrigger == 'swipe_previous' ||
-          playbackTrigger == 'auto_next') {
+      final isItemChange = previousItemId != item.id || previousIndex != index;
+      // 上报切集事件。PageView 初始对齐或同一页二次 settled 不是切集。
+      if (isItemChange &&
+          (playbackTrigger == 'swipe_next' ||
+              playbackTrigger == 'swipe_previous' ||
+              playbackTrigger == 'auto_next')) {
         if (previousItem != null) {
           unawaited(
             _playbackController.reportWatchProgress(
@@ -239,10 +241,6 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
           state.accessPresenter.playableCopy(item),
           resumeIfCurrentSource: true,
         );
-        // 上报观看开始事件
-        unawaited(
-          _playbackController.reportWatchProgress(eventType: 1),
-        ); // 1: start
       case EpisodeAccessDecisionType.autoUnlockAndPlay:
         final unlocked = await _unlockCurrentItemWithCoinApi(
           item,

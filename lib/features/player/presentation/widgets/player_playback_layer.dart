@@ -658,7 +658,7 @@ class PlayerPlaybackControlsConsumer extends ConsumerStatefulWidget {
 
   final String sessionKey;
   final String itemId;
-  final VoidCallback onTogglePlay;
+  final void Function({required bool pauseRequested}) onTogglePlay;
   final VoidCallback onRetry;
 
   /// 单剧：沉浸态单击仅恢复 default chrome；default 态单击切换播放/暂停。
@@ -813,12 +813,12 @@ class PlayerPlaybackControlsConsumerState
     } else if (snapshot.status == PlayerPlaybackStatus.paused) {
       _showTransientFeedback(_PlaybackFeedbackIcon.play);
     }
-    widget.onTogglePlay();
+    widget.onTogglePlay(pauseRequested: snapshot.isPlaying);
   }
 
   void _playWithFeedback() {
     _showTransientFeedback(_PlaybackFeedbackIcon.play);
-    widget.onTogglePlay();
+    widget.onTogglePlay(pauseRequested: false);
   }
 
   void _showTransientFeedback(_PlaybackFeedbackIcon icon) {

@@ -2,12 +2,15 @@ import 'dart:async';
 
 import 'package:drama_client/core/locale/app_locale_controller.dart';
 import 'package:drama_client/core/network/api_client.dart';
+import 'package:drama_client/features/player/application/player_feed_controller.dart';
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
 import 'package:drama_client/features/player/application/player_playback_prepare_manager.dart';
+import 'package:drama_client/features/player/application/player_runtime_coordinator.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/data/mock_playback_progress_repository.dart';
 import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
 import 'package:drama_client/features/player/data/playback_progress_repository_provider.dart';
+import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_preload_config_provider.dart';
 import 'package:drama_client/features/player/data/player_remote_data_source_provider.dart';
@@ -76,6 +79,365 @@ void main() {
     expect(state.status, PlayerPlaybackStatus.playing);
     expect(state.currentItemId, 'drama-a-ep-2');
   });
+
+  test('periodic watch progress restarts after completed auto next', () async {
+    final session = _FakePlaybackSession();
+    final remoteDataSource = _RecordingPlayerRemoteDataSource();
+    final items = [_item(1, duration: const Duration(seconds: 120)), _item(2)];
+    final container = _createContainer(
+      session,
+      remoteDataSource: remoteDataSource,
+      feedRepository: _ListPlayerFeedRepository(items),
+      watchProgressReportInterval: const Duration(milliseconds: 1),
+    );
+    const sessionKey = 'single:drama-a:1';
+    final provider = playerPlaybackControllerProvider(sessionKey);
+    final feedController = container.read(
+      playerFeedControllerProvider(sessionKey).notifier,
+    );
+    final controller = container.read(provider.notifier);
+
+    await feedController.load(
+      const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: 'ep-1'),
+    );
+    await controller.playItem(items[0]);
+    session.emitDuration(const Duration(seconds: 120));
+    session.emitPosition(const Duration(seconds: 35));
+    await Future<void>.delayed(const Duration(milliseconds: 3));
+
+    session.emitCompleted(true);
+    await Future<void>.delayed(Duration.zero);
+    remoteDataSource.clearReports();
+
+    feedController.setCurrentIndex(1);
+    await controller.playItem(items[1]);
+    session.emitPosition(const Duration(seconds: 12));
+    await Future<void>.delayed(const Duration(milliseconds: 3));
+
+    expect(remoteDataSource.reportedEventTypes, contains(2));
+    expect(remoteDataSource.reportedEpisodeNumbers, contains(2));
+    expect(remoteDataSource.reportedWatchSeconds, contains(12));
+    expect(remoteDataSource.reportedDurationSeconds, contains(12));
+  });
+
+  test('start watch progress reports at zero position', () async {
+    final session = _FakePlaybackSession();
+    final remoteDataSource = _RecordingPlayerRemoteDataSource();
+    final item = _item(1, duration: const Duration(seconds: 120));
+    final container = _createContainer(
+      session,
+      remoteDataSource: remoteDataSource,
+      feedRepository: _ListPlayerFeedRepository([item]),
+    );
+    const sessionKey = 'single:drama-a:1';
+    final provider = playerPlaybackControllerProvider(sessionKey);
+    final feedController = container.read(
+      playerFeedControllerProvider(sessionKey).notifier,
+    );
+    final controller = container.read(provider.notifier);
+
+    await feedController.load(
+      const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: 'ep-1'),
+    );
+    await controller.playItem(item);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(remoteDataSource.reportedEventTypes, contains(1));
+    expect(remoteDataSource.reportedEpisodeNumbers, contains(1));
+    expect(remoteDataSource.reportedWatchSeconds, contains(0));
+    expect(remoteDataSource.reportedDurationSeconds, contains(120));
+  });
+
+  test('start watch progress reports only once for same playback', () async {
+    final session = _FakePlaybackSession();
+    final remoteDataSource = _RecordingPlayerRemoteDataSource();
+    final item = _item(1, duration: const Duration(seconds: 120));
+    final container = _createContainer(
+      session,
+      remoteDataSource: remoteDataSource,
+      feedRepository: _ListPlayerFeedRepository([item]),
+    );
+    const sessionKey = 'single:drama-a:1';
+    final provider = playerPlaybackControllerProvider(sessionKey);
+    final feedController = container.read(
+      playerFeedControllerProvider(sessionKey).notifier,
+    );
+    final controller = container.read(provider.notifier);
+
+    await feedController.load(
+      const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: 'ep-1'),
+    );
+    await controller.playItem(item);
+    await Future<void>.delayed(Duration.zero);
+
+    await controller.reportWatchProgress(eventType: 1);
+    await controller.reportWatchProgress(eventType: 1);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(remoteDataSource.reportedEventTypes.where((type) => type == 1), [1]);
+  });
+
+  test(
+    'start watch progress reports restored position after playback starts',
+    () async {
+      final session = _FakePlaybackSession();
+      final remoteDataSource = _RecordingPlayerRemoteDataSource();
+      final progressRepository = InMemoryPlaybackProgressRepository();
+      final item = _item(1, duration: const Duration(seconds: 120));
+      await progressRepository.saveProgress(
+        PlaybackProgress(
+          itemId: item.id,
+          position: const Duration(seconds: 35),
+          duration: const Duration(seconds: 120),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      final container = _createContainer(
+        session,
+        remoteDataSource: remoteDataSource,
+        feedRepository: _ListPlayerFeedRepository([item]),
+        progressRepository: progressRepository,
+      );
+      const sessionKey = 'single:drama-a:1';
+      final provider = playerPlaybackControllerProvider(sessionKey);
+      final feedController = container.read(
+        playerFeedControllerProvider(sessionKey).notifier,
+      );
+      final controller = container.read(provider.notifier);
+
+      await feedController.load(
+        const PlayerFeedConfig.singleDrama(
+          dramaId: 'drama-a',
+          episodeId: 'ep-1',
+        ),
+      );
+      await controller.playItem(item);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(remoteDataSource.reportedEventTypes, contains(1));
+      expect(remoteDataSource.reportedWatchSeconds, contains(35));
+    },
+  );
+
+  test('same viewport settled does not report switch episode', () async {
+    final session = _FakePlaybackSession();
+    final remoteDataSource = _RecordingPlayerRemoteDataSource();
+    final item = _item(1, duration: const Duration(seconds: 120));
+    final container = _createContainer(
+      session,
+      remoteDataSource: remoteDataSource,
+      feedRepository: _ListPlayerFeedRepository([item]),
+    );
+    const sessionKey = 'single:drama-a:1';
+    final provider = playerPlaybackControllerProvider(sessionKey);
+    final feedController = container.read(
+      playerFeedControllerProvider(sessionKey).notifier,
+    );
+    final runtime = container.read(
+      playerRuntimeCoordinatorProvider(sessionKey).notifier,
+    );
+    final controller = container.read(provider.notifier);
+
+    await feedController.load(
+      const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: 'ep-1'),
+    );
+    await controller.playItem(item);
+    session.emitDuration(const Duration(seconds: 120));
+    session.emitPosition(const Duration(seconds: 35));
+    await Future<void>.delayed(Duration.zero);
+    remoteDataSource.clearReports();
+
+    await runtime.onViewportSettled(
+      item: item,
+      index: 0,
+      previousItemId: item.id,
+      previousIndex: 0,
+      playbackTrigger: 'swipe_previous',
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(remoteDataSource.reportedEventTypes, isNot(contains(5)));
+  });
+
+  test(
+    'periodic watch progress reports at zero position when playback valid',
+    () async {
+      final session = _FakePlaybackSession();
+      final remoteDataSource = _RecordingPlayerRemoteDataSource();
+      final item = _item(1, duration: const Duration(seconds: 120));
+      final container = _createContainer(
+        session,
+        remoteDataSource: remoteDataSource,
+        feedRepository: _ListPlayerFeedRepository([item]),
+      );
+      const sessionKey = 'single:drama-a:1';
+      final provider = playerPlaybackControllerProvider(sessionKey);
+      final feedController = container.read(
+        playerFeedControllerProvider(sessionKey).notifier,
+      );
+      final controller = container.read(provider.notifier);
+
+      await feedController.load(
+        const PlayerFeedConfig.singleDrama(
+          dramaId: 'drama-a',
+          episodeId: 'ep-1',
+        ),
+      );
+      await controller.playItem(item);
+
+      await controller.reportWatchProgress(eventType: 2);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(remoteDataSource.reportedEventTypes, contains(2));
+      expect(remoteDataSource.reportedEpisodeNumbers, contains(1));
+      expect(remoteDataSource.reportedWatchSeconds, contains(0));
+      expect(remoteDataSource.reportedDurationSeconds, contains(120));
+    },
+  );
+
+  test('periodic watch progress excludes paused time', () async {
+    final session = _FakePlaybackSession();
+    final remoteDataSource = _RecordingPlayerRemoteDataSource();
+    final item = _item(1, duration: const Duration(seconds: 120));
+    final container = _createContainer(
+      session,
+      remoteDataSource: remoteDataSource,
+      feedRepository: _ListPlayerFeedRepository([item]),
+      watchProgressReportInterval: const Duration(milliseconds: 60),
+    );
+    const sessionKey = 'single:drama-a:1';
+    final provider = playerPlaybackControllerProvider(sessionKey);
+    final feedController = container.read(
+      playerFeedControllerProvider(sessionKey).notifier,
+    );
+    final controller = container.read(provider.notifier);
+
+    await feedController.load(
+      const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: 'ep-1'),
+    );
+    await controller.playItem(item);
+    session.emitPosition(const Duration(seconds: 1));
+    await Future<void>.delayed(const Duration(milliseconds: 25));
+
+    await controller.pause();
+    remoteDataSource.clearReports();
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    expect(remoteDataSource.reportedEventTypes, isNot(contains(2)));
+
+    await controller.togglePlay();
+    await Future<void>.delayed(const Duration(milliseconds: 45));
+
+    expect(remoteDataSource.reportedEventTypes, contains(2));
+  });
+
+  test('periodic watch progress excludes seeking time', () async {
+    final session = _FakePlaybackSession();
+    final remoteDataSource = _RecordingPlayerRemoteDataSource();
+    final item = _item(1, duration: const Duration(seconds: 120));
+    final container = _createContainer(
+      session,
+      remoteDataSource: remoteDataSource,
+      feedRepository: _ListPlayerFeedRepository([item]),
+      watchProgressReportInterval: const Duration(milliseconds: 60),
+    );
+    const sessionKey = 'single:drama-a:1';
+    final provider = playerPlaybackControllerProvider(sessionKey);
+    final feedController = container.read(
+      playerFeedControllerProvider(sessionKey).notifier,
+    );
+    final controller = container.read(provider.notifier);
+
+    await feedController.load(
+      const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: 'ep-1'),
+    );
+    await controller.playItem(item);
+    session.emitDuration(const Duration(seconds: 120));
+    session.emitPosition(const Duration(seconds: 1));
+    await Future<void>.delayed(const Duration(milliseconds: 25));
+
+    controller.beginSeek();
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    expect(remoteDataSource.reportedEventTypes, isNot(contains(2)));
+
+    await controller.endSeek();
+    await Future<void>.delayed(const Duration(milliseconds: 45));
+
+    expect(remoteDataSource.reportedEventTypes, contains(2));
+  });
+
+  test('toggle pause reports pause watch progress', () async {
+    final session = _FakePlaybackSession();
+    final remoteDataSource = _RecordingPlayerRemoteDataSource();
+    final item = _item(1, duration: const Duration(seconds: 120));
+    final container = _createContainer(
+      session,
+      remoteDataSource: remoteDataSource,
+      feedRepository: _ListPlayerFeedRepository([item]),
+    );
+    const sessionKey = 'single:drama-a:1';
+    final provider = playerPlaybackControllerProvider(sessionKey);
+    final feedController = container.read(
+      playerFeedControllerProvider(sessionKey).notifier,
+    );
+    final controller = container.read(provider.notifier);
+
+    await feedController.load(
+      const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: 'ep-1'),
+    );
+    await controller.playItem(item);
+    session.emitDuration(const Duration(seconds: 120));
+    session.emitPosition(const Duration(seconds: 35));
+    await Future<void>.delayed(Duration.zero);
+
+    await controller.togglePlay();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(remoteDataSource.reportedEventTypes, contains(3));
+    expect(remoteDataSource.reportedEpisodeNumbers, contains(1));
+    expect(remoteDataSource.reportedWatchSeconds, contains(35));
+  });
+
+  test(
+    'user pause intent reports even after playing stream paused first',
+    () async {
+      final session = _FakePlaybackSession();
+      final remoteDataSource = _RecordingPlayerRemoteDataSource();
+      final item = _item(1, duration: const Duration(seconds: 120));
+      final container = _createContainer(
+        session,
+        remoteDataSource: remoteDataSource,
+        feedRepository: _ListPlayerFeedRepository([item]),
+      );
+      const sessionKey = 'single:drama-a:1';
+      final provider = playerPlaybackControllerProvider(sessionKey);
+      final feedController = container.read(
+        playerFeedControllerProvider(sessionKey).notifier,
+      );
+      final controller = container.read(provider.notifier);
+
+      await feedController.load(
+        const PlayerFeedConfig.singleDrama(
+          dramaId: 'drama-a',
+          episodeId: 'ep-1',
+        ),
+      );
+      await controller.playItem(item);
+      session.emitDuration(const Duration(seconds: 120));
+      session.emitPosition(const Duration(seconds: 35));
+      await Future<void>.delayed(Duration.zero);
+      remoteDataSource.clearReports();
+
+      session.emitPlaying(false);
+      await Future<void>.delayed(Duration.zero);
+      await controller.togglePlay(pauseRequested: true);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(provider).status, PlayerPlaybackStatus.paused);
+      expect(remoteDataSource.reportedEventTypes, contains(3));
+      expect(remoteDataSource.reportedEpisodeNumbers, contains(1));
+      expect(remoteDataSource.reportedWatchSeconds, contains(35));
+    },
+  );
 
   test(
     'embedded subtitle language switches source and keeps position',
@@ -2793,9 +3155,11 @@ ProviderContainer _createContainer(
   bool addDisposeTearDown = true,
   PlayerPlaybackPreloadManager? preloadManager,
   PlaybackProgressRepository? progressRepository,
+  PlayerFeedRepository? feedRepository,
   PlayerPlaybackSourceRepository? sourceRepository,
   PlayerPreloadConfig? preloadConfig,
   PlayerRemoteDataSource? remoteDataSource,
+  Duration? watchProgressReportInterval,
 }) {
   final playbackCacheManager =
       preloadManager ??
@@ -2819,8 +3183,14 @@ ProviderContainer _createContainer(
         playbackProgressRepositoryProvider.overrideWithValue(
           progressRepository,
         ),
+      if (feedRepository != null)
+        playerFeedRepositoryProvider.overrideWithValue(feedRepository),
       if (remoteDataSource != null)
         playerRemoteDataSourceProvider.overrideWithValue(remoteDataSource),
+      if (watchProgressReportInterval != null)
+        playerWatchProgressReportIntervalProvider.overrideWithValue(
+          watchProgressReportInterval,
+        ),
     ],
   );
   if (addDisposeTearDown) {
@@ -2832,8 +3202,17 @@ ProviderContainer _createContainer(
 class _RecordingPlayerRemoteDataSource extends PlayerRemoteDataSource {
   _RecordingPlayerRemoteDataSource() : super(apiClient: ApiClient());
 
+  final reportedEventTypes = <int>[];
+  final reportedDurationSeconds = <int>[];
   final reportedEpisodeNumbers = <int>[];
   final reportedWatchSeconds = <int>[];
+
+  void clearReports() {
+    reportedEventTypes.clear();
+    reportedDurationSeconds.clear();
+    reportedEpisodeNumbers.clear();
+    reportedWatchSeconds.clear();
+  }
 
   @override
   Future<void> reportWatchProgress({
@@ -2845,8 +3224,29 @@ class _RecordingPlayerRemoteDataSource extends PlayerRemoteDataSource {
     required int eventType,
     required int watchSecond,
   }) async {
+    reportedEventTypes.add(eventType);
+    reportedDurationSeconds.add(durationSecond);
     reportedEpisodeNumbers.add(episodeNo);
     reportedWatchSeconds.add(watchSecond);
+  }
+}
+
+class _ListPlayerFeedRepository implements PlayerFeedRepository {
+  const _ListPlayerFeedRepository(this.items);
+
+  final List<PlayerFeedItem> items;
+
+  @override
+  Future<List<PlayerFeedItem>> listSingleDramaFeed({
+    required String dramaId,
+    required String episodeId,
+  }) async {
+    return items;
+  }
+
+  @override
+  Future<List<PlayerFeedItem>> listForYouFeed() async {
+    return items;
   }
 }
 

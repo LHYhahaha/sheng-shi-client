@@ -58,6 +58,10 @@ final playerPlaybackControllerProvider =
       String
     >(PlayerPlaybackController.new);
 
+final playerWatchProgressReportIntervalProvider = Provider<Duration>(
+  (_) => const Duration(seconds: 10),
+);
+
 class PlayerPlaybackSessionKeys {
   const PlayerPlaybackSessionKeys._();
 
@@ -451,13 +455,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   static const _restoreFloorTimeout = Duration(seconds: 12);
   static const _firstFrameProgressProbeDelay = Duration(milliseconds: 800);
   static const _resumeOpenStartMinPosition = Duration(seconds: 10);
-  static const _watchProgressReportInterval = Duration(seconds: 10);
 
   String? _preferredSubtitleLanguage;
   bool _externalSubtitlesClosed = false;
   PlayerFeedItem? _currentOriginalItem;
   Timer? _firstFrameProgressProbeTimer;
   Timer? _watchProgressReportTimer;
+  DateTime? _watchProgressReportTimerStartedAt;
+  Duration? _watchProgressReportRemaining;
   PlayerFeedItem? _visibilitySuspendedItem;
   PlayerFeedItem? _pendingSubtitleLoadItem;
 
@@ -528,6 +533,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   String? _lastSavedProgressItemId;
   Duration? _lastSavedProgressPosition;
   Duration? _lastSavedProgressDuration;
+  String? _lastPauseReportItemId;
+  int? _lastPauseReportWatchSecond;
+  int? _lastStartReportGeneration;
+  String? _lastStartReportItemId;
+  String? _lastStartReportSource;
   bool _watchProgressReportInFlight = false;
   late final _timingTrace = PlayerPlaybackTimingTrace(sessionKey: sessionKey);
   final _playingBeforeFirstFrameLoggedItemIds = <String>{};
@@ -922,6 +932,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
 
     final generation = ++_generation;
+    _resetWatchProgressReportTimer();
     _firstFrameProgressProbeTimer?.cancel();
     _pendingSubtitleLoadItem = null;
     _logTiming(
@@ -1069,10 +1080,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         if (!ref.mounted || !_isCurrent(generation)) {
           return;
         }
-        state = state.copyWith(
-          status: PlayerPlaybackStatus.playing,
+        _setPlayingStateAndSyncProgressTimer(
           isBuffering: !prepared.hasFirstFrame,
-          hasEnded: false,
         );
         return;
       }
@@ -1203,10 +1212,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         );
         return;
       }
-      state = state.copyWith(
-        status: PlayerPlaybackStatus.playing,
+      _setPlayingStateAndSyncProgressTimer(
         isBuffering: !_currentPlaybackHasFirstFrame,
-        hasEnded: false,
         hasFirstFrame: _currentPlaybackHasFirstFrame,
       );
     } catch (error, st) {
@@ -1475,7 +1482,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       _accessOverlayPausedItemId = state.currentItemId;
     }
     _pauseWhenOpenCompletes = true;
-    _stopWatchProgressReportTimer();
+    _pauseWatchProgressReportTimer();
     final generation = ++_generation;
     _logTiming(
       'access overlay quiesce',
@@ -1544,15 +1551,24 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     return candidates;
   }
 
-  Future<void> togglePlay() async {
+  Future<void> togglePlay({bool pauseRequested = false}) async {
     if (_isSessionDisposed) {
       return;
     }
 
     if (state.status == PlayerPlaybackStatus.playing) {
       _accessOverlayPausedItemId = null;
+      _pauseWatchProgressReportTimer();
       await _session.pause();
       state = state.copyWith(status: PlayerPlaybackStatus.paused);
+      _reportPauseWatchProgressIfNeeded();
+      return;
+    }
+
+    if (pauseRequested &&
+        state.status == PlayerPlaybackStatus.paused &&
+        state.currentSource != null) {
+      _reportPauseWatchProgressIfNeeded();
       return;
     }
 
@@ -1613,10 +1629,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
     _accessOverlayPausedItemId = null;
-    _stopWatchProgressReportTimer();
+    _pauseWatchProgressReportTimer();
     await _session.pause();
     state = state.copyWith(status: PlayerPlaybackStatus.paused);
-    unawaited(_reportWatchProgress(eventType: 3)); // 3: pause
+    _reportPauseWatchProgressIfNeeded();
   }
 
   /// 上报观看进度。
@@ -1659,21 +1675,30 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       final dramaId = int.tryParse(currentItem.content.id) ?? 0;
       final episodeId = int.tryParse(currentItem.episode.id);
       final episodeNo = currentItem.episode.number;
-      final durationSecond = state.duration.inSeconds;
       final watchSecond = state.position.inSeconds;
-      if (durationSecond <= 0 || watchSecond <= 0) {
+      final durationSecond = _reportableDurationSecond(
+        currentItem,
+        watchSecond: watchSecond,
+      );
+      if (_shouldSkipDuplicateStartReport(
+        eventType: eventType,
+        itemId: currentItem.id,
+      )) {
         _logTiming(
-          'report watch progress skipped zero progress',
+          'report watch progress skipped duplicate start',
           itemId: state.currentItemId,
           details: _timingDetails([
             'eventType=$eventType',
-            'durationSecond=$durationSecond',
-            'watchSecond=$watchSecond',
+            'generation=$_generation',
+            'reportedItemId=${currentItem.id}',
           ]),
         );
         return;
       }
-
+      _markWatchProgressEventReported(
+        eventType: eventType,
+        itemId: currentItem.id,
+      );
       _logTiming(
         'report watch progress',
         itemId: state.currentItemId,
@@ -1708,11 +1733,65 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
   }
 
+  bool _shouldSkipDuplicateStartReport({
+    required int eventType,
+    required String itemId,
+  }) {
+    return eventType == 1 &&
+        _lastStartReportGeneration == _generation &&
+        _lastStartReportItemId == itemId &&
+        _lastStartReportSource == state.currentSource;
+  }
+
+  void _markWatchProgressEventReported({
+    required int eventType,
+    required String itemId,
+  }) {
+    if (eventType != 1) {
+      return;
+    }
+    _lastStartReportGeneration = _generation;
+    _lastStartReportItemId = itemId;
+    _lastStartReportSource = state.currentSource;
+  }
+
+  void _reportPauseWatchProgressIfNeeded() {
+    final itemId = state.currentItemId;
+    if (itemId == null) {
+      return;
+    }
+    final watchSecond = state.position.inSeconds;
+    if (_lastPauseReportItemId == itemId &&
+        _lastPauseReportWatchSecond == watchSecond) {
+      return;
+    }
+    _lastPauseReportItemId = itemId;
+    _lastPauseReportWatchSecond = watchSecond;
+    unawaited(_reportWatchProgress(eventType: 3)); // 3: pause
+  }
+
+  int _reportableDurationSecond(
+    PlayerFeedItem item, {
+    required int watchSecond,
+  }) {
+    final candidates = [
+      state.duration,
+      _currentPlaybackDuration,
+      item.episode.duration,
+    ];
+    for (final duration in candidates) {
+      if (duration != null && duration > Duration.zero) {
+        return duration.inSeconds;
+      }
+    }
+    return watchSecond > 0 ? watchSecond : 0;
+  }
+
   void beginSeek() {
     if (!state.isSeekAllowed || _isSessionDisposed) {
       return;
     }
-    _stopWatchProgressReportTimer();
+    _pauseWatchProgressReportTimer();
     _restoreFloorTimer?.cancel();
     _restoreFloorPosition = null;
     _wasPlayingBeforeSeek = state.status == PlayerPlaybackStatus.playing;
@@ -1788,7 +1867,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     ++_visibilityDetachEpoch;
     _pauseWhenOpenCompletes = true;
     _accessOverlayPausedItemId = null;
-    _stopWatchProgressReportTimer();
+    _pauseWatchProgressReportTimer();
     unawaited(_persistProgressIfNeeded());
     ++_generation;
     await _session.pause();
@@ -1918,7 +1997,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     // 占用音频/网络资源。
     _pauseWhenOpenCompletes = true;
     _accessOverlayPausedItemId = null;
-    _stopWatchProgressReportTimer();
+    _pauseWatchProgressReportTimer();
     await _persistProgressIfNeeded();
     if (visibilityEpoch != _visibilityDetachEpoch) {
       return;
@@ -2249,16 +2328,34 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   void _syncWatchProgressReportTimer() {
     if (!_shouldReportWatchProgressPeriodically) {
-      _stopWatchProgressReportTimer();
+      _pauseWatchProgressReportTimer();
       return;
     }
     if (_watchProgressReportTimer?.isActive == true) {
       return;
     }
-    _watchProgressReportTimer = Timer.periodic(
-      _watchProgressReportInterval,
-      (_) => _reportPeriodicWatchProgressIfNeeded(),
+    final interval = ref.read(playerWatchProgressReportIntervalProvider);
+    final remaining = _watchProgressReportRemaining ?? interval;
+    final delay = remaining > Duration.zero ? remaining : Duration.zero;
+    _watchProgressReportTimerStartedAt = DateTime.now();
+    _watchProgressReportTimer = Timer(
+      delay,
+      _reportPeriodicWatchProgressIfNeeded,
     );
+  }
+
+  void _setPlayingStateAndSyncProgressTimer({
+    bool? isBuffering,
+    bool? hasFirstFrame,
+  }) {
+    state = state.copyWith(
+      status: PlayerPlaybackStatus.playing,
+      isBuffering: isBuffering,
+      hasFirstFrame: hasFirstFrame,
+      hasEnded: false,
+    );
+    _reportStartWatchProgressIfNeeded();
+    _syncWatchProgressReportTimer();
   }
 
   bool get _shouldReportWatchProgressPeriodically {
@@ -2274,23 +2371,57 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         !_pauseWhenOpenCompletes;
   }
 
+  void _reportStartWatchProgressIfNeeded() {
+    unawaited(_reportWatchProgress(eventType: 1)); // 1: start
+  }
+
   void _stopWatchProgressReportTimer() {
     _watchProgressReportTimer?.cancel();
     _watchProgressReportTimer = null;
+    _watchProgressReportTimerStartedAt = null;
+  }
+
+  void _pauseWatchProgressReportTimer() {
+    final timer = _watchProgressReportTimer;
+    final startedAt = _watchProgressReportTimerStartedAt;
+    if (timer?.isActive == true && startedAt != null) {
+      final elapsed = DateTime.now().difference(startedAt);
+      final Duration remaining =
+          _watchProgressReportRemaining ??
+          ref.read(playerWatchProgressReportIntervalProvider);
+      final nextRemaining = remaining - elapsed;
+      _watchProgressReportRemaining = nextRemaining > Duration.zero
+          ? nextRemaining
+          : Duration.zero;
+    }
+    _stopWatchProgressReportTimer();
+  }
+
+  void _resetWatchProgressReportTimer() {
+    _stopWatchProgressReportTimer();
+    _watchProgressReportRemaining = ref.read(
+      playerWatchProgressReportIntervalProvider,
+    );
   }
 
   void _reportPeriodicWatchProgressIfNeeded() {
     if (!_shouldReportWatchProgressPeriodically) {
-      _stopWatchProgressReportTimer();
+      _pauseWatchProgressReportTimer();
       return;
     }
+    _stopWatchProgressReportTimer();
+    _watchProgressReportRemaining = ref.read(
+      playerWatchProgressReportIntervalProvider,
+    );
     if (_watchProgressReportInFlight) {
+      _syncWatchProgressReportTimer();
       return;
     }
     _watchProgressReportInFlight = true;
     unawaited(
       _reportWatchProgress(eventType: 2).whenComplete(() {
         _watchProgressReportInFlight = false;
+        _syncWatchProgressReportTimer();
       }),
     );
   }

@@ -1267,8 +1267,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                       performancePolicy.allowPressChromeDimming
                       ? _overlayOpacityNotifier
                       : null,
-                  onTogglePlay: () {
-                    unawaited(playbackController.togglePlay());
+                  onTogglePlay: ({required pauseRequested}) {
+                    unawaited(
+                      playbackController.togglePlay(
+                        pauseRequested: pauseRequested,
+                      ),
+                    );
                   },
                   onRetry: () {
                     unawaited(_retryPlaybackForItem(item));

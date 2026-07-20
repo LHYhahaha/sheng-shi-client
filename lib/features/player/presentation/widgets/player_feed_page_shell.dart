@@ -53,7 +53,7 @@ class PlayerFeedPageShell extends ConsumerWidget {
   final bool forYouLayout;
   final bool allowPressChromeDimming;
   final ValueListenable<double>? overlayOpacityListenable;
-  final VoidCallback onTogglePlay;
+  final void Function({required bool pauseRequested}) onTogglePlay;
   final VoidCallback onRetry;
   final VoidCallback onSeekStart;
   final ValueChanged<Duration> onSeekUpdate;
