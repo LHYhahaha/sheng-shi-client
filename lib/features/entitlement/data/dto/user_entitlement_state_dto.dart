@@ -7,6 +7,7 @@ class UserEntitlementStateDto {
     this.membershipExpiresAt,
     required this.coinBalance,
     required this.bonusBalance,
+    required this.totalPointBalance,
     required this.autoUnlockEnabled,
     required this.unlockedEpisodeIds,
     this.pendingOperationId,
@@ -19,6 +20,7 @@ class UserEntitlementStateDto {
   final DateTime? membershipExpiresAt;
   final int coinBalance;
   final int bonusBalance;
+  final int totalPointBalance;
   final bool autoUnlockEnabled;
   final List<String> unlockedEpisodeIds;
   final String? pendingOperationId;
@@ -48,6 +50,8 @@ class UserEntitlementStateDto {
         'bonusBalance',
         dtoName: dtoName,
       ),
+      totalPointBalance:
+          JsonFieldParser.optionalInt(map, 'totalPointBalance') ?? 0,
       autoUnlockEnabled: JsonFieldParser.requireBool(
         map,
         'autoUnlockEnabled',

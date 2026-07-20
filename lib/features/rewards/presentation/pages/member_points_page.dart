@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gradient_borders/box_borders/gradient_box_border.dart';
+import 'package:permission_handler/permission_handler.dart' as permissions;
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../core/toast/app_center_toast.dart';
@@ -19,6 +20,41 @@ const _purple = Color(0xFF8800FF);
 const _titleColor = Color(0xFFECC2FF);
 const _bodyColor = Color(0xFFF3EAF6);
 const _mutedColor = Color(0xFF8D7197);
+
+@visibleForTesting
+Future<bool> Function() debugRequestMemberPointsNotificationPermission =
+    _requestNotificationPermission;
+
+@visibleForTesting
+Future<permissions.PermissionStatus> Function()
+debugGetMemberPointsNotificationPermissionStatus =
+    _getNotificationPermissionStatus;
+
+@visibleForTesting
+Future<permissions.PermissionStatus> Function()
+debugRequestMemberPointsNotificationPermissionStatus =
+    _requestNotificationPermissionStatus;
+
+@visibleForTesting
+Future<bool> Function() debugRequestMemberPointsFirebaseNotificationPermission =
+    _requestFirebaseNotificationPermission;
+
+@visibleForTesting
+Future<bool> Function() debugOpenMemberPointsNotificationSettings =
+    _openNotificationSettings;
+
+@visibleForTesting
+void debugResetMemberPointsNotificationPermission() {
+  debugRequestMemberPointsNotificationPermission =
+      _requestNotificationPermission;
+  debugGetMemberPointsNotificationPermissionStatus =
+      _getNotificationPermissionStatus;
+  debugRequestMemberPointsNotificationPermissionStatus =
+      _requestNotificationPermissionStatus;
+  debugRequestMemberPointsFirebaseNotificationPermission =
+      _requestFirebaseNotificationPermission;
+  debugOpenMemberPointsNotificationSettings = _openNotificationSettings;
+}
 
 BoxDecoration _dailyRewardsContentDecoration() => BoxDecoration(
   borderRadius: BorderRadius.circular(7),
@@ -82,6 +118,7 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !widget.isActive) return;
       ref.read(memberPointsControllerProvider.notifier).loadDailyDetail();
+      ref.read(entitlementControllerProvider.notifier).refreshFromServer();
     });
   }
 
@@ -123,6 +160,10 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage> {
             child: _DailyRewardsPanel(
               isMember: isMember,
               dailyDetail: dailyDetail,
+              useDefaultDailyRewards: widget.isMember != null,
+              pointBalance: widget.isMember == null
+                  ? entitlement.totalPointBalance
+                  : dailyDetail?.totalPointBalance,
             ),
           ),
           if (isMember) ...[
@@ -166,10 +207,17 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage> {
 }
 
 class _DailyRewardsPanel extends StatelessWidget {
-  const _DailyRewardsPanel({required this.isMember, this.dailyDetail});
+  const _DailyRewardsPanel({
+    required this.isMember,
+    required this.useDefaultDailyRewards,
+    this.dailyDetail,
+    this.pointBalance,
+  });
 
   final bool isMember;
+  final bool useDefaultDailyRewards;
   final MemberPointDailyDetail? dailyDetail;
+  final int? pointBalance;
 
   @override
   Widget build(BuildContext context) {
@@ -228,11 +276,15 @@ class _DailyRewardsPanel extends StatelessWidget {
                   _PanelHeader(
                     title:
                         '${AppLocalizations.maybeOf(context).memberPointsDailyRewardTitle} >',
-                    trailingPoints: '${dailyDetail?.totalPointBalance ?? 0}',
+                    trailingPoints:
+                        '${pointBalance ?? dailyDetail?.totalPointBalance ?? 0}',
                     onTap: () => context.push(RoutePaths.memberPointDetails),
                   ),
                   isMember
-                      ? _MemberDailyRewards(dailyDetail: dailyDetail)
+                      ? _MemberDailyRewards(
+                          dailyDetail: dailyDetail,
+                          useDefaultProgress: useDefaultDailyRewards,
+                        )
                       : const _LockedDailyRewards(),
                 ],
               ),
@@ -379,12 +431,20 @@ class _RewardFeatureTile extends StatelessWidget {
 }
 
 class _MemberDailyRewards extends StatelessWidget {
-  const _MemberDailyRewards({this.dailyDetail});
+  const _MemberDailyRewards({
+    required this.useDefaultProgress,
+    this.dailyDetail,
+  });
 
+  final bool useDefaultProgress;
   final MemberPointDailyDetail? dailyDetail;
 
   @override
   Widget build(BuildContext context) {
+    if (dailyDetail == null && !useDefaultProgress) {
+      return const _MemberDailyRewardsLoading();
+    }
+
     final progress = _resolvedDayProgress(dailyDetail?.dayProgress);
     final currentIndex = _currentProgressIndex(progress);
     final l10n = AppLocalizations.maybeOf(context);
@@ -423,6 +483,30 @@ class _MemberDailyRewards extends StatelessWidget {
           const SizedBox(height: 7),
           _DailyLabelsRow(progress: progress, currentIndex: currentIndex),
         ],
+      ),
+    );
+  }
+}
+
+class _MemberDailyRewardsLoading extends StatelessWidget {
+  const _MemberDailyRewardsLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('member_points_active_daily_loading'),
+      height: 171,
+      margin: const EdgeInsets.fromLTRB(0, 9, 0, 0),
+      padding: const EdgeInsets.fromLTRB(17, 24, 17, 16),
+      decoration: _dailyRewardsContentDecoration(),
+      child: Center(
+        child: SizedBox.square(
+          dimension: 18,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: _titleColor.withValues(alpha: 0.9),
+          ),
+        ),
       ),
     );
   }
@@ -916,12 +1000,22 @@ class _MemberTasksPanel extends ConsumerWidget {
       case _MemberTaskActionType.dailyDraw:
         await _claimTask(context, ref, item.task.taskKey);
       case _MemberTaskActionType.watch30m:
-        showAppCenterToast(
-          AppLocalizations.maybeOf(context).memberPointsWatchOver30Min,
-        );
+        if (item.task.completed) {
+          await _claimTask(context, ref, item.task.taskKey);
+        } else {
+          showAppCenterToast(
+            AppLocalizations.maybeOf(context).memberPointsWatchOver30Min,
+          );
+        }
       case _MemberTaskActionType.enablePush:
-        final granted = await _requestNotificationPermission();
-        if (!context.mounted || !granted) return;
+        final granted = await debugRequestMemberPointsNotificationPermission();
+        if (!context.mounted) return;
+        if (!granted) {
+          showAppCenterToast(
+            AppLocalizations.maybeOf(context).rewardsTaskEnablePush,
+          );
+          return;
+        }
         await _claimTask(context, ref, item.task.taskKey);
     }
   }
@@ -935,7 +1029,11 @@ class _MemberTasksPanel extends ConsumerWidget {
       final result = await ref
           .read(memberPointsControllerProvider.notifier)
           .claimReward(taskKey: taskKey);
-      if (!context.mounted || result?.isSuccess != true) return;
+      if (!context.mounted) return;
+      if (result?.isSuccess != true) {
+        showAppCenterToast(AppLocalizations.maybeOf(context).networkError);
+        return;
+      }
       await showMemberPointsClaimSuccessDialog(
         context,
         rewardAmount: result!.rewardAmount,
@@ -949,12 +1047,123 @@ class _MemberTasksPanel extends ConsumerWidget {
 
 Future<bool> _requestNotificationPermission() async {
   try {
+    final currentStatus =
+        await debugGetMemberPointsNotificationPermissionStatus();
+    _debugLogNotificationPermission('current=$currentStatus');
+    if (_hasNotificationPermission(currentStatus)) {
+      _debugLogNotificationPermission('granted from current status');
+      return true;
+    }
+
+    if (_isNotificationPermissionPermanentlyDenied(currentStatus)) {
+      _debugLogNotificationPermission('permanently denied before request');
+      await _openNotificationSettingsAfterDenied();
+      return false;
+    }
+
+    final firebaseGranted =
+        await debugRequestMemberPointsFirebaseNotificationPermission();
+    _debugLogNotificationPermission(
+      'firebase request granted=$firebaseGranted',
+    );
+    if (firebaseGranted) {
+      return true;
+    }
+
+    final requestedStatus = await _requestAndReadNotificationPermissionStatus();
+    final granted =
+        firebaseGranted || _hasNotificationPermission(requestedStatus);
+    _debugLogNotificationPermission(
+      'requested=$requestedStatus, granted=$granted',
+    );
+    if (!granted) {
+      await _openNotificationSettingsAfterDenied();
+    }
+    return granted;
+  } catch (error) {
+    _debugLogNotificationPermission(
+      'notification permission flow failed: $error; retrying with permission_handler',
+    );
+    final requestedStatus = await _requestAndReadNotificationPermissionStatus();
+    final granted = _hasNotificationPermission(requestedStatus);
+    _debugLogNotificationPermission(
+      'permission_handler retry=$requestedStatus, granted=$granted',
+    );
+    if (!granted) {
+      await _openNotificationSettingsAfterDenied();
+    }
+    return granted;
+  }
+}
+
+bool _hasNotificationPermission(permissions.PermissionStatus status) {
+  return status.isGranted || status.isProvisional;
+}
+
+bool _isNotificationPermissionPermanentlyDenied(
+  permissions.PermissionStatus status,
+) {
+  return status.isPermanentlyDenied || status.isRestricted;
+}
+
+Future<permissions.PermissionStatus> _getNotificationPermissionStatus() {
+  return permissions.Permission.notification.status;
+}
+
+Future<permissions.PermissionStatus> _requestNotificationPermissionStatus() {
+  return permissions.Permission.notification.request();
+}
+
+Future<permissions.PermissionStatus>
+_requestAndReadNotificationPermissionStatus() async {
+  final requestedStatus =
+      await debugRequestMemberPointsNotificationPermissionStatus();
+  if (_hasNotificationPermission(requestedStatus) ||
+      _isNotificationPermissionPermanentlyDenied(requestedStatus)) {
+    return requestedStatus;
+  }
+  return debugGetMemberPointsNotificationPermissionStatus();
+}
+
+Future<void> _openNotificationSettingsAfterDenied() async {
+  final opened = await debugOpenMemberPointsNotificationSettings();
+  _debugLogNotificationPermission('open settings after denied=$opened');
+}
+
+Future<bool> _openNotificationSettings() {
+  return permissions.openAppSettings();
+}
+
+Future<bool> _requestFirebaseNotificationPermission() async {
+  try {
+    final currentSettings = await FirebaseMessaging.instance
+        .getNotificationSettings();
+    _debugLogNotificationPermission(
+      'firebase current=${currentSettings.authorizationStatus}',
+    );
+    if (currentSettings.authorizationStatus == AuthorizationStatus.authorized ||
+        currentSettings.authorizationStatus ==
+            AuthorizationStatus.provisional) {
+      return true;
+    }
+
     final settings = await FirebaseMessaging.instance.requestPermission();
+    _debugLogNotificationPermission(
+      'firebase requested=${settings.authorizationStatus}',
+    );
     return settings.authorizationStatus == AuthorizationStatus.authorized ||
         settings.authorizationStatus == AuthorizationStatus.provisional;
-  } catch (_) {
+  } catch (error) {
+    _debugLogNotificationPermission('firebase unavailable: $error');
     return false;
   }
+}
+
+void _debugLogNotificationPermission(String message) {
+  assert(() {
+    debugPrint('[MemberPointsNotificationPermission] $message');
+    return true;
+  }());
 }
 
 enum _MemberTaskActionType { dailyDraw, watch30m, enablePush }
@@ -1088,6 +1297,11 @@ class _RedeemPointsPanel extends ConsumerWidget {
               points: '${tiers[index].pointCost}',
               action: l10n.memberCenterButtonExchange,
               disabled: !canRedeemAsMember || !tiers[index].canExchange,
+              disabledOnTap: canRedeemAsMember && !tiers[index].canExchange
+                  ? () => showAppCenterToast(
+                      l10n.memberCenterModalExchangeInsufficientPoints,
+                    )
+                  : null,
               onTap: () => _confirmExchange(context, ref, tiers[index]),
             ),
           ],
@@ -1255,6 +1469,7 @@ class _ActionRow extends StatelessWidget {
     this.keySuffix,
     this.note,
     this.disabled = false,
+    this.disabledOnTap,
     this.onTap,
   });
 
@@ -1264,6 +1479,7 @@ class _ActionRow extends StatelessWidget {
   final String points;
   final String action;
   final bool disabled;
+  final VoidCallback? disabledOnTap;
   final VoidCallback? onTap;
 
   @override
@@ -1329,6 +1545,7 @@ class _ActionRow extends StatelessWidget {
             ),
             label: action,
             disabled: disabled,
+            disabledOnTap: disabledOnTap,
             onTap: onTap ?? () {},
           ),
         ],
@@ -1342,6 +1559,7 @@ class _MemberPointsActionButton extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.disabled = false,
+    this.disabledOnTap,
     this.fontSize = 12,
     this.fontWeight = FontWeight.w500,
     super.key,
@@ -1351,6 +1569,7 @@ class _MemberPointsActionButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final bool disabled;
+  final VoidCallback? disabledOnTap;
   final double fontSize;
   final FontWeight fontWeight;
   final EdgeInsetsGeometry? boxPadding;
@@ -1390,7 +1609,7 @@ class _MemberPointsActionButton extends StatelessWidget {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: disabled ? null : onTap,
+              onTap: disabled ? disabledOnTap : onTap,
               borderRadius: BorderRadius.circular(4),
               splashColor: Colors.white.withValues(alpha: 0.08),
               highlightColor: Colors.white.withValues(alpha: 0.04),

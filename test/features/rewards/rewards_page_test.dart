@@ -2,6 +2,10 @@ import 'dart:async';
 
 import 'package:bot_toast/bot_toast.dart';
 import 'package:drama_client/app/router/route_paths.dart';
+import 'package:drama_client/features/entitlement/application/entitlement_controller.dart';
+import 'package:drama_client/features/entitlement/data/entitlement_repository_provider.dart';
+import 'package:drama_client/features/entitlement/domain/entitlement_repository.dart';
+import 'package:drama_client/features/entitlement/domain/user_entitlement_state.dart';
 import 'package:drama_client/features/pay/application/payment_loading_controller.dart';
 import 'package:drama_client/features/rewards/application/member_points_controller.dart';
 import 'package:drama_client/features/rewards/data/member_points_repository_provider.dart';
@@ -22,6 +26,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gradient_borders/box_borders/gradient_box_border.dart';
+import 'package:permission_handler/permission_handler.dart' as permissions;
 
 void main() {
   test('member points can be addressed as an independent rewards tab', () {
@@ -296,12 +301,18 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(375, 812));
     addTearDown(() => tester.binding.setSurfaceSize(null));
+    final entitlementRepository = _FakeEntitlementRepository(
+      states: [_memberEntitlement(pointBalance: 5)],
+    );
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           memberPointsRepositoryProvider.overrideWithValue(
             _FakeMemberPointsRepository(),
+          ),
+          entitlementRepositoryProvider.overrideWithValue(
+            entitlementRepository,
           ),
         ],
         child: const MaterialApp(home: MemberPointsPage(isMember: true)),
@@ -325,6 +336,275 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Claimed Successfully'), findsNothing);
+    expect(entitlementRepository.fetchStateCallCount, 1);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('member_points_page'))),
+    );
+    expect(container.read(entitlementControllerProvider).totalPointBalance, 5);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('member points watch task claims when daily detail completed', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(375, 812));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeMemberPointsRepository(
+      tasks: [_watchTask(completed: true)],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          memberPointsRepositoryProvider.overrideWithValue(repository),
+          entitlementRepositoryProvider.overrideWithValue(
+            _FakeEntitlementRepository(
+              states: [
+                _memberEntitlement(pointBalance: 0),
+                _memberEntitlement(pointBalance: 5),
+              ],
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: MemberPointsPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(
+      find.byKey(const Key('member_points_action_play_reward')),
+    );
+    await tester.tap(find.byKey(const Key('member_points_action_play_reward')));
+    await tester.pumpAndSettle();
+
+    expect(repository.claimedTaskKeys, ['point.watch.30m']);
+    expect(find.text('Claimed Successfully'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('member points push task claims when notifications are enabled', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(375, 812));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    debugRequestMemberPointsNotificationPermission = () async => true;
+    addTearDown(debugResetMemberPointsNotificationPermission);
+    final repository = _FakeMemberPointsRepository(tasks: [_pushTask()]);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          memberPointsRepositoryProvider.overrideWithValue(repository),
+          entitlementRepositoryProvider.overrideWithValue(
+            _FakeEntitlementRepository(
+              states: [
+                _memberEntitlement(pointBalance: 0),
+                _memberEntitlement(pointBalance: 5),
+              ],
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: MemberPointsPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(
+      find.byKey(const Key('member_points_action_enable_push')),
+    );
+    await tester.tap(find.byKey(const Key('member_points_action_enable_push')));
+    await tester.pumpAndSettle();
+
+    expect(repository.claimedTaskKeys, ['point.enable_push']);
+    expect(find.text('Claimed Successfully'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  test(
+    'member points notification permission claims when already granted',
+    () async {
+      var requestCallCount = 0;
+      var firebaseRequestCallCount = 0;
+      var openSettingsCallCount = 0;
+      debugGetMemberPointsNotificationPermissionStatus = () async =>
+          permissions.PermissionStatus.granted;
+      debugRequestMemberPointsNotificationPermissionStatus = () async {
+        requestCallCount++;
+        return permissions.PermissionStatus.denied;
+      };
+      debugRequestMemberPointsFirebaseNotificationPermission = () async {
+        firebaseRequestCallCount++;
+        return false;
+      };
+      debugOpenMemberPointsNotificationSettings = () async {
+        openSettingsCallCount++;
+        return true;
+      };
+      addTearDown(debugResetMemberPointsNotificationPermission);
+
+      expect(await debugRequestMemberPointsNotificationPermission(), isTrue);
+      expect(requestCallCount, 0);
+      expect(firebaseRequestCallCount, 0);
+      expect(openSettingsCallCount, 0);
+    },
+  );
+
+  test('member points notification permission requests when denied', () async {
+    var requestCallCount = 0;
+    var firebaseRequestCallCount = 0;
+    var openSettingsCallCount = 0;
+    debugGetMemberPointsNotificationPermissionStatus = () async =>
+        permissions.PermissionStatus.denied;
+    debugRequestMemberPointsNotificationPermissionStatus = () async {
+      requestCallCount++;
+      return permissions.PermissionStatus.denied;
+    };
+    debugRequestMemberPointsFirebaseNotificationPermission = () async {
+      firebaseRequestCallCount++;
+      return true;
+    };
+    debugOpenMemberPointsNotificationSettings = () async {
+      openSettingsCallCount++;
+      return true;
+    };
+    addTearDown(debugResetMemberPointsNotificationPermission);
+
+    expect(await debugRequestMemberPointsNotificationPermission(), isTrue);
+    expect(firebaseRequestCallCount, 1);
+    expect(requestCallCount, 0);
+    expect(openSettingsCallCount, 0);
+  });
+
+  test(
+    'member points notification permission stays denied when request is denied',
+    () async {
+      var requestCallCount = 0;
+      var firebaseRequestCallCount = 0;
+      var openSettingsCallCount = 0;
+      debugGetMemberPointsNotificationPermissionStatus = () async =>
+          permissions.PermissionStatus.denied;
+      debugRequestMemberPointsNotificationPermissionStatus = () async {
+        requestCallCount++;
+        return permissions.PermissionStatus.denied;
+      };
+      debugRequestMemberPointsFirebaseNotificationPermission = () async {
+        firebaseRequestCallCount++;
+        return false;
+      };
+      debugOpenMemberPointsNotificationSettings = () async {
+        openSettingsCallCount++;
+        return true;
+      };
+      addTearDown(debugResetMemberPointsNotificationPermission);
+
+      expect(await debugRequestMemberPointsNotificationPermission(), isFalse);
+      expect(firebaseRequestCallCount, 1);
+      expect(requestCallCount, 1);
+      expect(openSettingsCallCount, 1);
+    },
+  );
+
+  test(
+    'member points notification permission falls back when Firebase is unavailable',
+    () async {
+      var requestCallCount = 0;
+      var firebaseRequestCallCount = 0;
+      var openSettingsCallCount = 0;
+      debugGetMemberPointsNotificationPermissionStatus = () async =>
+          permissions.PermissionStatus.denied;
+      debugRequestMemberPointsNotificationPermissionStatus = () async {
+        requestCallCount++;
+        return permissions.PermissionStatus.granted;
+      };
+      debugRequestMemberPointsFirebaseNotificationPermission = () async {
+        firebaseRequestCallCount++;
+        throw StateError('No Firebase App');
+      };
+      debugOpenMemberPointsNotificationSettings = () async {
+        openSettingsCallCount++;
+        return true;
+      };
+      addTearDown(debugResetMemberPointsNotificationPermission);
+
+      expect(await debugRequestMemberPointsNotificationPermission(), isTrue);
+      expect(firebaseRequestCallCount, 1);
+      expect(requestCallCount, 1);
+      expect(openSettingsCallCount, 0);
+    },
+  );
+
+  test(
+    'member points notification permission does not request after permanent denial',
+    () async {
+      var requestCallCount = 0;
+      var firebaseRequestCallCount = 0;
+      var openSettingsCallCount = 0;
+      debugGetMemberPointsNotificationPermissionStatus = () async =>
+          permissions.PermissionStatus.permanentlyDenied;
+      debugRequestMemberPointsNotificationPermissionStatus = () async {
+        requestCallCount++;
+        return permissions.PermissionStatus.granted;
+      };
+      debugRequestMemberPointsFirebaseNotificationPermission = () async {
+        firebaseRequestCallCount++;
+        return true;
+      };
+      debugOpenMemberPointsNotificationSettings = () async {
+        openSettingsCallCount++;
+        return true;
+      };
+      addTearDown(debugResetMemberPointsNotificationPermission);
+
+      expect(await debugRequestMemberPointsNotificationPermission(), isFalse);
+      expect(requestCallCount, 0);
+      expect(firebaseRequestCallCount, 0);
+      expect(openSettingsCallCount, 1);
+    },
+  );
+
+  testWidgets('member points watch task shows toast when not completed', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(375, 812));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeMemberPointsRepository(
+      tasks: [_watchTask(completed: false, canClaim: true)],
+    );
+    final botToastBuilder = BotToastInit();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          memberPointsRepositoryProvider.overrideWithValue(repository),
+          entitlementRepositoryProvider.overrideWithValue(
+            _FakeEntitlementRepository(
+              states: [_memberEntitlement(pointBalance: 0)],
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          builder: botToastBuilder,
+          navigatorObservers: [BotToastNavigatorObserver()],
+          home: const MemberPointsPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(
+      find.byKey(const Key('member_points_action_play_reward')),
+    );
+    await tester.tap(find.byKey(const Key('member_points_action_play_reward')));
+    await tester.pumpAndSettle();
+
+    expect(repository.claimedTaskKeys, isEmpty);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('app_center_toast')),
+        matching: find.text('(＞ 30 min)'),
+      ),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -337,17 +617,26 @@ void main() {
     final repository = _FakeMemberPointsRepository(
       exchangeCompleter: exchangeCompleter,
     );
+    final entitlementRepository = _FakeEntitlementRepository(
+      states: [
+        _memberEntitlement(pointBalance: 1000),
+        _memberEntitlement(pointBalance: 0),
+      ],
+    );
     final botToastBuilder = BotToastInit();
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           memberPointsRepositoryProvider.overrideWithValue(repository),
+          entitlementRepositoryProvider.overrideWithValue(
+            entitlementRepository,
+          ),
         ],
         child: MaterialApp(
           builder: botToastBuilder,
           navigatorObservers: [BotToastNavigatorObserver()],
-          home: const MemberPointsPage(isMember: true),
+          home: const MemberPointsPage(),
         ),
       ),
     );
@@ -361,6 +650,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.exchangeCallCount, 0);
+    expect(entitlementRepository.fetchStateCallCount, 1);
     expect(
       find.byKey(const Key('member_points_exchange_confirm_dialog')),
       findsOneWidget,
@@ -372,7 +662,14 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('1000 Member Points'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const Key('member_points_exchange_confirm_points')),
+          )
+          .data,
+      '1000',
+    );
     expect(
       find.text(
         '1. After redemption, your current membership will be extended by 5 day(s).\n'
@@ -410,6 +707,8 @@ void main() {
       isFalse,
     );
     expect(container.read(paymentLoadingControllerProvider).isVisible, isFalse);
+    expect(entitlementRepository.fetchStateCallCount, 2);
+    expect(container.read(entitlementControllerProvider).totalPointBalance, 0);
     expect(find.text('Redeemed successfully'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -493,6 +792,27 @@ void main() {
 
     expect(find.text('Watch Reward'), findsOneWidget);
     expect(find.text('point.watch.30m'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('member point details shows configured empty text', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          memberPointsRepositoryProvider.overrideWithValue(
+            _FakeMemberPointsRepository(details: const []),
+          ),
+        ],
+        child: const MaterialApp(
+          home: member_point_details.MemberPointDetailsPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No records'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -589,18 +909,23 @@ class _FakeMemberPointsRepository implements MemberPointsRepository {
   _FakeMemberPointsRepository({
     this.detailRemark = 'Daily member points',
     this.exchangeCompleter,
+    this.tasks = const [],
+    this.details,
   });
 
   final String detailRemark;
   final Completer<MemberPointExchangeResult>? exchangeCompleter;
+  final List<MemberPointTask> tasks;
+  final List<MemberPointDetailRecord>? details;
+  final List<String> claimedTaskKeys = [];
   int exchangeCallCount = 0;
 
   @override
   Future<MemberPointDailyDetail> getDailyDetail() async {
-    return const MemberPointDailyDetail(
-      dayProgress: [],
+    return MemberPointDailyDetail(
+      dayProgress: const [],
       memberDay: 7,
-      tasks: [],
+      tasks: tasks,
       totalAvailablePoint: 0,
       totalPointBalance: 0,
     );
@@ -608,6 +933,7 @@ class _FakeMemberPointsRepository implements MemberPointsRepository {
 
   @override
   Future<MemberPointClaimResult> claimReward({required String taskKey}) async {
+    claimedTaskKeys.add(taskKey);
     return const MemberPointClaimResult(
       claimNo: 'claim-test',
       grantedAt: '2026-07-15T00:00:00Z',
@@ -657,6 +983,16 @@ class _FakeMemberPointsRepository implements MemberPointsRepository {
     required int page,
     required int pageSize,
   }) async {
+    final detailRecords = details;
+    if (detailRecords != null) {
+      return MemberPointDetailsPage(
+        list: detailRecords,
+        page: page,
+        pageSize: pageSize,
+        totalNum: detailRecords.length,
+      );
+    }
+
     return MemberPointDetailsPage(
       list: [
         MemberPointDetailRecord(
@@ -673,6 +1009,117 @@ class _FakeMemberPointsRepository implements MemberPointsRepository {
       page: page,
       pageSize: pageSize,
       totalNum: 1,
+    );
+  }
+}
+
+MemberPointTask _watchTask({required bool completed, bool canClaim = false}) {
+  return MemberPointTask(
+    canClaim: canClaim,
+    claimed: false,
+    claimedRewardAmount: 0,
+    completed: completed,
+    conditionText: '',
+    displayName: 'Watch over 30 mins',
+    progressValue: completed ? 30 : 0,
+    rewardMax: 5,
+    rewardMin: 5,
+    targetValue: 30,
+    taskKey: 'point.watch.30m',
+  );
+}
+
+MemberPointTask _pushTask() {
+  return const MemberPointTask(
+    canClaim: true,
+    claimed: false,
+    claimedRewardAmount: 0,
+    completed: true,
+    conditionText: '',
+    displayName: 'Turn push notification',
+    progressValue: 1,
+    rewardMax: 5,
+    rewardMin: 5,
+    targetValue: 1,
+    taskKey: 'point.enable_push',
+  );
+}
+
+UserEntitlementState _memberEntitlement({required int pointBalance}) {
+  return UserEntitlementState(
+    isGuest: false,
+    isMember: true,
+    coinBalance: 20,
+    bonusBalance: 0,
+    totalPointBalance: pointBalance,
+    autoUnlockEnabled: false,
+    unlockedEpisodeIds: const <String>{},
+  );
+}
+
+class _FakeEntitlementRepository implements EntitlementRepository {
+  _FakeEntitlementRepository({required List<UserEntitlementState> states})
+    : _states = states;
+
+  final List<UserEntitlementState> _states;
+  int fetchStateCallCount = 0;
+
+  UserEntitlementState get _currentState => _stateAt(fetchStateCallCount - 1);
+
+  UserEntitlementState _stateAt(int rawIndex) {
+    if (_states.isEmpty) {
+      return _memberEntitlement(pointBalance: 0);
+    }
+    final index = rawIndex < 0
+        ? 0
+        : rawIndex >= _states.length
+        ? _states.length - 1
+        : rawIndex;
+    return _states[index];
+  }
+
+  @override
+  Future<UserEntitlementState> fetchState() async {
+    final state = _stateAt(fetchStateCallCount);
+    fetchStateCallCount++;
+    return state;
+  }
+
+  @override
+  Future<UserEntitlementState> setAutoUnlockEnabled(bool enabled) async {
+    return _currentState.copyWith(autoUnlockEnabled: enabled);
+  }
+
+  @override
+  Future<UserEntitlementState> grantMockMembership({
+    required String source,
+  }) async {
+    return _currentState.copyWith(isGuest: false, isMember: true);
+  }
+
+  @override
+  Future<UserEntitlementState> grantMockCoins({
+    required int amount,
+    required String source,
+  }) async {
+    return _currentState.copyWith(
+      coinBalance: _currentState.coinBalance + amount,
+    );
+  }
+
+  @override
+  Future<UserEntitlementState> unlockEpisodeWithCoins({
+    required String dramaId,
+    required String episodeId,
+    required int price,
+    required String operationId,
+  }) async {
+    return _currentState.copyWith(
+      coinBalance: _currentState.coinBalance - price,
+      unlockedEpisodeIds: <String>{
+        ..._currentState.unlockedEpisodeIds,
+        episodeId,
+      },
     );
   }
 }

@@ -5,15 +5,16 @@ import '../../../../l10n/app_localizations.dart';
 
 const _memberPointsButtonColor = Color(0xFF8800FF);
 
-Future<void> showMemberPointsClaimSuccessDialog(
-  BuildContext context, {
+Future<void> showMemberPointsClaimSuccessDialog(BuildContext context, {
   required int rewardAmount,
 }) {
   return showGeneralDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.72),
     barrierDismissible: true,
-    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+    barrierLabel: MaterialLocalizations
+        .of(context)
+        .modalBarrierDismissLabel,
     transitionDuration: const Duration(milliseconds: 180),
     pageBuilder: (context, animation, secondaryAnimation) {
       return _MemberPointsClaimSuccessDialog(rewardAmount: rewardAmount);
@@ -42,7 +43,9 @@ class _MemberPointsClaimSuccessDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dialogWidth = (MediaQuery.sizeOf(context).width - 64).clamp(
+    final dialogWidth = (MediaQuery
+        .sizeOf(context)
+        .width - 64).clamp(
       280.0,
       312.0,
     );
@@ -106,7 +109,10 @@ class _MemberPointsClaimSuccessDialog extends StatelessWidget {
                   ),
                   Positioned(
                     top: 76,
-                    child: Image.asset(
+                    child: Stack(
+                      alignment: Alignment.bottomCenter,
+                      children: [
+                      Image.asset(
                       'assets/images/rewards/points_claime_pop_bac.png',
                       key: const Key('member_points_claim_success_image'),
                       width: 123,
@@ -114,48 +120,75 @@ class _MemberPointsClaimSuccessDialog extends StatelessWidget {
                       fit: BoxFit.fitWidth,
                       alignment: Alignment.topCenter,
                     ),
-                  ),
-                  Positioned(
-                    top: 203,
-                    child: Container(
-                      key: const Key('member_points_claim_success_amount'),
-                      width: 86,
-                      height: 36,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        gradient: const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0xFF7E42C8), Color(0xFF5E229C)],
-                        ),
-                      ),
-                      child: Text(
-                        '+$rewardAmount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          height: 1,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 16,
-                    child: _ClaimSuccessOkButton(
-                      label: l10n.ok,
-                      onTap: () => Navigator.of(context).pop(),
-                    ),
-                  ),
+                        Positioned(
+                          top: 103,
+                          left: 15,
+                          right: 15,
+                          child: Center(
+                            child: SizedBox(
+                              width: 100,
+                              height: 20,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '+$rewardAmount',
+                                  maxLines: 1,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    height: 1,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
                 ],
               ),
             ),
+            // Positioned(
+            //   top: 203,
+            //   child: Container(
+            //     key: const Key('member_points_claim_success_amount'),
+            //     width: 86,
+            //     height: 36,
+            //     alignment: Alignment.center,
+            //     decoration: BoxDecoration(
+            //       borderRadius: BorderRadius.circular(18),
+            //       gradient: const LinearGradient(
+            //         begin: Alignment.topCenter,
+            //         end: Alignment.bottomCenter,
+            //         colors: [Color(0xFF7E42C8), Color(0xFF5E229C)],
+            //       ),
+            //     ),
+            //     child: Text(
+            //       '+$rewardAmount',
+            //       style: const TextStyle(
+            //         color: Colors.white,
+            //         fontSize: 24,
+            //         height: 1,
+            //         fontWeight: FontWeight.w800,
+            //       ),
+            //     ),
+            //   ),
+            // ),
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 16,
+              child: _ClaimSuccessOkButton(
+                label: l10n.ok,
+                onTap: () => Navigator.of(context).pop(),
+              ),
+            ),
+            ],
           ),
         ),
       ),
+    ),)
+    ,
     );
   }
 }

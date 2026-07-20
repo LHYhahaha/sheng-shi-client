@@ -44,16 +44,29 @@ class EntitlementController extends Notifier<UserEntitlementState> {
   }
 
   Future<void> load() async {
+    await _load(resetToGuestOnFailure: true);
+  }
+
+  Future<void> refreshFromServer() async {
+    await _load(resetToGuestOnFailure: false);
+  }
+
+  Future<void> _load({required bool resetToGuestOnFailure}) async {
     try {
       state = await ref.read(entitlementRepositoryProvider).fetchState();
     } catch (error, stackTrace) {
-      final autoUnlockEnabled = state.autoUnlockEnabled;
-      state = const UserEntitlementState.guest().copyWith(
-        autoUnlockEnabled: autoUnlockEnabled,
-      );
+      if (resetToGuestOnFailure) {
+        final autoUnlockEnabled = state.autoUnlockEnabled;
+        state = const UserEntitlementState.guest().copyWith(
+          autoUnlockEnabled: autoUnlockEnabled,
+        );
+      }
+      final fallbackMessage = resetToGuestOnFailure
+          ? 'using guest-safe state'
+          : 'keeping current state';
       debugPrint(
         '[EntitlementController] Failed to load entitlements; '
-        'using guest-safe state: $error',
+        '$fallbackMessage: $error',
       );
       debugPrintStack(stackTrace: stackTrace);
     }

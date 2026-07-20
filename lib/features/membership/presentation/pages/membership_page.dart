@@ -12,6 +12,7 @@ import '../../../../core/modal/app_modal_source.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../application/membership_controller.dart';
 import '../../application/membership_modal_coordinator.dart';
@@ -24,7 +25,14 @@ import '../widgets/membership_benefits_panel.dart';
 import '../widgets/membership_plan_card.dart';
 
 class MembershipPage extends ConsumerStatefulWidget {
-  const MembershipPage({super.key});
+  const MembershipPage({
+    this.showBackButton = true,
+    this.handleBackNavigation = true,
+    super.key,
+  });
+
+  final bool showBackButton;
+  final bool handleBackNavigation;
 
   @override
   ConsumerState<MembershipPage> createState() => _MembershipPageState();
@@ -70,8 +78,14 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
     final isPaymentLoading = ref.watch(
       paymentLoadingControllerProvider.select((state) => state.isVisible),
     );
+    final isPurchaseFlowActive =
+        isPaymentLoading ||
+        state.confirmationPlan != null ||
+        state.purchaseStatus != MembershipPurchaseStatus.idle;
     final topInset = MediaQuery.paddingOf(context).top;
     final l10n = context.l10n;
+    final useFloatingPurchaseButton =
+        !widget.showBackButton && !widget.handleBackNavigation;
 
     ref.watch(membershipModalCoordinatorProvider);
 
@@ -92,26 +106,22 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
                 if (!mounted) {
                   return;
                 }
+                if (!context.mounted) {
+                  return;
+                }
                 if (MembershipModalResults.isPurchaseCompleted(result)) {
                   ref.read(appToastProvider).success(l10n.storePurchaseSuccess);
                   // 根据参数决定导航行为
-                  unawaited(
-                    Future.microtask(() {
-                      if (!mounted) return;
-                      if (_returnToProfile) {
-                        // 需要从首页/store等入口进入，购买成功后跳转到"我的"页面
-                        if (context.canPop()) {
-                          context.pop();
-                        }
-                        context.go(RoutePaths.profile);
-                      } else {
-                        // 从播放器充值弹框等入口进入，按原有逻辑返回
-                        _goBack(
-                          result: MembershipRouteResult.purchaseCompleted,
-                        );
-                      }
-                    }),
-                  );
+                  if (_returnToProfile) {
+                    // 需要从首页/store等入口进入，购买成功后跳转到"我的"页面
+                    if (context.canPop()) {
+                      context.pop();
+                    }
+                    context.go(RoutePaths.profile);
+                  } else {
+                    // 从播放器充值弹框等入口进入，按原有逻辑返回
+                    _goBack(result: MembershipRouteResult.purchaseCompleted);
+                  }
                   return;
                 }
                 final purchaseState = ref.read(membershipControllerProvider);
@@ -138,28 +148,22 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
       },
     );
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) {
-          return;
-        }
-        if (isPaymentLoading) {
-          return;
-        }
-        _goBack();
-      },
-      child: Scaffold(
-        backgroundColor: MembershipLayout.background,
-        body: Stack(
-          children: [
-            _MembershipHeroBackground(topInset: topInset),
-            _MembershipBody(state: state, controller: controller),
-            if (state.hasContent)
-              _MembershipHeroContent(
-                title: context.l10n.membershipTitle,
-                subtitle: context.l10n.membershipUpgraded,
-              ),
+    final page = Scaffold(
+      backgroundColor: MembershipLayout.background,
+      body: Stack(
+        children: [
+          _MembershipHeroBackground(topInset: topInset),
+          _MembershipBody(
+            state: state,
+            controller: controller,
+            useFloatingPurchaseButton: useFloatingPurchaseButton,
+          ),
+          if (state.hasContent)
+            _MembershipHeroContent(
+              title: context.l10n.membershipTitle,
+              subtitle: context.l10n.membershipUpgraded,
+            ),
+          if (widget.showBackButton)
             Positioned(
               top: topInset,
               left: 0,
@@ -174,15 +178,38 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
                 ),
               ),
             ),
-            // 底部悬浮购买按钮
-            if (state.hasContent && state.selectedPlan != null)
-              _MembershipBottomButton(
-                selectedPlan: state.selectedPlan!,
-                onPurchase: controller.showConfirmation,
-              ),
-          ],
-        ),
+          // 底部悬浮购买按钮
+          if (state.hasContent)
+            _MembershipBottomButton(
+              enabled: state.selectedPlan != null,
+              onPurchase: state.selectedPlan == null
+                  ? null
+                  : controller.showConfirmation,
+              floating: useFloatingPurchaseButton,
+            ),
+        ],
       ),
+    );
+
+    if (!widget.handleBackNavigation && !isPurchaseFlowActive) {
+      return page;
+    }
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          return;
+        }
+        if (isPaymentLoading) {
+          return;
+        }
+        if (!widget.handleBackNavigation) {
+          return;
+        }
+        _goBack();
+      },
+      child: page,
     );
   }
 
@@ -196,10 +223,15 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
 }
 
 class _MembershipBody extends StatelessWidget {
-  const _MembershipBody({required this.state, required this.controller});
+  const _MembershipBody({
+    required this.state,
+    required this.controller,
+    required this.useFloatingPurchaseButton,
+  });
 
   final MembershipState state;
   final MembershipController controller;
+  final bool useFloatingPurchaseButton;
 
   @override
   Widget build(BuildContext context) {
@@ -244,7 +276,9 @@ class _MembershipBody extends StatelessWidget {
       left: 0,
       right: 0,
       top: MembershipLayout.scrollContentTop,
-      bottom: state.hasContent ? MembershipLayout.bottomButtonAreaHeight : 0,
+      bottom: state.hasContent && !useFloatingPurchaseButton
+          ? MembershipLayout.bottomButtonAreaHeight
+          : 0,
       child: ClipRect(
         child: ListView(
           padding: EdgeInsets.only(bottom: bottomInset + 24),
@@ -347,6 +381,19 @@ class _MembershipPlanCardsRow extends StatelessWidget {
             cardWidth *
             MembershipLayout.planCardHeight /
             MembershipLayout.planCardWidth;
+
+        if (plans.isEmpty) {
+          return SizedBox(
+            height: cardHeight,
+            child: Center(
+              child: AppEmptyState(
+                message: context.l10n.noData,
+                imageSize: 72,
+                spacing: 4,
+              ),
+            ),
+          );
+        }
 
         return SizedBox(
           height: cardHeight,
@@ -527,16 +574,80 @@ class _AvatarDots extends StatelessWidget {
 /// 底部悬浮购买按钮
 class _MembershipBottomButton extends StatelessWidget {
   const _MembershipBottomButton({
-    required this.selectedPlan,
+    required this.enabled,
     required this.onPurchase,
+    required this.floating,
   });
 
-  final MembershipPlan selectedPlan;
-  final VoidCallback onPurchase;
+  final bool enabled;
+  final VoidCallback? onPurchase;
+  final bool floating;
 
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+
+    if (floating) {
+      return Positioned(
+        left: 0,
+        right: 0,
+        bottom: 16,
+        child: Center(
+          child: GestureDetector(
+            onTap: enabled ? onPurchase : null,
+            child: Container(
+              width: 192,
+              height: 56,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                color: enabled ? null : const Color(0xFF4A4A4A),
+                gradient: enabled
+                    ? const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0xFFFFEBC7), Color(0xFFFFDB99)],
+                      )
+                    : null,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.28),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    context.l10n.membershipBuyNow,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: enabled
+                          ? const Color(0xFF230D06)
+                          : Colors.white.withValues(alpha: 0.45),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    context.l10n.membershipAutoRenewCancel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF230D06).withValues(alpha: 0.3),
+                      fontSize: 11,
+                      height: 1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Positioned(
       left: 0,
@@ -571,7 +682,7 @@ class _MembershipBottomButton extends StatelessWidget {
             ),
             SizedBox(height: 20),
             GestureDetector(
-              onTap: onPurchase,
+              onTap: enabled ? onPurchase : null,
               child: Container(
                 height: 46,
                 width: double.infinity,
@@ -579,16 +690,21 @@ class _MembershipBottomButton extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFFFFEBC7), Color(0xFFFFDB99)],
-                  ),
+                  color: enabled ? null : const Color(0xFF4A4A4A),
+                  gradient: enabled
+                      ? const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0xFFFFEBC7), Color(0xFFFFDB99)],
+                        )
+                      : null,
                 ),
                 child: Text(
                   context.l10n.membershipBuyNow,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: const Color(0xFF1B1B1C),
+                    color: enabled
+                        ? const Color(0xFF1B1B1C)
+                        : Colors.white.withValues(alpha: 0.45),
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),

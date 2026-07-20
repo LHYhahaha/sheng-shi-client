@@ -24,7 +24,9 @@ class EntitlementRemoteDataSource {
   /// 获取权益状态并返回用户信息。
   ///
   /// 返回包含 'dto' 和 'userInfo' 的 Map。
-  Future<Map<String, dynamic>> fetchEntitlementsWithUserInfo({int? dramaId}) async {
+  Future<Map<String, dynamic>> fetchEntitlementsWithUserInfo({
+    int? dramaId,
+  }) async {
     final queryParams = dramaId != null ? {'dramaId': dramaId} : null;
 
     final response = await _apiClient.get<Map<String, dynamic>>(
@@ -34,11 +36,12 @@ class EntitlementRemoteDataSource {
       decoder: (json) => Map<String, dynamic>.from(json as Map),
     );
 
-    // 从统一接口的响应中提取数据
-    final userInfo = response['userInfo'] as Map<String, dynamic>? ?? {};
-    final wallet = response['wallet'] as Map<String, dynamic>? ?? {};
-    final membership = response['membership'] as Map<String, dynamic>? ?? {};
-    final playback = response['playback'] as Map<String, dynamic>? ?? {};
+    final data = _entitlementData(response);
+    final userInfo = _mapValue(data['userInfo']);
+    final wallet = _mapValue(data['wallet']);
+    final membership = _mapValue(data['membership']);
+    final playback = _mapValue(data['playback']);
+    final point = _mapValue(data['point']);
 
     // 转换解锁的剧集编号列表
     final unlockedEpisodeNos = playback['unlockedEpisodeNos'] as List?;
@@ -54,15 +57,13 @@ class EntitlementRemoteDataSource {
           : null,
       coinBalance: _intValue(wallet['coinBalance']),
       bonusBalance: _intValue(wallet['bonusBalance']),
+      totalPointBalance: _intValue(point['totalPointBalance']),
       autoUnlockEnabled: playback['autoUnlockEnabled'] as bool? ?? false,
       unlockedEpisodeIds: unlockedEpisodeIds,
       pendingOperationId: playback['pendingOperationId'] as String?,
     );
 
-    return {
-      'dto': dto,
-      'userInfo': userInfo,
-    };
+    return {'dto': dto, 'userInfo': userInfo};
   }
 
   Future<UserEntitlementStateDto> setAutoUnlockEnabled(bool enabled) async {
@@ -88,6 +89,24 @@ class EntitlementRemoteDataSource {
       decoder: UnlockEpisodeResponseDto.fromJson,
     );
   }
+}
+
+Map<String, dynamic> _entitlementData(Map<String, dynamic> response) {
+  final data = response['data'];
+  if (data is Map) {
+    return Map<String, dynamic>.from(data);
+  }
+  return response;
+}
+
+Map<String, dynamic> _mapValue(Object? value) {
+  if (value is Map<String, dynamic>) {
+    return value;
+  }
+  if (value is Map) {
+    return Map<String, dynamic>.from(value);
+  }
+  return <String, dynamic>{};
 }
 
 int _intValue(Object? value) {

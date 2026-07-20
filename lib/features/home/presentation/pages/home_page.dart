@@ -240,11 +240,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(17, 18, 17, 2),
-                  child: _HomeTitleBar(
-                    onMembershipTap: () => context.push(
-                      RoutePaths.membershipLocation(returnToProfile: true),
-                    ),
-                  ),
+                  child: const _HomeTitleBar(),
                 ),
               ),
               SliverPersistentHeader(
@@ -440,9 +436,7 @@ class _HomeBannerSliderIndicator extends StatelessWidget {
 }
 
 class _HomeTitleBar extends ConsumerWidget {
-  const _HomeTitleBar({required this.onMembershipTap});
-
-  final VoidCallback onMembershipTap;
+  const _HomeTitleBar();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -471,7 +465,10 @@ class _HomeTitleBar extends ConsumerWidget {
                     "assets/images/player/search.svg",
                     width: 24,
                     height: 24,
-                    color: Color(0XFFAFAFAF),
+                    colorFilter: const ColorFilter.mode(
+                      Color(0XFFAFAFAF),
+                      BlendMode.srcIn,
+                    ),
                   ),
                   SizedBox(width: 8),
                   Text(
@@ -488,16 +485,18 @@ class _HomeTitleBar extends ConsumerWidget {
             ),
           ),
         ),
-        // 如果是会员则隐藏VIP入口
-        if (!isMember)
-          GestureDetector(
-            key: const ValueKey('home_vip_entry'),
-            onTap: onMembershipTap,
-            child: const Padding(
-              padding: EdgeInsets.only(right: 1, left: 7),
-              child: _VipCrown(),
-            ),
+        GestureDetector(
+          key: const ValueKey('home_vip_entry'),
+          onTap: () => context.push(
+            isMember
+                ? RoutePaths.myMember
+                : RoutePaths.membershipLocation(returnToProfile: true),
           ),
+          child: const Padding(
+            padding: EdgeInsets.only(right: 1, left: 7),
+            child: _VipCrown(),
+          ),
+        ),
       ],
     );
   }

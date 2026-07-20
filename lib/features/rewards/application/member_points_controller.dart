@@ -6,6 +6,7 @@ import '../domain/member_point_daily_detail.dart';
 import '../domain/member_point_exchange_options.dart';
 import '../domain/member_point_exchange_result.dart';
 import '../../pay/application/payment_loading_controller.dart';
+import '../../entitlement/application/entitlement_controller.dart';
 
 class MemberPointsState {
   const MemberPointsState({
@@ -91,7 +92,7 @@ class MemberPointsController extends Notifier<MemberPointsState> {
           .claimReward(taskKey: taskKey);
 
       if (result.isSuccess) {
-        await loadDailyDetail();
+        await _refreshMemberPointsAndEntitlements();
       }
 
       return result;
@@ -116,7 +117,7 @@ class MemberPointsController extends Notifier<MemberPointsState> {
           .exchange(tierId: tierId);
 
       if (result.isSuccess) {
-        await loadDailyDetail();
+        await _refreshMemberPointsAndEntitlements();
       }
 
       return result;
@@ -127,5 +128,12 @@ class MemberPointsController extends Notifier<MemberPointsState> {
       loading.hide();
       state = state.copyWith(isExchanging: false);
     }
+  }
+
+  Future<void> _refreshMemberPointsAndEntitlements() async {
+    await (
+      loadDailyDetail(),
+      ref.read(entitlementControllerProvider.notifier).refreshFromServer(),
+    ).wait;
   }
 }

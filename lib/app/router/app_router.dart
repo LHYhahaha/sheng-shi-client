@@ -72,7 +72,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: RoutePaths.member,
                 name: RouteNames.member,
-                builder: (context, state) => const MemberPage(),
+                builder: (context, state) => const MemberTabPage(),
               ),
             ],
           ),
@@ -152,6 +152,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.membership,
         name: RouteNames.membership,
         builder: (context, state) => const MembershipPage(),
+      ),
+      GoRoute(
+        path: RoutePaths.myMember,
+        name: RouteNames.myMember,
+        builder: (context, state) => const MemberPage(),
       ),
       GoRoute(
         path: RoutePaths.rewards,

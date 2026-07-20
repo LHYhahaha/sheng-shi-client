@@ -49,7 +49,7 @@ class ProfileMembershipCard extends StatelessWidget {
             GestureDetector(
               key: const ValueKey('profile_membership_entry'),
               behavior: HitTestBehavior.opaque,
-              onTap: membership.entryEnabled && !isActive ? onTap : null,
+              onTap: membership.entryEnabled ? onTap : null,
               child: Container(
                 margin: EdgeInsets.only(bottom: 6.2),
                 padding: const EdgeInsets.symmetric(
@@ -112,12 +112,10 @@ class ProfileMembershipCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: AppSpacing.md),
-                    isActive
-                        ? SizedBox()
-                        : _JoinButton(
-                            enabled: !isActive,
-                            label: l10n.profileJoin,
-                          ),
+                    _JoinButton(
+                      enabled: membership.entryEnabled,
+                      label: isActive ? l10n.profileMember : l10n.profileJoin,
+                    ),
                   ],
                 ),
               ),

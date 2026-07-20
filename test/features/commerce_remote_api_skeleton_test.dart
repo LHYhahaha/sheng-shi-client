@@ -257,6 +257,7 @@ void main() {
       expect(state.isMember, isTrue);
       expect(state.coinBalance, 900);
       expect(state.bonusBalance, 100);
+      expect(state.totalPointBalance, 85);
       expect(state.autoUnlockEnabled, isTrue);
       expect(state.unlockedEpisodeIds, contains('ep-1'));
       expect(state.refreshReason, 'login');
@@ -368,15 +369,20 @@ void main() {
       'entitlement unlock and setting endpoints use required auth',
       () async {
         final adapter = _FakeHttpClientAdapter(
-          responseData: _ok(_entitlementJson),
+          responseData: _ok(_entitlementAggregateJson),
         );
         final source = EntitlementRemoteDataSource(
           apiClient: _apiClient(adapter),
         );
 
-        await source.fetchEntitlements();
+        final dto = await source.fetchEntitlements();
         await source.setAutoUnlockEnabled(true);
 
+        expect(dto.isMember, isTrue);
+        expect(dto.coinBalance, 900);
+        expect(dto.bonusBalance, 100);
+        expect(dto.totalPointBalance, 85);
+        expect(dto.unlockedEpisodeIds, contains('1'));
         expect(
           adapter.requests.first.headers['Authorization'],
           'Bearer test-token',
@@ -538,11 +544,34 @@ const _entitlementJson = {
   'membershipExpiresAt': '2026-06-15T10:00:00Z',
   'coinBalance': 900,
   'bonusBalance': 100,
+  'totalPointBalance': 85,
   'autoUnlockEnabled': true,
   'unlockedEpisodeIds': ['ep-1'],
   'pendingOperationId': 'op-1',
   'serverTime': '2026-05-15T10:00:00Z',
   'refreshReason': 'login',
+};
+
+const _entitlementAggregateJson = {
+  'membership': {
+    'isMember': true,
+    'membershipExpiresAt': '2026-06-15T10:00:00Z',
+  },
+  'playback': {
+    'autoUnlockEnabled': true,
+    'pendingOperationId': 'op-1',
+    'unlockedEpisodeNos': [1],
+  },
+  'point': {'totalPointBalance': '85'},
+  'userInfo': {
+    'avatar': 'https://cdn.example.test/avatar.png',
+    'isGuest': false,
+    'language': 'en',
+    'nickname': 'Mira',
+    'showId': '15589299',
+    'status': 1,
+  },
+  'wallet': {'bonusBalance': '100', 'coinBalance': '900'},
 };
 
 ApiClient _apiClient(_FakeHttpClientAdapter adapter) {

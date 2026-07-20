@@ -4,9 +4,12 @@ import 'package:drama_client/features/membership/domain/membership_repository.da
 import 'package:drama_client/features/membership/presentation/membership_layout.dart';
 import 'package:drama_client/features/membership/presentation/pages/membership_page.dart';
 import 'package:drama_client/features/membership/presentation/widgets/membership_plan_card.dart';
+import 'package:drama_client/features/pay/application/iap_price_service.dart';
+import 'package:drama_client/features/pay/provider/iap_price_service_provider.dart';
 import 'package:drama_client/features/pay/application/payment_loading_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../helpers/app_modal_test_harness.dart';
 
@@ -179,6 +182,44 @@ void main() {
       await tester.pump();
       expect(find.byType(MembershipPage), findsOneWidget);
     });
+
+    testWidgets('shows no data when Google returns no membership products', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _buildMembershipPage(
+          repository: const _GoogleMembershipRepository(),
+          overrides: [
+            iapPriceServiceProvider.overrideWithValue(_EmptyIapPriceService()),
+          ],
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+
+      expect(find.text('No data'), findsOneWidget);
+      expect(find.text('Weekly VIP'), findsNothing);
+      expect(find.text('Join Now'), findsOneWidget);
+
+      await tester.tap(find.text('Join Now'));
+      await tester.pumpAndSettle();
+      expect(find.text('Payment method'), findsNothing);
+
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('membership_benefits_panel')),
+        320,
+        scrollable: find.descendant(
+          of: find.byKey(const Key('membership_scroll_body')),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('membership_benefits_panel')),
+        findsOneWidget,
+      );
+    });
   });
 
   group('membership purchase flow', () {
@@ -240,13 +281,14 @@ Color _planDailyBarColor(WidgetTester tester, String planId) {
   return bar.color;
 }
 
-Widget _buildMembershipPage({List overrides = const []}) {
+Widget _buildMembershipPage({
+  MembershipRepository repository = const _FakeMembershipRepository(),
+  List overrides = const [],
+}) {
   return buildAppModalTestApp(
     home: const MembershipPage(),
     overrides: [
-      membershipRepositoryProvider.overrideWithValue(
-        const _FakeMembershipRepository(),
-      ),
+      membershipRepositoryProvider.overrideWithValue(repository),
       ...overrides,
     ],
   );
@@ -295,4 +337,39 @@ class _FakeMembershipRepository implements MembershipRepository {
       ],
     );
   }
+}
+
+class _GoogleMembershipRepository implements MembershipRepository {
+  const _GoogleMembershipRepository();
+
+  @override
+  Future<MembershipData> fetchMembership() async {
+    return const MembershipData(
+      isActive: false,
+      heroTitle: 'Join Membership',
+      heroSubtitle: '10M+ users upgraded',
+      plans: [
+        MembershipPlan(
+          id: '348',
+          title: 'Weekly VIP',
+          priceLabel: r'$2.99',
+          dailyPriceLabel: '',
+          platformProductId: 'test_sub_weekly_1',
+          period: 'P1W',
+        ),
+      ],
+    );
+  }
+}
+
+class _EmptyIapPriceService extends IapPriceService {
+  @override
+  Future<Map<String, ProductDetails>> queryProducts({
+    required Set<String> productIds,
+  }) async {
+    return const {};
+  }
+
+  @override
+  void dispose() {}
 }

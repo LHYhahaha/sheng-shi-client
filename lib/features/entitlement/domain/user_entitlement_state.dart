@@ -37,6 +37,7 @@ class UserEntitlementState {
     required this.autoUnlockEnabled,
     required this.unlockedEpisodeIds,
     this.bonusBalance = 0,
+    this.totalPointBalance = 0,
     this.membershipExpiresAt,
     this.pendingOperationId,
     this.serverTime,
@@ -51,6 +52,7 @@ class UserEntitlementState {
       isMember = false,
       coinBalance = 0,
       bonusBalance = 0,
+      totalPointBalance = 0,
       autoUnlockEnabled = false,
       unlockedEpisodeIds = const <String>{},
       membershipExpiresAt = null,
@@ -81,6 +83,12 @@ class UserEntitlementState {
   ///
   /// 当前 mock 主要使用 coinBalance；真实钱包/权益接口会区分可消费金币和赠币。
   final int bonusBalance;
+
+  /// 会员积分余额。
+  ///
+  /// 来自 `/api/user/entitlements` 的 point.totalPointBalance，积分领取和兑换会员成功
+  /// 后应刷新这份权益快照，避免会员中心和其它入口展示不同余额。
+  final int totalPointBalance;
 
   /// 会员过期时间。
   final DateTime? membershipExpiresAt;
@@ -126,6 +134,7 @@ class UserEntitlementState {
     bool? isMember,
     int? coinBalance,
     int? bonusBalance,
+    int? totalPointBalance,
     DateTime? membershipExpiresAt,
     String? pendingOperationId,
     DateTime? serverTime,
@@ -144,6 +153,7 @@ class UserEntitlementState {
       isMember: isMember ?? this.isMember,
       coinBalance: coinBalance ?? this.coinBalance,
       bonusBalance: bonusBalance ?? this.bonusBalance,
+      totalPointBalance: totalPointBalance ?? this.totalPointBalance,
       membershipExpiresAt: membershipExpiresAt ?? this.membershipExpiresAt,
       pendingOperationId: pendingOperationId ?? this.pendingOperationId,
       serverTime: serverTime ?? this.serverTime,

@@ -16,6 +16,7 @@ class EntitlementMapper {
       isMember: dto.isMember,
       coinBalance: dto.coinBalance,
       bonusBalance: dto.bonusBalance,
+      totalPointBalance: dto.totalPointBalance,
       membershipExpiresAt: dto.membershipExpiresAt,
       pendingOperationId: dto.pendingOperationId,
       serverTime: dto.serverTime,

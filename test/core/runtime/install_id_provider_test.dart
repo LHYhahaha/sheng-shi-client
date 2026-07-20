@@ -48,20 +48,22 @@ void main() {
     expect(second, isNot(first));
   });
 
-  test('legacy non uuid install id is migrated to uuid', () async {
-    final storage = InMemoryInstallIdStorage();
-    await storage.write('ed486125705f7f18');
-    final container = ProviderContainer(
-      overrides: [installIdStorageProvider.overrideWithValue(storage)],
-    );
-    addTearDown(container.dispose);
+  test(
+    'legacy non uuid install id is preserved when platform id is unavailable',
+    () async {
+      final storage = InMemoryInstallIdStorage();
+      await storage.write('ed486125705f7f18');
+      final container = ProviderContainer(
+        overrides: [installIdStorageProvider.overrideWithValue(storage)],
+      );
+      addTearDown(container.dispose);
 
-    final migrated = await container.read(installIdProvider.future);
+      final existing = await container.read(installIdProvider.future);
 
-    expect(migrated, matches(uuidPattern));
-    expect(migrated, isNot('ed486125705f7f18'));
-    expect(await storage.read(), migrated);
-  });
+      expect(existing, 'ed486125705f7f18');
+      expect(await storage.read(), existing);
+    },
+  );
 
   test('logout does not clear install id', () async {
     final storage = InMemoryInstallIdStorage();

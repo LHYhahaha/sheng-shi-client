@@ -193,6 +193,49 @@ class MembershipController extends Notifier<MembershipState> {
 
   Future<void> retry() => load();
 
+  Future<void> refreshSilently() async {
+    if (state.isLoading) {
+      return;
+    }
+
+    final generation = ++_generation;
+    try {
+      final data = await ref
+          .read(membershipRepositoryProvider)
+          .fetchMembership();
+
+      if (!_isCurrent(generation)) {
+        return;
+      }
+
+      final iapDetails = await _queryIapProducts(data.plans);
+      if (!_isCurrent(generation)) {
+        return;
+      }
+
+      final plans = _mergeIapPricing(data.plans, iapDetails);
+      final selectedPlanId = state.selectedPlanId;
+      final nextSelectedPlanId = plans.any((plan) => plan.id == selectedPlanId)
+          ? selectedPlanId
+          : plans.isEmpty
+          ? null
+          : plans.first.id;
+
+      state = state.copyWith(
+        isLoading: false,
+        isActive: data.isActive,
+        heroTitle: data.heroTitle,
+        heroSubtitle: data.heroSubtitle,
+        plans: List<MembershipPlan>.unmodifiable(plans),
+        selectedPlanId: nextSelectedPlanId,
+        iapProductDetails: iapDetails,
+        clearError: true,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('[Membership] silent refresh failed: $error\n$stackTrace');
+    }
+  }
+
   void selectPlan(String id) {
     if (state.planById(id) == null) {
       return;
@@ -475,18 +518,27 @@ class MembershipController extends Notifier<MembershipState> {
     List<MembershipPlan> plans,
     Map<String, ProductDetails> iapDetails,
   ) {
-    if (iapDetails.isEmpty) {
+    final hasPlatformProducts = plans.any((plan) {
+      final productId = plan.platformProductId;
+      return productId != null && productId.isNotEmpty;
+    });
+    if (!hasPlatformProducts) {
       return plans;
+    }
+
+    if (iapDetails.isEmpty) {
+      return const [];
     }
 
     final priceService = ref.read(iapPriceServiceProvider);
     return [
       for (final plan in plans)
-        _mergePlanPricing(
-          plan,
-          iapDetails[plan.platformProductId],
-          priceService,
-        ),
+        if (iapDetails.containsKey(plan.platformProductId))
+          _mergePlanPricing(
+            plan,
+            iapDetails[plan.platformProductId],
+            priceService,
+          ),
     ];
   }
 

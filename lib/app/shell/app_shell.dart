@@ -50,6 +50,26 @@ final homeScrollToTopRequestProvider =
       _HomeScrollToTopNotifier.new,
     );
 
+/// 会员 tab 刷新请求计数 notifier。
+class _MemberTabRefreshRequestNotifier extends Notifier<int> {
+  @override
+  int build() {
+    return 0;
+  }
+
+  void requestRefresh() {
+    state++;
+  }
+}
+
+/// 会员 tab 刷新通知 provider。
+///
+/// 当重复点击会员 tab 时，这个 provider 会增加计数，MemberTabPage 会静默刷新商品价钱。
+final memberTabRefreshRequestProvider =
+    NotifierProvider<_MemberTabRefreshRequestNotifier, int>(
+      _MemberTabRefreshRequestNotifier.new,
+    );
+
 /// 主导航 shell。
 ///
 /// Shell 只管理 tab 容器和底部导航显示，不拥有播放器 session。离开 For You tab 时
@@ -137,6 +157,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     // 检测是否重复点击首页 tab，如果是则通知首页滚动到顶部
     if (index == currentIndex && index == AppShellDestinations.homeIndex) {
       ref.read(homeScrollToTopRequestProvider.notifier).requestScrollToTop();
+    }
+    if (index == currentIndex && index == AppShellDestinations.memberIndex) {
+      ref.read(memberTabRefreshRequestProvider.notifier).requestRefresh();
     }
 
     if (index != currentIndex) {
