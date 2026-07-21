@@ -25,6 +25,7 @@ abstract final class _PlayerLayoutMetrics {
 class PlayerChrome extends StatefulWidget {
   const PlayerChrome({
     required this.content,
+    this.episodeNumber,
     required this.isPlaying,
     required this.showCenterPlayButton,
     required this.onTogglePlay,
@@ -67,6 +68,9 @@ class PlayerChrome extends StatefulWidget {
   });
 
   final PlayerContent content;
+
+  /// 当前展示剧集的集数。For You 将它和简介合并展示；普通播放器不显示。
+  final int? episodeNumber;
   final bool isPlaying;
   final bool showCenterPlayButton;
   final VoidCallback onTogglePlay;
@@ -135,6 +139,8 @@ class _PlayerChromeState extends State<PlayerChrome> {
   Timer? _feedbackTimer;
 
   PlayerContent get content => widget.content;
+
+  int? get episodeNumber => widget.episodeNumber;
 
   bool get isPlaying => widget.isPlaying;
 
@@ -299,6 +305,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
           ),
           _PlayerMetaLayer(
             content: content,
+            episodeNumber: episodeNumber,
             bottom: forYouLayout
                 ? forYouWatchNowBottom
                 : bottomInset + _PlayerLayoutMetrics.singleMetaBottom,
@@ -540,6 +547,7 @@ class _PlayerActionRailLayer extends StatelessWidget {
 class _PlayerMetaLayer extends StatelessWidget {
   const _PlayerMetaLayer({
     required this.content,
+    required this.episodeNumber,
     required this.bottom,
     required this.forYouLayout,
     required this.onWatchNowTap,
@@ -551,6 +559,7 @@ class _PlayerMetaLayer extends StatelessWidget {
   });
 
   final PlayerContent content;
+  final int? episodeNumber;
   final double bottom;
   final bool forYouLayout;
   final VoidCallback onWatchNowTap;
@@ -584,6 +593,7 @@ class _PlayerMetaLayer extends StatelessWidget {
                 children: [
                   PlayerBottomMeta(
                     content: content,
+                    episodeNumber: forYouLayout ? episodeNumber : null,
                     showChevron: true,
                     showTags: forYouLayout,
                     expandableSynopsis: forYouLayout,
@@ -1009,6 +1019,7 @@ class _WatchNowButton extends StatelessWidget {
 class PlayerBottomMeta extends StatelessWidget {
   const PlayerBottomMeta({
     required this.content,
+    this.episodeNumber,
     this.showChevron = true,
     this.showTags = false,
     this.expandableSynopsis = false,
@@ -1017,6 +1028,7 @@ class PlayerBottomMeta extends StatelessWidget {
   });
 
   final PlayerContent content;
+  final int? episodeNumber;
   final bool showChevron;
   final bool showTags;
   final bool expandableSynopsis;
@@ -1066,7 +1078,7 @@ class PlayerBottomMeta extends StatelessWidget {
           ],
           const SizedBox(height: 8),
           _SynopsisPreviewText(
-            text: content.synopsis,
+            text: _synopsisText(context),
             moreLabel: context.l10n.playerMore,
             collapseLabel: context.l10n.playerLess,
             expandable: expandableSynopsis,
@@ -1074,6 +1086,14 @@ class PlayerBottomMeta extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _synopsisText(BuildContext context) {
+    final episode = episodeNumber;
+    if (episode == null || episode <= 0) {
+      return content.synopsis;
+    }
+    return '${context.l10n.myListEpisode(episode.toString().padLeft(2, '0'))}｜${content.synopsis}';
   }
 }
 

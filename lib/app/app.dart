@@ -25,6 +25,7 @@ import '../shared/widgets/app_blocking_loading_overlay.dart';
 import 'router/app_router.dart';
 import 'router/route_paths.dart';
 import 'shell/app_shell.dart';
+import 'shell/app_shell_chrome.dart';
 import 'theme/app_theme.dart';
 
 class DramaClientApp extends ConsumerStatefulWidget {
@@ -61,9 +62,11 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     unawaited(ref.read(appActiveReporterProvider).onLifecycleChanged(state));
-    final currentPlacement = AppShellDestinations.popupPlacementForIndex(
-      ref.read(appShellCurrentTabIndexProvider),
-    );
+    final currentPlacement = ref.read(appShellBottomNavigationVisibleProvider)
+        ? AppShellDestinations.popupPlacementForIndex(
+            ref.read(appShellCurrentTabIndexProvider),
+          )
+        : null;
     unawaited(
       ref
           .read(popupEntryControllerProvider.notifier)

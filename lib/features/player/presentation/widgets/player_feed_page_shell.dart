@@ -120,6 +120,7 @@ class PlayerFeedPageShell extends ConsumerWidget {
       children: [
         PlayerChrome(
           content: item.content,
+          episodeNumber: item.episode.number,
           overlayOpacityListenable: allowPressChromeDimming
               ? overlayOpacityListenable
               : null,

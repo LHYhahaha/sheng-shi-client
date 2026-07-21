@@ -85,6 +85,7 @@ void main() {
               overlayOpacity: 1,
               onBackTap: () {},
               onSpeedTap: () {},
+              showChromeOverlays: true,
               subtitles: subtitles,
               episodeSources: episodeSources,
               currentSubtitleLanguage: null,
@@ -148,6 +149,7 @@ void main() {
             overlayOpacity: 1,
             onBackTap: () {},
             onSpeedTap: () {},
+            showChromeOverlays: true,
             subtitles: const [],
             episodeSources: const [
               PlayerEpisodeSource(id: '1', language: 'English', url: 'one'),
@@ -169,6 +171,100 @@ void main() {
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
   });
 
+  testWidgets('subtitle entry stays hidden until the selection is resolved', (
+    tester,
+  ) async {
+    Future<void> pump({required bool isResolved}) {
+      return tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: const [AppLocalizations.delegate],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: PlayerTopBar(
+              episodeNumber: 1,
+              playbackRate: 1,
+              overlayOpacity: 1,
+              onBackTap: () {},
+              onSpeedTap: () {},
+              showChromeOverlays: true,
+              subtitles: const [
+                PlayerSubtitle(
+                  id: 1,
+                  language: 'English',
+                  name: 'English',
+                  url: 'subtitle',
+                  format: 'srt',
+                  isDefault: true,
+                ),
+              ],
+              episodeSources: const [],
+              currentSubtitleLanguage: isResolved ? 'English' : null,
+              isSubtitleSelectionResolved: isResolved,
+              onSubtitleSelected: (_) {},
+            ),
+          ),
+        ),
+      );
+    }
+
+    await pump(isResolved: false);
+    expect(find.byKey(const ValueKey('player_subtitle_button')), findsNothing);
+    expect(find.text('Subtitle: Closed'), findsNothing);
+
+    await pump(isResolved: true);
+    expect(
+      find.byKey(const ValueKey('player_subtitle_button')),
+      findsOneWidget,
+    );
+    expect(find.text('English'), findsOneWidget);
+  });
+
+  testWidgets('subtitle entry stays hidden while the page is moving', (
+    tester,
+  ) async {
+    Future<void> pump({required bool showSubtitleEntry}) {
+      return tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: const [AppLocalizations.delegate],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: PlayerTopBar(
+              episodeNumber: 1,
+              playbackRate: 1,
+              overlayOpacity: 1,
+              onBackTap: () {},
+              onSpeedTap: () {},
+              showChromeOverlays: true,
+              subtitles: const [
+                PlayerSubtitle(
+                  id: 1,
+                  language: 'English',
+                  name: 'English',
+                  url: 'subtitle',
+                  format: 'srt',
+                  isDefault: true,
+                ),
+              ],
+              episodeSources: const [],
+              currentSubtitleLanguage: 'English',
+              showSubtitleEntry: showSubtitleEntry,
+              onSubtitleSelected: (_) {},
+            ),
+          ),
+        ),
+      );
+    }
+
+    await pump(showSubtitleEntry: false);
+    expect(find.byKey(const ValueKey('player_subtitle_button')), findsNothing);
+
+    await pump(showSubtitleEntry: true);
+    expect(
+      find.byKey(const ValueKey('player_subtitle_button')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('embedded subtitle language menu does not show closed option', (
     tester,
   ) async {
@@ -183,6 +279,7 @@ void main() {
             overlayOpacity: 1,
             onBackTap: () {},
             onSpeedTap: () {},
+            showChromeOverlays: true,
             subtitles: const [],
             episodeSources: const [
               PlayerEpisodeSource(id: '1', language: 'English', url: 'one'),

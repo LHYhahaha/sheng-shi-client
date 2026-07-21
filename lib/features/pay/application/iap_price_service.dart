@@ -74,6 +74,7 @@ class IapPriceService {
   /// 将 ProductDetails 转换为 IapProductInfo
   IapProductInfo _toIapProductInfo(ProductDetails product) {
     Map<String, dynamic>? promoInfo;
+
     if (Platform.isAndroid) {
       promoInfo = GooglePlayPricingExtractor.extractPromoPricing(product);
     }
@@ -82,19 +83,31 @@ class IapPriceService {
       return IapProductInfo(
         productDetails: product,
         hasPromo: true,
+        hasFreeTrial: promoInfo['hasFreeTrial'] as bool? ?? false,
+
         promoPrice: promoInfo['promoPrice'] as String?,
         promoPriceMicros: promoInfo['promoPriceMicros'] as int?,
         promoPeriod: promoInfo['promoPeriod'] as String?,
+        promoCycles: promoInfo['promoCycles'] as int?,
+
         regularPrice: promoInfo['regularPrice'] as String?,
         regularPriceMicros: promoInfo['regularPriceMicros'] as int?,
         regularPeriod: promoInfo['regularPeriod'] as String?,
+        regularCycles: promoInfo['regularCycles'] as int?,
+
         offerToken: promoInfo['offerToken'] as String?,
         basePlanId: promoInfo['basePlanId'] as String?,
         offerId: promoInfo['offerId'] as String?,
+        offerTags:
+        (promoInfo['offerTags'] as List?)?.cast<String>() ??
+            const <String>[],
       );
     }
 
-    return IapProductInfo(productDetails: product, hasPromo: false);
+    return IapProductInfo(
+      productDetails: product,
+      hasPromo: false,
+    );
   }
 
   ProductDetails _preferProductDetails(

@@ -1099,7 +1099,10 @@ class PlayerTopBar extends StatelessWidget {
     required this.subtitles,
     required this.episodeSources,
     required this.currentSubtitleLanguage,
+    this.isSubtitleSelectionResolved = true,
+    this.showSubtitleEntry = true,
     required this.onSubtitleSelected,
+    required this.showChromeOverlays,
   });
 
   final int episodeNumber;
@@ -1111,7 +1114,14 @@ class PlayerTopBar extends StatelessWidget {
   final List<PlayerSubtitle> subtitles;
   final List<PlayerEpisodeSource> episodeSources;
   final String? currentSubtitleLanguage;
+  final bool isSubtitleSelectionResolved;
+
+  /// 页面滑动或切集尚未落位时，延后展示字幕入口，避免显示上一集的状态。
+  final bool showSubtitleEntry;
   final ValueChanged<String?> onSubtitleSelected;
+
+  /// 是否处于非沉浸模式；进入沉浸模式时用于关闭展开的字幕菜单。
+  final bool showChromeOverlays;
 
   @override
   Widget build(BuildContext context) {
@@ -1138,7 +1148,10 @@ class PlayerTopBar extends StatelessWidget {
             subtitles: subtitles,
             episodeSources: episodeSources,
             currentSubtitleLanguage: currentSubtitleLanguage,
+            isSubtitleSelectionResolved: isSubtitleSelectionResolved,
+            showSubtitleEntry: showSubtitleEntry,
             onSubtitleSelected: onSubtitleSelected,
+            showChromeOverlays: showChromeOverlays,
           ),
         ),
       );
@@ -1158,7 +1171,10 @@ class PlayerTopBar extends StatelessWidget {
           subtitles: subtitles,
           episodeSources: episodeSources,
           currentSubtitleLanguage: currentSubtitleLanguage,
+          isSubtitleSelectionResolved: isSubtitleSelectionResolved,
+          showSubtitleEntry: showSubtitleEntry,
           onSubtitleSelected: onSubtitleSelected,
+          showChromeOverlays: showChromeOverlays,
         ),
       ),
     );
@@ -1175,7 +1191,10 @@ class PlayerTopBarContent extends StatelessWidget {
     required this.subtitles,
     required this.episodeSources,
     required this.currentSubtitleLanguage,
+    required this.isSubtitleSelectionResolved,
+    required this.showSubtitleEntry,
     required this.onSubtitleSelected,
+    required this.showChromeOverlays,
   });
 
   final int episodeNumber;
@@ -1185,7 +1204,12 @@ class PlayerTopBarContent extends StatelessWidget {
   final List<PlayerSubtitle> subtitles;
   final List<PlayerEpisodeSource> episodeSources;
   final String? currentSubtitleLanguage;
+  final bool isSubtitleSelectionResolved;
+  final bool showSubtitleEntry;
   final ValueChanged<String?> onSubtitleSelected;
+
+  /// 是否处于非沉浸模式；进入沉浸模式时用于关闭展开的字幕菜单。
+  final bool showChromeOverlays;
 
   @override
   Widget build(BuildContext context) {
@@ -1230,13 +1254,16 @@ class PlayerTopBarContent extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              if (subtitles.isNotEmpty || episodeSources.length > 1)
+              if (showSubtitleEntry &&
+                  isSubtitleSelectionResolved &&
+                  (subtitles.isNotEmpty || episodeSources.length > 1))
                 _PlayerSubtitleMenuButton(
                   key: const ValueKey('player_subtitle_button'),
                   subtitles: subtitles,
                   episodeSources: episodeSources,
                   currentSubtitleLanguage: currentSubtitleLanguage,
                   onSubtitleSelected: onSubtitleSelected,
+                  showChromeOverlays: showChromeOverlays,
                 ),
               // const SizedBox(width: 4),
               // // 倍速按钮
@@ -1274,12 +1301,16 @@ class _PlayerSubtitleMenuButton extends StatefulWidget {
     required this.episodeSources,
     required this.currentSubtitleLanguage,
     required this.onSubtitleSelected,
+    required this.showChromeOverlays,
   });
 
   final List<PlayerSubtitle> subtitles;
   final List<PlayerEpisodeSource> episodeSources;
   final String? currentSubtitleLanguage;
   final ValueChanged<String?> onSubtitleSelected;
+
+  /// 是否处于非沉浸模式；进入沉浸模式时关闭已展开的字幕菜单。
+  final bool showChromeOverlays;
 
   @override
   State<_PlayerSubtitleMenuButton> createState() =>
@@ -1290,8 +1321,26 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
   bool _isMenuOpen = false;
 
   @override
+  void didUpdateWidget(covariant _PlayerSubtitleMenuButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 进入沉浸模式（chrome 隐藏）时，若字幕菜单仍展开则关闭。
+    if (oldWidget.showChromeOverlays &&
+        !widget.showChromeOverlays &&
+        _isMenuOpen) {
+      // 字幕菜单以独立 route 推入，需在帧后关闭该 route。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _isMenuOpen) {
+          Navigator.of(context).maybePop();
+        }
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (!_isVisible) return const SizedBox.shrink();
+    if (!_isVisible) {
+      return const SizedBox.shrink();
+    }
     final menuWidth = _menuWidth(context);
     return PopupMenuButton<String>(
       enabled: _isVisible,

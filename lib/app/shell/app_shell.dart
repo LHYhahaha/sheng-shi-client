@@ -107,6 +107,15 @@ class _AppShellState extends ConsumerState<AppShell> {
       appShellBottomNavigationVisibleProvider,
     );
 
+    // 单剧播放器覆盖 Shell 时会隐藏底部导航。若应用在播放器页停留超过
+    // 30 分钟，PopupEntryController 只会重置请求周期而不会请求；返回到可展示
+    // 弹窗的首页/For You 后，再由这里按当前 tab 发起检查与请求。
+    ref.listen<bool>(appShellBottomNavigationVisibleProvider, (previous, next) {
+      if (previous == false && next) {
+        _requestPopupForIndex(widget.navigationShell.currentIndex);
+      }
+    });
+
     // 延迟更新当前 Tab 索引，避免在 build 中修改 provider
     Future.microtask(() {
       ref

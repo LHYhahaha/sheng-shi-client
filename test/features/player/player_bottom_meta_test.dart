@@ -55,16 +55,45 @@ void main() {
 
     expect(find.byKey(const ValueKey('player_synopsis_more')), findsOneWidget);
   });
+
+  testWidgets('for you synopsis prefixes the localized current episode', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: Material(
+          child: SizedBox(
+            width: 400,
+            child: PlayerBottomMeta(
+              content: _content(synopsis: 'A short synopsis.'),
+              episodeNumber: 1,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('EP.01｜A short synopsis.'), findsOneWidget);
+  });
 }
 
-PlayerContent _content() {
-  return const PlayerContent(
+PlayerContent _content({String? synopsis}) {
+  return PlayerContent(
     id: 'drama-1',
     title: 'Drama',
     playTitle: 'Drama',
     synopsis:
+        synopsis ??
         'This is a deliberately long synopsis that needs more than two lines '
-        'at the test width, so the For You expansion control is displayed.',
+            'at the test width, so the For You expansion control is displayed.',
     viewCountLabel: '1M',
     likeCountLabel: '1K',
     backgroundAssetPath: '',

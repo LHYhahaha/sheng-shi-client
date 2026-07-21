@@ -829,6 +829,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           subtitles: state.availableSubtitles,
           episodeSources: state.availableEpisodeSources,
           currentLanguage: state.currentSubtitleLanguage,
+          isSelectionResolved: state.isSubtitleSelectionResolved,
         ),
       ),
     );
@@ -1168,6 +1169,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           subtitles: subtitleState.subtitles,
           episodeSources: subtitleState.episodeSources,
           currentSubtitleLanguage: subtitleState.currentLanguage,
+          isSubtitleSelectionResolved: subtitleState.isSelectionResolved,
           playbackController: playbackController,
           feedEngine: feedEngine,
           performancePolicy: performancePolicy,
@@ -1190,6 +1192,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     required List<PlayerSubtitle> subtitles,
     required List<PlayerEpisodeSource> episodeSources,
     required String? currentSubtitleLanguage,
+    required bool isSubtitleSelectionResolved,
     required PlayerPlaybackController playbackController,
     required PlayerFeedEngine feedEngine,
     required PlayerPerformancePolicy performancePolicy,
@@ -1431,6 +1434,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                 episodeNumber: settledItem.episode.number,
                 playbackRate: playbackShell.playbackRate,
                 overlayOpacity: 1,
+                showChromeOverlays: showsChromeOverlays,
                 overlayOpacityListenable:
                     performancePolicy.allowPressChromeDimming
                     ? _overlayOpacityNotifier
@@ -1442,6 +1446,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                 subtitles: subtitles,
                 episodeSources: episodeSources,
                 currentSubtitleLanguage: currentSubtitleLanguage,
+                isSubtitleSelectionResolved: isSubtitleSelectionResolved,
+                showSubtitleEntry:
+                    viewportState.scrollPhase == PlayerViewportScrollPhase.idle,
                 onSubtitleSelected: (language) {
                   final controller = ref.read(
                     playerPlaybackControllerProvider(_sessionKey).notifier,

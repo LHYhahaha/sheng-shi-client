@@ -150,6 +150,7 @@ class GooglePlayPricingExtractor {
       product,
       basePlanId: offer.basePlanId,
     );
+
     final basePlanPhase = basePlanOffer?.pricingPhases.last;
 
     if (phases.length < 2 && basePlanPhase == null) {
@@ -157,20 +158,29 @@ class GooglePlayPricingExtractor {
     }
 
     final promoPhase = phases.first;
-    final regularPhase = phases.length >= 2 ? phases.last : basePlanPhase!;
+    final regularPhase = phases.length >= 2
+        ? phases.last
+        : basePlanPhase!;
+
     return <String, dynamic>{
       'hasPromo': true,
+
+      'hasFreeTrial': promoPhase.priceAmountMicros == 0,
+
       'promoPrice': promoPhase.formattedPrice,
       'promoPriceMicros': promoPhase.priceAmountMicros,
       'promoPeriod': promoPhase.billingPeriod,
       'promoCycles': promoPhase.billingCycleCount,
+
       'regularPrice': regularPhase.formattedPrice,
       'regularPriceMicros': regularPhase.priceAmountMicros,
       'regularPeriod': regularPhase.billingPeriod,
       'regularCycles': regularPhase.billingCycleCount,
+
       'offerToken': offer.offerIdToken,
       'basePlanId': offer.basePlanId,
       'offerId': offer.offerId,
+      'offerTags': offer.offerTags,
     };
   }
 
@@ -218,17 +228,22 @@ class GooglePlayPricingExtractor {
 
     return <String, dynamic>{
       'hasPromo': true,
+      'hasFreeTrial': selectedPhase.priceAmountMicros == 0,
+
       'promoPrice': selectedPhase.formattedPrice,
       'promoPriceMicros': selectedPhase.priceAmountMicros,
       'promoPeriod': selectedPhase.billingPeriod,
       'promoCycles': selectedPhase.billingCycleCount,
+
       'regularPrice': regularPhase.formattedPrice,
       'regularPriceMicros': regularPhase.priceAmountMicros,
       'regularPeriod': regularPhase.billingPeriod,
       'regularCycles': regularPhase.billingCycleCount,
+
       'offerToken': selectedOffer.offerIdToken,
       'basePlanId': selectedOffer.basePlanId,
       'offerId': selectedOffer.offerId,
+      'offerTags': selectedOffer.offerTags,
     };
   }
 

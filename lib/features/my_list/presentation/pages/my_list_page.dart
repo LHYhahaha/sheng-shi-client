@@ -49,8 +49,6 @@ class _MyListPageState extends ConsumerState<MyListPage> {
         _shellChrome = ref.read(
           appShellBottomNavigationVisibleProvider.notifier,
         );
-        ref.read(myListControllerProvider.notifier).load();
-        ref.read(myListHotPlaysControllerProvider.notifier).load();
       }
     });
   }
@@ -136,13 +134,14 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     final hotPlaysState = ref.watch(myListHotPlaysControllerProvider);
     final controller = ref.read(myListControllerProvider.notifier);
 
-    // 监听 Tab 索引变化，当切换到 MyList Tab 时刷新数据
+    // 仅在底部导航激活 My List 时请求，避免页面首次创建时与 tab
+    // 切换监听同时发起重复请求。
     ref.listen(appShellCurrentTabIndexProvider, (previous, current) {
-      // 当切换到 MyList Tab 时刷新数据
       if (current == AppShellDestinations.myListIndex && previous != current) {
         _didTriggerLoadMoreNearEnd = false;
         developer.log('MyList tab activated, reloading data');
         controller.load();
+        ref.read(myListHotPlaysControllerProvider.notifier).load();
       }
     });
     ref.listen(

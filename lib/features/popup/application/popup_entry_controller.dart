@@ -332,7 +332,12 @@ class PopupEntryController extends Notifier<PopupEntryState> {
       }
     }
     final frontPopupLimit = popup.frontPopupLimit;
-    return frontPopupLimit != null && _flowDisplayedCount < frontPopupLimit;
+    // 服务端约定 0 表示前台弹窗数量不受限制；多个此类弹窗仍按接口顺序
+    // 进入当前 flow。正数则表示当前 flow 中允许展示的最大数量。
+    return frontPopupLimit == 0 ||
+        (frontPopupLimit != null &&
+            frontPopupLimit > 0 &&
+            _flowDisplayedCount < frontPopupLimit);
   }
 
   bool _isBackgroundState(AppLifecycleState state) {

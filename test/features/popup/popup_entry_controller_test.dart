@@ -395,6 +395,57 @@ void main() {
     },
   );
 
+  test('shows unlimited popups in server order when limit is zero', () async {
+    const firstPopup = PopupConfig(
+      id: 1,
+      contentMode: 1,
+      popupImage: 'https://example.test/1.jpg',
+      frontPopupLimit: 0,
+    );
+    const secondPopup = PopupConfig(
+      id: 2,
+      contentMode: 1,
+      popupImage: 'https://example.test/2.jpg',
+      frontPopupLimit: 0,
+    );
+    final repository = _RecordingPopupRepository(
+      popups: const [firstPopup, secondPopup],
+    );
+    final container = _container(repository: repository);
+    addTearDown(container.dispose);
+
+    final controller = container.read(popupEntryControllerProvider.notifier);
+    await controller.requestForPlacement(PopupPlacementCode.homeEnter);
+
+    expect(
+      container.read(popupEntryControllerProvider).pendingPopup,
+      firstPopup,
+    );
+
+    controller.markPendingPopupImageReady(firstPopup);
+    expect(
+      container.read(popupEntryControllerProvider).activePopup,
+      firstPopup,
+    );
+    expect(
+      container.read(popupEntryControllerProvider).pendingPopup,
+      secondPopup,
+    );
+
+    controller.markPendingPopupImageReady(secondPopup);
+    controller.closeActivePopup();
+
+    expect(
+      container.read(popupEntryControllerProvider).activePopup,
+      secondPopup,
+    );
+    expect(repository.events, const [
+      _RecordedPopupEvent(1, PopupEventType.show),
+      _RecordedPopupEvent(1, PopupEventType.close),
+      _RecordedPopupEvent(2, PopupEventType.show),
+    ]);
+  });
+
   test(
     'shows preloaded next popup immediately after closing active popup',
     () async {

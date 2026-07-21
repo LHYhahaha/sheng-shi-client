@@ -130,6 +130,7 @@ class PlayerPlaybackState {
     this.availableEpisodeSources = const [],
     this.currentSubtitleUrl,
     this.currentSubtitleLanguage,
+    this.isSubtitleSelectionResolved = false,
     this.currentSubtitlePosition = PlayerSubtitlePosition.bottom,
     this.subtitleCues = const [],
     this.currentSubtitleText = '',
@@ -157,6 +158,7 @@ class PlayerPlaybackState {
         availableEpisodeSources: const [],
         currentSubtitleUrl: null,
         currentSubtitleLanguage: null,
+        isSubtitleSelectionResolved: false,
         currentSubtitlePosition: PlayerSubtitlePosition.bottom,
         subtitleCues: const [],
         currentSubtitleText: '',
@@ -292,6 +294,12 @@ class PlayerPlaybackState {
   /// 当前剧选择的字幕语言，菜单直接展示接口返回的 language。
   final String? currentSubtitleLanguage;
 
+  /// 当前剧的字幕选择是否已确认。
+  ///
+  /// 外挂字幕会在首帧后异步确定默认语言；在确认前，`null` 不能被当作用户选择了
+  /// “Closed”，以免入口短暂展示错误文案。
+  final bool isSubtitleSelectionResolved;
+
   final PlayerSubtitlePosition currentSubtitlePosition;
 
   /// 当前已解析的字幕条目列表。
@@ -368,6 +376,7 @@ class PlayerPlaybackState {
     List<PlayerEpisodeSource>? availableEpisodeSources,
     String? currentSubtitleUrl,
     String? currentSubtitleLanguage,
+    bool? isSubtitleSelectionResolved,
     PlayerSubtitlePosition? currentSubtitlePosition,
     List<SubtitleCue>? subtitleCues,
     String? currentSubtitleText,
@@ -415,6 +424,8 @@ class PlayerPlaybackState {
       currentSubtitleLanguage: clearSubtitleLanguage
           ? null
           : currentSubtitleLanguage ?? this.currentSubtitleLanguage,
+      isSubtitleSelectionResolved:
+          isSubtitleSelectionResolved ?? this.isSubtitleSelectionResolved,
       currentSubtitlePosition:
           currentSubtitlePosition ?? this.currentSubtitlePosition,
       subtitleCues: subtitleCues ?? this.subtitleCues,
@@ -976,6 +987,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       currentSubtitleText: '',
       clearSubtitle: true,
       clearSubtitleLanguage: item.episode.episodeSources.isEmpty,
+      isSubtitleSelectionResolved: !item.episode.episodeSources.isEmpty,
       currentSubtitleLanguage: item.episode.episodeSources.isEmpty
           ? null
           : _languageForEpisodeSource(item.episode),
@@ -3283,6 +3295,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         subtitleCues: const [],
         currentSubtitleText: '',
         clearSubtitle: true,
+        isSubtitleSelectionResolved: true,
       );
       return;
     }
@@ -3290,6 +3303,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     state = state.copyWith(
       availableSubtitles: subtitles,
       availableEpisodeSources: const [],
+      isSubtitleSelectionResolved: false,
     );
     if (_externalSubtitlesClosed) {
       unawaited(setSubtitle(null));
@@ -3338,6 +3352,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         subtitleCues: const [],
         currentSubtitleText: '',
         clearSubtitleLanguage: true,
+        isSubtitleSelectionResolved: true,
       );
       developer.log('setSubtitle: 已关闭字幕');
       return;
@@ -3382,6 +3397,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       currentSubtitleUrl: subtitle.url,
       currentSubtitleLanguage: subtitle.language,
       currentSubtitlePosition: subtitle.position,
+      isSubtitleSelectionResolved: true,
     );
     try {
       await _fetchAndParseSubtitle(subtitle.url, format: subtitle.format);
