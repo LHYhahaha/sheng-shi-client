@@ -16,6 +16,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../search/domain/search_rankings.dart';
 import '../../application/my_list_hot_plays_controller.dart';
 import '../../application/my_list_controller.dart';
@@ -262,19 +263,25 @@ class _MyListPageState extends ConsumerState<MyListPage> {
 
     if (state.error != null) {
       return Center(
-        child: TextButton(
-          onPressed: controller.retry,
-          child: Text(
-            l10n.feedLoadFailed,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              l10n.feedLoadFailed,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            AppRetryButton(onPressed: controller.retry, label: l10n.retry),
+          ],
         ),
       );
     }
 
     final children = <Widget>[];
+    final shouldShowHotPlays =
+        hotPlays.length >= MyListHotPlaysController.maxItems;
     if (state.isEmpty) {
       final emptyText = state.selectedTab == MyListTab.collection
           ? l10n.myListEmptyFollowing
@@ -308,7 +315,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
         );
       }
       final needsLoadMoreFooter =
-          hotPlays.isEmpty ||
+          !shouldShowHotPlays ||
           state.isLoadingMore ||
           state.nextPageToken != null ||
           state.loadMoreError != null;
@@ -324,7 +331,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
       }
     }
 
-    if (hotPlays.isNotEmpty) {
+    if (shouldShowHotPlays) {
       children.add(
         _HotPlaysSection(
           dramas: hotPlays,
@@ -394,7 +401,7 @@ class _HotPlaysSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            context.l10n.searchTrending,
+            context.l10n.favoriteSectionHotRecommend,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: AppColors.textPrimary.withValues(alpha: 0.6),
               fontSize: 16,
@@ -540,7 +547,7 @@ class _MyListLoadMoreFooter extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : error != null
-              ? TextButton(onPressed: onRetry, child: Text(context.l10n.retry))
+              ? AppRetryButton(onPressed: onRetry, label: context.l10n.retry)
               : Text(
                   hasMore ? '' : context.l10n.feedNoMore,
                   style: Theme.of(

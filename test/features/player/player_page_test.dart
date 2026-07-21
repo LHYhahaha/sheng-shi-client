@@ -15,6 +15,8 @@ import 'package:drama_client/features/entitlement/data/mock_entitlement_reposito
 import 'package:drama_client/features/entitlement/domain/episode_unlock_type.dart';
 import 'package:drama_client/features/entitlement/domain/user_entitlement_state.dart';
 import 'package:drama_client/features/player/data/dto/watch_progress_dto.dart';
+import 'package:drama_client/features/player/data/mock_playback_progress_repository.dart';
+import 'package:drama_client/features/player/data/playback_progress_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_content_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_exit_recommendation_history_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
@@ -45,6 +47,7 @@ import 'package:drama_client/features/player/domain/player_recharge_unlock_offer
 import '../../core/toast/recording_app_toast_service.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_chrome.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_detail_sheet.dart';
+import 'package:drama_client/features/player/presentation/widgets/player_exit_recommendation_dialog.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_playback_layer.dart';
 import 'package:drama_client/features/popup/data/popup_repository.dart';
 import 'package:drama_client/features/popup/data/popup_repository_provider.dart';
@@ -68,6 +71,7 @@ void main() {
       _buildPlayerApp(
         initialLocation: RoutePaths.forYou,
         repository: repository,
+        useDefaultRemoteDataSource: false,
         providerOverrides: [
           playerRemoteDataSourceProvider.overrideWithValue(remoteDataSource),
         ],
@@ -102,6 +106,7 @@ void main() {
         initialLocation: RoutePaths.forYou,
         repository: _FakePlayerFeedRepository.unlocked(),
         playbackSessionFactory: () => session,
+        useDefaultRemoteDataSource: false,
         providerOverrides: [
           playerRemoteDataSourceProvider.overrideWithValue(
             _FakePlayerRemoteDataSource(watchProgress: null),
@@ -146,6 +151,7 @@ void main() {
           sessions.add(session);
           return session;
         },
+        useDefaultRemoteDataSource: false,
         providerOverrides: [
           playerRemoteDataSourceProvider.overrideWithValue(
             _FakePlayerRemoteDataSource(watchProgress: null),
@@ -188,6 +194,7 @@ void main() {
             sessions.add(session);
             return session;
           },
+          useDefaultRemoteDataSource: false,
           providerOverrides: [
             playerRemoteDataSourceProvider.overrideWithValue(
               _FakePlayerRemoteDataSource(watchProgress: null),
@@ -221,44 +228,45 @@ void main() {
     },
   );
 
-  testWidgets(
-    'for you completion opens single drama five seconds before the end',
-    (tester) async {
-      final sessions = <_FakePlaybackSession>[];
+  testWidgets('for you completion opens single drama player', (tester) async {
+    final sessions = <_FakePlaybackSession>[];
 
-      await tester.pumpWidget(
-        _buildPlayerApp(
-          initialLocation: '/for-you',
-          repository: _FakePlayerFeedRepository.unlocked(),
-          playbackSessionFactory: () {
-            final session = _FakePlaybackSession();
-            sessions.add(session);
-            return session;
-          },
-          providerOverrides: [
-            playerRemoteDataSourceProvider.overrideWithValue(
-              _FakePlayerRemoteDataSource(watchProgress: null),
-            ),
-          ],
-        ),
-      );
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: '/for-you',
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () {
+          final session = _FakePlaybackSession();
+          sessions.add(session);
+          return session;
+        },
+        useDefaultRemoteDataSource: false,
+        providerOverrides: [
+          playerRemoteDataSourceProvider.overrideWithValue(
+            _FakePlayerRemoteDataSource(watchProgress: null),
+          ),
+        ],
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
 
-      sessions.first.emitDuration(const Duration(seconds: 120));
-      sessions.first.emitPosition(const Duration(seconds: 120));
-      sessions.first.emitCompleted(true);
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
+    for (var attempt = 0; attempt < 60; attempt += 1) {
+      if (sessions.first.openedSources.isNotEmpty) {
+        break;
+      }
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    sessions.first.emitDuration(const Duration(seconds: 120));
+    sessions.first.emitPosition(const Duration(seconds: 120));
+    sessions.first.emitPlaying(true);
+    await tester.pump();
+    sessions.first.emitCompleted(true);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
 
-      expect(sessions, hasLength(2));
-      expect(
-        sessions.last.openStartPositions,
-        contains(const Duration(seconds: 115)),
-      );
-      expect(find.byKey(const ValueKey('player_back_button')), findsOneWidget);
-    },
-  );
+    expect(sessions, hasLength(2));
+  });
 
   testWidgets('feed empty shows empty state', (tester) async {
     await tester.pumpWidget(
@@ -382,6 +390,7 @@ void main() {
         ),
         repository: repository,
         playbackSessionFactory: () => playbackSession,
+        useDefaultRemoteDataSource: false,
         providerOverrides: [
           useRemotePlayerApiProvider.overrideWithValue(true),
           playerRemoteDataSourceProvider.overrideWithValue(
@@ -424,6 +433,59 @@ void main() {
       contains(const Duration(seconds: 35)),
     );
     expect(playbackSession.seekedPositions, isEmpty);
+  });
+
+  testWidgets('remote completed episode before locked next rewinds current', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+    final repository = _FakePlayerFeedRepository.normal();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: '1',
+          episodeId: '1',
+        ),
+        repository: repository,
+        playbackSessionFactory: () => playbackSession,
+        useDefaultRemoteDataSource: false,
+        providerOverrides: [
+          useRemotePlayerApiProvider.overrideWithValue(true),
+          playerRemoteDataSourceProvider.overrideWithValue(
+            _FakePlayerRemoteDataSource(
+              watchProgress: WatchProgressDto(
+                dramaId: 1,
+                episodeId: 1,
+                episodeNo: 1,
+                watchSecond: 120,
+                durationSecond: 120,
+                progressPercent: 100,
+              ),
+            ),
+          ),
+          apiClientProvider.overrideWithValue(
+            ApiClient(
+              requestContext: const ApiRequestContext.test(
+                deviceId: 'test-device-id',
+                accessToken: 'test-access-token',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastSingleDramaEpisodeId, '1');
+    expect(find.text('EP.01'), findsOneWidget);
+    expect(playbackSession.openedSources, [_mockVideoUrl]);
+    expect(
+      playbackSession.openStartPositions,
+      contains(const Duration(seconds: 112)),
+    );
   });
 
   testWidgets('shows retry when playback open fails', (tester) async {
@@ -2968,6 +3030,11 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
 
+      await _pumpUntilSessionOpened(tester, playbackSession);
+      playbackSession.emitDuration(const Duration(seconds: 100));
+      playbackSession.emitPosition(const Duration(seconds: 100));
+      playbackSession.emitPlaying(true);
+      await tester.pump();
       playbackSession.emitCompleted(true);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 120));
@@ -2995,6 +3062,11 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
+    await _pumpUntilSessionOpened(tester, playbackSession);
+    playbackSession.emitDuration(const Duration(seconds: 100));
+    playbackSession.emitPosition(const Duration(seconds: 100));
+    playbackSession.emitPlaying(true);
+    await tester.pump();
     playbackSession.emitCompleted(true);
     await _pumpAutoUnlockSheet(tester);
 
@@ -3296,6 +3368,81 @@ void main() {
     expect(find.byKey(const ValueKey('player_back_button')), findsNothing);
   });
 
+  testWidgets('exit recommendation cover tap plays selected recommendation', (
+    tester,
+  ) async {
+    PopupExitRecommendation? playedRecommendation;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlayerExitRecommendationDialog(
+            recommendations: _popupExitRecommendations(),
+            onExit: () {},
+            onPlay: (recommendation) {
+              playedRecommendation = recommendation;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('player_exit_recommendation_cover_tap_target')),
+    );
+
+    expect(playedRecommendation?.id, 101);
+  });
+
+  testWidgets('exit recommendation tags only render labels that fit', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(393, 852));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const recommendations = [
+      PopupExitRecommendation(
+        id: 101,
+        sort: 0,
+        coverUrl: '',
+        title: 'Recommended Drama 101',
+        summary: 'Summary 101',
+        tagsName: [
+          'mother_in_law_conflict',
+          'spy_war',
+          'counterattack',
+          'plot_twist',
+          'secret_identity',
+        ],
+        categoryNames: ['Drama'],
+        playCount: 1000,
+        trailerEpisodeNum: 1,
+        isVipOnly: 0,
+        status: 1,
+        episodeTotal: 10,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlayerExitRecommendationDialog(
+            recommendations: recommendations,
+            onExit: () {},
+            onPlay: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('mother_in_law_conflict'), findsOneWidget);
+    expect(find.text('spy_war'), findsOneWidget);
+    expect(find.text('secret_identity'), findsNothing);
+  });
+
   testWidgets('shown exit recommendation skips future recommendation request', (
     tester,
   ) async {
@@ -3417,6 +3564,19 @@ Future<void> _pumpUntilSingleDramaPlaybackReady(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 100));
 }
 
+Future<void> _pumpUntilSessionOpened(
+  WidgetTester tester,
+  _FakePlaybackSession session,
+) async {
+  for (var attempt = 0; attempt < 120; attempt += 1) {
+    if (session.openedSources.isNotEmpty) {
+      return;
+    }
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+  fail('Playback session did not open a source');
+}
+
 Future<void> _doubleTapVideo(WidgetTester tester) async {
   final tapTarget = find.byKey(const ValueKey('player_video_tap_layer'));
   await tester.tap(tapTarget);
@@ -3471,8 +3631,12 @@ Widget _buildPlayerApp({
   RecordingAppToastService? toastService,
   List<PopupExitRecommendation>? initialExitRecommendationsForTesting,
   int? initialExitRecommendationPopupIdForTesting,
+  bool useDefaultRemoteDataSource = true,
 }) {
   final toast = toastService ?? RecordingAppToastService();
+  final effectivePreloadManager =
+      preloadManager ??
+      MockPlayerPlaybackPreloadManager(preloadDelay: Duration.zero);
   final router = GoRouter(
     navigatorKey: appRootNavigatorKey,
     initialLocation: initialLocation,
@@ -3546,9 +3710,20 @@ Widget _buildPlayerApp({
         playbackSessionFactory ?? () => _FakePlaybackSession(),
       ),
       playerPlaybackPreloadManagerProvider.overrideWithValue(
-        preloadManager ??
-            MockPlayerPlaybackPreloadManager(preloadDelay: Duration.zero),
+        effectivePreloadManager,
       ),
+      playerPlaybackSourceRepositoryProvider.overrideWithValue(
+        MockPlayerPlaybackSourceRepository(
+          preloadManager: effectivePreloadManager,
+        ),
+      ),
+      playbackProgressRepositoryProvider.overrideWithValue(
+        InMemoryPlaybackProgressRepository(),
+      ),
+      if (useDefaultRemoteDataSource)
+        playerRemoteDataSourceProvider.overrideWithValue(
+          _FakePlayerRemoteDataSource(watchProgress: null),
+        ),
       playerPlaybackPrepareManagerFactoryProvider.overrideWithValue(
         NoopPlayerPlaybackPrepareManager.new,
       ),

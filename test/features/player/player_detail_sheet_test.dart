@@ -2,8 +2,10 @@ import 'package:drama_client/features/entitlement/domain/episode_unlock_type.dar
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_detail_sheet.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
+import 'package:drama_client/shared/widgets/app_empty_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -98,6 +100,43 @@ void main() {
     expect(find.byType(PlayerDetailSheet), findsNothing);
   });
 
+  testWidgets('duplicate episode numbers select only the current episode id', (
+    tester,
+  ) async {
+    await _openDetailSheet(
+      tester,
+      initialTab: PlayerDetailTab.episodes,
+      currentEpisode: 1,
+      currentEpisodeId: 'ep-duplicate-b',
+      episodes: const [
+        PlayerEpisode(
+          id: 'ep-duplicate-a',
+          number: 1,
+          isLocked: false,
+          unlockType: EpisodeUnlockType.free,
+          videoUrl: 'https://example.com/a.m3u8',
+        ),
+        PlayerEpisode(
+          id: 'ep-duplicate-b',
+          number: 1,
+          isLocked: false,
+          unlockType: EpisodeUnlockType.free,
+          videoUrl: 'https://example.com/b.m3u8',
+        ),
+        PlayerEpisode(
+          id: 'ep-2',
+          number: 2,
+          isLocked: false,
+          unlockType: EpisodeUnlockType.free,
+          videoUrl: 'https://example.com/2.m3u8',
+        ),
+      ],
+    );
+
+    expect(find.byIcon(Icons.graphic_eq_rounded), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+  });
+
   testWidgets('top chrome is outside scrollable content', (tester) async {
     await _openDetailSheet(tester, initialTab: PlayerDetailTab.synopsis);
 
@@ -113,15 +152,60 @@ void main() {
     expect(topChrome, findsOneWidget);
     expect(find.descendant(of: scrollView, matching: topChrome), findsNothing);
   });
+
+  testWidgets(
+    'recommendation tab shows dedicated empty state when API is empty',
+    (tester) async {
+      await _openDetailSheet(
+        tester,
+        initialTab: PlayerDetailTab.synopsis,
+        recommendationsFuture: Future<List<PlayerRecommendation>>.value(
+          const [],
+        ),
+      );
+
+      expect(find.text('No recommendations yet'), findsOneWidget);
+      expect(find.text('No dramas yet'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(AppEmptyState),
+          matching: find.byType(SvgPicture),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 }
 
 Future<void> _openDetailSheet(
   WidgetTester tester, {
   required PlayerDetailTab initialTab,
   int currentEpisode = 1,
+  String? currentEpisodeId,
   ValueChanged<PlayerEpisode>? onEpisodeSelected,
+  List<PlayerEpisode>? episodes,
   List<PlayerRecommendation> recommendations = const [],
+  Future<List<PlayerRecommendation>>? recommendationsFuture,
 }) async {
+  final detailEpisodes =
+      episodes ??
+      const [
+        PlayerEpisode(
+          id: 'ep-1',
+          number: 1,
+          isLocked: false,
+          unlockType: EpisodeUnlockType.free,
+          videoUrl: 'https://example.com/1.m3u8',
+        ),
+        PlayerEpisode(
+          id: 'ep-2',
+          number: 2,
+          isLocked: true,
+          unlockType: EpisodeUnlockType.coins,
+          requiredCoins: 60,
+          videoUrl: 'https://example.com/2.m3u8',
+        ),
+      ];
   final content = PlayerContent(
     id: 'drama-a',
     title: 'Reborn: The Cure',
@@ -132,25 +216,9 @@ Future<void> _openDetailSheet(
     likeCountLabel: '43.2K',
     backgroundAssetPath: 'assets/images/player/player_background.png',
     posterAssetPath: 'assets/images/player/recommend_1.png',
-    episodes: const [
-      PlayerEpisode(
-        id: 'ep-1',
-        number: 1,
-        isLocked: false,
-        unlockType: EpisodeUnlockType.free,
-        videoUrl: 'https://example.com/1.m3u8',
-      ),
-      PlayerEpisode(
-        id: 'ep-2',
-        number: 2,
-        isLocked: true,
-        unlockType: EpisodeUnlockType.coins,
-        requiredCoins: 60,
-        videoUrl: 'https://example.com/2.m3u8',
-      ),
-    ],
+    episodes: detailEpisodes,
     recommendations: recommendations,
-    episodeTotal: 2,
+    episodeTotal: detailEpisodes.length,
   );
 
   await tester.pumpWidget(
@@ -177,6 +245,8 @@ Future<void> _openDetailSheet(
                         content: content,
                         initialTab: initialTab,
                         currentEpisode: currentEpisode,
+                        currentEpisodeId: currentEpisodeId,
+                        recommendationsFuture: recommendationsFuture,
                         onEpisodeSelected: (episode) {
                           if (onEpisodeSelected != null) {
                             onEpisodeSelected(episode);

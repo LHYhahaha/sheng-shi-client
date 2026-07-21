@@ -13,6 +13,7 @@ import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../application/membership_controller.dart';
 import '../../application/membership_modal_coordinator.dart';
@@ -110,6 +111,9 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
                   return;
                 }
                 if (MembershipModalResults.isPurchaseCompleted(result)) {
+                  ref
+                      .read(membershipControllerProvider.notifier)
+                      .hideConfirmation();
                   ref.read(appToastProvider).success(l10n.storePurchaseSuccess);
                   // 根据参数决定导航行为
                   if (_returnToProfile) {
@@ -260,9 +264,9 @@ class _MembershipBody extends StatelessWidget {
         top: MembershipLayout.scrollContentTop,
         bottom: 0,
         child: Center(
-          child: TextButton(
+          child: AppRetryButton(
             onPressed: controller.retry,
-            child: Text(context.l10n.retry),
+            label: context.l10n.retry,
           ),
         ),
       );
@@ -278,7 +282,7 @@ class _MembershipBody extends StatelessWidget {
       top: MembershipLayout.scrollContentTop,
       bottom: state.hasContent && !useFloatingPurchaseButton
           ? MembershipLayout.bottomButtonAreaHeight
-          : 0,
+          : 30,
       child: ClipRect(
         child: ListView(
           padding: EdgeInsets.only(bottom: bottomInset + 24),

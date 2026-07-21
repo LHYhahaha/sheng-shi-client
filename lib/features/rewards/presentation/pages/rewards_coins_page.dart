@@ -1,31 +1,64 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:gradient_borders/box_borders/gradient_box_border.dart';
 
+import '../../application/reward_coins_controller.dart';
+import '../../domain/reward_coins_check_in_status.dart';
 import '../widget/reward_rules_sheet.dart';
 
-const _gold = Color(0xFFFFD58D);
+const _gold = Color(0xFFFFD392);
 const _muted = Color(0xFF77777B);
-const _card = Color(0xFF1B1D22);
+const _card = Color(0xFF1B1D23);
+const _goldButtonText = Color(0xFF743000);
+const _disabledButton = Color(0xFF696A6E);
+const _goldButtonBorder = GradientBoxBorder(
+  width: 1,
+  gradient: LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [
+      Color.fromRGBO(255, 255, 255, 0.52),
+      Color.fromRGBO(255, 255, 255, 0.10),
+      Color.fromRGBO(255, 255, 255, 0.04),
+      Color.fromRGBO(255, 255, 255, 0.08),
+    ],
+    stops: [0, 0.2767, 0.8906, 1],
+  ),
+);
 
-/// Rewards coins 页面。
-///
-/// 当前仅实现静态视觉；签到、领取以及规则入口会在接入奖励接口时补充交互。
-class RewardsCoinsPage extends StatelessWidget {
+class RewardsCoinsPage extends ConsumerStatefulWidget {
   const RewardsCoinsPage({this.useParentBackground = false, super.key});
 
   final bool useParentBackground;
 
   @override
+  ConsumerState<RewardsCoinsPage> createState() => _RewardsCoinsPageState();
+}
+
+class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(
+      () =>
+          ref.read(rewardCoinsControllerProvider.notifier).loadCheckInStatus(),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final rewardCoinsState = ref.watch(rewardCoinsControllerProvider);
+
     return DecoratedBox(
       key: const Key('rewards_coins_page'),
       decoration: BoxDecoration(
-        gradient: useParentBackground
+        gradient: widget.useParentBackground
             ? null
             : const LinearGradient(
                 begin: Alignment.topRight,
                 end: Alignment.bottomLeft,
-                colors: [Color(0xFF4E370D), Color(0xFF121418)],
-                stops: [0, 0.33],
+                colors: [Color(0xFF50390D), Color(0xFF121318)],
+                stops: [0, 0.159],
               ),
       ),
       child: ListView(
@@ -36,50 +69,50 @@ class RewardsCoinsPage extends StatelessWidget {
           10,
           MediaQuery.paddingOf(context).bottom + 24,
         ),
-        children: const [
-          _BalanceHeader(),
-          _CheckInPanel(),
-          SizedBox(height: 22),
+        children: [
+          const _BalanceHeader(),
+          _CheckInPanel(status: rewardCoinsState.checkInStatus),
+          const SizedBox(height: 20),
           Text(
             'Earn Rewards',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 17,
+              fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
           ),
-          SizedBox(height: 11),
+          const SizedBox(height: 9),
           _RewardTaskCard(
             key: Key('reward_task_login'),
             imagePath: 'assets/images/rewards/coins_login_account.png',
             title: 'Login with any account',
             claimed: true,
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           _RewardTaskCard(
             key: Key('reward_task_invite'),
             imagePath: 'assets/images/rewards/coins_invite.png',
             title: 'Invite friends',
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           _RewardTaskCard(
             key: Key('reward_task_watch_5'),
             imagePath: 'assets/images/rewards/coins_watch.png',
             title: 'Watch for 5 mins',
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           _RewardTaskCard(
             key: Key('reward_task_watch_10'),
             imagePath: 'assets/images/rewards/coins_watch.png',
             title: 'Watch for 10 mins',
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           _RewardTaskCard(
             key: Key('reward_task_watch_15'),
             imagePath: 'assets/images/rewards/coins_watch.png',
             title: 'Watch for 15 mins',
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           _RewardTaskCard(
             key: Key('reward_task_notification'),
             imagePath: 'assets/images/rewards/coins_notification.png',
@@ -116,7 +149,7 @@ class _BalanceHeader extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                SizedBox(height: 10),
+                SizedBox(height: 6),
                 Text(
                   'Your Balance',
                   style: TextStyle(
@@ -130,12 +163,36 @@ class _BalanceHeader extends StatelessWidget {
           ),
           Positioned(
             right: 1,
-            bottom: -2,
-            child: Image.asset(
-              'assets/images/rewards/coins_icon.png',
-              width: 142,
-              height: 142,
-              fit: BoxFit.contain,
+            bottom: -30,
+            child: Stack(
+              children: [
+                Image.asset(
+                  'assets/images/rewards/coins_icon.png',
+                  width: 142,
+                  height: 142,
+                  fit: BoxFit.contain,
+                ),
+                Positioned(
+                  bottom: 26,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    width: 142,
+                    height: 29,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: [0, 0.9],
+                        colors: [
+                          Color(0xFF121318).withValues(alpha: 0),
+                          Color(0xFF121318),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -145,13 +202,21 @@ class _BalanceHeader extends StatelessWidget {
 }
 
 class _CheckInPanel extends StatelessWidget {
-  const _CheckInPanel();
+  const _CheckInPanel({required this.status});
+
+  final RewardCoinsCheckInStatus? status;
 
   @override
   Widget build(BuildContext context) {
+    final checkInStatus = status ?? _fallbackCheckInStatus;
+    final days = checkInStatus.days.isEmpty
+        ? _fallbackCheckInStatus.days
+        : checkInStatus.days;
+    final checkedToday = checkInStatus.checkedToday;
+
     return Container(
       key: const Key('rewards_coins_check_in_panel'),
-      padding: const EdgeInsets.fromLTRB(11, 22, 11, 12),
+      padding: const EdgeInsets.fromLTRB(12, 20, 12, 12),
       decoration: BoxDecoration(
         color: _card,
         borderRadius: BorderRadius.circular(8),
@@ -165,14 +230,20 @@ class _CheckInPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Expanded(
-                child: Text(
-                  'Check-in for Rewards',
-                  maxLines: 1,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w700,
+              Expanded(
+                child: ShaderMask(
+                  blendMode: BlendMode.srcIn,
+                  shaderCallback: (bounds) => const LinearGradient(
+                    colors: [Color(0xFFFFF9E9), Color(0xFFFFBD90)],
+                  ).createShader(bounds),
+                  child: const Text(
+                    'Check-in for Rewards',
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -182,8 +253,8 @@ class _CheckInPanel extends StatelessWidget {
                 onTap: () => showRewardRulesSheet(context),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 4,
+                    horizontal: 8,
+                    vertical: 2,
                   ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.1),
@@ -191,49 +262,53 @@ class _CheckInPanel extends StatelessWidget {
                   ),
                   child: const Text(
                     'Rules',
-                    style: TextStyle(color: Color(0xFFAAA49D), fontSize: 12),
+                    style: TextStyle(color: Color(0xFFAAA49D), fontSize: 11),
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 24),
-          const Row(
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: _CheckInDay(day: 1, checked: true)),
-              SizedBox(width: 4),
-              Expanded(child: _CheckInDay(day: 2, active: true)),
-              SizedBox(width: 4),
-              Expanded(child: _CheckInDay(day: 3)),
-              SizedBox(width: 4),
-              Expanded(child: _CheckInDay(day: 4)),
-              SizedBox(width: 4),
-              Expanded(child: _CheckInDay(day: 5)),
-              SizedBox(width: 4),
-              Expanded(child: _CheckInDay(day: 6)),
-              SizedBox(width: 4),
-              Expanded(child: _CheckInDay(day: 7)),
-            ],
+            children: _buildDayWidgets(days, checkInStatus.currentDay),
           ),
           const SizedBox(height: 17),
-          Container(
+          GestureDetector(
             key: const Key('rewards_coins_sign_in'),
-            width: double.infinity,
-            height: 44,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(5),
-              gradient: const LinearGradient(
-                colors: [Color(0xFFD48851), Color(0xFFFFF3C7)],
+            behavior: HitTestBehavior.opaque,
+            onTap: checkedToday ? null : () {},
+            child: Container(
+              width: double.infinity,
+              height: 44,
+              margin: EdgeInsetsGeometry.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: checkedToday ? _disabledButton : null,
+                borderRadius: BorderRadius.circular(5),
+                border: checkedToday ? null : _goldButtonBorder,
+                gradient: checkedToday
+                    ? null
+                    : const LinearGradient(
+                        colors: [Color(0xFFD48851), Color(0xFFFFF3C7)],
+                      ),
               ),
-            ),
-            child: const Text(
-              'Sign In',
-              style: TextStyle(
-                color: Color(0xFF71340B),
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
+              child: CustomPaint(
+                key: const Key('rewards_coins_button_top_highlight'),
+                foregroundPainter: checkedToday
+                    ? null
+                    : const _MemberPointsButtonTopHighlightPainter(),
+                child: Center(
+                  child: Text(
+                    'Check In',
+                    style: TextStyle(
+                      color: checkedToday
+                          ? Colors.white.withValues(alpha: 0.6)
+                          : _goldButtonText,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -241,16 +316,37 @@ class _CheckInPanel extends StatelessWidget {
       ),
     );
   }
+
+  List<Widget> _buildDayWidgets(
+    List<RewardCoinsCheckInDay> days,
+    int currentDay,
+  ) {
+    return [
+      for (var index = 0; index < days.length; index++) ...[
+        if (index > 0) const SizedBox(width: 4),
+        Expanded(
+          child: _CheckInDay(
+            day: days[index].day,
+            checked: days[index].checked,
+            active: days[index].current || days[index].day == currentDay,
+            rewardCoin: days[index].rewardCoin,
+          ),
+        ),
+      ],
+    ];
+  }
 }
 
 class _CheckInDay extends StatelessWidget {
   const _CheckInDay({
     required this.day,
+    required this.rewardCoin,
     this.checked = false,
     this.active = false,
   });
 
   final int day;
+  final String rewardCoin;
   final bool checked;
   final bool active;
 
@@ -258,61 +354,72 @@ class _CheckInDay extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Container(
-          height: 67,
-          decoration: BoxDecoration(
-            color: checked ? const Color(0xFF333539) : const Color(0xFFAF6E37),
-            borderRadius: BorderRadius.circular(4),
-            gradient: checked
-                ? null
-                : const LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFF9A572B), Color(0xFFE0A052)],
+        Stack(
+          children: [
+            Container(
+              height: 67,
+              width: 44,
+              decoration: BoxDecoration(
+                color: checked
+                    ? const Color(0xFF373737)
+                    : const Color(0xFFAF6E37),
+                borderRadius: BorderRadius.circular(4),
+                gradient: checked
+                    ? null
+                    : const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0xFF91562B), Color(0xFFD9AA69)],
+                      ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (checked)
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF929397),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Image.asset(
+                        "assets/images/rewards/check_black.png",
+                      ),
+                    )
+                  else
+                    Image.asset(
+                      'assets/images/rewards/coins.png',
+                      width: 24,
+                      height: 24,
+                    ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '+$rewardCoin',
+                    style: TextStyle(
+                      color: checked ? const Color(0xFF8C8D91) : Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-            border: checked
-                ? null
-                : Border.all(color: const Color(0xFFCF9561), width: 0.7),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (checked)
-                Container(
-                  width: 25,
-                  height: 25,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF929397),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_rounded,
-                    color: Color(0xFF45464A),
-                    size: 18,
-                  ),
-                )
-              else
-                Image.asset(
-                  'assets/images/rewards/coins.png',
-                  width: 29,
-                  height: 29,
-                ),
-              const SizedBox(height: 5),
-              Text(
-                '+10',
-                style: TextStyle(
-                  color: checked ? const Color(0xFF8C8D91) : Colors.white,
-                  fontSize: 13,
-                  height: 1,
-                  fontWeight: FontWeight.w700,
+                ],
+              ),
+            ),
+            if (!checked)
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(painter: _CheckInDayBorderPainter()),
                 ),
               ),
-            ],
-          ),
+          ],
         ),
         const SizedBox(height: 7),
         if (checked)
-          const Icon(Icons.check_rounded, color: Color(0xFF5E6065), size: 17)
+          SizedBox(
+            height: 13,
+            width: 12,
+            child: Image.asset("assets/images/rewards/check.png"),
+          )
         else
           Text(
             'DAY $day',
@@ -326,6 +433,93 @@ class _CheckInDay extends StatelessWidget {
       ],
     );
   }
+}
+
+const _fallbackCheckInStatus = RewardCoinsCheckInStatus(
+  checkedToday: false,
+  currentDay: 2,
+  days: [
+    RewardCoinsCheckInDay(
+      checked: true,
+      claimable: false,
+      current: false,
+      day: 1,
+      rewardCoin: '10',
+    ),
+    RewardCoinsCheckInDay(
+      checked: false,
+      claimable: true,
+      current: true,
+      day: 2,
+      rewardCoin: '10',
+    ),
+    RewardCoinsCheckInDay(
+      checked: false,
+      claimable: false,
+      current: false,
+      day: 3,
+      rewardCoin: '10',
+    ),
+    RewardCoinsCheckInDay(
+      checked: false,
+      claimable: false,
+      current: false,
+      day: 4,
+      rewardCoin: '10',
+    ),
+    RewardCoinsCheckInDay(
+      checked: false,
+      claimable: false,
+      current: false,
+      day: 5,
+      rewardCoin: '10',
+    ),
+    RewardCoinsCheckInDay(
+      checked: false,
+      claimable: false,
+      current: false,
+      day: 6,
+      rewardCoin: '10',
+    ),
+    RewardCoinsCheckInDay(
+      checked: false,
+      claimable: false,
+      current: false,
+      day: 7,
+      rewardCoin: '10',
+    ),
+  ],
+);
+
+class _CheckInDayBorderPainter extends CustomPainter {
+  const _CheckInDayBorderPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(
+      rect.deflate(0.5),
+      const Radius.circular(4),
+    );
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..shader = LinearGradient(
+        begin: Alignment.topRight,
+        end: Alignment.bottomLeft,
+        colors: [
+          Color(0xFFFFFFFF).withValues(alpha: 0.4),
+          Color(0x1AFFFFFF),
+          Color(0xFFFFFFFF).withValues(alpha: 0.4),
+        ],
+        stops: [0, 0.5, 1],
+      ).createShader(rect);
+
+    canvas.drawRRect(rrect, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CheckInDayBorderPainter oldDelegate) => false;
 }
 
 class _RewardTaskCard extends StatelessWidget {
@@ -343,16 +537,15 @@ class _RewardTaskCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: 15),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
         color: _card,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
-          Image.asset(imagePath, width: 34, height: 34),
-          const SizedBox(width: 10),
+          Image.asset(imagePath, width: 32, height: 32),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -364,21 +557,23 @@ class _RewardTaskCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: FontWeight.w400,
                   ),
                 ),
                 const SizedBox(height: 2),
-                const Text.rich(
+                Text.rich(
                   TextSpan(
                     children: [
                       TextSpan(
                         text: '+10',
-                        style: TextStyle(color: Color(0xFFE45E18)),
+                        style: TextStyle(color: Color(0xFFE54900)),
                       ),
                       TextSpan(
                         text: ' Reward coins',
-                        style: TextStyle(color: Color(0xFF696A6E)),
+                        style: TextStyle(
+                          color: Color(0xFFFFFFFF).withValues(alpha: 0.3),
+                        ),
                       ),
                     ],
                   ),
@@ -389,9 +584,6 @@ class _RewardTaskCard extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Container(
-            width: 74,
-            height: 31,
-            alignment: Alignment.center,
             decoration: BoxDecoration(
               color: claimed ? const Color(0xFF696A6E) : null,
               gradient: claimed
@@ -400,15 +592,29 @@ class _RewardTaskCard extends StatelessWidget {
                       colors: [Color(0xFFD4864E), Color(0xFFFFF0BE)],
                     ),
               borderRadius: BorderRadius.circular(5),
+              border: claimed ? null : _goldButtonBorder,
             ),
-            child: Text(
-              'Claim',
-              style: TextStyle(
-                color: claimed
-                    ? const Color(0xFFBEBFC2)
-                    : const Color(0xFF74380E),
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+            child: CustomPaint(
+              foregroundPainter: claimed
+                  ? null
+                  : const _MemberPointsButtonTopHighlightPainter(),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 6,
+                  ),
+                  child: Text(
+                    'Claim',
+                    style: TextStyle(
+                      color: claimed
+                          ? Colors.white.withValues(alpha: 0.6)
+                          : _goldButtonText,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -416,4 +622,31 @@ class _RewardTaskCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _MemberPointsButtonTopHighlightPainter extends CustomPainter {
+  const _MemberPointsButtonTopHighlightPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    final paint = Paint()
+      ..strokeWidth = 1
+      ..shader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          Colors.white.withValues(alpha: 0.1),
+          Colors.white.withValues(alpha: 0.6),
+          Colors.white.withValues(alpha: 0.1),
+        ],
+        stops: [0, 0.5, 1],
+      ).createShader(Offset.zero & size);
+
+    canvas.drawLine(const Offset(4, 0.1), Offset(size.width - 4, 0.1), paint);
+  }
+
+  @override
+  bool shouldRepaint(_MemberPointsButtonTopHighlightPainter oldDelegate) =>
+      false;
 }

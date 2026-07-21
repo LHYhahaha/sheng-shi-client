@@ -26,6 +26,17 @@ void main() {
     expect(repository.hotPlaysRequestCount, 1);
   });
 
+  test('stays hidden when fewer than six hot plays load', () async {
+    final repository = _FakeSearchRepository(dramas: List.generate(5, _drama));
+    final container = _createContainer(repository);
+
+    await container.read(myListHotPlaysControllerProvider.notifier).load();
+    final state = container.read(myListHotPlaysControllerProvider);
+
+    expect(state.dramas, hasLength(5));
+    expect(state.shouldShow, isFalse);
+  });
+
   test('stays hidden when hot-play data is empty', () async {
     final container = _createContainer(_FakeSearchRepository());
 

@@ -7,6 +7,7 @@ import 'package:flutter_svg/svg.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_retry_button.dart';
 import '../../application/player_like_count_provider.dart';
 import '../../domain/player_content.dart';
 import '../../domain/player_performance_policy.dart';
@@ -697,7 +698,7 @@ class _PlaybackRetryOverlay extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            TextButton(onPressed: onRetry, child: Text(context.l10n.retry)),
+            AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
           ],
         ),
       ),
@@ -981,6 +982,7 @@ class _WatchNowButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      key: const ValueKey('player_for_you_watch_now_button'),
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(

@@ -455,6 +455,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   static const _restoreFloorTimeout = Duration(seconds: 12);
   static const _firstFrameProgressProbeDelay = Duration(milliseconds: 800);
   static const _resumeOpenStartMinPosition = Duration(seconds: 10);
+  static const _localResumeReadBudget = Duration(milliseconds: 180);
 
   String? _preferredSubtitleLanguage;
   bool _externalSubtitlesClosed = false;
@@ -1607,6 +1608,31 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     state = state.copyWith(
       status: PlayerPlaybackStatus.playing,
       position: Duration.zero,
+      hasEnded: false,
+      clearSeekPreview: true,
+    );
+    _syncWatchProgressReportTimer();
+  }
+
+  Future<void> rewindFromEndAndPlay(Duration offset) async {
+    if (_isSessionDisposed || state.currentSource == null) {
+      return;
+    }
+    final duration = state.duration > Duration.zero
+        ? state.duration
+        : _currentPlaybackDuration;
+    final target = duration > offset ? duration - offset : Duration.zero;
+    _pauseWhenOpenCompletes = false;
+    await _session.seek(target);
+    _ignoreNextCompleted = false;
+    _currentPlaybackPosition = target;
+    await _session.play();
+    if (!ref.mounted) {
+      return;
+    }
+    state = state.copyWith(
+      status: PlayerPlaybackStatus.playing,
+      position: target,
       hasEnded: false,
       clearSeekPreview: true,
     );
@@ -3231,7 +3257,18 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (!_shouldPersistProgress) {
       return null;
     }
-    return _progressRepository.getProgress(itemId);
+    try {
+      return await _progressRepository
+          .getProgress(itemId)
+          .timeout(_localResumeReadBudget);
+    } on TimeoutException {
+      _logTiming(
+        'resume progress read timeout',
+        itemId: itemId,
+        details: 'budgetMs=${_localResumeReadBudget.inMilliseconds}',
+      );
+      return null;
+    }
   }
 
   /// 加载指定 item 的字幕列表。

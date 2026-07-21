@@ -15,6 +15,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_retry_button.dart';
 import '../../player/domain/player_feed.dart';
 import '../application/search_history_controller.dart';
 import '../application/search_rankings_controller.dart';
@@ -182,168 +183,188 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final suggestions = ref.watch(searchSuggestionsControllerProvider);
     final results = ref.watch(searchResultsControllerProvider);
     final searchHistory = ref.watch(searchHistoryControllerProvider).items;
+    final recommendedKeywords = _recommendedKeywordsFrom(state.hotSearches);
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Column(
-            children: [
-              _SearchBar(
-                controller: _searchController,
-                onBack: context.pop,
-                onSubmitted: _submitSearch,
-                onChanged: _onSearchChanged,
-                onClear: _clearSearch,
-              ),
-              if (_viewMode == _SearchViewMode.initial &&
-                  searchHistory.isNotEmpty)
-                _SearchHistory(
-                  items: searchHistory,
-                  showAll: _showAllHistory,
-                  isEditing: _isEditingHistory,
-                  onToggle: () {
-                    setState(() => _showAllHistory = !_showAllHistory);
-                  },
-                  onEdit: () {
-                    setState(() => _isEditingHistory = true);
-                  },
-                  onCancelEdit: () {
-                    setState(() => _isEditingHistory = false);
-                  },
-                  onClear: _confirmClearHistory,
-                  onRemove: (keyword) {
-                    unawaited(
-                      ref
-                          .read(searchHistoryControllerProvider.notifier)
-                          .remove(keyword),
-                    );
-                    if (searchHistory.length == 1) {
-                      setState(() {
-                        _isEditingHistory = false;
-                      });
-                    }
-                  },
-                  onSelected: (keyword) {
-                    _searchController
-                      ..text = keyword
-                      ..selection = TextSelection.collapsed(
-                        offset: keyword.length,
+      body: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Column(
+              children: [
+                _SearchBar(
+                  controller: _searchController,
+                  recommendedKeywords: recommendedKeywords,
+                  onBack: context.pop,
+                  onSubmitted: _submitSearch,
+                  onChanged: _onSearchChanged,
+                  onClear: _clearSearch,
+                ),
+                if (_viewMode == _SearchViewMode.initial &&
+                    searchHistory.isNotEmpty)
+                  _SearchHistory(
+                    items: searchHistory,
+                    showAll: _showAllHistory,
+                    isEditing: _isEditingHistory,
+                    onToggle: () {
+                      setState(() => _showAllHistory = !_showAllHistory);
+                    },
+                    onEdit: () {
+                      setState(() => _isEditingHistory = true);
+                    },
+                    onCancelEdit: () {
+                      setState(() => _isEditingHistory = false);
+                    },
+                    onClear: _confirmClearHistory,
+                    onRemove: (keyword) {
+                      unawaited(
+                        ref
+                            .read(searchHistoryControllerProvider.notifier)
+                            .remove(keyword),
                       );
-                    _submitSearch(keyword);
-                  },
-                ),
-              if (_viewMode == _SearchViewMode.initial) ...[
-                _RankingTabs(
-                  selectedIndex: _selectedRanking,
-                  onSelected: _selectRanking,
-                ),
-                Expanded(
-                  child: state.isInitialLoading
-                      ? const Center(
-                          child: SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : state.hasPageError
-                      ? _SearchErrorState(
-                          onRetry: () => ref
-                              .read(searchRankingsControllerProvider.notifier)
-                              .retryAll(),
-                        )
-                      : LayoutBuilder(
-                          builder: (context, constraints) {
-                            _rankingViewportWidth = constraints.maxWidth;
-                            final itemWidth =
-                                constraints.maxWidth * _rankingViewportFraction;
-                            return NotificationListener<ScrollEndNotification>(
-                              onNotification: (notification) {
-                                _updateSelectedRanking();
-                                return false;
-                              },
-                              child: ListView.builder(
-                                controller: _rankingScrollController,
-                                scrollDirection: Axis.horizontal,
-                                physics: _RankingSnapPhysics(
-                                  viewportWidth: constraints.maxWidth,
-                                  itemWidth: itemWidth,
-                                  itemCount: _rankingTypes.length,
-                                ),
-                                itemCount: _rankingTypes.length,
-                                itemBuilder: (context, index) {
-                                  final type = _rankingTypes[index];
-                                  return SizedBox(
-                                    width: itemWidth,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                      ),
-                                      child: _RankingPanel(
-                                        type: type,
-                                        state: state.rankingFor(type),
-                                        onRetry: () => ref
-                                            .read(
-                                              searchRankingsControllerProvider
-                                                  .notifier,
-                                            )
-                                            .retry(type),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ] else if (_viewMode == _SearchViewMode.suggestions)
-                Expanded(
-                  child: _SuggestionResults(
-                    state: suggestions,
-                    onRetry: () => ref
-                        .read(searchSuggestionsControllerProvider.notifier)
-                        .search(_searchController.text),
-                    onLoadMore: () => ref
-                        .read(searchSuggestionsControllerProvider.notifier)
-                        .loadMore(),
-                    onTap: (drama) {
+                      if (searchHistory.length == 1) {
+                        setState(() {
+                          _isEditingHistory = false;
+                        });
+                      }
+                    },
+                    onSelected: (keyword) {
                       _searchController
-                        ..text = drama.title
+                        ..text = keyword
                         ..selection = TextSelection.collapsed(
-                          offset: drama.title.length,
+                          offset: keyword.length,
                         );
-                      _submitSearch(drama.title);
+                      _submitSearch(keyword);
                     },
                   ),
-                )
-              else ...[
-                _ResultSortTabs(
-                  selected: _selectedSort,
-                  onSelected: _selectSort,
-                ),
-                Expanded(
-                  child: _SubmittedSearchResults(
-                    state: results,
-                    onRetry: () => ref
-                        .read(searchResultsControllerProvider.notifier)
-                        .search(
-                          keyword: _searchController.text,
-                          sortType: _selectedSort,
-                        ),
-                    onLoadMore: () => ref
-                        .read(searchResultsControllerProvider.notifier)
-                        .loadMore(),
+                if (_viewMode == _SearchViewMode.initial) ...[
+                  _RankingTabs(
+                    selectedIndex: _selectedRanking,
+                    onSelected: _selectRanking,
                   ),
-                ),
+                  Expanded(
+                    child: state.isInitialLoading
+                        ? const Center(
+                            child: SizedBox.square(
+                              dimension: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : state.hasPageError
+                        ? _SearchErrorState(
+                            onRetry: () => ref
+                                .read(searchRankingsControllerProvider.notifier)
+                                .retryAll(),
+                          )
+                        : LayoutBuilder(
+                            builder: (context, constraints) {
+                              _rankingViewportWidth = constraints.maxWidth;
+                              final itemWidth =
+                                  constraints.maxWidth *
+                                  _rankingViewportFraction;
+                              return NotificationListener<
+                                ScrollEndNotification
+                              >(
+                                onNotification: (notification) {
+                                  _updateSelectedRanking();
+                                  return false;
+                                },
+                                child: ListView.builder(
+                                  controller: _rankingScrollController,
+                                  scrollDirection: Axis.horizontal,
+                                  physics: _RankingSnapPhysics(
+                                    viewportWidth: constraints.maxWidth,
+                                    itemWidth: itemWidth,
+                                    itemCount: _rankingTypes.length,
+                                  ),
+                                  itemCount: _rankingTypes.length,
+                                  itemBuilder: (context, index) {
+                                    final type = _rankingTypes[index];
+                                    return SizedBox(
+                                      width: itemWidth,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                        ),
+                                        child: _RankingPanel(
+                                          type: type,
+                                          state: state.rankingFor(type),
+                                          onRetry: () => ref
+                                              .read(
+                                                searchRankingsControllerProvider
+                                                    .notifier,
+                                              )
+                                              .retry(type),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ] else if (_viewMode == _SearchViewMode.suggestions)
+                  Expanded(
+                    child: _SuggestionResults(
+                      state: suggestions,
+                      onRetry: () => ref
+                          .read(searchSuggestionsControllerProvider.notifier)
+                          .search(_searchController.text),
+                      onLoadMore: () => ref
+                          .read(searchSuggestionsControllerProvider.notifier)
+                          .loadMore(),
+                      onTap: (drama) {
+                        _searchController
+                          ..text = drama.title
+                          ..selection = TextSelection.collapsed(
+                            offset: drama.title.length,
+                          );
+                        _submitSearch(drama.title);
+                      },
+                    ),
+                  )
+                else ...[
+                  _ResultSortTabs(
+                    selected: _selectedSort,
+                    onSelected: _selectSort,
+                  ),
+                  Expanded(
+                    child: _SubmittedSearchResults(
+                      state: results,
+                      onRetry: () => ref
+                          .read(searchResultsControllerProvider.notifier)
+                          .search(
+                            keyword: _searchController.text,
+                            sortType: _selectedSort,
+                          ),
+                      onLoadMore: () => ref
+                          .read(searchResultsControllerProvider.notifier)
+                          .loadMore(),
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  List<String> _recommendedKeywordsFrom(SearchRankingState state) {
+    final keywords = <String>[];
+    final seen = <String>{};
+    for (final drama in state.data?.dramas ?? const <SearchRankDrama>[]) {
+      final title = drama.title.trim();
+      if (title.isEmpty || !seen.add(title)) continue;
+      keywords.add(title);
+    }
+    return keywords;
   }
 }
 
@@ -418,9 +439,10 @@ class _RankingSnapPhysics extends ScrollPhysics {
   }
 }
 
-class _SearchBar extends StatelessWidget {
+class _SearchBar extends StatefulWidget {
   const _SearchBar({
     required this.controller,
+    required this.recommendedKeywords,
     required this.onBack,
     required this.onSubmitted,
     required this.onChanged,
@@ -428,20 +450,94 @@ class _SearchBar extends StatelessWidget {
   });
 
   final TextEditingController controller;
+  final List<String> recommendedKeywords;
   final VoidCallback onBack;
   final ValueChanged<String> onSubmitted;
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
 
   @override
+  State<_SearchBar> createState() => _SearchBarState();
+}
+
+class _SearchBarState extends State<_SearchBar> {
+  static const _recommendationInterval = Duration(seconds: 3);
+  static const _recommendationLeftPadding = 40.0;
+  static const _recommendationRightPadding = 12.0;
+
+  Timer? _recommendationTimer;
+  int _recommendedKeywordIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncRecommendationTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SearchBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_sameKeywords(
+      oldWidget.recommendedKeywords,
+      widget.recommendedKeywords,
+    )) {
+      _recommendedKeywordIndex = 0;
+      _syncRecommendationTimer();
+    }
+  }
+
+  @override
+  void dispose() {
+    _recommendationTimer?.cancel();
+    super.dispose();
+  }
+
+  void _syncRecommendationTimer() {
+    _recommendationTimer?.cancel();
+    if (widget.recommendedKeywords.length < 2) return;
+    _recommendationTimer = Timer.periodic(_recommendationInterval, (_) {
+      if (!mounted || widget.recommendedKeywords.isEmpty) return;
+      setState(() {
+        _recommendedKeywordIndex =
+            (_recommendedKeywordIndex + 1) % widget.recommendedKeywords.length;
+      });
+    });
+  }
+
+  bool _sameKeywords(List<String> previous, List<String> next) {
+    if (previous.length != next.length) return false;
+    for (var index = 0; index < previous.length; index++) {
+      if (previous[index] != next[index]) return false;
+    }
+    return true;
+  }
+
+  String get _recommendedKeyword {
+    if (widget.recommendedKeywords.isEmpty) return '';
+    final index = _recommendedKeywordIndex % widget.recommendedKeywords.length;
+    return widget.recommendedKeywords[index];
+  }
+
+  String get _effectiveSearchText {
+    final input = widget.controller.text.trim();
+    return input.isNotEmpty ? input : _recommendedKeyword;
+  }
+
+  void _submitSearch() {
+    widget.onSubmitted(_effectiveSearchText);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final fallbackHint = context.l10n.searchHint;
+    final recommendation = _recommendedKeyword;
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 12, 8, 20),
       child: Row(
         children: [
           GestureDetector(
             key: const ValueKey('search_back_button'),
-            onTap: onBack,
+            onTap: widget.onBack,
             child: Container(
               width: 30,
               height: 30,
@@ -453,84 +549,158 @@ class _SearchBar extends StatelessWidget {
           Expanded(
             child: SizedBox(
               height: 38,
-              child: TextField(
-                controller: controller,
-                onSubmitted: onSubmitted,
-                onChanged: onChanged,
-                textInputAction: TextInputAction.search,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-                decoration: InputDecoration(
-                  isDense: true,
-                  hintText: context.l10n.searchHint,
-                  hintStyle: TextStyle(
-                    fontWeight: FontWeight.normal,
-                    color: AppColors.textPrimary.withValues(alpha: 0.4),
-                    fontSize: 14,
-                  ),
-                  prefixIconConstraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: 32,
-                  ),
-                  prefixIcon: Padding(
-                    padding: const EdgeInsets.only(left: 15, right: 4),
-                    child: GestureDetector(
-                      key: const ValueKey('search_submit_button'),
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => onSubmitted(controller.text),
-                      child: Image.asset(
-                        'assets/images/search/search_grey.png',
-                        width: 14,
-                        height: 14,
+              child: Stack(
+                alignment: Alignment.centerLeft,
+                children: [
+                  TextField(
+                    controller: widget.controller,
+                    onSubmitted: (_) => _submitSearch(),
+                    onChanged: widget.onChanged,
+                    textInputAction: TextInputAction.search,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: recommendation.isEmpty ? fallbackHint : '',
+                      hintStyle: TextStyle(
+                        fontWeight: FontWeight.normal,
+                        color: AppColors.textPrimary.withValues(alpha: 0.4),
+                        fontSize: 14,
+                      ),
+                      prefixIconConstraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                      prefixIcon: Padding(
+                        padding: const EdgeInsets.only(left: 15, right: 4),
+                        child: GestureDetector(
+                          key: const ValueKey('search_submit_button'),
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _submitSearch,
+                          child: Image.asset(
+                            'assets/images/search/search_grey.png',
+                            width: 14,
+                            height: 14,
+                          ),
+                        ),
+                      ),
+                      suffixIconConstraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
+                      suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: widget.controller,
+                        builder: (context, value, child) {
+                          if (value.text.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+                          return GestureDetector(
+                            key: const ValueKey('search_clear_button'),
+                            behavior: HitTestBehavior.opaque,
+                            onTap: widget.onClear,
+                            child: Container(
+                              width: 18,
+                              height: 18,
+                              margin: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Color(0xFF353535),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.close,
+                                color: Colors.white,
+                                size: 13,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      filled: true,
+                      fillColor: AppColors.textPrimary.withValues(alpha: 0.14),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          width: 0.5,
+                          color: AppColors.textPrimary.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          width: 0.5,
+                          color: AppColors.textPrimary.withValues(alpha: 0.2),
+                        ),
                       ),
                     ),
                   ),
-                  suffixIconConstraints: const BoxConstraints(
-                    minWidth: 36,
-                    minHeight: 36,
-                  ),
-                  suffixIcon: ValueListenableBuilder<TextEditingValue>(
-                    valueListenable: controller,
-                    builder: (context, value, child) {
-                      if (value.text.isEmpty) return const SizedBox.shrink();
-                      return GestureDetector(
-                        key: const ValueKey('search_clear_button'),
-                        behavior: HitTestBehavior.opaque,
-                        onTap: onClear,
-                        child: Container(
-                          width: 18,
-                          height: 18,
-                          margin: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Color(0xFF353535),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.close,
-                            color: Colors.white,
-                            size: 13,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  filled: true,
-                  fillColor: AppColors.textPrimary.withValues(alpha: 0.14),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(
-                      width: 0.5,
-                      color: AppColors.textPrimary.withValues(alpha: 0.2),
+                  if (recommendation.isNotEmpty)
+                    Positioned.fill(
+                      left: _recommendationLeftPadding,
+                      right: _recommendationRightPadding,
+                      child: ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: widget.controller,
+                        builder: (context, value, child) {
+                          if (value.text.isNotEmpty) {
+                            return const SizedBox.shrink();
+                          }
+                          return IgnorePointer(
+                            child: ClipRect(
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 320),
+                                  switchInCurve: Curves.easeOutCubic,
+                                  switchOutCurve: Curves.easeInCubic,
+                                  layoutBuilder:
+                                      (currentChild, previousChildren) {
+                                        return Stack(
+                                          alignment: Alignment.centerLeft,
+                                          fit: StackFit.expand,
+                                          children: [
+                                            ...previousChildren,
+                                            ?currentChild,
+                                          ],
+                                        );
+                                      },
+                                  transitionBuilder: (child, animation) {
+                                    return FadeTransition(
+                                      opacity: animation,
+                                      child: SlideTransition(
+                                        position: animation.drive(
+                                          Tween<Offset>(
+                                            begin: const Offset(0, 0.85),
+                                            end: Offset.zero,
+                                          ),
+                                        ),
+                                        child: Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: child,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: Text(
+                                    recommendation,
+                                    key: ValueKey(recommendation),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.left,
+                                    style: TextStyle(
+                                      color: AppColors.textPrimary.withValues(
+                                        alpha: 0.4,
+                                      ),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.normal,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(
-                      width: 0.5,
-                      color: AppColors.textPrimary.withValues(alpha: 0.2),
-                    ),
-                  ),
-                ),
+                ],
               ),
             ),
           ),
@@ -610,10 +780,10 @@ class _ResultSortTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const labels = {
-      SearchSortType.hottest: 'Trending',
-      SearchSortType.newest: 'Latest',
-      SearchSortType.unwatched: 'Unwatched',
+    final labels = {
+      SearchSortType.hottest: context.l10n.searchTabHottest,
+      SearchSortType.newest: context.l10n.searchTabLatest,
+      SearchSortType.unwatched: context.l10n.searchTabUnwatched,
     };
     return Padding(
       padding: const EdgeInsets.fromLTRB(6, 0, 16, 20),
@@ -651,6 +821,8 @@ class _SubmittedSearchResults extends ConsumerWidget {
     required this.onLoadMore,
   });
 
+  static const _visibleRecommendationCount = 10;
+
   final SearchResultsState state;
   final VoidCallback onRetry;
   final VoidCallback onLoadMore;
@@ -664,98 +836,139 @@ class _SubmittedSearchResults extends ConsumerWidget {
       return _NetworkRetry(onRetry: onRetry);
     }
     final dramas = state.data?.dramas ?? const <SearchResultDrama>[];
+    final recommendations = ref.watch(searchRecommendationsProvider);
     if (dramas.isEmpty) {
-      final recommendations = ref.watch(searchRecommendationsProvider);
+      final recommendationItems = _visibleRecommendations(recommendations);
+      if (recommendations.isLoading && recommendationItems == null) {
+        return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+      }
+      if (recommendationItems == null) {
+        return Center(
+          child: AppEmptyState(message: context.l10n.searchEmptyNoResult),
+        );
+      }
+
       return CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.only(top: 25, bottom: 120),
-              child: AppEmptyState(message: context.l10n.emptyNoDramas),
+              child: AppEmptyState(message: context.l10n.searchEmptyNoResult),
             ),
           ),
-          const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(6, 0, 16, 12),
-              child: Text(
-                'Recommend more',
-                style: TextStyle(color: Color(0xFF999999), fontSize: 14),
-              ),
-            ),
-          ),
-          recommendations.when(
-            loading: () => const SliverToBoxAdapter(
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            ),
-            error: (_, _) => SliverToBoxAdapter(
-              child: _NetworkRetry(
-                onRetry: () => ref.invalidate(searchRecommendationsProvider),
-              ),
-            ),
-            data: (items) => SliverList.separated(
-              itemCount: items.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 16),
-              itemBuilder: (context, index) => Padding(
-                padding: EdgeInsets.only(left: 6, right: 16),
-                child: _RecommendationTile(item: items[index]),
-              ),
-            ),
-          ),
+          ..._recommendationSlivers(context, recommendationItems),
         ],
       );
     }
 
+    final recommendationItems = _visibleRecommendations(recommendations);
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
         if (notification.metrics.extentAfter < 240) onLoadMore();
         return false;
       },
-      child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(6, 0, 16, 24),
-        itemCount: dramas.length + 1,
-        separatorBuilder: (_, _) => const SizedBox(height: 16),
-        itemBuilder: (context, index) {
-          if (index < dramas.length) {
-            final drama = dramas[index];
-            return _SearchDramaTile(
-              drama: drama,
-              onTap: () {
-                unawaited(
-                  ref
-                      .read(searchResultsControllerProvider.notifier)
-                      .reportSearchResultClick(drama.id),
+      child: CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(6, 0, 16, 0),
+            sliver: SliverList.separated(
+              itemCount: dramas.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 16),
+              itemBuilder: (context, index) {
+                final drama = dramas[index];
+                return _SearchDramaTile(
+                  drama: drama,
+                  onTap: () {
+                    unawaited(
+                      ref
+                          .read(searchResultsControllerProvider.notifier)
+                          .reportSearchResultClick(drama.id),
+                    );
+                    _openDrama(context, drama.id);
+                  },
                 );
-                _openDrama(context, drama.id);
               },
-            );
-          }
-          if (state.isLoadingMore) {
-            return const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            );
-          }
-          if (state.loadMoreError != null) {
-            return _NetworkRetry(onRetry: onLoadMore, compact: true);
-          }
-          if (!state.hasMore) {
-            return Padding(
-              padding: const EdgeInsets.all(16),
-              child: Center(
-                child: Text(
-                  '没有更多了',
-                  style: TextStyle(
-                    color: AppColors.textPrimary.withValues(alpha: 0.4),
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            );
-          }
-          return const SizedBox(height: 24);
-        },
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: _SearchResultsFooter(state: state, onLoadMore: onLoadMore),
+          ),
+          if (recommendationItems != null)
+            ..._recommendationSlivers(context, recommendationItems),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+        ],
       ),
     );
+  }
+
+  List<PlayerFeedItem>? _visibleRecommendations(
+    AsyncValue<List<PlayerFeedItem>> recommendations,
+  ) {
+    final items = recommendations.asData?.value ?? const <PlayerFeedItem>[];
+    if (items.length < _visibleRecommendationCount) {
+      return null;
+    }
+    return items.take(_visibleRecommendationCount).toList(growable: false);
+  }
+
+  List<Widget> _recommendationSlivers(
+    BuildContext context,
+    List<PlayerFeedItem> items,
+  ) {
+    return [
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(6, 0, 16, 12),
+          child: Text(
+            context.l10n.searchRecommendGuessLike,
+            style: const TextStyle(color: Color(0xFF999999), fontSize: 14),
+          ),
+        ),
+      ),
+      SliverList.separated(
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 16),
+        itemBuilder: (context, index) => Padding(
+          padding: const EdgeInsets.only(left: 6, right: 16),
+          child: _RecommendationTile(item: items[index]),
+        ),
+      ),
+    ];
+  }
+}
+
+class _SearchResultsFooter extends StatelessWidget {
+  const _SearchResultsFooter({required this.state, required this.onLoadMore});
+
+  final SearchResultsState state;
+  final VoidCallback onLoadMore;
+
+  @override
+  Widget build(BuildContext context) {
+    if (state.isLoadingMore) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    if (state.loadMoreError != null) {
+      return _NetworkRetry(onRetry: onLoadMore, compact: true);
+    }
+    if (!state.hasMore) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Center(
+          child: Text(
+            '没有更多了',
+            style: TextStyle(
+              color: AppColors.textPrimary.withValues(alpha: 0.4),
+              fontSize: 12,
+            ),
+          ),
+        ),
+      );
+    }
+    return const SizedBox(height: 24);
   }
 }
 
@@ -957,7 +1170,7 @@ class _NetworkRetry extends StatelessWidget {
               style: TextStyle(color: Color(0xFF888888), fontSize: 13),
             ),
             const SizedBox(height: 10),
-            TextButton(onPressed: onRetry, child: const Text('重试')),
+            AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
           ],
         ),
       ),
@@ -1396,7 +1609,7 @@ class _RankingDramaTile extends StatelessWidget {
                       ),
                       const SizedBox(width: 5),
                       Text(
-                        '🔥 ${formatCompactCount(drama.searchCount, lowercaseSuffix: true)}',
+                        '🔥 ${formatCompactCount(drama.searchCount, lowercaseSuffix: false)}',
                         style: const TextStyle(
                           color: Color(0xFFECECEC),
                           fontSize: 14,
@@ -1470,7 +1683,7 @@ class _SearchErrorState extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          TextButton(onPressed: onRetry, child: Text(context.l10n.retry)),
+          AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
         ],
       ),
     );

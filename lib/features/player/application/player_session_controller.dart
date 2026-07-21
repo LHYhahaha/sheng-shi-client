@@ -82,6 +82,7 @@ class MediaKitPlayerSession implements PlayerPlaybackSession {
   final Player player;
   @override
   late final VideoController videoController;
+  bool _isDisposed = false;
 
   @override
   Stream<bool> get bufferingStream => player.stream.buffering;
@@ -162,7 +163,19 @@ class MediaKitPlayerSession implements PlayerPlaybackSession {
   }
 
   @override
-  Future<void> dispose() {
-    return player.dispose();
+  Future<void> dispose() async {
+    if (_isDisposed) {
+      return;
+    }
+    _isDisposed = true;
+    try {
+      await player.dispose();
+    } catch (error) {
+      if (error is AssertionError &&
+          error.toString().contains('[Player] has been disposed')) {
+        return;
+      }
+      rethrow;
+    }
   }
 }

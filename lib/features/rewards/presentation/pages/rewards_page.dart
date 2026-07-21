@@ -219,7 +219,7 @@ class _RewardTabButton extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              const SizedBox(height: 7),
+              const SizedBox(height: 2),
               AnimatedContainer(
                 key: Key('rewards_tab_indicator_$tabKey'),
                 duration: const Duration(milliseconds: 160),

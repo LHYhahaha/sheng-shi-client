@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -13,6 +12,7 @@ import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_spacing.dart';
+import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../application/store_controller.dart';
 import '../../application/store_modal_coordinator.dart';
@@ -95,9 +95,7 @@ class _StorePageState extends ConsumerState<StorePage> {
                       : l10n.storePurchaseFailed;
                   ref.read(appToastProvider).error(message);
                 } else if (StoreModalResults.isCancelled(result)) {
-                  ref
-                      .read(appToastProvider)
-                      .info(l10n.storePurchaseCancelled);
+                  ref.read(appToastProvider).info(l10n.storePurchaseCancelled);
                 }
                 ref.read(storeControllerProvider.notifier).hideConfirmation();
               }),
@@ -230,7 +228,7 @@ class _StoreHeader extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(width: 58)
+            SizedBox(width: 58),
             // SizedBox(
             //   width: 58,
             //   child: TextButton(
@@ -287,9 +285,18 @@ class _StoreBody extends StatelessWidget {
 
     if (state.error != null) {
       return Center(
-        child: TextButton(
-          onPressed: onRetry,
-          child: Text(context.l10n.feedLoadFailed),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              context.l10n.feedLoadFailed,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
+          ],
         ),
       );
     }

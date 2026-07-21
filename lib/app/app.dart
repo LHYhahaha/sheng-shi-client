@@ -20,6 +20,7 @@ import '../features/popup/application/popup_entry_controller.dart';
 import '../features/popup/domain/popup.dart';
 import '../features/popup/presentation/widgets/popup_entry_overlay.dart';
 import '../l10n/app_localizations.dart';
+import '../shared/url/external_url_launcher.dart';
 import '../shared/widgets/app_blocking_loading_overlay.dart';
 import 'router/app_router.dart';
 import 'router/route_paths.dart';
@@ -173,7 +174,18 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       return;
     }
     _finishActivePopupFlow();
+    if (popup.h5OpenType == 2) {
+      unawaited(_openPopupExternalUrl(url));
+      return;
+    }
     router.push(RoutePaths.webviewLocation(url: url, title: popup.name));
+  }
+
+  Future<void> _openPopupExternalUrl(String url) async {
+    final opened = await ref.read(externalUrlLauncherProvider).open(url);
+    if (!opened) {
+      debugPrint('[PopupEntryOverlay] Failed to open external URL: $url');
+    }
   }
 
   void _closePopupAndOpenDrama(GoRouter router, PopupConfig popup) {

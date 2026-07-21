@@ -9,6 +9,7 @@ class ForYouPlayerHandoff {
     required this.episodeId,
     required this.position,
     required this.duration,
+    this.rewoundFromCompletion = false,
   });
 
   final String id;
@@ -17,6 +18,7 @@ class ForYouPlayerHandoff {
   final String episodeId;
   final Duration position;
   final Duration duration;
+  final bool rewoundFromCompletion;
 }
 
 /// 某部剧在 For You/标准播放页中看到的最新位置。

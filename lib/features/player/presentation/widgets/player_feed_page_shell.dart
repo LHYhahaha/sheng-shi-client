@@ -157,10 +157,12 @@ class PlayerFeedPageShell extends ConsumerWidget {
           showCenterPlayButton: false,
           onTogglePlay: () {},
           onWatchNowTap:
-              shell != null &&
-                  shell.canTogglePlayback &&
-                  shell.currentItemId == item.id &&
-                  accessPresentation == PlayerAccessPresentationState.playable
+              _canOpenWatchNow(
+                forYouLayout: forYouLayout,
+                item: item,
+                accessPresentation: accessPresentation,
+                shell: shell,
+              )
               ? onWatchNowTap
               : () {},
           onEpisodesTap: onEpisodesTap,
@@ -195,5 +197,20 @@ class PlayerFeedPageShell extends ConsumerWidget {
           ),
       ],
     );
+  }
+
+  bool _canOpenWatchNow({
+    required bool forYouLayout,
+    required PlayerFeedItem item,
+    required PlayerAccessPresentationState accessPresentation,
+    required PlayerPlaybackShellSnapshot? shell,
+  }) {
+    if (forYouLayout) {
+      return item.content.id.isNotEmpty && item.episode.id.isNotEmpty;
+    }
+    return accessPresentation == PlayerAccessPresentationState.playable &&
+        shell != null &&
+        shell.canTogglePlayback &&
+        shell.currentItemId == item.id;
   }
 }

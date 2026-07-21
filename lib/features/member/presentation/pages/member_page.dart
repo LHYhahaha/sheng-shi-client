@@ -19,6 +19,7 @@ import '../../../../features/rewards/presentation/pages/member_points_page.dart'
 import '../../../../features/rewards/presentation/widget/member_points_exchange_confirm_dialog.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/media/media_resource.dart';
+import '../../../../shared/widgets/app_retry_button.dart';
 
 const _memberBackground = Color(0xFF090010);
 const _memberCard = Color(0xFF24192E);
@@ -361,18 +362,7 @@ class _MemberInfoLoadFailed extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          TextButton(
-            onPressed: onRetry,
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.white,
-              backgroundColor: _memberButton,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-            child: Text(l10n.retry),
-          ),
+          AppRetryButton(onPressed: onRetry, label: l10n.retry),
         ],
       ),
     );

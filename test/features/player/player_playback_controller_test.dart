@@ -919,6 +919,29 @@ void main() {
     expect(container.read(provider).status, PlayerPlaybackStatus.playing);
   });
 
+  test(
+    'rewindFromEndAndPlay seeks back from duration and clears ended',
+    () async {
+      final session = _FakePlaybackSession();
+      final container = _createContainer(session);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      session.emitDuration(const Duration(seconds: 100));
+      session.emitCompleted(true);
+      await Future<void>.delayed(Duration.zero);
+
+      await controller.rewindFromEndAndPlay(const Duration(seconds: 8));
+
+      expect(session.seekedPositions, [const Duration(seconds: 92)]);
+      expect(session.playCount, greaterThan(0));
+      expect(container.read(provider).position, const Duration(seconds: 92));
+      expect(container.read(provider).hasEnded, isFalse);
+      expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+    },
+  );
+
   test('playItem and seek clear ended state', () async {
     final session = _FakePlaybackSession();
     final container = _createContainer(session);

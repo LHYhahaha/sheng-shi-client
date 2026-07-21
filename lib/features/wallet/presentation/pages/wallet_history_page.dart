@@ -9,6 +9,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_retry_button.dart';
 import '../../application/wallet_controller.dart';
 import '../../domain/wallet_record.dart';
 
@@ -228,9 +229,18 @@ class _HistoryBody extends StatelessWidget {
 
     if (state.error != null) {
       return Center(
-        child: TextButton(
-          onPressed: onRetry,
-          child: Text(context.l10n.feedLoadFailed),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              context.l10n.feedLoadFailed,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
+          ],
         ),
       );
     }
@@ -239,7 +249,7 @@ class _HistoryBody extends StatelessWidget {
     final hasFooter = records.isNotEmpty;
 
     if (records.isEmpty) {
-      return  const _HistoryEmptyState();
+      return const _HistoryEmptyState();
     }
 
     return ListView(
@@ -311,7 +321,7 @@ class _HistoryLoadMoreFooter extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : error != null
-              ? TextButton(onPressed: onRetry, child: Text(context.l10n.retry))
+              ? AppRetryButton(onPressed: onRetry, label: context.l10n.retry)
               : Text(
                   hasMore ? '' : context.l10n.feedNoMore,
                   style: Theme.of(
@@ -331,9 +341,7 @@ class _HistoryEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(top: 200),
-      child: AppEmptyState(
-        message: context.l10n.walletHistoryEmpty,
-      ),
+      child: AppEmptyState(message: context.l10n.walletHistoryEmpty),
     );
   }
 }

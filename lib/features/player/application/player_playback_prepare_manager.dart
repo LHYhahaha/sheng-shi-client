@@ -86,6 +86,7 @@ class PreparedPlaybackSession {
   final Duration bufferedPosition;
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<int?>? _widthSubscription;
+  bool _isDisposed = false;
 
   Future<void> detachFirstFrameListener() async {
     final positionSubscription = _positionSubscription;
@@ -97,6 +98,10 @@ class PreparedPlaybackSession {
   }
 
   Future<void> dispose() async {
+    if (_isDisposed) {
+      return;
+    }
+    _isDisposed = true;
     await detachFirstFrameListener();
     await session.dispose();
   }

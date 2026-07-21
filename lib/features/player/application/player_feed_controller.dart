@@ -322,6 +322,15 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
     await load(config);
   }
 
+  Future<void> refresh() async {
+    final config = state.config;
+    if (config == null) {
+      return;
+    }
+
+    await load(config);
+  }
+
   Future<PlayerFeedItem?> refreshCurrentDramaAtEpisode({
     required String episodeId,
   }) async {

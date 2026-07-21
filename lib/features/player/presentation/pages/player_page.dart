@@ -17,6 +17,7 @@ import '../../../../core/locale/app_locale_controller.dart';
 import '../../../../core/runtime/api_lang_provider.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../data/player_exit_recommendation_history_repository_provider.dart';
 import '../../../auth/application/auth_controller.dart';
@@ -122,6 +123,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   static const _pageTransitionDuration = Duration(milliseconds: 260);
   static const _dimmedOverlayOpacity = 0.64;
   static const _remoteResumeInitialWait = Duration(milliseconds: 450);
+  static const _lockedNextEpisodeRewind = Duration(seconds: 8);
+  static const _forYouNearEndRestartThreshold = Duration(seconds: 8);
 
   late final PageController _pageController;
   late final String _sessionKey;
@@ -149,6 +152,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isExitRecommendationRequestInFlight = false;
   String? _activeCoinSheetItemId;
   String? _activeRechargeSheetItemId;
+  String? _lockedNextRewoundCompletionItemId;
   final Set<String> _exitRecommendationEpisodeIds = <String>{};
   CancelToken? _exitRecommendationCancelToken;
   List<PopupExitRecommendation>? _exitRecommendationRecommendations;
@@ -247,7 +251,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         elapsed: startupStopwatch.elapsed,
         details: 'feedMode=${widget.feedMode.name}',
       );
-      final remoteResumeFuture = _loadRemoteResumeProgress();
+      final remoteResumeFuture = widget.forYouHandoff == null
+          ? _loadRemoteResumeProgress()
+          : null;
 
       final uiController = ref.read(
         playerUiControllerProvider(_sessionKey).notifier,
@@ -627,12 +633,22 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final duration = handoff.duration > Duration.zero
         ? handoff.duration
         : targetItem.episode.duration ?? Duration.zero;
+    final normalizedPosition = _normalPlaybackEntryPosition(
+      item: targetItem,
+      position: handoff.position,
+      duration: duration,
+      feedState: feedState,
+      markRewound: true,
+    );
     final progress = PlaybackProgress(
       itemId: targetItem.id,
-      position: handoff.position,
+      position: normalizedPosition,
       duration: duration,
       updatedAt: DateTime.now(),
     );
+    if (handoff.rewoundFromCompletion) {
+      _lockedNextRewoundCompletionItemId = targetItem.id;
+    }
     _resumeProgress = progress;
     if (progress.canResume) {
       _playbackController.setPendingResumeProgress(progress);
@@ -668,15 +684,33 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         remotePosition > Duration.zero &&
         remoteDuration > Duration.zero &&
         remotePosition < remoteDuration - const Duration(seconds: 2);
+    var resumePosition = canResume ? remotePosition : Duration.zero;
+    var resumeDuration = canResume ? remoteDuration : Duration.zero;
     if (!canResume && remoteItemIndex + 1 < feedState.items.length) {
-      targetIndex = remoteItemIndex + 1;
+      final nextItem = feedState.items[remoteItemIndex + 1];
+      final shouldRewindBeforeLockedNext =
+          widget.feedMode == PlayerFeedMode.singleDrama &&
+          remoteDuration > Duration.zero &&
+          _feedEngine.accessPresentationFor(nextItem) !=
+              PlayerAccessPresentationState.playable;
+      if (shouldRewindBeforeLockedNext) {
+        targetIndex = remoteItemIndex;
+        resumePosition = remoteDuration > _lockedNextEpisodeRewind
+            ? remoteDuration - _lockedNextEpisodeRewind
+            : Duration.zero;
+        resumeDuration = remoteDuration;
+        _lockedNextRewoundCompletionItemId =
+            feedState.items[remoteItemIndex].id;
+      } else {
+        targetIndex = remoteItemIndex + 1;
+      }
     }
 
     final targetItem = feedState.items[targetIndex];
     final progress = PlaybackProgress(
       itemId: targetItem.id,
-      position: canResume ? remotePosition : Duration.zero,
-      duration: canResume ? remoteDuration : Duration.zero,
+      position: resumePosition,
+      duration: resumeDuration,
       updatedAt: DateTime.now(),
     );
     _resumeProgress = progress;
@@ -871,7 +905,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             }
             final progress = PlaybackProgress(
               itemId: settledItem.id,
-              position: cached.position,
+              position: _forYouResumePosition(cached.position, cached.duration),
               duration: cached.duration,
               updatedAt: cached.updatedAt,
             );
@@ -1092,8 +1126,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               _openForYouItemInPlayer(completedItem, rewindFromEnd: true),
             );
           }
-        } else if (feedSnapshot.$5) {
-          unawaited(_advanceToNextFromCompletion());
+        } else {
+          unawaited(_advanceToNextFromCompletion(completedItemId: next.$1!));
         }
       },
     );
@@ -1163,6 +1197,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     required Duration chromeOverlayFadeDuration,
     required PlayerUiController uiController,
   }) {
+    Future<void> refreshFeed() {
+      return widget.feedMode == PlayerFeedMode.forYou
+          ? feedController.refresh()
+          : Future<void>.value();
+    }
+
     if (isLoading) {
       return const Center(
         child: SizedBox.square(
@@ -1173,17 +1213,33 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
 
     if (error != null) {
-      return PlayerStateMessage(
+      final stateMessage = PlayerStateMessage(
         icon: Icons.refresh_rounded,
         message: context.l10n.playerFeedLoadFailed,
         actionLabel: context.l10n.retry,
         onAction: feedController.retry,
       );
+      if (widget.feedMode != PlayerFeedMode.forYou) {
+        return stateMessage;
+      }
+      return _ForYouRefreshableState(
+        onRefresh: refreshFeed,
+        child: stateMessage,
+      );
     }
     if (items.isEmpty) {
-      return PlayerStateMessage(
+      final stateMessage = PlayerStateMessage(
         icon: Icons.movie_filter_rounded,
-        message: context.l10n.noData,
+        message: widget.feedMode == PlayerFeedMode.forYou
+            ? context.l10n.noData
+            : context.l10n.playerNoEpisodes,
+      );
+      if (widget.feedMode != PlayerFeedMode.forYou) {
+        return stateMessage;
+      }
+      return _ForYouRefreshableState(
+        onRefresh: refreshFeed,
+        child: stateMessage,
       );
     }
     _schedulePageControllerAlignment(
@@ -1209,6 +1265,139 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         ? settledIndex
         : items.indexWhere((candidate) => candidate.id == activeVideoItemId);
 
+    final pageView = Listener(
+      key: const ValueKey('player_page_view_surface'),
+      onPointerDown: (_) => _setPlaybackSurfacePressed(true),
+      onPointerUp: (_) => _setPlaybackSurfacePressed(false),
+      onPointerCancel: (_) => _setPlaybackSurfacePressed(false),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: _handlePageScrollNotification,
+        child: PageView.builder(
+          controller: _pageController,
+          physics: _isSeekDragging
+              ? const NeverScrollableScrollPhysics()
+              : const PageScrollPhysics(parent: ClampingScrollPhysics()),
+          scrollDirection: Axis.vertical,
+          itemCount: widget.feedMode == PlayerFeedMode.forYou
+              ? items.length + 1
+              : items.length,
+          onPageChanged: (index) {
+            if (widget.feedMode == PlayerFeedMode.forYou &&
+                index >= items.length) {
+              unawaited(feedController.loadMore());
+              return;
+            }
+            feedEngine.onPageChanged(index);
+            if (widget.feedMode == PlayerFeedMode.forYou &&
+                index == items.length - 1) {
+              unawaited(feedController.loadMore());
+            }
+          },
+          itemBuilder: (context, index) {
+            if (widget.feedMode == PlayerFeedMode.forYou &&
+                index >= items.length) {
+              return _ForYouFeedFooterPage(
+                state: ref.watch(playerFeedControllerProvider(_sessionKey)),
+                onRetry: feedController.loadMore,
+              );
+            }
+
+            final item = items[index];
+            final isSettledPage = index == viewportState.settledIndex;
+            PlayerRebuildDiagnostics.recordPageViewItemBuild(
+              itemId: item.id,
+              isCurrent: isSettledPage,
+            );
+            return PlayerFeedPageShell(
+              key: ValueKey('player_feed_page_${item.id}'),
+              sessionKey: _sessionKey,
+              item: item,
+              index: index,
+              isSettledPage: isSettledPage,
+              forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
+              allowPressChromeDimming:
+                  performancePolicy.allowPressChromeDimming,
+              overlayOpacityListenable:
+                  performancePolicy.allowPressChromeDimming
+                  ? _overlayOpacityNotifier
+                  : null,
+              onTogglePlay: ({required pauseRequested}) {
+                unawaited(
+                  playbackController.togglePlay(pauseRequested: pauseRequested),
+                );
+              },
+              onRetry: () {
+                unawaited(_retryPlaybackForItem(item));
+              },
+              onSeekStart: () {
+                _setSeekDragging(true);
+                playbackController.beginSeek();
+                if (widget.feedMode == PlayerFeedMode.singleDrama) {
+                  uiController.notifyUserInteraction();
+                }
+              },
+              onSeekUpdate: playbackController.updateSeekPreview,
+              onSeekEnd: () {
+                _setSeekDragging(false);
+                unawaited(playbackController.endSeek());
+              },
+              onSeekCancel: () {
+                _setSeekDragging(false);
+                playbackController.cancelSeek();
+              },
+              onWatchNowTap: () {
+                unawaited(_openForYouItemInPlayer(item, rewindFromEnd: false));
+              },
+              onSearchTap: widget.feedMode == PlayerFeedMode.forYou
+                  ? () => unawaited(_openSearch())
+                  : null,
+              onEpisodesTap: () {
+                _showDetailSheet(
+                  item.content,
+                  initialTab: PlayerDetailTab.episodes,
+                );
+              },
+              onShareTap: _showShareSheet,
+              onMoreTap: () {
+                _showDetailSheet(
+                  item.content,
+                  initialTab: PlayerDetailTab.synopsis,
+                );
+              },
+              onMetaTap: () {
+                _showDetailSheet(
+                  item.content,
+                  initialTab: PlayerDetailTab.synopsis,
+                );
+              },
+              onUnlockTap: () {
+                unawaited(_showPendingUnlockActionSheet());
+              },
+              onOpenMembership: () {
+                unawaited(_openMembership());
+              },
+              showChromeOverlays: widget.feedMode == PlayerFeedMode.forYou
+                  ? true
+                  : showsChromeOverlays,
+              chromeOverlayFadeDuration: chromeOverlayFadeDuration,
+              useSingleDramaChromeTap:
+                  widget.feedMode == PlayerFeedMode.singleDrama,
+              onExitImmersiveChrome:
+                  widget.feedMode == PlayerFeedMode.singleDrama
+                  ? () {
+                      uiController.onImmersiveVideoTap();
+                    }
+                  : null,
+              onSingleDramaUserInteraction:
+                  widget.feedMode == PlayerFeedMode.singleDrama
+                  ? uiController.notifyUserInteraction
+                  : null,
+            );
+          },
+        ),
+      ),
+    );
+
     return Stack(
       children: [
         ActivePlaybackSurfaceOverlay(
@@ -1226,127 +1415,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               : videoFitForEpisode(settledItem.episode),
           forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
         ),
-        Listener(
-          key: const ValueKey('player_page_view_surface'),
-          onPointerDown: (_) => _setPlaybackSurfacePressed(true),
-          onPointerUp: (_) => _setPlaybackSurfacePressed(false),
-          onPointerCancel: (_) => _setPlaybackSurfacePressed(false),
-          child: NotificationListener<ScrollNotification>(
-            onNotification: _handlePageScrollNotification,
-            child: PageView.builder(
-              controller: _pageController,
-              physics: _isSeekDragging
-                  ? const NeverScrollableScrollPhysics()
-                  : const PageScrollPhysics(parent: ClampingScrollPhysics()),
-              scrollDirection: Axis.vertical,
-              itemCount: items.length,
-              onPageChanged: (index) {
-                feedEngine.onPageChanged(index);
-                if (widget.feedMode == PlayerFeedMode.forYou &&
-                    index == items.length - 1) {
-                  unawaited(feedController.loadMore());
-                }
-              },
-              itemBuilder: (context, index) {
-                final item = items[index];
-                final isSettledPage = index == viewportState.settledIndex;
-                PlayerRebuildDiagnostics.recordPageViewItemBuild(
-                  itemId: item.id,
-                  isCurrent: isSettledPage,
-                );
-                return PlayerFeedPageShell(
-                  key: ValueKey('player_feed_page_${item.id}'),
-                  sessionKey: _sessionKey,
-                  item: item,
-                  index: index,
-                  isSettledPage: isSettledPage,
-                  forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
-                  allowPressChromeDimming:
-                      performancePolicy.allowPressChromeDimming,
-                  overlayOpacityListenable:
-                      performancePolicy.allowPressChromeDimming
-                      ? _overlayOpacityNotifier
-                      : null,
-                  onTogglePlay: ({required pauseRequested}) {
-                    unawaited(
-                      playbackController.togglePlay(
-                        pauseRequested: pauseRequested,
-                      ),
-                    );
-                  },
-                  onRetry: () {
-                    unawaited(_retryPlaybackForItem(item));
-                  },
-                  onSeekStart: () {
-                    _setSeekDragging(true);
-                    playbackController.beginSeek();
-                    if (widget.feedMode == PlayerFeedMode.singleDrama) {
-                      uiController.notifyUserInteraction();
-                    }
-                  },
-                  onSeekUpdate: playbackController.updateSeekPreview,
-                  onSeekEnd: () {
-                    _setSeekDragging(false);
-                    unawaited(playbackController.endSeek());
-                  },
-                  onSeekCancel: () {
-                    _setSeekDragging(false);
-                    playbackController.cancelSeek();
-                  },
-                  onWatchNowTap: () {
-                    unawaited(
-                      _openForYouItemInPlayer(item, rewindFromEnd: false),
-                    );
-                  },
-                  onSearchTap: widget.feedMode == PlayerFeedMode.forYou
-                      ? () => unawaited(_openSearch())
-                      : null,
-                  onEpisodesTap: () {
-                    _showDetailSheet(
-                      item.content,
-                      initialTab: PlayerDetailTab.episodes,
-                    );
-                  },
-                  onShareTap: _showShareSheet,
-                  onMoreTap: () {
-                    _showDetailSheet(
-                      item.content,
-                      initialTab: PlayerDetailTab.synopsis,
-                    );
-                  },
-                  onMetaTap: () {
-                    _showDetailSheet(
-                      item.content,
-                      initialTab: PlayerDetailTab.synopsis,
-                    );
-                  },
-                  onUnlockTap: () {
-                    unawaited(_showPendingUnlockActionSheet());
-                  },
-                  onOpenMembership: () {
-                    unawaited(_openMembership());
-                  },
-                  showChromeOverlays: widget.feedMode == PlayerFeedMode.forYou
-                      ? true
-                      : showsChromeOverlays,
-                  chromeOverlayFadeDuration: chromeOverlayFadeDuration,
-                  useSingleDramaChromeTap:
-                      widget.feedMode == PlayerFeedMode.singleDrama,
-                  onExitImmersiveChrome:
-                      widget.feedMode == PlayerFeedMode.singleDrama
-                      ? () {
-                          uiController.onImmersiveVideoTap();
-                        }
-                      : null,
-                  onSingleDramaUserInteraction:
-                      widget.feedMode == PlayerFeedMode.singleDrama
-                      ? uiController.notifyUserInteraction
-                      : null,
-                );
-              },
-            ),
-          ),
-        ),
+        widget.feedMode == PlayerFeedMode.forYou
+            ? RefreshIndicator(onRefresh: refreshFeed, child: pageView)
+            : pageView,
         if (widget.feedMode == PlayerFeedMode.singleDrama &&
             settledItem != null)
           AnimatedOpacity(
@@ -1618,29 +1689,31 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         playbackState.currentSource != null &&
         (playbackState.status == PlayerPlaybackStatus.playing ||
             playbackState.status == PlayerPlaybackStatus.paused);
-    if (!isCurrentPlayableItem) {
-      return;
-    }
 
     _isOpeningForYouPlayer = true;
     try {
       final effectiveDuration = playbackState.duration > Duration.zero
           ? playbackState.duration
           : item.episode.duration ?? Duration.zero;
-      final initialPosition = rewindFromEnd
-          ? Duration(
-              milliseconds: (effectiveDuration - const Duration(seconds: 5))
-                  .inMilliseconds
-                  .clamp(0, effectiveDuration.inMilliseconds),
-            )
-          : playbackState.position;
+      final shouldUseCurrentPlayback = isCurrentPlayableItem;
+      final targetEpisodeId = shouldUseCurrentPlayback ? item.episode.id : '1';
+      final initialPosition = shouldUseCurrentPlayback
+          ? rewindFromEnd
+                ? Duration(
+                    milliseconds: (effectiveDuration - _lockedNextEpisodeRewind)
+                        .inMilliseconds
+                        .clamp(0, effectiveDuration.inMilliseconds),
+                  )
+                : playbackState.position
+          : Duration.zero;
       final handoff = ForYouPlayerHandoff(
         id: '${item.id}:${DateTime.now().microsecondsSinceEpoch}',
         originItemId: item.id,
         dramaId: item.content.id,
-        episodeId: item.episode.id,
+        episodeId: targetEpisodeId,
         position: initialPosition,
-        duration: effectiveDuration,
+        duration: shouldUseCurrentPlayback ? effectiveDuration : Duration.zero,
+        rewoundFromCompletion: rewindFromEnd,
       );
       ref
           .read(forYouPlaybackProgressControllerProvider.notifier)
@@ -1650,37 +1723,45 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               dramaId: item.content.id,
               episode: item.episode,
               position: initialPosition,
-              duration: effectiveDuration,
+              duration: shouldUseCurrentPlayback
+                  ? effectiveDuration
+                  : Duration.zero,
               updatedAt: DateTime.now(),
             ),
           );
-
-      await _playbackController.pauseForRouteHandoff();
+      if (shouldUseCurrentPlayback) {
+        unawaited(_playbackController.pauseForRouteHandoff());
+      } else {
+        unawaited(_playbackController.pauseForVisibility(syncState: false));
+      }
       if (!mounted) {
         return;
       }
       final location = RoutePaths.playerLocation(
         dramaId: item.content.id,
-        episodeId: item.episode.id,
+        episodeId: targetEpisodeId,
         trigger: rewindFromEnd ? 'for_you_complete' : 'for_you_watch_now',
         userActionAtMs: DateTime.now().millisecondsSinceEpoch,
       );
-      final returned = await context.push<ForYouPlaybackSnapshot>(
-        location,
-        extra: handoff,
+      unawaited(
+        context.push<ForYouPlaybackSnapshot>(location, extra: handoff).then((
+          returned,
+        ) async {
+          if (!mounted || returned == null) {
+            return;
+          }
+          ref
+              .read(forYouPlaybackProgressControllerProvider.notifier)
+              .save(returned);
+          await WidgetsBinding.instance.endOfFrame;
+          if (!mounted) {
+            return;
+          }
+          await _synchronizeReturnedForYouProgress(returned);
+        }),
       );
       if (!mounted) {
         return;
-      }
-      if (returned != null) {
-        ref
-            .read(forYouPlaybackProgressControllerProvider.notifier)
-            .save(returned);
-        await WidgetsBinding.instance.endOfFrame;
-        if (!mounted) {
-          return;
-        }
-        await _synchronizeReturnedForYouProgress(returned);
       }
     } finally {
       _isOpeningForYouPlayer = false;
@@ -1689,30 +1770,67 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   Duration _forYouResumePosition(Duration position, Duration duration) {
     if (duration > Duration.zero &&
-        position >= duration - const Duration(seconds: 1)) {
-      final rewind = duration - const Duration(seconds: 5);
-      return rewind > Duration.zero ? rewind : Duration.zero;
+        position >= duration - _forYouNearEndRestartThreshold) {
+      return Duration.zero;
     }
     return position;
   }
 
-  Future<void> _advanceToNextFromCompletion() async {
+  Duration _normalPlaybackEntryPosition({
+    required PlayerFeedItem item,
+    required Duration position,
+    required Duration duration,
+    required PlayerFeedState feedState,
+    required bool markRewound,
+  }) {
+    if (widget.feedMode != PlayerFeedMode.singleDrama ||
+        duration <= Duration.zero ||
+        position < duration - _lockedNextEpisodeRewind) {
+      return position;
+    }
+    final itemIndex = feedState.items.indexWhere(
+      (candidate) => candidate.id == item.id,
+    );
+    if (itemIndex == -1 || itemIndex + 1 >= feedState.items.length) {
+      return position;
+    }
+    final nextItem = feedState.items[itemIndex + 1];
+    final nextPlayable =
+        _feedEngine.accessPresentationFor(nextItem) ==
+        PlayerAccessPresentationState.playable;
+    if (nextPlayable) {
+      return position;
+    }
+    if (markRewound) {
+      _lockedNextRewoundCompletionItemId = item.id;
+    }
+    return duration > _lockedNextEpisodeRewind
+        ? duration - _lockedNextEpisodeRewind
+        : Duration.zero;
+  }
+
+  Future<void> _advanceToNextFromCompletion({
+    required String completedItemId,
+  }) async {
     if (_isAutoAdvancing || !mounted) {
       return;
     }
     final feedProvider = playerFeedControllerProvider(_sessionKey);
     final feedState = ref.read(feedProvider);
     if (!feedState.canGoNext) {
+      _clearLockedNextRewind(completedItemId);
       return;
     }
     final nextIndex = feedState.currentIndex + 1;
+    final nextItem = feedState.items[nextIndex];
+    _clearLockedNextRewind(completedItemId);
     _isAutoAdvancing = true;
     try {
       _playbackController.recordPlaybackUserAction(
         'auto next animation start',
         trigger: 'auto_next',
         fromItemId: feedState.currentItem?.id,
-        toItemId: feedState.items[nextIndex].id,
+        toItemId: nextItem.id,
         direction: 'next',
         fromIndex: feedState.currentIndex,
         toIndex: nextIndex,
@@ -1730,9 +1848,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       ref.read(feedProvider.notifier).setCurrentIndex(nextIndex);
       ref
           .read(playerViewportControllerProvider(_sessionKey).notifier)
-          .settle(index: nextIndex, itemId: feedState.items[nextIndex].id);
+          .settle(index: nextIndex, itemId: nextItem.id);
     } finally {
       _isAutoAdvancing = false;
+    }
+  }
+
+  void _clearLockedNextRewind(String itemId) {
+    if (_lockedNextRewoundCompletionItemId == itemId) {
+      _lockedNextRewoundCompletionItemId = null;
     }
   }
 
@@ -2065,22 +2189,63 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       }
     }
     if (currentItem == null || playback.currentSource == null) {
+      if (currentItem != null) {
+        final snapshot = _forYouReturnSnapshotForItem(
+          currentItem: currentItem,
+          feed: feed,
+          position: playback.position,
+          duration: playback.duration,
+        );
+        ref
+            .read(forYouPlaybackProgressControllerProvider.notifier)
+            .save(snapshot);
+        return snapshot;
+      }
       return ref
           .read(forYouPlaybackProgressControllerProvider.notifier)
           .snapshotFor(handoff.dramaId);
     }
-    final snapshot = ForYouPlaybackSnapshot(
-      originItemId: handoff.originItemId,
-      dramaId: currentItem.content.id,
-      episode: currentItem.episode,
+    final snapshot = _forYouReturnSnapshotForItem(
+      currentItem: currentItem,
+      feed: feed,
       position: playback.position,
-      duration: playback.duration > Duration.zero
-          ? playback.duration
-          : currentItem.episode.duration ?? Duration.zero,
-      updatedAt: DateTime.now(),
+      duration: playback.duration,
     );
     ref.read(forYouPlaybackProgressControllerProvider.notifier).save(snapshot);
     return snapshot;
+  }
+
+  ForYouPlaybackSnapshot _forYouReturnSnapshotForItem({
+    required PlayerFeedItem currentItem,
+    required PlayerFeedState feed,
+    required Duration position,
+    required Duration duration,
+  }) {
+    final handoff = widget.forYouHandoff!;
+    var targetItem = currentItem;
+    var targetPosition = position;
+    var targetDuration = duration > Duration.zero
+        ? duration
+        : currentItem.episode.duration ?? Duration.zero;
+    if (_feedEngine.accessPresentationFor(currentItem) !=
+        PlayerAccessPresentationState.playable) {
+      final currentIndex = feed.items.indexWhere(
+        (item) => item.id == currentItem.id,
+      );
+      if (currentIndex > 0) {
+        targetItem = feed.items[currentIndex - 1];
+        targetPosition = Duration.zero;
+        targetDuration = targetItem.episode.duration ?? Duration.zero;
+      }
+    }
+    return ForYouPlaybackSnapshot(
+      originItemId: handoff.originItemId,
+      dramaId: targetItem.content.id,
+      episode: targetItem.episode,
+      position: _forYouResumePosition(targetPosition, targetDuration),
+      duration: targetDuration,
+      updatedAt: DateTime.now(),
+    );
   }
 
   Future<void> _openRecommendationFromDetailSheet(
@@ -2313,16 +2478,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           future: contentFuture,
           builder: (context, snapshot) {
             final displayContent = snapshot.data ?? content;
+            final currentItem = ref
+                .read(playerFeedControllerProvider(_sessionKey))
+                .currentItem;
             return PlayerDetailSheet(
               content: displayContent,
               initialTab: initialTab,
-              currentEpisode:
-                  ref
-                      .read(playerFeedControllerProvider(_sessionKey))
-                      .currentItem
-                      ?.episode
-                      .number ??
-                  1,
+              currentEpisode: currentItem?.episode.number ?? 1,
+              currentEpisodeId: currentItem?.episode.id,
               onEpisodeSelected: (episode) {
                 _closeSheetAndSelectEpisode(sheetContext, episode);
               },
@@ -2453,5 +2616,58 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     await _presentSheetIntent(context, currentItem, flowResult.sheetIntent);
+  }
+}
+
+class _ForYouFeedFooterPage extends StatelessWidget {
+  const _ForYouFeedFooterPage({required this.state, required this.onRetry});
+
+  final PlayerFeedState state;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Center(
+        child: state.isLoadingMore
+            ? const SizedBox.square(
+                dimension: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : state.loadMoreError != null
+            ? AppRetryButton(onPressed: onRetry, label: context.l10n.retry)
+            : Text(
+                context.l10n.noData,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.72),
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class _ForYouRefreshableState extends StatelessWidget {
+  const _ForYouRefreshableState({required this.onRefresh, required this.child});
+
+  final RefreshCallback onRefresh;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(
+            height:
+                MediaQuery.sizeOf(context).height -
+                MediaQuery.paddingOf(context).vertical,
+            child: child,
+          ),
+        ],
+      ),
+    );
   }
 }

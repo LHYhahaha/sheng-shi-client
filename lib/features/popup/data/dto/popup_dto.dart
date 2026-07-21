@@ -11,6 +11,7 @@ class PopupDto {
     this.showCloseButton,
     this.jumpType,
     this.h5Url,
+    this.h5OpenType,
     this.pageCode,
     this.shortJumpMode,
     this.shortDramaId,
@@ -25,6 +26,7 @@ class PopupDto {
   final int? showCloseButton;
   final int? jumpType;
   final String? h5Url;
+  final int? h5OpenType;
   final String? pageCode;
   final int? shortJumpMode;
   final int? shortDramaId;
@@ -40,6 +42,7 @@ class PopupDto {
       showCloseButton: JsonFieldParser.optionalInt(json, 'show_close_button'),
       jumpType: JsonFieldParser.optionalInt(json, 'jump_type'),
       h5Url: JsonFieldParser.optionalString(json, 'h5_url'),
+      h5OpenType: JsonFieldParser.optionalInt(json, 'h5_open_type'),
       pageCode: JsonFieldParser.optionalString(json, 'page_code'),
       shortJumpMode: JsonFieldParser.optionalInt(json, 'short_jump_mode'),
       shortDramaId: JsonFieldParser.optionalInt(json, 'short_drama_id'),
@@ -57,6 +60,7 @@ class PopupDto {
       showCloseButton: showCloseButton,
       jumpType: jumpType,
       h5Url: h5Url,
+      h5OpenType: h5OpenType,
       pageCode: pageCode,
       shortJumpMode: shortJumpMode,
       shortDramaId: shortDramaId,

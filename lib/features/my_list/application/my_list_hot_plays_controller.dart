@@ -23,7 +23,7 @@ class MyListHotPlaysState {
   final bool isLoading;
   final Object? error;
 
-  bool get shouldShow => dramas.isNotEmpty;
+  bool get shouldShow => dramas.length >= MyListHotPlaysController.maxItems;
 }
 
 /// Loads only the hot-play ranking used below both My List tabs.

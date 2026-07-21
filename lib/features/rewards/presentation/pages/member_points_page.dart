@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +11,7 @@ import '../../../../app/router/route_paths.dart';
 import '../../../../core/toast/app_center_toast.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
+import '../../../membership/presentation/membership_route_result.dart';
 import '../../application/member_points_controller.dart';
 import '../../domain/member_point_daily_detail.dart';
 import '../../domain/member_point_exchange_options.dart';
@@ -122,6 +125,22 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage> {
     });
   }
 
+  Future<void> _openMembership() async {
+    final result = await context.push<MembershipRouteResult>(
+      RoutePaths.membership,
+    );
+    if (!mounted ||
+        result != MembershipRouteResult.purchaseCompleted ||
+        widget.isMember != null) {
+      return;
+    }
+
+    await (
+      ref.read(memberPointsControllerProvider.notifier).loadDailyDetail(),
+      ref.read(entitlementControllerProvider.notifier).refreshFromServer(),
+    ).wait;
+  }
+
   @override
   Widget build(BuildContext context) {
     final entitlement = ref.watch(entitlementControllerProvider);
@@ -159,6 +178,7 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage> {
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: _DailyRewardsPanel(
               isMember: isMember,
+              onJoinMembership: () => unawaited(_openMembership()),
               dailyDetail: dailyDetail,
               useDefaultDailyRewards: widget.isMember != null,
               pointBalance: widget.isMember == null
@@ -209,12 +229,14 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage> {
 class _DailyRewardsPanel extends StatelessWidget {
   const _DailyRewardsPanel({
     required this.isMember,
+    required this.onJoinMembership,
     required this.useDefaultDailyRewards,
     this.dailyDetail,
     this.pointBalance,
   });
 
   final bool isMember;
+  final VoidCallback onJoinMembership;
   final bool useDefaultDailyRewards;
   final MemberPointDailyDetail? dailyDetail;
   final int? pointBalance;
@@ -285,7 +307,7 @@ class _DailyRewardsPanel extends StatelessWidget {
                           dailyDetail: dailyDetail,
                           useDefaultProgress: useDefaultDailyRewards,
                         )
-                      : const _LockedDailyRewards(),
+                      : _LockedDailyRewards(onJoinMembership: onJoinMembership),
                 ],
               ),
             ),
@@ -297,7 +319,9 @@ class _DailyRewardsPanel extends StatelessWidget {
 }
 
 class _LockedDailyRewards extends StatelessWidget {
-  const _LockedDailyRewards();
+  const _LockedDailyRewards({required this.onJoinMembership});
+
+  final VoidCallback onJoinMembership;
 
   @override
   Widget build(BuildContext context) {
@@ -370,7 +394,7 @@ class _LockedDailyRewards extends StatelessWidget {
                   fontSize: 16,
                   boxPadding: EdgeInsetsGeometry.symmetric(vertical: 10),
                   fontWeight: FontWeight.w600,
-                  onTap: () => context.push(RoutePaths.membership),
+                  onTap: onJoinMembership,
                 ),
               ),
             ],
@@ -1004,7 +1028,7 @@ class _MemberTasksPanel extends ConsumerWidget {
           await _claimTask(context, ref, item.task.taskKey);
         } else {
           showAppCenterToast(
-            AppLocalizations.maybeOf(context).memberPointsWatchOver30Min,
+            AppLocalizations.maybeOf(context).memberPointsWatchRequired,
           );
         }
       case _MemberTaskActionType.enablePush:
@@ -1237,7 +1261,6 @@ class _RedeemPointsPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tiers = _exchangeTiers(exchangeOptions);
-    final canRedeemAsMember = isMember && (exchangeOptions?.isMember ?? true);
     final l10n = AppLocalizations.maybeOf(context);
 
     return _OutlinedPanel(
@@ -1293,11 +1316,11 @@ class _RedeemPointsPanel extends ConsumerWidget {
               Divider(height: 1, color: Colors.white.withValues(alpha: 0.08)),
             _ActionRow(
               keySuffix: 'redeem_${tiers[index].tierId}',
-              title: _redeemTitle(tiers[index].memberDays, l10n),
+              title: _redeemTitle(tiers[index], l10n),
               points: '${tiers[index].pointCost}',
               action: l10n.memberCenterButtonExchange,
-              disabled: !canRedeemAsMember || !tiers[index].canExchange,
-              disabledOnTap: canRedeemAsMember && !tiers[index].canExchange
+              disabled: !tiers[index].canExchange,
+              disabledOnTap: !tiers[index].canExchange
                   ? () => showAppCenterToast(
                       l10n.memberCenterModalExchangeInsufficientPoints,
                     )
@@ -1313,12 +1336,13 @@ class _RedeemPointsPanel extends ConsumerWidget {
   List<MemberPointExchangeTier> _exchangeTiers(
     MemberPointExchangeOptions? options,
   ) {
-    final source = options?.list ?? _previewExchangeTiers;
-    return [...source]..sort((a, b) => a.priority.compareTo(b.priority));
+    return [...?options?.list];
   }
 
-  String _redeemTitle(int memberDays, AppLocalizations l10n) {
-    return l10n.memberCenterExchangeDaysMember(memberDays);
+  String _redeemTitle(MemberPointExchangeTier tier, AppLocalizations l10n) {
+    final displayName = tier.displayName.trim();
+    if (displayName.isNotEmpty) return displayName;
+    return l10n.memberCenterExchangeDaysMember(tier.memberDays);
   }
 
   Future<void> _confirmExchange(
@@ -1348,29 +1372,6 @@ class _RedeemPointsPanel extends ConsumerWidget {
     }
   }
 }
-
-const _previewExchangeTiers = [
-  MemberPointExchangeTier(
-    canExchange: false,
-    displayName: 'Redeem 1-Day Membership',
-    exchangeStatus: 'insufficient_points',
-    memberDays: 1,
-    pointCost: 500,
-    priority: 1,
-    status: 1,
-    tierId: 1,
-  ),
-  MemberPointExchangeTier(
-    canExchange: true,
-    displayName: 'Redeem 5-Day Membership',
-    exchangeStatus: 'available',
-    memberDays: 5,
-    pointCost: 1000,
-    priority: 2,
-    status: 1,
-    tierId: 2,
-  ),
-];
 
 class _PanelHeader extends StatelessWidget {
   const _PanelHeader({

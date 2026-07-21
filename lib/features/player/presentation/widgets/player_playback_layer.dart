@@ -9,6 +9,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_retry_button.dart';
 import '../../application/player_performance_policy_provider.dart';
 import '../../application/player_playback_controller.dart';
 import '../../application/player_ui_controller.dart';
@@ -980,7 +981,7 @@ class PlaybackRetryOverlay extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            TextButton(onPressed: onRetry, child: Text(context.l10n.retry)),
+            AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
           ],
         ),
       ),
@@ -1479,7 +1480,7 @@ class PlayerStateMessage extends StatelessWidget {
             ),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 16),
-              TextButton(onPressed: onAction, child: Text(actionLabel!)),
+              AppRetryButton(onPressed: onAction, label: actionLabel!),
             ],
           ],
         ),

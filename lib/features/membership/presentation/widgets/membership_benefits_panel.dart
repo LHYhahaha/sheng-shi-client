@@ -140,6 +140,7 @@ class MembershipBenefitsPanel extends StatelessWidget {
                 ],
                 const SizedBox(height: 28),
                 _MembershipTips(tips: tips),
+
               ],
             ),
           ),

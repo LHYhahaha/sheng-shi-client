@@ -21,6 +21,7 @@ class PlayerDetailSheet extends StatefulWidget {
     required this.content,
     required this.initialTab,
     required this.currentEpisode,
+    this.currentEpisodeId,
     required this.onEpisodeSelected,
     required this.onRecommendationSelected,
     this.recommendationsFuture,
@@ -30,6 +31,7 @@ class PlayerDetailSheet extends StatefulWidget {
   final PlayerContent content;
   final PlayerDetailTab initialTab;
   final int currentEpisode;
+  final String? currentEpisodeId;
   final ValueChanged<PlayerEpisode> onEpisodeSelected;
   final ValueChanged<PlayerRecommendation> onRecommendationSelected;
   final Future<List<PlayerRecommendation>>? recommendationsFuture;
@@ -157,6 +159,7 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
                                 dramaId: widget.content.id,
                                 episodes: widget.content.episodes,
                                 currentEpisode: widget.currentEpisode,
+                                currentEpisodeId: widget.currentEpisodeId,
                                 rangeStart: _rangeStart,
                                 onRangeChanged: (value) {
                                   setState(() => _rangeStart = value);
@@ -440,7 +443,7 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
       color: Colors.white.withValues(alpha: 0.4),
       fontSize: 12,
       height: 16 / 12,
-      fontWeight: FontWeight.normal
+      fontWeight: FontWeight.normal,
     );
 
     // 确定要使用的 future
@@ -502,12 +505,7 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
               final recommendations = snapshot.data ?? [];
               if (recommendations.isEmpty) {
                 // 加载完成但为空 - 显示空状态
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 32),
-                    child: AppEmptyState(message: context.l10n.emptyNoDramas),
-                  ),
-                );
+                return const _RecommendationEmptyState();
               }
 
               // 加载完成且有数据 - 显示推荐列表
@@ -537,12 +535,7 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
         // 同步显示推荐列表
         if (widget.content.recommendations.isEmpty)
           // 为空 - 显示空状态
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              child: AppEmptyState(message: context.l10n.emptyNoDramas),
-            ),
-          )
+          const _RecommendationEmptyState()
         else
           // 有数据 - 显示推荐列表
           GridView.builder(
@@ -566,6 +559,20 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
             },
           ),
       ],
+    );
+  }
+}
+
+class _RecommendationEmptyState extends StatelessWidget {
+  const _RecommendationEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: AppEmptyState(message: context.l10n.recommendTabEmptyNoContent),
+      ),
     );
   }
 }
@@ -650,6 +657,7 @@ class _EpisodesPanel extends StatefulWidget {
     required this.dramaId,
     required this.episodes,
     required this.currentEpisode,
+    required this.currentEpisodeId,
     required this.rangeStart,
     required this.onRangeChanged,
     required this.onEpisodeSelected,
@@ -660,6 +668,7 @@ class _EpisodesPanel extends StatefulWidget {
   final String dramaId;
   final List<PlayerEpisode> episodes;
   final int currentEpisode;
+  final String? currentEpisodeId;
   final int rangeStart;
   final ValueChanged<int> onRangeChanged;
   final ValueChanged<PlayerEpisode> onEpisodeSelected;
@@ -811,10 +820,15 @@ class _EpisodesPanelState extends State<_EpisodesPanel> {
             ),
             itemBuilder: (context, index) {
               final episode = visibleEpisodes[index];
+              final hasCurrentEpisodeId =
+                  widget.currentEpisodeId?.isNotEmpty ?? false;
+              final selected = hasCurrentEpisodeId
+                  ? episode.id == widget.currentEpisodeId
+                  : episode.number == widget.currentEpisode;
               return _EpisodeTile(
                 dramaId: widget.dramaId,
                 episode: episode,
-                selected: episode.number == widget.currentEpisode,
+                selected: selected,
                 onTap: () => widget.onEpisodeSelected(episode),
                 currentEpisode: widget.currentEpisode,
               );

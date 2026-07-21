@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router/route_paths.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../../shared/widgets/custom_switch.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/wallet_controller.dart';
@@ -140,9 +141,18 @@ class _WalletBody extends ConsumerWidget {
 
     if (state.error != null) {
       return Center(
-        child: TextButton(
-          onPressed: onRetry,
-          child: Text(context.l10n.feedLoadFailed),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              context.l10n.feedLoadFailed,
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
+          ],
         ),
       );
     }
@@ -316,10 +326,7 @@ class _WalletSwitchRow extends StatelessWidget {
               ),
             ),
           ),
-          CustomSwitch(
-            value: value,
-            onChanged: onChanged,
-          )
+          CustomSwitch(value: value, onChanged: onChanged),
           // Switch(
           //   value: value,
           //   onChanged: onChanged,

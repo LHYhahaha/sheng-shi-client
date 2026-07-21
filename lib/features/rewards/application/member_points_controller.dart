@@ -61,23 +61,23 @@ class MemberPointsController extends Notifier<MemberPointsState> {
   Future<void> loadDailyDetail() async {
     final generation = ++_generation;
     state = state.copyWith(isLoading: true, clearError: true);
-    try {
-      final repository = ref.read(memberPointsRepositoryProvider);
-      final (data, exchangeOptions) = await (
-        repository.getDailyDetail(),
-        repository.getExchangeOptions(),
-      ).wait;
-      if (generation != _generation) return;
-      state = state.copyWith(
-        data: data,
-        exchangeOptions: exchangeOptions,
-        isLoading: false,
-        clearError: true,
-      );
-    } catch (error) {
-      if (generation != _generation) return;
-      state = state.copyWith(isLoading: false, error: error);
-    }
+    final repository = ref.read(memberPointsRepositoryProvider);
+    final dailyDetailLoad = _capture(repository.getDailyDetail());
+    final exchangeOptionsLoad = _capture(repository.getExchangeOptions());
+    final (dailyDetail, exchangeOptions) = await (
+      dailyDetailLoad,
+      exchangeOptionsLoad,
+    ).wait;
+    if (generation != _generation) return;
+
+    final error = dailyDetail.error ?? exchangeOptions.error;
+    state = state.copyWith(
+      data: dailyDetail.data,
+      exchangeOptions: exchangeOptions.data,
+      isLoading: false,
+      error: error,
+      clearError: error == null,
+    );
   }
 
   Future<MemberPointClaimResult?> claimReward({required String taskKey}) async {
@@ -136,4 +136,21 @@ class MemberPointsController extends Notifier<MemberPointsState> {
       ref.read(entitlementControllerProvider.notifier).refreshFromServer(),
     ).wait;
   }
+}
+
+Future<_LoadAttempt<T>> _capture<T>(Future<T> future) async {
+  try {
+    return _LoadAttempt.data(await future);
+  } catch (error) {
+    return _LoadAttempt.error(error);
+  }
+}
+
+class _LoadAttempt<T> {
+  const _LoadAttempt.data(this.data) : error = null;
+
+  const _LoadAttempt.error(this.error) : data = null;
+
+  final T? data;
+  final Object? error;
 }

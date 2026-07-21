@@ -1,3 +1,4 @@
+import 'package:drama_client/core/utils/compact_count_formatter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -116,7 +117,29 @@ class _PlayerExitRecommendationDialogState
                             });
                           },
                           itemBuilder: (context, index) {
-                            return const SizedBox.expand();
+                            final recommendation =
+                                _items[index % _items.length];
+                            return Center(
+                              child: Semantics(
+                                button: true,
+                                label: 'Play ${recommendation.title}',
+                                child: GestureDetector(
+                                  key: index == _selectedPage
+                                      ? const ValueKey(
+                                          'player_exit_recommendation_cover_tap_target',
+                                        )
+                                      : ValueKey(
+                                          'player_exit_recommendation_cover_tap_target_$index',
+                                        ),
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () => widget.onPlay(recommendation),
+                                  child: const SizedBox(
+                                    width: _coverWidth,
+                                    height: _coverHeight,
+                                  ),
+                                ),
+                              ),
+                            );
                           },
                         ),
                       ),
@@ -319,15 +342,37 @@ class _RecommendationCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: AppCachedNetworkImage(
-        imageUrl: recommendation.coverUrl,
-        width: _PlayerExitRecommendationDialogState._coverWidth,
-        height: _PlayerExitRecommendationDialogState._coverHeight,
-        fit: BoxFit.cover,
-        alignment: Alignment.topCenter,
-      ),
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: AppCachedNetworkImage(
+            imageUrl: recommendation.coverUrl,
+            width: _PlayerExitRecommendationDialogState._coverWidth,
+            height: _PlayerExitRecommendationDialogState._coverHeight,
+            fit: BoxFit.cover,
+            alignment: Alignment.topCenter,
+          ),
+        ),
+        Positioned(
+          bottom: 10,
+          right: 10,
+          child: Row(
+            children: [
+              SvgPicture.asset(
+                "assets/images/home/play_icon.svg",
+                width: 8,
+                height: 8,
+              ),
+              SizedBox(width: 2),
+              Text(
+                formatCompactCount(recommendation.playCount),
+                style: TextStyle(fontSize: 9, color: Color(0XFFE0E0E0)),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -335,35 +380,85 @@ class _RecommendationCover extends StatelessWidget {
 class _RecommendationTags extends StatelessWidget {
   const _RecommendationTags({required this.item});
 
+  static const _gap = 6.0;
+
   final PopupExitRecommendation item;
 
   @override
   Widget build(BuildContext context) {
-    final tags = item.tagsName.isNotEmpty ? item.tagsName : item.categoryNames;
+    final tags = item.tagsName;
     if (tags.isEmpty) {
       return const SizedBox();
     }
 
-    return ClipRect(
-      child: SingleChildScrollView(
-        physics: const NeverScrollableScrollPhysics(),
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final visibleTags = _visibleTagsForWidth(
+          context,
+          tags,
+          constraints.maxWidth,
+        );
+        return Row(
           children: [
-            for (final tag in tags) ...[
-              _RecommendationTag(label: tag),
-              const SizedBox(width: 6),
+            for (final tag in visibleTags.indexed) ...[
+              _RecommendationTag(label: tag.$2),
+              if (tag.$1 != visibleTags.length - 1) const SizedBox(width: _gap),
             ],
           ],
-        ),
-      ),
+        );
+      },
     );
+  }
+
+  List<String> _visibleTagsForWidth(
+    BuildContext context,
+    List<String> tags,
+    double maxWidth,
+  ) {
+    if (!maxWidth.isFinite || maxWidth <= 0) {
+      return const [];
+    }
+
+    final visibleTags = <String>[];
+    final textDirection = Directionality.of(context);
+    final textScaler = MediaQuery.textScalerOf(context);
+    final style = DefaultTextStyle.of(
+      context,
+    ).style.merge(_RecommendationTag.textStyle);
+    var usedWidth = 0.0;
+
+    for (final tag in tags) {
+      final painter = TextPainter(
+        text: TextSpan(text: tag, style: style),
+        maxLines: 1,
+        textDirection: textDirection,
+        textScaler: textScaler,
+      )..layout();
+      final tagWidth =
+          painter.width.ceilToDouble() +
+          _RecommendationTag.horizontalPadding +
+          1;
+      final nextWidth = usedWidth + (visibleTags.isEmpty ? 0 : _gap) + tagWidth;
+      if (nextWidth > maxWidth) {
+        break;
+      }
+      visibleTags.add(tag);
+      usedWidth = nextWidth;
+    }
+
+    return visibleTags;
   }
 }
 
 class _RecommendationTag extends StatelessWidget {
   const _RecommendationTag({required this.label});
+
+  static const horizontalPadding = 16.0;
+  static final textStyle = TextStyle(
+    color: Colors.white.withValues(alpha: 0.8),
+    fontSize: 9,
+    fontWeight: FontWeight.w400,
+  );
 
   final String label;
 
@@ -380,11 +475,7 @@ class _RecommendationTag extends StatelessWidget {
         label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: Colors.white.withValues(alpha: 0.8),
-          fontSize: 9,
-          fontWeight: FontWeight.w400,
-        ),
+        style: textStyle,
       ),
     );
   }

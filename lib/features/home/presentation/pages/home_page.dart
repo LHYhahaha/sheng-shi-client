@@ -17,6 +17,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_retry_button.dart';
 import '../../application/home_data_controller.dart';
 import '../../application/home_remote_data_provider.dart';
 
@@ -924,7 +925,7 @@ class _HomeErrorState extends StatelessWidget {
           ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
         ),
         const SizedBox(height: 12),
-        TextButton(onPressed: onRetry, child: Text(context.l10n.retry)),
+        AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
       ],
     );
   }
@@ -956,7 +957,7 @@ class _HomeFeedFooter extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : error != null
-              ? TextButton(onPressed: onRetry, child: Text(context.l10n.retry))
+              ? AppRetryButton(onPressed: onRetry, label: context.l10n.retry)
               : Text(
                   hasMore ? '' : context.l10n.feedNoMore,
                   style: Theme.of(

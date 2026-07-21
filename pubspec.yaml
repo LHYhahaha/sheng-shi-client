@@ -46,6 +46,7 @@ dependencies:
   device_info_plus: ^13.1.0
   android_id: ^0.5.1
   flutter_udid: ^2.0.2
+  url_launcher: ^6.3.2
   webview_flutter: ^4.10.0
   readmore: ^3.0.0
   gradient_borders: ^1.0.4
@@ -62,6 +63,8 @@ dev_dependencies:
   json_serializable: ^6.13.2
 
   mocktail: ^1.0.0
+  plugin_platform_interface: ^2.1.8
+  url_launcher_platform_interface: ^2.3.2
 
 flutter:
   uses-material-design: true

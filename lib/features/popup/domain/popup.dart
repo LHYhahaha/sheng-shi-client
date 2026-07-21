@@ -27,6 +27,7 @@ class PopupConfig {
     this.showCloseButton,
     this.jumpType,
     this.h5Url,
+    this.h5OpenType,
     this.pageCode,
     this.shortJumpMode,
     this.shortDramaId,
@@ -41,6 +42,7 @@ class PopupConfig {
   final int? showCloseButton;
   final int? jumpType;
   final String? h5Url;
+  final int? h5OpenType;
   final String? pageCode;
   final int? shortJumpMode;
   final int? shortDramaId;

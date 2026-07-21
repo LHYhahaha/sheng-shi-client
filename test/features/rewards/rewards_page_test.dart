@@ -8,6 +8,7 @@ import 'package:drama_client/features/entitlement/domain/entitlement_repository.
 import 'package:drama_client/features/entitlement/domain/user_entitlement_state.dart';
 import 'package:drama_client/features/pay/application/payment_loading_controller.dart';
 import 'package:drama_client/features/rewards/application/member_points_controller.dart';
+import 'package:drama_client/features/rewards/data/reward_coins_repository_provider.dart';
 import 'package:drama_client/features/rewards/data/member_points_repository_provider.dart';
 import 'package:drama_client/features/rewards/data/dto/member_point_daily_detail_dto.dart';
 import 'package:drama_client/features/rewards/domain/member_point_claim_result.dart';
@@ -16,11 +17,14 @@ import 'package:drama_client/features/rewards/domain/member_point_details.dart';
 import 'package:drama_client/features/rewards/domain/member_point_exchange_options.dart';
 import 'package:drama_client/features/rewards/domain/member_point_exchange_result.dart';
 import 'package:drama_client/features/rewards/domain/member_points_repository.dart';
+import 'package:drama_client/features/rewards/domain/reward_coins_check_in_status.dart';
+import 'package:drama_client/features/rewards/domain/reward_coins_repository.dart';
 import 'package:drama_client/features/rewards/presentation/pages/member_point_details_page.dart'
     as member_point_details;
 import 'package:drama_client/features/rewards/presentation/pages/member_points_page.dart';
 import 'package:drama_client/features/rewards/presentation/pages/rewards_coins_page.dart';
 import 'package:drama_client/features/rewards/presentation/pages/rewards_page.dart';
+import 'package:drama_client/features/membership/presentation/membership_route_result.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -88,7 +92,49 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: RewardsCoinsPage())),
+      ProviderScope(
+        overrides: [
+          rewardCoinsRepositoryProvider.overrideWithValue(
+            const _FakeRewardCoinsRepository(
+              status: RewardCoinsCheckInStatus(
+                checkedToday: true,
+                currentDay: 4,
+                days: [
+                  RewardCoinsCheckInDay(
+                    checked: true,
+                    claimable: false,
+                    current: false,
+                    day: 1,
+                    rewardCoin: '5',
+                  ),
+                  RewardCoinsCheckInDay(
+                    checked: true,
+                    claimable: false,
+                    current: false,
+                    day: 2,
+                    rewardCoin: '10',
+                  ),
+                  RewardCoinsCheckInDay(
+                    checked: true,
+                    claimable: false,
+                    current: false,
+                    day: 3,
+                    rewardCoin: '15',
+                  ),
+                  RewardCoinsCheckInDay(
+                    checked: false,
+                    claimable: false,
+                    current: true,
+                    day: 4,
+                    rewardCoin: '20',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: RewardsCoinsPage())),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -100,8 +146,21 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Check-in for Rewards'), findsOneWidget);
-    expect(find.text('DAY 2'), findsOneWidget);
+    expect(find.text('+20'), findsOneWidget);
+    expect(find.text('DAY 4'), findsOneWidget);
     expect(find.byKey(const Key('rewards_coins_sign_in')), findsOneWidget);
+    final signInButton = tester.widget<Container>(
+      find
+          .descendant(
+            of: find.byKey(const Key('rewards_coins_sign_in')),
+            matching: find.byType(Container),
+          )
+          .last,
+    );
+    expect(
+      (signInButton.decoration! as BoxDecoration).color,
+      const Color(0xFF696A6E),
+    );
     expect(find.text('Earn Rewards'), findsOneWidget);
     expect(find.byKey(const Key('reward_task_login')), findsOneWidget);
     expect(find.byKey(const Key('reward_task_invite')), findsOneWidget);
@@ -116,7 +175,14 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: RewardsCoinsPage())),
+      ProviderScope(
+        overrides: [
+          rewardCoinsRepositoryProvider.overrideWithValue(
+            _FakeRewardCoinsRepository(status: _rewardCoinsStatus()),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: RewardsCoinsPage())),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -174,6 +240,14 @@ void main() {
     );
     expect(find.text('Subscribe to unlock daily rewards'), findsOneWidget);
     expect(find.text('Join Now'), findsOneWidget);
+    expect(
+      find.byKey(const Key('member_points_action_redeem_1')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('member_points_action_redeem_2')),
+      findsNothing,
+    );
     expect(_hasGradientBorder('member_points_join_now'), isTrue);
     expect(
       find.descendant(
@@ -196,6 +270,158 @@ void main() {
           .widget<CustomPaint>(find.byKey(const Key('vip_benefits_top_border')))
           .foregroundPainter,
       isNotNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('non-member points redemption uses server options', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(375, 812));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeMemberPointsRepository(
+      exchangeOptions: const MemberPointExchangeOptions(
+        balance: 1200,
+        isMember: false,
+        list: [
+          MemberPointExchangeTier(
+            canExchange: true,
+            displayName: 'Server 3-Day Pass',
+            exchangeStatus: 'available',
+            memberDays: 3,
+            pointCost: 1200,
+            priority: 1,
+            status: 1,
+            tierId: 3,
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          memberPointsRepositoryProvider.overrideWithValue(repository),
+          entitlementRepositoryProvider.overrideWithValue(
+            _FakeEntitlementRepository(states: [_nonMemberEntitlement()]),
+          ),
+        ],
+        child: const MaterialApp(home: MemberPointsPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Server 3-Day Pass'), findsOneWidget);
+    expect(find.text('3-Day Membership'), findsNothing);
+
+    final exchangeButton = find.byKey(
+      const Key('member_points_action_redeem_3'),
+    );
+    await tester.ensureVisible(exchangeButton);
+    await tester.tap(exchangeButton);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('member_points_exchange_confirm_dialog')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('member points redemption keeps server order', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(375, 812));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeMemberPointsRepository(
+      exchangeOptions: const MemberPointExchangeOptions(
+        balance: 138,
+        isMember: false,
+        list: [
+          MemberPointExchangeTier(
+            canExchange: false,
+            displayName: '兑换23日会员',
+            exchangeStatus: 'not_member',
+            memberDays: 23,
+            pointCost: 23,
+            priority: 3232323,
+            status: 1,
+            tierId: 8,
+          ),
+          MemberPointExchangeTier(
+            canExchange: false,
+            displayName: '兑换2日会员',
+            exchangeStatus: 'not_member',
+            memberDays: 2,
+            pointCost: 2,
+            priority: 2,
+            status: 1,
+            tierId: 5,
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          memberPointsRepositoryProvider.overrideWithValue(repository),
+          entitlementRepositoryProvider.overrideWithValue(
+            _FakeEntitlementRepository(states: [_nonMemberEntitlement()]),
+          ),
+        ],
+        child: const MaterialApp(home: MemberPointsPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getTopLeft(find.text('兑换23日会员')).dy,
+      lessThan(tester.getTopLeft(find.text('兑换2日会员')).dy),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('non-member points redemption shows when daily detail fails', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(375, 812));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeMemberPointsRepository(
+      dailyDetailError: StateError('not member'),
+      exchangeOptions: const MemberPointExchangeOptions(
+        balance: 138,
+        isMember: false,
+        list: [
+          MemberPointExchangeTier(
+            canExchange: false,
+            displayName: '兑换23日会员',
+            exchangeStatus: 'not_member',
+            memberDays: 23,
+            pointCost: 23,
+            priority: 1,
+            status: 1,
+            tierId: 8,
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          memberPointsRepositoryProvider.overrideWithValue(repository),
+          entitlementRepositoryProvider.overrideWithValue(
+            _FakeEntitlementRepository(states: [_nonMemberEntitlement()]),
+          ),
+        ],
+        child: const MaterialApp(home: MemberPointsPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('兑换23日会员'), findsOneWidget);
+    expect(
+      find.byKey(const Key('member_points_action_redeem_8')),
+      findsOneWidget,
     );
     expect(tester.takeException(), isNull);
   });
@@ -236,6 +462,68 @@ void main() {
 
     expect(find.byKey(const Key('member_points_page')), findsOneWidget);
     expect(find.byKey(const Key('member_points_join_now')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('member points refreshes after membership purchase return', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(375, 812));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final memberPointsRepository = _FakeMemberPointsRepository();
+    final entitlementRepository = _FakeEntitlementRepository(
+      states: [_nonMemberEntitlement(), _memberEntitlement(pointBalance: 5)],
+    );
+    final router = GoRouter(
+      initialLocation: '/member-points-test',
+      routes: [
+        GoRoute(
+          path: '/member-points-test',
+          builder: (context, state) => const MemberPointsPage(),
+        ),
+        GoRoute(
+          path: RoutePaths.membership,
+          builder: (context, state) => Scaffold(
+            body: Center(
+              child: TextButton(
+                onPressed: () =>
+                    context.pop(MembershipRouteResult.purchaseCompleted),
+                child: const Text('Complete purchase'),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          memberPointsRepositoryProvider.overrideWithValue(
+            memberPointsRepository,
+          ),
+          entitlementRepositoryProvider.overrideWithValue(
+            entitlementRepository,
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(memberPointsRepository.dailyDetailCallCount, 1);
+    expect(entitlementRepository.fetchStateCallCount, 1);
+    expect(find.byKey(const Key('member_points_join_now')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('member_points_join_now')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Complete purchase'));
+    await tester.pumpAndSettle();
+
+    expect(memberPointsRepository.dailyDetailCallCount, 2);
+    expect(entitlementRepository.fetchStateCallCount, 2);
+    expect(find.byKey(const Key('member_points_join_now')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -908,20 +1196,28 @@ bool _hasTopHighlight(String key) {
 class _FakeMemberPointsRepository implements MemberPointsRepository {
   _FakeMemberPointsRepository({
     this.detailRemark = 'Daily member points',
+    this.dailyDetailError,
+    this.exchangeOptions,
     this.exchangeCompleter,
     this.tasks = const [],
     this.details,
   });
 
   final String detailRemark;
+  final Object? dailyDetailError;
+  final MemberPointExchangeOptions? exchangeOptions;
   final Completer<MemberPointExchangeResult>? exchangeCompleter;
   final List<MemberPointTask> tasks;
   final List<MemberPointDetailRecord>? details;
   final List<String> claimedTaskKeys = [];
+  int dailyDetailCallCount = 0;
   int exchangeCallCount = 0;
 
   @override
   Future<MemberPointDailyDetail> getDailyDetail() async {
+    dailyDetailCallCount++;
+    final error = dailyDetailError;
+    if (error != null) throw error;
     return MemberPointDailyDetail(
       dayProgress: const [],
       memberDay: 7,
@@ -945,22 +1241,23 @@ class _FakeMemberPointsRepository implements MemberPointsRepository {
 
   @override
   Future<MemberPointExchangeOptions> getExchangeOptions() async {
-    return const MemberPointExchangeOptions(
-      balance: 1000,
-      isMember: true,
-      list: [
-        MemberPointExchangeTier(
-          canExchange: true,
-          displayName: 'Redeem 5-Day Membership',
-          exchangeStatus: 'available',
-          memberDays: 5,
-          pointCost: 1000,
-          priority: 1,
-          status: 1,
-          tierId: 2,
-        ),
-      ],
-    );
+    return exchangeOptions ??
+        const MemberPointExchangeOptions(
+          balance: 1000,
+          isMember: true,
+          list: [
+            MemberPointExchangeTier(
+              canExchange: true,
+              displayName: 'Redeem 5-Day Membership',
+              exchangeStatus: 'available',
+              memberDays: 5,
+              pointCost: 1000,
+              priority: 1,
+              status: 1,
+              tierId: 2,
+            ),
+          ],
+        );
   }
 
   @override
@@ -1013,6 +1310,73 @@ class _FakeMemberPointsRepository implements MemberPointsRepository {
   }
 }
 
+class _FakeRewardCoinsRepository implements RewardCoinsRepository {
+  const _FakeRewardCoinsRepository({required this.status});
+
+  final RewardCoinsCheckInStatus status;
+
+  @override
+  Future<RewardCoinsCheckInStatus> getCheckInStatus() async => status;
+}
+
+RewardCoinsCheckInStatus _rewardCoinsStatus() {
+  return const RewardCoinsCheckInStatus(
+    checkedToday: false,
+    currentDay: 2,
+    days: [
+      RewardCoinsCheckInDay(
+        checked: true,
+        claimable: false,
+        current: false,
+        day: 1,
+        rewardCoin: '10',
+      ),
+      RewardCoinsCheckInDay(
+        checked: false,
+        claimable: true,
+        current: true,
+        day: 2,
+        rewardCoin: '10',
+      ),
+      RewardCoinsCheckInDay(
+        checked: false,
+        claimable: false,
+        current: false,
+        day: 3,
+        rewardCoin: '10',
+      ),
+      RewardCoinsCheckInDay(
+        checked: false,
+        claimable: false,
+        current: false,
+        day: 4,
+        rewardCoin: '10',
+      ),
+      RewardCoinsCheckInDay(
+        checked: false,
+        claimable: false,
+        current: false,
+        day: 5,
+        rewardCoin: '10',
+      ),
+      RewardCoinsCheckInDay(
+        checked: false,
+        claimable: false,
+        current: false,
+        day: 6,
+        rewardCoin: '10',
+      ),
+      RewardCoinsCheckInDay(
+        checked: false,
+        claimable: false,
+        current: false,
+        day: 7,
+        rewardCoin: '10',
+      ),
+    ],
+  );
+}
+
 MemberPointTask _watchTask({required bool completed, bool canClaim = false}) {
   return MemberPointTask(
     canClaim: canClaim,
@@ -1042,6 +1406,18 @@ MemberPointTask _pushTask() {
     rewardMin: 5,
     targetValue: 1,
     taskKey: 'point.enable_push',
+  );
+}
+
+UserEntitlementState _nonMemberEntitlement() {
+  return const UserEntitlementState(
+    isGuest: false,
+    isMember: false,
+    coinBalance: 20,
+    bonusBalance: 0,
+    totalPointBalance: 0,
+    autoUnlockEnabled: false,
+    unlockedEpisodeIds: <String>{},
   );
 }
 

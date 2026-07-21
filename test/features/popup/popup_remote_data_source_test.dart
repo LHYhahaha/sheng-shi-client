@@ -26,6 +26,7 @@ void main() {
               'show_close_button': 1,
               'jump_type': 2,
               'h5_url': 'https://example.test/landing',
+              'h5_open_type': 2,
               'page_code': 'store',
               'short_jump_mode': 0,
               'short_drama_id': 99,
@@ -45,6 +46,7 @@ void main() {
       expect(dtos.single.placementCode, 'home_enter');
       expect(dtos.single.popupImage, 'https://example.test/popup.png');
       expect(dtos.single.jumpType, 2);
+      expect(dtos.single.h5OpenType, 2);
       expect(dtos.single.frontPopupLimit, 1);
 
       final request = adapter.requests.single;
