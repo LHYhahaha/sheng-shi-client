@@ -16,10 +16,8 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
-import '../../player/domain/player_feed.dart';
 import '../application/search_history_controller.dart';
 import '../application/search_rankings_controller.dart';
-import '../application/search_recommendations_controller.dart';
 import '../application/search_results_controller.dart';
 import '../domain/search_rankings.dart';
 import '../domain/search_results.dart';
@@ -746,7 +744,10 @@ class _SuggestionResults extends StatelessWidget {
     if (dramas.isEmpty) return const SizedBox.shrink();
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
-        if (notification.metrics.extentAfter < 240) onLoadMore();
+        if (notification is ScrollUpdateNotification &&
+            notification.metrics.extentAfter < 240) {
+          _scheduleLoadMore(onLoadMore);
+        }
         return false;
       },
       child: ListView.separated(
@@ -840,13 +841,10 @@ class _SubmittedSearchResults extends ConsumerWidget {
     if (state.error != null) {
       return _NetworkRetry(onRetry: onRetry);
     }
-    final dramas = state.data?.dramas ?? const <SearchResultDrama>[];
-    final recommendations = ref.watch(searchRecommendationsProvider);
+    final data = state.data;
+    final dramas = data?.dramas ?? const <SearchResultDrama>[];
+    final recommendationItems = _visibleRecommendations(data?.guessLike);
     if (dramas.isEmpty) {
-      final recommendationItems = _visibleRecommendations(recommendations);
-      if (recommendations.isLoading && recommendationItems == null) {
-        return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-      }
       if (recommendationItems == null) {
         return Center(
           child: AppEmptyState(message: context.l10n.searchEmptyNoResult),
@@ -867,10 +865,12 @@ class _SubmittedSearchResults extends ConsumerWidget {
       );
     }
 
-    final recommendationItems = _visibleRecommendations(recommendations);
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
-        if (notification.metrics.extentAfter < 240) onLoadMore();
+        if (notification is ScrollUpdateNotification &&
+            notification.metrics.extentAfter < 240) {
+          _scheduleLoadMore(onLoadMore);
+        }
         return false;
       },
       child: CustomScrollView(
@@ -908,10 +908,10 @@ class _SubmittedSearchResults extends ConsumerWidget {
     );
   }
 
-  List<PlayerFeedItem>? _visibleRecommendations(
-    AsyncValue<List<PlayerFeedItem>> recommendations,
+  List<SearchResultDrama>? _visibleRecommendations(
+    List<SearchResultDrama>? recommendations,
   ) {
-    final items = recommendations.asData?.value ?? const <PlayerFeedItem>[];
+    final items = recommendations ?? const <SearchResultDrama>[];
     if (items.length < _visibleRecommendationCount) {
       return null;
     }
@@ -920,7 +920,7 @@ class _SubmittedSearchResults extends ConsumerWidget {
 
   List<Widget> _recommendationSlivers(
     BuildContext context,
-    List<PlayerFeedItem> items,
+    List<SearchResultDrama> items,
   ) {
     return [
       SliverToBoxAdapter(
@@ -937,11 +937,15 @@ class _SubmittedSearchResults extends ConsumerWidget {
         separatorBuilder: (_, _) => const SizedBox(height: 16),
         itemBuilder: (context, index) => Padding(
           padding: const EdgeInsets.only(left: 6, right: 16),
-          child: _RecommendationTile(item: items[index]),
+          child: _RecommendationTile(drama: items[index]),
         ),
       ),
     ];
   }
+}
+
+void _scheduleLoadMore(VoidCallback onLoadMore) {
+  WidgetsBinding.instance.addPostFrameCallback((_) => onLoadMore());
 }
 
 class _SearchResultsFooter extends StatelessWidget {
@@ -966,7 +970,7 @@ class _SearchResultsFooter extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Center(
           child: Text(
-            '没有更多了',
+            context.l10n.feedNoMore,
             style: TextStyle(
               color: AppColors.textPrimary.withValues(alpha: 0.4),
               fontSize: 12,
@@ -998,19 +1002,18 @@ class _SearchDramaTile extends StatelessWidget {
 }
 
 class _RecommendationTile extends StatelessWidget {
-  const _RecommendationTile({required this.item});
+  const _RecommendationTile({required this.drama});
 
-  final PlayerFeedItem item;
+  final SearchResultDrama drama;
 
   @override
   Widget build(BuildContext context) {
-    final content = item.content;
     return _DramaTileLayout(
-      coverUrl: content.coverUrl ?? '',
-      title: content.title,
-      tags: content.tags,
-      summary: content.synopsis,
-      onTap: () => _openDrama(context, content.id),
+      coverUrl: drama.coverUrl,
+      title: drama.title,
+      tags: drama.tags,
+      summary: drama.summary,
+      onTap: () => _openDrama(context, drama.id),
     );
   }
 }

@@ -84,7 +84,9 @@ class PlayerContentMapper {
             url: dto.subtitleUrl,
             format: dto.format.isNotEmpty ? dto.format : 'vtt',
             isDefault: dto.status == 1,
-            position: switch (dto.subtitlePosition) {
+            // `/api/home/detail`：1 为下方、2 为中间、3 为上方。
+            // 后端字段是字符串；trim 后兼容意外的首尾空白。
+            position: switch (dto.subtitlePosition.trim()) {
               '2' => PlayerSubtitlePosition.middle,
               '3' => PlayerSubtitlePosition.top,
               _ => PlayerSubtitlePosition.bottom,

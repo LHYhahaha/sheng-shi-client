@@ -104,8 +104,9 @@ class PlayerEpisodeSubtitleDto {
       subtitleUrl: JsonFieldParser.optionalString(json, 'subtitle_url') ?? '',
       format: JsonFieldParser.optionalString(json, 'format') ?? '',
       status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
-      subtitlePosition:
-          JsonFieldParser.optionalString(json, 'subtitle_position') ?? '1',
+      // 接口文档定义为 string，但实际响应可能返回 number（例如 2）。
+      // 统一转换为字符串后，由 mapper 映射到播放器位置。
+      subtitlePosition: json['subtitle_position']?.toString() ?? '1',
     );
   }
 }

@@ -399,6 +399,7 @@ class _RecommendationTags extends StatelessWidget {
           constraints.maxWidth,
         );
         return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             for (final tag in visibleTags.indexed) ...[
               _RecommendationTag(label: tag.$2),

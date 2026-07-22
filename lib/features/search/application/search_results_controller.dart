@@ -128,7 +128,8 @@ class SearchResultsController extends Notifier<SearchResultsState> {
           pageSize: next.pageSize,
           total: next.total,
           dramas: [...current.dramas, ...next.dramas],
-          guessLike: next.guessLike,
+          // 猜你喜欢由首次搜索响应提供；分页加载不应替换已展示的推荐列表。
+          guessLike: current.guessLike,
         ),
       );
     } catch (error) {

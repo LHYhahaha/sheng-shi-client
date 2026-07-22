@@ -26,15 +26,43 @@ void main() {
           'status': 1,
           'subtitle_position': '3',
         },
+        {
+          'id': 12,
+          'language': 'English',
+          'subtitle_name': 'english.srt',
+          'subtitle_url': 'https://cdn.test/en.srt',
+          'format': 'srt',
+          'status': 1,
+          // 真实 `/api/home/detail` 响应返回 number，而非文档中的 string。
+          'subtitle_position': 2,
+        },
+        {
+          'id': 13,
+          'language': 'Español',
+          'subtitle_name': 'spanish.srt',
+          'subtitle_url': 'https://cdn.test/es.srt',
+          'format': 'srt',
+          'status': 1,
+          'subtitle_position': '1',
+        },
       ],
     });
     final externalEpisode = const PlayerContentMapper().mapEpisode(external);
 
-    expect(externalEpisode.subtitles.single.language, '简体中文');
-    expect(externalEpisode.subtitles.single.languageCode, 'zh');
+    expect(externalEpisode.subtitles, hasLength(3));
+    expect(externalEpisode.subtitles.first.language, '简体中文');
+    expect(externalEpisode.subtitles.first.languageCode, 'zh');
     expect(
-      externalEpisode.subtitles.single.position,
+      externalEpisode.subtitles.first.position,
       PlayerSubtitlePosition.top,
+    );
+    expect(
+      externalEpisode.subtitles[1].position,
+      PlayerSubtitlePosition.middle,
+    );
+    expect(
+      externalEpisode.subtitles[2].position,
+      PlayerSubtitlePosition.bottom,
     );
 
     final embedded = PlayerEpisodeDto.fromJson({
