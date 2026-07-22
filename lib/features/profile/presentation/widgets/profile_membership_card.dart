@@ -112,10 +112,14 @@ class ProfileMembershipCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: AppSpacing.md),
-                    _JoinButton(
-                      enabled: membership.entryEnabled,
-                      label: isActive ? l10n.profileMember : l10n.profileJoin,
-                    ),
+                    isActive
+                        ? SizedBox()
+                        : _JoinButton(
+                            enabled: membership.entryEnabled,
+                            label: isActive
+                                ? l10n.profileMember
+                                : l10n.profileJoin,
+                          ),
                   ],
                 ),
               ),

@@ -115,15 +115,13 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               onGuestTap: onHeaderTap,
             ),
             const SizedBox(height: 21),
-            if (!state.membership.isActive) ...[
-              ProfileMembershipCard(
-                membership: state.membership,
-                onTap: () => context.push(
-                  RoutePaths.membershipLocation(returnToProfile: true),
-                ),
+            ProfileMembershipCard(
+              membership: state.membership,
+              onTap: () => context.push(
+                RoutePaths.membershipLocation(returnToProfile: true),
               ),
-              const SizedBox(height: 12),
-            ],
+            ),
+            const SizedBox(height: 12),
             ProfileCoinsCard(
               coins: state.coins,
               onTopUpTap: () => context.push(RoutePaths.store),
