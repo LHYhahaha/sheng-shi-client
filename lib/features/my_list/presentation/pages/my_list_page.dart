@@ -334,14 +334,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
       children.add(
         _HotPlaysSection(
           dramas: hotPlays,
-          onTap: (drama) => context.push(
-            RoutePaths.playerLocation(
-              dramaId: drama.id,
-              episodeId: '1',
-              trigger: 'my_list_hot_play_tap',
-              userActionAtMs: DateTime.now().millisecondsSinceEpoch,
-            ),
-          ),
+          onTap: (drama) => _openHotPlay(controller, drama),
         ),
       );
     }
@@ -380,6 +373,21 @@ class _MyListPageState extends ConsumerState<MyListPage> {
         dramaId: item.dramaId.toString(),
         episodeId: episodeId,
         trigger: isCollection ? 'my_list_collection_item' : 'play_history_item',
+      ),
+    );
+    await controller.refreshCurrentTabInPlace();
+  }
+
+  Future<void> _openHotPlay(
+    MyListController controller,
+    SearchRankDrama drama,
+  ) async {
+    await context.push(
+      RoutePaths.playerLocation(
+        dramaId: drama.id,
+        episodeId: '1',
+        trigger: 'my_list_hot_play_tap',
+        userActionAtMs: DateTime.now().millisecondsSinceEpoch,
       ),
     );
     await controller.refreshCurrentTabInPlace();
