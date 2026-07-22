@@ -11,25 +11,33 @@ class MembershipPlan {
     this.platformProductId,
     this.badgeLabel,
     this.originalPriceLabel,
+
     /// 促销价展示文案（Google IAP 促销首期价）。
     ///
     /// 当 [hasPromo] 为 true 时，[priceLabel] 可能已被更新为促销价。
     /// 这个字段用于 UI 明确展示促销价格。
     this.promotionPriceLabel,
+
     /// 是否有促销价。
     this.hasPromo = false,
+
     /// 续费原价展示文案（促销结束后的价格）。
     this.regularPriceLabel,
+
     /// 促销倒计时截止时间（毫秒时间戳），0 表示无倒计时。
     ///
     /// UI 层根据此字段展示倒计时，倒计时结束后隐藏促销标签。
     this.promoCountdownEndMs = 0,
     this.description,
     this.enabled = true,
+
     /// Google Play IAP 促销首期周期 ISO，如 "P1W"。
     ///
     /// 用于 UI 层根据当前语言动态组装促销文案。
     this.promoPeriodIso,
+    this.promoCycles,
+    this.hasFreeTrial = false,
+
     /// Google Play IAP 续费周期 ISO，如 "P1M"。
     ///
     /// 用于 UI 层根据当前语言动态组装促销文案。
@@ -90,6 +98,12 @@ class MembershipPlan {
   ///
   /// 用于 UI 层根据当前语言动态组装促销文案。
   final String? promoPeriodIso;
+
+  /// Google Play IAP 促销周期的执行次数，例如 2 表示连续两个 P1W 周期。
+  final int? promoCycles;
+
+  /// 促销首期是否为免费试用。
+  final bool hasFreeTrial;
 
   /// Google Play IAP 续费周期 ISO，如 "P1M"。
   ///

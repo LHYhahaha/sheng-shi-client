@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 
-import '../../../core/utils/period_iso_parser.dart';
 import '../domain/iap_product_info.dart';
 import 'google_play_pricing_extractor.dart';
 
@@ -25,6 +24,7 @@ class IapPriceService {
   }) async {
     try {
       debugPrint('[IapPrice] 开始查询商品: $productIds');
+
       final response = await _iap.queryProductDetails(productIds);
 
       if (response.error != null) {
@@ -33,11 +33,65 @@ class IapPriceService {
       }
 
       final result = <String, ProductDetails>{};
+      final loggedProductIds = <String>{};
+
       for (final product in response.productDetails) {
         final selected = _preferProductDetails(result[product.id], product);
-        _productDetailsCache[product.id] = selected;
+
+        // 循环中只更新临时结果。
+        // 同一个 productId 返回多个 ProductDetails 时，
+        // _preferProductDetails 会保留第一个促销 Offer。
         result[product.id] = selected;
-        _logProductPricing(product);
+
+        // 同一个商品的 subscriptionOfferDetails 通常相同，
+        // 只完整打印一次所有方案。
+        if (loggedProductIds.add(product.id)) {
+          _logProductPricing(product);
+        }
+
+        if (product is GooglePlayProductDetails) {
+          final currentOffer = GooglePlayPricingExtractor.getSelectedOffer(
+            product,
+          );
+
+          debugPrint(
+            '[IapPrice] Google返回对象: '
+            'productId=${product.id}, '
+            'subscriptionIndex=${product.subscriptionIndex}, '
+            'basePlanId=${currentOffer?.basePlanId}, '
+            'offerId=${currentOffer?.offerId}',
+          );
+        }
+      }
+
+      // 所有 ProductDetails 都比较结束后，
+      // 再把最终选中的对象写入缓存。
+      _productDetailsCache.addAll(result);
+
+      for (final entry in result.entries) {
+        final product = entry.value;
+
+        final selectedOffer = GooglePlayPricingExtractor.getSelectedOffer(
+          product,
+        );
+
+        final selectedIndex = product is GooglePlayProductDetails
+            ? product.subscriptionIndex
+            : null;
+
+        final firstPhase = selectedOffer?.pricingPhases.isNotEmpty == true
+            ? selectedOffer!.pricingPhases.first
+            : null;
+
+        debugPrint(
+          '[IapPrice] 最终选中: '
+          'productId=${entry.key}, '
+          'subscriptionIndex=$selectedIndex, '
+          'basePlanId=${selectedOffer?.basePlanId}, '
+          'offerId=${selectedOffer?.offerId}, '
+          'price=${firstPhase?.formattedPrice ?? product.price}, '
+          'offerToken=${selectedOffer?.offerIdToken}',
+        );
       }
 
       debugPrint('[IapPrice] 查询成功: ${result.length} 个商品');
@@ -73,40 +127,42 @@ class IapPriceService {
 
   /// 将 ProductDetails 转换为 IapProductInfo
   IapProductInfo _toIapProductInfo(ProductDetails product) {
-    Map<String, dynamic>? promoInfo;
-
-    if (Platform.isAndroid) {
-      promoInfo = GooglePlayPricingExtractor.extractPromoPricing(product);
+    if (!Platform.isAndroid) {
+      return IapProductInfo(productDetails: product, hasPromo: false);
     }
 
-    if (promoInfo != null && promoInfo['hasPromo'] == true) {
-      return IapProductInfo(
-        productDetails: product,
-        hasPromo: true,
-        hasFreeTrial: promoInfo['hasFreeTrial'] as bool? ?? false,
+    final promoInfo = GooglePlayPricingExtractor.extractPromoPricing(product);
 
-        promoPrice: promoInfo['promoPrice'] as String?,
-        promoPriceMicros: promoInfo['promoPriceMicros'] as int?,
-        promoPeriod: promoInfo['promoPeriod'] as String?,
-        promoCycles: promoInfo['promoCycles'] as int?,
-
-        regularPrice: promoInfo['regularPrice'] as String?,
-        regularPriceMicros: promoInfo['regularPriceMicros'] as int?,
-        regularPeriod: promoInfo['regularPeriod'] as String?,
-        regularCycles: promoInfo['regularCycles'] as int?,
-
-        offerToken: promoInfo['offerToken'] as String?,
-        basePlanId: promoInfo['basePlanId'] as String?,
-        offerId: promoInfo['offerId'] as String?,
-        offerTags:
-        (promoInfo['offerTags'] as List?)?.cast<String>() ??
-            const <String>[],
-      );
+    if (promoInfo == null || promoInfo['hasPromo'] != true) {
+      return IapProductInfo(productDetails: product, hasPromo: false);
     }
 
     return IapProductInfo(
+      // 必须保存最终选中的这个 ProductDetails。
       productDetails: product,
-      hasPromo: false,
+
+      hasPromo: true,
+      hasFreeTrial: promoInfo['hasFreeTrial'] as bool? ?? false,
+
+      promoPrice: promoInfo['promoPrice'] as String?,
+      promoPriceMicros: promoInfo['promoPriceMicros'] as int?,
+      promoPeriod: promoInfo['promoPeriod'] as String?,
+      promoCycles: promoInfo['promoCycles'] as int?,
+
+      regularPrice: promoInfo['regularPrice'] as String?,
+      regularPriceMicros: promoInfo['regularPriceMicros'] as int?,
+      regularPeriod: promoInfo['regularPeriod'] as String?,
+      regularCycles: promoInfo['regularCycles'] as int?,
+
+      // 购买时使用的 Offer Token。
+      offerToken: promoInfo['offerToken'] as String?,
+
+      basePlanId: promoInfo['basePlanId'] as String?,
+
+      offerId: promoInfo['offerId'] as String?,
+
+      offerTags:
+          (promoInfo['offerTags'] as List?)?.cast<String>() ?? const <String>[],
     );
   }
 
@@ -118,11 +174,68 @@ class IapPriceService {
       return candidate;
     }
 
-    final existingHasPromo = GooglePlayPricingExtractor.hasPromo(existing);
-    final candidateHasPromo = GooglePlayPricingExtractor.hasPromo(candidate);
-    if (candidateHasPromo && !existingHasPromo) {
+    final existingIsOffer =
+        GooglePlayPricingExtractor.isSelectedPromotionalOffer(existing);
+
+    final candidateIsOffer =
+        GooglePlayPricingExtractor.isSelectedPromotionalOffer(candidate);
+
+    final existingIndex = existing is GooglePlayProductDetails
+        ? existing.subscriptionIndex
+        : null;
+
+    final candidateIndex = candidate is GooglePlayProductDetails
+        ? candidate.subscriptionIndex
+        : null;
+
+    final existingOffer = GooglePlayPricingExtractor.getSelectedOffer(existing);
+
+    final candidateOffer = GooglePlayPricingExtractor.getSelectedOffer(
+      candidate,
+    );
+
+    debugPrint(
+      '[IapPrice] 比较商品方案: '
+      'productId=${candidate.id}, '
+      'existingIndex=$existingIndex, '
+      'existingOfferId=${existingOffer?.offerId}, '
+      'candidateIndex=$candidateIndex, '
+      'candidateOfferId=${candidateOffer?.offerId}',
+    );
+
+    // 已经选中了一个促销 Offer：
+    // 后续即使又返回其他 Offer，也继续保留第一个。
+    if (existingIsOffer) {
+      debugPrint(
+        '[IapPrice] 已有促销方案，保留第一个: '
+        'productId=${existing.id}, '
+        'subscriptionIndex=$existingIndex, '
+        'offerId=${existingOffer?.offerId}',
+      );
+
+      return existing;
+    }
+
+    // 当前还没有促销，而 candidate 是促销：
+    // 选择第一个出现的促销 Offer。
+    if (candidateIsOffer) {
+      debugPrint(
+        '[IapPrice] 选择第一个促销方案: '
+        'productId=${candidate.id}, '
+        'subscriptionIndex=$candidateIndex, '
+        'offerId=${candidateOffer?.offerId}',
+      );
+
       return candidate;
     }
+
+    // 两个都是基础方案时，保留第一个。
+    debugPrint(
+      '[IapPrice] 当前没有促销方案，保留第一个基础方案: '
+      'productId=${existing.id}, '
+      'subscriptionIndex=$existingIndex',
+    );
+
     return existing;
   }
 
@@ -160,61 +273,166 @@ class IapPriceService {
   /// 获取商品的促销描述文案（中英文）
   ///
   /// 示例：
-  /// - 中文： "前2周 $0.99/周，之后 $9.99/周"
-  /// - 英文： "$0.99/week for first 2 weeks, then $9.99/week"
+  /// - 中文： "前2周 $14.99/周，之后 $19.99/周。"
+  /// - 英文： "$14.99/week for first 2 weeks, then $19.99/week"
   String? getPromoDescription(ProductDetails product, {String? languageCode}) {
     if (!Platform.isAndroid) return null;
     final promo = extractPromoInfo(product);
     if (promo == null || promo['hasPromo'] != true) return null;
 
-    return PeriodIsoParser.buildPromoDescription(
-      promoPrice: promo['promoPrice'] as String?,
-      regularPrice: promo['regularPrice'] as String?,
-      promoPeriodIso: promo['promoPeriod'] as String?,
-      regularPeriodIso: promo['regularPeriod'] as String?,
-      languageCode: languageCode,
+    final promoPrice = promo['promoPrice'] as String?;
+    final regularPrice = promo['regularPrice'] as String?;
+    final promoPeriod = promo['promoPeriod'] as String?;
+    final regularPeriod = promo['regularPeriod'] as String?;
+    if (promoPrice == null ||
+        regularPrice == null ||
+        promoPeriod == null ||
+        regularPeriod == null) {
+      return null;
+    }
+
+    return IapPromoTextBuilder.build(
+      promoPrice: promoPrice,
+      promoPeriod: promoPeriod,
+      promoCycles: promo['promoCycles'] as int? ?? 1,
+      regularPrice: regularPrice,
+      regularPeriod: regularPeriod,
+      hasFreeTrial: promo['hasFreeTrial'] as bool? ?? false,
+      languageCode: languageCode ?? 'zh',
     );
   }
 
   /// 打印商品价格详情（调试用）
   void _logProductPricing(ProductDetails product) {
-    debugPrint('[IapPrice] 商品: ${product.id}');
-    debugPrint('  IAP 价格: ${product.price} (raw: ${product.rawPrice})');
-    debugPrint('  货币: ${product.currencyCode} ${product.currencySymbol}');
+    debugPrint('');
+    debugPrint('================ IAP 商品详情开始 ================');
+    debugPrint('[IapPrice] 商品ID: ${product.id}');
+    debugPrint('[IapPrice] 标题: ${product.title}');
+    debugPrint('[IapPrice] 描述: ${product.description}');
+    debugPrint(
+      '[IapPrice] 默认价格: ${product.price} '
+      '(raw: ${product.rawPrice})',
+    );
+    debugPrint(
+      '[IapPrice] 货币: '
+      'code=${product.currencyCode}, '
+      'symbol=${product.currencySymbol}',
+    );
 
-    if (!Platform.isAndroid) return;
+    if (!Platform.isAndroid) {
+      debugPrint('[IapPrice] 当前不是 Android，不打印 Google Play Offer');
+      debugPrint('================ IAP 商品详情结束 ================');
+      debugPrint('');
+      return;
+    }
 
-    if (product is GooglePlayProductDetails) {
-      final offers =
-          GooglePlayPricingExtractor.getOfferDetails(product) ??
-          const <dynamic>[];
+    if (product is! GooglePlayProductDetails) {
+      debugPrint('[IapPrice] 当前 ProductDetails 不是 GooglePlayProductDetails');
+      debugPrint('================ IAP 商品详情结束 ================');
+      debugPrint('');
+      return;
+    }
+
+    final offers =
+        product.productDetails.subscriptionOfferDetails ?? const <dynamic>[];
+
+    final selectedIndex = product.subscriptionIndex;
+
+    debugPrint('[GooglePlay] subscriptionIndex: $selectedIndex');
+    debugPrint('[GooglePlay] 全部方案数量: ${offers.length}');
+
+    if (offers.isEmpty) {
+      debugPrint('[GooglePlay] 当前商品没有返回基础方案或促销方案');
+      debugPrint('================ IAP 商品详情结束 ================');
+      debugPrint('');
+      return;
+    }
+
+    for (var offerIndex = 0; offerIndex < offers.length; offerIndex++) {
+      final offer = offers[offerIndex];
+      final isSelected = offerIndex == selectedIndex;
+
+      final offerId = offer.offerId;
+      final offerTags = offer.offerTags;
+      final phases = offer.pricingPhases;
+
+      final hasOfferId =
+          offerId != null && offerId.toString().trim().isNotEmpty;
+
+      final hasMultiplePhases = phases.length > 1;
+
+      final hasFreeTrial =
+          phases.isNotEmpty && phases.first.priceAmountMicros == 0;
+
+      final isPromotion = hasOfferId || hasMultiplePhases || hasFreeTrial;
+
+      debugPrint('');
       debugPrint(
-        '  [GooglePlay] subscriptionIndex: ${product.subscriptionIndex}',
+        '---------------- 方案[$offerIndex] '
+        '${isSelected ? "【当前 ProductDetails 选中】" : ""} ----------------',
       );
-      debugPrint('  [GooglePlay] offers count: ${offers.length}');
-      for (var i = 0; i < offers.length; i += 1) {
-        final offer = offers[i];
+
+      debugPrint('[GooglePlay] basePlanId: ${offer.basePlanId}');
+      debugPrint('[GooglePlay] offerId: ${offer.offerId}');
+      debugPrint('[GooglePlay] offerTags: ${offer.offerTags}');
+      debugPrint('[GooglePlay] offerToken: ${offer.offerIdToken}');
+      debugPrint('[GooglePlay] 当前方案是否被选中: $isSelected');
+
+      debugPrint(
+        '[GooglePlay] 资格Offer判断: '
+        'offerIdNotEmpty=$hasOfferId, '
+        'phaseCount=${phases.length}, '
+        'firstPriceMicros=${phases.isEmpty ? null : phases.first.priceAmountMicros}',
+      );
+      debugPrint('[GooglePlay] pricingPhases数量: ${phases.length}');
+      debugPrint('[GooglePlay] 是否正式Offer: $hasOfferId');
+      debugPrint('[GooglePlay] 是否多阶段价格: $hasMultiplePhases');
+      debugPrint('[GooglePlay] 是否免费试用: $hasFreeTrial');
+      debugPrint('[GooglePlay] 是否判定为促销: $isPromotion');
+
+      if (phases.isEmpty) {
+        debugPrint('[GooglePlay] 此方案没有价格阶段');
+        continue;
+      }
+
+      for (var phaseIndex = 0; phaseIndex < phases.length; phaseIndex++) {
+        final phase = phases[phaseIndex];
+
+        final cycleDescription = phase.billingCycleCount == 0
+            ? '持续续费/无限次'
+            : '执行 ${phase.billingCycleCount} 次';
+
+        debugPrint('  [价格阶段][$phaseIndex]');
+        debugPrint('    formattedPrice: ${phase.formattedPrice}');
+        debugPrint('    priceAmountMicros: ${phase.priceAmountMicros}');
+        debugPrint('    billingPeriod: ${phase.billingPeriod}');
         debugPrint(
-          '  [GooglePlay] offer[$i] basePlan=${offer.basePlanId}, offerId=${offer.offerId}, phases=${offer.pricingPhases.length}',
+          '    billingCycleCount: ${phase.billingCycleCount} '
+          '($cycleDescription)',
         );
-        for (var j = 0; j < offer.pricingPhases.length; j += 1) {
-          final phase = offer.pricingPhases[j];
-          debugPrint(
-            '    phase[$j] price=${phase.formattedPrice}, micros=${phase.priceAmountMicros}, period=${phase.billingPeriod}, cycles=${phase.billingCycleCount}',
-          );
+        debugPrint('    recurrenceMode: ${phase.recurrenceMode}');
+        debugPrint('    是否免费: ${phase.priceAmountMicros == 0}');
+      }
+
+      if (isPromotion && phases.isNotEmpty) {
+        final firstPhase = phases.first;
+        final lastPhase = phases.last;
+
+        debugPrint('[促销汇总] 首期价格: ${firstPhase.formattedPrice}');
+        debugPrint('[促销汇总] 首期周期: ${firstPhase.billingPeriod}');
+        debugPrint('[促销汇总] 首期执行次数: ${firstPhase.billingCycleCount}');
+
+        if (phases.length >= 2) {
+          debugPrint('[促销汇总] 后续价格: ${lastPhase.formattedPrice}');
+          debugPrint('[促销汇总] 后续周期: ${lastPhase.billingPeriod}');
+          debugPrint('[促销汇总] 后续执行次数: ${lastPhase.billingCycleCount}');
         }
       }
     }
 
-    final promo = extractPromoInfo(product);
-    if (promo != null && promo['hasPromo'] == true) {
-      debugPrint('  [促销] 首期价: ${promo['promoPrice']}');
-      debugPrint('  [促销] 续费价: ${promo['regularPrice']}');
-      debugPrint('  [促销] 首期周期: ${promo['promoPeriod']}');
-      debugPrint('  [促销] 续费周期: ${promo['regularPeriod']}');
-    } else {
-      debugPrint('  [促销] 无促销');
-    }
+    debugPrint('');
+    debugPrint('================ IAP 商品详情结束 ================');
+    debugPrint('');
   }
 
   /// 清理资源

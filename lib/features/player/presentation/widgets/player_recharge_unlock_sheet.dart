@@ -14,7 +14,6 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
 import '../../../../shared/theme/app_spacing.dart';
-import '../../../../core/utils/period_iso_parser.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
 import '../../domain/player_recharge_unlock_offer.dart';
@@ -1217,11 +1216,7 @@ class _MembershipPackageCard extends ConsumerWidget {
     String? promoDescription;
     if (iapInfo?.hasPromo == true) {
       final locale = Localizations.localeOf(context);
-      promoDescription = PeriodIsoParser.buildPromoDescription(
-        promoPrice: iapInfo!.displayPrice,
-        regularPrice: iapInfo.displayOriginalPrice,
-        promoPeriodIso: iapInfo.promoPeriod,
-        regularPeriodIso: iapInfo.regularPeriod,
+      promoDescription = iapInfo!.promoDescription(
         languageCode: locale.languageCode,
       );
     }

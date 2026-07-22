@@ -38,24 +38,48 @@ class GooglePlayPricingExtractor {
     return offers[index];
   }
 
+  // 判断当前对象是不是促销 Offer
+  /// 判断当前 ProductDetails 指向的方案是否为可购买促销。
+  static bool isSelectedPromotionalOffer(ProductDetails product) {
+    final offer = getSelectedOffer(product);
+    if (offer == null) {
+      return false;
+    }
+
+    final offerId = offer.offerId?.trim();
+    final offerToken = offer.offerIdToken.trim();
+
+    return offerId != null &&
+        offerId.isNotEmpty &&
+        offerToken.isNotEmpty &&
+        offer.pricingPhases.isNotEmpty;
+  }
+
   static SubscriptionOfferDetailsWrapper? getPromotionalOffer(
-    ProductDetails product,
-  ) {
+      ProductDetails product,
+      ) {
     final offers = getOfferDetails(product);
     if (offers == null || offers.isEmpty) {
       return null;
     }
 
+    // 优先使用当前 ProductDetails 指向的 Offer。
     final selected = getSelectedOffer(product);
-    if (selected != null && _isPromotionalOffer(selected)) {
+    final selectedOfferId = selected?.offerId?.trim();
+
+    if (selectedOfferId != null && selectedOfferId.isNotEmpty) {
       return selected;
     }
 
+    // 当前对象不是促销时，按 Google Play 返回顺序选择第一个促销。
     for (final offer in offers) {
-      if (_isPromotionalOffer(offer)) {
+      final offerId = offer.offerId?.trim();
+
+      if (offerId != null && offerId.isNotEmpty) {
         return offer;
       }
     }
+
     return null;
   }
 
@@ -107,27 +131,8 @@ class GooglePlayPricingExtractor {
     };
   }
 
-  static PricingPhaseWrapper? getPromotionalPhase(ProductDetails product) {
-    final offer = getPromotionalOffer(product);
-    final phases = offer?.pricingPhases;
-    if (phases == null || phases.isEmpty) {
-      return null;
-    }
-    return phases.first;
-  }
 
-  static PricingPhaseWrapper? getRegularPhase(ProductDetails product) {
-    final offer = getPromotionalOffer(product);
-    final phases = offer?.pricingPhases;
-    if (offer == null || phases == null || phases.isEmpty) {
-      return null;
-    }
-    final basePlanOffer = getBasePlanOffer(
-      product,
-      basePlanId: offer.basePlanId,
-    );
-    return phases.length >= 2 ? phases.last : basePlanOffer?.pricingPhases.last;
-  }
+
 
   /// Returns pricing for the selected Google Play offer or lower base plan.
   ///
@@ -135,36 +140,53 @@ class GooglePlayPricingExtractor {
   /// pricing phases, or as multiple base plans for the same product. In the
   /// latter case, the selected lower-priced base plan is treated as promo and
   /// the higher-priced base plan as regular.
-  static Map<String, dynamic>? extractPromoPricing(ProductDetails product) {
-    if (!Platform.isAndroid) return null;
-
-    final offer = getPromotionalOffer(product);
-    if (offer == null) {
-      return _extractDiscountBasePlanPricing(product);
+  static Map<String, dynamic>? extractPromoPricing(
+      ProductDetails product,
+      ) {
+    if (!Platform.isAndroid) {
+      return null;
     }
 
+    // 只读取当前 ProductDetails.subscriptionIndex 对应的方案。
+    final offer = getSelectedOffer(product);
+
+    if (offer == null) {
+      return null;
+    }
+
+    final offerId = offer.offerId?.trim();
+    final offerToken = offer.offerIdToken.trim();
     final phases = offer.pricingPhases;
-    if (phases.isEmpty) return null;
 
-    final basePlanOffer = getBasePlanOffer(
-      product,
-      basePlanId: offer.basePlanId,
-    );
-
-    final basePlanPhase = basePlanOffer?.pricingPhases.last;
-
-    if (phases.length < 2 && basePlanPhase == null) {
+    // 必须同时具备正式 Offer ID、购买 Token 和价格阶段。
+    if (offerId == null ||
+        offerId.isEmpty ||
+        offerToken.isEmpty ||
+        phases.isEmpty) {
       return null;
     }
 
     final promoPhase = phases.first;
-    final regularPhase = phases.length >= 2
-        ? phases.last
-        : basePlanPhase!;
+
+    PricingPhaseWrapper? regularPhase;
+
+    if (phases.length >= 2) {
+      regularPhase = phases.last;
+    } else {
+      final basePlanOffer = getBasePlanOffer(
+        product,
+        basePlanId: offer.basePlanId,
+      );
+
+      final basePlanPhases = basePlanOffer?.pricingPhases;
+
+      if (basePlanPhases != null && basePlanPhases.isNotEmpty) {
+        regularPhase = basePlanPhases.last;
+      }
+    }
 
     return <String, dynamic>{
       'hasPromo': true,
-
       'hasFreeTrial': promoPhase.priceAmountMicros == 0,
 
       'promoPrice': promoPhase.formattedPrice,
@@ -172,89 +194,16 @@ class GooglePlayPricingExtractor {
       'promoPeriod': promoPhase.billingPeriod,
       'promoCycles': promoPhase.billingCycleCount,
 
-      'regularPrice': regularPhase.formattedPrice,
-      'regularPriceMicros': regularPhase.priceAmountMicros,
-      'regularPeriod': regularPhase.billingPeriod,
-      'regularCycles': regularPhase.billingCycleCount,
+      'regularPrice': regularPhase?.formattedPrice,
+      'regularPriceMicros': regularPhase?.priceAmountMicros,
+      'regularPeriod': regularPhase?.billingPeriod,
+      'regularCycles': regularPhase?.billingCycleCount,
 
-      'offerToken': offer.offerIdToken,
+      'offerToken': offerToken,
       'basePlanId': offer.basePlanId,
-      'offerId': offer.offerId,
+      'offerId': offerId,
       'offerTags': offer.offerTags,
     };
-  }
-
-  /// Google Play may return multiple base plans for the same subscription
-  /// product without an offerId. When those base plans have the same billing
-  /// period but different prices, treat the selected lower-priced base plan as
-  /// the current promotional price and the higher-priced base plan as regular.
-  static Map<String, dynamic>? _extractDiscountBasePlanPricing(
-    ProductDetails product,
-  ) {
-    final selectedOffer = getSelectedOffer(product);
-    final selectedPhase = selectedOffer == null
-        ? null
-        : _singlePricingPhase(selectedOffer);
-    if (selectedOffer == null || selectedPhase == null) {
-      return null;
-    }
-
-    final offers = getOfferDetails(product);
-    if (offers == null || offers.length < 2) {
-      return null;
-    }
-
-    PricingPhaseWrapper? regularPhase;
-    for (final offer in offers) {
-      final phase = _singlePricingPhase(offer);
-      if (phase == null) {
-        continue;
-      }
-      if (phase.billingPeriod != selectedPhase.billingPeriod) {
-        continue;
-      }
-      if (phase.priceAmountMicros <= selectedPhase.priceAmountMicros) {
-        continue;
-      }
-      if (regularPhase == null ||
-          phase.priceAmountMicros > regularPhase.priceAmountMicros) {
-        regularPhase = phase;
-      }
-    }
-
-    if (regularPhase == null) {
-      return null;
-    }
-
-    return <String, dynamic>{
-      'hasPromo': true,
-      'hasFreeTrial': selectedPhase.priceAmountMicros == 0,
-
-      'promoPrice': selectedPhase.formattedPrice,
-      'promoPriceMicros': selectedPhase.priceAmountMicros,
-      'promoPeriod': selectedPhase.billingPeriod,
-      'promoCycles': selectedPhase.billingCycleCount,
-
-      'regularPrice': regularPhase.formattedPrice,
-      'regularPriceMicros': regularPhase.priceAmountMicros,
-      'regularPeriod': regularPhase.billingPeriod,
-      'regularCycles': regularPhase.billingCycleCount,
-
-      'offerToken': selectedOffer.offerIdToken,
-      'basePlanId': selectedOffer.basePlanId,
-      'offerId': selectedOffer.offerId,
-      'offerTags': selectedOffer.offerTags,
-    };
-  }
-
-  static PricingPhaseWrapper? _singlePricingPhase(
-    SubscriptionOfferDetailsWrapper offer,
-  ) {
-    return offer.pricingPhases.length == 1 ? offer.pricingPhases.first : null;
-  }
-
-  static bool hasPromo(ProductDetails product) {
-    return extractPromoPricing(product)?['hasPromo'] == true;
   }
 
   static bool _isPromotionalOffer(SubscriptionOfferDetailsWrapper offer) {

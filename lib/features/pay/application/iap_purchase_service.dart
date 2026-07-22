@@ -42,34 +42,6 @@ class IapPurchaseService {
     _payRemoteDataSource = payRemoteDataSource;
   }
 
-  Future<Map<String, ProductDetails>> queryProducts({
-    required Set<String> productIds,
-  }) async {
-    try {
-      debugPrint('[IapPurchase] Querying products: $productIds');
-      final response = await _iap.queryProductDetails(productIds);
-
-      if (response.error != null) {
-        debugPrint('[IapPurchase] Product query failed: ${response.error}');
-        return {};
-      }
-
-      final result = <String, ProductDetails>{};
-      for (final product in response.productDetails) {
-        result[product.id] = product;
-        debugPrint(
-          '[IapPurchase] Product found: ${product.id}, price: ${product.price}',
-        );
-      }
-
-      debugPrint('[IapPurchase] Product query succeeded: ${result.length}');
-      return result;
-    } catch (e, st) {
-      debugPrint('[IapPurchase] Product query exception: $e\n$st');
-      return {};
-    }
-  }
-
   Future<int> restoreAndConsumePendingPurchases({
     required String source,
     Set<String>? productIds,

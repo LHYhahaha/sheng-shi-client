@@ -336,6 +336,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   Expanded(
                     child: _SubmittedSearchResults(
                       state: results,
+                      scrollKey: PageStorageKey<String>(
+                        'search-results:${results.keyword}:${_selectedSort.value}',
+                      ),
                       onRetry: () => ref
                           .read(searchResultsControllerProvider.notifier)
                           .search(
@@ -817,6 +820,7 @@ class _ResultSortTabs extends StatelessWidget {
 class _SubmittedSearchResults extends ConsumerWidget {
   const _SubmittedSearchResults({
     required this.state,
+    required this.scrollKey,
     required this.onRetry,
     required this.onLoadMore,
   });
@@ -824,6 +828,7 @@ class _SubmittedSearchResults extends ConsumerWidget {
   static const _visibleRecommendationCount = 10;
 
   final SearchResultsState state;
+  final PageStorageKey<String> scrollKey;
   final VoidCallback onRetry;
   final VoidCallback onLoadMore;
 
@@ -849,6 +854,7 @@ class _SubmittedSearchResults extends ConsumerWidget {
       }
 
       return CustomScrollView(
+        key: scrollKey,
         slivers: [
           SliverToBoxAdapter(
             child: Padding(
@@ -868,6 +874,7 @@ class _SubmittedSearchResults extends ConsumerWidget {
         return false;
       },
       child: CustomScrollView(
+        key: scrollKey,
         slivers: [
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(6, 0, 16, 0),

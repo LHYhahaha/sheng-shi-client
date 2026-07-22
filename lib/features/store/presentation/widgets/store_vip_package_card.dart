@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
 
-import '../../../../core/utils/period_iso_parser.dart';
 import '../../../../shared/theme/app_radii.dart';
 import '../../../../shared/theme/app_spacing.dart';
 import '../../domain/store_package.dart';
 import '../../application/store_controller.dart';
 import '../../../pay/provider/iap_price_service_provider.dart';
+import '../../../pay/domain/iap_product_info.dart';
 import '../../../membership/application/promotion_countdown_service.dart';
 
 class StoreVipPackageCard extends ConsumerWidget {
@@ -48,13 +48,24 @@ class StoreVipPackageCard extends ConsumerWidget {
           : ref.read(iapPriceServiceProvider).extractPromoInfo(productDetails);
       if (promo?['hasPromo'] == true) {
         final locale = Localizations.localeOf(context);
-        promoDescription = PeriodIsoParser.buildPromoDescription(
-          promoPrice: promo?['promoPrice'] as String?,
-          regularPrice: promo?['regularPrice'] as String?,
-          promoPeriodIso: promo?['promoPeriod'] as String?,
-          regularPeriodIso: promo?['regularPeriod'] as String?,
-          languageCode: locale.languageCode,
-        );
+        final promoPrice = promo?['promoPrice'] as String?;
+        final regularPrice = promo?['regularPrice'] as String?;
+        final promoPeriod = promo?['promoPeriod'] as String?;
+        final regularPeriod = promo?['regularPeriod'] as String?;
+        if (promoPrice != null &&
+            regularPrice != null &&
+            promoPeriod != null &&
+            regularPeriod != null) {
+          promoDescription = IapPromoTextBuilder.build(
+            promoPrice: promoPrice,
+            promoPeriod: promoPeriod,
+            promoCycles: promo?['promoCycles'] as int? ?? 1,
+            regularPrice: regularPrice,
+            regularPeriod: regularPeriod,
+            hasFreeTrial: promo?['hasFreeTrial'] as bool? ?? false,
+            languageCode: locale.languageCode,
+          );
+        }
       }
     }
 

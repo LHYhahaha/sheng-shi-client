@@ -556,6 +556,7 @@ class MembershipController extends Notifier<MembershipState> {
       final promoPrice = promo['promoPrice'] as String? ?? product.price;
       final regularPrice = promo['regularPrice'] as String?;
       final promoPeriod = promo['promoPeriod'] as String?;
+      final promoCycles = promo['promoCycles'] as int?;
       final regularPeriod = promo['regularPeriod'] as String?;
       final promoMicros = promo['promoPriceMicros'] as int?;
       final regularMicros = promo['regularPriceMicros'] as int?;
@@ -569,6 +570,8 @@ class MembershipController extends Notifier<MembershipState> {
         hasPromo: true,
         regularPriceLabel: regularPrice,
         promoPeriodIso: promoPeriod,
+        promoCycles: promoCycles,
+        hasFreeTrial: promo['hasFreeTrial'] as bool? ?? false,
         regularPeriodIso: regularPeriod,
         dailyPriceLabel: _dailyPriceLabel(
           priceMicros: promoMicros ?? regularMicros,
@@ -611,6 +614,8 @@ class MembershipController extends Notifier<MembershipState> {
     bool? hasPromo,
     String? regularPriceLabel,
     String? promoPeriodIso,
+    int? promoCycles,
+    bool? hasFreeTrial,
     String? regularPeriodIso,
   }) {
     return MembershipPlan(
@@ -629,6 +634,8 @@ class MembershipController extends Notifier<MembershipState> {
       description: plan.description,
       enabled: plan.enabled,
       promoPeriodIso: promoPeriodIso ?? plan.promoPeriodIso,
+      promoCycles: promoCycles ?? plan.promoCycles,
+      hasFreeTrial: hasFreeTrial ?? plan.hasFreeTrial,
       regularPeriodIso: regularPeriodIso ?? plan.regularPeriodIso,
     );
   }

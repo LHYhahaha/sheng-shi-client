@@ -110,7 +110,6 @@ class IapProductInfo {
   }
 }
 
-
 class IapPromoTextBuilder {
   const IapPromoTextBuilder._();
 
@@ -125,15 +124,9 @@ class IapPromoTextBuilder {
   }) {
     final isZh = languageCode.toLowerCase().startsWith('zh');
 
-    final promoUnit = _periodUnit(
-      promoPeriod,
-      languageCode: languageCode,
-    );
+    final promoUnit = _periodUnit(promoPeriod, languageCode: languageCode);
 
-    final regularUnit = _periodUnit(
-      regularPeriod,
-      languageCode: languageCode,
-    );
+    final regularUnit = _periodUnit(regularPeriod, languageCode: languageCode);
 
     final safeCycles = promoCycles <= 0 ? 1 : promoCycles;
 
@@ -145,7 +138,7 @@ class IapPromoTextBuilder {
           languageCode: languageCode,
         );
 
-        return '$trialDuration免费，之后 $regularPrice/$regularUnit';
+        return '前$trialDuration免费，之后 $regularPrice/$regularUnit。';
       }
 
       final duration = _durationText(
@@ -154,8 +147,8 @@ class IapPromoTextBuilder {
         languageCode: languageCode,
       );
 
-      return '前 $duration $promoPrice/$promoUnit，'
-          '之后 $regularPrice/$regularUnit';
+      return '前$duration $promoPrice/$promoUnit，'
+          '之后 $regularPrice/$regularUnit。';
     }
 
     if (hasFreeTrial) {
@@ -174,15 +167,15 @@ class IapPromoTextBuilder {
       languageCode: languageCode,
     );
 
-    return '$promoPrice/$promoUnit for the first $duration, '
+    return '$promoPrice/$promoUnit for first $duration, '
         'then $regularPrice/$regularUnit';
   }
 
   static String _durationText(
-      String isoPeriod,
-      int cycles, {
-        required String languageCode,
-      }) {
+    String isoPeriod,
+    int cycles, {
+    required String languageCode,
+  }) {
     final isZh = languageCode.toLowerCase().startsWith('zh');
 
     final parsed = _parsePeriod(isoPeriod);
@@ -191,13 +184,13 @@ class IapPromoTextBuilder {
     if (isZh) {
       switch (parsed.unit) {
         case _PeriodUnit.day:
-          return '$total 天';
+          return '$total天';
         case _PeriodUnit.week:
-          return '$total 周';
+          return '$total周';
         case _PeriodUnit.month:
-          return '$total 个月';
+          return '$total个月';
         case _PeriodUnit.year:
-          return '$total 年';
+          return '$total年';
       }
     }
 
@@ -211,10 +204,7 @@ class IapPromoTextBuilder {
     return '$total $unit';
   }
 
-  static String _periodUnit(
-      String isoPeriod, {
-        required String languageCode,
-      }) {
+  static String _periodUnit(String isoPeriod, {required String languageCode}) {
     final isZh = languageCode.toLowerCase().startsWith('zh');
     final parsed = _parsePeriod(isoPeriod);
 
@@ -241,10 +231,7 @@ class IapPromoTextBuilder {
     final match = RegExp(r'^P(\d+)(D|W|M|Y)$').firstMatch(normalized);
 
     if (match == null) {
-      return const _ParsedPeriod(
-        value: 1,
-        unit: _PeriodUnit.month,
-      );
+      return const _ParsedPeriod(value: 1, unit: _PeriodUnit.month);
     }
 
     final count = int.tryParse(match.group(1) ?? '') ?? 1;
@@ -257,25 +244,14 @@ class IapPromoTextBuilder {
       _ => _PeriodUnit.month,
     };
 
-    return _ParsedPeriod(
-      value: count,
-      unit: unit,
-    );
+    return _ParsedPeriod(value: count, unit: unit);
   }
 }
 
-enum _PeriodUnit {
-  day,
-  week,
-  month,
-  year,
-}
+enum _PeriodUnit { day, week, month, year }
 
 class _ParsedPeriod {
-  const _ParsedPeriod({
-    required this.value,
-    required this.unit,
-  });
+  const _ParsedPeriod({required this.value, required this.unit});
 
   final int value;
   final _PeriodUnit unit;

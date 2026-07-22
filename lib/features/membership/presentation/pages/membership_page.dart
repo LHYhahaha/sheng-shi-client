@@ -18,7 +18,7 @@ import '../../../pay/application/payment_loading_controller.dart';
 import '../../application/membership_controller.dart';
 import '../../application/membership_modal_coordinator.dart';
 import '../../domain/membership_plan.dart';
-import '../../../../core/utils/period_iso_parser.dart';
+import '../../../pay/domain/iap_product_info.dart';
 import '../membership_layout.dart';
 import '../membership_route_result.dart';
 import '../modal/membership_modal_results.dart';
@@ -301,13 +301,7 @@ class _MembershipBody extends StatelessWidget {
                 final plan = selectedPlan;
                 // 只有当 hasPromo 为 true 时才显示促销文案
                 final promoText = (plan != null && plan.hasPromo)
-                    ? PeriodIsoParser.buildPromoDescription(
-                        promoPrice: plan.promotionPriceLabel,
-                        regularPrice: plan.regularPriceLabel,
-                        promoPeriodIso: plan.promoPeriodIso,
-                        regularPeriodIso: plan.regularPeriodIso,
-                        languageCode: locale.languageCode,
-                      )
+                    ? _buildPromoText(plan, locale.languageCode)
                     : null;
                 if (promoText == null) return const SizedBox.shrink();
                 return Padding(
@@ -357,6 +351,29 @@ class _MembershipBody extends StatelessWidget {
       ),
     );
   }
+}
+
+String? _buildPromoText(MembershipPlan plan, String languageCode) {
+  final promoPrice = plan.promotionPriceLabel;
+  final regularPrice = plan.regularPriceLabel;
+  final promoPeriod = plan.promoPeriodIso;
+  final regularPeriod = plan.regularPeriodIso;
+  if (promoPrice == null ||
+      regularPrice == null ||
+      promoPeriod == null ||
+      regularPeriod == null) {
+    return null;
+  }
+
+  return IapPromoTextBuilder.build(
+    promoPrice: promoPrice,
+    promoPeriod: promoPeriod,
+    promoCycles: plan.promoCycles ?? 1,
+    regularPrice: regularPrice,
+    regularPeriod: regularPeriod,
+    hasFreeTrial: plan.hasFreeTrial,
+    languageCode: languageCode,
+  );
 }
 
 class _MembershipPlanCardsRow extends StatelessWidget {
