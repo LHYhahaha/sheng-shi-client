@@ -115,15 +115,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               onGuestTap: onHeaderTap,
             ),
             const SizedBox(height: 21),
-            ProfileMembershipCard(
-              membership: state.membership,
-              onTap: () => context.push(
-                state.membership.isActive
-                    ? RoutePaths.myMember
-                    : RoutePaths.membershipLocation(returnToProfile: true),
+            if (!state.membership.isActive) ...[
+              ProfileMembershipCard(
+                membership: state.membership,
+                onTap: () => context.push(
+                  RoutePaths.membershipLocation(returnToProfile: true),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
+            ],
             ProfileCoinsCard(
               coins: state.coins,
               onTopUpTap: () => context.push(RoutePaths.store),
@@ -140,11 +140,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               enabled: state.canOpenLanguage,
               onTap: () => context.push(RoutePaths.language),
             ),
-            ProfileMenuRow(
-              title: l10n.profileReward,
-              iconAssetPath: 'assets/images/profile/reward.png',
-              onTap: () => context.push(RoutePaths.rewardsLocation()),
-            ),
+            // ProfileMenuRow(
+            //   title: l10n.profileReward,
+            //   iconAssetPath: 'assets/images/profile/reward.png',
+            //   onTap: () => context.push(RoutePaths.rewardsLocation()),
+            // ),
             ProfileMenuRow(
               title: l10n.profileSettings,
               iconAssetPath: 'assets/images/profile/setting.png',

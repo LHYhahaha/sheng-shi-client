@@ -486,18 +486,17 @@ class _HomeTitleBar extends ConsumerWidget {
             ),
           ),
         ),
-        GestureDetector(
-          key: const ValueKey('home_vip_entry'),
-          onTap: () => context.push(
-            isMember
-                ? RoutePaths.myMember
-                : RoutePaths.membershipLocation(returnToProfile: true),
+        if (!isMember)
+          GestureDetector(
+            key: const ValueKey('home_vip_entry'),
+            onTap: () => context.push(
+              RoutePaths.membershipLocation(returnToProfile: true),
+            ),
+            child: const Padding(
+              padding: EdgeInsets.only(right: 1, left: 7),
+              child: _VipCrown(),
+            ),
           ),
-          child: const Padding(
-            padding: EdgeInsets.only(right: 1, left: 7),
-            child: _VipCrown(),
-          ),
-        ),
       ],
     );
   }
