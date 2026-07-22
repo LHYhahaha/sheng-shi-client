@@ -3,6 +3,7 @@ import 'package:drama_client/app/app_root_navigator_key.dart';
 import 'package:drama_client/bootstrap/app_modal_registry_bootstrap.dart';
 import 'package:drama_client/core/active/app_active_reporter.dart';
 import 'package:drama_client/core/modal/app_modal_host.dart';
+import 'package:drama_client/core/notification/startup_notification_permission_reporter.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -13,12 +14,20 @@ import 'package:mocktail/mocktail.dart';
 Widget buildDramaClientAppForTest({List overrides = const []}) {
   registerFallbackValue(AppLifecycleState.resumed);
   final activeReporter = _MockAppActiveReporter();
+  final notificationPermissionReporter =
+      _MockStartupNotificationPermissionReporter();
   when(activeReporter.reportAppLaunch).thenAnswer((_) async {});
   when(() => activeReporter.onLifecycleChanged(any())).thenAnswer((_) async {});
+  when(
+    notificationPermissionReporter.checkAndReportOnHomeArrival,
+  ).thenAnswer((_) async {});
   return ProviderScope(
     overrides: [
       ...appModalRegistryOverrides,
       appActiveReporterProvider.overrideWithValue(activeReporter),
+      startupNotificationPermissionReporterProvider.overrideWithValue(
+        notificationPermissionReporter,
+      ),
       ...overrides,
     ],
     child: const DramaClientApp(),
@@ -26,6 +35,9 @@ Widget buildDramaClientAppForTest({List overrides = const []}) {
 }
 
 class _MockAppActiveReporter extends Mock implements AppActiveReporter {}
+
+class _MockStartupNotificationPermissionReporter extends Mock
+    implements StartupNotificationPermissionReporter {}
 
 /// 为 Store/Membership 等页面测试挂载 [AppModalHost] 与 presenter registry。
 Widget buildAppModalTestApp({required Widget home, List overrides = const []}) {

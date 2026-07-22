@@ -334,14 +334,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
       children.add(
         _HotPlaysSection(
           dramas: hotPlays,
-          onTap: (drama) => context.push(
-            RoutePaths.playerLocation(
-              dramaId: drama.id,
-              episodeId: '1',
-              trigger: 'my_list_hot_play_tap',
-              userActionAtMs: DateTime.now().millisecondsSinceEpoch,
-            ),
-          ),
+          onTap: (drama) => _openHotPlay(controller, drama),
         ),
       );
     }
@@ -384,6 +377,21 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     );
     await controller.refreshCurrentTabInPlace();
   }
+
+  Future<void> _openHotPlay(
+    MyListController controller,
+    SearchRankDrama drama,
+  ) async {
+    await context.push(
+      RoutePaths.playerLocation(
+        dramaId: drama.id,
+        episodeId: '1',
+        trigger: 'my_list_hot_play_tap',
+        userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+      ),
+    );
+    await controller.refreshCurrentTabInPlace();
+  }
 }
 
 class _HotPlaysSection extends StatelessWidget {
@@ -395,7 +403,7 @@ class _HotPlaysSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 20),
+      padding: const EdgeInsets.only(top: 20, right: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -416,7 +424,7 @@ class _HotPlaysSection extends StatelessWidget {
               crossAxisCount: 3,
               crossAxisSpacing: 9,
               mainAxisSpacing: 14,
-              childAspectRatio: 0.57,
+              childAspectRatio: 0.55,
             ),
             itemBuilder: (context, index) {
               final drama = dramas[index];
@@ -452,7 +460,8 @@ class _HotPlayCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
+          AspectRatio(
+            aspectRatio: 0.84,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(AppRadii.xs),
               child: Stack(

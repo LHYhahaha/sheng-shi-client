@@ -83,25 +83,23 @@ class AppBottomNavigation extends StatelessWidget {
               right: 0,
               top: 0,
               height: contentHeight,
-              child: Center(
-                child: SizedBox(
-                  width: _contentWidth,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      for (final item in _items.indexed)
-                        _AppBottomNavigationItem(
-                          key: ValueKey('bottom_nav_${item.$2.label.name}'),
-                          label: item.$2.label.resolve(context.l10n),
-                          selectedAssetPath: item.$2.selectedAssetPath,
-                          unselectedAssetPath: item.$2.unselectedAssetPath,
-                          fallbackIcon: item.$2.fallbackIcon,
-                          selected: item.$1 == currentIndex,
-                          height: contentHeight,
-                          onTap: () => onDestinationSelected(item.$1),
-                        ),
-                    ],
-                  ),
+              child: SizedBox(
+                width: _contentWidth,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    for (final item in _items.indexed)
+                      _AppBottomNavigationItem(
+                        key: ValueKey('bottom_nav_${item.$2.label.name}'),
+                        label: item.$2.label.resolve(context.l10n),
+                        selectedAssetPath: item.$2.selectedAssetPath,
+                        unselectedAssetPath: item.$2.unselectedAssetPath,
+                        fallbackIcon: item.$2.fallbackIcon,
+                        selected: item.$1 == currentIndex,
+                        height: contentHeight,
+                        onTap: () => onDestinationSelected(item.$1),
+                      ),
+                  ],
                 ),
               ),
             ),
