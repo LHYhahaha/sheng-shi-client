@@ -82,26 +82,24 @@ class AppBottomNavigation extends StatelessWidget {
               right: 0,
               top: 0,
               height: contentHeight,
-              child: Center(
-                child: SizedBox(
-                  width: _contentWidth,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      for (final item in _items)
-                        _AppBottomNavigationItem(
-                          key: ValueKey('bottom_nav_${item.label.name}'),
-                          label: item.label.resolve(context.l10n),
-                          selectedAssetPath: item.selectedAssetPath,
-                          unselectedAssetPath: item.unselectedAssetPath,
-                          fallbackIcon: item.fallbackIcon,
-                          selected: item.destinationIndex == currentIndex,
-                          height: contentHeight,
-                          onTap: () =>
-                              onDestinationSelected(item.destinationIndex),
-                        ),
-                    ],
-                  ),
+              child: SizedBox(
+                width: _contentWidth,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    for (final item in _items)
+                      _AppBottomNavigationItem(
+                        key: ValueKey('bottom_nav_${item.label.name}'),
+                        label: item.label.resolve(context.l10n),
+                        selectedAssetPath: item.selectedAssetPath,
+                        unselectedAssetPath: item.unselectedAssetPath,
+                        fallbackIcon: item.fallbackIcon,
+                        selected: item.destinationIndex == currentIndex,
+                        height: contentHeight,
+                        onTap: () =>
+                            onDestinationSelected(item.destinationIndex),
+                      ),
+                  ],
                 ),
               ),
             ),
