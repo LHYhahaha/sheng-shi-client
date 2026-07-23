@@ -1047,7 +1047,7 @@ class _HomeErrorState extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          context.l10n.feedLoadFailed,
+          context.l10n.networkError,
           style: Theme.of(
             context,
           ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),

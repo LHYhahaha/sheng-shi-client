@@ -264,7 +264,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              l10n.feedLoadFailed,
+              l10n.networkError,
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
@@ -295,7 +295,10 @@ class _MyListPageState extends ConsumerState<MyListPage> {
       for (final item in state.items) {
         children.add(
           Padding(
-            padding: const EdgeInsets.only(bottom: 16),
+            padding: EdgeInsets.only(
+              bottom: 16,
+              right: state.isCollectionEditing ? 4 : 0,
+            ),
             child: _MyListRowSwipeAction(
               // 两个 tab 都支持左滑删除，但编辑模式下禁用
               enabled: !state.isCollectionEditing,
@@ -348,7 +351,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
       padding: EdgeInsets.fromLTRB(
         16,
         15,
-        state.isCollectionEditing ? 4 : 0,
+        0,
         state.isCollectionEditing
             ? 108 + MediaQuery.viewPaddingOf(context).bottom
             : 24,
@@ -407,7 +410,7 @@ class _HotPlaysSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 20, right: 16),
+      padding: const EdgeInsets.only(top: 20, right: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

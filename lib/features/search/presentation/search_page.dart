@@ -1700,7 +1700,7 @@ class _SearchErrorState extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            context.l10n.feedLoadFailed,
+            context.l10n.networkError,
             style: const TextStyle(
               color: AppColors.textSecondary,
               fontSize: 13,

@@ -209,9 +209,6 @@ class AppLocalizations {
 
   // ── 首页 Feed ─────────────────────────────────────────────
 
-  String get feedLoadFailed =>
-      _remoteText('common.action.retry', en: 'Retry', zh: '重试');
-
   String get feedNoMore =>
       _remoteText('home.state.no_more', en: 'No more content', zh: '没有更多了');
 
@@ -819,9 +816,6 @@ class AppLocalizations {
   String get storeConfirm =>
       _remoteText('delete_account.confirm.confirm', en: 'Confirm', zh: '确认');
 
-  String get storeCancel =>
-      _remoteText('common.action.retry', en: 'Cancel', zh: '取消');
-
   String get storeClose =>
       _remoteText('payment_modal.button.done', en: 'Done', zh: '完成');
 
@@ -1419,9 +1413,11 @@ class AppLocalizations {
     zh: '(＞ 30 分钟)',
   );
 
-  String get memberPointsWatchRequired =>
-      _remoteText('member_points.toast.watch_required', en: 'Watch dramas for 30 minutes', zh: '需观看短剧30分钟');
-
+  String get memberPointsWatchRequired => _remoteText(
+    'member_points.toast.watch_required',
+    en: 'Watch dramas for 30 minutes',
+    zh: '需观看短剧30分钟',
+  );
 
   String get memberPointsRuleTitle =>
       _remoteText('member_points.rule.title', en: 'Points Rules', zh: '积分规则');
