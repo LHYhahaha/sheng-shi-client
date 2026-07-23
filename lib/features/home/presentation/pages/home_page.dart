@@ -481,12 +481,59 @@ class _HomeBannerSliderIndicator extends StatelessWidget {
   }
 }
 
-class _HomeTitleBar extends ConsumerWidget {
+class _HomeTitleBar extends ConsumerStatefulWidget {
   const _HomeTitleBar();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_HomeTitleBar> createState() => _HomeTitleBarState();
+}
+
+class _HomeTitleBarState extends ConsumerState<_HomeTitleBar> {
+  static const _recommendationInterval = Duration(seconds: 3);
+
+  Timer? _recommendationTimer;
+  List<String> _recommendationKeywords = const [];
+  int _recommendedKeywordIndex = 0;
+
+  @override
+  void dispose() {
+    _recommendationTimer?.cancel();
+    super.dispose();
+  }
+
+  void _updateRecommendationKeywords(List<String> keywords) {
+    if (_sameKeywords(_recommendationKeywords, keywords)) return;
+    _recommendationKeywords = List.unmodifiable(keywords);
+    _recommendedKeywordIndex = 0;
+    _recommendationTimer?.cancel();
+    if (_recommendationKeywords.length < 2) return;
+    _recommendationTimer = Timer.periodic(_recommendationInterval, (_) {
+      if (!mounted || _recommendationKeywords.isEmpty) return;
+      setState(() {
+        _recommendedKeywordIndex =
+            (_recommendedKeywordIndex + 1) % _recommendationKeywords.length;
+      });
+    });
+  }
+
+  bool _sameKeywords(List<String> previous, List<String> next) {
+    if (previous.length != next.length) return false;
+    for (var index = 0; index < previous.length; index++) {
+      if (previous[index] != next[index]) return false;
+    }
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isMember = ref.watch(entitlementControllerProvider).isMember;
+    final keywords = ref.watch(
+      homeDataControllerProvider.select((state) => state.hotSearchKeywords),
+    );
+    _updateRecommendationKeywords(keywords);
+    final recommendation = keywords.isEmpty
+        ? ''
+        : keywords[_recommendedKeywordIndex % keywords.length];
 
     return Row(
       children: [
@@ -517,13 +564,44 @@ class _HomeTitleBar extends ConsumerWidget {
                     ),
                   ),
                   SizedBox(width: 8),
-                  Text(
-                    context.l10n.searchKeyWordHint,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Color(0XFFAFAFAF),
-                      fontSize: 14,
-                      fontWeight: FontWeight.normal,
-                      height: 1.5,
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 320),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      layoutBuilder: (currentChild, previousChildren) {
+                        return Stack(
+                          alignment: Alignment.centerLeft,
+                          children: [...previousChildren, ?currentChild],
+                        );
+                      },
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: animation.drive(
+                            Tween<Offset>(
+                              begin: const Offset(0, 0.85),
+                              end: Offset.zero,
+                            ),
+                          ),
+                          child: child,
+                        ),
+                      ),
+                      child: Text(
+                        recommendation.isEmpty
+                            ? context.l10n.searchKeyWordHint
+                            : recommendation,
+                        key: ValueKey(recommendation),
+                        maxLines: 1,
+                        textAlign: TextAlign.start,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: const Color(0XFFAFAFAF),
+                          fontSize: 14,
+                          fontWeight: FontWeight.normal,
+                          height: 1.5,
+                        ),
+                      ),
                     ),
                   ),
                 ],

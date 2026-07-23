@@ -12,7 +12,7 @@ void main() {
           regularPeriodIso: 'P1W',
           languageCode: 'en',
         ),
-        r'$14.99/week for first 2 weeks, then $19.99/week',
+        r'$14.99 for 2nd week, then $19.99 week',
       );
 
       expect(
@@ -23,7 +23,7 @@ void main() {
           regularPeriodIso: 'P1W',
           languageCode: 'zh',
         ),
-        '\u524d2\u5468 \$14.99/\u5468\uff0c\u4e4b\u540e \$19.99/\u5468',
+        '\u524d2\u5468 \$14.99/\u5468\uff0c\u4e4b\u540e \$19.99/\u5468\u3002',
       );
     });
 

@@ -17,6 +17,19 @@ class RemoteHomeRepository implements HomeRepository {
   final HomeMapper _mapper;
 
   @override
+  Future<List<String>> getHotSearchKeywords() async {
+    final ranking = await _remoteDataSource.getHotSearchKeywords();
+    final keywords = <String>[];
+    final seen = <String>{};
+    for (final drama in ranking.dramas) {
+      final title = drama.title.trim();
+      if (title.isEmpty || !seen.add(title)) continue;
+      keywords.add(title);
+    }
+    return List.unmodifiable(keywords);
+  }
+
+  @override
   Future<HomeData> getHomeData({
     int? page,
     int pageSize = 20,

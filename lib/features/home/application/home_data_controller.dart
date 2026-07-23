@@ -11,6 +11,7 @@ import '../domain/home_data.dart';
 class HomeDataState {
   const HomeDataState({
     this.data,
+    this.hotSearchKeywords = const [],
     this.isLoading = false,
     this.isLoadingMore = false,
     this.error,
@@ -18,6 +19,7 @@ class HomeDataState {
   });
 
   final HomeData? data;
+  final List<String> hotSearchKeywords;
   final bool isLoading;
   final bool isLoadingMore;
   final Object? error;
@@ -27,6 +29,7 @@ class HomeDataState {
 
   HomeDataState copyWith({
     HomeData? data,
+    List<String>? hotSearchKeywords,
     bool? isLoading,
     bool? isLoadingMore,
     Object? error,
@@ -36,6 +39,7 @@ class HomeDataState {
   }) {
     return HomeDataState(
       data: data ?? this.data,
+      hotSearchKeywords: hotSearchKeywords ?? this.hotSearchKeywords,
       isLoading: isLoading ?? this.isLoading,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       error: clearError ? null : (error ?? this.error),
@@ -58,7 +62,9 @@ class HomeDataController extends Notifier<HomeDataState> {
   @override
   HomeDataState build() {
     ref.listen(appLocaleControllerProvider, (previous, next) {
-      final previousLang = previous == null ? null : apiLangFromLocale(previous);
+      final previousLang = previous == null
+          ? null
+          : apiLangFromLocale(previous);
       final nextLang = apiLangFromLocale(next);
       if (previousLang == nextLang) {
         return;
@@ -102,14 +108,17 @@ class HomeDataController extends Notifier<HomeDataState> {
     );
 
     try {
-      final repository = ref.read(homeRepositoryProvider);
-      final homeData = await repository.getHomeData();
+      final homeDataFuture = ref.read(homeRepositoryProvider).getHomeData();
+      final hotSearchKeywordsFuture = _loadHotSearchKeywords();
+      final homeData = await homeDataFuture;
+      final hotSearchKeywords = await hotSearchKeywordsFuture;
       if (!_isCurrent(generation)) {
         return;
       }
 
       state = state.copyWith(
         data: homeData,
+        hotSearchKeywords: hotSearchKeywords,
         isLoading: false,
         clearError: true,
         clearLoadMoreError: true,
@@ -166,14 +175,17 @@ class HomeDataController extends Notifier<HomeDataState> {
     );
 
     try {
-      final repository = ref.read(homeRepositoryProvider);
-      final homeData = await repository.getHomeData();
+      final homeDataFuture = ref.read(homeRepositoryProvider).getHomeData();
+      final hotSearchKeywordsFuture = _loadHotSearchKeywords();
+      final homeData = await homeDataFuture;
+      final hotSearchKeywords = await hotSearchKeywordsFuture;
       if (!_isCurrent(generation)) {
         return;
       }
 
       state = state.copyWith(
         data: homeData,
+        hotSearchKeywords: hotSearchKeywords,
         isLoadingMore: false,
         clearError: true,
         clearLoadMoreError: true,
@@ -232,6 +244,14 @@ class HomeDataController extends Notifier<HomeDataState> {
   Future<void> retry() async {
     _loadAttempted = true;
     await loadHomeData();
+  }
+
+  Future<List<String>> _loadHotSearchKeywords() async {
+    try {
+      return await ref.read(homeRepositoryProvider).getHotSearchKeywords();
+    } catch (_) {
+      return state.hotSearchKeywords;
+    }
   }
 
   HomeTab? _findTab(HomeData data, int tabId) {

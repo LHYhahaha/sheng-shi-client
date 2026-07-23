@@ -55,6 +55,12 @@ class _FakeHomeRepository implements HomeRepository {
   int callCount = 0;
 
   @override
+  Future<List<String>> getHotSearchKeywords() async => const [
+    'English Drama',
+    '中文剧',
+  ];
+
+  @override
   Future<HomeData> getHomeData({
     int? page,
     int pageSize = 20,

@@ -28,6 +28,7 @@ import '../../features/wallet/presentation/pages/wallet_history_page.dart';
 import '../../features/wallet/presentation/pages/wallet_page.dart';
 import 'route_names.dart';
 import 'route_paths.dart';
+import 'player_route_observer.dart';
 
 /// 应用路由表。
 ///
@@ -38,7 +39,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: appRootNavigatorKey,
     initialLocation: RoutePaths.home,
-    observers: [BotToastNavigatorObserver()],
+    observers: [BotToastNavigatorObserver(), playerRouteObserver],
     routes: [
       // 底部五个主 tab 使用 indexedStack 保持页面状态。
       //

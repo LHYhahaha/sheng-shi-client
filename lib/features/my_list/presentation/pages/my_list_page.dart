@@ -66,11 +66,9 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     if (!_scrollController.hasClients) {
       return;
     }
-    // When the ranking is present, start the next My List page before the user
-    // reaches that section so newly appended list rows do not jump in above it.
-    final hasHotPlays = ref.read(myListHotPlaysControllerProvider).shouldShow;
-    final loadMoreThreshold = hasHotPlays ? 680.0 : 240.0;
-    if (_scrollController.position.extentAfter > loadMoreThreshold) {
+    // 推荐区仅在所有分页数据加载完成后展示，因此按普通列表的阈值加载下一页。
+    // 这样新列表项不会插入到用户正在浏览的推荐区之前，造成内容闪现或跳动。
+    if (_scrollController.position.extentAfter > 240) {
       _didTriggerLoadMoreNearEnd = false;
       return;
     }
@@ -279,8 +277,13 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     }
 
     final children = <Widget>[];
+    // 只有确认没有下一页、且当前没有分页请求/错误时才展示推荐区。否则用户快速
+    // 下滑时会先看到推荐区，待下一页返回后又被新条目推到下方，形成闪现。
     final shouldShowHotPlays =
-        hotPlays.length >= MyListHotPlaysController.maxItems;
+        hotPlays.length >= MyListHotPlaysController.maxItems &&
+        !state.isLoadingMore &&
+        state.nextPageToken == null &&
+        state.loadMoreError == null;
     if (state.isEmpty) {
       final emptyText = state.selectedTab == MyListTab.collection
           ? l10n.myListEmptyFollowing

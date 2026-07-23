@@ -523,11 +523,21 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   List<PlayerFeedItem>? _deferredPreloadItems;
   int? _deferredPreloadIndex;
   PlaybackProgress? _pendingResumeProgress;
+  bool _pendingResumeProgressRequiresSeekAfterOpen = false;
+  bool _lastResumeProgressRequiresSeekAfterOpen = false;
   bool _lastResumeProgressWasPending = false;
   int _generation = 0;
   int _preloadGeneration = 0;
   int _visibilityDetachEpoch = 0;
   bool _pauseWhenOpenCompletes = false;
+  // Android 上 next 的真实首帧预热会短时间内同时占用 previous/current/next 三个
+  // MediaCodec。部分机型会把正在播放的 current 异常切成 paused（并非一次新的
+  // playItem/open）。只在这个很小的危险窗口内恢复 current，避免用户看到播几秒又
+  // 从头开始，也不能把用户主动暂停或退后台当成异常恢复。
+  DateTime? _unexpectedPauseRecoveryDeadline;
+  bool _userPauseRequested = false;
+  bool _unexpectedPauseRecoveryInFlight = false;
+  bool _positionRollbackRecoveryInFlight = false;
   String? _accessOverlayPausedItemId;
   bool _isSessionDisposed = false;
   bool _wasPlayingBeforeSeek = false;
@@ -632,7 +642,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   /// 设置待恢复的播放进度（从播放历史进入时使用）。
-  void setPendingResumeProgress(PlaybackProgress? progress) {
+  void setPendingResumeProgress(
+    PlaybackProgress? progress, {
+    bool requireSeekAfterOpen = false,
+  }) {
     if (progress != null && _isStaleResumeProgress(progress)) {
       _logTiming(
         'pending resume progress skipped stale',
@@ -646,6 +659,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
     _pendingResumeProgress = progress;
+    _pendingResumeProgressRequiresSeekAfterOpen =
+        progress != null && requireSeekAfterOpen;
   }
 
   /// 对当前正在播放的 item 立即应用恢复进度。
@@ -944,6 +959,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
 
     final generation = ++_generation;
+    _unexpectedPauseRecoveryDeadline = null;
+    _unexpectedPauseRecoveryInFlight = false;
+    _positionRollbackRecoveryInFlight = false;
+    _userPauseRequested = false;
     _resetWatchProgressReportTimer();
     _firstFrameProgressProbeTimer?.cancel();
     _pendingSubtitleLoadItem = null;
@@ -960,6 +979,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       item.episode.duration,
     );
     final resumeProgressWasPending = _lastResumeProgressWasPending;
+    final resumeProgressRequiresSeekAfterOpen =
+        _lastResumeProgressRequiresSeekAfterOpen;
     final resumeStart = resumeProgress?.canResume == true
         ? resumeProgress!.position
         : null;
@@ -1170,6 +1191,23 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           await _session.pause();
         }
         return;
+      }
+
+      // Media.start is only a hint for some HLS backends. For the explicit
+      // For You completion handoff, issue one authoritative seek after the
+      // source is open so the rendered video cannot remain at a server-chosen
+      // middle position while the UI shows the requested rewind point.
+      if (resumeStart != null && resumeProgressRequiresSeekAfterOpen) {
+        await _session.seek(resumeStart);
+        if (!ref.mounted || !_isCurrent(generation)) {
+          return;
+        }
+        _logTiming(
+          'explicit handoff rewind seek applied',
+          itemId: item.id,
+          source: playbackSource.playableSource,
+          details: 'positionMs=${resumeStart.inMilliseconds}',
+        );
       }
 
       if (resumeStart != null && resumeProgress != null) {
@@ -1572,8 +1610,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (state.status == PlayerPlaybackStatus.playing) {
       _accessOverlayPausedItemId = null;
       _pauseWatchProgressReportTimer();
-      await _session.pause();
+      _userPauseRequested = true;
       state = state.copyWith(status: PlayerPlaybackStatus.paused);
+      await _session.pause();
       _reportPauseWatchProgressIfNeeded();
       return;
     }
@@ -1591,6 +1630,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
 
     _pauseWhenOpenCompletes = false;
+    _userPauseRequested = false;
     if (state.hasEnded) {
       await _session.seek(Duration.zero);
       _ignoreNextCompleted = false;
@@ -1668,8 +1708,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
     _accessOverlayPausedItemId = null;
     _pauseWatchProgressReportTimer();
-    await _session.pause();
+    _userPauseRequested = true;
     state = state.copyWith(status: PlayerPlaybackStatus.paused);
+    await _session.pause();
     _reportPauseWatchProgressIfNeeded();
   }
 
@@ -2142,13 +2183,17 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _pauseWhenOpenCompletes = true;
     _accessOverlayPausedItemId = null;
     _stopWatchProgressReportTimer();
-    await _persistProgressIfNeeded();
     ++_generation;
+    // The caller often cannot await page disposal. Issue the native pause
+    // before cleanup work so no audio survives a route exit.
+    final pauseFuture = _session.pause();
+    await _persistProgressIfNeeded();
+    await pauseFuture;
     await _releaseSessionWindowFor('dispose');
     await _disposePreloads(syncState: syncState);
     _preloadStates.clear();
     _preloadedItemIds.clear();
-    await _disposeSessionOnly(disposeDelay: disposeDelay);
+    await _disposeSessionOnly(disposeDelay: disposeDelay, shouldPause: false);
     _currentPlaybackItemId = null;
     _currentPlaybackSource = null;
     _clearCurrentPlaybackSnapshot();
@@ -2207,6 +2252,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         state.status == PlayerPlaybackStatus.opening) {
       return;
     }
+    if (!isPlaying && _shouldRecoverUnexpectedPause()) {
+      unawaited(_recoverFromUnexpectedPause());
+      return;
+    }
     if (isPlaying &&
         !state.hasFirstFrame &&
         state.currentItemId != null &&
@@ -2238,6 +2287,129 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       hasEnded: isPlaying ? false : state.hasEnded,
     );
     _syncWatchProgressReportTimer();
+  }
+
+  bool _shouldRecoverUnexpectedPause() {
+    final deadline = _unexpectedPauseRecoveryDeadline;
+    return deadline != null &&
+        DateTime.now().isBefore(deadline) &&
+        !_userPauseRequested &&
+        !_pauseWhenOpenCompletes &&
+        !_unexpectedPauseRecoveryInFlight &&
+        !state.hasEnded &&
+        state.status == PlayerPlaybackStatus.playing &&
+        state.currentSource != null;
+  }
+
+  Future<void> _recoverFromUnexpectedPause() async {
+    if (!_shouldRecoverUnexpectedPause()) {
+      return;
+    }
+    _unexpectedPauseRecoveryInFlight = true;
+    final generation = _generation;
+    final itemId = state.currentItemId;
+    final source = state.currentSource;
+    final position = _currentPlaybackPosition;
+    // 一个 warm-up 最多只允许修复一次。若仍然失败，会保留清晰 timing 日志，不能在
+    // 后台无限 seek/play 造成新的循环。
+    _unexpectedPauseRecoveryDeadline = null;
+    _logTiming(
+      'recover current after prepare interruption',
+      itemId: itemId,
+      source: source,
+      details: _timingDetails([
+        'positionMs=${position.inMilliseconds}',
+        'reason=unexpected_playing_false_during_prepare_window',
+      ]),
+    );
+    try {
+      if (position > Duration.zero) {
+        await _session.seek(position);
+      }
+      if (!ref.mounted || !_isCurrent(generation) || _userPauseRequested) {
+        return;
+      }
+      await _session.play();
+      if (!ref.mounted || !_isCurrent(generation) || _userPauseRequested) {
+        return;
+      }
+      state = state.copyWith(
+        status: PlayerPlaybackStatus.playing,
+        position: position,
+        hasEnded: false,
+        isBuffering: !state.hasFirstFrame,
+      );
+      _syncWatchProgressReportTimer();
+      _logTiming(
+        'recover current after prepare interruption complete',
+        itemId: itemId,
+        source: source,
+        details: 'positionMs=${position.inMilliseconds}',
+      );
+    } finally {
+      _unexpectedPauseRecoveryInFlight = false;
+    }
+  }
+
+  bool _shouldRecoverPositionRollback(Duration position) {
+    final deadline = _unexpectedPauseRecoveryDeadline;
+    final lastPosition = _currentPlaybackPosition;
+    return deadline != null &&
+        DateTime.now().isBefore(deadline) &&
+        !_userPauseRequested &&
+        !_pauseWhenOpenCompletes &&
+        !_positionRollbackRecoveryInFlight &&
+        state.status == PlayerPlaybackStatus.playing &&
+        lastPosition >= const Duration(seconds: 1) &&
+        position < lastPosition - const Duration(milliseconds: 750);
+  }
+
+  Future<void> _recoverFromPositionRollback(Duration position) async {
+    if (!_shouldRecoverPositionRollback(position)) {
+      return;
+    }
+    _positionRollbackRecoveryInFlight = true;
+    final generation = _generation;
+    final itemId = state.currentItemId;
+    final source = state.currentSource;
+    final repairTarget = _currentPlaybackPosition;
+    // 底层 HLS/MediaCodec 可以在没有 Dart open 的情况下回到 0。保留一次修复机会，
+    // 把当前位置恢复到回卷前而不是让 UI 和视频重新从开头开始。
+    _unexpectedPauseRecoveryDeadline = null;
+    _logTiming(
+      'recover current after prepare position rollback',
+      itemId: itemId,
+      source: source,
+      details: _timingDetails([
+        'reportedPositionMs=${position.inMilliseconds}',
+        'repairPositionMs=${repairTarget.inMilliseconds}',
+      ]),
+    );
+    try {
+      await _session.seek(repairTarget);
+      if (!ref.mounted || !_isCurrent(generation) || _userPauseRequested) {
+        return;
+      }
+      await _session.play();
+      if (!ref.mounted || !_isCurrent(generation) || _userPauseRequested) {
+        return;
+      }
+      state = state.copyWith(
+        status: PlayerPlaybackStatus.playing,
+        position: repairTarget,
+        hasEnded: false,
+        isBuffering: !state.hasFirstFrame,
+      );
+      _syncWatchProgressReportTimer();
+      _logTiming(
+        'recover current after prepare position rollback complete',
+        itemId: itemId,
+        source: source,
+        details: 'positionMs=${repairTarget.inMilliseconds}',
+      );
+    } finally {
+      _positionRollbackRecoveryInFlight = false;
+    }
   }
 
   void _handleCompleted(bool completed) {
@@ -2292,6 +2464,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           ? _currentPlaybackPosition
           : restoreFloor;
       _repairResumePositionIfNeeded(repairTarget, _generation, clamped);
+      return;
+    }
+    if (_shouldRecoverPositionRollback(clamped)) {
+      unawaited(_recoverFromPositionRollback(clamped));
       return;
     }
     final last = _lastPositionUpdate;
@@ -3039,6 +3215,26 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
                 'firstFrameReady=${prepared.hasFirstFrame}',
               ]),
       );
+      if (prepared != null &&
+          state.currentItemId != null &&
+          state.currentSource != null &&
+          state.status == PlayerPlaybackStatus.playing) {
+        // 从 prepare 真正创建第二个解码 session 开始，到其首帧 pause 后的短时间，
+        // 是 Android 厂商 codec 最容易错误暂停 current 的窗口。只在此窗口开启一次
+        // current 修复，不改变正常的用户暂停、路由切换或自然完播行为。
+        _unexpectedPauseRecoveryDeadline = DateTime.now().add(
+          const Duration(seconds: 12),
+        );
+        _logTiming(
+          'prepare interruption guard armed',
+          itemId: state.currentItemId,
+          source: state.currentSource,
+          details: _timingDetails([
+            'preparedItemId=${prepared.itemId}',
+            'guardMs=12000',
+          ]),
+        );
+      }
     } finally {
       _preparingItemIds.remove(item.id);
     }
@@ -3249,11 +3445,15 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   Future<PlaybackProgress?> _resumeProgressForItem(String itemId) async {
     _lastResumeProgressWasPending = false;
+    _lastResumeProgressRequiresSeekAfterOpen = false;
     final pending = _pendingResumeProgress;
     if (pending != null) {
       if (pending.itemId == itemId) {
         _pendingResumeProgress = null;
         _lastResumeProgressWasPending = true;
+        _lastResumeProgressRequiresSeekAfterOpen =
+            _pendingResumeProgressRequiresSeekAfterOpen;
+        _pendingResumeProgressRequiresSeekAfterOpen = false;
         return pending;
       }
       _logTiming(
@@ -3922,12 +4122,15 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   Future<void> _disposeSessionOnly({
     Duration disposeDelay = Duration.zero,
+    bool shouldPause = true,
   }) async {
     if (_isSessionDisposed) {
       return;
     }
     _isSessionDisposed = true;
-    await _session.pause();
+    if (shouldPause) {
+      await _session.pause();
+    }
     if (disposeDelay > Duration.zero) {
       await Future<void>.delayed(disposeDelay);
     }

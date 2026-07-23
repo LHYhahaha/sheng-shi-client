@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../app/router/player_route_observer.dart';
+import '../../../../app/shell/app_shell.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
 import '../../../../core/modal/app_modal_provider.dart';
 import '../../../../core/modal/app_modal_service.dart';
@@ -15,9 +17,9 @@ import '../../../../core/modal/app_modal_source.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/locale/app_locale_controller.dart';
 import '../../../../core/runtime/api_lang_provider.dart';
+import '../../../../core/toast/app_center_toast.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
-import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../data/player_exit_recommendation_history_repository_provider.dart';
 import '../../../auth/application/auth_controller.dart';
@@ -118,7 +120,7 @@ class PlayerPage extends ConsumerStatefulWidget {
 }
 
 class _PlayerPageState extends ConsumerState<PlayerPage>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, RouteAware {
   static const _autoAdvanceDuration = Duration(milliseconds: 300);
   static const _pageTransitionDuration = Duration(milliseconds: 260);
   static const _dimmedOverlayOpacity = 0.64;
@@ -142,6 +144,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isOpeningSearch = false;
   bool _isOpeningForYouPlayer = false;
   bool _isReloadingForYouAfterLanguageChange = false;
+  bool _isRefreshingForYouFeed = false;
   bool _isLeavingRoute = false;
   bool _isPressingPlaybackSurface = false;
   bool _isPageScrolling = false;
@@ -149,7 +152,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _hasShownExitRecommendationForDrama = false;
   bool _didRecordFirstBuild = false;
   bool _allowRemoteResumeEpisodeSwitch = true;
+  bool _enforceInitialHandoffRewindSeek = false;
   bool _isExitRecommendationRequestInFlight = false;
+  DateTime? _lastForYouNoMoreToastAt;
   String? _activeCoinSheetItemId;
   String? _activeRechargeSheetItemId;
   String? _lockedNextRewoundCompletionItemId;
@@ -160,6 +165,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   AppLifecycleState _previousLifecycleState = AppLifecycleState.resumed;
   bool _wasPlayingBeforeInactive = false;
   bool _resumePlaybackOnLifecycleResume = false;
+  bool _resumePlaybackOnRouteReturn = false;
+  bool _isCoveredByAnotherRoute = false;
+  ModalRoute<dynamic>? _route;
   final ValueNotifier<double> _overlayOpacityNotifier = ValueNotifier<double>(
     1.0,
   );
@@ -184,6 +192,45 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         instanceId: identityHashCode(this),
       ),
     };
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route == _route) {
+      return;
+    }
+    if (_route != null) {
+      playerRouteObserver.unsubscribe(this);
+    }
+    _route = route;
+    if (route != null) {
+      playerRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPushNext() {
+    if (_isLeavingRoute) {
+      return;
+    }
+    _isCoveredByAnotherRoute = true;
+    final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
+    _resumePlaybackOnRouteReturn = playback.isPlaying;
+    unawaited(_playbackController.pauseForVisibility());
+  }
+
+  @override
+  void didPopNext() {
+    _isCoveredByAnotherRoute = false;
+    if (!_resumePlaybackOnRouteReturn ||
+        _previousLifecycleState != AppLifecycleState.resumed ||
+        _isLeavingRoute) {
+      return;
+    }
+    _resumePlaybackOnRouteReturn = false;
+    unawaited(_resumePlaybackAfterLifecyclePause());
   }
 
   @override
@@ -316,6 +363,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     // 涓婃姤瑙傜湅閫€鍑轰簨浠?
     unawaited(_playbackController.reportWatchProgress(eventType: 4)); // 4: exit
     WidgetsBinding.instance.removeObserver(this);
+    playerRouteObserver.unsubscribe(this);
     _cancelExitRecommendationRequestIfPending();
     _modalService.dismissForSource(AppModalSource.player);
     _overlayOrchestrator.cancelPending();
@@ -350,7 +398,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           (previous == AppLifecycleState.inactive && _wasPlayingBeforeInactive);
       _resumePlaybackOnLifecycleResume = false;
       _wasPlayingBeforeInactive = false;
-      if (shouldResumePlayback) {
+      if (shouldResumePlayback && _isPlaybackViewVisible) {
         unawaited(_resumePlaybackAfterLifecyclePause());
       }
       return;
@@ -411,6 +459,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return false;
     }
     return playback.currentSource != null || playback.isOpening;
+  }
+
+  bool get _isPlaybackViewVisible {
+    if (_isCoveredByAnotherRoute) {
+      return false;
+    }
+    if (widget.feedMode != PlayerFeedMode.forYou) {
+      return true;
+    }
+    return ref.read(appShellCurrentTabIndexProvider) ==
+        AppShellDestinations.forYouIndex;
   }
 
   void _restoreChromeAfterReturningToPlayer() {
@@ -571,7 +630,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (_resumeProgress != null &&
           playbackState.currentItemId == null &&
           playbackState.currentSource == null) {
-        _playbackController.setPendingResumeProgress(_resumeProgress);
+        _playbackController.setPendingResumeProgress(
+          _resumeProgress,
+          requireSeekAfterOpen: _enforceInitialHandoffRewindSeek,
+        );
       }
 
       _feedEngine.initializeViewport(
@@ -630,29 +692,54 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (targetItem == null) {
       return;
     }
-    final duration = handoff.duration > Duration.zero
-        ? handoff.duration
-        : targetItem.episode.duration ?? Duration.zero;
-    final normalizedPosition = _normalPlaybackEntryPosition(
-      item: targetItem,
-      position: handoff.position,
-      duration: duration,
-      feedState: feedState,
-      markRewound: true,
-    );
+    // The handoff only owns the intent (For You completed). The normal player
+    // owns the episode timeline, so calculate its rewind from the normal feed
+    // duration instead of reusing a potentially different For You HLS length.
+    final duration = targetItem.episode.duration ?? handoff.duration;
+    final shouldRewindBeforeLockedNext =
+        handoff.rewoundFromCompletion &&
+        _shouldRewindBeforeLockedNext(item: targetItem, feedState: feedState);
+    final normalizedPosition = shouldRewindBeforeLockedNext
+        ? _rewindPositionBeforeEnd(duration)
+        : handoff.position;
     final progress = PlaybackProgress(
       itemId: targetItem.id,
       position: normalizedPosition,
       duration: duration,
       updatedAt: DateTime.now(),
     );
-    if (handoff.rewoundFromCompletion) {
+    _enforceInitialHandoffRewindSeek = shouldRewindBeforeLockedNext;
+    if (shouldRewindBeforeLockedNext) {
       _lockedNextRewoundCompletionItemId = targetItem.id;
     }
     _resumeProgress = progress;
     if (progress.canResume) {
-      _playbackController.setPendingResumeProgress(progress);
+      _playbackController.setPendingResumeProgress(
+        progress,
+        requireSeekAfterOpen: shouldRewindBeforeLockedNext,
+      );
     }
+  }
+
+  bool _shouldRewindBeforeLockedNext({
+    required PlayerFeedItem item,
+    required PlayerFeedState feedState,
+  }) {
+    final itemIndex = feedState.items.indexWhere(
+      (candidate) => candidate.id == item.id,
+    );
+    if (itemIndex == -1 || itemIndex + 1 >= feedState.items.length) {
+      return false;
+    }
+    return _feedEngine.accessPresentationFor(feedState.items[itemIndex + 1]) !=
+        PlayerAccessPresentationState.playable;
+  }
+
+  Duration _rewindPositionBeforeEnd(Duration duration) {
+    if (duration <= _lockedNextEpisodeRewind) {
+      return Duration.zero;
+    }
+    return duration - _lockedNextEpisodeRewind;
   }
 
   Future<void> _applyStartupRemoteResumeProgress(
@@ -1202,11 +1289,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }) {
     Future<void> refreshFeed() {
       return widget.feedMode == PlayerFeedMode.forYou
-          ? feedController.refresh()
+          ? _refreshForYouFeed()
           : Future<void>.value();
     }
 
-    if (isLoading) {
+    if (isLoading && items.isEmpty) {
       return const Center(
         child: SizedBox.square(
           dimension: 22,
@@ -1215,7 +1302,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       );
     }
 
-    if (error != null) {
+    if (error != null && items.isEmpty) {
       final stateMessage = PlayerStateMessage(
         icon: Icons.refresh_rounded,
         message: context.l10n.playerFeedLoadFailed,
@@ -1281,30 +1368,24 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               ? const NeverScrollableScrollPhysics()
               : const PageScrollPhysics(parent: ClampingScrollPhysics()),
           scrollDirection: Axis.vertical,
-          itemCount: widget.feedMode == PlayerFeedMode.forYou
-              ? items.length + 1
-              : items.length,
+          // For You 到底时不能追加一个整屏“暂无数据” page。它会让用户看起来像
+          // 滑进了空白内容，也与首页/My List 的底部 footer 不一致。
+          itemCount: items.length,
           onPageChanged: (index) {
-            if (widget.feedMode == PlayerFeedMode.forYou &&
-                index >= items.length) {
-              unawaited(feedController.loadMore());
-              return;
-            }
             feedEngine.onPageChanged(index);
             if (widget.feedMode == PlayerFeedMode.forYou &&
                 index == items.length - 1) {
-              unawaited(feedController.loadMore());
+              final latestFeed = ref.read(
+                playerFeedControllerProvider(_sessionKey),
+              );
+              if (latestFeed.hasMore) {
+                unawaited(feedController.loadMore());
+              } else {
+                _showForYouNoMoreToast();
+              }
             }
           },
           itemBuilder: (context, index) {
-            if (widget.feedMode == PlayerFeedMode.forYou &&
-                index >= items.length) {
-              return _ForYouFeedFooterPage(
-                state: ref.watch(playerFeedControllerProvider(_sessionKey)),
-                onRetry: feedController.loadMore,
-              );
-            }
-
             final item = items[index];
             final isSettledPage = index == viewportState.settledIndex;
             PlayerRebuildDiagnostics.recordPageViewItemBuild(
@@ -1493,6 +1574,40 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _feedEngine.settleViewport(index: index, itemId: feedState.items[index].id);
   }
 
+  Future<void> _refreshForYouFeed() async {
+    if (_isRefreshingForYouFeed ||
+        widget.feedMode != PlayerFeedMode.forYou ||
+        !mounted) {
+      return;
+    }
+    _isRefreshingForYouFeed = true;
+    try {
+      await ref
+          .read(playerFeedControllerProvider(_sessionKey).notifier)
+          .refresh();
+      if (!mounted) {
+        return;
+      }
+      final refreshedFeed = ref.read(playerFeedControllerProvider(_sessionKey));
+      if (refreshedFeed.items.isEmpty) {
+        return;
+      }
+      // Refresh starts a new For You feed at its first item. Align the page
+      // and viewport in the same event turn, before Flutter has a chance to
+      // rebuild the overlay against an old item id and drop its Video surface.
+      const firstIndex = 0;
+      final firstItem = refreshedFeed.items[firstIndex];
+      if (_pageController.hasClients &&
+          _pageController.page?.round() != firstIndex) {
+        _pageController.jumpToPage(firstIndex);
+      }
+      _feedEngine.initializeViewport(index: firstIndex, itemId: firstItem.id);
+      _syncActiveVideoPagePosition();
+    } finally {
+      _isRefreshingForYouFeed = false;
+    }
+  }
+
   void _syncActiveVideoPagePosition() {
     if (!_pageController.hasClients) {
       return;
@@ -1545,6 +1660,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   bool _handlePageScrollNotification(ScrollNotification notification) {
+    if (notification is OverscrollNotification &&
+        widget.feedMode == PlayerFeedMode.forYou &&
+        notification.overscroll > 0) {
+      final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+      if (!feedState.hasMore &&
+          notification.metrics.pixels >= notification.metrics.maxScrollExtent) {
+        _showForYouNoMoreToast();
+      }
+    }
     if (notification is ScrollStartNotification ||
         notification is ScrollUpdateNotification) {
       if (notification is ScrollStartNotification) {
@@ -1587,6 +1711,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       }
     }
     return false;
+  }
+
+  void _showForYouNoMoreToast() {
+    final now = DateTime.now();
+    final lastShownAt = _lastForYouNoMoreToastAt;
+    // 一次上滑会发出多个 Overscroll 通知；短暂去重，避免同一手势连弹 toast。
+    if (lastShownAt != null &&
+        now.difference(lastShownAt) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastForYouNoMoreToastAt = now;
+    showAppCenterToast(context.l10n.feedNoMore);
   }
 
   void _setPlaybackSurfacePressed(bool isPressed) {
@@ -1781,39 +1917,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return Duration.zero;
     }
     return position;
-  }
-
-  Duration _normalPlaybackEntryPosition({
-    required PlayerFeedItem item,
-    required Duration position,
-    required Duration duration,
-    required PlayerFeedState feedState,
-    required bool markRewound,
-  }) {
-    if (widget.feedMode != PlayerFeedMode.singleDrama ||
-        duration <= Duration.zero ||
-        position < duration - _lockedNextEpisodeRewind) {
-      return position;
-    }
-    final itemIndex = feedState.items.indexWhere(
-      (candidate) => candidate.id == item.id,
-    );
-    if (itemIndex == -1 || itemIndex + 1 >= feedState.items.length) {
-      return position;
-    }
-    final nextItem = feedState.items[itemIndex + 1];
-    final nextPlayable =
-        _feedEngine.accessPresentationFor(nextItem) ==
-        PlayerAccessPresentationState.playable;
-    if (nextPlayable) {
-      return position;
-    }
-    if (markRewound) {
-      _lockedNextRewoundCompletionItemId = item.id;
-    }
-    return duration > _lockedNextEpisodeRewind
-        ? duration - _lockedNextEpisodeRewind
-        : Duration.zero;
   }
 
   Future<void> _advanceToNextFromCompletion({
@@ -2623,34 +2726,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     await _presentSheetIntent(context, currentItem, flowResult.sheetIntent);
-  }
-}
-
-class _ForYouFeedFooterPage extends StatelessWidget {
-  const _ForYouFeedFooterPage({required this.state, required this.onRetry});
-
-  final PlayerFeedState state;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: state.isLoadingMore
-            ? const SizedBox.square(
-                dimension: 22,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : state.loadMoreError != null
-            ? AppRetryButton(onPressed: onRetry, label: context.l10n.retry)
-            : Text(
-                context.l10n.noData,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.72),
-                ),
-              ),
-      ),
-    );
   }
 }
 

@@ -138,7 +138,10 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
   @override
   PlayerFeedState build() => const PlayerFeedState.initial();
 
-  Future<void> load(PlayerFeedConfig config) async {
+  Future<void> load(
+    PlayerFeedConfig config, {
+    bool preserveVisibleItems = false,
+  }) async {
     final generation = ++_generation;
     _logTiming(
       'feed controller load start',
@@ -149,10 +152,16 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
         'episodeId=${config.episodeId ?? 'null'}',
       ]),
     );
+    final previousItems = state.items;
+    final previousIndex = state.currentIndex;
+    final keepVisibleItems =
+        preserveVisibleItems &&
+        state.config?.mode == config.mode &&
+        previousItems.isNotEmpty;
     state = state.copyWith(
       config: config,
-      items: const [],
-      currentIndex: 0,
+      items: keepVisibleItems ? state.items : const [],
+      currentIndex: keepVisibleItems ? state.currentIndex : 0,
       isLoading: true,
       isLoadingMore: false,
       hasMore: false,
@@ -257,8 +266,8 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
       );
 
       state = state.copyWith(
-        items: const [],
-        currentIndex: 0,
+        items: keepVisibleItems ? previousItems : const [],
+        currentIndex: keepVisibleItems ? previousIndex : 0,
         isLoading: false,
         error: error,
       );
@@ -328,7 +337,10 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
       return;
     }
 
-    await load(config);
+    // For You refresh must not tear down the active Video widget while its
+    // native session is still playing. Repeated surface removal/recreation on
+    // Android can leave the decoder audible but detached from its texture.
+    await load(config, preserveVisibleItems: true);
   }
 
   Future<PlayerFeedItem?> refreshCurrentDramaAtEpisode({

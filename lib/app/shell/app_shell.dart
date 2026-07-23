@@ -89,10 +89,12 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> {
   bool _resumeForYouOnReturn = false;
   Future<void> _forYouVisibilityOperation = Future<void>.value();
+  late int _lastNavigationIndex;
 
   @override
   void initState() {
     super.initState();
+    _lastNavigationIndex = widget.navigationShell.currentIndex;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -103,6 +105,14 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final navigationIndex = widget.navigationShell.currentIndex;
+    if (_lastNavigationIndex != navigationIndex) {
+      _syncForYouVisibilityForNavigationChange(
+        from: _lastNavigationIndex,
+        to: navigationIndex,
+      );
+      _lastNavigationIndex = navigationIndex;
+    }
     final showBottomNavigation = ref.watch(
       appShellBottomNavigationVisibleProvider,
     );
@@ -120,14 +130,14 @@ class _AppShellState extends ConsumerState<AppShell> {
     Future.microtask(() {
       ref
           .read(appShellCurrentTabIndexProvider.notifier)
-          .setIndex(widget.navigationShell.currentIndex);
+          .setIndex(navigationIndex);
     });
 
     return Scaffold(
       body: widget.navigationShell,
       bottomNavigationBar: showBottomNavigation
           ? AppBottomNavigation(
-              currentIndex: widget.navigationShell.currentIndex,
+              currentIndex: navigationIndex,
               onDestinationSelected: (index) {
                 _goBranch(index);
               },
@@ -138,30 +148,8 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   void _goBranch(int index) {
     final currentIndex = widget.navigationShell.currentIndex;
-    final playbackProvider = playerPlaybackControllerProvider(
-      PlayerPlaybackSessionKeys.forYouTab,
-    );
-
-    if (currentIndex == AppShellDestinations.forYouIndex &&
-        index != AppShellDestinations.forYouIndex) {
-      final playback = ref.read(playbackProvider);
-      _resumeForYouOnReturn =
-          playback.currentSource != null || playback.isOpening;
-      _forYouVisibilityOperation = _forYouVisibilityOperation.then((_) {
-        return ref.read(playbackProvider.notifier).pauseForVisibility();
-      });
-    } else if (currentIndex != AppShellDestinations.forYouIndex &&
-        index == AppShellDestinations.forYouIndex) {
-      final shouldResume = _resumeForYouOnReturn;
-      _resumeForYouOnReturn = false;
-      if (shouldResume) {
-        _forYouVisibilityOperation = _forYouVisibilityOperation.then((_) {
-          return ref
-              .read(playbackProvider.notifier)
-              .resumeAfterVisibilityPause();
-        });
-      }
-    }
+    _syncForYouVisibilityForNavigationChange(from: currentIndex, to: index);
+    _lastNavigationIndex = index;
 
     // 检测是否重复点击首页 tab，如果是则通知首页滚动到顶部
     if (index == currentIndex && index == AppShellDestinations.homeIndex) {
@@ -187,6 +175,45 @@ class _AppShellState extends ConsumerState<AppShell> {
       initialLocation: index == currentIndex,
     );
     _requestPopupForIndex(index);
+  }
+
+  /// Handles both bottom-navigation taps and router-driven branch changes.
+  ///
+  /// `context.go('/home')` does not call [_goBranch], while the For You branch
+  /// stays alive in StatefulShell's indexed stack. Watching the shell index is
+  /// essential so that route-driven exits cannot leave its audio playing.
+  void _syncForYouVisibilityForNavigationChange({
+    required int from,
+    required int to,
+  }) {
+    if (from == to) {
+      return;
+    }
+    final playbackProvider = playerPlaybackControllerProvider(
+      PlayerPlaybackSessionKeys.forYouTab,
+    );
+    if (from == AppShellDestinations.forYouIndex &&
+        to != AppShellDestinations.forYouIndex) {
+      final playback = ref.read(playbackProvider);
+      _resumeForYouOnReturn =
+          playback.currentSource != null || playback.isOpening;
+      _forYouVisibilityOperation = _forYouVisibilityOperation.then((_) {
+        return ref.read(playbackProvider.notifier).pauseForVisibility();
+      });
+      return;
+    }
+    if (from != AppShellDestinations.forYouIndex &&
+        to == AppShellDestinations.forYouIndex) {
+      final shouldResume = _resumeForYouOnReturn;
+      _resumeForYouOnReturn = false;
+      if (shouldResume) {
+        _forYouVisibilityOperation = _forYouVisibilityOperation.then((_) {
+          return ref
+              .read(playbackProvider.notifier)
+              .resumeAfterVisibilityPause();
+        });
+      }
+    }
   }
 
   void _requestPopupForIndex(int index) {
