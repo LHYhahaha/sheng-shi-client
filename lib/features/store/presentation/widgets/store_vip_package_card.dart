@@ -5,10 +5,10 @@ import 'package:flutter_svg/svg.dart';
 
 import '../../../../shared/theme/app_radii.dart';
 import '../../../../shared/theme/app_spacing.dart';
+import '../../../../core/utils/period_iso_parser.dart';
 import '../../domain/store_package.dart';
 import '../../application/store_controller.dart';
 import '../../../pay/provider/iap_price_service_provider.dart';
-import '../../../pay/domain/iap_product_info.dart';
 import '../../../membership/application/promotion_countdown_service.dart';
 
 class StoreVipPackageCard extends ConsumerWidget {

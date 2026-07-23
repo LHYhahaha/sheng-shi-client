@@ -1513,6 +1513,31 @@ void main() {
     secondContainer.dispose();
   });
 
+  test(
+    'explicit For You completion rewind seeks again after HLS opens',
+    () async {
+      final session = _FakePlaybackSession(
+        positionOnOpen: const Duration(seconds: 57),
+      );
+      final container = _createContainer(session);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+      final rewind = PlaybackProgress(
+        itemId: 'drama-a-ep-1',
+        position: const Duration(seconds: 112),
+        duration: const Duration(seconds: 120),
+        updatedAt: DateTime.now(),
+      );
+
+      controller.setPendingResumeProgress(rewind, requireSeekAfterOpen: true);
+      await controller.playItem(_item(1));
+
+      expect(session.openStartPositions, [const Duration(seconds: 112)]);
+      expect(session.seekedPositions, contains(const Duration(seconds: 112)));
+      container.dispose();
+    },
+  );
+
   test('late duplicate resume progress does not seek again', () async {
     final progressRepository = InMemoryPlaybackProgressRepository();
     final preloadManager = MockPlayerPlaybackPreloadManager(
@@ -2471,6 +2496,76 @@ void main() {
       expect(preparedSession.pauseCount, 1);
       expect(preparedSession.playCount, 0);
       expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+    },
+  );
+
+  test(
+    'unexpected current pause during next prepare resumes from current position',
+    () async {
+      final currentSession = _FakePlaybackSession();
+      final preparedSession = _FakePlaybackSession();
+      var index = 0;
+      final sessions = [currentSession, preparedSession];
+      PlayerPlaybackSession sessionFactory() => sessions[index++];
+      final container = _createPrepareContainer(sessionFactory);
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('prepare-recovery');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      await controller.preloadAround([_item(1), _item(2)], 0);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      currentSession.emitPosition(const Duration(milliseconds: 2900));
+      currentSession.emitPlaying(false);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(
+        currentSession.seekedPositions,
+        contains(const Duration(milliseconds: 2900)),
+      );
+      expect(currentSession.playCount, greaterThanOrEqualTo(2));
+      expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+      expect(
+        controller.exportTimingReport(),
+        contains('recover current after prepare interruption'),
+      );
+    },
+  );
+
+  test(
+    'current position rollback during next prepare is repaired without reopen',
+    () async {
+      final currentSession = _FakePlaybackSession();
+      final preparedSession = _FakePlaybackSession();
+      var index = 0;
+      final sessions = [currentSession, preparedSession];
+      PlayerPlaybackSession sessionFactory() => sessions[index++];
+      final container = _createPrepareContainer(sessionFactory);
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('prepare-rollback');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      await controller.preloadAround([_item(1), _item(2)], 0);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      currentSession.emitPosition(const Duration(milliseconds: 2900));
+      await Future<void>.delayed(Duration.zero);
+      currentSession.emitPosition(Duration.zero);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(
+        currentSession.seekedPositions,
+        contains(const Duration(milliseconds: 2900)),
+      );
+      expect(currentSession.openedSources, [_videoUrl]);
+      expect(
+        container.read(provider).position,
+        const Duration(milliseconds: 2900),
+      );
+      expect(
+        controller.exportTimingReport(),
+        contains('recover current after prepare position rollback'),
+      );
     },
   );
 

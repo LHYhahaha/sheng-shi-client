@@ -941,16 +941,16 @@ class _PlayerActionRailContent extends ConsumerWidget {
             ),
           ),
 
-        _ActionItem(
-          icon: Icons.share_rounded,
-          imageIcon: Image.asset(
-            'assets/images/player/share.png',
-            width: 28,
-            height: 28,
-          ),
-          label: context.l10n.playerShare,
-          onTap: onShareTap,
-        ),
+        // _ActionItem(
+        //   icon: Icons.share_rounded,
+        //   imageIcon: Image.asset(
+        //     'assets/images/player/share.png',
+        //     width: 28,
+        //     height: 28,
+        //   ),
+        //   label: context.l10n.playerShare,
+        //   onTap: onShareTap,
+        // ),
       ],
     );
   }
@@ -1093,7 +1093,7 @@ class PlayerBottomMeta extends StatelessWidget {
     if (episode == null || episode <= 0) {
       return content.synopsis;
     }
-    return '${context.l10n.myListEpisode(episode.toString().padLeft(2, '0'))}｜${content.synopsis}';
+    return '${context.l10n.myListEpisode(episode.toString())}｜${content.synopsis}';
   }
 }
 

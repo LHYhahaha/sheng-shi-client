@@ -826,7 +826,8 @@ class _SubmittedSearchResults extends ConsumerWidget {
     required this.onLoadMore,
   });
 
-  static const _visibleRecommendationCount = 10;
+  static const _minimumRecommendationCount = 5;
+  static const _maximumRecommendationCount = 10;
 
   final SearchResultsState state;
   final PageStorageKey<String> scrollKey;
@@ -846,7 +847,8 @@ class _SubmittedSearchResults extends ConsumerWidget {
     final recommendationItems = _visibleRecommendations(data?.guessLike);
     if (dramas.isEmpty) {
       if (recommendationItems == null) {
-        return Center(
+        return Padding(
+          padding: const EdgeInsets.only(top: 120),
           child: AppEmptyState(message: context.l10n.searchEmptyNoResult),
         );
       }
@@ -912,10 +914,10 @@ class _SubmittedSearchResults extends ConsumerWidget {
     List<SearchResultDrama>? recommendations,
   ) {
     final items = recommendations ?? const <SearchResultDrama>[];
-    if (items.length < _visibleRecommendationCount) {
+    if (items.length < _minimumRecommendationCount) {
       return null;
     }
-    return items.take(_visibleRecommendationCount).toList(growable: false);
+    return items.take(_maximumRecommendationCount).toList(growable: false);
   }
 
   List<Widget> _recommendationSlivers(
@@ -1175,8 +1177,8 @@ class _NetworkRetry extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              '网络异常，请重试',
+            Text(
+              context.l10n.networkError,
               style: TextStyle(color: Color(0xFF888888), fontSize: 13),
             ),
             const SizedBox(height: 10),

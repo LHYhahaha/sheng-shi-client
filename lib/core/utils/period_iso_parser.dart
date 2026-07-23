@@ -5,10 +5,7 @@ class PeriodIsoParser {
   static Map<String, dynamic>? parse(String iso) {
     final match = RegExp(r'^P(\d+)([DWMY])$').firstMatch(iso.toUpperCase());
     if (match == null) return null;
-    return {
-      'value': int.parse(match.group(1)!),
-      'unit': match.group(2),
-    };
+    return {'value': int.parse(match.group(1)!), 'unit': match.group(2)};
   }
 
   static String toDisplayLabel(String iso, {String? languageCode}) {
@@ -20,18 +17,6 @@ class PeriodIsoParser {
       return '$value ${_unitEnglish(unit, value)}';
     }
     return '$value${_unitChinese(unit)}';
-  }
-
-  static String toPromoPrefix(String? iso, {String? languageCode}) {
-    if (iso == null) return '';
-    final parsed = parse(iso);
-    if (parsed == null) return '';
-    final value = parsed['value'] as int;
-    final unit = parsed['unit'] as String;
-    if (_isEnglish(languageCode)) {
-      return 'for first $value ${_unitEnglish(unit, value)}';
-    }
-    return '\u524d$value${_unitChinese(unit)}';
   }
 
   static String toPeriodLabel(String? iso, {String? languageCode}) {
@@ -55,28 +40,27 @@ class PeriodIsoParser {
     required String? promoPeriodIso,
     required String? regularPeriodIso,
     required String? languageCode,
+    int promoCycles = 1,
+    bool hasFreeTrial = false,
   }) {
-    if (promoPrice == null || regularPrice == null) return null;
-    final promoPrefix = toPromoPrefix(
-      promoPeriodIso,
-      languageCode: languageCode,
-    );
-    if (promoPrefix.isEmpty) return null;
-
-    final promoPeriodLabel = toPeriodLabel(
-      promoPeriodIso,
-      languageCode: languageCode,
-    );
-    final regularPeriodLabel = toPeriodLabel(
-      regularPeriodIso,
-      languageCode: languageCode,
-    );
-    final thenLabel = promoThenLabel(languageCode: languageCode);
-
-    if (_isEnglish(languageCode)) {
-      return '$promoPrice$promoPeriodLabel $promoPrefix, $thenLabel $regularPrice$regularPeriodLabel';
+    if (promoPrice == null ||
+        regularPrice == null ||
+        promoPeriodIso == null ||
+        regularPeriodIso == null ||
+        parse(promoPeriodIso) == null ||
+        parse(regularPeriodIso) == null) {
+      return null;
     }
-    return '$promoPrefix $promoPrice$promoPeriodLabel\uff0c$thenLabel $regularPrice$regularPeriodLabel';
+
+    return IapPromoTextBuilder.build(
+      promoPrice: promoPrice,
+      promoPeriod: promoPeriodIso,
+      promoCycles: promoCycles,
+      regularPrice: regularPrice,
+      regularPeriod: regularPeriodIso,
+      hasFreeTrial: hasFreeTrial,
+      languageCode: languageCode ?? 'zh',
+    );
   }
 
   static String localizedMembershipTitle(
@@ -98,10 +82,7 @@ class PeriodIsoParser {
     return '${_chinesePlanName(period)}\u4f1a\u5458';
   }
 
-  static String localizedDailyPriceLabel(
-    String label, {
-    String? languageCode,
-  }) {
+  static String localizedDailyPriceLabel(String label, {String? languageCode}) {
     if (label.isEmpty) return label;
     if (_isEnglish(languageCode)) {
       return label
@@ -110,10 +91,7 @@ class PeriodIsoParser {
     }
     return label
         .replaceAll(RegExp(r'/\s*days?', caseSensitive: false), '/\u5929')
-        .replaceAll(
-          RegExp(r'\s+per\s+days?', caseSensitive: false),
-          '/\u5929',
-        );
+        .replaceAll(RegExp(r'\s+per\s+days?', caseSensitive: false), '/\u5929');
   }
 
   static String _unitChinese(String unit) {
@@ -166,6 +144,85 @@ class PeriodIsoParser {
       };
     }
     return '${period.value}${_unitChinese(period.unit)}';
+  }
+}
+
+class IapPromoTextBuilder {
+  const IapPromoTextBuilder._();
+
+  static String build({
+    required String promoPrice,
+    required String promoPeriod,
+    required int promoCycles,
+    required String regularPrice,
+    required String regularPeriod,
+    required bool hasFreeTrial,
+    required String languageCode,
+  }) {
+    final isZh = languageCode.toLowerCase().startsWith('zh');
+    final safeCycles = promoCycles <= 0 ? 1 : promoCycles;
+    final promo = _PromoPeriod.fromIso(promoPeriod);
+    final regular = _PromoPeriod.fromIso(regularPeriod);
+
+    if (isZh) {
+      final duration = promo.durationText(
+        safeCycles,
+        languageCode: languageCode,
+      );
+      if (hasFreeTrial) {
+        return '前$duration免费，之后 $regularPrice/${regular.unitText(languageCode)}。';
+      }
+      return '前$duration $promoPrice/${promo.unitText(languageCode)}，'
+          '之后 $regularPrice/${regular.unitText(languageCode)}。';
+    }
+
+    if (hasFreeTrial) {
+      return '${promo.durationText(safeCycles, languageCode: languageCode)} free, '
+          'then $regularPrice/${regular.unitText(languageCode)}';
+    }
+
+    return '$promoPrice for ${promo.ordinalDuration(safeCycles)} '
+        '${promo.unitText(languageCode)}, then $regularPrice '
+        '${regular.unitText(languageCode)}';
+  }
+}
+
+class _PromoPeriod {
+  const _PromoPeriod(this.value, this.unit);
+
+  final int value;
+  final String unit;
+
+  factory _PromoPeriod.fromIso(String iso) {
+    final parsed = PeriodIsoParser.parse(iso);
+    if (parsed == null) return const _PromoPeriod(1, 'M');
+    return _PromoPeriod(parsed['value'] as int, parsed['unit'] as String);
+  }
+
+  String durationText(int cycles, {required String languageCode}) {
+    final total = value * cycles;
+    if (languageCode.toLowerCase().startsWith('zh')) {
+      return '$total${PeriodIsoParser._unitChinese(unit)}';
+    }
+    return '$total ${PeriodIsoParser._unitEnglish(unit, total)}';
+  }
+
+  String ordinalDuration(int cycles) {
+    final total = value * cycles;
+    final suffix = switch (total) {
+      1 => 'st',
+      2 => 'nd',
+      3 => 'rd',
+      _ => 'th',
+    };
+    return '$total$suffix';
+  }
+
+  String unitText(String languageCode) {
+    if (languageCode.toLowerCase().startsWith('zh')) {
+      return PeriodIsoParser._unitChinese(unit);
+    }
+    return PeriodIsoParser._unitEnglish(unit, 1);
   }
 }
 

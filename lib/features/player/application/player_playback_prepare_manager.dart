@@ -116,7 +116,7 @@ class PreparedPlaybackSession {
 class PlayerPlaybackPrepareManager {
   PlayerPlaybackPrepareManager({
     required PlayerPlaybackSession Function() sessionFactory,
-    this.maxWindowSessions = 11,
+    this.maxWindowSessions = 2,
     this.warmUpTimeout = const Duration(milliseconds: 4000),
     this.timingLogger,
   }) : _sessionFactory = sessionFactory;

@@ -1,4 +1,5 @@
 import '../../../../core/network/api_client.dart';
+import '../../../search/data/dto/search_ranking_response_dto.dart';
 import '../dto/home_response_dto.dart';
 
 class HomeRemoteDataSource {
@@ -6,6 +7,21 @@ class HomeRemoteDataSource {
     : _apiClient = apiClient;
 
   final ApiClient _apiClient;
+
+  Future<SearchRankingResponseDto> getHotSearchKeywords() {
+    return _apiClient.get<SearchRankingResponseDto>(
+      '/api/home/search/hot',
+      authPolicy: ApiAuthPolicy.required,
+      decoder: (data) {
+        if (data is! Map) {
+          throw Exception('Expected Map response, got ${data.runtimeType}');
+        }
+        return SearchRankingResponseDto.fromJson(
+          Map<String, Object?>.from(data),
+        );
+      },
+    );
+  }
 
   Future<HomeResponseDto> getHomeData({
     int? page,
