@@ -333,7 +333,8 @@ class _MyListPageState extends ConsumerState<MyListPage> {
       }
     }
 
-    if (shouldShowHotPlays) {
+    // 批量编辑时只保留待删除列表，避免推荐标题和内容出现在多选区域下方。
+    if (shouldShowHotPlays && !state.isCollectionEditing) {
       children.add(
         _HotPlaysSection(
           dramas: hotPlays,

@@ -20,6 +20,7 @@ import '../../application/player_viewport_controller.dart';
 import '../../domain/player_content.dart';
 import '../../domain/player_subtitle.dart';
 import 'player_chrome.dart';
+import 'player_subtitle_overlay.dart';
 
 abstract final class PlayerTopBarMetrics {
   static const horizontal = 16.0;
@@ -730,6 +731,10 @@ class PlayerPlaybackControlsConsumerState
               onTap: _handleVideoTap,
             ),
           ),
+        // 字幕在视频画面之上，但需低于播放/暂停反馈图标和中间播放按钮。
+        IgnorePointer(
+          child: PlayerSubtitleOverlay(sessionKey: widget.sessionKey),
+        ),
         if (showCenterPlayButton) CenterPlayButton(onTap: _playWithFeedback),
         if (_showPlayFeedback) const PlayFeedbackIcon(),
         if (_showPauseFeedback) const PauseFeedbackIcon(),
@@ -1319,6 +1324,8 @@ class _PlayerSubtitleMenuButton extends StatefulWidget {
 
 class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
   bool _isMenuOpen = false;
+  final _menuLayerLink = LayerLink();
+  OverlayEntry? _menuOverlay;
 
   @override
   void didUpdateWidget(covariant _PlayerSubtitleMenuButton oldWidget) {
@@ -1327,13 +1334,19 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
     if (oldWidget.showChromeOverlays &&
         !widget.showChromeOverlays &&
         _isMenuOpen) {
-      // 字幕菜单以独立 route 推入，需在帧后关闭该 route。
+      // 菜单通过 Overlay 展示；进入沉浸模式时立即移除它。
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _isMenuOpen) {
-          Navigator.of(context).maybePop();
+          _closeMenu();
         }
       });
     }
+  }
+
+  @override
+  void dispose() {
+    _removeMenuOverlay();
+    super.dispose();
   }
 
   @override
@@ -1341,47 +1354,36 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
     if (!_isVisible) {
       return const SizedBox.shrink();
     }
-    final menuWidth = _menuWidth(context);
-    return PopupMenuButton<String>(
-      enabled: _isVisible,
-      tooltip: '',
-      color: Colors.black.withValues(alpha: 0.65),
-      elevation: 0,
-      offset: const Offset(0, 38),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      constraints: BoxConstraints.tightFor(width: menuWidth),
-      menuPadding: const EdgeInsets.all(20),
-      onOpened: () => setState(() => _isMenuOpen = true),
-      onCanceled: () => setState(() => _isMenuOpen = false),
-      onSelected: (value) {
-        setState(() => _isMenuOpen = false);
-        widget.onSubtitleSelected(value == _closedSubtitleValue ? null : value);
-      },
-      itemBuilder: (context) => _buildMenuItems(),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _currentSubtitleLabel(),
-              style: TextStyle(
-                color: !_isVisible
-                    ? Colors.white.withValues(alpha: 0.5)
-                    : Colors.white,
-                fontSize: 14,
-                height: 18 / 14,
+    return CompositedTransformTarget(
+      link: _menuLayerLink,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _toggleMenu,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _currentSubtitleLabel(),
+                style: TextStyle(
+                  color: !_isVisible
+                      ? Colors.white.withValues(alpha: 0.5)
+                      : Colors.white,
+                  fontSize: 14,
+                  height: 18 / 14,
+                ),
               ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              _isMenuOpen
-                  ? Icons.keyboard_arrow_up_rounded
-                  : Icons.keyboard_arrow_down_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-          ],
+              const SizedBox(width: 4),
+              Icon(
+                _isMenuOpen
+                    ? Icons.keyboard_arrow_up_rounded
+                    : Icons.keyboard_arrow_down_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1392,70 +1394,99 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
   static const _selectedIndicatorWidth = 24.0;
   static const _menuTextStyle = TextStyle(color: Colors.white, fontSize: 14);
 
-  List<PopupMenuEntry<String>> _buildMenuItems() {
-    final showsClosedOption = _showsClosedOption;
-    final options = <({String label, String value})>[
-      if (showsClosedOption) (label: 'Closed', value: _closedSubtitleValue),
-      ...widget.subtitles.map(
-        (subtitle) => (label: subtitle.language, value: subtitle.language),
-      ),
-      ...widget.episodeSources.map(
-        (source) => (label: source.language, value: source.language),
-      ),
-    ];
+  List<({String label, String value})> get _menuOptions => [
+    if (_showsClosedOption) (label: 'Closed', value: _closedSubtitleValue),
+    ...widget.subtitles.map(
+      (subtitle) => (label: subtitle.language, value: subtitle.language),
+    ),
+    ...widget.episodeSources.map(
+      (source) => (label: source.language, value: source.language),
+    ),
+  ];
 
-    return [
-      for (var index = 0; index < options.length; index++) ...[
-        if (index > 0)
-          const PopupMenuItem<String>(
-            enabled: false,
-            height: 20,
-            padding: EdgeInsets.zero,
-            child: SizedBox.shrink(),
+  void _toggleMenu() {
+    if (_isMenuOpen) {
+      _closeMenu();
+    } else {
+      _openMenu();
+    }
+  }
+
+  void _openMenu() {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    _menuOverlay = OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _closeMenu,
+            ),
           ),
-        PopupMenuItem<String>(
-          value: options[index].value,
-          height: 20,
-          padding: EdgeInsets.zero,
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  options[index].label,
-                  style: _menuTextStyle.copyWith(
-                    color: _isSelected(options[index].value)
-                        ? AppColors.primary
-                        : Colors.white,
-                    fontWeight: _isSelected(options[index].value)
-                        ? FontWeight.w600
-                        : FontWeight.w400,
-                  ),
-                  maxLines: 1,
-                  softWrap: false,
+          CompositedTransformFollower(
+            link: _menuLayerLink,
+            targetAnchor: Alignment.bottomRight,
+            followerAnchor: Alignment.topRight,
+            offset: const Offset(0, 8),
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                width: _menuWidth(context),
+                padding: const EdgeInsets.all(_menuHorizontalPadding),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.65),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (
+                      var index = 0;
+                      index < _menuOptions.length;
+                      index++
+                    ) ...[
+                      if (index > 0) const SizedBox(height: 20),
+                      _SubtitleMenuOption(
+                        label: _menuOptions[index].label,
+                        selected: _isSelected(_menuOptions[index].value),
+                        onTap: () =>
+                            _selectMenuOption(_menuOptions[index].value),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              if (_isSelected(options[index].value))
-                const Icon(
-                  Icons.check_rounded,
-                  color: AppColors.primary,
-                  size: 18,
-                ),
-            ],
+            ),
           ),
-        ),
-      ],
-    ];
+        ],
+      ),
+    );
+    overlay.insert(_menuOverlay!);
+    setState(() => _isMenuOpen = true);
+  }
+
+  void _selectMenuOption(String value) {
+    _closeMenu();
+    widget.onSubtitleSelected(value == _closedSubtitleValue ? null : value);
+  }
+
+  void _closeMenu() {
+    _removeMenuOverlay();
+    if (mounted && _isMenuOpen) {
+      setState(() => _isMenuOpen = false);
+    }
+  }
+
+  void _removeMenuOverlay() {
+    _menuOverlay?.remove();
+    _menuOverlay = null;
   }
 
   double _menuWidth(BuildContext context) {
     final resolvedTextStyle = DefaultTextStyle.of(
       context,
     ).style.merge(_menuTextStyle);
-    final labels = <String>[
-      if (_showsClosedOption) 'Closed',
-      ...widget.subtitles.map((subtitle) => subtitle.language),
-      ...widget.episodeSources.map((source) => source.language),
-    ];
+    final labels = _menuOptions.map((option) => option.label);
     var widestText = 0.0;
     for (final label in labels) {
       final painter = TextPainter(
@@ -1492,6 +1523,43 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
 
   bool get _isVisible =>
       widget.subtitles.isNotEmpty || widget.episodeSources.length > 1;
+}
+
+class _SubtitleMenuOption extends StatelessWidget {
+  const _SubtitleMenuOption({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: _PlayerSubtitleMenuButtonState._menuTextStyle.copyWith(
+                color: selected ? AppColors.primary : Colors.white,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+              maxLines: 1,
+              softWrap: false,
+            ),
+          ),
+          if (selected)
+            const Icon(Icons.check_rounded, color: AppColors.primary, size: 18),
+        ],
+      ),
+    );
+  }
 }
 
 class PlayerStateMessage extends StatelessWidget {

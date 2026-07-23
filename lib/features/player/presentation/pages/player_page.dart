@@ -56,7 +56,6 @@ import '../widgets/player_detail_sheet.dart';
 import '../widgets/player_exit_recommendation_dialog.dart';
 import '../widgets/player_feed_page_shell.dart';
 import '../widgets/player_playback_layer.dart';
-import '../widgets/player_subtitle_overlay.dart';
 
 sealed class _ExitRecommendationDialogResult {
   const _ExitRecommendationDialogResult();
@@ -1321,7 +1320,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       final stateMessage = PlayerStateMessage(
         icon: Icons.movie_filter_rounded,
         message: widget.feedMode == PlayerFeedMode.forYou
-            ? context.l10n.noData
+            ? context.l10n.recommendTabEmptyNoContent
             : context.l10n.playerNoEpisodes,
       );
       if (widget.feedMode != PlayerFeedMode.forYou) {
@@ -1543,8 +1542,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               ),
             ),
           ),
-        // 瀛楀箷鍙犲姞灞?
-        PlayerSubtitleOverlay(sessionKey: _sessionKey),
       ],
     );
   }
