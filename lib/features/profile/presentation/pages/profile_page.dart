@@ -156,11 +156,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 onTap: () => showTestNetworkConfigDialog(context, ref),
               ),
 
-            ProfileMenuRow(
-              title: l10n.profileFeedback,
-              iconAssetPath: 'assets/images/profile/feedback.png',
-              onTap: () {},
-            ),
+            // ProfileMenuRow(
+            //   title: l10n.profileFeedback,
+            //   iconAssetPath: 'assets/images/profile/feedback.png',
+            //   onTap: () {},
+            // ),
           ],
         ),
       ),
