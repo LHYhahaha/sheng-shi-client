@@ -21,6 +21,7 @@ class PlayerContentDto {
     required this.subtitleLangs,
     required this.playCount,
     required this.favoriteCount,
+    this.isFavorited,
     required this.episodeTotal,
     required this.onlineAt,
     required this.episodes,
@@ -41,6 +42,9 @@ class PlayerContentDto {
   final String subtitleLangs;
   final int playCount;
   final int favoriteCount;
+
+  /// `null` means the current endpoint did not include the user's status.
+  final bool? isFavorited;
   final int episodeTotal;
   final String onlineAt;
   final List<PlayerEpisodeDto> episodes;
@@ -65,10 +69,24 @@ class PlayerContentDto {
           JsonFieldParser.optionalString(json, 'subtitle_langs') ?? '',
       playCount: JsonFieldParser.optionalInt(json, 'play_count') ?? 0,
       favoriteCount: JsonFieldParser.optionalInt(json, 'favorite_count') ?? 0,
+      isFavorited: _boolFromFlag(json['is_favorited']),
       episodeTotal: JsonFieldParser.optionalInt(json, 'episode_total') ?? 0,
       onlineAt: JsonFieldParser.optionalString(json, 'online_at') ?? '',
       episodes: _parseEpisodes(json['episodes']),
     );
+  }
+
+  static bool? _boolFromFlag(Object? value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      return switch (value.trim().toLowerCase()) {
+        '1' || 'true' => true,
+        '0' || 'false' => false,
+        _ => null,
+      };
+    }
+    return null;
   }
 
   static List<int> _parseIntList(Object? value) {

@@ -732,9 +732,7 @@ class PlayerPlaybackControlsConsumerState
             ),
           ),
         // 字幕在视频画面之上，但需低于播放/暂停反馈图标和中间播放按钮。
-        IgnorePointer(
-          child: PlayerSubtitleOverlay(sessionKey: widget.sessionKey),
-        ),
+        PlayerSubtitleOverlay(sessionKey: widget.sessionKey),
         if (showCenterPlayButton) CenterPlayButton(onTap: _playWithFeedback),
         if (_showPlayFeedback) const PlayFeedbackIcon(),
         if (_showPauseFeedback) const PauseFeedbackIcon(),
@@ -1261,7 +1259,9 @@ class PlayerTopBarContent extends StatelessWidget {
               const Spacer(),
               if (showSubtitleEntry &&
                   isSubtitleSelectionResolved &&
-                  (subtitles.isNotEmpty || episodeSources.length > 1))
+                  (episodeSources.isNotEmpty
+                      ? episodeSources.length > 1
+                      : subtitles.isNotEmpty))
                 _PlayerSubtitleMenuButton(
                   key: const ValueKey('player_subtitle_button'),
                   subtitles: subtitles,
@@ -1395,13 +1395,17 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
   static const _menuTextStyle = TextStyle(color: Colors.white, fontSize: 14);
 
   List<({String label, String value})> get _menuOptions => [
+    // 只要存在内嵌字幕视频，语言入口完全由它驱动。外挂字幕仅自动匹配
+    // language_code 后显示，不应把外挂独有语言带进菜单。
     if (_showsClosedOption) (label: 'Closed', value: _closedSubtitleValue),
-    ...widget.subtitles.map(
-      (subtitle) => (label: subtitle.language, value: subtitle.language),
-    ),
-    ...widget.episodeSources.map(
-      (source) => (label: source.language, value: source.language),
-    ),
+    if (widget.episodeSources.isEmpty)
+      ...widget.subtitles.map(
+        (subtitle) => (label: subtitle.language, value: subtitle.language),
+      )
+    else
+      ...widget.episodeSources.map(
+        (source) => (label: source.language, value: source.language),
+      ),
   ];
 
   void _toggleMenu() {
@@ -1521,8 +1525,9 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
   bool get _showsClosedOption =>
       widget.subtitles.isNotEmpty && widget.episodeSources.isEmpty;
 
-  bool get _isVisible =>
-      widget.subtitles.isNotEmpty || widget.episodeSources.length > 1;
+  bool get _isVisible => widget.episodeSources.isNotEmpty
+      ? widget.episodeSources.length > 1
+      : widget.subtitles.isNotEmpty;
 }
 
 class _SubtitleMenuOption extends StatelessWidget {

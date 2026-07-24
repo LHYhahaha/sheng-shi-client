@@ -2,28 +2,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/compact_count_formatter.dart';
 import 'player_like_controller.dart';
+import '../data/local/player_like_cache.dart';
 
 /// 获取实时的点赞数 provider。
 ///
-/// 只有当用户点击了点赞/取消点赞时，才在原始 likeCountLabel 基础上计算；
-/// 进入页面时直接显示接口返回的 likeCountLabel。
-final playerLikeCountProvider = Provider.family<String, (String, String)>((
+/// 优先使用按 dramaId 缓存的最近一次接口计数，使普通播放器刷新后的结果能同步
+/// 回仍然保留在 IndexedStack 中的 For You 页面。
+final playerLikeCountProvider = Provider.family<String, (String, int, String)>((
   ref,
   args,
 ) {
-  final (likeCountLabel, dramaId) = args;
+  final (likeCountLabel, favoriteCount, dramaId) = args;
 
   // 监听 PlayerLikeState 的变化
   final likeState = ref.watch(playerLikeControllerProvider(dramaId));
 
-  // 只有当用户有点赞操作（likeCountDelta != 0）时，才在原始值基础上计算
-  // 进入页面时直接显示接口返回的 likeCountLabel
-  if (likeState.likeCountDelta == 0) {
-    return likeCountLabel;
-  }
-
-  // 从原始的 likeCountLabel 中提取数字
-  final originalCount = _extractCountFromLabel(likeCountLabel);
+  final originalCount =
+      likeState.serverFavoriteCount ??
+      PlayerLikeCache.getCachedInitialLikeCount(dramaId) ??
+      (favoriteCount > 0
+          ? favoriteCount
+          : _extractCountFromLabel(likeCountLabel));
 
   // 计算新的点赞数
   final newCount = (originalCount + likeState.likeCountDelta)

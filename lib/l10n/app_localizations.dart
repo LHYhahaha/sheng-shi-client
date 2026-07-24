@@ -332,6 +332,12 @@ class AppLocalizations {
   String get searchNewReleases =>
       _remoteText('search.ranking.new_online', en: 'New Releases', zh: '上新榜');
 
+  String get searchRankEmpty => _remoteText(
+    "search.rank.empty",
+    en: "There is no content for now",
+    zh: "暂无内容",
+  );
+
   // ── 个人中心 Profile ─────────────────────────────────────────────
   String get profileLogin =>
       _remoteText('profile.user.login', en: 'Log in >', zh: '登录');
@@ -1529,6 +1535,18 @@ class AppLocalizations {
 
   String get popupDramaExitActionPlay =>
       _remoteText('popup.drama_exit.action.play', en: 'Play', zh: '播放');
+
+  String get popupNextDramaSubtitle => _remoteText(
+    'app.recommend_popup.subtitle_next_drama',
+    en: 'A story you might love',
+    zh: '你可能会喜欢的故事',
+  );
+
+  String get popupNextDramaTitle => _remoteText(
+    'app.recommend_popup.title_next_drama',
+    en: 'Your Next Drama',
+    zh: '你的下一部短剧',
+  );
 
   // ── 1.0.2 / 推荐Tab ─────────────────────────────────────────────
   String get recommendTabActionViewAllEpisodes => _remoteText(

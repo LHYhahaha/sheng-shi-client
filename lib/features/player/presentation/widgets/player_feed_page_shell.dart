@@ -15,7 +15,7 @@ import 'player_playback_layer.dart';
 /// PageView 单页轻量 shell：海报/文案/按钮，不含真实 Video（Video 在顶层 surface）。
 ///
 /// 权益展示只读：经 [PlayerAccessPresenter]（与 engine 同源），不在此触发 evaluate/play。
-class PlayerFeedPageShell extends ConsumerWidget {
+class PlayerFeedPageShell extends ConsumerStatefulWidget {
   const PlayerFeedPageShell({
     required this.sessionKey,
     required this.item,
@@ -74,7 +74,81 @@ class PlayerFeedPageShell extends ConsumerWidget {
   final VoidCallback? onSingleDramaUserInteraction;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PlayerFeedPageShell> createState() =>
+      _PlayerFeedPageShellState();
+}
+
+class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
+  @override
+  void initState() {
+    super.initState();
+    _syncFeedLikeState();
+  }
+
+  @override
+  void didUpdateWidget(covariant PlayerFeedPageShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.content.isFavorited != item.content.isFavorited ||
+        oldWidget.item.content.favoriteCount != item.content.favoriteCount) {
+      _syncFeedLikeState();
+    }
+  }
+
+  void _syncFeedLikeState() {
+    final isFavorited = item.content.isFavorited;
+    final favoriteCount = item.content.favoriteCount;
+    final dramaId = item.content.id;
+    // PageView may create this child while its sliver is laying out. Riverpod
+    // forbids state changes during that build phase, so defer the feed snapshot
+    // until the frame has completed.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          widget.item.content.id != dramaId ||
+          widget.item.content.isFavorited != isFavorited ||
+          widget.item.content.favoriteCount != favoriteCount) {
+        return;
+      }
+      ref
+          .read(playerLikeControllerProvider(dramaId).notifier)
+          .syncFeedLikeState(
+            isLiked: isFavorited,
+            favoriteCount: favoriteCount,
+          );
+    });
+  }
+
+  PlayerFeedItem get item => widget.item;
+  String get sessionKey => widget.sessionKey;
+  bool get isSettledPage => widget.isSettledPage;
+  bool get forYouLayout => widget.forYouLayout;
+  bool get allowPressChromeDimming => widget.allowPressChromeDimming;
+  ValueListenable<double>? get overlayOpacityListenable =>
+      widget.overlayOpacityListenable;
+  void Function({required bool pauseRequested}) get onTogglePlay =>
+      widget.onTogglePlay;
+  VoidCallback get onRetry => widget.onRetry;
+  VoidCallback get onSeekStart => widget.onSeekStart;
+  ValueChanged<Duration> get onSeekUpdate => widget.onSeekUpdate;
+  VoidCallback get onSeekEnd => widget.onSeekEnd;
+  VoidCallback get onSeekCancel => widget.onSeekCancel;
+  VoidCallback get onWatchNowTap => widget.onWatchNowTap;
+  VoidCallback get onEpisodesTap => widget.onEpisodesTap;
+  VoidCallback get onShareTap => widget.onShareTap;
+  VoidCallback get onMoreTap => widget.onMoreTap;
+  VoidCallback get onUnlockTap => widget.onUnlockTap;
+  VoidCallback get onOpenMembership => widget.onOpenMembership;
+  VoidCallback? get onSearchTap => widget.onSearchTap;
+  VoidCallback? get onMetaTap => widget.onMetaTap;
+  bool get showChromeOverlays => widget.showChromeOverlays;
+  Duration get chromeOverlayFadeDuration => widget.chromeOverlayFadeDuration;
+  bool get useSingleDramaChromeTap => widget.useSingleDramaChromeTap;
+  VoidCallback? get onExitImmersiveChrome => widget.onExitImmersiveChrome;
+  VoidCallback? get onSingleDramaUserInteraction =>
+      widget.onSingleDramaUserInteraction;
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = this.ref;
     final entitlement = ref.watch(entitlementControllerProvider);
     // 与 PlayerFeedEngine.accessPresentationFor 同源；勿在 select 内 ref.read。
     final accessPresentation = ref.watch(

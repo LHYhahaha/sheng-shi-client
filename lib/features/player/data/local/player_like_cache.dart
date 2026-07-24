@@ -25,9 +25,9 @@ class PlayerLikeCache {
     return _likeCountDeltaCache[dramaId] ?? 0;
   }
 
-  /// 获取初始点赞数。
-  static int getCachedInitialLikeCount(String dramaId) {
-    return _initialLikeCountCache[dramaId] ?? 0;
+  /// 获取服务端最近一次确认的点赞数；未同步过时返回 `null`。
+  static int? getCachedInitialLikeCount(String dramaId) {
+    return _initialLikeCountCache[dramaId];
   }
 
   /// 设置点赞状态。
@@ -41,24 +41,20 @@ class PlayerLikeCache {
     _initialLikeCountCache[dramaId] = count;
   }
 
-  /// 更新点赞数变化。
-  /// 点赞时 +1，取消点赞时 -1，最小值为 0。
+  /// 更新点赞数变化。点赞时 +1，取消点赞时 -1。
   static void updateLikeCountDelta(String dramaId, bool isLiked) {
     final currentDelta = _likeCountDeltaCache[dramaId] ?? 0;
-    
     if (isLiked) {
-      // 点赞：增加 1
       _likeCountDeltaCache[dramaId] = currentDelta + 1;
     } else {
-      // 取消点赞：减少 1，最小值为 0
-      _likeCountDeltaCache[dramaId] = (currentDelta - 1).clamp(0, double.infinity).toInt();
+      _likeCountDeltaCache[dramaId] = currentDelta - 1;
     }
   }
 
   /// 直接设置点赞数变化。
   /// 用于回滚操作或批量更新。
   static void setLikeCountDelta(String dramaId, int delta) {
-    _likeCountDeltaCache[dramaId] = delta.clamp(0, double.infinity).toInt();
+    _likeCountDeltaCache[dramaId] = delta;
   }
 
   /// 清除指定 dramaId 的缓存。
@@ -77,6 +73,10 @@ class PlayerLikeCache {
 
   /// 获取缓存的所有 dramaId。
   static Set<String> getCachedDramaIds() {
-    return {..._likeStatusCache.keys, ..._likeCountDeltaCache.keys, ..._initialLikeCountCache.keys};
+    return {
+      ..._likeStatusCache.keys,
+      ..._likeCountDeltaCache.keys,
+      ..._initialLikeCountCache.keys,
+    };
   }
 }

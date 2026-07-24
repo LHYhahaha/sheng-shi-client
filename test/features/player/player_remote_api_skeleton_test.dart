@@ -70,6 +70,8 @@ void main() {
           'title': 'Drama 154',
           'summary': '',
           'play_count': 1000000,
+          'favorite_count': 1234,
+          'is_favorited': 1,
           'trailer_episode_num': 5,
           'is_vip_only': 1,
           'status': 1,
@@ -108,6 +110,8 @@ void main() {
     expect(page.items.single.dramaId, '154');
     expect(page.items.single.episodeId, '502');
     expect(page.items.single.episode.id, 502);
+    expect(page.items.single.drama.favoriteCount, 1234);
+    expect(page.items.single.drama.isFavorited, isTrue);
     expect(page.items.single.drama.episodes, hasLength(2));
   });
 

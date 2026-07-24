@@ -62,6 +62,14 @@ final playerWatchProgressReportIntervalProvider = Provider<Duration>(
   (_) => const Duration(seconds: 10),
 );
 
+/// 从开始解析播放源到真正收到视频首帧的最长等待时间。
+///
+/// 部分设备会出现音频开始播放但视频始终未渲染、且不主动报错的情况；超时后
+/// 统一进入可重试错误态，避免黑屏或无限 loading。
+final playerFirstFrameTimeoutProvider = Provider<Duration>(
+  (_) => const Duration(seconds: 8),
+);
+
 class PlayerPlaybackSessionKeys {
   const PlayerPlaybackSessionKeys._();
 
@@ -472,6 +480,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   bool _externalSubtitlesClosed = false;
   PlayerFeedItem? _currentOriginalItem;
   Timer? _firstFrameProgressProbeTimer;
+  Timer? _firstFrameTimeoutTimer;
   Timer? _watchProgressReportTimer;
   DateTime? _watchProgressReportTimerStartedAt;
   Duration? _watchProgressReportRemaining;
@@ -773,6 +782,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       unawaited(_cancelSessionStreams());
       _restoreFloorTimer?.cancel();
       _firstFrameProgressProbeTimer?.cancel();
+      _firstFrameTimeoutTimer?.cancel();
       _stopWatchProgressReportTimer();
       unawaited(_disposePreloads(syncState: false));
       unawaited(_releaseSessionWindowFor('provider dispose'));
@@ -821,7 +831,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           item.id == _lastPlayItemRequest!.id &&
           item.episode.videoSource == _lastPlayItemRequest!.episode.videoSource;
       final timeSinceLastCall = DateTime.now().difference(_lastPlayItemTime);
-      if (isSameItem && timeSinceLastCall.inMilliseconds < 500) {
+      if (isSameItem &&
+          state.status != PlayerPlaybackStatus.error &&
+          timeSinceLastCall.inMilliseconds < 500) {
         developer.log(
           'playItem: 忽略重复调用 - itemId=${item.id}, '
           'timeSinceLastCall=${timeSinceLastCall.inMilliseconds}ms',
@@ -965,6 +977,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _userPauseRequested = false;
     _resetWatchProgressReportTimer();
     _firstFrameProgressProbeTimer?.cancel();
+    _cancelFirstFrameTimeout();
     _pendingSubtitleLoadItem = null;
     _logTiming(
       'trace generation assigned',
@@ -1008,13 +1021,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       currentSubtitleText: '',
       clearSubtitle: true,
       clearSubtitleLanguage: item.episode.episodeSources.isEmpty,
-      isSubtitleSelectionResolved: !item.episode.episodeSources.isEmpty,
+      isSubtitleSelectionResolved: item.episode.episodeSources.isNotEmpty,
       currentSubtitleLanguage: item.episode.episodeSources.isEmpty
           ? null
           : _languageForEpisodeSource(item.episode),
       videoController: _session.videoController,
       surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
     );
+    _armFirstFrameTimeout(generation: generation, item: item);
 
     var didResolveSource = false;
     try {
@@ -1086,6 +1100,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           bufferedPosition: prepared.bufferedPosition,
         );
         _currentPlaybackHasFirstFrame = prepared.hasFirstFrame;
+        if (prepared.hasFirstFrame) {
+          _cancelFirstFrameTimeout();
+        }
         _currentPlaybackPosition = prepared.position;
         _currentPlaybackDuration = _effectiveDuration(
           prepared.duration,
@@ -1284,15 +1301,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       if (!_isCurrent(generation)) {
         return;
       }
-      _currentPlaybackItemId = null;
-      _currentPlaybackSource = null;
-      _clearCurrentPlaybackSnapshot();
-      state = state.copyWith(
-        status: PlayerPlaybackStatus.error,
-        hasFirstFrame: false,
-        isBuffering: false,
+      _markPlaybackFailed(
         error: error,
         errorKind: errorKind,
+        expectedGeneration: generation,
       );
     }
   }
@@ -2749,7 +2761,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (!ref.mounted) {
       return;
     }
-    if (width == null || width <= 0 || state.currentSource == null) {
+    if (width == null ||
+        width <= 0 ||
+        state.currentSource == null ||
+        state.status == PlayerPlaybackStatus.error) {
       return;
     }
     if (!state.hasFirstFrame) {
@@ -2773,6 +2788,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _playingBeforeFirstFrameAt = null;
     _positionBeforeFirstFrameAt = null;
     _firstFrameProgressProbeTimer?.cancel();
+    _cancelFirstFrameTimeout();
     state = state.copyWith(
       status: state.status == PlayerPlaybackStatus.opening
           ? PlayerPlaybackStatus.playing
@@ -2853,15 +2869,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
     final errorKind = _classifyPlaybackError(error);
-    // HLS 分片短暂失败在首帧后通常可由播放器继续重试。此时保留画面并展示 buffering，
-    // 不立刻进入 fatal error；但首帧前失败必须暴露为错误，避免黑屏假播放。
-    final keepPlayingSurface =
-        errorKind == PlayerPlaybackErrorKind.recoverableNetwork &&
-        state.hasFirstFrame &&
-        (state.status == PlayerPlaybackStatus.playing ||
-            state.position > Duration.zero);
     _logTiming(
-      keepPlayingSurface ? 'recoverable error' : 'error',
+      'error',
       itemId: state.currentItemId,
       source: state.currentSource,
       error: error,
@@ -2872,14 +2881,68 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         'status=${state.status.name}',
       ]),
     );
-    if (keepPlayingSurface) {
-      state = state.copyWith(
-        isBuffering: true,
-        error: error,
-        errorKind: errorKind,
+    _markPlaybackFailed(error: error, errorKind: errorKind);
+  }
+
+  void _armFirstFrameTimeout({
+    required int generation,
+    required PlayerFeedItem item,
+  }) {
+    _cancelFirstFrameTimeout();
+    final timeout = ref.read(playerFirstFrameTimeoutProvider);
+    if (timeout <= Duration.zero) return;
+    _firstFrameTimeoutTimer = Timer(timeout, () {
+      if (!ref.mounted ||
+          !_isCurrent(generation) ||
+          state.currentItemId != item.id ||
+          state.currentSource == null ||
+          state.hasFirstFrame ||
+          state.status == PlayerPlaybackStatus.error ||
+          state.status == PlayerPlaybackStatus.paused) {
+        return;
+      }
+      final error = TimeoutException(
+        'Timed out waiting for the first video frame after '
+        '${timeout.inMilliseconds}ms.',
       );
+      _logTiming(
+        'first frame timeout',
+        itemId: item.id,
+        source: state.currentSource,
+        error: error,
+      );
+      _markPlaybackFailed(
+        error: error,
+        errorKind: PlayerPlaybackErrorKind.unknown,
+        expectedGeneration: generation,
+      );
+    });
+  }
+
+  void _cancelFirstFrameTimeout() {
+    _firstFrameTimeoutTimer?.cancel();
+    _firstFrameTimeoutTimer = null;
+  }
+
+  /// 收敛所有播放失败出口。保留 currentSource 让 UI 继续挂载错误覆盖层，同时
+  /// 使当前 generation 失效，防止晚到的 open/playing/width 事件把错误态改回播放。
+  void _markPlaybackFailed({
+    required Object error,
+    required PlayerPlaybackErrorKind errorKind,
+    int? expectedGeneration,
+  }) {
+    if (!ref.mounted ||
+        state.currentSource == null ||
+        (expectedGeneration != null && !_isCurrent(expectedGeneration))) {
       return;
     }
+    _generation += 1;
+    _cancelFirstFrameTimeout();
+    _firstFrameProgressProbeTimer?.cancel();
+    _stopWatchProgressReportTimer();
+    _currentPlaybackItemId = null;
+    _currentPlaybackSource = null;
+    _clearCurrentPlaybackSnapshot();
     state = state.copyWith(
       status: PlayerPlaybackStatus.error,
       hasFirstFrame: false,
@@ -2887,6 +2950,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       error: error,
       errorKind: errorKind,
     );
+    unawaited(_session.pause());
   }
 
   PlayerPlaybackErrorKind _classifyPlaybackError(String error) {
@@ -3488,10 +3552,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   /// 在 [playItem] 中调用，会在成功打开 source 后自动加载默认字幕。
   void _loadSubtitlesForItem(PlayerFeedItem item) {
     final subtitles = item.episode.subtitles;
+    final episodeSources = item.episode.episodeSources;
     if (subtitles.isEmpty) {
       state = state.copyWith(
         availableSubtitles: const [],
-        availableEpisodeSources: item.episode.episodeSources,
+        availableEpisodeSources: episodeSources,
         subtitleCues: const [],
         currentSubtitleText: '',
         clearSubtitle: true,
@@ -3502,9 +3567,42 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
     state = state.copyWith(
       availableSubtitles: subtitles,
-      availableEpisodeSources: const [],
+      availableEpisodeSources: episodeSources,
       isSubtitleSelectionResolved: false,
     );
+
+    // 有内嵌字幕视频时，语言选择和视频源始终以 episode_sources 为准。外挂
+    // 字幕只作为当前内嵌语言的补充，不能沿用上一集“关闭外挂字幕”的状态。
+    if (episodeSources.isNotEmpty) {
+      _externalSubtitlesClosed = false;
+      final source = _selectEpisodeSourceForCurrentLanguage(episodeSources);
+      _preferredSubtitleLanguage = _episodeSourceMatchCode(source);
+      final external = _findSubtitleForEpisodeSource(subtitles, source);
+      state = state.copyWith(currentSubtitleLanguage: source.language);
+      if (external == null) {
+        state = state.copyWith(
+          clearSubtitle: true,
+          subtitleCues: const [],
+          currentSubtitleText: '',
+          isSubtitleSelectionResolved: true,
+        );
+        return;
+      }
+      if (!state.hasFirstFrame) {
+        _pendingSubtitleLoadItem = item;
+        _logTiming(
+          'subtitle external load deferred until first frame',
+          itemId: item.id,
+          source: state.currentSource,
+        );
+        return;
+      }
+      unawaited(
+        _setExternalSubtitle(external, updateCurrentSubtitleLanguage: false),
+      );
+      return;
+    }
+
     if (_externalSubtitlesClosed) {
       unawaited(setSubtitle(null));
       return;
@@ -3591,11 +3689,16 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
   }
 
-  Future<void> _setExternalSubtitle(PlayerSubtitle subtitle) async {
+  Future<void> _setExternalSubtitle(
+    PlayerSubtitle subtitle, {
+    bool updateCurrentSubtitleLanguage = true,
+  }) async {
     final oldUrl = state.currentSubtitleUrl;
     state = state.copyWith(
       currentSubtitleUrl: subtitle.url,
-      currentSubtitleLanguage: subtitle.language,
+      currentSubtitleLanguage: updateCurrentSubtitleLanguage
+          ? subtitle.language
+          : null,
       currentSubtitlePosition: subtitle.position,
       isSubtitleSelectionResolved: true,
     );
@@ -3613,15 +3716,17 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   /// 根据 language 切换外挂字幕或带内嵌字幕的视频资源。
   Future<void> selectSubtitleLanguage(String language) async {
-    final external = _findSubtitle(state.availableSubtitles, language);
-    if (external != null) {
+    final sources = state.availableEpisodeSources;
+    if (sources.isEmpty) {
+      final external = _findSubtitle(state.availableSubtitles, language);
+      if (external == null) return;
       _externalSubtitlesClosed = false;
       _preferredSubtitleLanguage = _subtitleMatchCode(external);
       await _setExternalSubtitle(external);
       return;
     }
 
-    final source = _findEpisodeSource(state.availableEpisodeSources, language);
+    final source = _findEpisodeSource(sources, language);
     final item = _currentOriginalItem;
     if (source == null || item == null) return;
 
@@ -3668,6 +3773,22 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       (subtitle) => _subtitleMatchCode(subtitle),
       fallbackLanguageOf: (subtitle) => subtitle.language,
     );
+  }
+
+  /// 内嵌视频和外挂字幕的关联只使用接口下发的 language_code；语言名称仅用于
+  /// UI 展示，不能参与匹配，避免同名语言被错误地绑定到另一个视频源。
+  PlayerSubtitle? _findSubtitleForEpisodeSource(
+    List<PlayerSubtitle> subtitles,
+    PlayerEpisodeSource source,
+  ) {
+    final sourceCode = _normalizeLanguage(source.languageCode);
+    if (sourceCode.isEmpty) return null;
+    for (final subtitle in subtitles) {
+      if (_normalizeLanguage(subtitle.languageCode) == sourceCode) {
+        return subtitle;
+      }
+    }
+    return null;
   }
 
   PlayerEpisodeSource? _findEpisodeSource(

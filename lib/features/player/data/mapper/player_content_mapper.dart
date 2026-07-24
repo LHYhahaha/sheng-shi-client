@@ -37,6 +37,7 @@ class PlayerContentMapper {
       tags: List<String>.unmodifiable(dto.tagsName),
       playCount: dto.playCount,
       favoriteCount: dto.favoriteCount,
+      isFavorited: dto.isFavorited,
       episodeTotal: dto.episodeTotal,
       recommendationsStatus: recommendationsStatus,
     );

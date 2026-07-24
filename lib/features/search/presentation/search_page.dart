@@ -1539,7 +1539,7 @@ class _RankingPanel extends StatelessWidget {
           : state.error != null
           ? _SearchErrorState(onRetry: onRetry)
           : state.isEmpty
-          ? Center(child: AppEmptyState(message: context.l10n.emptyNoDramas))
+          ? Center(child: AppEmptyState(message: context.l10n.searchRankEmpty))
           : ListView.separated(
               padding: const EdgeInsets.fromLTRB(0, 6, 0, 28),
               itemCount: state.data?.dramas.length ?? 0,

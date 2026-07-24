@@ -1,4 +1,5 @@
 import 'package:drama_client/core/utils/compact_count_formatter.dart';
+import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -80,8 +81,8 @@ class _PlayerExitRecommendationDialogState
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'More Like This',
+                Text(
+                  context.l10n.popupDramaExitTitle,
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -188,7 +189,7 @@ class _PlayerExitRecommendationDialogState
                           ),
                           backgroundColor: const Color(0xFF4A4A4A),
                           iconAssetPath: 'assets/images/player/exit.svg',
-                          label: 'Exit',
+                          label: context.l10n.popupDramaExitActionExit,
                           onTap: widget.onExit,
                         ),
                       ),
@@ -200,7 +201,7 @@ class _PlayerExitRecommendationDialogState
                           ),
                           backgroundColor: AppColors.primary,
                           iconAssetPath: 'assets/images/player/play_icon.svg',
-                          label: 'Play',
+                          label: context.l10n.popupDramaExitActionPlay,
                           onTap: () => widget.onPlay(item),
                         ),
                       ),
