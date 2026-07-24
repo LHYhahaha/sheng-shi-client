@@ -1,5 +1,21 @@
+import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:gradient_borders/box_borders/gradient_box_border.dart';
+
+const _goldButtonBorder = GradientBoxBorder(
+  width: 1,
+  gradient: LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [
+      Color.fromRGBO(255, 255, 255, 0.52),
+      Color.fromRGBO(255, 255, 255, 0.10),
+      Color.fromRGBO(255, 255, 255, 0.04),
+      Color.fromRGBO(255, 255, 255, 0.08),
+    ],
+    stops: [0, 0.2767, 0.8906, 1],
+  ),
+);
 
 Future<void> showRewardCoinsCheckInSuccessDialog(
   BuildContext context, {
@@ -32,12 +48,20 @@ class _RewardCoinsCheckInSuccessDialog extends StatelessWidget {
             height: 240,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
-              border: const GradientBoxBorder(
+              border: GradientBoxBorder(
                 width: 1,
                 gradient: LinearGradient(
-                  colors: [Color(0xFFFFD392), Color(0xFF6C3B13)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFFFFC895).withValues(alpha: 0.8),
+                    Color(0xFFFFC895).withValues(alpha: 0),
+                    Color(0xFFFFC895).withValues(alpha: 0),
+                    Color(0xFFFFC895).withValues(alpha: 0),
+                    Color(0xFFFFC895).withValues(alpha: 0),
+                    Color(0xFFFFC895).withValues(alpha: 0),
+                    Color(0xFFFFC895).withValues(alpha: 0.8),
+                  ],
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
                 ),
               ),
               image: const DecorationImage(
@@ -50,58 +74,62 @@ class _RewardCoinsCheckInSuccessDialog extends StatelessWidget {
               clipBehavior: Clip.none,
               children: [
                 Positioned(
-                  top: -51,
+                  top: -65,
                   child: Image.asset(
-                    'assets/images/rewards/coins_reward_pop_icon.png',
-                    width: 145,
-                    height: 110,
+                    'assets/images/rewards/coins_pop_icon.png',
+                    width: 128,
+                    height: 128,
                     fit: BoxFit.contain,
                   ),
                 ),
-                const Positioned(
+                Positioned(
                   top: 65,
                   child: Text(
-                    'Check-in successful',
-                    style: TextStyle(color: Colors.white, fontSize: 16),
+                    context.l10n.rewardsSigninSuccessTitle,
+                    style: TextStyle(color: Colors.white, fontSize: 14),
                   ),
                 ),
                 Positioned(
                   top: 105,
                   child: Text(
-                    '+$rewardAmount coins',
+                    context.l10n.rewardsSigninSuccessCoins(rewardAmount),
                     key: const Key('rewards_coins_claim_success_amount'),
                     style: const TextStyle(
                       color: Color(0xFFFFD9B4),
-                      fontSize: 27,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
                 Positioned(
                   left: 16,
                   right: 16,
-                  bottom: 16,
-                  child: SizedBox(
-                    height: 44,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(4),
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFD48851), Color(0xFFFFF3C7)],
+                  bottom: 18,
+                  child: GestureDetector(
+                    key: const Key('rewards_coins_claim_success_ok'),
+                    onTap: () => Navigator.of(context).pop(),
+                    child: SizedBox(
+                      height: 44,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          border: _goldButtonBorder,
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFD48851), Color(0xFFFFF3C7)],
+                          ),
                         ),
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          key: const Key('rewards_coins_claim_success_ok'),
-                          onTap: () => Navigator.of(context).pop(),
-                          child: const Center(
-                            child: Text(
-                              'Claim',
-                              style: TextStyle(
-                                color: Color(0xFF743000),
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                        child: CustomPaint(
+                          foregroundPainter: const _ButtonTopHighlightPainter(),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: Center(
+                              child: Text(
+                                context.l10n.rewardsSigninSuccessConfirm,
+                                style: TextStyle(
+                                  color: Color(0xFF743000),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
@@ -117,4 +145,26 @@ class _RewardCoinsCheckInSuccessDialog extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ButtonTopHighlightPainter extends CustomPainter {
+  const _ButtonTopHighlightPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..strokeWidth = 1
+      ..shader = LinearGradient(
+        colors: [
+          Colors.transparent,
+          Colors.white.withValues(alpha: 0.6),
+          Colors.transparent,
+        ],
+        stops: const [0, 0.5, 1],
+      ).createShader(Offset.zero & size);
+    canvas.drawLine(const Offset(4, 0.5), Offset(size.width - 4, 0.5), paint);
+  }
+
+  @override
+  bool shouldRepaint(_ButtonTopHighlightPainter oldDelegate) => false;
 }

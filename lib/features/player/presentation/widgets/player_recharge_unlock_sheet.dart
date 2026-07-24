@@ -610,7 +610,7 @@ class _RechargeHeader extends ConsumerWidget {
               child: Row(
                 children: [
                   _InlineCoinMetric(
-                    label: '${context.l10n.playerRequiredCoins}:',
+                    label: '${context.l10n.unitCoin}:',
                     value: offer.requiredCoins,
                   ),
                   const SizedBox(width: 34),

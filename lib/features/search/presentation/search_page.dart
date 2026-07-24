@@ -463,7 +463,7 @@ class _SearchBar extends StatefulWidget {
 }
 
 class _SearchBarState extends State<_SearchBar> {
-  static const _recommendationInterval = Duration(seconds: 3);
+  static const _recommendationInterval = Duration(seconds: 8);
   static const _recommendationLeftPadding = 40.0;
   static const _recommendationRightPadding = 12.0;
 

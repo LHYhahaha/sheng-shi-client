@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bot_toast/bot_toast.dart';
 import 'package:drama_client/app/router/route_paths.dart';
+import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:drama_client/features/entitlement/application/entitlement_controller.dart';
 import 'package:drama_client/features/entitlement/data/entitlement_repository_provider.dart';
 import 'package:drama_client/features/entitlement/domain/entitlement_repository.dart';
@@ -20,6 +21,7 @@ import 'package:drama_client/features/rewards/domain/member_points_repository.da
 import 'package:drama_client/features/rewards/domain/reward_coins_check_in_status.dart';
 import 'package:drama_client/features/rewards/domain/reward_coins_check_in_claim_result.dart';
 import 'package:drama_client/features/rewards/domain/reward_coins_repository.dart';
+import 'package:drama_client/features/rewards/domain/reward_task.dart';
 import 'package:drama_client/features/rewards/presentation/pages/member_point_details_page.dart'
     as member_point_details;
 import 'package:drama_client/features/rewards/presentation/pages/member_points_page.dart';
@@ -134,21 +136,28 @@ void main() {
             ),
           ),
         ],
-        child: const MaterialApp(home: Scaffold(body: RewardsCoinsPage())),
+        child: const MaterialApp(
+          localizationsDelegates: [AppLocalizations.delegate],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(body: RewardsCoinsPage()),
+        ),
       ),
     );
     await tester.pumpAndSettle();
+    final l10n = AppLocalizations.of(
+      tester.element(find.byKey(const Key('rewards_coins_page'))),
+    );
 
     expect(find.byKey(const Key('rewards_coins_balance')), findsOneWidget);
     expect(find.text('0'), findsOneWidget);
-    expect(find.text('Your Balance'), findsOneWidget);
+    expect(find.text(l10n.rewardsCoinBalanceCurrent), findsOneWidget);
     expect(
       find.byKey(const Key('rewards_coins_check_in_panel')),
       findsOneWidget,
     );
-    expect(find.text('Check-in for Rewards'), findsOneWidget);
+    expect(find.text(l10n.rewardsSigninDaysCount(4)), findsOneWidget);
     expect(find.text('+20'), findsOneWidget);
-    expect(find.text('DAY 4'), findsOneWidget);
+    expect(find.text(l10n.rewardsSigninDayIndex(4)), findsOneWidget);
     expect(find.byKey(const Key('rewards_coins_sign_in')), findsOneWidget);
     final signInButton = tester.widget<Container>(
       find
@@ -163,9 +172,15 @@ void main() {
       const Color(0xFF696A6E),
     );
     expect(find.text('Earn Rewards'), findsOneWidget);
-    expect(find.byKey(const Key('reward_task_login')), findsOneWidget);
-    expect(find.byKey(const Key('reward_task_invite')), findsOneWidget);
-    expect(find.text('Watch for 5 mins'), findsOneWidget);
+    expect(
+      find.byKey(const Key('reward_task_coin.bind_account')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('reward_task_coin.share_drama')),
+      findsOneWidget,
+    );
+    expect(find.text(l10n.rewardsTaskWatch5), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -1323,7 +1338,61 @@ class _FakeRewardCoinsRepository implements RewardCoinsRepository {
   Future<RewardCoinsCheckInClaimResult> claimCheckIn() {
     throw UnimplementedError();
   }
+
+  @override
+  Future<RewardCoinsCheckInClaimResult> claimTask({required String taskKey}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<RewardTask>> getTasks({required int rewardType}) async =>
+      _rewardCoinTasks();
+
+  @override
+  Future<void> reportTaskAction({required String actionKey}) async {}
 }
+
+List<RewardTask> _rewardCoinTasks() => const [
+  RewardTask(
+    claimed: true,
+    completed: true,
+    conditionText: '',
+    cycleType: 'TASK_CYCLE_TYPE_ONCE',
+    displayName: '',
+    progressValue: 1,
+    rewardMax: 10,
+    rewardMin: 10,
+    rewardType: 'REWARD_TYPE_BONUS_COIN',
+    targetValue: 1,
+    taskKey: 'coin.bind_account',
+  ),
+  RewardTask(
+    claimed: false,
+    completed: false,
+    conditionText: '',
+    cycleType: 'TASK_CYCLE_TYPE_ONCE',
+    displayName: '',
+    progressValue: 0,
+    rewardMax: 10,
+    rewardMin: 10,
+    rewardType: 'REWARD_TYPE_BONUS_COIN',
+    targetValue: 1,
+    taskKey: 'coin.share_drama',
+  ),
+  RewardTask(
+    claimed: false,
+    completed: false,
+    conditionText: '',
+    cycleType: 'TASK_CYCLE_TYPE_DAILY',
+    displayName: '',
+    progressValue: 0,
+    rewardMax: 10,
+    rewardMin: 10,
+    rewardType: 'REWARD_TYPE_BONUS_COIN',
+    targetValue: 5,
+    taskKey: 'coin.watch.5m',
+  ),
+];
 
 RewardCoinsCheckInStatus _rewardCoinsStatus() {
   return const RewardCoinsCheckInStatus(

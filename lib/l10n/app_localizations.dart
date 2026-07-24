@@ -1148,9 +1148,6 @@ class AppLocalizations {
   String get playerRechargeUnlockTitle =>
       _remoteText('wallet.button.top_up', en: 'Recharge to unlock', zh: '充值解锁');
 
-  String get playerRequiredCoins =>
-      _remoteText('app.common.unit.coin', en: 'Required', zh: '所需金币');
-
   String get playerCoinPackages =>
       _remoteText('payment_modal.button.buy_now', en: 'Coins', zh: '金币充值');
 
@@ -1481,8 +1478,6 @@ class AppLocalizations {
   String get commonActionSubmit =>
       _remoteText('common.action.submit', en: 'Submit', zh: '提交');
 
-  String get commonUnitCoin =>
-      _remoteText('common.unit.coin', en: 'Coins', zh: '金币');
 
   String get appAccountBannedDialogMessage => _remoteText(
     'app.account.banned.dialog.message',

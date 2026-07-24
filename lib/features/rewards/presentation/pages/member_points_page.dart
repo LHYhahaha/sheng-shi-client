@@ -118,10 +118,15 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage> {
 
   void _refreshIfNeeded() {
     if (!widget.isActive || widget.isMember != null) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || !widget.isActive) return;
-      ref.read(memberPointsControllerProvider.notifier).loadDailyDetail();
-      ref.read(entitlementControllerProvider.notifier).refreshFromServer();
+      await ref
+          .read(entitlementControllerProvider.notifier)
+          .refreshFromServer();
+      if (!mounted || !widget.isActive) return;
+      if (ref.read(entitlementControllerProvider).isMember) {
+        ref.read(memberPointsControllerProvider.notifier).loadDailyDetail();
+      }
     });
   }
 
@@ -135,10 +140,10 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage> {
       return;
     }
 
-    await (
-      ref.read(memberPointsControllerProvider.notifier).loadDailyDetail(),
-      ref.read(entitlementControllerProvider.notifier).refreshFromServer(),
-    ).wait;
+    await ref.read(entitlementControllerProvider.notifier).refreshFromServer();
+    if (mounted && ref.read(entitlementControllerProvider).isMember) {
+      await ref.read(memberPointsControllerProvider.notifier).loadDailyDetail();
+    }
   }
 
   @override
