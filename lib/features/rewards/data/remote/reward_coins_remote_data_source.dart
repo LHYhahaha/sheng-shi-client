@@ -1,6 +1,7 @@
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/json_field_parser.dart';
 import '../dto/reward_coins_check_in_status_dto.dart';
+import '../dto/reward_coins_check_in_claim_result_dto.dart';
 
 class RewardCoinsRemoteDataSource {
   const RewardCoinsRemoteDataSource({required ApiClient apiClient})
@@ -16,6 +17,19 @@ class RewardCoinsRemoteDataSource {
         JsonFieldParser.requireMap(
           data,
           dtoName: 'RewardCoinsCheckInStatusDto',
+        ),
+      ),
+    );
+  }
+
+  Future<RewardCoinsCheckInClaimResultDto> claimCheckIn() {
+    return _apiClient.post<RewardCoinsCheckInClaimResultDto>(
+      '/api/activity/checkin',
+      authPolicy: ApiAuthPolicy.required,
+      decoder: (data) => RewardCoinsCheckInClaimResultDto.fromJson(
+        JsonFieldParser.requireMap(
+          data,
+          dtoName: 'RewardCoinsCheckInClaimResultDto',
         ),
       ),
     );

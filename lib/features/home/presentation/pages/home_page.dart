@@ -483,7 +483,7 @@ class _HomeTitleBar extends ConsumerStatefulWidget {
 }
 
 class _HomeTitleBarState extends ConsumerState<_HomeTitleBar> {
-  static const _recommendationInterval = Duration(seconds: 3);
+  static const _recommendationInterval = Duration(seconds: 8);
 
   Timer? _recommendationTimer;
   List<String> _recommendationKeywords = const [];

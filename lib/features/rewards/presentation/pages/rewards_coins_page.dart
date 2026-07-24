@@ -4,7 +4,10 @@ import 'package:gradient_borders/box_borders/gradient_box_border.dart';
 
 import '../../application/reward_coins_controller.dart';
 import '../../domain/reward_coins_check_in_status.dart';
+import '../../../entitlement/application/entitlement_controller.dart';
+import '../../../../core/toast/app_center_toast.dart';
 import '../widget/reward_rules_sheet.dart';
+import '../widget/reward_coins_check_in_success_dialog.dart';
 
 const _gold = Color(0xFFFFD392);
 const _muted = Color(0xFF77777B);
@@ -27,8 +30,13 @@ const _goldButtonBorder = GradientBoxBorder(
 );
 
 class RewardsCoinsPage extends ConsumerStatefulWidget {
-  const RewardsCoinsPage({this.useParentBackground = false, super.key});
+  const RewardsCoinsPage({
+    this.isActive = true,
+    this.useParentBackground = false,
+    super.key,
+  });
 
+  final bool isActive;
   final bool useParentBackground;
 
   @override
@@ -39,15 +47,30 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(
-      () =>
-          ref.read(rewardCoinsControllerProvider.notifier).loadCheckInStatus(),
-    );
+    _refreshIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(RewardsCoinsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isActive && widget.isActive) {
+      _refreshIfNeeded();
+    }
+  }
+
+  void _refreshIfNeeded() {
+    if (!widget.isActive) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.isActive) return;
+      ref.read(rewardCoinsControllerProvider.notifier).loadCheckInStatus();
+      ref.read(entitlementControllerProvider.notifier).refreshFromServer();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final rewardCoinsState = ref.watch(rewardCoinsControllerProvider);
+    final entitlement = ref.watch(entitlementControllerProvider);
 
     return DecoratedBox(
       key: const Key('rewards_coins_page'),
@@ -70,8 +93,13 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
           MediaQuery.paddingOf(context).bottom + 24,
         ),
         children: [
-          const _BalanceHeader(),
-          _CheckInPanel(status: rewardCoinsState.checkInStatus),
+          _BalanceHeader(
+            balance: entitlement.coinBalance + entitlement.bonusBalance,
+          ),
+          _CheckInPanel(
+            status: rewardCoinsState.checkInStatus,
+            onCheckIn: () => _claimCheckIn(context),
+          ),
           const SizedBox(height: 20),
           Text(
             'Earn Rewards',
@@ -122,10 +150,31 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
       ),
     );
   }
+
+  Future<void> _claimCheckIn(BuildContext context) async {
+    try {
+      final result = await ref
+          .read(rewardCoinsControllerProvider.notifier)
+          .claimCheckIn();
+      if (!context.mounted) return;
+      if (result?.isSuccess != true) {
+        showAppCenterToast('Claim failed');
+        return;
+      }
+      await showRewardCoinsCheckInSuccessDialog(
+        context,
+        rewardAmount: result!.rewardAmount,
+      );
+    } catch (_) {
+      if (context.mounted) showAppCenterToast('Claim failed');
+    }
+  }
 }
 
 class _BalanceHeader extends StatelessWidget {
-  const _BalanceHeader();
+  const _BalanceHeader({required this.balance});
+
+  final int balance;
 
   @override
   Widget build(BuildContext context) {
@@ -134,14 +183,14 @@ class _BalanceHeader extends StatelessWidget {
       height: 102,
       child: Stack(
         children: [
-          const Positioned(
+          Positioned(
             left: 10,
             top: 33,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '2230',
+                  '$balance',
                   style: TextStyle(
                     color: _gold,
                     fontSize: 28,
@@ -202,9 +251,10 @@ class _BalanceHeader extends StatelessWidget {
 }
 
 class _CheckInPanel extends StatelessWidget {
-  const _CheckInPanel({required this.status});
+  const _CheckInPanel({required this.status, required this.onCheckIn});
 
   final RewardCoinsCheckInStatus? status;
+  final VoidCallback onCheckIn;
 
   @override
   Widget build(BuildContext context) {
@@ -213,6 +263,10 @@ class _CheckInPanel extends StatelessWidget {
         ? _fallbackCheckInStatus.days
         : checkInStatus.days;
     final checkedToday = checkInStatus.checkedToday;
+    final canCheckIn =
+        status != null &&
+        !checkedToday &&
+        status!.days.any((day) => day.current && day.claimable);
 
     return Container(
       key: const Key('rewards_coins_check_in_panel'),
@@ -277,33 +331,33 @@ class _CheckInPanel extends StatelessWidget {
           GestureDetector(
             key: const Key('rewards_coins_sign_in'),
             behavior: HitTestBehavior.opaque,
-            onTap: checkedToday ? null : () {},
+            onTap: canCheckIn ? onCheckIn : null,
             child: Container(
               width: double.infinity,
               height: 44,
               margin: EdgeInsetsGeometry.symmetric(horizontal: 8),
               decoration: BoxDecoration(
-                color: checkedToday ? _disabledButton : null,
+                color: canCheckIn ? null : _disabledButton,
                 borderRadius: BorderRadius.circular(5),
-                border: checkedToday ? null : _goldButtonBorder,
-                gradient: checkedToday
-                    ? null
-                    : const LinearGradient(
+                border: canCheckIn ? _goldButtonBorder : null,
+                gradient: canCheckIn
+                    ? const LinearGradient(
                         colors: [Color(0xFFD48851), Color(0xFFFFF3C7)],
-                      ),
+                      )
+                    : null,
               ),
               child: CustomPaint(
                 key: const Key('rewards_coins_button_top_highlight'),
-                foregroundPainter: checkedToday
-                    ? null
-                    : const _MemberPointsButtonTopHighlightPainter(),
+                foregroundPainter: canCheckIn
+                    ? const _MemberPointsButtonTopHighlightPainter()
+                    : null,
                 child: Center(
                   child: Text(
                     'Check In',
                     style: TextStyle(
-                      color: checkedToday
-                          ? Colors.white.withValues(alpha: 0.6)
-                          : _goldButtonText,
+                      color: canCheckIn
+                          ? _goldButtonText
+                          : Colors.white.withValues(alpha: 0.6),
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),

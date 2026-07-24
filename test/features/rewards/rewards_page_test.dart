@@ -18,6 +18,7 @@ import 'package:drama_client/features/rewards/domain/member_point_exchange_optio
 import 'package:drama_client/features/rewards/domain/member_point_exchange_result.dart';
 import 'package:drama_client/features/rewards/domain/member_points_repository.dart';
 import 'package:drama_client/features/rewards/domain/reward_coins_check_in_status.dart';
+import 'package:drama_client/features/rewards/domain/reward_coins_check_in_claim_result.dart';
 import 'package:drama_client/features/rewards/domain/reward_coins_repository.dart';
 import 'package:drama_client/features/rewards/presentation/pages/member_point_details_page.dart'
     as member_point_details;
@@ -139,7 +140,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('rewards_coins_balance')), findsOneWidget);
-    expect(find.text('2230'), findsOneWidget);
+    expect(find.text('0'), findsOneWidget);
     expect(find.text('Your Balance'), findsOneWidget);
     expect(
       find.byKey(const Key('rewards_coins_check_in_panel')),
@@ -1317,6 +1318,11 @@ class _FakeRewardCoinsRepository implements RewardCoinsRepository {
 
   @override
   Future<RewardCoinsCheckInStatus> getCheckInStatus() async => status;
+
+  @override
+  Future<RewardCoinsCheckInClaimResult> claimCheckIn() {
+    throw UnimplementedError();
+  }
 }
 
 RewardCoinsCheckInStatus _rewardCoinsStatus() {
