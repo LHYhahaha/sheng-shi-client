@@ -44,12 +44,9 @@ void main() {
       expect(PlayerLikeCache.getCachedLikeCountDelta('123'), 0);
     });
 
-    test('updateLikeCountDelta does not go below 0', () {
+    test('updateLikeCountDelta keeps unlike delta for optimistic UI', () {
       PlayerLikeCache.updateLikeCountDelta('123', false);
-      expect(PlayerLikeCache.getCachedLikeCountDelta('123'), 0);
-
-      PlayerLikeCache.updateLikeCountDelta('123', false);
-      expect(PlayerLikeCache.getCachedLikeCountDelta('123'), 0);
+      expect(PlayerLikeCache.getCachedLikeCountDelta('123'), -1);
     });
 
     test('clearCache removes specific dramaId', () {

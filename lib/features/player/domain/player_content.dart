@@ -36,6 +36,7 @@ class PlayerContent {
     this.tags = const [],
     this.playCount = 0,
     this.favoriteCount = 0,
+    this.isFavorited,
     this.likeCountDelta = 0,
     this.episodeTotal = 0,
     this.recommendationsStatus = PlayerRecommendationLoadStatus.loaded,
@@ -113,6 +114,9 @@ class PlayerContent {
   ///
   /// 从服务端返回的原始收藏数据。
   final int favoriteCount;
+
+  /// 当前用户是否已收藏；接口未提供时为 `null`。
+  final bool? isFavorited;
 
   /// 点赞数变化。
   ///

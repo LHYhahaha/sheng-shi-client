@@ -56,7 +56,6 @@ import '../widgets/player_detail_sheet.dart';
 import '../widgets/player_exit_recommendation_dialog.dart';
 import '../widgets/player_feed_page_shell.dart';
 import '../widgets/player_playback_layer.dart';
-import '../widgets/player_subtitle_overlay.dart';
 
 sealed class _ExitRecommendationDialogResult {
   const _ExitRecommendationDialogResult();
@@ -144,6 +143,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isOpeningSearch = false;
   bool _isOpeningForYouPlayer = false;
   bool _isReloadingForYouAfterLanguageChange = false;
+  bool _hasPendingForYouLanguageReload = false;
   bool _isRefreshingForYouFeed = false;
   bool _isLeavingRoute = false;
   bool _isPressingPlaybackSurface = false;
@@ -314,7 +314,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       }
 
       // 姣忔杩涘叆鎾斁椤垫椂锛屽埛鏂扮偣璧炵姸鎬?
-      if (widget.dramaId != null) {
+      if (widget.feedMode == PlayerFeedMode.singleDrama &&
+          widget.dramaId != null) {
         final likeController = ref.read(
           playerLikeControllerProvider(widget.dramaId!).notifier,
         );
@@ -441,6 +442,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         widget.feedMode != PlayerFeedMode.forYou) {
       return;
     }
+    // For You lives in StatefulShell's indexed stack.  Its widget can receive
+    // locale updates while another tab is on screen, so loading the replacement
+    // feed here would settle a viewport and issue a new autoplay command behind
+    // that tab.  Defer the reload until the player is visible again.
+    if (!_isPlaybackViewVisible) {
+      _hasPendingForYouLanguageReload = true;
+      return;
+    }
     _isReloadingForYouAfterLanguageChange = true;
     try {
       await _playbackController.pauseForVisibility();
@@ -449,9 +458,26 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       }
       ref.invalidate(playerViewportControllerProvider(_sessionKey));
       await _loadFeedForTiming();
+      // The user may leave For You while the feed request is in flight.  The
+      // reload can have started playback before that navigation is observed by
+      // the shell, so make the hidden state authoritative one more time.
+      if (!_isPlaybackViewVisible) {
+        _hasPendingForYouLanguageReload = true;
+        await _playbackController.pauseForVisibility();
+      }
     } finally {
       _isReloadingForYouAfterLanguageChange = false;
     }
+  }
+
+  void _reloadPendingForYouLanguageChangeOnReturn() {
+    if (!_hasPendingForYouLanguageReload ||
+        widget.feedMode != PlayerFeedMode.forYou ||
+        !_isPlaybackViewVisible) {
+      return;
+    }
+    _hasPendingForYouLanguageReload = false;
+    unawaited(_reloadForYouAfterLanguageChange());
   }
 
   bool _shouldResumePlaybackWhenForYouReturns(PlayerPlaybackState playback) {
@@ -957,6 +983,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       unawaited(_reloadForYouAfterLanguageChange());
     });
 
+    // A locale change may have occurred while this indexed-stack page was
+    // hidden.  Refresh only after navigation makes the player visible, which
+    // keeps the feed current without allowing background audio.
+    ref.listen(appShellCurrentTabIndexProvider, (previous, next) {
+      if (next == AppShellDestinations.forYouIndex) {
+        _reloadPendingForYouLanguageChangeOnReturn();
+      }
+    });
+
     ref.listen(
       viewportProvider.select(PlayerViewportSettledSnapshot.fromState),
       (previous, next) {
@@ -1321,7 +1356,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       final stateMessage = PlayerStateMessage(
         icon: Icons.movie_filter_rounded,
         message: widget.feedMode == PlayerFeedMode.forYou
-            ? context.l10n.noData
+            ? context.l10n.recommendTabEmptyNoContent
             : context.l10n.playerNoEpisodes,
       );
       if (widget.feedMode != PlayerFeedMode.forYou) {
@@ -1543,8 +1578,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               ),
             ),
           ),
-        // 瀛楀箷鍙犲姞灞?
-        PlayerSubtitleOverlay(sessionKey: _sessionKey),
       ],
     );
   }

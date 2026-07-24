@@ -162,6 +162,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             message: '',
             confirmLabel: context.l10n.searchHistoryConfirm,
             cancelLabel: context.l10n.searchHistoryCancel,
+            style: ConfirmModalStyle.searchHistoryClear,
           ),
         );
     if (!mounted || result != ConfirmResult.confirmed) {
@@ -732,7 +733,7 @@ class _SuggestionResults extends StatelessWidget {
     if (state.error != null) {
       return Center(
         child: Text(
-          '网络异常，请稍后重试',
+          context.l10n.networkError,
           style: TextStyle(
             color: AppColors.textPrimary.withValues(alpha: 0.6),
             fontSize: 13,
@@ -806,8 +807,8 @@ class _ResultSortTabs extends StatelessWidget {
                     color: selected == type
                         ? const Color(0xFFFF007A)
                         : const Color(0xFF858585),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -1472,6 +1473,8 @@ class _RankingTabs extends StatelessWidget {
         for (var index = 0; index < labels.length; index++)
           Flexible(
             child: InkWell(
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
               onTap: () => onSelected(index),
               child: Padding(
                 padding: EdgeInsets.only(
@@ -1536,7 +1539,7 @@ class _RankingPanel extends StatelessWidget {
           : state.error != null
           ? _SearchErrorState(onRetry: onRetry)
           : state.isEmpty
-          ? Center(child: AppEmptyState(message: context.l10n.emptyNoDramas))
+          ? Center(child: AppEmptyState(message: context.l10n.searchRankEmpty))
           : ListView.separated(
               padding: const EdgeInsets.fromLTRB(0, 6, 0, 28),
               itemCount: state.data?.dramas.length ?? 0,
@@ -1620,8 +1623,17 @@ class _RankingDramaTile extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 5),
+                      Image.asset(
+                        'assets/images/search/hot.png',
+                        width: 21,
+                        height: 21,
+                      ),
+                      const SizedBox(width: 3),
                       Text(
-                        '🔥 ${formatCompactCount(drama.searchCount, lowercaseSuffix: false)}',
+                        formatCompactCount(
+                          drama.searchCount,
+                          lowercaseSuffix: false,
+                        ),
                         style: const TextStyle(
                           color: Color(0xFFECECEC),
                           fontSize: 14,
@@ -1688,7 +1700,7 @@ class _SearchErrorState extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            context.l10n.feedLoadFailed,
+            context.l10n.networkError,
             style: const TextStyle(
               color: AppColors.textSecondary,
               fontSize: 13,

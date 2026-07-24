@@ -209,9 +209,6 @@ class AppLocalizations {
 
   // ── 首页 Feed ─────────────────────────────────────────────
 
-  String get feedLoadFailed =>
-      _remoteText('common.action.retry', en: 'Retry', zh: '重试');
-
   String get feedNoMore =>
       _remoteText('home.state.no_more', en: 'No more content', zh: '没有更多了');
 
@@ -334,6 +331,12 @@ class AppLocalizations {
 
   String get searchNewReleases =>
       _remoteText('search.ranking.new_online', en: 'New Releases', zh: '上新榜');
+
+  String get searchRankEmpty => _remoteText(
+    "search.rank.empty",
+    en: "There is no content for now",
+    zh: "暂无内容",
+  );
 
   // ── 个人中心 Profile ─────────────────────────────────────────────
   String get profileLogin =>
@@ -818,9 +821,6 @@ class AppLocalizations {
 
   String get storeConfirm =>
       _remoteText('delete_account.confirm.confirm', en: 'Confirm', zh: '确认');
-
-  String get storeCancel =>
-      _remoteText('common.action.retry', en: 'Cancel', zh: '取消');
 
   String get storeClose =>
       _remoteText('payment_modal.button.done', en: 'Done', zh: '完成');
@@ -1419,9 +1419,11 @@ class AppLocalizations {
     zh: '(＞ 30 分钟)',
   );
 
-  String get memberPointsWatchRequired =>
-      _remoteText('member_points.toast.watch_required', en: 'Watch dramas for 30 minutes', zh: '需观看短剧30分钟');
-
+  String get memberPointsWatchRequired => _remoteText(
+    'member_points.toast.watch_required',
+    en: 'Watch dramas for 30 minutes',
+    zh: '需观看短剧30分钟',
+  );
 
   String get memberPointsRuleTitle =>
       _remoteText('member_points.rule.title', en: 'Points Rules', zh: '积分规则');
@@ -1533,6 +1535,12 @@ class AppLocalizations {
 
   String get popupDramaExitActionPlay =>
       _remoteText('popup.drama_exit.action.play', en: 'Play', zh: '播放');
+
+  String get popupNextDramaSubtitle =>
+      _remoteText('app.recommend_popup.subtitle_next_drama', en: 'A story you might love', zh: '你可能会喜欢的故事');
+
+  String get popupNextDramaTitle =>
+      _remoteText('app.recommend_popup.title_next_drama', en: 'Your Next Drama', zh: '你的下一部短剧');
 
   // ── 1.0.2 / 推荐Tab ─────────────────────────────────────────────
   String get recommendTabActionViewAllEpisodes => _remoteText(

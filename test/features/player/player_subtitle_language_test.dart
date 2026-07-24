@@ -149,6 +149,23 @@ void main() {
       subtitles: const [
         PlayerSubtitle(
           id: 1,
+          language: '外挂独有语言',
+          name: 'external',
+          url: 'external',
+          format: 'srt',
+          isDefault: true,
+        ),
+      ],
+      episodeSources: const [
+        PlayerEpisodeSource(id: '1', language: 'English', url: 'one'),
+      ],
+    );
+    expect(find.byKey(const ValueKey('player_subtitle_button')), findsNothing);
+
+    await pump(
+      subtitles: const [
+        PlayerSubtitle(
+          id: 1,
           language: '简体中文',
           name: 'ignored.srt',
           url: 'subtitle',
@@ -197,6 +214,43 @@ void main() {
     expect(selectedText.style?.color, AppColors.primary);
     expect(selectedText.style?.fontWeight, FontWeight.w600);
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+  });
+
+  testWidgets('subtitle menu closes when immersive chrome is entered', (
+    tester,
+  ) async {
+    Widget buildTopBar({required bool showChromeOverlays}) {
+      return MaterialApp(
+        localizationsDelegates: const [AppLocalizations.delegate],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: PlayerTopBar(
+            episodeNumber: 1,
+            playbackRate: 1,
+            overlayOpacity: 1,
+            onBackTap: () {},
+            onSpeedTap: () {},
+            showChromeOverlays: showChromeOverlays,
+            subtitles: const [],
+            episodeSources: const [
+              PlayerEpisodeSource(id: '1', language: 'English', url: 'one'),
+              PlayerEpisodeSource(id: '2', language: '中文', url: 'two'),
+            ],
+            currentSubtitleLanguage: 'English',
+            onSubtitleSelected: (_) {},
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildTopBar(showChromeOverlays: true));
+    await tester.tap(find.byKey(const ValueKey('player_subtitle_button')));
+    await tester.pump();
+    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+
+    await tester.pumpWidget(buildTopBar(showChromeOverlays: false));
+    await tester.pump();
+    expect(find.byIcon(Icons.check_rounded), findsNothing);
   });
 
   testWidgets('subtitle entry stays hidden until the selection is resolved', (
@@ -324,6 +378,51 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Closed'), findsNothing);
+    expect(find.text('English'), findsWidgets);
+    expect(find.text('中文'), findsOneWidget);
+  });
+
+  testWidgets('embedded menu excludes external-only languages and Closed', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const [AppLocalizations.delegate],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: PlayerTopBar(
+            episodeNumber: 1,
+            playbackRate: 1,
+            overlayOpacity: 1,
+            onBackTap: () {},
+            onSpeedTap: () {},
+            showChromeOverlays: true,
+            subtitles: const [
+              PlayerSubtitle(
+                id: 1,
+                language: '外挂独有语言',
+                name: 'external',
+                url: 'external',
+                format: 'srt',
+                isDefault: true,
+              ),
+            ],
+            episodeSources: const [
+              PlayerEpisodeSource(id: '1', language: 'English', url: 'one'),
+              PlayerEpisodeSource(id: '2', language: '中文', url: 'two'),
+            ],
+            currentSubtitleLanguage: 'English',
+            onSubtitleSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('player_subtitle_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Closed'), findsNothing);
+    expect(find.text('外挂独有语言'), findsNothing);
     expect(find.text('English'), findsWidgets);
     expect(find.text('中文'), findsOneWidget);
   });

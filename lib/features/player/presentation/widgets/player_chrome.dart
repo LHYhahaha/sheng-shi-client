@@ -293,6 +293,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
             overlayOpacity: overlayOpacity,
             overlayOpacityListenable: overlayOpacityListenable,
             likeCountLabel: content.likeCountLabel,
+            favoriteCount: content.favoriteCount,
             dramaId: content.id,
             onEpisodesTap: onEpisodesTap,
             onShareTap: onShareTap,
@@ -478,6 +479,7 @@ class _PlayerActionRailLayer extends StatelessWidget {
     required this.overlayOpacity,
     required this.overlayOpacityListenable,
     required this.likeCountLabel,
+    required this.favoriteCount,
     required this.dramaId,
     required this.onEpisodesTap,
     required this.onShareTap,
@@ -494,6 +496,7 @@ class _PlayerActionRailLayer extends StatelessWidget {
   final double overlayOpacity;
   final ValueListenable<double>? overlayOpacityListenable;
   final String likeCountLabel;
+  final int favoriteCount;
   final String dramaId;
   final VoidCallback onEpisodesTap;
   final VoidCallback onShareTap;
@@ -527,6 +530,7 @@ class _PlayerActionRailLayer extends StatelessWidget {
               opacityListenable: overlayOpacityListenable,
               child: _PlayerActionRailContent(
                 likeCountLabel: likeCountLabel,
+                favoriteCount: favoriteCount,
                 dramaId: dramaId,
                 forYouLayout: forYouLayout,
                 onEpisodesTap: onEpisodesTap,
@@ -890,6 +894,7 @@ class PlayerActionRail extends StatelessWidget {
 class _PlayerActionRailContent extends ConsumerWidget {
   const _PlayerActionRailContent({
     required this.likeCountLabel,
+    required this.favoriteCount,
     required this.dramaId,
     required this.forYouLayout,
     required this.onEpisodesTap,
@@ -901,6 +906,7 @@ class _PlayerActionRailContent extends ConsumerWidget {
   });
 
   final String likeCountLabel;
+  final int favoriteCount;
   final String dramaId;
   final bool forYouLayout;
   final VoidCallback onEpisodesTap;
@@ -914,7 +920,7 @@ class _PlayerActionRailContent extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // 获取实时的点赞数显示文案
     final displayLikeCountLabel = ref.watch(
-      playerLikeCountProvider((likeCountLabel, dramaId)),
+      playerLikeCountProvider((likeCountLabel, favoriteCount, dramaId)),
     );
 
     return Column(
@@ -1003,7 +1009,7 @@ class _WatchNowButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(3),
         ),
         child: Text(
-          context.l10n.playerWatchNow,
+          context.l10n.recommendTabActionViewAllEpisodes,
           style: const TextStyle(
             color: Colors.white,
             fontSize: 14,

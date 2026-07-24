@@ -3023,28 +3023,56 @@ void main() {
     },
   );
 
-  test('transient HLS error after first frame stays recoverable', () async {
-    final session = _FakePlaybackSession();
-    final container = _createContainer(session);
+  test(
+    'HLS network error after first frame enters retryable error state',
+    () async {
+      final session = _FakePlaybackSession();
+      final container = _createContainer(session);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      session.emitPosition(const Duration(seconds: 2));
+      await Future<void>.delayed(Duration.zero);
+      session.emitError('tcp: ffurl_read returned segment 00001.ts');
+      await Future<void>.delayed(Duration.zero);
+
+      final state = container.read(provider);
+      expect(state.status, PlayerPlaybackStatus.error);
+      expect(state.hasFirstFrame, isFalse);
+      expect(state.isBuffering, isFalse);
+      expect(state.errorKind, PlayerPlaybackErrorKind.recoverableNetwork);
+      expect(controller.exportTimingReport(), contains('error'));
+      expect(
+        controller.exportTimingReport(),
+        contains('kind=recoverableNetwork'),
+      );
+    },
+  );
+
+  test('first-frame timeout enters retryable error state', () async {
+    final session = _FakePlaybackSession(emitWidthOnOpen: false);
+    final container = _createContainer(
+      session,
+      sourceRepository: _CountingPlaybackSourceRepository(),
+      firstFrameTimeout: const Duration(milliseconds: 10),
+    );
+    addTearDown(container.dispose);
     final provider = playerPlaybackControllerProvider('single:drama-a:1');
     final controller = container.read(provider.notifier);
 
     await controller.playItem(_item(1));
-    session.emitPosition(const Duration(seconds: 2));
-    await Future<void>.delayed(Duration.zero);
-    session.emitError('tcp: ffurl_read returned segment 00001.ts');
-    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(const Duration(milliseconds: 30));
 
     final state = container.read(provider);
-    expect(state.status, PlayerPlaybackStatus.playing);
-    expect(state.hasFirstFrame, isTrue);
-    expect(state.isBuffering, isTrue);
-    expect(state.errorKind, PlayerPlaybackErrorKind.recoverableNetwork);
-    expect(controller.exportTimingReport(), contains('recoverable error'));
-    expect(
-      controller.exportTimingReport(),
-      contains('kind=recoverableNetwork'),
-    );
+    expect(state.status, PlayerPlaybackStatus.error);
+    expect(state.error, isA<TimeoutException>());
+    expect(state.currentSource, _videoUrl);
+    expect(session.pauseCount, greaterThanOrEqualTo(1));
+    expect(controller.exportTimingReport(), contains('first frame timeout'));
+
+    await controller.playItem(_item(1));
+    expect(session.openedSources, hasLength(2));
   });
 
   test('HTTP 400 HLS segment error is not treated as recoverable', () async {
@@ -3278,6 +3306,7 @@ ProviderContainer _createContainer(
   PlayerPreloadConfig? preloadConfig,
   PlayerRemoteDataSource? remoteDataSource,
   Duration? watchProgressReportInterval,
+  Duration? firstFrameTimeout,
 }) {
   final playbackCacheManager =
       preloadManager ??
@@ -3309,6 +3338,8 @@ ProviderContainer _createContainer(
         playerWatchProgressReportIntervalProvider.overrideWithValue(
           watchProgressReportInterval,
         ),
+      if (firstFrameTimeout != null)
+        playerFirstFrameTimeoutProvider.overrideWithValue(firstFrameTimeout),
     ],
   );
   if (addDisposeTearDown) {

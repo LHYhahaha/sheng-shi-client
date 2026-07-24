@@ -15,6 +15,15 @@ enum AppModalType {
   unknown,
 }
 
+/// 确认弹窗的视觉样式。
+enum ConfirmModalStyle {
+  /// 应用内通用确认弹窗。
+  standard,
+
+  /// 搜索历史清空确认弹窗。
+  searchHistoryClear,
+}
+
 /// 全局弹窗请求基类。
 sealed class AppModalRequest {
   const AppModalRequest({
@@ -46,6 +55,7 @@ final class ConfirmModalRequest extends AppModalRequest {
     required this.message,
     required this.confirmLabel,
     required this.cancelLabel,
+    this.style = ConfirmModalStyle.standard,
   }) : super(
          type: AppModalType.confirm,
          createdAt: createdAt ?? DateTime.now(),
@@ -55,6 +65,7 @@ final class ConfirmModalRequest extends AppModalRequest {
   final String message;
   final String confirmLabel;
   final String cancelLabel;
+  final ConfirmModalStyle style;
 }
 
 /// Feature 弹窗信封：payload 在 feature 层定义类型，core 不 import feature。

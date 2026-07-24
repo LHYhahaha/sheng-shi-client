@@ -239,15 +239,9 @@ class _HomePageState extends ConsumerState<HomePage> {
             controller: _scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(17, 18, 17, 2),
-                  child: const _HomeTitleBar(),
-                ),
-              ),
               SliverPersistentHeader(
                 pinned: true,
-                delegate: _HomeTabsHeaderDelegate(
+                delegate: _HomeFixedHeaderDelegate(
                   selectedTab: selectedIndex,
                   tabs: categories,
                   onTabChanged: (index) {
@@ -597,8 +591,8 @@ class _VipCrown extends StatelessWidget {
   }
 }
 
-class _HomeTabsHeaderDelegate extends SliverPersistentHeaderDelegate {
-  const _HomeTabsHeaderDelegate({
+class _HomeFixedHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _HomeFixedHeaderDelegate({
     required this.tabs,
     required this.selectedTab,
     required this.onTabChanged,
@@ -609,10 +603,10 @@ class _HomeTabsHeaderDelegate extends SliverPersistentHeaderDelegate {
   final ValueChanged<int> onTabChanged;
 
   @override
-  double get minExtent => 50;
+  double get minExtent => 108;
 
   @override
-  double get maxExtent => 50;
+  double get maxExtent => 108;
 
   @override
   Widget build(
@@ -634,28 +628,39 @@ class _HomeTabsHeaderDelegate extends SliverPersistentHeaderDelegate {
                 ]
               : null,
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(0, 13, 0, 0),
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: tabs.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 31),
-            itemBuilder: (context, index) {
-              return _HomeCategoryTab(
-                label: tabs[index].title,
-                selected: index == selectedTab,
-                onTap: () => onTabChanged(index),
-              );
-            },
-          ),
+        child: Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(17, 18, 17, 2),
+              child: _HomeTitleBar(),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(0, 13, 0, 0),
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: tabs.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(width: 31),
+                  itemBuilder: (context, index) {
+                    return _HomeCategoryTab(
+                      label: tabs[index].title,
+                      selected: index == selectedTab,
+                      onTap: () => onTabChanged(index),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   @override
-  bool shouldRebuild(covariant _HomeTabsHeaderDelegate oldDelegate) {
+  bool shouldRebuild(covariant _HomeFixedHeaderDelegate oldDelegate) {
     return oldDelegate.selectedTab != selectedTab || oldDelegate.tabs != tabs;
   }
 }
@@ -997,7 +1002,7 @@ class _HomeErrorState extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          context.l10n.feedLoadFailed,
+          context.l10n.networkError,
           style: Theme.of(
             context,
           ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),

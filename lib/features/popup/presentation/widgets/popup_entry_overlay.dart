@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
@@ -264,8 +265,8 @@ class _PopupEntryContentState extends State<_PopupEntryContent> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
-                        'Your Next Drama',
+                      Text(
+                        context.l10n.popupNextDramaTitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
@@ -278,7 +279,7 @@ class _PopupEntryContentState extends State<_PopupEntryContent> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'A story you might love',
+                        context.l10n.popupNextDramaSubtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
@@ -348,7 +349,7 @@ class _PopupEntryContentState extends State<_PopupEntryContent> {
                   ),
                   SizedBox(width: 5),
                   Text(
-                    'Play',
+                    context.l10n.popupDramaExitActionPlay,
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight(590)),
                   ),
                 ],

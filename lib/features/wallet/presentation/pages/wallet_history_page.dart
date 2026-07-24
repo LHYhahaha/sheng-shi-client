@@ -233,7 +233,7 @@ class _HistoryBody extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              context.l10n.feedLoadFailed,
+              context.l10n.networkError,
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
