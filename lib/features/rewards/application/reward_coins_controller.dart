@@ -11,26 +11,46 @@ class RewardCoinsState {
   const RewardCoinsState({
     this.checkInStatus,
     this.tasks = const [],
-    this.isLoading = false,
+    this.isCheckInLoading = false,
+    this.isTasksLoading = false,
+    this.isClaiming = false,
+    this.checkInError,
+    this.tasksError,
     this.error,
   });
 
   final RewardCoinsCheckInStatus? checkInStatus;
   final List<RewardTask> tasks;
-  final bool isLoading;
+  final bool isCheckInLoading;
+  final bool isTasksLoading;
+  final bool isClaiming;
+  final Object? checkInError;
+  final Object? tasksError;
   final Object? error;
 
   RewardCoinsState copyWith({
     RewardCoinsCheckInStatus? checkInStatus,
     List<RewardTask>? tasks,
-    bool? isLoading,
+    bool? isCheckInLoading,
+    bool? isTasksLoading,
+    bool? isClaiming,
+    Object? checkInError,
+    Object? tasksError,
     Object? error,
+    bool clearCheckInError = false,
+    bool clearTasksError = false,
     bool clearError = false,
   }) {
     return RewardCoinsState(
       checkInStatus: checkInStatus ?? this.checkInStatus,
       tasks: tasks ?? this.tasks,
-      isLoading: isLoading ?? this.isLoading,
+      isCheckInLoading: isCheckInLoading ?? this.isCheckInLoading,
+      isTasksLoading: isTasksLoading ?? this.isTasksLoading,
+      isClaiming: isClaiming ?? this.isClaiming,
+      checkInError: clearCheckInError
+          ? null
+          : checkInError ?? this.checkInError,
+      tasksError: clearTasksError ? null : tasksError ?? this.tasksError,
       error: clearError ? null : error ?? this.error,
     );
   }
@@ -42,40 +62,49 @@ final rewardCoinsControllerProvider =
     );
 
 class RewardCoinsController extends Notifier<RewardCoinsState> {
-  int _generation = 0;
+  int _checkInGeneration = 0;
+  int _tasksGeneration = 0;
 
   @override
   RewardCoinsState build() {
-    return const RewardCoinsState();
+    return const RewardCoinsState(isCheckInLoading: true, isTasksLoading: true);
   }
 
   Future<void> loadCheckInStatus() async {
-    final generation = ++_generation;
-    state = state.copyWith(isLoading: true, clearError: true);
+    final generation = ++_checkInGeneration;
+    state = state.copyWith(isCheckInLoading: true, clearCheckInError: true);
     try {
       final status = await ref
           .read(rewardCoinsRepositoryProvider)
           .getCheckInStatus();
-      if (generation != _generation) return;
+      if (generation != _checkInGeneration) return;
       state = state.copyWith(
         checkInStatus: status,
-        isLoading: false,
-        clearError: true,
+        isCheckInLoading: false,
+        clearCheckInError: true,
       );
     } catch (error) {
-      if (generation != _generation) return;
-      state = state.copyWith(isLoading: false, error: error);
+      if (generation != _checkInGeneration) return;
+      state = state.copyWith(isCheckInLoading: false, checkInError: error);
     }
   }
 
   Future<void> loadTasks() async {
+    final generation = ++_tasksGeneration;
+    state = state.copyWith(isTasksLoading: true, clearTasksError: true);
     try {
       final tasks = await ref
           .read(rewardCoinsRepositoryProvider)
           .getTasks(rewardType: 1);
-      state = state.copyWith(tasks: tasks);
+      if (generation != _tasksGeneration) return;
+      state = state.copyWith(
+        tasks: tasks,
+        isTasksLoading: false,
+        clearTasksError: true,
+      );
     } catch (error) {
-      state = state.copyWith(error: error);
+      if (generation != _tasksGeneration) return;
+      state = state.copyWith(isTasksLoading: false, tasksError: error);
     }
   }
 
@@ -89,10 +118,10 @@ class RewardCoinsController extends Notifier<RewardCoinsState> {
   Future<RewardCoinsCheckInClaimResult?> claimTask({
     required String taskKey,
   }) async {
-    if (state.isLoading) return null;
+    if (state.isClaiming) return null;
 
     final loading = ref.read(paymentLoadingControllerProvider.notifier);
-    state = state.copyWith(isLoading: true, clearError: true);
+    state = state.copyWith(isClaiming: true, clearError: true);
     loading.show(label: PaymentLoadingLabel.loading);
     try {
       final result = await ref
@@ -110,15 +139,15 @@ class RewardCoinsController extends Notifier<RewardCoinsState> {
       rethrow;
     } finally {
       loading.hide();
-      if (state.isLoading) state = state.copyWith(isLoading: false);
+      if (state.isClaiming) state = state.copyWith(isClaiming: false);
     }
   }
 
   Future<RewardCoinsCheckInClaimResult?> claimCheckIn() async {
-    if (state.isLoading) return null;
+    if (state.isClaiming) return null;
 
     final loading = ref.read(paymentLoadingControllerProvider.notifier);
-    state = state.copyWith(isLoading: true, clearError: true);
+    state = state.copyWith(isClaiming: true, clearError: true);
     loading.show(label: PaymentLoadingLabel.loading);
     try {
       final result = await ref
@@ -136,7 +165,7 @@ class RewardCoinsController extends Notifier<RewardCoinsState> {
       rethrow;
     } finally {
       loading.hide();
-      if (state.isLoading) state = state.copyWith(isLoading: false);
+      if (state.isClaiming) state = state.copyWith(isClaiming: false);
     }
   }
 }

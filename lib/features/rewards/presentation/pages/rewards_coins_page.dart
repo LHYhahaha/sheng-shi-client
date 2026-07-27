@@ -6,6 +6,7 @@ import 'package:gradient_borders/box_borders/gradient_box_border.dart';
 import 'package:permission_handler/permission_handler.dart' as permissions;
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../shared/widgets/app_retry_button.dart';
 import '../../application/reward_coins_controller.dart';
 import '../../domain/reward_coins_check_in_status.dart';
 import '../../domain/reward_task.dart';
@@ -78,6 +79,7 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
   Widget build(BuildContext context) {
     final rewardCoinsState = ref.watch(rewardCoinsControllerProvider);
     final entitlement = ref.watch(entitlementControllerProvider);
+    final supportedTasks = _supportedTasks(rewardCoinsState.tasks);
 
     return DecoratedBox(
       key: const Key('rewards_coins_page'),
@@ -103,10 +105,34 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
           _BalanceHeader(
             balance: entitlement.coinBalance + entitlement.bonusBalance,
           ),
-          _CheckInPanel(
-            status: rewardCoinsState.checkInStatus,
-            onCheckIn: () => _claimCheckIn(context),
-          ),
+          if (rewardCoinsState.isCheckInLoading)
+            const _RewardsSectionLoading(
+              key: Key('rewards_coins_check_in_loading'),
+            )
+          else if (rewardCoinsState.checkInError != null)
+            _RewardsSectionLoadFailed(
+              key: const Key('rewards_coins_check_in_error'),
+              onRetry: () {
+                ref
+                    .read(rewardCoinsControllerProvider.notifier)
+                    .loadCheckInStatus();
+              },
+            )
+          else if (rewardCoinsState.checkInStatus case final status?)
+            if (status.days.isEmpty)
+              const _RewardsSectionNoData(
+                key: Key('rewards_coins_check_in_empty'),
+              )
+            else
+              _CheckInPanel(
+                status: status,
+                isClaiming: rewardCoinsState.isClaiming,
+                onCheckIn: () => _claimCheckIn(context),
+              )
+          else
+            const _RewardsSectionNoData(
+              key: Key('rewards_coins_check_in_empty'),
+            ),
           const SizedBox(height: 20),
           Text(
             'Earn Rewards',
@@ -116,7 +142,7 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
               fontWeight: FontWeight.w700,
             ),
           ),
-          for (final task in _supportedTasks(rewardCoinsState.tasks)) ...[
+          for (final task in supportedTasks) ...[
             const SizedBox(height: 8),
             _RewardTaskCard(
               key: Key('reward_task_${task.taskKey}'),
@@ -168,7 +194,11 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
     }
     switch (task.taskKey) {
       case 'coin.bind_account':
-        context.go(RoutePaths.auth);
+        await context.push(RoutePaths.auth);
+        if (mounted) {
+          await ref.read(rewardCoinsControllerProvider.notifier).loadTasks();
+        }
+        return;
       case 'coin.enable_push':
         final status = await permissions.Permission.notification.request();
         if (status.isGranted || status.isProvisional) {
@@ -176,11 +206,13 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
               .read(rewardCoinsControllerProvider.notifier)
               .reportTaskAction(actionKey: 'enable_push');
         }
+        return;
       case 'coin.share_drama':
       case 'coin.watch.5m':
       case 'coin.watch.10m':
       case 'coin.watch.15m':
         context.go(RoutePaths.home);
+        return;
     }
   }
 
@@ -280,22 +312,99 @@ class _BalanceHeader extends StatelessWidget {
   }
 }
 
-class _CheckInPanel extends StatelessWidget {
-  const _CheckInPanel({required this.status, required this.onCheckIn});
+class _RewardsSectionLoading extends StatelessWidget {
+  const _RewardsSectionLoading({super.key});
 
-  final RewardCoinsCheckInStatus? status;
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      height: 96,
+      child: Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+class _RewardsSectionLoadFailed extends StatelessWidget {
+  const _RewardsSectionLoadFailed({required this.onRetry, super.key});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RewardsSectionStatus(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            context.l10n.networkError,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.7),
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 12),
+          AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
+        ],
+      ),
+    );
+  }
+}
+
+class _RewardsSectionNoData extends StatelessWidget {
+  const _RewardsSectionNoData({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return _RewardsSectionStatus(
+      child: Text(
+        context.l10n.noData,
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.7),
+          fontSize: 14,
+        ),
+      ),
+    );
+  }
+}
+
+class _RewardsSectionStatus extends StatelessWidget {
+  const _RewardsSectionStatus({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 112,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _CheckInPanel extends StatelessWidget {
+  const _CheckInPanel({
+    required this.status,
+    required this.isClaiming,
+    required this.onCheckIn,
+  });
+
+  final RewardCoinsCheckInStatus status;
+  final bool isClaiming;
   final VoidCallback onCheckIn;
 
   @override
   Widget build(BuildContext context) {
-    final checkInStatus = status ?? _fallbackCheckInStatus;
-    final days = checkInStatus.days.isEmpty
-        ? _fallbackCheckInStatus.days
-        : checkInStatus.days;
+    final checkInStatus = status;
+    final days = checkInStatus.days;
     final canCheckIn =
-        status != null &&
         !checkInStatus.checkedToday &&
-        status!.days.any((day) => day.current && day.claimable);
+        !isClaiming &&
+        status.days.any((day) => day.current && day.claimable);
 
     return Container(
       key: const Key('rewards_coins_check_in_panel'),
@@ -521,62 +630,6 @@ class _CheckInDay extends StatelessWidget {
     );
   }
 }
-
-const _fallbackCheckInStatus = RewardCoinsCheckInStatus(
-  checkedToday: false,
-  currentDay: 2,
-  days: [
-    RewardCoinsCheckInDay(
-      checked: true,
-      claimable: false,
-      current: false,
-      day: 1,
-      rewardCoin: '10',
-    ),
-    RewardCoinsCheckInDay(
-      checked: false,
-      claimable: true,
-      current: true,
-      day: 2,
-      rewardCoin: '10',
-    ),
-    RewardCoinsCheckInDay(
-      checked: false,
-      claimable: false,
-      current: false,
-      day: 3,
-      rewardCoin: '10',
-    ),
-    RewardCoinsCheckInDay(
-      checked: false,
-      claimable: false,
-      current: false,
-      day: 4,
-      rewardCoin: '10',
-    ),
-    RewardCoinsCheckInDay(
-      checked: false,
-      claimable: false,
-      current: false,
-      day: 5,
-      rewardCoin: '10',
-    ),
-    RewardCoinsCheckInDay(
-      checked: false,
-      claimable: false,
-      current: false,
-      day: 6,
-      rewardCoin: '10',
-    ),
-    RewardCoinsCheckInDay(
-      checked: false,
-      claimable: false,
-      current: false,
-      day: 7,
-      rewardCoin: '10',
-    ),
-  ],
-);
 
 class _CheckInDayBorderPainter extends CustomPainter {
   const _CheckInDayBorderPainter();
