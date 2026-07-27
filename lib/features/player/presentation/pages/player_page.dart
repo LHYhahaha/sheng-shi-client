@@ -20,6 +20,7 @@ import '../../../../core/runtime/api_lang_provider.dart';
 import '../../../../core/toast/app_center_toast.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/url/external_url_launcher.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../data/player_exit_recommendation_history_repository_provider.dart';
 import '../../../auth/application/auth_controller.dart';
@@ -393,6 +394,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final previous = _previousLifecycleState;
     _previousLifecycleState = state;
     if (state == AppLifecycleState.resumed) {
+      // 从外部应用（例如 Facebook 分享页）返回时，恢复播放器可操作的默认
+      // chrome；不能只依赖“是否自动续播”，否则暂停状态返回会残留沉浸 UI。
+      if (previous != AppLifecycleState.resumed && _isPlaybackViewVisible) {
+        _restoreChromeAfterReturningToPlayer();
+      }
       // 浠?inactive 鎭㈠锛堝涓嬫媺鐘舵€佹爮鍚庢敹鍥烇級锛岃嫢涔嬪墠姝ｅ湪鎾斁鍒欒嚜鍔ㄦ仮澶?
       final shouldResumePlayback =
           _resumePlaybackOnLifecycleResume ||
@@ -1476,7 +1482,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   initialTab: PlayerDetailTab.episodes,
                 );
               },
-              onShareTap: _showShareSheet,
+              onShareTap: () => _showShareSheet(item.content.id),
               onMoreTap: () {
                 _showDetailSheet(
                   item.content,
@@ -2647,7 +2653,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     });
   }
 
-  Future<void> _showShareSheet() {
+  Future<void> _showShareSheet(String dramaId) {
     _isModalOpen = true;
     _syncAutoImmersiveBlockers();
     return showModalBottomSheet<void>(
@@ -2656,13 +2662,34 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       barrierColor: Colors.black.withValues(alpha: 0.7),
       isDismissible: true,
       enableDrag: true,
-      builder: (context) => const PlayerShareSheet(),
+      builder: (context) => PlayerShareSheet(
+        onFacebookTap: () => unawaited(_shareToFacebook(dramaId)),
+      ),
     ).whenComplete(() {
       _isModalOpen = false;
       if (mounted) {
         _syncAutoImmersiveBlockers();
       }
     });
+  }
+
+  Future<void> _shareToFacebook(String dramaId) async {
+    final languageCode = ref.read(appLocaleControllerProvider).languageCode;
+    final shareUrl = Uri.https('drama-wave.8y4w2vxvdffmd83.xyz', '/share/', {
+      'drama_id': dramaId,
+      'lang': languageCode,
+    });
+    final facebookShareUrl = Uri.https('www.facebook.com', '', {
+      'u': shareUrl.toString(),
+    });
+    final opened = await ref
+        .read(externalUrlLauncherProvider)
+        .open(facebookShareUrl.toString());
+    if (!opened) {
+      debugPrint(
+        '[PlayerShare] Failed to open Facebook share: $facebookShareUrl',
+      );
+    }
   }
 
   Future<void> _showSpeedSheet() async {

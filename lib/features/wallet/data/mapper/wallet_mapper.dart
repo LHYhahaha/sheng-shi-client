@@ -91,6 +91,8 @@ class WalletMapper {
       rewardEnabled: dto.status == 0,
       rewardClaimed: dto.status == 1,
       subtitle: UiText.raw(dto.sourceName),
+      sourceOrderNo: dto.sourceOrderNo,
+      rewardSourceType: dto.sourceType,
     );
   }
 

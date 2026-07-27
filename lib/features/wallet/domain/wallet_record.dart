@@ -29,6 +29,8 @@ class WalletRecord {
     UiText? detailLabel,
     UiText? trailingSubtitle,
     this.sourceType,
+    this.sourceOrderNo,
+    this.rewardSourceType,
     this.consumptionStatus,
     this.rewardEnabled = false,
     this.rewardClaimed = false,
@@ -56,6 +58,8 @@ class WalletRecord {
     String? detailLabel,
     String? trailingSubtitle,
     this.sourceType,
+    this.sourceOrderNo,
+    this.rewardSourceType,
     this.consumptionStatus,
     this.rewardEnabled = false,
     this.rewardClaimed = false,
@@ -68,8 +72,9 @@ class WalletRecord {
        trailingLabelText = UiText.raw(trailingLabel),
        subtitleText = subtitle == null ? null : UiText.raw(subtitle),
        detailLabelText = detailLabel == null ? null : UiText.raw(detailLabel),
-       trailingSubtitleText =
-           trailingSubtitle == null ? null : UiText.raw(trailingSubtitle);
+       trailingSubtitleText = trailingSubtitle == null
+           ? null
+           : UiText.raw(trailingSubtitle);
 
   /// 记录 id。
   ///
@@ -129,6 +134,17 @@ class WalletRecord {
   /// 用于 UI 层根据来源类型显示本地化文本。例如 'coins' 显示为本地化的 'Coins'。
   final String? sourceType;
 
+  /// 奖励金币的来源业务单号。
+  ///
+  /// 仅 coins 类型有意义，可用于后续的订单详情或问题排查。
+  final String? sourceOrderNo;
+
+  /// 奖励金币来源类型。
+  ///
+  /// 对应服务端 `sourceType`：1 后台补发、2 签到、3 任务、4 充值、5 其他。
+  /// 它与消费记录的字符串 [sourceType] 语义不同，因此单独保留。
+  final int? rewardSourceType;
+
   /// 消费状态。
   ///
   /// 仅 consumption 类型有意义；transaction/coins 记录不要读取它做筛选。
@@ -179,6 +195,8 @@ class WalletRecord {
     bool? rewardEnabled,
     bool? rewardClaimed,
     String? sourceType,
+    String? sourceOrderNo,
+    int? rewardSourceType,
     String? productType,
     String? memberPeriodType,
     int? coin,
@@ -198,6 +216,8 @@ class WalletRecord {
       detailLabel: detailLabelText,
       trailingSubtitle: trailingSubtitleText,
       sourceType: sourceType ?? this.sourceType,
+      sourceOrderNo: sourceOrderNo ?? this.sourceOrderNo,
+      rewardSourceType: rewardSourceType ?? this.rewardSourceType,
       consumptionStatus: consumptionStatus,
       rewardEnabled: rewardEnabled ?? this.rewardEnabled,
       rewardClaimed: rewardClaimed ?? this.rewardClaimed,

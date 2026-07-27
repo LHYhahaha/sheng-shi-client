@@ -1358,6 +1358,41 @@ void main() {
     expect(playbackSession.pauseCount, 0);
   });
 
+  testWidgets('single drama restores default chrome after app resumes', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        repository: _FakePlayerFeedRepository.unlocked(),
+        playbackSessionFactory: () => playbackSession,
+        providerOverrides: _singleDramaAutoImmersiveTestOverrides,
+      ),
+    );
+    await _pumpUntilSingleDramaPlaybackReady(tester);
+    await tester.pump(
+      _testAutoImmersiveDelay + const Duration(milliseconds: 80),
+    );
+
+    expect(
+      tester.widget<PlayerChrome>(find.byType(PlayerChrome)).showChromeOverlays,
+      isFalse,
+    );
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+
+    expect(
+      tester.widget<PlayerChrome>(find.byType(PlayerChrome)).showChromeOverlays,
+      isTrue,
+    );
+  });
+
   testWidgets('single drama default tap pauses while playing', (tester) async {
     final playbackSession = _FakePlaybackSession();
 

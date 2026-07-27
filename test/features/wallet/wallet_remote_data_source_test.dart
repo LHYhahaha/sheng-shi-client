@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:drama_client/core/network/api_client.dart';
 import 'package:drama_client/core/network/api_request_context.dart';
 import 'package:drama_client/features/wallet/data/dto/wallet_page_dto.dart';
+import 'package:drama_client/features/wallet/data/dto/wallet_reward_coin_record_dto.dart';
+import 'package:drama_client/features/wallet/data/mapper/wallet_mapper.dart';
 import 'package:drama_client/features/wallet/data/remote/wallet_remote_data_source.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -18,9 +20,7 @@ void main() {
         }),
       ),
     );
-    final dataSource = WalletRemoteDataSource(
-      apiClient: _apiClient(adapter),
-    );
+    final dataSource = WalletRemoteDataSource(apiClient: _apiClient(adapter));
 
     await dataSource.listTransactions(pageToken: '2');
     await dataSource.listConsumptionRecords(status: 'spent', pageToken: '2');
@@ -63,6 +63,28 @@ void main() {
     expect(pageByTotal.nextPageToken, '2');
     expect(pageByPages.items, [1]);
     expect(pageByPages.nextPageToken, '3');
+  });
+
+  test('reward coin records preserve their source metadata', () {
+    final dto = WalletRewardCoinRecordDto.fromJson({
+      'recordId': '1001',
+      'bonusCoin': '50',
+      'remainBonusCoin': '20',
+      'sourceName': 'Check-in reward',
+      'sourceType': 2,
+      'sourceOrderNo': 'checkin-20260727',
+      'status': 2,
+      'startAt': '2026-07-27T00:00:00Z',
+      'expireAt': '2026-08-27T00:00:00Z',
+      'permanent': false,
+    });
+    final record = const WalletMapper().mapReward(dto);
+
+    expect(dto.sourceType, 2);
+    expect(dto.sourceOrderNo, 'checkin-20260727');
+    expect(record.rewardSourceType, 2);
+    expect(record.sourceOrderNo, 'checkin-20260727');
+    expect(record.subtitle, 'Check-in reward');
   });
 }
 

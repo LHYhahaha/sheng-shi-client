@@ -4,6 +4,8 @@ class WalletRewardCoinRecordDto {
     required this.bonusCoin,
     required this.remainBonusCoin,
     required this.sourceName,
+    required this.sourceType,
+    required this.sourceOrderNo,
     required this.status,
     required this.startAt,
     required this.expireAt,
@@ -14,6 +16,8 @@ class WalletRewardCoinRecordDto {
   final int bonusCoin;
   final int remainBonusCoin;
   final String sourceName;
+  final int sourceType;
+  final String sourceOrderNo;
   final int status;
   final DateTime? startAt;
   final DateTime? expireAt;
@@ -26,6 +30,8 @@ class WalletRewardCoinRecordDto {
       bonusCoin: _int(map['bonusCoin']),
       remainBonusCoin: _int(map['remainBonusCoin']),
       sourceName: _string(map['sourceName']),
+      sourceType: _int(map['sourceType']),
+      sourceOrderNo: _string(map['sourceOrderNo']),
       status: _int(map['status']),
       startAt: _date(map['startAt']),
       expireAt: _date(map['expireAt']),

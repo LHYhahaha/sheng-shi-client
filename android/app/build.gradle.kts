@@ -78,20 +78,20 @@ android {
             resValue("string", "VEST_PKG_ID", "1001")
         }
 
-//        create("douyin_pro") {
-//            dimension = "channel"
-//            applicationId = "com.yushi.drama.client"
-//            resValue("string", "channel_flag", "douyin")
-//            resValue("string", "MERCHANT_ID", "331")
-//            resValue("string", "VEST_PKG_ID", "1002")
-//        }
-//        create("kuaishou_pro") {
-//            dimension = "channel"
-//            applicationId = "com.yushi.drama.client"
-//            resValue("string", "channel_flag", "kuaishou")
-//            resValue("string", "MERCHANT_ID", "332")
-//            resValue("string", "VEST_PKG_ID", "1001")
-//        }
+        create("douyin_pro") {
+            dimension = "channel"
+            applicationId = "com.yushi.drama.client"
+            resValue("string", "channel_flag", "douyin")
+            resValue("string", "MERCHANT_ID", "331")
+            resValue("string", "VEST_PKG_ID", "1002")
+        }
+        create("kuaishou_pro") {
+            dimension = "channel"
+            applicationId = "com.yushi.drama.client"
+            resValue("string", "channel_flag", "kuaishou")
+            resValue("string", "MERCHANT_ID", "332")
+            resValue("string", "VEST_PKG_ID", "1001")
+        }
         create("tiktok_dev") {
             dimension = "channel"
             applicationId = "com.yushi.drama.client"

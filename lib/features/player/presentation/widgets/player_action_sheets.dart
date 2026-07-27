@@ -7,12 +7,13 @@ import 'package:flutter_svg/svg.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
-import '../../../../shared/widgets/app_sheet_handle.dart';
 import '../../../../shared/widgets/app_primary_button.dart';
 import '../../../../shared/widgets/custom_switch.dart';
 
 class PlayerShareSheet extends StatelessWidget {
-  const PlayerShareSheet({super.key});
+  const PlayerShareSheet({required this.onFacebookTap, super.key});
+
+  final VoidCallback onFacebookTap;
 
   @override
   Widget build(BuildContext context) {
@@ -46,28 +47,30 @@ class PlayerShareSheet extends StatelessWidget {
                   color: const Color(0xFF1877F2),
                   icon: Icons.facebook_rounded,
                   label: context.l10n.playerFacebook,
+                  onTap: onFacebookTap,
+                  iconColor: Colors.white,
                 ),
-                _ShareTarget(
-                  color: const Color(0xFF25D366),
-                  icon: Icons.phone_rounded,
-                  label: context.l10n.playerWhatsApp,
-                ),
-                _ShareTarget(
-                  color: const Color(0xFF6F65FF),
-                  icon: Icons.chat_bubble_rounded,
-                  label: context.l10n.playerMessenger,
-                ),
-                _ShareTarget(
-                  color: const Color(0xFFE1306C),
-                  icon: Icons.camera_alt_rounded,
-                  label: context.l10n.playerInstagram,
-                ),
-                _ShareTarget(
-                  color: const Color(0xFFFFFC00),
-                  icon: Icons.bolt_rounded,
-                  label: context.l10n.playerSnapchat,
-                  iconColor: Colors.black,
-                ),
+                // _ShareTarget(
+                //   color: const Color(0xFF25D366),
+                //   icon: Icons.phone_rounded,
+                //   label: context.l10n.playerWhatsApp,
+                // ),
+                // _ShareTarget(
+                //   color: const Color(0xFF6F65FF),
+                //   icon: Icons.chat_bubble_rounded,
+                //   label: context.l10n.playerMessenger,
+                // ),
+                // _ShareTarget(
+                //   color: const Color(0xFFE1306C),
+                //   icon: Icons.camera_alt_rounded,
+                //   label: context.l10n.playerInstagram,
+                // ),
+                // _ShareTarget(
+                //   color: const Color(0xFFFFFC00),
+                //   icon: Icons.bolt_rounded,
+                //   label: context.l10n.playerSnapchat,
+                //   iconColor: Colors.black,
+                // ),
               ],
             ),
           ),
@@ -422,40 +425,49 @@ class _ShareTarget extends StatelessWidget {
     required this.color,
     required this.icon,
     required this.label,
+    required this.onTap,
     this.iconColor = Colors.white,
   });
 
   final Color color;
   final IconData icon;
   final String label;
+  final VoidCallback onTap;
   final Color iconColor;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 64,
-      child: Column(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            child: Icon(icon, color: iconColor, size: 25),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              height: 12 / 10,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        Navigator.of(context).pop();
+        onTap();
+      },
+      child: SizedBox(
+        width: 64,
+        child: Column(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              child: Icon(icon, color: iconColor, size: 25),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                height: 12 / 10,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -595,12 +595,9 @@ class _CoinRewardRecordRow extends StatelessWidget {
         ),
         const SizedBox(width: AppSpacing.md),
         Text(
-          // record.trailingLabel == "1"
-          //     ?
-          context.l10n.claimCoinsTypeRechargeBonus,
-          // : record.trailingLabel == "2"
-          // ? context.l10n.consumptionHistorySpent
-          // : context.l10n.consumptionHistoryExpired,
+          record.subtitle == null || record.subtitle!.isEmpty
+              ? context.l10n.claimCoinsTypeRechargeBonus
+              : context.l10n.walletText(record.subtitleText!),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
