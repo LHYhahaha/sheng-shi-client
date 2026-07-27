@@ -48,7 +48,9 @@ class _MemberTabPageState extends ConsumerState<MemberTabPage> {
     });
   }
 
-  void _refreshForActiveMemberTab({bool includeMemberPoints = true}) {
+  Future<void> _refreshForActiveMemberTab({
+    bool includeMemberPoints = true,
+  }) async {
     final now = DateTime.now();
     final lastRefreshAt = _lastRefreshAt;
     if (lastRefreshAt != null &&
@@ -57,16 +59,16 @@ class _MemberTabPageState extends ConsumerState<MemberTabPage> {
     }
     _lastRefreshAt = now;
 
-    ref.read(entitlementControllerProvider.notifier).refreshFromServer();
+    await ref.read(entitlementControllerProvider.notifier).refreshFromServer();
     if (ref.read(entitlementControllerProvider).isMember) {
       if (!includeMemberPoints) {
         return;
       }
-      ref.read(memberPointsControllerProvider.notifier).loadDailyDetail();
+      await ref.read(memberPointsControllerProvider.notifier).loadDailyDetail();
       return;
     }
 
-    ref.read(membershipControllerProvider.notifier).refreshSilently();
+    await ref.read(membershipControllerProvider.notifier).refreshSilently();
   }
 
   @override
@@ -119,9 +121,14 @@ class _MemberPageState extends ConsumerState<MemberPage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      ref.read(entitlementControllerProvider.notifier).refreshFromServer();
+      await ref
+          .read(entitlementControllerProvider.notifier)
+          .refreshFromServer();
+      if (!mounted || !ref.read(entitlementControllerProvider).isMember) {
+        return;
+      }
       ref.read(memberPointsControllerProvider.notifier).loadDailyDetail();
     });
   }

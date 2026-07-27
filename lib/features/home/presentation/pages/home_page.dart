@@ -10,6 +10,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell.dart';
+import '../../../../core/auth/auth_token_store.dart';
+import '../../../../core/network/api_client_provider.dart';
+import '../../../../core/notification/startup_notification_permission_reporter.dart';
 import '../../../../features/drama/domain/drama.dart';
 import '../../../../features/entitlement/application/entitlement_controller.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -35,6 +38,9 @@ class _HomePageState extends ConsumerState<HomePage> {
   int _remoteDataSelectedIndex = 0; // 远程数据的选中分类索引
   int _lastScrollToTopRequest = 0; // 跟踪上次的滚动请求计数
   ProviderSubscription<int>? _scrollToTopListener; // 监听滚动请求的订阅
+  ProviderSubscription<bool>? _accessTokenListener;
+  bool _notificationPermissionCheckScheduled = false;
+  bool _notificationPermissionChecked = false;
 
   List image = [
     "assets/images/home/picture1.jpg",
@@ -58,6 +64,16 @@ class _HomePageState extends ConsumerState<HomePage> {
       }
     });
 
+    _accessTokenListener = ref.listenManual(
+      authTokenStoreProvider.select((state) => state.hasAccessToken),
+      (_, hasAccessToken) {
+        if (hasAccessToken) {
+          _checkNotificationPermissionAfterFirstFrame();
+        }
+      },
+      fireImmediately: true,
+    );
+
     // 首页 remote 数据会在 HomeDataController 中监听 AuthState 自动加载
     // 不需要在这里手动加载 mock 数据，HomeFeedController 会根据 remote 数据的存在情况自动决定
   }
@@ -66,11 +82,39 @@ class _HomePageState extends ConsumerState<HomePage> {
   void dispose() {
     // 取消滚动请求的监听
     _scrollToTopListener?.close();
+    _accessTokenListener?.close();
 
     _scrollController
       ..removeListener(_onScroll)
       ..dispose();
     super.dispose();
+  }
+
+  void _checkNotificationPermissionAfterFirstFrame() {
+    if (_notificationPermissionChecked ||
+        _notificationPermissionCheckScheduled) {
+      return;
+    }
+
+    _notificationPermissionCheckScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _notificationPermissionCheckScheduled = false;
+      if (!mounted || _notificationPermissionChecked) {
+        return;
+      }
+
+      final accessToken = ref.read(apiRequestContextProvider).accessToken;
+      if (accessToken == null || accessToken.isEmpty) {
+        return;
+      }
+
+      _notificationPermissionChecked = true;
+      unawaited(
+        ref
+            .read(startupNotificationPermissionReporterProvider)
+            .checkAndReportOnHomeArrival(),
+      );
+    });
   }
 
   void _onScroll() {

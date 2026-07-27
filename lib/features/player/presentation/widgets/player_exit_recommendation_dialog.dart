@@ -81,7 +81,7 @@ class _PlayerExitRecommendationDialogState
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                 Text(
+                Text(
                   context.l10n.popupDramaExitTitle,
                   style: TextStyle(
                     color: Colors.white,

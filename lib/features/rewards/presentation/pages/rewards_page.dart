@@ -80,7 +80,10 @@ class _RewardsPageState extends State<RewardsPage> {
                 child: IndexedStack(
                   index: _selectedTab.index,
                   children: [
-                    const RewardsCoinsPage(useParentBackground: true),
+                    RewardsCoinsPage(
+                      useParentBackground: true,
+                      isActive: _selectedTab == RewardTab.rewardsCoins,
+                    ),
                     MemberPointsPage(
                       useParentBackground: true,
                       isActive: _selectedTab == RewardTab.memberPoints,

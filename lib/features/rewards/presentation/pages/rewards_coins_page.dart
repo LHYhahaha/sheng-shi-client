@@ -1,10 +1,19 @@
+import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:gradient_borders/box_borders/gradient_box_border.dart';
+import 'package:permission_handler/permission_handler.dart' as permissions;
 
+import '../../../../app/router/route_paths.dart';
 import '../../application/reward_coins_controller.dart';
 import '../../domain/reward_coins_check_in_status.dart';
+import '../../domain/reward_task.dart';
+import '../../../entitlement/application/entitlement_controller.dart';
+import '../../../../core/toast/app_center_toast.dart';
 import '../widget/reward_rules_sheet.dart';
+import '../widget/reward_coins_check_in_success_dialog.dart';
+import '../widget/reward_coins_claim_success_toast.dart';
 
 const _gold = Color(0xFFFFD392);
 const _muted = Color(0xFF77777B);
@@ -27,8 +36,13 @@ const _goldButtonBorder = GradientBoxBorder(
 );
 
 class RewardsCoinsPage extends ConsumerStatefulWidget {
-  const RewardsCoinsPage({this.useParentBackground = false, super.key});
+  const RewardsCoinsPage({
+    this.isActive = true,
+    this.useParentBackground = false,
+    super.key,
+  });
 
+  final bool isActive;
   final bool useParentBackground;
 
   @override
@@ -39,15 +53,31 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(
-      () =>
-          ref.read(rewardCoinsControllerProvider.notifier).loadCheckInStatus(),
-    );
+    _refreshIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(RewardsCoinsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isActive && widget.isActive) {
+      _refreshIfNeeded();
+    }
+  }
+
+  void _refreshIfNeeded() {
+    if (!widget.isActive) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.isActive) return;
+      ref.read(rewardCoinsControllerProvider.notifier).loadCheckInStatus();
+      ref.read(rewardCoinsControllerProvider.notifier).loadTasks();
+      ref.read(entitlementControllerProvider.notifier).refreshFromServer();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final rewardCoinsState = ref.watch(rewardCoinsControllerProvider);
+    final entitlement = ref.watch(entitlementControllerProvider);
 
     return DecoratedBox(
       key: const Key('rewards_coins_page'),
@@ -70,8 +100,13 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
           MediaQuery.paddingOf(context).bottom + 24,
         ),
         children: [
-          const _BalanceHeader(),
-          _CheckInPanel(status: rewardCoinsState.checkInStatus),
+          _BalanceHeader(
+            balance: entitlement.coinBalance + entitlement.bonusBalance,
+          ),
+          _CheckInPanel(
+            status: rewardCoinsState.checkInStatus,
+            onCheckIn: () => _claimCheckIn(context),
+          ),
           const SizedBox(height: 20),
           Text(
             'Earn Rewards',
@@ -81,51 +116,95 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 9),
-          _RewardTaskCard(
-            key: Key('reward_task_login'),
-            imagePath: 'assets/images/rewards/coins_login_account.png',
-            title: 'Login with any account',
-            claimed: true,
-          ),
-          const SizedBox(height: 8),
-          _RewardTaskCard(
-            key: Key('reward_task_invite'),
-            imagePath: 'assets/images/rewards/coins_invite.png',
-            title: 'Invite friends',
-          ),
-          const SizedBox(height: 8),
-          _RewardTaskCard(
-            key: Key('reward_task_watch_5'),
-            imagePath: 'assets/images/rewards/coins_watch.png',
-            title: 'Watch for 5 mins',
-          ),
-          const SizedBox(height: 8),
-          _RewardTaskCard(
-            key: Key('reward_task_watch_10'),
-            imagePath: 'assets/images/rewards/coins_watch.png',
-            title: 'Watch for 10 mins',
-          ),
-          const SizedBox(height: 8),
-          _RewardTaskCard(
-            key: Key('reward_task_watch_15'),
-            imagePath: 'assets/images/rewards/coins_watch.png',
-            title: 'Watch for 15 mins',
-          ),
-          const SizedBox(height: 8),
-          _RewardTaskCard(
-            key: Key('reward_task_notification'),
-            imagePath: 'assets/images/rewards/coins_notification.png',
-            title: 'Turn push notification',
-          ),
+          for (final task in _supportedTasks(rewardCoinsState.tasks)) ...[
+            const SizedBox(height: 8),
+            _RewardTaskCard(
+              key: Key('reward_task_${task.taskKey}'),
+              task: task,
+              onTap: () => _handleTaskTap(context, task),
+            ),
+          ],
         ],
       ),
     );
   }
+
+  Future<void> _claimCheckIn(BuildContext context) async {
+    try {
+      final result = await ref
+          .read(rewardCoinsControllerProvider.notifier)
+          .claimCheckIn();
+      if (!context.mounted) return;
+      if (result?.isSuccess != true) {
+        showAppCenterToast(context.l10n.networkError);
+        return;
+      }
+      await showRewardCoinsCheckInSuccessDialog(
+        context,
+        rewardAmount: result!.rewardAmount,
+      );
+    } catch (_) {
+      if (context.mounted) showAppCenterToast(context.l10n.networkError);
+    }
+  }
+
+  List<RewardTask> _supportedTasks(List<RewardTask> tasks) {
+    const keys = <String>{
+      'coin.bind_account',
+      'coin.enable_push',
+      'coin.share_drama',
+      'coin.watch.5m',
+      'coin.watch.10m',
+      'coin.watch.15m',
+    };
+    return tasks.where((task) => keys.contains(task.taskKey)).toList();
+  }
+
+  Future<void> _handleTaskTap(BuildContext context, RewardTask task) async {
+    if (task.claimed) return;
+    if (task.completed) {
+      await _claimTask(context, task.taskKey);
+      return;
+    }
+    switch (task.taskKey) {
+      case 'coin.bind_account':
+        context.go(RoutePaths.auth);
+      case 'coin.enable_push':
+        final status = await permissions.Permission.notification.request();
+        if (status.isGranted || status.isProvisional) {
+          await ref
+              .read(rewardCoinsControllerProvider.notifier)
+              .reportTaskAction(actionKey: 'enable_push');
+        }
+      case 'coin.share_drama':
+      case 'coin.watch.5m':
+      case 'coin.watch.10m':
+      case 'coin.watch.15m':
+        context.go(RoutePaths.home);
+    }
+  }
+
+  Future<void> _claimTask(BuildContext context, String taskKey) async {
+    try {
+      final result = await ref
+          .read(rewardCoinsControllerProvider.notifier)
+          .claimTask(taskKey: taskKey);
+      if (!context.mounted) return;
+      if (result?.isSuccess != true) {
+        showAppCenterToast(context.l10n.networkError);
+        return;
+      }
+      showRewardCoinsClaimSuccessToast(result!.rewardAmount);
+    } catch (_) {
+      if (context.mounted) showAppCenterToast(context.l10n.networkError);
+    }
+  }
 }
 
 class _BalanceHeader extends StatelessWidget {
-  const _BalanceHeader();
+  const _BalanceHeader({required this.balance});
+
+  final int balance;
 
   @override
   Widget build(BuildContext context) {
@@ -134,14 +213,14 @@ class _BalanceHeader extends StatelessWidget {
       height: 102,
       child: Stack(
         children: [
-          const Positioned(
+          Positioned(
             left: 10,
             top: 33,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '2230',
+                  '$balance',
                   style: TextStyle(
                     color: _gold,
                     fontSize: 28,
@@ -151,7 +230,7 @@ class _BalanceHeader extends StatelessWidget {
                 ),
                 SizedBox(height: 6),
                 Text(
-                  'Your Balance',
+                  context.l10n.rewardsCoinBalanceCurrent,
                   style: TextStyle(
                     color: Color(0xFF756A57),
                     fontSize: 13,
@@ -202,9 +281,10 @@ class _BalanceHeader extends StatelessWidget {
 }
 
 class _CheckInPanel extends StatelessWidget {
-  const _CheckInPanel({required this.status});
+  const _CheckInPanel({required this.status, required this.onCheckIn});
 
   final RewardCoinsCheckInStatus? status;
+  final VoidCallback onCheckIn;
 
   @override
   Widget build(BuildContext context) {
@@ -212,7 +292,10 @@ class _CheckInPanel extends StatelessWidget {
     final days = checkInStatus.days.isEmpty
         ? _fallbackCheckInStatus.days
         : checkInStatus.days;
-    final checkedToday = checkInStatus.checkedToday;
+    final canCheckIn =
+        status != null &&
+        !checkInStatus.checkedToday &&
+        status!.days.any((day) => day.current && day.claimable);
 
     return Container(
       key: const Key('rewards_coins_check_in_panel'),
@@ -236,8 +319,10 @@ class _CheckInPanel extends StatelessWidget {
                   shaderCallback: (bounds) => const LinearGradient(
                     colors: [Color(0xFFFFF9E9), Color(0xFFFFBD90)],
                   ).createShader(bounds),
-                  child: const Text(
-                    'Check-in for Rewards',
+                  child: Text(
+                    context.l10n.rewardsSigninDaysCount(
+                      checkInStatus.currentDay,
+                    ),
                     maxLines: 1,
                     style: TextStyle(
                       color: Colors.white,
@@ -260,8 +345,8 @@ class _CheckInPanel extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Text(
-                    'Rules',
+                  child: Text(
+                    context.l10n.rewardsRuleEntry,
                     style: TextStyle(color: Color(0xFFAAA49D), fontSize: 11),
                   ),
                 ),
@@ -277,33 +362,35 @@ class _CheckInPanel extends StatelessWidget {
           GestureDetector(
             key: const Key('rewards_coins_sign_in'),
             behavior: HitTestBehavior.opaque,
-            onTap: checkedToday ? null : () {},
+            onTap: canCheckIn ? onCheckIn : null,
             child: Container(
               width: double.infinity,
               height: 44,
               margin: EdgeInsetsGeometry.symmetric(horizontal: 8),
               decoration: BoxDecoration(
-                color: checkedToday ? _disabledButton : null,
+                color: canCheckIn ? null : _disabledButton,
                 borderRadius: BorderRadius.circular(5),
-                border: checkedToday ? null : _goldButtonBorder,
-                gradient: checkedToday
-                    ? null
-                    : const LinearGradient(
+                border: canCheckIn ? _goldButtonBorder : null,
+                gradient: canCheckIn
+                    ? const LinearGradient(
                         colors: [Color(0xFFD48851), Color(0xFFFFF3C7)],
-                      ),
+                      )
+                    : null,
               ),
               child: CustomPaint(
                 key: const Key('rewards_coins_button_top_highlight'),
-                foregroundPainter: checkedToday
-                    ? null
-                    : const _MemberPointsButtonTopHighlightPainter(),
+                foregroundPainter: canCheckIn
+                    ? const _MemberPointsButtonTopHighlightPainter()
+                    : null,
                 child: Center(
                   child: Text(
-                    'Check In',
+                    canCheckIn
+                        ? context.l10n.rewardsSigninButtonSignIn
+                        : context.l10n.rewardsSigninButtonSignedIn,
                     style: TextStyle(
-                      color: checkedToday
-                          ? Colors.white.withValues(alpha: 0.6)
-                          : _goldButtonText,
+                      color: canCheckIn
+                          ? _goldButtonText
+                          : Colors.white.withValues(alpha: 0.6),
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
@@ -422,7 +509,7 @@ class _CheckInDay extends StatelessWidget {
           )
         else
           Text(
-            'DAY $day',
+            context.l10n.rewardsSigninDayIndex(day),
             maxLines: 1,
             style: TextStyle(
               color: active ? Colors.white : _muted,
@@ -523,19 +610,34 @@ class _CheckInDayBorderPainter extends CustomPainter {
 }
 
 class _RewardTaskCard extends StatelessWidget {
-  const _RewardTaskCard({
-    required this.imagePath,
-    required this.title,
-    this.claimed = false,
-    super.key,
-  });
+  const _RewardTaskCard({required this.task, required this.onTap, super.key});
 
-  final String imagePath;
-  final String title;
-  final bool claimed;
+  final RewardTask task;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final title = switch (task.taskKey) {
+      'coin.bind_account' => l10n.rewardsTaskLogin,
+      'coin.enable_push' => l10n.rewardsTaskEnablePush,
+      'coin.share_drama' => l10n.rewardsTaskShare,
+      'coin.watch.5m' => l10n.rewardsTaskWatch5,
+      'coin.watch.10m' => l10n.rewardsTaskWatch10,
+      'coin.watch.15m' => l10n.rewardsTaskWatch15,
+      _ => task.displayName,
+    };
+    final imagePath = switch (task.taskKey) {
+      'coin.bind_account' => 'assets/images/rewards/coins_login_account.png',
+      'coin.enable_push' => 'assets/images/rewards/coins_notification.png',
+      'coin.share_drama' => 'assets/images/rewards/coins_invite.png',
+      _ => 'assets/images/rewards/coins_watch.png',
+    };
+    final label = task.claimed
+        ? l10n.claimed
+        : task.completed
+        ? l10n.claim
+        : l10n.goComplete;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
@@ -566,11 +668,11 @@ class _RewardTaskCard extends StatelessWidget {
                   TextSpan(
                     children: [
                       TextSpan(
-                        text: '+10',
+                        text: task.rewardText,
                         style: TextStyle(color: Color(0xFFE54900)),
                       ),
                       TextSpan(
-                        text: ' Reward coins',
+                        text: ' ${context.l10n.unitCoin}',
                         style: TextStyle(
                           color: Color(0xFFFFFFFF).withValues(alpha: 0.3),
                         ),
@@ -585,33 +687,40 @@ class _RewardTaskCard extends StatelessWidget {
           const SizedBox(width: 8),
           Container(
             decoration: BoxDecoration(
-              color: claimed ? const Color(0xFF696A6E) : null,
-              gradient: claimed
+              color: task.claimed ? const Color(0xFF696A6E) : null,
+              gradient: task.claimed
                   ? null
                   : const LinearGradient(
                       colors: [Color(0xFFD4864E), Color(0xFFFFF0BE)],
                     ),
-              borderRadius: BorderRadius.circular(5),
-              border: claimed ? null : _goldButtonBorder,
+              borderRadius: BorderRadius.circular(4),
+              border: task.claimed ? null : _goldButtonBorder,
             ),
             child: CustomPaint(
-              foregroundPainter: claimed
+              foregroundPainter: task.claimed
                   ? null
                   : const _MemberPointsButtonTopHighlightPainter(),
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 6,
-                  ),
-                  child: Text(
-                    'Claim',
-                    style: TextStyle(
-                      color: claimed
-                          ? Colors.white.withValues(alpha: 0.6)
-                          : _goldButtonText,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: task.claimed ? null : onTap,
+                  borderRadius: BorderRadius.circular(4),
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 6,
+                      ),
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          color: task.claimed
+                              ? Colors.white.withValues(alpha: 0.6)
+                              : _goldButtonText,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
                 ),

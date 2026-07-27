@@ -1148,9 +1148,6 @@ class AppLocalizations {
   String get playerRechargeUnlockTitle =>
       _remoteText('wallet.button.top_up', en: 'Recharge to unlock', zh: '充值解锁');
 
-  String get playerRequiredCoins =>
-      _remoteText('app.common.unit.coin', en: 'Required', zh: '所需金币');
-
   String get playerCoinPackages =>
       _remoteText('payment_modal.button.buy_now', en: 'Coins', zh: '金币充值');
 
@@ -1481,8 +1478,6 @@ class AppLocalizations {
   String get commonActionSubmit =>
       _remoteText('common.action.submit', en: 'Submit', zh: '提交');
 
-  String get commonUnitCoin =>
-      _remoteText('common.unit.coin', en: 'Coins', zh: '金币');
 
   String get appAccountBannedDialogMessage => _remoteText(
     'app.account.banned.dialog.message',
@@ -1536,11 +1531,17 @@ class AppLocalizations {
   String get popupDramaExitActionPlay =>
       _remoteText('popup.drama_exit.action.play', en: 'Play', zh: '播放');
 
-  String get popupNextDramaSubtitle =>
-      _remoteText('app.recommend_popup.subtitle_next_drama', en: 'A story you might love', zh: '你可能会喜欢的故事');
+  String get popupNextDramaSubtitle => _remoteText(
+    'app.recommend_popup.subtitle_next_drama',
+    en: 'A story you might love',
+    zh: '你可能会喜欢的故事',
+  );
 
-  String get popupNextDramaTitle =>
-      _remoteText('app.recommend_popup.title_next_drama', en: 'Your Next Drama', zh: '你的下一部短剧');
+  String get popupNextDramaTitle => _remoteText(
+    'app.recommend_popup.title_next_drama',
+    en: 'Your Next Drama',
+    zh: '你的下一部短剧',
+  );
 
   // ── 1.0.2 / 推荐Tab ─────────────────────────────────────────────
   String get recommendTabActionViewAllEpisodes => _remoteText(
