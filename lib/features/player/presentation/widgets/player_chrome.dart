@@ -946,17 +946,16 @@ class _PlayerActionRailContent extends ConsumerWidget {
               onTap: onEpisodesTap,
             ),
           ),
-
-        // _ActionItem(
-        //   icon: Icons.share_rounded,
-        //   imageIcon: Image.asset(
-        //     'assets/images/player/share.png',
-        //     width: 28,
-        //     height: 28,
-        //   ),
-        //   label: context.l10n.playerShare,
-        //   onTap: onShareTap,
-        // ),
+        _ActionItem(
+          icon: Icons.share_rounded,
+          imageIcon: Image.asset(
+            'assets/images/player/share.png',
+            width: 28,
+            height: 28,
+          ),
+          label: context.l10n.playerShare,
+          onTap: onShareTap,
+        ),
       ],
     );
   }

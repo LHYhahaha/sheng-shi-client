@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:app_links/app_links.dart';
 import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -37,18 +38,54 @@ class DramaClientApp extends ConsumerStatefulWidget {
 
 class _DramaClientAppState extends ConsumerState<DramaClientApp>
     with WidgetsBindingObserver {
+  StreamSubscription<Uri>? _appLinkSubscription;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _setPreferredOrientations();
+    _listenForAppLinks();
     Future.microtask(_bootstrapSessionAndI18n);
   }
 
   @override
   void dispose() {
+    _appLinkSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _listenForAppLinks() {
+    _appLinkSubscription = AppLinks().uriLinkStream.listen(
+      _handleAppLink,
+      onError: (Object error, StackTrace stackTrace) {
+        debugPrint('[AppLink] Failed to receive link: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      },
+    );
+  }
+
+  void _handleAppLink(Uri uri) {
+    if (uri.scheme != 'novashort' || uri.host != 'player') {
+      debugPrint('[AppLink] Ignored unsupported link: $uri');
+      return;
+    }
+
+    final dramaId = uri.queryParameters['drama_id']?.trim();
+    if (dramaId == null || dramaId.isEmpty) {
+      debugPrint('[AppLink] Missing drama_id: $uri');
+      return;
+    }
+
+    final location = RoutePaths.playerLocation(
+      dramaId: dramaId,
+      episodeId: '1',
+      trigger: 'app_link',
+      userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+    );
+    debugPrint('[AppLink] Opening drama $dramaId');
+    ref.read(appRouterProvider).go(location);
   }
 
   @override

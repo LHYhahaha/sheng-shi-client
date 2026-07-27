@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -184,6 +186,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: RoutePaths.profileFeedback,
+        name: RouteNames.profileFeedback,
+        builder: (context, state) => WebViewPage(
+          url: 'https://drama-wave.8y4w2vxvdffmd83.xyz/app/?lang=en#/help',
+          title: context.l10n.profileFeedback,
+          showAppBar: false,
+          javaScriptMessageHandlers: {
+            'ProfileFeedbackBridge': (message) =>
+                _handleProfileFeedbackMessage(message),
+          },
+        ),
+      ),
+      GoRoute(
         path: RoutePaths.language,
         name: RouteNames.language,
         builder: (context, state) => const LanguagePage(),
@@ -245,3 +260,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+/// H5 可调用 `window.ProfileFeedbackBridge.postMessage(message)` 向 App 发消息。
+///
+/// [message] 推荐使用 JSON，例如 `{"event":"submit_success"}`。这里保留原始
+/// 内容的日志，便于联调阶段根据 H5 的事件协议继续补充原生动作。
+void _handleProfileFeedbackMessage(String message) {
+  try {
+    final decoded = jsonDecode(message);
+    debugPrint('[ProfileFeedbackBridge] $decoded');
+  } on FormatException {
+    debugPrint('[ProfileFeedbackBridge] $message');
+  }
+}

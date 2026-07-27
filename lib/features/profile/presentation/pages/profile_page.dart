@@ -159,7 +159,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             ProfileMenuRow(
               title: l10n.profileFeedback,
               iconAssetPath: 'assets/images/profile/feedback.png',
-              onTap: () {},
+              onTap: () => context.push(RoutePaths.profileFeedback),
             ),
           ],
         ),

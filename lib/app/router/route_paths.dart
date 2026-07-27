@@ -7,6 +7,7 @@ abstract final class RoutePaths {
   static const member = '/member';
   static const myMember = '/my-member';
   static const profile = '/profile';
+  static const profileFeedback = '/profile/feedback';
   static const search = '/search';
   static const auth = '/auth';
   static const account = '/account';
