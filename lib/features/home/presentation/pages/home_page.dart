@@ -43,9 +43,12 @@ class _HomePageState extends ConsumerState<HomePage> {
   bool _notificationPermissionChecked = false;
 
   List image = [
-    "assets/images/home/picture1.jpg",
-    "assets/images/home/picture2.jpg",
-    "assets/images/home/picture3.jpg",
+    "assets/images/home/picture1.png",
+    "assets/images/home/picture2.png",
+    "assets/images/home/picture3.png",
+    "assets/images/home/picture4.png",
+    "assets/images/home/picture5.png",
+    "assets/images/home/picture6.png",
   ];
 
   @override
