@@ -25,12 +25,12 @@ class AppBottomNavigation extends StatelessWidget {
       unselectedAssetPath: 'assets/navigation/home_unselected.png',
       fallbackIcon: Icons.home_rounded,
     ),
-    _BottomNavigationItem(
-      label: _BottomNavigationLabel.member,
-      selectedAssetPath: 'assets/navigation/huiyuan__selected.png',
-      unselectedAssetPath: 'assets/navigation/huiyuan_unselected.png',
-      fallbackIcon: Icons.card_membership_rounded,
-    ),
+    // _BottomNavigationItem(
+    //   label: _BottomNavigationLabel.member,
+    //   selectedAssetPath: 'assets/navigation/huiyuan__selected.png',
+    //   unselectedAssetPath: 'assets/navigation/huiyuan_unselected.png',
+    //   fallbackIcon: Icons.card_membership_rounded,
+    // ),
     // TODO: 暂时禁用 For You tab
     // _BottomNavigationItem(
     //   label: _BottomNavigationLabel.forYou,
@@ -88,7 +88,7 @@ class AppBottomNavigation extends StatelessWidget {
                 child: SizedBox(
                   width: _contentWidth,
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       for (final item in _items.indexed)
                         _AppBottomNavigationItem(
@@ -225,7 +225,7 @@ enum _BottomNavigationLabel {
   home,
   forYou,
   myList,
-  member,
+  // member,
   profile;
 
   String resolve(AppLocalizations l10n) {
@@ -233,7 +233,7 @@ enum _BottomNavigationLabel {
       _BottomNavigationLabel.home => l10n.navHome,
       _BottomNavigationLabel.forYou => l10n.navForYou,
       _BottomNavigationLabel.myList => l10n.navMyList,
-      _BottomNavigationLabel.member => l10n.navMember,
+      // _BottomNavigationLabel.member => l10n.navMember,
       _BottomNavigationLabel.profile => l10n.navProfile,
     };
   }
