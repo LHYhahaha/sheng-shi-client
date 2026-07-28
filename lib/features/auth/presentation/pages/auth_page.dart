@@ -102,7 +102,12 @@ class _AuthPageState extends ConsumerState<AuthPage> {
             ),
             if (!state.isLoggedIn && !_returnedAfterLogin)
               _LoginBody(
-                isLoading: state.pendingProvider == AuthProviderType.facebook,
+                pendingProvider: state.pendingProvider,
+                onGooglePressed: state.pendingProvider == null
+                    ? () => ref
+                          .read(authControllerProvider.notifier)
+                          .login(AuthProviderType.google)
+                    : null,
                 onFacebookPressed: state.pendingProvider == null
                     ? () => ref
                           .read(authControllerProvider.notifier)
@@ -117,9 +122,14 @@ class _AuthPageState extends ConsumerState<AuthPage> {
 }
 
 class _LoginBody extends StatelessWidget {
-  const _LoginBody({required this.isLoading, required this.onFacebookPressed});
+  const _LoginBody({
+    required this.pendingProvider,
+    required this.onGooglePressed,
+    required this.onFacebookPressed,
+  });
 
-  final bool isLoading;
+  final AuthProviderType? pendingProvider;
+  final VoidCallback? onGooglePressed;
   final VoidCallback? onFacebookPressed;
 
   @override
@@ -134,8 +144,13 @@ class _LoginBody extends StatelessWidget {
         children: [
           const Spacer(flex: 145),
           ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.asset('assets/images/profile/logo.png', width: 62, height: 62)),
+            borderRadius: BorderRadius.circular(10),
+            child: Image.asset(
+              'assets/images/profile/logo.png',
+              width: 62,
+              height: 62,
+            ),
+          ),
           const SizedBox(height: 13),
           Text(
             context.l10n.appTitle,
@@ -147,10 +162,28 @@ class _LoginBody extends StatelessWidget {
             ),
           ),
           const Spacer(flex: 181),
-          _FacebookLoginButton(
+          _SocialLoginButton(
+            key: const ValueKey('auth_facebook_button'),
             label: l10n.authFacebookLogin,
-            isLoading: isLoading,
+            isLoading: pendingProvider == AuthProviderType.facebook,
             onPressed: onFacebookPressed,
+            backgroundColor: const Color(0xFF5981EF),
+            foregroundColor: AppColors.textPrimary,
+            icon: const Icon(Icons.facebook_rounded, size: 26),
+          ),
+          const SizedBox(height: 12),
+          _SocialLoginButton(
+            key: const ValueKey('auth_google_button'),
+            label: l10n.authGoogleLogin,
+            isLoading: pendingProvider == AuthProviderType.google,
+            onPressed: onGooglePressed,
+            backgroundColor: AppColors.textPrimary,
+            foregroundColor: const Color(0xFF1A1A1A),
+            icon: Image.asset(
+              'assets/images/auth/google_login.png',
+              width: 26,
+              height: 26,
+            ),
           ),
           const SizedBox(height: 12),
           const AuthTermsText(width: double.infinity),
@@ -160,46 +193,49 @@ class _LoginBody extends StatelessWidget {
   }
 }
 
-class _FacebookLoginButton extends StatelessWidget {
-  const _FacebookLoginButton({
+class _SocialLoginButton extends StatelessWidget {
+  const _SocialLoginButton({
+    super.key,
     required this.label,
     required this.isLoading,
     required this.onPressed,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.icon,
   });
 
   final String label;
   final bool isLoading;
   final VoidCallback? onPressed;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final Widget icon;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
       child: FilledButton.icon(
-        key: const ValueKey('auth_facebook_button'),
+        key: key,
         onPressed: isLoading ? null : onPressed,
         icon: isLoading
-            ? const SizedBox.square(
+            ? SizedBox.square(
                 dimension: 18,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: AppColors.textPrimary,
+                  color: foregroundColor,
                 ),
               )
-            : const Icon(Icons.facebook_rounded, size: 26),
+            : icon,
         label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
         style: FilledButton.styleFrom(
           padding: EdgeInsets.symmetric(vertical: 10),
-          backgroundColor: const Color(0xFF5981EF),
-          foregroundColor: AppColors.textPrimary,
-          disabledBackgroundColor: const Color(
-            0xFF5981EF,
-          ).withValues(alpha: 0.65),
-          disabledForegroundColor: AppColors.textPrimary.withValues(
-            alpha: 0.75,
-          ),
+          backgroundColor: backgroundColor,
+          foregroundColor: foregroundColor,
+          disabledBackgroundColor: backgroundColor.withValues(alpha: 0.65),
+          disabledForegroundColor: foregroundColor.withValues(alpha: 0.75),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(8),
           ),
           textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
             fontSize: 14,

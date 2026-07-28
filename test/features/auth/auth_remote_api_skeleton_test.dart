@@ -66,6 +66,22 @@ void main() {
       expect(session.user?.avatarResource?.isNetwork, isTrue);
     });
 
+    test('google login response accepts string token expiry timestamps', () {
+      final dto = AuthSessionDto.fromJson({
+        'accessToken': 'google-access-token',
+        'refreshToken': 'google-refresh-token',
+        'accessExpireAt': '1785826791',
+        'refreshExpireAt': '1787813991',
+      });
+
+      expect(dto.isAuthenticated, isTrue);
+      expect(dto.token?.accessToken, 'google-access-token');
+      expect(
+        dto.token?.expiresAt,
+        DateTime.fromMillisecondsSinceEpoch(1785826791 * 1000),
+      );
+    });
+
     test('guest session maps to guest; malformed payload fails fast', () {
       final mapper = const AuthMapper();
 
@@ -108,7 +124,7 @@ void main() {
       },
     );
 
-    test('oauth login uses public auth policy and provider payload', () async {
+    test('oauth login uses current auth token and provider payload', () async {
       final adapter = _FakeHttpClientAdapter(
         responseData: _ok(_authSessionJson),
       );
@@ -119,12 +135,14 @@ void main() {
 
       await repository.login(AuthProviderType.google);
 
-      expect(adapter.lastOptions?.path, '/auth/login/oauth');
-      expect(adapter.lastOptions?.headers['Authorization'], isNull);
-      expect(adapter.lastOptions?.data, containsPair('provider', 'google'));
+      expect(adapter.lastOptions?.path, '/api/user/google/login');
+      expect(
+        adapter.lastOptions?.headers['Authorization'],
+        'Bearer test-token',
+      );
       expect(
         adapter.lastOptions?.data,
-        containsPair('facebookToken', 'mock-google-id-token'),
+        containsPair('googleToken', 'mock-google-id-token'),
       );
     });
 
@@ -142,30 +160,26 @@ void main() {
       expect(adapter.lastOptions?.headers['Authorization'], isNull);
     });
 
-    test(
-      'logout and delete account use required auth policy',
-      () async {
-        final adapter = _FakeHttpClientAdapter(
-          responseData: _ok({'success': true, 'isCurrentDeviceAccount': true}),
-        );
-        final source = AuthRemoteDataSource(apiClient: _apiClient(adapter));
+    test('logout and delete account use required auth policy', () async {
+      final adapter = _FakeHttpClientAdapter(
+        responseData: _ok({'success': true, 'isCurrentDeviceAccount': true}),
+      );
+      final source = AuthRemoteDataSource(apiClient: _apiClient(adapter));
 
-        await source.logout();
-        await source.deleteAccount();
+      await source.logout();
+      await source.deleteAccount();
 
-        expect(adapter.requests.map((request) => request.path), [
-          '/api/user/logout',
-          '/api/user/delete',
-        ]);
-        expect(
-          adapter.requests.every(
-            (request) =>
-                request.headers['Authorization'] == 'Bearer test-token',
-          ),
-          isTrue,
-        );
-      },
-    );
+      expect(adapter.requests.map((request) => request.path), [
+        '/api/user/logout',
+        '/api/user/delete',
+      ]);
+      expect(
+        adapter.requests.every(
+          (request) => request.headers['Authorization'] == 'Bearer test-token',
+        ),
+        isTrue,
+      );
+    });
 
     test('auth provider defaults to mock and can be switched to remote', () {
       final mockContainer = ProviderContainer();

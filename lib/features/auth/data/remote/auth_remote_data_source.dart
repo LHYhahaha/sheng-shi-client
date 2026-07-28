@@ -52,13 +52,23 @@ class AuthRemoteDataSource {
   }
 
   Future<AuthSessionDto> loginOAuth(OAuthLoginRequestDto request) {
+    final path = switch (request.provider) {
+      'google' => '/api/user/google/login',
+      'facebook' => '/api/user/facebook/login',
+      _ => throw ArgumentError.value(
+        request.provider,
+        'request.provider',
+        'Unsupported OAuth provider',
+      ),
+    };
     print('[AuthRemoteDataSource] loginOAuth request:');
-    print('[AuthRemoteDataSource]   URL: POST /api/user/facebook/login');
+    print('[AuthRemoteDataSource]   URL: POST $path');
     print('[AuthRemoteDataSource]   Body: ${request.toJson()}');
 
     return _apiClient.post<AuthSessionDto>(
-      '/api/user/facebook/login',
+      path,
       data: request.toJson(),
+      // 三方登录用于将当前游客会话升级为正式账号，需携带已有 App token。
       authPolicy: ApiAuthPolicy.required,
       decoder: AuthSessionDto.fromJson,
     );

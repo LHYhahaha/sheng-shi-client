@@ -74,18 +74,18 @@ class AuthLoginModalContent extends ConsumerWidget {
         //       : null,
         // ),
         // const SizedBox(height: 12),
-        // TODO(暂未开放): Google登录按钮 - 2026-06-15
-        // AuthActionButton(
-        //   label: l10n.authGoogleLogin,
-        //   icon: Icons.g_mobiledata_rounded,
-        //   backgroundColor: AppColors.textPrimary,
-        //   foregroundColor: const Color(0xFF1A1A1A),
-        //   isLoading: state.pendingProvider == AuthProviderType.google,
-        //   onPressed: state.pendingProvider == null
-        //       ? () => controller.login(AuthProviderType.google)
-        //       : null,
-        // ),
-        // const SizedBox(height: 12),
+        AuthActionButton(
+          label: l10n.authGoogleLogin,
+          icon: Icons.g_mobiledata_rounded,
+          assetIconPath: 'assets/images/auth/google_login.png',
+          backgroundColor: AppColors.textPrimary,
+          foregroundColor: const Color(0xFF1A1A1A),
+          isLoading: state.pendingProvider == AuthProviderType.google,
+          onPressed: state.pendingProvider == null
+              ? () => controller.login(AuthProviderType.google)
+              : null,
+        ),
+        const SizedBox(height: 12),
         Stack(
           clipBehavior: Clip.none,
           children: [

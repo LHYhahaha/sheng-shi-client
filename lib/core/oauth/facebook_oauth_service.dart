@@ -1,4 +1,5 @@
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import 'oauth_service.dart';
 
@@ -11,6 +12,21 @@ class FacebookOAuthService implements OAuthService {
     : _facebookAuth = facebookAuth ?? FacebookAuth.instance;
 
   final FacebookAuth _facebookAuth;
+  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+  Future<void>? _googleInitializeFuture;
+
+  Future<void> _initializeGoogleSignIn() {
+    if (_googleServerClientId.isEmpty) {
+      throw const OAuthException(
+        'google',
+        'Missing GOOGLE_SERVER_CLIENT_ID build configuration',
+      );
+    }
+    return _googleInitializeFuture ??= _googleSignIn.initialize(
+      // 始终显式注入 Web OAuth Client ID，不依赖 google-services.json。
+      serverClientId: _googleServerClientId,
+    );
+  }
 
   @override
   Future<String?> signInWithFacebook() async {
@@ -38,10 +54,7 @@ class FacebookOAuthService implements OAuthService {
           return null;
 
         case LoginStatus.failed:
-          throw OAuthException(
-            'facebook',
-            result.message ?? 'Login failed',
-          );
+          throw OAuthException('facebook', result.message ?? 'Login failed');
 
         case LoginStatus.operationInProgress:
           throw const OAuthException(
@@ -89,10 +102,41 @@ class FacebookOAuthService implements OAuthService {
     }
   }
 
-  // Google 和 Apple 登录预留给未来实现
   @override
-  Future<String?> signInWithGoogle() {
-    throw UnimplementedError('Google login not implemented yet');
+  Future<String?> signInWithGoogle() async {
+    try {
+      await _initializeGoogleSignIn();
+      if (!_googleSignIn.supportsAuthenticate()) {
+        throw const OAuthException(
+          'google',
+          'Google sign-in is not supported on this platform',
+        );
+      }
+
+      final account = await _googleSignIn.authenticate();
+      final idToken = account.authentication.idToken;
+      if (idToken == null || idToken.isEmpty) {
+        throw const OAuthException(
+          'google',
+          'Login succeeded but Google ID token is missing',
+        );
+      }
+      return idToken;
+    } on GoogleSignInException catch (error) {
+      if (error.code == GoogleSignInExceptionCode.canceled) {
+        return null;
+      }
+      throw OAuthException(
+        'google',
+        error.description ?? 'Login failed',
+        error,
+      );
+    } catch (error) {
+      if (error is OAuthException) {
+        rethrow;
+      }
+      throw OAuthException('google', 'Unexpected error during login', error);
+    }
   }
 
   @override
@@ -101,7 +145,19 @@ class FacebookOAuthService implements OAuthService {
   }
 
   @override
-  Future<void> signOutGoogle() {
-    throw UnimplementedError('Google login not implemented yet');
+  Future<void> signOutGoogle() async {
+    try {
+      await _initializeGoogleSignIn();
+      await _googleSignIn.signOut();
+    } catch (error) {
+      print('Failed to sign out from Google: $error');
+    }
   }
 }
+
+/// Google Cloud Console 中的 Web OAuth Client ID。
+///
+/// 通过构建参数写入 App，例如：
+/// `--dart-define=GOOGLE_SERVER_CLIENT_ID=xxx.apps.googleusercontent.com`。
+/// 不要在客户端写入 OAuth Client Secret。
+const _googleServerClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');

@@ -189,7 +189,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.profileFeedback,
         name: RouteNames.profileFeedback,
         builder: (context, state) => WebViewPage(
-          url: 'https://drama-wave.8y4w2vxvdffmd83.xyz/app/?lang=en#/help',
+          // url: 'https://drama-wave.8y4w2vxvdffmd83.xyz/app/?lang=en#/help',
+          url: 'http://192.168.1.55:5173/app/#/help/feedback/new',
           title: context.l10n.profileFeedback,
           showAppBar: false,
           javaScriptMessageHandlers: {

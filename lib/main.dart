@@ -21,9 +21,9 @@ Future<void> main() async {
    * Android 会自动读取 android/app/google-services.json，
    * 所以这里不需要 firebase_options.dart。
   */
-  // await Firebase.initializeApp();
-  // FirebaseMessaging.onBackgroundMessage(fcmBackgroundMessageHandler);
-  // await FcmNotificationService().initialize();
+  await Firebase.initializeApp();
+  FirebaseMessaging.onBackgroundMessage(fcmBackgroundMessageHandler);
+  await FcmNotificationService().initialize();
 
   MediaKit.ensureInitialized();
 

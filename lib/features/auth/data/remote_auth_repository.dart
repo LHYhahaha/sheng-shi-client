@@ -194,7 +194,7 @@ class RemoteAuthRepository
     // 调用后端登录接口
     print('[RemoteAuthRepository] _loginWithOAuth: calling backend API...');
     return await _remoteDataSource.loginOAuth(
-      OAuthLoginRequestDto(facebookToken: oauthToken),
+      OAuthLoginRequestDto(provider: provider.name, token: oauthToken),
     );
   }
 

@@ -7,6 +7,7 @@ class AuthActionButton extends StatelessWidget {
     required this.backgroundColor,
     required this.foregroundColor,
     required this.onPressed,
+    this.assetIconPath,
     this.isLoading = false,
     super.key,
   });
@@ -16,6 +17,7 @@ class AuthActionButton extends StatelessWidget {
   final Color backgroundColor;
   final Color foregroundColor;
   final VoidCallback? onPressed;
+  final String? assetIconPath;
   final bool isLoading;
 
   @override
@@ -33,7 +35,9 @@ class AuthActionButton extends StatelessWidget {
                   color: foregroundColor,
                 ),
               )
-            : Icon(icon, size: 22),
+            : assetIconPath == null
+            ? Icon(icon, size: 22)
+            : Image.asset(assetIconPath!, width: 22, height: 22),
         label: Text(label),
         style: FilledButton.styleFrom(
           backgroundColor: backgroundColor,

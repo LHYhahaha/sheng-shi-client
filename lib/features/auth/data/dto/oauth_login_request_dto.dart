@@ -1,13 +1,18 @@
 class OAuthLoginRequestDto {
-  const OAuthLoginRequestDto({
-    required this.facebookToken,
-  });
+  const OAuthLoginRequestDto({required this.provider, required this.token});
 
-  final String facebookToken;
+  final String provider;
+  final String token;
 
   Map<String, Object?> toJson() {
-    return {
-      'facebookToken': facebookToken,
+    return switch (provider) {
+      'google' => {'googleToken': token},
+      'facebook' => {'facebookToken': token},
+      _ => throw ArgumentError.value(
+        provider,
+        'provider',
+        'Unsupported OAuth provider',
+      ),
     };
   }
 }

@@ -594,15 +594,15 @@ class AppLocalizations {
   );
 
   String get authGoogleLogin => _remoteText(
-    'login.button.facebook',
+    'login.button.google',
     en: 'Sign in with Google',
-    zh: '使用 Google 登录',
+    zh: 'Google登录',
   );
 
   String get authFacebookLogin => _remoteText(
     'login.button.facebook',
     en: 'Sign in with Facebook',
-    zh: '使用 Facebook 登录',
+    zh: 'Facebook登录',
   );
 
   String get authClaimCoins => _remoteText(
