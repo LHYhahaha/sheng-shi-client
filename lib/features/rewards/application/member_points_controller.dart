@@ -80,6 +80,26 @@ class MemberPointsController extends Notifier<MemberPointsState> {
     );
   }
 
+  /// 非会员进入积分页时也需要获取兑换档位；每日积分明细仍仅供会员加载。
+  Future<void> loadExchangeOptions() async {
+    final generation = ++_generation;
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final exchangeOptions = await ref
+          .read(memberPointsRepositoryProvider)
+          .getExchangeOptions();
+      if (generation != _generation) return;
+      state = state.copyWith(
+        exchangeOptions: exchangeOptions,
+        isLoading: false,
+        clearError: true,
+      );
+    } catch (error) {
+      if (generation != _generation) return;
+      state = state.copyWith(isLoading: false, error: error);
+    }
+  }
+
   Future<MemberPointClaimResult?> claimReward({required String taskKey}) async {
     if (state.isClaiming || state.isExchanging) return null;
 

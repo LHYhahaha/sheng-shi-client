@@ -11,9 +11,14 @@ import '../../../../shared/widgets/app_primary_button.dart';
 import '../../../../shared/widgets/custom_switch.dart';
 
 class PlayerShareSheet extends StatelessWidget {
-  const PlayerShareSheet({required this.onFacebookTap, super.key});
+  const PlayerShareSheet({
+    required this.onFacebookTap,
+    required this.onCopyLinkTap,
+    super.key,
+  });
 
   final VoidCallback onFacebookTap;
+  final VoidCallback onCopyLinkTap;
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +54,12 @@ class PlayerShareSheet extends StatelessWidget {
                   label: context.l10n.playerFacebook,
                   onTap: onFacebookTap,
                   iconColor: Colors.white,
+                ),
+                _ShareTarget(
+                  color: const Color(0xFF6B6570),
+                  icon: Icons.link_rounded,
+                  label: context.l10n.shareActionCopyLink,
+                  onTap: onCopyLinkTap,
                 ),
                 // _ShareTarget(
                 //   color: const Color(0xFF25D366),

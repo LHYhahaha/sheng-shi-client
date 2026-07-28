@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../../core/auth/session_cleanup_types.dart';
+import '../../../core/auth/user_info_store.dart';
+import '../../../core/notification/startup_notification_permission_reporter.dart';
 import '../../../core/utils/period_iso_parser.dart';
 import '../../entitlement/application/entitlement_controller.dart';
 import '../../pay/application/google_play_pricing_extractor.dart';
@@ -440,6 +442,11 @@ class MembershipController extends Notifier<MembershipState> {
       }
 
       await _refreshAfterPurchase();
+
+      // 支付已验证且权益已刷新后，再同步一次当前账号的通知状态。
+      await ref
+          .read(startupNotificationPermissionReporterProvider)
+          .syncForAccount(ref.read(userInfoStoreProvider).showId);
 
       if (!_isCurrentPurchase(purchaseGeneration, plan.id)) {
         return;

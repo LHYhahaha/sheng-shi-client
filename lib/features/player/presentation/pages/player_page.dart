@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -1482,7 +1483,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   initialTab: PlayerDetailTab.episodes,
                 );
               },
-              onShareTap: () => _showShareSheet(item.content.id),
+              onShareTap: () =>
+                  _showShareSheet(item.content.id, item.content.title),
               onMoreTap: () {
                 _showDetailSheet(
                   item.content,
@@ -2653,7 +2655,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     });
   }
 
-  Future<void> _showShareSheet(String dramaId) {
+  Future<void> _showShareSheet(String dramaId, String dramaTitle) {
     _isModalOpen = true;
     _syncAutoImmersiveBlockers();
     return showModalBottomSheet<void>(
@@ -2663,7 +2665,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       isDismissible: true,
       enableDrag: true,
       builder: (context) => PlayerShareSheet(
-        onFacebookTap: () => unawaited(_shareToFacebook(dramaId)),
+        onFacebookTap: () => unawaited(_shareToFacebook(dramaId, dramaTitle)),
+        onCopyLinkTap: () => unawaited(_copyShareLink(dramaId, dramaTitle)),
       ),
     ).whenComplete(() {
       _isModalOpen = false;
@@ -2673,15 +2676,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     });
   }
 
-  Future<void> _shareToFacebook(String dramaId) async {
-    final languageCode = ref.read(appLocaleControllerProvider).languageCode;
-    final shareUrl = Uri.https('drama-wave.8y4w2vxvdffmd83.xyz', '/share/', {
-      'drama_id': dramaId,
-      'lang': languageCode,
-    });
-    final facebookShareUrl = Uri.https('www.facebook.com', '', {
-      'u': shareUrl.toString(),
-    });
+  Future<void> _shareToFacebook(String dramaId, String dramaTitle) async {
+    final shareUrl = _shareUrl(dramaId);
+    final shareMessage = _shareMessage(dramaTitle, shareUrl);
+    final facebookShareUrl = Uri.https(
+      'www.facebook.com',
+      '/sharer/sharer.php',
+      {'u': shareUrl.toString(), 'quote': shareMessage},
+    );
     final opened = await ref
         .read(externalUrlLauncherProvider)
         .open(facebookShareUrl.toString());
@@ -2689,6 +2691,29 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       debugPrint(
         '[PlayerShare] Failed to open Facebook share: $facebookShareUrl',
       );
+    }
+  }
+
+  Uri _shareUrl(String dramaId) {
+    final languageCode = ref.read(appLocaleControllerProvider).languageCode;
+    return Uri.https('drama-wave.8y4w2vxvdffmd83.xyz', '/share/', {
+      'drama_id': dramaId,
+      'lang': languageCode,
+    });
+  }
+
+  String _shareMessage(String dramaTitle, Uri shareUrl) {
+    return context.l10n.shareMessage(
+      dramaTitle: dramaTitle,
+      shareUrl: shareUrl.toString(),
+    );
+  }
+
+  Future<void> _copyShareLink(String dramaId, String dramaTitle) async {
+    final shareMessage = _shareMessage(dramaTitle, _shareUrl(dramaId));
+    await Clipboard.setData(ClipboardData(text: shareMessage));
+    if (mounted) {
+      showAppCenterToast(context.l10n.shareToastCopySuccess);
     }
   }
 

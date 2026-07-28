@@ -5,6 +5,7 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+//    id("com.google.gms.google-services")
 }
 
 val keystoreProperties = Properties()
@@ -77,21 +78,21 @@ android {
             resValue("string", "MERCHANT_ID", "329")
             resValue("string", "VEST_PKG_ID", "1001")
         }
-
-        create("douyin_pro") {
-            dimension = "channel"
-            applicationId = "com.yushi.drama.client"
-            resValue("string", "channel_flag", "douyin")
-            resValue("string", "MERCHANT_ID", "331")
-            resValue("string", "VEST_PKG_ID", "1002")
-        }
-        create("kuaishou_pro") {
-            dimension = "channel"
-            applicationId = "com.yushi.drama.client"
-            resValue("string", "channel_flag", "kuaishou")
-            resValue("string", "MERCHANT_ID", "332")
-            resValue("string", "VEST_PKG_ID", "1001")
-        }
+//
+//        create("douyin_pro") {
+//            dimension = "channel"
+//            applicationId = "com.yushi.drama.client"
+//            resValue("string", "channel_flag", "douyin")
+//            resValue("string", "MERCHANT_ID", "331")
+//            resValue("string", "VEST_PKG_ID", "1002")
+//        }
+//        create("kuaishou_pro") {
+//            dimension = "channel"
+//            applicationId = "com.yushi.drama.client"
+//            resValue("string", "channel_flag", "kuaishou")
+//            resValue("string", "MERCHANT_ID", "332")
+//            resValue("string", "VEST_PKG_ID", "1001")
+//        }
         create("tiktok_dev") {
             dimension = "channel"
             applicationId = "com.yushi.drama.client"

@@ -686,59 +686,57 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('member points push task claims when notifications are enabled', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(375, 812));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    debugRequestMemberPointsNotificationPermission = () async => true;
-    addTearDown(debugResetMemberPointsNotificationPermission);
-    final repository = _FakeMemberPointsRepository(tasks: [_pushTask()]);
+  testWidgets(
+    'member points push task refreshes after notifications are enabled',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(375, 812));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      debugRequestMemberPointsNotificationPermission = () async => true;
+      addTearDown(debugResetMemberPointsNotificationPermission);
+      final repository = _FakeMemberPointsRepository(tasks: [_pushTask()]);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          memberPointsRepositoryProvider.overrideWithValue(repository),
-          entitlementRepositoryProvider.overrideWithValue(
-            _FakeEntitlementRepository(
-              states: [
-                _memberEntitlement(pointBalance: 0),
-                _memberEntitlement(pointBalance: 5),
-              ],
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            memberPointsRepositoryProvider.overrideWithValue(repository),
+            entitlementRepositoryProvider.overrideWithValue(
+              _FakeEntitlementRepository(
+                states: [
+                  _memberEntitlement(pointBalance: 0),
+                  _memberEntitlement(pointBalance: 5),
+                ],
+              ),
             ),
-          ),
-        ],
-        child: const MaterialApp(home: MemberPointsPage()),
-      ),
-    );
-    await tester.pumpAndSettle();
+          ],
+          child: const MaterialApp(home: MemberPointsPage()),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    await tester.ensureVisible(
-      find.byKey(const Key('member_points_action_enable_push')),
-    );
-    await tester.tap(find.byKey(const Key('member_points_action_enable_push')));
-    await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const Key('member_points_action_enable_push')),
+      );
+      await tester.tap(
+        find.byKey(const Key('member_points_action_enable_push')),
+      );
+      await tester.pumpAndSettle();
 
-    expect(repository.claimedTaskKeys, ['point.enable_push']);
-    expect(find.text('Claimed Successfully'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+      expect(repository.claimedTaskKeys, isEmpty);
+      expect(find.text('Claimed Successfully'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   test(
     'member points notification permission claims when already granted',
     () async {
       var requestCallCount = 0;
-      var firebaseRequestCallCount = 0;
       var openSettingsCallCount = 0;
       debugGetMemberPointsNotificationPermissionStatus = () async =>
           permissions.PermissionStatus.granted;
       debugRequestMemberPointsNotificationPermissionStatus = () async {
         requestCallCount++;
         return permissions.PermissionStatus.denied;
-      };
-      debugRequestMemberPointsFirebaseNotificationPermission = () async {
-        firebaseRequestCallCount++;
-        return false;
       };
       debugOpenMemberPointsNotificationSettings = () async {
         openSettingsCallCount++;
@@ -748,14 +746,12 @@ void main() {
 
       expect(await debugRequestMemberPointsNotificationPermission(), isTrue);
       expect(requestCallCount, 0);
-      expect(firebaseRequestCallCount, 0);
       expect(openSettingsCallCount, 0);
     },
   );
 
   test('member points notification permission requests when denied', () async {
     var requestCallCount = 0;
-    var firebaseRequestCallCount = 0;
     var openSettingsCallCount = 0;
     debugGetMemberPointsNotificationPermissionStatus = () async =>
         permissions.PermissionStatus.denied;
@@ -763,37 +759,27 @@ void main() {
       requestCallCount++;
       return permissions.PermissionStatus.denied;
     };
-    debugRequestMemberPointsFirebaseNotificationPermission = () async {
-      firebaseRequestCallCount++;
-      return true;
-    };
     debugOpenMemberPointsNotificationSettings = () async {
       openSettingsCallCount++;
       return true;
     };
     addTearDown(debugResetMemberPointsNotificationPermission);
 
-    expect(await debugRequestMemberPointsNotificationPermission(), isTrue);
-    expect(firebaseRequestCallCount, 1);
-    expect(requestCallCount, 0);
-    expect(openSettingsCallCount, 0);
+    expect(await debugRequestMemberPointsNotificationPermission(), isFalse);
+    expect(requestCallCount, 1);
+    expect(openSettingsCallCount, 1);
   });
 
   test(
     'member points notification permission stays denied when request is denied',
     () async {
       var requestCallCount = 0;
-      var firebaseRequestCallCount = 0;
       var openSettingsCallCount = 0;
       debugGetMemberPointsNotificationPermissionStatus = () async =>
           permissions.PermissionStatus.denied;
       debugRequestMemberPointsNotificationPermissionStatus = () async {
         requestCallCount++;
         return permissions.PermissionStatus.denied;
-      };
-      debugRequestMemberPointsFirebaseNotificationPermission = () async {
-        firebaseRequestCallCount++;
-        return false;
       };
       debugOpenMemberPointsNotificationSettings = () async {
         openSettingsCallCount++;
@@ -802,27 +788,21 @@ void main() {
       addTearDown(debugResetMemberPointsNotificationPermission);
 
       expect(await debugRequestMemberPointsNotificationPermission(), isFalse);
-      expect(firebaseRequestCallCount, 1);
       expect(requestCallCount, 1);
       expect(openSettingsCallCount, 1);
     },
   );
 
   test(
-    'member points notification permission falls back when Firebase is unavailable',
+    'member points notification permission grants when the system request grants',
     () async {
       var requestCallCount = 0;
-      var firebaseRequestCallCount = 0;
       var openSettingsCallCount = 0;
       debugGetMemberPointsNotificationPermissionStatus = () async =>
           permissions.PermissionStatus.denied;
       debugRequestMemberPointsNotificationPermissionStatus = () async {
         requestCallCount++;
         return permissions.PermissionStatus.granted;
-      };
-      debugRequestMemberPointsFirebaseNotificationPermission = () async {
-        firebaseRequestCallCount++;
-        throw StateError('No Firebase App');
       };
       debugOpenMemberPointsNotificationSettings = () async {
         openSettingsCallCount++;
@@ -831,7 +811,6 @@ void main() {
       addTearDown(debugResetMemberPointsNotificationPermission);
 
       expect(await debugRequestMemberPointsNotificationPermission(), isTrue);
-      expect(firebaseRequestCallCount, 1);
       expect(requestCallCount, 1);
       expect(openSettingsCallCount, 0);
     },
@@ -841,17 +820,12 @@ void main() {
     'member points notification permission does not request after permanent denial',
     () async {
       var requestCallCount = 0;
-      var firebaseRequestCallCount = 0;
       var openSettingsCallCount = 0;
       debugGetMemberPointsNotificationPermissionStatus = () async =>
           permissions.PermissionStatus.permanentlyDenied;
       debugRequestMemberPointsNotificationPermissionStatus = () async {
         requestCallCount++;
         return permissions.PermissionStatus.granted;
-      };
-      debugRequestMemberPointsFirebaseNotificationPermission = () async {
-        firebaseRequestCallCount++;
-        return true;
       };
       debugOpenMemberPointsNotificationSettings = () async {
         openSettingsCallCount++;
@@ -861,7 +835,6 @@ void main() {
 
       expect(await debugRequestMemberPointsNotificationPermission(), isFalse);
       expect(requestCallCount, 0);
-      expect(firebaseRequestCallCount, 0);
       expect(openSettingsCallCount, 1);
     },
   );

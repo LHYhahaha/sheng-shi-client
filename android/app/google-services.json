@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "310714551188",
+    "project_id": "dramabox-498207",
+    "storage_bucket": "dramabox-498207.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:310714551188:android:27b8ed5a3a584b96735d81",
+        "android_client_info": {
+          "package_name": "com.yushi.drama.client"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "310714551188-ui5no11di9c40noon0cpcv5llmf0heah.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBu-3rxBfBmqv_puZoU0nv-D2TUqmZrRSg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "310714551188-ui5no11di9c40noon0cpcv5llmf0heah.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

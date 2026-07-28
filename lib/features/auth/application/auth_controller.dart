@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/auth_token_store.dart';
 import '../../../core/auth/auth_refresh_executor_provider.dart';
 import '../../../core/auth/session_cleanup_types.dart';
 import '../../../core/auth/user_info_manager.dart';
+import '../../../core/notification/startup_notification_permission_reporter.dart';
 import '../../../core/runtime/install_id_provider.dart';
 import '../../entitlement/application/entitlement_controller.dart';
 import '../data/auth_repository_provider.dart';
@@ -200,6 +203,7 @@ class AuthController extends Notifier<AuthState> {
               clearPendingProvider: true,
               clearFailedAction: true,
             );
+            _syncNotificationPermission(session);
             return;
           } catch (e) {
             print(
@@ -241,6 +245,7 @@ class AuthController extends Notifier<AuthState> {
                   clearPendingProvider: true,
                   clearFailedAction: true,
                 );
+                _syncNotificationPermission(session);
                 return;
               } catch (e) {
                 print(
@@ -292,6 +297,7 @@ class AuthController extends Notifier<AuthState> {
         clearPendingProvider: true,
         clearFailedAction: true,
       );
+      _syncNotificationPermission(session);
     } catch (error) {
       if (!_isCurrent(generation)) {
         return;
@@ -334,6 +340,7 @@ class AuthController extends Notifier<AuthState> {
         clearError: true,
         clearFailedAction: true,
       );
+      _syncNotificationPermission(session);
     } catch (error) {
       state = state.copyWith(
         isLoading: false,
@@ -371,6 +378,7 @@ class AuthController extends Notifier<AuthState> {
         clearPendingProvider: true,
         clearFailedAction: true,
       );
+      _syncNotificationPermission(session);
     } catch (error) {
       state = state.copyWith(
         isLoading: false,
@@ -436,6 +444,17 @@ class AuthController extends Notifier<AuthState> {
       );
     }
     return session;
+  }
+
+  void _syncNotificationPermission(AuthSession session) {
+    // 后端将静默登录与正式登录的同一 showId 视为同一账号；没有 showId 不同步。
+    final showId =
+        session.user?.showId ?? ref.read(userInfoStoreProvider).showId;
+    unawaited(
+      ref
+          .read(startupNotificationPermissionReporterProvider)
+          .syncForAccount(showId),
+    );
   }
 
   bool _isCurrent(int generation) => generation == _generation;

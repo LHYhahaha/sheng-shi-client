@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:dio/dio.dart';
 import 'package:drama_client/core/network/api_client.dart';
 import 'package:drama_client/core/network/api_request_context.dart';
@@ -16,65 +14,87 @@ void main() {
     adapter = RecordingHttpAdapter();
   });
 
+  test('reports denied on the first check for an account', () async {
+    bool? reportedEnabled;
+    final reporter = StartupNotificationPermissionReporter(
+      apiClient: _apiClient(adapter),
+      getStatus: () async => permissions.PermissionStatus.denied,
+      getLastReportedEnabled: (_) async => null,
+      markReportedEnabled: (_, enabled) async => reportedEnabled = enabled,
+      reportEnablePush: (enabled) async => reportedEnabled = enabled,
+    );
+
+    await reporter.syncForAccount('show-a');
+
+    expect(reportedEnabled, isFalse);
+  });
+
   test(
-    'does not report enable_push when notification permission is denied',
+    'does not report when an account permission status is unchanged',
     () async {
-      var reported = false;
+      var checked = false;
+      final reporter = StartupNotificationPermissionReporter(
+        apiClient: _apiClient(adapter),
+        getStatus: () async {
+          checked = true;
+          return permissions.PermissionStatus.granted;
+        },
+        getLastReportedEnabled: (_) async => true,
+        reportEnablePush: (_) async => fail('must not report'),
+      );
+
+      await reporter.syncForAccount('show-a');
+
+      expect(checked, isTrue);
+    },
+  );
+
+  test(
+    'reports a changed status and persists it only after reporting',
+    () async {
+      var persisted = false;
+      var reportFinished = false;
       final reporter = StartupNotificationPermissionReporter(
         apiClient: _apiClient(adapter),
         getStatus: () async => permissions.PermissionStatus.denied,
-        hasCheckedOnHome: () async => false,
-        markCheckedOnHome: () async {},
-        reportEnablePush: () async {
-          reported = true;
+        getLastReportedEnabled: (_) async => true,
+        reportEnablePush: (enabled) async {
+          expect(enabled, isFalse);
+          reportFinished = true;
+        },
+        markReportedEnabled: (_, enabled) async {
+          expect(reportFinished, isTrue);
+          expect(enabled, isFalse);
+          persisted = true;
         },
       );
 
-      await reporter.checkAndReportOnHomeArrival();
+      await reporter.syncForAccount('show-a');
 
-      expect(reported, isFalse);
+      expect(persisted, isTrue);
     },
   );
 
-  test(
-    'reports and marks the check when notification permission is granted',
-    () async {
-      var marked = false;
-      var reported = false;
-      final reporter = StartupNotificationPermissionReporter(
-        apiClient: _apiClient(adapter),
-        getStatus: () async => permissions.PermissionStatus.granted,
-        hasCheckedOnHome: () async => false,
-        markCheckedOnHome: () async => marked = true,
-        reportEnablePush: () async => reported = true,
-      );
+  test('uses independent status records for different show IDs', () async {
+    final reports = <bool>[];
+    final reporter = StartupNotificationPermissionReporter(
+      apiClient: _apiClient(adapter),
+      getStatus: () async => permissions.PermissionStatus.granted,
+      getLastReportedEnabled: (showId) async =>
+          showId == 'show-a' ? true : null,
+      reportEnablePush: (enabled) async {
+        reports.add(enabled);
+      },
+    );
 
-      await reporter.checkAndReportOnHomeArrival();
+    await reporter.syncForAccount('show-a');
+    await reporter.syncForAccount('show-b');
 
-      expect(marked, isTrue);
-      expect(reported, isTrue);
-    },
-  );
+    expect(reports, [true]);
+  });
 
   test(
-    'marks the check but does not report when notification is denied',
-    () async {
-      var marked = false;
-      final reporter = StartupNotificationPermissionReporter(
-        apiClient: _apiClient(adapter),
-        getStatus: () async => permissions.PermissionStatus.denied,
-        hasCheckedOnHome: () async => false,
-        markCheckedOnHome: () async => marked = true,
-      );
-
-      await reporter.checkAndReportOnHomeArrival();
-      expect(marked, isTrue);
-      expect(adapter.requests, isEmpty);
-    },
-  );
-
-  test(
-    'does not check notification permission until an access token is available',
+    'does not check notification permission without a show ID or token',
     () async {
       var checked = false;
       final reporter = StartupNotificationPermissionReporter(
@@ -83,48 +103,17 @@ void main() {
           checked = true;
           return permissions.PermissionStatus.granted;
         },
+        getLastReportedEnabled: (_) async => null,
+        reportEnablePush: (_) async {},
+        markReportedEnabled: (_, __) async {},
       );
 
-      await reporter.checkAndReportOnHomeArrival();
+      await reporter.syncForAccount(null);
+      await reporter.syncForAccount('show-a');
+
       expect(checked, isFalse);
-      expect(adapter.requests, isEmpty);
     },
   );
-
-  test(
-    'does not check or report when home permission status was already recorded',
-    () async {
-      var checked = false;
-      final reporter = StartupNotificationPermissionReporter(
-        apiClient: _apiClient(adapter),
-        getStatus: () async {
-          checked = true;
-          return permissions.PermissionStatus.granted;
-        },
-        hasCheckedOnHome: () async => true,
-      );
-
-      await reporter.checkAndReportOnHomeArrival();
-      expect(checked, isFalse);
-      expect(adapter.requests, isEmpty);
-    },
-  );
-
-  test('finishes permission flow before a pending report completes', () async {
-    final reportCompletion = Completer<void>();
-    final reporter = StartupNotificationPermissionReporter(
-      apiClient: _apiClient(adapter),
-      getStatus: () async => permissions.PermissionStatus.granted,
-      hasCheckedOnHome: () async => false,
-      markCheckedOnHome: () async {},
-      reportEnablePush: () => reportCompletion.future,
-    );
-
-    await reporter.checkAndReportOnHomeArrival();
-
-    expect(reportCompletion.isCompleted, isFalse);
-    reportCompletion.complete();
-  });
 }
 
 ApiClient _apiClient(

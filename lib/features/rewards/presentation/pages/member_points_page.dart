@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +7,8 @@ import 'package:gradient_borders/box_borders/gradient_box_border.dart';
 import 'package:permission_handler/permission_handler.dart' as permissions;
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/notification/startup_notification_permission_reporter.dart';
+import '../../../../core/auth/user_info_store.dart';
 import '../../../../core/toast/app_center_toast.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
@@ -39,10 +40,6 @@ debugRequestMemberPointsNotificationPermissionStatus =
     _requestNotificationPermissionStatus;
 
 @visibleForTesting
-Future<bool> Function() debugRequestMemberPointsFirebaseNotificationPermission =
-    _requestFirebaseNotificationPermission;
-
-@visibleForTesting
 Future<bool> Function() debugOpenMemberPointsNotificationSettings =
     _openNotificationSettings;
 
@@ -54,8 +51,6 @@ void debugResetMemberPointsNotificationPermission() {
       _getNotificationPermissionStatus;
   debugRequestMemberPointsNotificationPermissionStatus =
       _requestNotificationPermissionStatus;
-  debugRequestMemberPointsFirebaseNotificationPermission =
-      _requestFirebaseNotificationPermission;
   debugOpenMemberPointsNotificationSettings = _openNotificationSettings;
 }
 
@@ -126,6 +121,8 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage> {
       if (!mounted || !widget.isActive) return;
       if (ref.read(entitlementControllerProvider).isMember) {
         ref.read(memberPointsControllerProvider.notifier).loadDailyDetail();
+      } else {
+        ref.read(memberPointsControllerProvider.notifier).loadExchangeOptions();
       }
     });
   }
@@ -1039,13 +1036,22 @@ class _MemberTasksPanel extends ConsumerWidget {
       case _MemberTaskActionType.enablePush:
         final granted = await debugRequestMemberPointsNotificationPermission();
         if (!context.mounted) return;
+        await ref
+            .read(startupNotificationPermissionReporterProvider)
+            .syncForAccount(ref.read(userInfoStoreProvider).showId);
+        if (!context.mounted) return;
+        await ref
+            .read(memberPointsControllerProvider.notifier)
+            .loadDailyDetail();
+        if (!context.mounted) return;
         if (!granted) {
           showAppCenterToast(
             AppLocalizations.maybeOf(context).rewardsTaskEnablePush,
           );
           return;
         }
-        await _claimTask(context, ref, item.task.taskKey);
+        // 授权任务由服务端在上报后更新为可领取，用户刷新后再主动领取。
+        return;
     }
   }
 
@@ -1090,18 +1096,8 @@ Future<bool> _requestNotificationPermission() async {
       return false;
     }
 
-    final firebaseGranted =
-        await debugRequestMemberPointsFirebaseNotificationPermission();
-    _debugLogNotificationPermission(
-      'firebase request granted=$firebaseGranted',
-    );
-    if (firebaseGranted) {
-      return true;
-    }
-
     final requestedStatus = await _requestAndReadNotificationPermissionStatus();
-    final granted =
-        firebaseGranted || _hasNotificationPermission(requestedStatus);
+    final granted = _hasNotificationPermission(requestedStatus);
     _debugLogNotificationPermission(
       'requested=$requestedStatus, granted=$granted',
     );
@@ -1111,17 +1107,9 @@ Future<bool> _requestNotificationPermission() async {
     return granted;
   } catch (error) {
     _debugLogNotificationPermission(
-      'notification permission flow failed: $error; retrying with permission_handler',
+      'notification permission flow failed: $error',
     );
-    final requestedStatus = await _requestAndReadNotificationPermissionStatus();
-    final granted = _hasNotificationPermission(requestedStatus);
-    _debugLogNotificationPermission(
-      'permission_handler retry=$requestedStatus, granted=$granted',
-    );
-    if (!granted) {
-      await _openNotificationSettingsAfterDenied();
-    }
-    return granted;
+    return false;
   }
 }
 
@@ -1161,31 +1149,6 @@ Future<void> _openNotificationSettingsAfterDenied() async {
 
 Future<bool> _openNotificationSettings() {
   return permissions.openAppSettings();
-}
-
-Future<bool> _requestFirebaseNotificationPermission() async {
-  try {
-    final currentSettings = await FirebaseMessaging.instance
-        .getNotificationSettings();
-    _debugLogNotificationPermission(
-      'firebase current=${currentSettings.authorizationStatus}',
-    );
-    if (currentSettings.authorizationStatus == AuthorizationStatus.authorized ||
-        currentSettings.authorizationStatus ==
-            AuthorizationStatus.provisional) {
-      return true;
-    }
-
-    final settings = await FirebaseMessaging.instance.requestPermission();
-    _debugLogNotificationPermission(
-      'firebase requested=${settings.authorizationStatus}',
-    );
-    return settings.authorizationStatus == AuthorizationStatus.authorized ||
-        settings.authorizationStatus == AuthorizationStatus.provisional;
-  } catch (error) {
-    _debugLogNotificationPermission('firebase unavailable: $error');
-    return false;
-  }
 }
 
 void _debugLogNotificationPermission(String message) {

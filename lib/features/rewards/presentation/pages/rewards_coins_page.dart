@@ -6,6 +6,8 @@ import 'package:gradient_borders/box_borders/gradient_box_border.dart';
 import 'package:permission_handler/permission_handler.dart' as permissions;
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/notification/startup_notification_permission_reporter.dart';
+import '../../../../core/auth/user_info_store.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../application/reward_coins_controller.dart';
 import '../../domain/reward_coins_check_in_status.dart';
@@ -200,11 +202,23 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
         }
         return;
       case 'coin.enable_push':
-        final status = await permissions.Permission.notification.request();
-        if (status.isGranted || status.isProvisional) {
-          await ref
-              .read(rewardCoinsControllerProvider.notifier)
-              .reportTaskAction(actionKey: 'enable_push');
+        final currentStatus = await permissions.Permission.notification.status;
+        if (!_hasNotificationPermission(currentStatus)) {
+          if (currentStatus.isPermanentlyDenied) {
+            await permissions.openAppSettings();
+          } else {
+            final requestedStatus = await permissions.Permission.notification
+                .request();
+            if (!_hasNotificationPermission(requestedStatus)) {
+              await permissions.openAppSettings();
+            }
+          }
+        }
+        await ref
+            .read(startupNotificationPermissionReporterProvider)
+            .syncForAccount(ref.read(userInfoStoreProvider).showId);
+        if (mounted) {
+          await ref.read(rewardCoinsControllerProvider.notifier).loadTasks();
         }
         return;
       case 'coin.share_drama':
@@ -214,6 +228,10 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
         context.go(RoutePaths.home);
         return;
     }
+  }
+
+  bool _hasNotificationPermission(permissions.PermissionStatus status) {
+    return status.isGranted || status.isProvisional;
   }
 
   Future<void> _claimTask(BuildContext context, String taskKey) async {

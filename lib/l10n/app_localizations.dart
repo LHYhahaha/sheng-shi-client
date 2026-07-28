@@ -1478,7 +1478,6 @@ class AppLocalizations {
   String get commonActionSubmit =>
       _remoteText('common.action.submit', en: 'Submit', zh: '提交');
 
-
   String get appAccountBannedDialogMessage => _remoteText(
     'app.account.banned.dialog.message',
     en: 'This account is temporarily unavailable.',
@@ -1614,6 +1613,17 @@ class AppLocalizations {
 
   String get shareToastCopySuccess =>
       _remoteText('share.toast.copy_success', en: 'Copied', zh: '复制成功');
+
+  String shareMessage({required String dramaTitle, required String shareUrl}) {
+    return _remoteText(
+          'share.message',
+          en: 'I\'m watching {dramaTitle} on {appTitle}. It\'s amazing—come watch with me! {shareUrl}',
+          zh: '我正在{appTitle}上看{dramaTitle}，很精彩，快来一起看吧！{shareUrl}',
+        )
+        .replaceAll('{appTitle}', appTitle)
+        .replaceAll('{dramaTitle}', dramaTitle)
+        .replaceAll('{shareUrl}', shareUrl);
+  }
 
   // ── 1.0.2 / 分享落地页 ─────────────────────────────────────────────
   String get shareLandingButtonOpenApp =>
