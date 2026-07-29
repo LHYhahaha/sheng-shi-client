@@ -15,6 +15,8 @@ import '../core/i18n/i18n.dart';
 import '../core/locale/app_locale_controller.dart';
 import '../core/modal/app_modal_host.dart';
 import '../core/network/api_client_provider.dart';
+import '../core/notification/fcm_notification.dart';
+import '../core/notification/fcm_notification_service.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/pay/application/payment_loading_controller.dart';
 import '../features/popup/application/popup_entry_controller.dart';
@@ -30,7 +32,9 @@ import 'shell/app_shell_chrome.dart';
 import 'theme/app_theme.dart';
 
 class DramaClientApp extends ConsumerStatefulWidget {
-  const DramaClientApp({super.key});
+  const DramaClientApp({this.fcmNotificationService, super.key});
+
+  final FcmNotificationService? fcmNotificationService;
 
   @override
   ConsumerState<DramaClientApp> createState() => _DramaClientAppState();
@@ -39,6 +43,7 @@ class DramaClientApp extends ConsumerStatefulWidget {
 class _DramaClientAppState extends ConsumerState<DramaClientApp>
     with WidgetsBindingObserver {
   StreamSubscription<Uri>? _appLinkSubscription;
+  StreamSubscription<FcmNotification>? _fcmNotificationTapSubscription;
 
   @override
   void initState() {
@@ -46,12 +51,14 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     WidgetsBinding.instance.addObserver(this);
     _setPreferredOrientations();
     _listenForAppLinks();
+    _listenForFcmNotificationTaps();
     Future.microtask(_bootstrapSessionAndI18n);
   }
 
   @override
   void dispose() {
     _appLinkSubscription?.cancel();
+    _fcmNotificationTapSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -86,6 +93,81 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     );
     debugPrint('[AppLink] Opening drama $dramaId');
     ref.read(appRouterProvider).go(location);
+  }
+
+  void _listenForFcmNotificationTaps() {
+    final service = widget.fcmNotificationService;
+    if (service == null) return;
+    _fcmNotificationTapSubscription = service.onNotificationTap.listen(
+      _handleFcmNotificationTap,
+    );
+    final initialNotification = service.takeInitialNotificationTap();
+    if (initialNotification != null) {
+      Future.microtask(() => _handleFcmNotificationTap(initialNotification));
+    }
+  }
+
+  void _handleFcmNotificationTap(FcmNotification notification) {
+    final data = notification.data;
+    final type = data['type']?.trim().toLowerCase();
+    final dramaId = data['drama_id']?.trim();
+    final episodeId = data['episode_id']?.trim();
+    final openType = data['open_type']?.trim();
+    final router = ref.read(appRouterProvider);
+
+    if (type == 'player' && dramaId != null && dramaId.isNotEmpty) {
+      router.go(
+        RoutePaths.playerLocation(
+          dramaId: dramaId,
+          episodeId: episodeId?.isNotEmpty == true ? episodeId! : '1',
+          trigger: 'fcm_notification',
+          userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+      return;
+    }
+
+    // 当前客户端没有独立的短剧详情路由，详情通知进入该剧第一集的播放器。
+    if ((type == 'drama' || type == 'drama_detail' || type == 'detail') &&
+        dramaId != null &&
+        dramaId.isNotEmpty) {
+      router.go(
+        RoutePaths.playerLocation(
+          dramaId: dramaId,
+          episodeId: '1',
+          trigger: 'fcm_notification_detail',
+          userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+      return;
+    }
+
+    final url =
+        data['url']?.trim() ??
+        data['h5_url']?.trim() ??
+        data['h5Url']?.trim() ??
+        notification.actionUrl;
+    if ((type == 'h5' || type == 'webview' || type == 'web') &&
+        url != null &&
+        url.isNotEmpty) {
+      if (openType == '2') {
+        unawaited(_openFcmExternalUrl(url));
+        return;
+      }
+      router.go(
+        RoutePaths.webviewLocation(url: url, title: notification.title),
+      );
+      return;
+    }
+
+    debugPrint('[FCM] Ignored notification tap with unsupported data: $data');
+  }
+
+  Future<void> _openFcmExternalUrl(String url) async {
+    final opened = await ref.read(externalUrlLauncherProvider).open(url);
+    if (!opened) {
+      debugPrint('[FCM] Failed to open external URL: $url');
+    }
   }
 
   @override

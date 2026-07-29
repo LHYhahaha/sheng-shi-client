@@ -1,10 +1,9 @@
-import 'dart:convert';
-
 import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/config/app_environment.dart';
 import '../app_root_navigator_key.dart';
 import '../shell/app_shell.dart';
 import '../../features/auth/presentation/pages/account_cancellation_page.dart';
@@ -18,6 +17,7 @@ import '../../features/player/presentation/pages/player_page.dart';
 import '../../features/player/domain/for_you_player_handoff.dart';
 import '../../features/profile/presentation/pages/language_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
+import '../../features/profile/presentation/pages/profile_feedback_webview_page.dart';
 import '../../features/profile/presentation/pages/settings_page.dart';
 import '../../features/rewards/presentation/pages/member_point_details_page.dart';
 import '../../features/rewards/presentation/pages/rewards_page.dart';
@@ -188,16 +188,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RoutePaths.profileFeedback,
         name: RouteNames.profileFeedback,
-        builder: (context, state) => WebViewPage(
-          // url: 'https://drama-wave.8y4w2vxvdffmd83.xyz/app/?lang=en#/help',
-          url: 'http://192.168.1.55:5173/app/#/help/feedback/new',
-          title: context.l10n.profileFeedback,
-          showAppBar: false,
-          javaScriptMessageHandlers: {
-            'ProfileFeedbackBridge': (message) =>
-                _handleProfileFeedbackMessage(message),
-          },
-        ),
+        builder: (context, state) => const ProfileFeedbackWebViewPage(),
       ),
       GoRoute(
         path: RoutePaths.language,
@@ -219,10 +210,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: RouteNames.userAgreement,
         builder: (context, state) {
           final languageCode = Localizations.localeOf(context).languageCode;
-          final url =
-              'https://drama-wave.8y4w2vxvdffmd83.xyz/legal/terms/index.html?lang=$languageCode';
           return WebViewPage(
-            url: url,
+            url: AppConfig.current
+                .termsOfUseUrlForLanguage(languageCode)
+                .toString(),
             title: context.l10n.settingsUserAgreement,
           );
         },
@@ -232,10 +223,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: RouteNames.privacyPolicy,
         builder: (context, state) {
           final languageCode = Localizations.localeOf(context).languageCode;
-          final url =
-              'https://drama-wave.8y4w2vxvdffmd83.xyz/legal/privacy/index.html?lang=$languageCode';
           return WebViewPage(
-            url: url,
+            url: AppConfig.current
+                .privacyPolicyUrlForLanguage(languageCode)
+                .toString(),
             title: context.l10n.settingsPrivacyPolicy,
           );
         },
@@ -261,16 +252,3 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
-
-/// H5 可调用 `window.ProfileFeedbackBridge.postMessage(message)` 向 App 发消息。
-///
-/// [message] 推荐使用 JSON，例如 `{"event":"submit_success"}`。这里保留原始
-/// 内容的日志，便于联调阶段根据 H5 的事件协议继续补充原生动作。
-void _handleProfileFeedbackMessage(String message) {
-  try {
-    final decoded = jsonDecode(message);
-    debugPrint('[ProfileFeedbackBridge] $decoded');
-  } on FormatException {
-    debugPrint('[ProfileFeedbackBridge] $message');
-  }
-}

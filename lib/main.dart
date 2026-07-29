@@ -23,7 +23,8 @@ Future<void> main() async {
   */
   await Firebase.initializeApp();
   FirebaseMessaging.onBackgroundMessage(fcmBackgroundMessageHandler);
-  await FcmNotificationService().initialize();
+  final fcmNotificationService = FcmNotificationService();
+  await fcmNotificationService.initialize();
 
   MediaKit.ensureInitialized();
 
@@ -53,7 +54,9 @@ Future<void> main() async {
         testNetworkConfigProvider.overrideWithValue(testNetworkConfig),
         ...appModalRegistryOverrides,
       ],
-      child: const TestNetworkBootstrap(child: DramaClientApp()),
+      child: TestNetworkBootstrap(
+        child: DramaClientApp(fcmNotificationService: fcmNotificationService),
+      ),
     ),
   );
 }

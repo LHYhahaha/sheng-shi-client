@@ -6,11 +6,16 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../../app/router/route_paths.dart';
 import '../../shared/theme/app_colors.dart';
 
+typedef WebViewPageLifecycleCallback =
+    Future<void> Function(WebViewController controller, String url);
+
 class WebViewPage extends ConsumerStatefulWidget {
   final String url;
   final String title;
   final bool showAppBar;
   final Map<String, ValueChanged<String>> javaScriptMessageHandlers;
+  final WebViewPageLifecycleCallback? onPageStarted;
+  final WebViewPageLifecycleCallback? onPageFinished;
 
   const WebViewPage({
     super.key,
@@ -18,6 +23,8 @@ class WebViewPage extends ConsumerStatefulWidget {
     required this.title,
     this.showAppBar = true,
     this.javaScriptMessageHandlers = const {},
+    this.onPageStarted,
+    this.onPageFinished,
   });
 
   @override
@@ -35,10 +42,36 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageFinished: (String url) {
-            setState(() {
-              _isLoading = false;
-            });
+          onPageStarted: (String url) {
+            debugPrint('[WebView] Page started: $url');
+            widget.onPageStarted?.call(_controller, url);
+          },
+          onPageFinished: _onPageFinished,
+          onHttpError: (error) {
+            debugPrint(
+              '[WebView] HTTP error: '
+              'url=${error.request?.uri}, '
+              'statusCode=${error.response?.statusCode}, '
+              'responseUrl=${error.response?.uri}',
+            );
+            _setLoading(false);
+          },
+          onWebResourceError: (error) {
+            debugPrint(
+              '[WebView] Resource error: '
+              'url=${error.url}, '
+              'code=${error.errorCode}, '
+              'type=${error.errorType}, '
+              'mainFrame=${error.isForMainFrame}, '
+              'description=${error.description}',
+            );
+            if (error.isForMainFrame ?? true) {
+              _setLoading(false);
+            }
+          },
+          onNavigationRequest: (request) {
+            debugPrint('[WebView] Navigation request: ${request.url}');
+            return NavigationDecision.navigate;
           },
         ),
       );
@@ -51,6 +84,19 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
     }
 
     _controller.loadRequest(Uri.parse(widget.url));
+  }
+
+  void _setLoading(bool isLoading) {
+    if (!mounted || _isLoading == isLoading) {
+      return;
+    }
+    setState(() => _isLoading = isLoading);
+  }
+
+  Future<void> _onPageFinished(String url) async {
+    debugPrint('[WebView] Page finished: $url');
+    _setLoading(false);
+    await widget.onPageFinished?.call(_controller, url);
   }
 
   @override

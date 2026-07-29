@@ -18,6 +18,44 @@ class AppConfig {
   /// 仅网络层使用，业务页面不要根据 URL 判断环境或行为。
   final Uri apiBaseUrl;
 
+  /// 问题与帮助 H5 地址。
+  ///
+  /// 语言由应用当前 locale 提供，避免 H5 与客户端语言不一致。
+  Uri helpUrlForLanguage(String languageCode) {
+    final baseUrl = _webBaseUrl.replace(path: '/app/');
+
+    return baseUrl.replace(
+      queryParameters: {'lang': languageCode},
+      fragment: '/help',
+    );
+  }
+
+  /// 隐私政策 H5 地址。
+  Uri privacyPolicyUrlForLanguage(String languageCode) => _webBaseUrl.replace(
+    path: '/legal/privacy/index.html',
+    queryParameters: {'lang': languageCode},
+  );
+
+  /// 用户协议 H5 地址。
+  Uri termsOfUseUrlForLanguage(String languageCode) => _webBaseUrl.replace(
+    path: '/legal/terms/index.html',
+    queryParameters: {'lang': languageCode},
+  );
+
+  /// 剧集分享页 H5 地址。
+  Uri shareUrl({required String dramaId, required String languageCode}) =>
+      _webBaseUrl.replace(
+        path: '/share/',
+        queryParameters: {'drama_id': dramaId, 'lang': languageCode},
+      );
+
+  Uri get _webBaseUrl => switch (environment) {
+    AppEnvironment.prod => Uri.parse('https://juan365drama.com/'),
+    AppEnvironment.dev || AppEnvironment.staging => Uri.parse(
+      'https://drama-wave.8y4w2vxvdffmd83.xyz/',
+    ),
+  };
+
   static final current = AppConfig.forEnvironment(_environmentFromDefine);
 
   static AppConfig forEnvironment(

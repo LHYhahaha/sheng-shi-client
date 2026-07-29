@@ -8,15 +8,15 @@
         android:name="${applicationName}"
         android:icon="@mipmap/logo"
         android:networkSecurityConfig="@xml/network_security_config">
-        <!-- 默认通知 Channel -->
-<!--        <meta-data-->
-<!--            android:name="com.google.firebase.messaging.default_notification_channel_id"-->
-<!--            android:value="high_importance_channel" />-->
+        <!-- FCM 后台通知在未指定 channel 时使用的默认渠道。 -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="default_notification_channel" />
 
-<!--        &lt;!&ndash; 默认小图标 &ndash;&gt;-->
-<!--        <meta-data-->
-<!--            android:name="com.google.firebase.messaging.default_notification_icon"-->
-<!--            android:resource="@drawable/ic_notification" />-->
+        <!-- 默认小图标 -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
 
         <activity
             android:name=".MainActivity"

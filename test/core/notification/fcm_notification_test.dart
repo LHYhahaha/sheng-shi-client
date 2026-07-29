@@ -63,6 +63,23 @@ void main() {
     });
 
     test(
+      'uses the shared data image before platform-specific image fields',
+      () {
+        final message = RemoteMessage.fromMap({
+          'data': {'image_url': 'https://example.com/shared.jpg'},
+          'notification': {
+            'android': {'imageUrl': 'https://example.com/android.jpg'},
+            'apple': {'imageUrl': 'https://example.com/ios.jpg'},
+          },
+        });
+
+        final notification = FcmNotification.fromRemoteMessage(message);
+
+        expect(notification.imageUrl, 'https://example.com/shared.jpg');
+      },
+    );
+
+    test(
       'does not report display content when all display fields are blank',
       () {
         final message = RemoteMessage.fromMap({

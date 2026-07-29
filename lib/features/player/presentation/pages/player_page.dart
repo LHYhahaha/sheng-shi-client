@@ -12,6 +12,7 @@ import '../../../../app/router/route_paths.dart';
 import '../../../../app/router/player_route_observer.dart';
 import '../../../../app/shell/app_shell.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
+import '../../../../core/config/app_environment.dart';
 import '../../../../core/modal/app_modal_provider.dart';
 import '../../../../core/modal/app_modal_service.dart';
 import '../../../../core/modal/app_modal_source.dart';
@@ -2696,10 +2697,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   Uri _shareUrl(String dramaId) {
     final languageCode = ref.read(appLocaleControllerProvider).languageCode;
-    return Uri.https('drama-wave.8y4w2vxvdffmd83.xyz', '/share/', {
-      'drama_id': dramaId,
-      'lang': languageCode,
-    });
+    return AppConfig.current.shareUrl(
+      dramaId: dramaId,
+      languageCode: languageCode,
+    );
   }
 
   String _shareMessage(String dramaTitle, Uri shareUrl) {
