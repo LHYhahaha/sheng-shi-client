@@ -327,7 +327,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Server 3-Day Pass'), findsOneWidget);
+    expect(find.text('Redeem 3-day VIP'), findsOneWidget);
+    expect(find.text('Server 3-Day Pass'), findsNothing);
     expect(find.text('3-Day Membership'), findsNothing);
 
     final exchangeButton = find.byKey(
@@ -390,8 +391,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester.getTopLeft(find.text('兑换23日会员')).dy,
-      lessThan(tester.getTopLeft(find.text('兑换2日会员')).dy),
+      tester.getTopLeft(find.text('Redeem 23-day VIP')).dy,
+      lessThan(tester.getTopLeft(find.text('Redeem 2-day VIP')).dy),
     );
     expect(tester.takeException(), isNull);
   });
@@ -434,7 +435,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('兑换23日会员'), findsOneWidget);
+    expect(find.text('Redeem 23-day VIP'), findsOneWidget);
+    expect(find.text('兑换23日会员'), findsNothing);
     expect(
       find.byKey(const Key('member_points_action_redeem_8')),
       findsOneWidget,
@@ -1069,6 +1071,30 @@ void main() {
 
     expect(find.text('Watch Reward'), findsOneWidget);
     expect(find.text('point.watch.30m'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('member point details localizes exchanged membership duration', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          memberPointsRepositoryProvider.overrideWithValue(
+            _FakeMemberPointsRepository(
+              detailRemark: 'point.exchange.member.2d',
+            ),
+          ),
+        ],
+        child: const MaterialApp(
+          home: member_point_details.MemberPointDetailsPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Redeem 2-day VIP'), findsOneWidget);
+    expect(find.text('point.exchange.member.2d'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

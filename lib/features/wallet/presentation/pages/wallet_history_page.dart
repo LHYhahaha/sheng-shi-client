@@ -559,6 +559,16 @@ class _CoinRewardRecordRow extends StatelessWidget {
   final WalletRecord record;
   final VoidCallback onClaim;
 
+  String _sourceTypeLabel(BuildContext context) {
+    return switch (record.rewardSourceType) {
+      1 => context.l10n.claimCoinsTypeAdminBonus,
+      2 => context.l10n.claimCoinsTypeSigninBonus,
+      3 => context.l10n.claimCoinsTypeTaskBonus,
+      4 => context.l10n.claimCoinsTypeRechargeBonus,
+      _ => context.l10n.claimCoinsName,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -595,9 +605,7 @@ class _CoinRewardRecordRow extends StatelessWidget {
         ),
         const SizedBox(width: AppSpacing.md),
         Text(
-          record.subtitle == null || record.subtitle!.isEmpty
-              ? context.l10n.claimCoinsTypeRechargeBonus
-              : context.l10n.walletText(record.subtitleText!),
+          _sourceTypeLabel(context),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(

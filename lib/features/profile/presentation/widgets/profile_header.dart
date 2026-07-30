@@ -14,6 +14,7 @@ class ProfileHeader extends StatelessWidget {
     this.onLoginTap,
     this.onAccountTap,
     this.onGuestTap,
+    this.secondaryText,
     super.key,
   });
 
@@ -21,6 +22,9 @@ class ProfileHeader extends StatelessWidget {
   final VoidCallback? onLoginTap;
   final VoidCallback? onAccountTap;
   final VoidCallback? onGuestTap;
+
+  /// 传入时替换默认的 Show ID 展示，不提供复制操作。
+  final String? secondaryText;
 
   @override
   Widget build(BuildContext context) {
@@ -70,23 +74,25 @@ class ProfileHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 1),
                 GestureDetector(
-                  onTap: () {
-                    final showId = state.showId;
-                    if (showId != null) {
-                      Clipboard.setData(ClipboardData(text: showId));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(l10n.profileCopySuccess),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  },
+                  onTap: secondaryText == null
+                      ? () {
+                          final showId = state.showId;
+                          if (showId != null) {
+                            Clipboard.setData(ClipboardData(text: showId));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(l10n.profileCopySuccess),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        }
+                      : null,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'ID:${state.showId ?? '--'}',
+                        secondaryText ?? 'ID:${state.showId ?? '--'}',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppColors.textPrimary.withValues(alpha: 0.8),
                           fontSize: 12,
@@ -94,14 +100,16 @@ class ProfileHeader extends StatelessWidget {
                           height: 1.3,
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      SvgPicture.asset(
-                        'assets/images/profile/copy.svg',
-                        colorFilter: ColorFilter.mode(
-                          AppColors.textPrimary.withValues(alpha: 0.8),
-                          BlendMode.srcIn,
+                      if (secondaryText == null) ...[
+                        const SizedBox(width: 4),
+                        SvgPicture.asset(
+                          'assets/images/profile/copy.svg',
+                          colorFilter: ColorFilter.mode(
+                            AppColors.textPrimary.withValues(alpha: 0.8),
+                            BlendMode.srcIn,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),

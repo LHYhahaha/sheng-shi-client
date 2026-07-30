@@ -23,6 +23,7 @@ enum ApiAuthPolicy { none, required }
 
 typedef ApiRequestContextReader = ApiRequestContext Function();
 typedef ApiChannelHeadersReader = FutureOr<Map<String, String>> Function();
+typedef ApiBusinessErrorListener = void Function(ApiException error);
 
 /// API client 的网络入口。
 ///
@@ -35,13 +36,15 @@ class ApiClient {
     ApiRequestContextReader? requestContextReader,
     ApiChannelHeadersReader? channelHeadersReader,
     ApiSessionAuthHandler? sessionAuthHandler,
+    ApiBusinessErrorListener? onBusinessError,
   }) : _dio = dio ?? Dio(defaultOptions),
        _requestContextReader =
            requestContextReader ??
            (() => requestContext ?? const ApiRequestContext.test()),
        _channelHeadersReader =
            channelHeadersReader ?? (() => const <String, String>{}),
-       _sessionAuthHandler = sessionAuthHandler {
+       _sessionAuthHandler = sessionAuthHandler,
+       _onBusinessError = onBusinessError {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -127,6 +130,7 @@ class ApiClient {
   final ApiRequestContextReader _requestContextReader;
   final ApiChannelHeadersReader _channelHeadersReader;
   ApiSessionAuthHandler? _sessionAuthHandler;
+  final ApiBusinessErrorListener? _onBusinessError;
 
   Dio get dio => _dio;
 
@@ -303,6 +307,7 @@ class ApiClient {
         final response = await send();
         return _decode(response, decoder);
       } on ApiException catch (error) {
+        _reportBusinessError(error);
         if (await _recoverFromSessionExpiredBusinessCode(error)) {
           rethrow;
         }
@@ -323,6 +328,7 @@ class ApiClient {
         final apiError = error.error is ApiException
             ? error.error! as ApiException
             : ApiException.fromDio(error);
+        _reportBusinessError(apiError);
         if (await _recoverFromSessionExpiredBusinessCode(apiError)) {
           throw apiError;
         }
@@ -351,6 +357,13 @@ class ApiClient {
           stackTrace: stackTrace,
         );
       }
+    }
+  }
+
+  void _reportBusinessError(ApiException error) {
+    // 由封禁状态机负责去重；账号解封后再次收到 3116 时仍必须能重新弹出。
+    if (error.businessCode == 3116) {
+      _onBusinessError?.call(error);
     }
   }
 

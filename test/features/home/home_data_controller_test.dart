@@ -4,6 +4,7 @@ import 'package:drama_client/features/home/application/home_data_controller.dart
 import 'package:drama_client/features/home/data/home_repository.dart';
 import 'package:drama_client/features/home/data/home_repository_provider.dart';
 import 'package:drama_client/features/home/domain/home_data.dart';
+import 'package:drama_client/features/home/domain/vip_only_drama.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -73,6 +74,10 @@ class _FakeHomeRepository implements HomeRepository {
       dramaTitle: isChinese ? '中文剧' : 'English Drama',
     );
   }
+
+  @override
+  Future<VipOnlyDramaCollection> getVipOnlyDramas() async =>
+      const VipOnlyDramaCollection(limit: 6, dramas: []);
 }
 
 HomeData _homeData({required String tabName, required String dramaTitle}) {

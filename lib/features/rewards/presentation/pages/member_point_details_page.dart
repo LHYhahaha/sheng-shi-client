@@ -283,7 +283,7 @@ class _MemberPointDetailItem extends StatelessWidget {
     }
 
     final exchangeDays = RegExp(
-      r'^(?:point|member_points?)\.(?:exchange|redeem)\.(\d+)d$',
+      r'^(?:point|member_points?)\.(?:exchange|redeem)\.(?:member\.)?(\d+)d$',
     ).firstMatch(key);
     if (exchangeDays != null) {
       return l10n.memberPointsDetailTypeExchange(

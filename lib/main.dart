@@ -16,15 +16,7 @@ import 'core/runtime/install_id_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  /*
-   * 手动配置方式：
-   * Android 会自动读取 android/app/google-services.json，
-   * 所以这里不需要 firebase_options.dart。
-  */
-  await Firebase.initializeApp();
-  FirebaseMessaging.onBackgroundMessage(fcmBackgroundMessageHandler);
-  final fcmNotificationService = FcmNotificationService();
-  await fcmNotificationService.initialize();
+  final fcmNotificationService = await _initializeFcmNotifications();
 
   MediaKit.ensureInitialized();
 
@@ -59,4 +51,25 @@ Future<void> main() async {
       ),
     ),
   );
+}
+
+/// 初始化失败时降级为无推送启动，不能阻塞应用进入首页。
+Future<FcmNotificationService?> _initializeFcmNotifications() async {
+  try {
+    /*
+     * 手动配置方式：
+     * Android 会自动读取 android/app/google-services.json，
+     * 所以这里不需要 firebase_options.dart。
+     */
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(fcmBackgroundMessageHandler);
+
+    final service = FcmNotificationService();
+    await service.initialize();
+    return service;
+  } catch (error, stackTrace) {
+    debugPrint('[FCM] Initialization failed; notifications are disabled: $error');
+    debugPrintStack(stackTrace: stackTrace);
+    return null;
+  }
 }

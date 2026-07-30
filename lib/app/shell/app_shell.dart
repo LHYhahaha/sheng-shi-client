@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/router/route_paths.dart';
+import '../../core/account/account_ban_controller.dart';
 import '../../features/player/application/player_playback_controller.dart';
 import '../../features/popup/application/popup_entry_controller.dart';
 import '../../features/popup/domain/popup.dart';
@@ -147,6 +148,9 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 
   void _goBranch(int index) {
+    if (ref.read(accountBanControllerProvider).isBanned) {
+      return;
+    }
     final currentIndex = widget.navigationShell.currentIndex;
     _syncForYouVisibilityForNavigationChange(from: currentIndex, to: index);
     _lastNavigationIndex = index;
@@ -217,6 +221,9 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 
   void _requestPopupForIndex(int index) {
+    if (ref.read(accountBanControllerProvider).isBanned) {
+      return;
+    }
     final placement = AppShellDestinations.popupPlacementForIndex(index);
     if (placement == null) {
       return;

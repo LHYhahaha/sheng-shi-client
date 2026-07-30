@@ -218,6 +218,29 @@ void main() {
   });
 
   test(
+    'account banned business code is reported only once per client',
+    () async {
+      final adapter = _FakeHttpClientAdapter(
+        responseData: {'code': 3116, 'message': '账号已封禁', 'data': null},
+      );
+      final dio = Dio()..httpClientAdapter = adapter;
+      var reports = 0;
+      final client = ApiClient(dio: dio, onBusinessError: (_) => reports += 1);
+
+      await expectLater(
+        client.get<void>('/first', decoder: (_) {}),
+        throwsA(isA<ApiException>()),
+      );
+      await expectLater(
+        client.get<void>('/second', decoder: (_) {}),
+        throwsA(isA<ApiException>()),
+      );
+
+      expect(reports, 1);
+    },
+  );
+
+  test(
     'auth required without token fails fast and does not call adapter',
     () async {
       final adapter = _FakeHttpClientAdapter(

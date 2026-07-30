@@ -5,7 +5,10 @@ import '../membership_layout.dart';
 import '../../domain/membership_plan.dart';
 
 class MembershipBenefitsPanel extends StatelessWidget {
-  const MembershipBenefitsPanel({super.key});
+  const MembershipBenefitsPanel({this.betweenBenefitsAndTips, super.key});
+
+  /// 放置在权益列表和提示条款之间的可选内容。
+  final Widget? betweenBenefitsAndTips;
 
   static const _gold = Color(0xFFE6CFA6);
 
@@ -103,46 +106,65 @@ class MembershipBenefitsPanel extends StatelessWidget {
               ),
             ),
           ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              MembershipLayout.horizontalPadding,
-              MembershipLayout.benefitsTitlePaddingTop,
-              MembershipLayout.horizontalPadding,
-              28 + bottomInset,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  MembershipLayout.horizontalPadding,
+                  MembershipLayout.benefitsTitlePaddingTop,
+                  MembershipLayout.horizontalPadding,
+                  0,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _BenefitTitleLine(reverse: true),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Text(
-                        l10n.membershipBenefits,
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: _gold,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          height: 1.5,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const _BenefitTitleLine(reverse: true),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Text(
+                            l10n.membershipBenefits,
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: _gold,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              height: 1.5,
+                            ),
+                          ),
                         ),
-                      ),
+                        const _BenefitTitleLine(),
+                      ],
                     ),
-                    const _BenefitTitleLine(),
+                    const SizedBox(height: 28),
+                    for (var index = 0; index < benefits.length; index++) ...[
+                      _BenefitRow(benefit: benefits[index]),
+                      if (index < benefits.length - 1)
+                        const SizedBox(height: MembershipLayout.benefitsRowGap),
+                    ],
                   ],
                 ),
-                const SizedBox(height: 28),
-                for (var index = 0; index < benefits.length; index++) ...[
-                  _BenefitRow(benefit: benefits[index]),
-                  if (index < benefits.length - 1)
-                    const SizedBox(height: MembershipLayout.benefitsRowGap),
+              ),
+              if (betweenBenefitsAndTips case final Widget content) Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(height: 20),
+                  Divider(height: 1,color: Colors.white.withValues(alpha: 0.12),),
+                  content,
                 ],
-                const SizedBox(height: 28),
-                _MembershipTips(tips: tips),
-
-              ],
-            ),
+              ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  MembershipLayout.horizontalPadding,
+                  16,
+                  MembershipLayout.horizontalPadding,
+                  28 + bottomInset,
+                ),
+                child: _MembershipTips(tips: tips),
+              ),
+            ],
           ),
         ],
       ),
@@ -209,7 +231,7 @@ class _BenefitRow extends StatelessWidget {
                     color: _gold.withValues(alpha: 0.6),
                     fontSize: 14,
                     height: 1.3,
-                    fontWeight: FontWeight.normal
+                    fontWeight: FontWeight.normal,
                   ),
                   children: [
                     TextSpan(text: benefit.title),
@@ -231,7 +253,7 @@ class _BenefitRow extends StatelessWidget {
                     color: _gold.withValues(alpha: 0.4),
                     fontSize: 12,
                     height: 1.3,
-                      fontWeight: FontWeight.normal
+                    fontWeight: FontWeight.normal,
                   ),
                 ),
               ],
@@ -255,7 +277,7 @@ class _MembershipTips extends StatelessWidget {
       color: Colors.white.withValues(alpha: 0.4),
       fontSize: 12,
       height: 1.5,
-      fontWeight: FontWeight.normal
+      fontWeight: FontWeight.normal,
     );
 
     return Column(

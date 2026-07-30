@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/account/account_ban_controller.dart';
 import '../../../core/auth/auth_token_store.dart';
 import '../../../core/auth/auth_refresh_executor_provider.dart';
 import '../../../core/auth/session_cleanup_types.dart';
 import '../../../core/auth/user_info_manager.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/notification/startup_notification_permission_reporter.dart';
 import '../../../core/runtime/install_id_provider.dart';
 import '../../entitlement/application/entitlement_controller.dart';
@@ -351,6 +353,90 @@ class AuthController extends Notifier<AuthState> {
     }
   }
 
+  /// 封禁反馈页返回后的恢复流程：优先用现有 token 校验权益，只有认证失效时
+  /// 才按保存的登录渠道重新认证。
+  Future<bool> recoverAfterAccountBan() async {
+    try {
+      await ref
+          .read(entitlementControllerProvider.notifier)
+          .verifyAccountStatusOrThrow();
+      ref.read(accountBanControllerProvider.notifier).clearAfterVerification();
+      return true;
+    } on ApiException catch (error) {
+      final hasAccessToken = ref.read(authTokenStoreProvider).hasAccessToken;
+      if (!error.isAuthFailure && hasAccessToken) {
+        return false;
+      }
+    } catch (_) {
+      return false;
+    }
+
+    return _reauthenticateAndVerifyAfterAccountBan();
+  }
+
+  Future<bool> _reauthenticateAndVerifyAfterAccountBan() async {
+    if (state.pendingProvider != null) {
+      return false;
+    }
+
+    final generation = ++_generation;
+    await ref.read(authTokenStoreProvider.notifier).waitForHydration();
+    final token = ref.read(authTokenStoreProvider);
+    final provider =
+        _providerFromToken(token.provider) ??
+        state.user?.provider ??
+        AuthProviderType.device;
+
+    state = state.copyWith(
+      isLoading: true,
+      pendingProvider: provider,
+      clearError: true,
+      clearFailedAction: true,
+    );
+
+    try {
+      final repositorySession = await ref
+          .read(authRepositoryProvider)
+          .login(provider);
+      if (!_isCurrent(generation)) {
+        return false;
+      }
+
+      // repository.login 已完成用户资料请求；这里只补一次权益校验，避免重复拉取资料。
+      await ref
+          .read(entitlementControllerProvider.notifier)
+          .verifyAccountStatusOrThrow();
+      if (!_isCurrent(generation)) {
+        return false;
+      }
+
+      final session = await _sessionFromCurrentStores(
+        fallbackProvider: provider,
+        fallbackSession: repositorySession,
+      );
+      state = state.copyWith(
+        isLoading: false,
+        session: session,
+        clearPendingProvider: true,
+        clearError: true,
+        clearFailedAction: true,
+      );
+      _syncNotificationPermission(session);
+      ref.read(accountBanControllerProvider.notifier).clearAfterVerification();
+      return true;
+    } catch (error) {
+      if (_isCurrent(generation)) {
+        state = state.copyWith(
+          isLoading: false,
+          error: error,
+          failedAction: AuthFailureAction.login,
+          clearPendingProvider: true,
+        );
+      }
+      return false;
+    }
+  }
+
   Future<void> logout() async {
     if (state.isLoading) {
       return;
@@ -475,7 +561,22 @@ class AuthController extends Notifier<AuthState> {
     }
 
     final candidate = await synchronizer.syncCurrentSession();
-    await ref.read(entitlementControllerProvider.notifier).load();
+    final isEntitlementVerified = await ref
+        .read(entitlementControllerProvider.notifier)
+        .load();
+    if (isEntitlementVerified) {
+      ref.read(accountBanControllerProvider.notifier).clearAfterVerification();
+    }
+    return _sessionFromCurrentStores(
+      fallbackProvider: fallbackProvider,
+      fallbackSession: candidate,
+    );
+  }
+
+  Future<AuthSession> _sessionFromCurrentStores({
+    required AuthProviderType fallbackProvider,
+    AuthSession? fallbackSession,
+  }) async {
     final syncedToken = ref.read(authTokenStoreProvider);
 
     final provider =
@@ -495,7 +596,7 @@ class AuthController extends Notifier<AuthState> {
         provider: provider,
       );
     }
-    return candidate;
+    return fallbackSession ?? const AuthSession.guest();
   }
 
   AuthProviderType? _providerFromToken(String? value) {

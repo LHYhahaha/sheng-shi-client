@@ -10,6 +10,8 @@ import '../../../../features/auth/application/auth_controller.dart';
 import '../../../../features/entitlement/application/entitlement_controller.dart';
 import '../../../../features/membership/application/membership_controller.dart';
 import '../../../../features/membership/presentation/pages/membership_page.dart';
+import '../../../../features/home/presentation/widgets/vip_only_dramas_section.dart';
+import '../../../../features/home/application/vip_only_dramas_provider.dart';
 import '../../../../features/profile/application/profile_controller.dart';
 import '../../../../features/profile/presentation/widgets/profile_header.dart';
 import '../../../../features/rewards/application/member_points_controller.dart';
@@ -58,6 +60,7 @@ class _MemberTabPageState extends ConsumerState<MemberTabPage> {
       return;
     }
     _lastRefreshAt = now;
+    ref.invalidate(vipOnlyDramasProvider);
 
     await ref.read(entitlementControllerProvider.notifier).refreshFromServer();
     if (ref.read(entitlementControllerProvider).isMember) {
@@ -118,6 +121,8 @@ class MemberPage extends ConsumerStatefulWidget {
 }
 
 class _MemberPageState extends ConsumerState<MemberPage> {
+  bool _vipDramasRefreshRequested = false;
+
   @override
   void initState() {
     super.initState();
@@ -131,6 +136,15 @@ class _MemberPageState extends ConsumerState<MemberPage> {
       }
       ref.read(memberPointsControllerProvider.notifier).loadDailyDetail();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_vipDramasRefreshRequested) {
+      _vipDramasRefreshRequested = true;
+      ref.invalidate(vipOnlyDramasProvider);
+    }
   }
 
   @override
@@ -151,6 +165,10 @@ class _MemberPageState extends ConsumerState<MemberPage> {
       points.exchangeOptions?.list ?? const <MemberPointExchangeTier>[],
     );
     final dailyRewardPoints = _dailyRewardAvailablePoints(points.data);
+    final membershipExpiresAt = entitlement.membershipExpiresAt;
+    final membershipValidityText =
+        '${context.l10n.memberCenterLabelValidUntil}: '
+        '${_formatMembershipExpiry(membershipExpiresAt)}';
     final hasLinkedAccount = !auth.session.isGuest;
     final avatarResource =
         authUser?.avatarResource ??
@@ -173,57 +191,91 @@ class _MemberPageState extends ConsumerState<MemberPage> {
         bottom: false,
         child: ListView(
           padding: EdgeInsets.fromLTRB(
-            10,
+            0,
             12,
-            10,
+            0,
             MediaQuery.paddingOf(context).bottom + 32,
           ),
           children: [
-            const _MemberNavBar(),
-            const SizedBox(height: 32),
-            ProfileHeader(
-              state: headerState,
-              onLoginTap: () {
-                if (auth.session.isGuest) {
-                  context.push(RoutePaths.auth);
-                }
-              },
-              onAccountTap: () => context.push(RoutePaths.account),
-              onGuestTap: () {
-                if (auth.session.isGuest) {
-                  context.push(RoutePaths.auth);
-                }
-              },
-            ),
-            const SizedBox(height: 42),
-            if (hasMemberInfoError)
-              _MemberInfoLoadFailed(
-                onRetry: () => ref
-                    .read(memberPointsControllerProvider.notifier)
-                    .loadDailyDetail(),
-              )
-            else ...[
-              _SectionTitleRow(
-                title: 'Points redemption',
-                trailing: _PointsValue(value: pointBalance, showChevron: true),
-                onTap: () => context.push(RoutePaths.memberPointDetails),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Column(
+                children: [
+                  const _MemberNavBar(),
+                  const SizedBox(height: 32),
+                  ProfileHeader(
+                    state: headerState,
+                    secondaryText: membershipValidityText,
+                    onLoginTap: () {
+                      if (auth.session.isGuest) {
+                        context.push(RoutePaths.auth);
+                      }
+                    },
+                    onAccountTap: () => context.push(RoutePaths.account),
+                    onGuestTap: () {
+                      if (auth.session.isGuest) {
+                        context.push(RoutePaths.auth);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 42),
+                  if (hasMemberInfoError)
+                    _MemberInfoLoadFailed(
+                      onRetry: () => ref
+                          .read(memberPointsControllerProvider.notifier)
+                          .loadDailyDetail(),
+                    )
+                  else ...[
+                    _SectionTitleRow(
+                      title: context.l10n.memberCenterRedeemPoints,
+                      trailing: _PointsValue(
+                        value: pointBalance,
+                        showChevron: true,
+                      ),
+                      onTap: () => context.push(RoutePaths.memberPointDetails),
+                    ),
+                    const SizedBox(height: 10),
+                    for (var index = 0; index < tiers.length; index++) ...[
+                      _RedeemCard(tier: tiers[index]),
+                      if (index < tiers.length - 1) const SizedBox(height: 8),
+                    ],
+                    if (dailyRewardPoints > 0) ...[
+                      const SizedBox(height: 8),
+                      _DailyRewardCard(availablePoints: dailyRewardPoints),
+                    ],
+                  ],
+                  const SizedBox(height: 24),
+                  const _PrivilegesSection(),
+                ],
               ),
-              const SizedBox(height: 10),
-              for (var index = 0; index < tiers.length; index++) ...[
-                _RedeemCard(tier: tiers[index]),
-                if (index < tiers.length - 1) const SizedBox(height: 8),
-              ],
-              if (dailyRewardPoints > 0) ...[
-                const SizedBox(height: 8),
-                _DailyRewardCard(availablePoints: dailyRewardPoints),
-              ],
-            ],
-            const SizedBox(height: 24),
-            const _PrivilegesSection(),
+            ),
+            VipOnlyDramasSection(
+              needDivider: true,
+              topPadding: 20,
+              listPadding: EdgeInsetsGeometry.only(left: 16),
+              onDramaTap: (drama) => context.push(
+                RoutePaths.playerLocation(
+                  dramaId: drama.id,
+                  episodeId: '1',
+                  trigger: 'member_center_vip_only_drama_tap',
+                  userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  String _formatMembershipExpiry(DateTime? value) {
+    if (value == null) {
+      return '--';
+    }
+    final local = value.toLocal();
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    return '${local.year}.$month.$day';
   }
 }
 
@@ -255,7 +307,7 @@ class _MemberNavBar extends StatelessWidget {
             ),
           ),
           Text(
-            'My Member',
+            context.l10n.memberCenterTitleMyMember,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               color: _memberText,
               fontSize: 16,
@@ -522,7 +574,7 @@ class _DailyRewardCard extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                'Daily Reward',
+                context.l10n.memberCenterSectionDailyReward,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: _memberText,
                   fontSize: 14,
@@ -556,31 +608,31 @@ class _PrivilegesSection extends StatelessWidget {
         const SizedBox(height: 12),
         _PrivilegeItem(
           icon: 'assets/images/membership/member_series.png',
-          title: 'Unlimited access to 8,000+ series',
+          title: context.l10n.benefitSeriesTitle,
           highlightedText: '8,000+',
-          subtitle: '55+ fresh dramas every week',
+          subtitle: context.l10n.benefitSeriesHighlight,
         ),
         const SizedBox(height: 20),
-        const _PrivilegeItem(
+         _PrivilegeItem(
           icon: 'assets/images/membership/member_download.png',
-          title: 'Download',
+          title: context.l10n.benefitDownload,
         ),
         const SizedBox(height: 14),
         _PrivilegeItem(
           icon: 'assets/images/membership/member_points.png',
-          title: 'Daily member points',
+          title: context.l10n.benefitSeriesDescription,
           showChevron: true,
           onTap: () => context.go(RoutePaths.member),
         ),
         const SizedBox(height: 20),
         _PrivilegeItem(
           icon: 'assets/images/membership/member_only.png',
-          title: 'Members-only dramas',
+          title: context.l10n.benefitMembersOnly,
         ),
         const SizedBox(height: 20),
-        const _PrivilegeItem(
+         _PrivilegeItem(
           icon: 'assets/images/membership/member_hd.png',
-          title: '1080p quality',
+          title: context.l10n.benefitHd,
         ),
       ],
     );
@@ -593,7 +645,7 @@ class _PrivilegeTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      'My privilege',
+      context.l10n.memberCenterSectionMyPrivileges,
       style: Theme.of(context).textTheme.titleLarge?.copyWith(
         color: _memberText,
         fontSize: 16,

@@ -16,6 +16,8 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../pay/application/payment_loading_controller.dart';
+import '../../../home/application/vip_only_dramas_provider.dart';
+import '../../../home/presentation/widgets/vip_only_dramas_section.dart';
 import '../../application/membership_controller.dart';
 import '../../application/membership_modal_coordinator.dart';
 import '../../domain/membership_plan.dart';
@@ -43,6 +45,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
   bool _modalOpen = false;
   late final AppModalService _modalService;
   late final bool _returnToProfile;
+  bool _vipDramasRefreshRequested = false;
 
   @override
   void initState() {
@@ -57,6 +60,11 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // Member tab 会在切入时统一刷新；独立路由在首次 build 前刷新。
+    if (widget.showBackButton && !_vipDramasRefreshRequested) {
+      _vipDramasRefreshRequested = true;
+      ref.invalidate(vipOnlyDramasProvider);
+    }
     if (!_returnToProfileInitialized) {
       final uri = GoRouter.maybeOf(context)?.routeInformationProvider.value.uri;
       _returnToProfile = uri?.queryParameters['returnToProfile'] == 'true';
@@ -345,7 +353,21 @@ class _MembershipBody extends StatelessWidget {
                   MembershipLayout.planDescriptionTop -
                   18,
             ),
-            MembershipBenefitsPanel(),
+            MembershipBenefitsPanel(
+              betweenBenefitsAndTips: VipOnlyDramasSection(
+                listPadding: const EdgeInsets.symmetric(
+                  horizontal: MembershipLayout.horizontalPadding,
+                ),
+                onDramaTap: (drama) => context.push(
+                  RoutePaths.playerLocation(
+                    dramaId: drama.id,
+                    episodeId: '1',
+                    trigger: 'membership_vip_only_drama_tap',
+                    userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),

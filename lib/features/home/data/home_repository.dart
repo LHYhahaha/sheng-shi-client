@@ -1,4 +1,5 @@
 import '../domain/home_data.dart';
+import '../domain/vip_only_drama.dart';
 
 /// 首页数据仓库接口。
 abstract interface class HomeRepository {
@@ -9,4 +10,7 @@ abstract interface class HomeRepository {
   ///
   /// 需要登录后的 token。
   Future<HomeData> getHomeData({int? page, int pageSize = 20, int? tabId});
+
+  /// 获取会员相关页面共用的会员专享短剧列表。
+  Future<VipOnlyDramaCollection> getVipOnlyDramas();
 }

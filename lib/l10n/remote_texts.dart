@@ -94,6 +94,24 @@ abstract final class RemoteTexts {
     fallbackZh: '{coins} 金币 + {bonus} 赠送',
   );
 
+  static const claimCoinsTypeSigninBonus = RemoteTextSpec(
+    key: 'claim_coins.type.signin_bonus',
+    fallbackEn: 'Check-in Bonus',
+    fallbackZh: '签到赠送',
+  );
+
+  static const claimCoinsTypeTaskBonus = RemoteTextSpec(
+    key: 'claim_coins.type.task_bonus',
+    fallbackEn: 'Task Bonus',
+    fallbackZh: '任务赠送',
+  );
+
+  static const claimCoinsTypeAdminBonus = RemoteTextSpec(
+    key: 'claim_coins.type.admin_bonus',
+    fallbackEn: 'Admin Credit',
+    fallbackZh: '后台补发',
+  );
+
   // ── 会员积分 Member points ─────────────────────────────────────
   static const memberPointsTitle = RemoteTextSpec(
     key: 'member_points.title',

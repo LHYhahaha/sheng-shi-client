@@ -21,12 +21,17 @@ const _androidNotificationChannel = AndroidNotificationChannel(
 /// FCM 后台消息入口。必须是顶层函数，且在 [main] 中注册。
 @pragma('vm:entry-point')
 Future<void> fcmBackgroundMessageHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  final notification = FcmNotification.fromRemoteMessage(message);
-  _logRemoteMessage('Background message received', message);
-  debugPrint(
-    '[FCM] Background display model: ${jsonEncode(notification.toPayload())}',
-  );
+  try {
+    await Firebase.initializeApp();
+    final notification = FcmNotification.fromRemoteMessage(message);
+    _logRemoteMessage('Background message received', message);
+    debugPrint(
+      '[FCM] Background display model: ${jsonEncode(notification.toPayload())}',
+    );
+  } catch (error, stackTrace) {
+    debugPrint('[FCM] Background initialization failed: $error');
+    debugPrintStack(stackTrace: stackTrace);
+  }
 }
 
 void _logRemoteMessage(String event, RemoteMessage message) {

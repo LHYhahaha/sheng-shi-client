@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/api_session_auth_handler.dart';
+import '../account/account_ban_controller.dart';
 import '../auth/auth_token_store.dart';
 import '../channel/channel_config_service.dart';
 import '../runtime/api_lang_provider.dart';
@@ -66,6 +67,11 @@ final apiClientProvider = Provider.autoDispose<ApiClient>((ref) {
           : const <String, String>{};
     },
     sessionAuthHandler: null,
+    onBusinessError: (error) {
+      ref
+          .read(accountBanControllerProvider.notifier)
+          .reportBusinessCode(error.businessCode);
+    },
   );
 
   final sessionAuthHandler = ref.watch(

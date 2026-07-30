@@ -12,6 +12,8 @@ import '../../../../core/auth/user_info_store.dart';
 import '../../../../core/toast/app_center_toast.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
+import '../../../home/application/vip_only_dramas_provider.dart';
+import '../../../home/presentation/widgets/vip_only_dramas_section.dart';
 import '../../../membership/presentation/membership_route_result.dart';
 import '../../application/member_points_controller.dart';
 import '../../domain/member_point_daily_detail.dart';
@@ -22,7 +24,6 @@ import '../widget/reward_rules_sheet.dart';
 
 const _purple = Color(0xFF8800FF);
 const _titleColor = Color(0xFFECC2FF);
-const _bodyColor = Color(0xFFF3EAF6);
 const _mutedColor = Color(0xFF8D7197);
 
 @visibleForTesting
@@ -97,10 +98,22 @@ class MemberPointsPage extends ConsumerStatefulWidget {
 }
 
 class _MemberPointsPageState extends ConsumerState<MemberPointsPage> {
+  bool _vipDramasRefreshRequested = false;
+
   @override
   void initState() {
     super.initState();
     _refreshIfNeeded();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 嵌在 Member tab 时由父页面统一刷新；独立页面自行刷新。
+    if (!widget.useParentBackground && !_vipDramasRefreshRequested) {
+      _vipDramasRefreshRequested = true;
+      ref.invalidate(vipOnlyDramasProvider);
+    }
   }
 
   @override
@@ -151,7 +164,6 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage> {
         : const MemberPointsState();
     final dailyDetail = memberPoints.data;
     final exchangeOptions = memberPoints.exchangeOptions;
-    final l10n = AppLocalizations.maybeOf(context);
     final isMember = widget.isMember ?? entitlement.isMember;
     // final isMember = false;
 
@@ -208,16 +220,19 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage> {
           ),
           const SizedBox(height: 16),
           if (isMember)
-            Container(
-              padding: EdgeInsets.fromLTRB(10, 24, 10, 0),
-              decoration: BoxDecoration(
-                color: Color(0XFF0E0016),
-                border: Border(
-                  top: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
-                ),
+            VipOnlyDramasSection(
+              border: Border(
+                top: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
               ),
-              child: _RecommendationsPanel(
-                title: l10n.memberCenterSectionVipDramas,
+              listPadding: EdgeInsetsGeometry.only(left: 16),
+              backgroundColor: const Color(0XFF0E0016),
+              onDramaTap: (drama) => context.push(
+                RoutePaths.playerLocation(
+                  dramaId: drama.id,
+                  episodeId: '1',
+                  trigger: 'member_points_vip_only_drama_tap',
+                  userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+                ),
               ),
             )
           else
@@ -1308,9 +1323,7 @@ class _RedeemPointsPanel extends ConsumerWidget {
   }
 
   String _redeemTitle(MemberPointExchangeTier tier, AppLocalizations l10n) {
-    final displayName = tier.displayName.trim();
-    if (displayName.isNotEmpty) return displayName;
-    return l10n.memberCenterExchangeDaysMember(tier.memberDays);
+    return l10n.memberPointsDetailTypeExchange(tier.memberDays);
   }
 
   Future<void> _confirmExchange(
@@ -1759,18 +1772,20 @@ class _VipSeriesPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.maybeOf(context);
-
     return Column(
       children: [
         const _VipBenefitsPanel(),
-        const Divider(height: 1, thickness: 1, color: Color(0x4D5A1B72)),
-        ColoredBox(
-          color: const Color(0xFF0E0016),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 24, 10, 0),
-            child: _RecommendationsPanel(
-              title: l10n.memberCenterSectionVipDramas,
+        VipOnlyDramasSection(
+          topPadding: 6,
+          needDivider: true,
+          listPadding: EdgeInsetsGeometry.only(left: 16),
+          backgroundColor: const Color(0xFF0E0016),
+          onDramaTap: (drama) => context.push(
+            RoutePaths.playerLocation(
+              dramaId: drama.id,
+              episodeId: '1',
+              trigger: 'member_points_vip_only_drama_tap',
+              userActionAtMs: DateTime.now().millisecondsSinceEpoch,
             ),
           ),
         ),
@@ -1818,76 +1833,6 @@ class _VipBenefitsTopBorderPainter extends CustomPainter {
   @override
   bool shouldRepaint(_VipBenefitsTopBorderPainter oldDelegate) =>
       oldDelegate.color != color;
-}
-
-class _RecommendationsPanel extends StatelessWidget {
-  const _RecommendationsPanel({required this.title});
-
-  final String title;
-
-  static const _cardWidth = 116.0;
-  static const _coverAspectRatio = 0.68;
-  static const _listHeight = _cardWidth / _coverAspectRatio + 6 + 24;
-
-  static const covers = [
-    ('assets/images/membership/1.png', 'Fallin Love With\nEx\'s Uncle'),
-    ('assets/images/membership/2.png', 'Wolf Queen Rises'),
-    ('assets/images/membership/3.png', 'Fake Dating My\nRich Nemesis'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.white.withValues(alpha: 0.7),
-          ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: _listHeight,
-          child: ListView.separated(
-            key: const Key('member_points_recommendations_list'),
-            scrollDirection: Axis.horizontal,
-            physics: const ClampingScrollPhysics(),
-            itemCount: covers.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
-              return SizedBox(
-                width: _cardWidth,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AspectRatio(
-                      aspectRatio: _coverAspectRatio,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(3),
-                        child: Image.asset(covers[index].$1, fit: BoxFit.cover),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      covers[index].$2,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _bodyColor,
-                        fontSize: 10,
-                        height: 1.15,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 class _SectionTitle extends StatelessWidget {

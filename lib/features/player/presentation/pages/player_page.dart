@@ -2666,8 +2666,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       isDismissible: true,
       enableDrag: true,
       builder: (context) => PlayerShareSheet(
-        onFacebookTap: () => unawaited(_shareToFacebook(dramaId, dramaTitle)),
-        onCopyLinkTap: () => unawaited(_copyShareLink(dramaId, dramaTitle)),
+        onFacebookTap: () {
+          unawaited(_reportDramaShareAction(dramaId, 'facebook'));
+          unawaited(_shareToFacebook(dramaId, dramaTitle));
+        },
+        onCopyLinkTap: () {
+          unawaited(_reportDramaShareAction(dramaId, 'copy_link'));
+          unawaited(_copyShareLink(dramaId, dramaTitle));
+        },
       ),
     ).whenComplete(() {
       _isModalOpen = false;
@@ -2675,6 +2681,24 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         _syncAutoImmersiveBlockers();
       }
     });
+  }
+
+  Future<void> _reportDramaShareAction(
+    String dramaId,
+    String shareChannel,
+  ) async {
+    try {
+      await ref
+          .read(playerRemoteDataSourceProvider)
+          .reportDramaShareAction(dramaId: dramaId, shareChannel: shareChannel);
+    } catch (error, stackTrace) {
+      developer.log(
+        'Failed to report drama share action.',
+        name: 'PlayerShare',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   Future<void> _shareToFacebook(String dramaId, String dramaTitle) async {

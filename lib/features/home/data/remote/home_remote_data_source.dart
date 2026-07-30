@@ -1,6 +1,7 @@
 import '../../../../core/network/api_client.dart';
 import '../../../search/data/dto/search_ranking_response_dto.dart';
 import '../dto/home_response_dto.dart';
+import '../dto/vip_only_dramas_response_dto.dart';
 
 class HomeRemoteDataSource {
   const HomeRemoteDataSource({required ApiClient apiClient})
@@ -51,6 +52,21 @@ class HomeRemoteDataSource {
         final dto = HomeResponseDto.fromJson(Map<String, Object?>.from(data));
 
         return dto;
+      },
+    );
+  }
+
+  Future<VipOnlyDramasResponseDto> getVipOnlyDramas() {
+    return _apiClient.get<VipOnlyDramasResponseDto>(
+      '/api/home/vip-only',
+      authPolicy: ApiAuthPolicy.required,
+      decoder: (data) {
+        if (data is! Map) {
+          throw Exception('Expected Map response, got ${data.runtimeType}');
+        }
+        return VipOnlyDramasResponseDto.fromJson(
+          Map<String, Object?>.from(data),
+        );
       },
     );
   }

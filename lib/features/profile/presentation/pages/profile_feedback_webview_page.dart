@@ -4,9 +4,14 @@ import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/account/account_ban_controller.dart';
+import '../../../../core/auth/user_info_store.dart';
+import '../../../../features/auth/application/auth_controller.dart';
 import '../../../../core/config/app_environment.dart';
 import '../../../../core/network/api_client_provider.dart';
 import '../../../../core/toast/app_toast_provider.dart';
@@ -25,6 +30,20 @@ class ProfileFeedbackWebViewPage extends ConsumerStatefulWidget {
 class _ProfileFeedbackWebViewPageState
     extends ConsumerState<ProfileFeedbackWebViewPage> {
   CancelFunc? _loadingCancel;
+  final ImagePicker _imagePicker = ImagePicker();
+  late final AccountBanController _accountBanController;
+  late final AuthController _authController;
+  late final bool _openedForAccountBan;
+
+  @override
+  void initState() {
+    super.initState();
+    _accountBanController = ref.read(accountBanControllerProvider.notifier);
+    _authController = ref.read(authControllerProvider.notifier);
+    _openedForAccountBan = ref
+        .read(accountBanControllerProvider)
+        .isViewingFeedback;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,42 +56,86 @@ class _ProfileFeedbackWebViewPageState
     if (accessToken != null && accessToken.isNotEmpty) {
       headers['Authorization'] = 'Bearer $accessToken';
     }
+    final userInfo = ref.watch(userInfoStoreProvider);
+    final bridgeData = _ProfileFeedbackBridgeData(
+      appName: context.l10n.appTitle,
+      statusBarHeight: MediaQuery.paddingOf(context).top,
+      // 这里使用后端返回后保存在 UserInfoStore 中的资料，不传本地默认头像。
+      // 后端没有返回时按 H5 协议传空字符串。
+      nickname: userInfo.nickname ?? '',
+      avatarUrl: userInfo.avatar ?? '',
+      i18n: AppLocalizations.remoteStrings ?? const <String, dynamic>{},
+      headers: headers,
+    );
 
     return WebViewPage(
-      url: AppConfig.current
-          .helpUrlForLanguage(context.l10n.locale.languageCode)
-          .toString(),
+      url:
+          // "http://192.168.1.55:5173/app/#/help",
+          AppConfig.current
+              .helpUrlForLanguage(context.l10n.locale.languageCode)
+              .toString(),
       title: context.l10n.profileFeedback,
       showAppBar: false,
       javaScriptMessageHandlers: {'DramaWaveBridge': _handleJavaScriptMessage},
+      // 在加载 URL 前完成 Android 文件选择器配置，避免延迟 JSBridge 注入。
+      onControllerCreated: _configureImageFileSelector,
       onPageStarted: (controller, _) =>
-          _injectJavaScriptBridge(controller, headers),
+          _injectJavaScriptBridge(controller, bridgeData),
       onPageFinished: (controller, _) =>
-          _injectJavaScriptBridge(controller, headers),
+          _injectJavaScriptBridge(controller, bridgeData),
     );
+  }
+
+  Future<void> _configureImageFileSelector(WebViewController controller) async {
+    final platformController = controller.platform;
+    if (platformController is! AndroidWebViewController) {
+      return;
+    }
+
+    await platformController.setOnShowFileSelector(_selectImages);
+  }
+
+  Future<List<String>> _selectImages(FileSelectorParams params) async {
+    debugPrint(
+      '[ProfileFeedbackH5] Image selector requested: '
+      'acceptTypes=${params.acceptTypes}, mode=${params.mode}',
+    );
+
+    if (params.mode == FileSelectorMode.openMultiple) {
+      final images = await _imagePicker.pickMultiImage();
+      return images.map((image) => Uri.file(image.path).toString()).toList();
+    }
+
+    final image = await _imagePicker.pickImage(source: ImageSource.gallery);
+    if (image == null) {
+      return const [];
+    }
+    return [Uri.file(image.path).toString()];
   }
 
   Future<void> _injectJavaScriptBridge(
     WebViewController controller,
-    Map<String, String> headers,
+    _ProfileFeedbackBridgeData bridgeData,
   ) async {
     if (!mounted) {
       return;
     }
-    final appName = context.l10n.appTitle;
-    final i18n = AppLocalizations.remoteStrings ?? const <String, dynamic>{};
-
     try {
       await controller.runJavaScript('''
         window.JSBridge = window.JSBridge || {};
-        window.JSBridge.appName = ${jsonEncode(appName)};
+        window.JSBridge.appName = ${jsonEncode(bridgeData.appName)};
         window.JSBridge.appBaseInfo = {
-        appName:${jsonEncode(appName)},
-        statusBarHeight:${MediaQuery.paddingOf(context).top}
+        appName:${jsonEncode(bridgeData.appName)},
+        statusBarHeight:${bridgeData.statusBarHeight}
         };
 
-        window.JSBridge.i18n = ${jsonEncode(i18n)};
-        window.JSBridge.httpHeader = ${jsonEncode(headers)};
+        window.JSBridge.userInfo = {
+        nickname:${jsonEncode(bridgeData.nickname)},
+        avatarUrl:${jsonEncode(bridgeData.avatarUrl)}
+        };
+
+        window.JSBridge.i18n = ${jsonEncode(bridgeData.i18n)};
+        window.JSBridge.httpHeader = ${jsonEncode(bridgeData.headers)};
         window.JSBridge.postMessage = function ({ event, data, callback }) {
           window.DramaWaveBridge.postMessage(JSON.stringify({
             event: event,
@@ -150,6 +213,47 @@ class _ProfileFeedbackWebViewPageState
   @override
   void dispose() {
     _loadingCancel?.call();
+    if (_openedForAccountBan) {
+      // 路由返回时当前组件正处于卸载阶段，延后恢复遮罩并重验账号，避免在
+      // dispose 中更新 provider。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_accountBanController.beginRevalidation()) {
+          return;
+        }
+        _reauthenticateAfterFeedback(
+          accountBanController: _accountBanController,
+          authController: _authController,
+        );
+      });
+    }
     super.dispose();
   }
+}
+
+Future<void> _reauthenticateAfterFeedback({
+  required AccountBanController accountBanController,
+  required AuthController authController,
+}) async {
+  final isUnbanned = await authController.recoverAfterAccountBan();
+  if (!isUnbanned) {
+    accountBanController.completeRevalidationAsBanned();
+  }
+}
+
+class _ProfileFeedbackBridgeData {
+  const _ProfileFeedbackBridgeData({
+    required this.appName,
+    required this.statusBarHeight,
+    required this.nickname,
+    required this.avatarUrl,
+    required this.i18n,
+    required this.headers,
+  });
+
+  final String appName;
+  final double statusBarHeight;
+  final String nickname;
+  final String avatarUrl;
+  final Map<String, dynamic> i18n;
+  final Map<String, String> headers;
 }

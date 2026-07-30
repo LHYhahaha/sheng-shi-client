@@ -153,6 +153,25 @@ class PlayerRemoteDataSource {
     );
   }
 
+  /// 上报播放器内的分享动作。
+  Future<void> reportDramaShareAction({
+    required String dramaId,
+    required String shareChannel,
+  }) {
+    return _apiClient.post<void>(
+      '/api/activity/task/action/report',
+      data: <String, Object?>{
+        'actionKey': 'share_drama',
+        'extra': <String, String>{
+          'drama_id': dramaId,
+          'share_channel': shareChannel,
+        },
+      },
+      authPolicy: ApiAuthPolicy.required,
+      decoder: (_) {},
+    );
+  }
+
   /// 金币解锁剧集。
   ///
   /// 对应后端 API：POST /api/payment/episode/unlock

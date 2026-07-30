@@ -137,7 +137,7 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
             ),
           const SizedBox(height: 20),
           Text(
-            'Earn Rewards',
+            context.l10n.rewardsTabRewardTaskTitle,
             style: TextStyle(
               color: Colors.white,
               fontSize: 16,

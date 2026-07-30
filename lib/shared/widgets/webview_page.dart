@@ -8,12 +8,15 @@ import '../../shared/theme/app_colors.dart';
 
 typedef WebViewPageLifecycleCallback =
     Future<void> Function(WebViewController controller, String url);
+typedef WebViewPageControllerCallback =
+    Future<void> Function(WebViewController controller);
 
 class WebViewPage extends ConsumerStatefulWidget {
   final String url;
   final String title;
   final bool showAppBar;
   final Map<String, ValueChanged<String>> javaScriptMessageHandlers;
+  final WebViewPageControllerCallback? onControllerCreated;
   final WebViewPageLifecycleCallback? onPageStarted;
   final WebViewPageLifecycleCallback? onPageFinished;
 
@@ -23,6 +26,7 @@ class WebViewPage extends ConsumerStatefulWidget {
     required this.title,
     this.showAppBar = true,
     this.javaScriptMessageHandlers = const {},
+    this.onControllerCreated,
     this.onPageStarted,
     this.onPageFinished,
   });
@@ -40,6 +44,8 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      // Android WebView 默认白底会在 H5 首帧绘制前短暂露出。
+      ..setBackgroundColor(AppColors.black)
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (String url) {
@@ -83,7 +89,15 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
       );
     }
 
-    _controller.loadRequest(Uri.parse(widget.url));
+    _initializeController();
+  }
+
+  Future<void> _initializeController() async {
+    await widget.onControllerCreated?.call(_controller);
+    if (!mounted) {
+      return;
+    }
+    await _controller.loadRequest(Uri.parse(widget.url));
   }
 
   void _setLoading(bool isLoading) {

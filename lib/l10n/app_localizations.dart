@@ -1364,6 +1364,21 @@ class AppLocalizations {
   String get claimCoinsTypeRechargeBonus =>
       _remoteText('claim_coins.type.recharge_bonus', en: 'Recharge', zh: '充值');
 
+  String get claimCoinsTypeSigninBonus => _remoteText(
+    'claim_coins.type.signin_bonus',
+    en: 'Check-in Bonus',
+    zh: '签到赠送',
+  );
+
+  String get claimCoinsTypeTaskBonus =>
+      _remoteText('claim_coins.type.task_bonus', en: 'Task Bonus', zh: '任务赠送');
+
+  String get claimCoinsTypeAdminBonus => _remoteText(
+    'claim_coins.type.admin_bonus',
+    en: 'Admin Credit',
+    zh: '后台补发',
+  );
+
   // ── 会员积分 Member Points ─────────────────────────────────────
   String get memberPointsTitle =>
       _remoteText('member_points.title', en: 'VIP Points', zh: '会员积分');
@@ -1686,6 +1701,9 @@ class AppLocalizations {
   );
 
   // ── 1.0.2 / 奖励金币 ─────────────────────────────────────────────
+  String get rewardsTabRewardTaskTitle =>
+      _remoteText('rewards.task.title', en: 'Earn Coins', zh: '赚取金币');
+
   String get rewardsTabRewardCoins =>
       _remoteText('rewards.tab.reward_coins', en: 'Reward Coins', zh: '奖励金币');
 

@@ -11,6 +11,8 @@ import 'package:go_router/go_router.dart';
 import '../bootstrap/feature_session_cleanup.dart';
 import '../bootstrap/i18n_bootstrap.dart';
 import '../core/active/app_active_reporter.dart';
+import '../core/account/account_ban_controller.dart';
+import '../core/account/account_banned_overlay.dart';
 import '../core/i18n/i18n.dart';
 import '../core/locale/app_locale_controller.dart';
 import '../core/modal/app_modal_host.dart';
@@ -74,6 +76,9 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   }
 
   void _handleAppLink(Uri uri) {
+    if (ref.read(accountBanControllerProvider).isBanned) {
+      return;
+    }
     if (uri.scheme != 'novashort' || uri.host != 'player') {
       debugPrint('[AppLink] Ignored unsupported link: $uri');
       return;
@@ -108,6 +113,9 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   }
 
   void _handleFcmNotificationTap(FcmNotification notification) {
+    if (ref.read(accountBanControllerProvider).isBanned) {
+      return;
+    }
     final data = notification.data;
     final type = data['type']?.trim().toLowerCase();
     final dramaId = data['drama_id']?.trim();
@@ -180,6 +188,9 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (ref.read(accountBanControllerProvider).isBanned) {
+      return;
+    }
     unawaited(ref.read(appActiveReporterProvider).onLifecycleChanged(state));
     final currentPlacement = ref.read(appShellBottomNavigationVisibleProvider)
         ? AppShellDestinations.popupPlacementForIndex(
@@ -230,6 +241,9 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
 
   Future<void> _requestStartupPopupSafely() async {
     try {
+      if (ref.read(accountBanControllerProvider).isBanned) {
+        return;
+      }
       final currentPlacement = AppShellDestinations.popupPlacementForIndex(
         ref.read(appShellCurrentTabIndexProvider),
       );
@@ -394,22 +408,29 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         final wrapped = botToastBuilder(context, child);
         final paymentLoading = ref.watch(paymentLoadingControllerProvider);
         final isPaymentLoading = paymentLoading.isVisible;
+        final accountBan = ref.watch(accountBanControllerProvider);
+        final isBanned = accountBan.isBanned;
         final paymentLoadingLabel =
             paymentLoading.label == PaymentLoadingLabel.loading
             ? context.l10n.loading
             : context.l10n.storePurchaseProcessing;
-        return PopScope(
-          canPop: !isPaymentLoading,
-          child: Stack(
-            children: [
-              AppModalHost(child: wrapped),
-              PopupEntryOverlay(
-                onImageTap: (popup) => _handlePopupImageTap(router, popup),
-                onPlayTap: (popup) => _handlePopupPlayTap(router, popup),
-              ),
-              if (isPaymentLoading)
-                AppBlockingLoadingOverlay(label: paymentLoadingLabel),
-            ],
+        return AccountBannedOverlay(
+          child: PopScope(
+            canPop:
+                !isPaymentLoading &&
+                (!isBanned || accountBan.isViewingFeedback),
+            child: Stack(
+              children: [
+                AppModalHost(child: wrapped),
+                if (!isBanned)
+                  PopupEntryOverlay(
+                    onImageTap: (popup) => _handlePopupImageTap(router, popup),
+                    onPlayTap: (popup) => _handlePopupPlayTap(router, popup),
+                  ),
+                if (isPaymentLoading && !isBanned)
+                  AppBlockingLoadingOverlay(label: paymentLoadingLabel),
+              ],
+            ),
           ),
         );
       },

@@ -1,4 +1,5 @@
 import '../domain/home_data.dart';
+import '../domain/vip_only_drama.dart';
 import 'home_repository.dart';
 import 'mapper/home_mapper.dart';
 import 'remote/home_remote_data_source.dart';
@@ -42,5 +43,24 @@ class RemoteHomeRepository implements HomeRepository {
     );
 
     return _mapper.mapHomeData(dto);
+  }
+
+  @override
+  Future<VipOnlyDramaCollection> getVipOnlyDramas() async {
+    final dto = await _remoteDataSource.getVipOnlyDramas();
+    return VipOnlyDramaCollection(
+      limit: dto.limit,
+      dramas: dto.dramas
+          .where((drama) => drama.id > 0)
+          .map(
+            (drama) => VipOnlyDrama(
+              id: drama.id.toString(),
+              coverUrl: drama.coverUrl,
+              title: drama.title,
+              summary: drama.summary,
+            ),
+          )
+          .toList(growable: false),
+    );
   }
 }

@@ -43,17 +43,19 @@ class EntitlementController extends Notifier<UserEntitlementState> {
     );
   }
 
-  Future<void> load() async {
-    await _load(resetToGuestOnFailure: true);
+  Future<bool> load() => _load(resetToGuestOnFailure: true);
+
+  Future<bool> refreshFromServer() => _load(resetToGuestOnFailure: false);
+
+  /// 封禁恢复流程使用的轻量校验：保留原始异常供调用方判断是否需要重新认证。
+  Future<void> verifyAccountStatusOrThrow() async {
+    state = await ref.read(entitlementRepositoryProvider).fetchState();
   }
 
-  Future<void> refreshFromServer() async {
-    await _load(resetToGuestOnFailure: false);
-  }
-
-  Future<void> _load({required bool resetToGuestOnFailure}) async {
+  Future<bool> _load({required bool resetToGuestOnFailure}) async {
     try {
       state = await ref.read(entitlementRepositoryProvider).fetchState();
+      return true;
     } catch (error, stackTrace) {
       if (resetToGuestOnFailure) {
         final autoUnlockEnabled = state.autoUnlockEnabled;
@@ -69,6 +71,7 @@ class EntitlementController extends Notifier<UserEntitlementState> {
         '$fallbackMessage: $error',
       );
       debugPrintStack(stackTrace: stackTrace);
+      return false;
     }
   }
 
