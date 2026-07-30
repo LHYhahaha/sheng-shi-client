@@ -689,11 +689,15 @@ void main() {
   });
 
   testWidgets(
-    'member points push task refreshes after notifications are enabled',
+    'member points push task claims when daily detail allows claiming',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(375, 812));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      debugRequestMemberPointsNotificationPermission = () async => true;
+      var permissionRequestCallCount = 0;
+      debugRequestMemberPointsNotificationPermission = () async {
+        permissionRequestCallCount++;
+        return true;
+      };
       addTearDown(debugResetMemberPointsNotificationPermission);
       final repository = _FakeMemberPointsRepository(tasks: [_pushTask()]);
 
@@ -723,8 +727,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(repository.claimedTaskKeys, isEmpty);
-      expect(find.text('Claimed Successfully'), findsNothing);
+      expect(repository.claimedTaskKeys, ['point.enable_push']);
+      expect(permissionRequestCallCount, 0);
+      expect(find.text('Claimed Successfully'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

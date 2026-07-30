@@ -1049,6 +1049,11 @@ class _MemberTasksPanel extends ConsumerWidget {
           );
         }
       case _MemberTaskActionType.enablePush:
+        // 服务端已确认任务可领取时，直接发起领取；不再重复请求系统权限。
+        if (item.task.canClaim) {
+          await _claimTask(context, ref, item.task.taskKey);
+          return;
+        }
         final granted = await debugRequestMemberPointsNotificationPermission();
         if (!context.mounted) return;
         await ref
