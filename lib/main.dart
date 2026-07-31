@@ -10,6 +10,7 @@ import 'bootstrap/app_modal_registry_bootstrap.dart';
 import 'bootstrap/test_network_bootstrap.dart';
 import 'core/auth/auth_token_storage_provider.dart';
 import 'core/auth/flutter_secure_auth_token_storage.dart';
+import 'core/active/app_active_reporter.dart';
 import 'core/network/test_network_config.dart';
 import 'core/notification/fcm_notification_service.dart';
 import 'core/runtime/install_id_provider.dart';
@@ -44,6 +45,9 @@ Future<void> main() async {
           FlutterSecureAuthTokenStorage(),
         ),
         testNetworkConfigProvider.overrideWithValue(testNetworkConfig),
+        pushTokenReaderProvider.overrideWithValue(
+          fcmNotificationService?.getPushToken ?? _unavailablePushToken,
+        ),
         ...appModalRegistryOverrides,
       ],
       child: TestNetworkBootstrap(
@@ -52,6 +56,8 @@ Future<void> main() async {
     ),
   );
 }
+
+Future<String?> _unavailablePushToken() async => null;
 
 /// 初始化失败时降级为无推送启动，不能阻塞应用进入首页。
 Future<FcmNotificationService?> _initializeFcmNotifications() async {
@@ -68,7 +74,9 @@ Future<FcmNotificationService?> _initializeFcmNotifications() async {
     await service.initialize();
     return service;
   } catch (error, stackTrace) {
-    debugPrint('[FCM] Initialization failed; notifications are disabled: $error');
+    debugPrint(
+      '[FCM] Initialization failed; notifications are disabled: $error',
+    );
     debugPrintStack(stackTrace: stackTrace);
     return null;
   }

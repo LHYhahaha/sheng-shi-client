@@ -45,10 +45,9 @@ void _logRemoteMessage(String event, RemoteMessage message) {
   }
 }
 
-/// 初始化 FCM、打印 Token，并将前台 FCM 消息展示为本地通知。
+/// 初始化 FCM、提供 Token，并将前台 FCM 消息展示为本地通知。
 ///
-/// 不申请通知权限；项目已有的用户触发授权流程会负责申请权限。Token
-/// 仅输出到 debug log，后续接入后台接口时可在 [_listenForTokenRefresh] 中上报。
+/// 不申请通知权限；项目已有的用户触发授权流程会负责申请权限。
 class FcmNotificationService {
   FcmNotificationService({
     FirebaseMessaging? messaging,
@@ -136,7 +135,7 @@ class FcmNotificationService {
 
   Future<void> _printCurrentToken() async {
     try {
-      final token = await _messaging.getToken();
+      final token = await getPushToken();
       if (token == null || token.isEmpty) {
         debugPrint('[FCM] Token is unavailable. It may be pending APNs setup.');
         return;
@@ -147,6 +146,11 @@ class FcmNotificationService {
       debugPrintStack(stackTrace: stackTrace);
     }
   }
+
+  /// 获取当前设备的 FCM token，供用户活跃上报等业务接口使用。
+  ///
+  /// iOS 在 APNs 初始化完成前可能暂时没有 token，因此调用方应能处理 `null`。
+  Future<String?> getPushToken() => _messaging.getToken();
 
   void _listenForTokenRefresh() {
     _tokenRefreshSubscription ??= _messaging.onTokenRefresh.listen(

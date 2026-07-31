@@ -3,7 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 /// 可供应用界面和本地通知直接展示的 FCM 推送消息。
 ///
 /// 服务端将展示内容放在 FCM 的 `notification` 字段，并在 `data` 中传递
-/// `type`、跳转参数和跨平台统一的 `image_url`。
+/// `type` / `dump_type`、跳转参数和跨平台统一的 `image_url` / `icon_url`。
 /// 其余 `data` 会原样保留，供点击通知后的业务跳转使用。
 class FcmNotification {
   const FcmNotification({
@@ -64,6 +64,8 @@ class FcmNotification {
       imageUrl: _firstNonBlank(
         data['image_url'],
         data['imageUrl'],
+        data['icon_url'],
+        data['iconUrl'],
         android?.imageUrl,
         apple?.imageUrl,
         data['image'],
@@ -118,8 +120,10 @@ class FcmNotification {
     String? third,
     String? fourth,
     String? fifth,
+    String? sixth,
+    String? seventh,
   ]) {
-    for (final value in [first, second, third, fourth, fifth]) {
+    for (final value in [first, second, third, fourth, fifth, sixth, seventh]) {
       final trimmed = value?.trim();
       if (trimmed != null && trimmed.isNotEmpty) return trimmed;
     }

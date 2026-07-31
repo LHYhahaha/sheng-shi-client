@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 abstract final class AppColors {
   static const black = Color(0xFF0A0014);
+  static const white = Color(0xFFFFFFFF);
   static const surface = Color(0xFF120018);
   static const surfacePanel = Color(0xFF2A2230);
   static const surfaceElevated = Color(0xFF211025);

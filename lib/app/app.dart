@@ -117,10 +117,14 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       return;
     }
     final data = notification.data;
-    final type = data['type']?.trim().toLowerCase();
+    // `dump_type` is the current push contract. Keep `type` as a fallback so
+    // notifications sent by older server versions remain actionable.
+    final type =
+        data['dump_type']?.trim().toLowerCase() ??
+        data['type']?.trim().toLowerCase();
     final dramaId = data['drama_id']?.trim();
     final episodeId = data['episode_id']?.trim();
-    final openType = data['open_type']?.trim();
+    final openType = data['h5_open_type']?.trim() ?? data['open_type']?.trim();
     final router = ref.read(appRouterProvider);
 
     if (type == 'player' && dramaId != null && dramaId.isNotEmpty) {
@@ -150,6 +154,11 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       return;
     }
 
+    if (type == 'page') {
+      _openFcmPage(router, data['page']);
+      return;
+    }
+
     final url =
         data['url']?.trim() ??
         data['h5_url']?.trim() ??
@@ -169,6 +178,37 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     }
 
     debugPrint('[FCM] Ignored notification tap with unsupported data: $data');
+  }
+
+  void _openFcmPage(GoRouter router, String? rawPage) {
+    switch (rawPage?.trim().toLowerCase()) {
+      case 'home':
+        router.go(RoutePaths.home);
+        return;
+      case 'recommend_tab':
+        router.go(RoutePaths.forYou);
+        return;
+      case 'member_tab':
+        router.go(RoutePaths.member);
+        return;
+      case 'reward_coin':
+        router.go(RoutePaths.rewardsLocation());
+        return;
+      case 'member_point':
+        router.go(RoutePaths.rewardsLocation(tab: RoutePaths.memberPointsTab));
+        return;
+      case 'vip_open':
+        router.push(RoutePaths.membership);
+        return;
+      case 'recharge':
+        router.push(RoutePaths.store);
+        return;
+      default:
+        debugPrint(
+          '[FCM] Ignored notification tap with unsupported page: $rawPage',
+        );
+        return;
+    }
   }
 
   Future<void> _openFcmExternalUrl(String url) async {

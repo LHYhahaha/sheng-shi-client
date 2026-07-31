@@ -6,18 +6,23 @@ import '../network/api_client.dart';
 import '../network/api_client_provider.dart';
 import 'app_active_device_info.dart';
 
+typedef PushTokenReader = Future<String?> Function();
+
 class AppActiveReporter {
   AppActiveReporter({
     required ApiClient apiClient,
     required AppActiveDeviceInfoReader deviceInfoReader,
+    PushTokenReader? pushTokenReader,
     DateTime Function()? now,
     this.hotStartThreshold = const Duration(minutes: 30),
   }) : _apiClient = apiClient,
        _deviceInfoReader = deviceInfoReader,
+       _pushTokenReader = pushTokenReader ?? _unavailablePushToken,
        _now = now ?? DateTime.now;
 
   final ApiClient _apiClient;
   final AppActiveDeviceInfoReader _deviceInfoReader;
+  final PushTokenReader _pushTokenReader;
   final DateTime Function() _now;
   final Duration hotStartThreshold;
 
@@ -59,6 +64,7 @@ class AppActiveReporter {
     _reportInFlight = true;
     try {
       final info = await _deviceInfoReader.read();
+      final pushToken = await _pushTokenReader();
       await _apiClient.post<void>(
         '/api/user/active/report',
         authPolicy: ApiAuthPolicy.required,
@@ -66,6 +72,7 @@ class AppActiveReporter {
           'channelSource': info.channelSource,
           'region': info.region,
           'timezone': info.timezone,
+          if (pushToken != null && pushToken.isNotEmpty) 'pushToken': pushToken,
         },
         decoder: (_) {},
       );
@@ -76,6 +83,13 @@ class AppActiveReporter {
     }
   }
 }
+
+Future<String?> _unavailablePushToken() async => null;
+
+/// FCM 在 [main] 初始化完成后覆盖此 provider，避免活跃上报模块直接依赖 Firebase。
+final pushTokenReaderProvider = Provider<PushTokenReader>((ref) {
+  return _unavailablePushToken;
+});
 
 final appActiveDeviceInfoReaderProvider = Provider<AppActiveDeviceInfoReader>((
   ref,
@@ -89,5 +103,6 @@ final appActiveReporterProvider = Provider<AppActiveReporter>((ref) {
   return AppActiveReporter(
     apiClient: ref.watch(apiClientProvider),
     deviceInfoReader: ref.watch(appActiveDeviceInfoReaderProvider),
+    pushTokenReader: ref.watch(pushTokenReaderProvider),
   );
 });

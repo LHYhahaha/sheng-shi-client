@@ -15,6 +15,7 @@ class WebViewPage extends ConsumerStatefulWidget {
   final String url;
   final String title;
   final bool showAppBar;
+  final Color? feedbackColor;
   final Map<String, ValueChanged<String>> javaScriptMessageHandlers;
   final WebViewPageControllerCallback? onControllerCreated;
   final WebViewPageLifecycleCallback? onPageStarted;
@@ -28,7 +29,7 @@ class WebViewPage extends ConsumerStatefulWidget {
     this.javaScriptMessageHandlers = const {},
     this.onControllerCreated,
     this.onPageStarted,
-    this.onPageFinished,
+    this.onPageFinished, this.feedbackColor,
   });
 
   @override
@@ -45,11 +46,12 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       // Android WebView 默认白底会在 H5 首帧绘制前短暂露出。
-      ..setBackgroundColor(AppColors.black)
+      ..setBackgroundColor(widget.feedbackColor??AppColors.white)
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (String url) {
             debugPrint('[WebView] Page started: $url');
+            _setLoading(true);
             widget.onPageStarted?.call(_controller, url);
           },
           onPageFinished: _onPageFinished,
@@ -149,8 +151,15 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
         children: [
           WebViewWidget(controller: _controller),
           if (_isLoading)
-            const Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
+             Positioned.fill(
+              // Keep the native WebView's default white first frame hidden
+              // until the H5 page has finished rendering.
+              child: ColoredBox(
+                color:widget.feedbackColor?? AppColors.white,
+                child: Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                ),
+              ),
             ),
         ],
       ),

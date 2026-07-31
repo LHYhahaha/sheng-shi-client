@@ -6,6 +6,7 @@ import 'package:drama_client/features/pay/application/iap_purchase_service.dart'
 import 'package:drama_client/features/pay/data/dto/payment_order_verify_response_dto.dart';
 import 'package:drama_client/features/pay/domain/iap_product_info.dart';
 import 'package:drama_client/features/pay/domain/pay_repository.dart';
+import 'package:drama_client/features/pay/domain/payment_method_options.dart';
 import 'package:drama_client/features/pay/domain/payment_order.dart';
 import 'package:drama_client/features/pay/provider/iap_purchase_service_provider.dart';
 import 'package:drama_client/features/pay/provider/pay_repository_provider.dart';
@@ -306,6 +307,19 @@ class _FakePayRepository implements PayRepository {
   String? verifiedOrderNo;
   String? verifiedChannelProductId;
   int? verifiedProductType;
+
+  @override
+  Future<PaymentMethodOptions> getPaymentOrderOptions({
+    required int osType,
+    required int payScene,
+    required int productId,
+    required int productType,
+    String? countryCode,
+    int? dramaId,
+    int? episodeId,
+    int? episodeNo,
+    String? scene,
+  }) async => throw UnimplementedError();
 
   @override
   Future<PaymentOrder> createPaymentOrder({

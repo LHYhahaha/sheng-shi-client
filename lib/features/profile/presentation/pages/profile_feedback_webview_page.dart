@@ -34,6 +34,7 @@ class _ProfileFeedbackWebViewPageState
   late final AccountBanController _accountBanController;
   late final AuthController _authController;
   late final bool _openedForAccountBan;
+  WebViewController? _webViewController;
 
   @override
   void initState() {
@@ -68,22 +69,52 @@ class _ProfileFeedbackWebViewPageState
       headers: headers,
     );
 
-    return WebViewPage(
-      url:
-          // "http://192.168.1.55:5173/app/#/help",
-          AppConfig.current
-              .helpUrlForLanguage(context.l10n.locale.languageCode)
-              .toString(),
-      title: context.l10n.profileFeedback,
-      showAppBar: false,
-      javaScriptMessageHandlers: {'DramaWaveBridge': _handleJavaScriptMessage},
-      // 在加载 URL 前完成 Android 文件选择器配置，避免延迟 JSBridge 注入。
-      onControllerCreated: _configureImageFileSelector,
-      onPageStarted: (controller, _) =>
-          _injectJavaScriptBridge(controller, bridgeData),
-      onPageFinished: (controller, _) =>
-          _injectJavaScriptBridge(controller, bridgeData),
+    return PopScope(
+      // H5 自行决定返回行为；只有它发出 closeWebView 时才关闭原生页面。
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          _notifyH5OfBackRequest();
+        }
+      },
+      child: WebViewPage(
+        url:
+            // "http://192.168.1.55:5173/app/#/help",
+            AppConfig.current
+                .helpUrlForLanguage(context.l10n.locale.languageCode)
+                .toString(),
+        title: context.l10n.profileFeedback,
+        showAppBar: false,
+        feedbackColor: Colors.black,
+        javaScriptMessageHandlers: {
+          'DramaWaveBridge': _handleJavaScriptMessage,
+        },
+        // 在加载 URL 前完成 Android 文件选择器配置，避免延迟 JSBridge 注入。
+        onControllerCreated: (controller) async {
+          _webViewController = controller;
+          await _configureImageFileSelector(controller);
+        },
+        onPageStarted: (controller, _) =>
+            _injectJavaScriptBridge(controller, bridgeData),
+        onPageFinished: (controller, _) =>
+            _injectJavaScriptBridge(controller, bridgeData),
+      ),
     );
+  }
+
+  Future<void> _notifyH5OfBackRequest() async {
+    final controller = _webViewController;
+    if (controller == null) {
+      return;
+    }
+
+    try {
+      await controller.runJavaScript('''
+        window.dispatchEvent(new CustomEvent('appBack'));
+      ''');
+    } on Object catch (error) {
+      debugPrint('[ProfileFeedbackH5] Failed to notify back request: $error');
+    }
   }
 
   Future<void> _configureImageFileSelector(WebViewController controller) async {
@@ -143,6 +174,10 @@ class _ProfileFeedbackWebViewPageState
             callback: callback,
           }));
         };
+
+        // H5 uses this signal to wait until every JSBridge field, especially
+        // postMessage, is ready before attempting to call the native bridge.
+        window.dispatchEvent(new Event('jsBridgeReady'));
       ''');
       debugPrint('[ProfileFeedbackH5] JSBridge injected');
     } on Object catch (error) {

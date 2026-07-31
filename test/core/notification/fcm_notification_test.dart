@@ -79,6 +79,22 @@ void main() {
       },
     );
 
+    test('supports icon_url from the notification dump contract', () {
+      final message = RemoteMessage.fromMap({
+        'data': {
+          'dump_type': 'drama',
+          'drama_id': '10086',
+          'icon_url': 'https://example.com/drama-cover.jpg',
+        },
+      });
+
+      final notification = FcmNotification.fromRemoteMessage(message);
+
+      expect(notification.data['dump_type'], 'drama');
+      expect(notification.data['drama_id'], '10086');
+      expect(notification.imageUrl, 'https://example.com/drama-cover.jpg');
+    });
+
     test(
       'does not report display content when all display fields are blank',
       () {

@@ -19,6 +19,7 @@ void main() {
     reporter = AppActiveReporter(
       apiClient: _apiClient(adapter),
       deviceInfoReader: _FakeDeviceInfoReader(),
+      pushTokenReader: () async => 'fcm-push-token',
       now: () => now,
     );
   });
@@ -35,7 +36,24 @@ void main() {
       'channelSource': 'tiktok',
       'region': 'US',
       'timezone': 'America/New_York',
+      'pushToken': 'fcm-push-token',
     });
+  });
+
+  test('does not send pushToken when FCM token is unavailable', () async {
+    reporter = AppActiveReporter(
+      apiClient: _apiClient(adapter),
+      deviceInfoReader: _FakeDeviceInfoReader(),
+      pushTokenReader: () async => null,
+      now: () => now,
+    );
+
+    await reporter.reportAppLaunch();
+
+    expect(
+      (adapter.requests.single.data! as Map).containsKey('pushToken'),
+      isFalse,
+    );
   });
 
   test('reports an empty channelSource when channel is unavailable', () async {
