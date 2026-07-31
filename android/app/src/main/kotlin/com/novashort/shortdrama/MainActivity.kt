@@ -1,4 +1,4 @@
-package com.yushi.drama.client
+package com.novashort.shortdrama
 
 import android.provider.Settings
 import androidx.annotation.NonNull

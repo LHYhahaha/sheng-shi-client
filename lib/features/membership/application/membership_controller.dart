@@ -131,7 +131,7 @@ class MembershipState {
 }
 
 class MembershipController extends Notifier<MembershipState> {
-  static const _packageName = 'com.yushi.drama.client';
+  static const _packageName = 'com.novashort.shortdrama';
   static const _membershipProductType = 2;
   static const _purchaseResultTimeout = Duration(seconds: 30);
   static const _paymentSheetDismissDelay = Duration(milliseconds: 260);

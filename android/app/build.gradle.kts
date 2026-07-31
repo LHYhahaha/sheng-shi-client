@@ -14,7 +14,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.yushi.drama.client"
+    namespace = "com.novashort.shortdrama"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -28,7 +28,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.yushi.drama.client"
+        applicationId = "com.novashort.shortdrama"
         minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -64,7 +64,7 @@ android {
 
         create("GF") {
             dimension = "channel"
-            applicationId = "com.yushi.drama.client"
+            applicationId = "com.novashort.shortdrama"
             resValue("string", "channel_flag", "GF_001")
             resValue("string", "MERCHANT_ID", "333")
             resValue("string", "VEST_PKG_ID", "1001")
@@ -72,7 +72,7 @@ android {
 
         create("haha") {
             dimension = "channel"
-            applicationId = "com.yushi.drama.client"
+            applicationId = "com.novashort.shortdrama"
             resValue("string", "channel_flag", "app_developer")
             resValue("string", "MERCHANT_ID", "329")
             resValue("string", "VEST_PKG_ID", "1001")
@@ -80,28 +80,28 @@ android {
 
 //        create("douyin_pro") {
 //            dimension = "channel"
-//            applicationId = "com.yushi.drama.client"
+//            applicationId = "com.novashort.shortdrama"
 //            resValue("string", "channel_flag", "douyin")
 //            resValue("string", "MERCHANT_ID", "331")
 //            resValue("string", "VEST_PKG_ID", "1002")
 //        }
 //        create("kuaishou_pro") {
 //            dimension = "channel"
-//            applicationId = "com.yushi.drama.client"
+//            applicationId = "com.novashort.shortdrama"
 //            resValue("string", "channel_flag", "kuaishou")
 //            resValue("string", "MERCHANT_ID", "332")
 //            resValue("string", "VEST_PKG_ID", "1001")
 //        }
         create("tiktok_dev") {
             dimension = "channel"
-            applicationId = "com.yushi.drama.client"
+            applicationId = "com.novashort.shortdrama"
             resValue("string", "channel_flag", "tiktok")
             resValue("string", "MERCHANT_ID", "319")
             resValue("string", "VEST_PKG_ID", "1001")
         }
         create("kuaishou_dev") {
             dimension = "channel"
-            applicationId = "com.yushi.drama.client"
+            applicationId = "com.novashort.shortdrama"
             resValue("string", "channel_flag", "kuaishou")
             resValue("string", "MERCHANT_ID", "320")
             resValue("string", "VEST_PKG_ID", "1002")

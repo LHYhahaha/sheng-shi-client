@@ -153,7 +153,7 @@ class PlayerRechargeUnlockController
     extends Notifier<PlayerRechargeUnlockState> {
   PlayerRechargeUnlockController(this.sessionKey);
 
-  static const _packageName = 'com.yushi.drama.client';
+  static const _packageName = 'com.novashort.shortdrama';
   static const _coinProductType = 1;
   static const _membershipProductType = 2;
   static const _purchaseResultTimeout = Duration(seconds: 30);

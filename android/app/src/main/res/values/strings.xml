@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Drama Client</string>
+    <string name="app_name">NovaShort</string>
     <string name="facebook_app_id">3996208420512909</string>
     <string name="facebook_client_token">dd40b592a1356c44679eb9ddb7075bd5</string>
     <string name="fb_login_protocol_scheme">fb3996208420512909</string>
