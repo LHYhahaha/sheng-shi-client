@@ -9,6 +9,7 @@ class MembershipPlan {
     required this.dailyPriceLabel,
     this.period,
     this.platformProductId,
+    this.payChannel = 'PAY_CHANNEL_GOOGLE',
     this.badgeLabel,
     this.originalPriceLabel,
 
@@ -67,6 +68,9 @@ class MembershipPlan {
 
   /// 渠道商品 id（对应 channelProductId）。
   final String? platformProductId;
+
+  /// 服务端支付渠道，用于决定是否需要查询平台商品价格。
+  final String payChannel;
 
   /// 徽标文案（对应 promotionText）。
   final String? badgeLabel;

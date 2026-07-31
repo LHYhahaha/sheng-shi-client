@@ -5,10 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../entitlement/application/entitlement_controller.dart';
+import '../../../core/runtime/api_region_code_provider.dart';
 import '../../pay/application/iap_pending_purchase_cleaner.dart';
 import '../../pay/application/payment_loading_controller.dart';
 import '../../pay/provider/iap_purchase_service_provider.dart';
 import '../../pay/provider/pay_repository_provider.dart';
+import '../../pay/domain/pay_channel.dart';
+import '../../pay/domain/payment_method_options.dart';
 import '../application/player_feed_controller.dart';
 import '../data/player_recharge_unlock_repository_provider.dart';
 import '../domain/player_recharge_unlock_offer.dart';
@@ -39,6 +42,7 @@ enum PlayerRechargeUnlockStatus {
 enum PlayerRechargePaymentStage { creatingOrder, waitingPayment, verifying }
 
 enum PlayerRechargePurchaseFailureKind {
+  paymentOptions,
   orderCreation,
   payment,
   verification,
@@ -209,17 +213,18 @@ class PlayerRechargeUnlockController
         status: PlayerRechargeUnlockStatus.idle,
         itemId: itemId,
         offer: offer,
-      selectedCoinPackageId: null,
-      selectedMembershipPackageId: null,
-      paymentStage: null,
-      purchaseFailureKind: null,
-    );
+        selectedCoinPackageId: null,
+        selectedMembershipPackageId: null,
+        paymentStage: null,
+        purchaseFailureKind: null,
+      );
     } catch (error) {
       if (!_isCurrent(generation)) {
         return;
       }
       state = state.copyWith(
         status: PlayerRechargeUnlockStatus.failed,
+        purchaseFailureKind: PlayerRechargePurchaseFailureKind.paymentOptions,
         error: error,
       );
     }
@@ -241,6 +246,60 @@ class PlayerRechargeUnlockController
       clearError: true,
     );
     return _startRemotePurchase();
+  }
+
+  /// 商品卡片点击入口：先由服务端决定可用支付方式。
+  ///
+  /// 返回 true 表示需展示应用内购买确认弹框；仅 Google Play 时已直接拉起 IAP。
+  Future<bool> prepareCoinPackagePurchase(String packageId) =>
+      _preparePackagePurchase(packageId, isCoinPackage: true);
+
+  /// 商品卡片点击入口：先由服务端决定可用支付方式。
+  Future<bool> prepareMembershipPackagePurchase(String packageId) =>
+      _preparePackagePurchase(packageId, isCoinPackage: false);
+
+  Future<bool> _preparePackagePurchase(
+    String packageId, {
+    required bool isCoinPackage,
+  }) async {
+    final offer = state.offer;
+    final exists = isCoinPackage
+        ? offer?.coinPackages.any((package) => package.id == packageId) == true
+        : offer?.membershipPackages.any((package) => package.id == packageId) ==
+              true;
+    if (state.isProcessing || !exists) {
+      return false;
+    }
+
+    try {
+      final options = await ref
+          .read(payRepositoryProvider)
+          .getPaymentOrderOptions(
+            countryCode: ref.read(apiRegionCodeProvider),
+            dramaId: int.tryParse(state.itemId ?? ''),
+            osType: _clientOsType,
+            payScene: isCoinPackage ? 1 : 2,
+            productId: int.tryParse(packageId) ?? 0,
+            productType: isCoinPackage
+                ? _coinProductType
+                : _membershipProductType,
+            scene: isCoinPackage ? 'player_coin' : 'player_membership',
+          );
+      if (!_isGoogleOnly(options)) {
+        return true;
+      }
+      if (isCoinPackage) {
+        await selectCoinPackage(packageId);
+      } else {
+        await selectMembershipPackage(packageId);
+      }
+    } catch (error) {
+      state = state.copyWith(
+        status: PlayerRechargeUnlockStatus.failed,
+        error: error,
+      );
+    }
+    return false;
   }
 
   Future<void> selectMembershipPackage(String packageId) {
@@ -665,4 +724,10 @@ class PlayerRechargeUnlockController
         message?.contains('cancel') == true ||
         message?.contains('user') == true;
   }
+
+  bool _isGoogleOnly(PaymentMethodOptions options) =>
+      options.options.length == 1 &&
+      PayChannel.isGoogle(options.options.single.payChannel);
+
+  int get _clientOsType => defaultTargetPlatform == TargetPlatform.iOS ? 1 : 2;
 }

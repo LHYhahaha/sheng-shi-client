@@ -1,17 +1,20 @@
-﻿import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../../core/auth/session_cleanup_types.dart';
+import '../../../core/runtime/api_region_code_provider.dart';
 import '../../entitlement/application/entitlement_controller.dart';
 import '../../pay/application/iap_pending_purchase_cleaner.dart';
 import '../../pay/application/iap_price_service.dart';
 import '../../pay/application/payment_loading_controller.dart';
+import '../../pay/application/payment_purchase_coordinator.dart';
+import '../../pay/domain/pay_channel.dart';
+import '../../pay/domain/payment_method_options.dart';
 import '../../pay/provider/iap_price_service_provider.dart';
 import '../../pay/provider/iap_purchase_service_provider.dart';
 import '../../pay/provider/pay_repository_provider.dart';
+import '../../pay/provider/payment_purchase_coordinator_provider.dart';
 import '../data/store_repository_provider.dart';
 import '../domain/store_package.dart';
 
@@ -30,7 +33,12 @@ enum StorePurchaseStatus {
   cancelled,
 }
 
-enum StorePurchaseFailureKind { orderCreation, payment, verification }
+enum StorePurchaseFailureKind {
+  paymentOptions,
+  orderCreation,
+  payment,
+  verification,
+}
 
 class StoreState {
   const StoreState({
@@ -133,7 +141,6 @@ class StoreController extends Notifier<StoreState> {
   static const _packageName = 'com.yushi.drama.client';
   static const _coinProductType = 1;
   static const _vipProductType = 2;
-  static const _purchaseResultTimeout = Duration(seconds: 30);
   static const _paymentSheetDismissDelay = Duration(milliseconds: 260);
 
   int _generation = 0;
@@ -170,12 +177,18 @@ class StoreController extends Notifier<StoreState> {
 
       final channelProductIds = <String>{};
       for (final package in coinPackagesRaw) {
+        if (!PayChannel.isGoogle(package.payChannel)) {
+          continue;
+        }
         final productId = package.platformProductId;
         if (productId != null && productId.isNotEmpty) {
           channelProductIds.add(productId);
         }
       }
       for (final package in vipPackagesRaw) {
+        if (!PayChannel.isGoogle(package.payChannel)) {
+          continue;
+        }
         final productId = package.platformProductId;
         if (productId != null && productId.isNotEmpty) {
           channelProductIds.add(productId);
@@ -193,13 +206,9 @@ class StoreController extends Notifier<StoreState> {
         return;
       }
 
-      final selectedId = coinPackagesRaw.isNotEmpty
-          ? coinPackagesRaw.first.id
-          : vipPackagesRaw.isNotEmpty
-          ? vipPackagesRaw.first.id
-          : null;
-
-      final priceService = ref.read(iapPriceServiceProvider);
+      final priceService = iapDetails.isEmpty
+          ? null
+          : ref.read(iapPriceServiceProvider);
       final coinPackages = _mergeIapPricing(
         coinPackagesRaw,
         iapDetails,
@@ -210,6 +219,11 @@ class StoreController extends Notifier<StoreState> {
         iapDetails,
         priceService,
       );
+      final selectedId = coinPackages.isNotEmpty
+          ? coinPackages.first.id
+          : vipPackages.isNotEmpty
+          ? vipPackages.first.id
+          : null;
 
       state = state.copyWith(
         isLoading: false,
@@ -237,6 +251,33 @@ class StoreController extends Notifier<StoreState> {
       return;
     }
     state = state.copyWith(selectedPackageId: id);
+  }
+
+  /// 商品点击入口：先向服务端获取可用支付方式。
+  ///
+  /// 仅 Google Play 时直接进入既有 IAP 流程；存在其他渠道时再展示收银台。
+  Future<void> selectPackageForPurchase(String id) async {
+    selectPackage(id);
+    final package = state.selectedPackage;
+    if (package == null) {
+      return;
+    }
+
+    try {
+      final options = await _fetchPaymentOptions(package);
+      if (_isGoogleOnly(options)) {
+        await _startGooglePurchase(package);
+      } else {
+        showConfirmation();
+      }
+    } catch (error, stackTrace) {
+      debugPrint('[Store] payment options failed: $error\n$stackTrace');
+      state = state.copyWith(
+        purchaseStatus: StorePurchaseStatus.failed,
+        purchaseFailureKind: StorePurchaseFailureKind.paymentOptions,
+        error: error,
+      );
+    }
   }
 
   void showConfirmation() {
@@ -269,13 +310,17 @@ class StoreController extends Notifier<StoreState> {
       return;
     }
 
-    final purchaseGeneration = _purchaseGeneration;
-    final package = state.confirmationPackage!;
-    StreamSubscription<PurchaseDetails>? sub;
-    StreamSubscription<Object>? errorSub;
+    await _startGooglePurchase(state.confirmationPackage!);
+  }
+
+  Future<void> _startGooglePurchase(StorePackage package) async {
+    final purchaseGeneration = ++_purchaseGeneration;
     final loading = ref.read(paymentLoadingControllerProvider.notifier);
     loading.show(label: PaymentLoadingLabel.loading);
     try {
+      if (!PayChannel.isGoogle(package.payChannel)) {
+        throw UnsupportedError('Payment channel is not supported yet.');
+      }
       final platformProductId = package.platformProductId;
       if (platformProductId == null || platformProductId.isEmpty) {
         throw Exception('Package has no platform product id: ${package.id}');
@@ -328,109 +373,44 @@ class StoreController extends Notifier<StoreState> {
       if (iapService == null) {
         throw Exception('IAP purchase service not available');
       }
-      final googleApplicationUserName =
-          iapService.buildOrderApplicationUserName(
-        orderNo: paymentOrder.orderNo,
-        clientOrderNo: paymentOrder.clientOrderNo,
-      );
-
-      final completer = Completer<PurchaseDetails?>();
-      sub = iapService.purchaseStream.listen((details) {
-        final isCurrentProduct = details.productID == productDetails!.id;
-        final isPurchaseError = details.status == PurchaseStatus.error;
-        final isCancellation =
-            details.status.name == 'canceled' ||
-            details.status == PurchaseStatus.error &&
-                _isUserCancelledPurchase(details);
-        if ((isCurrentProduct || isCancellation || isPurchaseError) &&
-            !completer.isCompleted) {
-          completer.complete(details);
-        }
-      });
-      errorSub = iapService.purchaseErrorStream.listen((error) {
-        if (!completer.isCompleted) {
-          completer.completeError(error);
-        }
-      });
-
-      state = state.copyWith(
-        purchaseStatus: StorePurchaseStatus.waitingPayment,
-      );
       await Future<void>.delayed(_paymentSheetDismissDelay);
       if (!_isCurrentPurchase(purchaseGeneration, package.id)) {
         return;
       }
 
       loading.hide();
-      final started = await iapService.buyProduct(
-        product: productDetails,
-        isConsumable: package.isCoinPackage,
-        applicationUserName: googleApplicationUserName,
-      );
-      if (!started) {
-        throw Exception('Failed to launch IAP purchase');
-      }
-
-      final purchaseDetails = await completer.future.timeout(
-        _purchaseResultTimeout,
-        onTimeout: () {
-          debugPrint('[Store] purchase result timed out.');
-          return null;
-        },
-      );
+      final outcome = await ref
+          .read(paymentPurchaseCoordinatorProvider)
+          .executeGooglePurchase(
+            iapService: iapService,
+            order: paymentOrder,
+            product: productDetails,
+            isConsumable: package.isCoinPackage,
+            productType: productType,
+            packageName: _packageName,
+            onPhase: (phase) {
+              state = state.copyWith(
+                purchaseStatus: switch (phase) {
+                  GooglePurchasePhase.waitingPayment =>
+                    StorePurchaseStatus.waitingPayment,
+                  GooglePurchasePhase.verifying =>
+                    StorePurchaseStatus.verifying,
+                },
+              );
+              if (phase == GooglePurchasePhase.verifying) loading.show();
+            },
+          );
 
       if (!_isCurrentPurchase(purchaseGeneration, package.id)) {
         return;
       }
-      if (purchaseDetails == null) {
+      if (outcome == GooglePurchaseOutcome.cancelled) {
         _markPurchaseCancelled(package.id);
         return;
       }
-
-      if (purchaseDetails.status == PurchaseStatus.pending) {
+      if (outcome == GooglePurchaseOutcome.pending) {
         state = state.copyWith(purchaseStatus: StorePurchaseStatus.pending);
         return;
-      }
-      if (purchaseDetails.status == PurchaseStatus.error) {
-        if (_isUserCancelledPurchase(purchaseDetails)) {
-          _markPurchaseCancelled(package.id);
-          return;
-        }
-        throw Exception('Purchase failed: ${purchaseDetails.error}');
-      }
-      if (purchaseDetails.status.name == 'canceled') {
-        _markPurchaseCancelled(package.id);
-        return;
-      }
-      if (purchaseDetails.status != PurchaseStatus.purchased &&
-          purchaseDetails.status != PurchaseStatus.restored) {
-        throw Exception(
-          'Unsupported purchase status: ${purchaseDetails.status}',
-        );
-      }
-      state = state.copyWith(purchaseStatus: StorePurchaseStatus.verifying);
-      loading.show();
-      final verifyResult = await payRepository.verifyGooglePayment(
-        orderNo: paymentOrder.orderNo,
-        channelProductId: purchaseDetails.productID,
-        packageName: _packageName,
-        productType: productType,
-        purchaseToken: purchaseDetails.verificationData.serverVerificationData,
-        channelOrderId: purchaseDetails.purchaseID,
-        rawReceipt: purchaseDetails.verificationData.source,
-      );
-
-      if (!_isCurrentPurchase(purchaseGeneration, package.id)) {
-        return;
-      }
-      if (verifyResult.orderStatus != 'ORDER_STATUS_SUCCESS') {
-        throw Exception(
-          'Payment verification returned ${verifyResult.orderStatus}',
-        );
-      }
-
-      if (purchaseDetails.pendingCompletePurchase) {
-        await iapService.completePurchase(purchaseDetails);
       }
 
       await ref.read(entitlementControllerProvider.notifier).load();
@@ -457,8 +437,6 @@ class StoreController extends Notifier<StoreState> {
         );
       }
     } finally {
-      await sub?.cancel();
-      await errorSub?.cancel();
       loading.hide();
     }
   }
@@ -471,24 +449,12 @@ class StoreController extends Notifier<StoreState> {
   }
 
   void _markPurchaseCancelled(String packageId) {
-    if (state.confirmationPackageId != packageId) {
-      return;
-    }
     state = state.copyWith(
       purchaseStatus: StorePurchaseStatus.cancelled,
       clearConfirmation: true,
       clearError: true,
       clearPurchaseFailure: true,
     );
-  }
-
-  bool _isUserCancelledPurchase(PurchaseDetails details) {
-    final code = details.error?.code.toLowerCase();
-    final message = details.error?.message.toLowerCase();
-    return code?.contains('cancel') == true ||
-        code?.contains('user') == true ||
-        message?.contains('cancel') == true ||
-        message?.contains('user') == true;
   }
 
   bool _isCurrent(int generation) => generation == _generation;
@@ -499,15 +465,19 @@ class StoreController extends Notifier<StoreState> {
   List<StorePackage> _mergeIapPricing(
     List<StorePackage> packages,
     Map<String, ProductDetails> iapDetails,
-    IapPriceService priceService,
+    IapPriceService? priceService,
   ) {
     return [
       for (final package in packages)
-        _mergePackagePricing(
-          package,
-          iapDetails[package.platformProductId],
-          priceService,
-        ),
+        if (PayChannel.isOther(package.payChannel))
+          package
+        else if (PayChannel.isGoogle(package.payChannel) &&
+            iapDetails.containsKey(package.platformProductId))
+          _mergePackagePricing(
+            package,
+            iapDetails[package.platformProductId],
+            priceService!,
+          ),
     ];
   }
 
@@ -564,7 +534,25 @@ class StoreController extends Notifier<StoreState> {
 
   bool _isCurrentPurchase(int purchaseGeneration, String packageId) {
     return purchaseGeneration == _purchaseGeneration &&
-        state.confirmationPackageId == packageId &&
         state.purchaseStatus != StorePurchaseStatus.idle;
   }
+
+  Future<PaymentMethodOptions> _fetchPaymentOptions(StorePackage package) {
+    return ref
+        .read(payRepositoryProvider)
+        .getPaymentOrderOptions(
+          countryCode: ref.read(apiRegionCodeProvider),
+          osType: _clientOsType,
+          payScene: package.isCoinPackage ? 1 : 2,
+          productId: int.tryParse(package.id) ?? 0,
+          productType: _productTypeFor(package),
+          scene: package.isCoinPackage ? 'store_coin' : 'store_vip',
+        );
+  }
+
+  bool _isGoogleOnly(PaymentMethodOptions options) =>
+      options.options.length == 1 &&
+      PayChannel.isGoogle(options.options.single.payChannel);
+
+  int get _clientOsType => defaultTargetPlatform == TargetPlatform.iOS ? 1 : 2;
 }

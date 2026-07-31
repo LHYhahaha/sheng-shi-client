@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
@@ -7,15 +5,20 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 import '../../../core/auth/session_cleanup_types.dart';
 import '../../../core/auth/user_info_store.dart';
 import '../../../core/notification/startup_notification_permission_reporter.dart';
+import '../../../core/runtime/api_region_code_provider.dart';
 import '../../../core/utils/period_iso_parser.dart';
 import '../../entitlement/application/entitlement_controller.dart';
 import '../../pay/application/google_play_pricing_extractor.dart';
 import '../../pay/application/iap_pending_purchase_cleaner.dart';
 import '../../pay/application/iap_price_service.dart';
 import '../../pay/application/payment_loading_controller.dart';
+import '../../pay/application/payment_purchase_coordinator.dart';
+import '../../pay/domain/pay_channel.dart';
+import '../../pay/domain/payment_method_options.dart';
 import '../../pay/provider/iap_price_service_provider.dart';
 import '../../pay/provider/iap_purchase_service_provider.dart';
 import '../../pay/provider/pay_repository_provider.dart';
+import '../../pay/provider/payment_purchase_coordinator_provider.dart';
 import '../data/membership_repository_provider.dart';
 import '../domain/membership_plan.dart';
 
@@ -35,7 +38,12 @@ enum MembershipPurchaseStatus {
   cancelled,
 }
 
-enum MembershipPurchaseFailureKind { orderCreation, payment, verification }
+enum MembershipPurchaseFailureKind {
+  paymentOptions,
+  orderCreation,
+  payment,
+  verification,
+}
 
 class MembershipState {
   const MembershipState({
@@ -135,7 +143,6 @@ class MembershipState {
 class MembershipController extends Notifier<MembershipState> {
   static const _packageName = 'com.yushi.drama.client';
   static const _membershipProductType = 2;
-  static const _purchaseResultTimeout = Duration(seconds: 30);
   static const _paymentSheetDismissDelay = Duration(milliseconds: 260);
 
   int _generation = 0;
@@ -250,6 +257,30 @@ class MembershipController extends Notifier<MembershipState> {
     showConfirmation();
   }
 
+  /// 当前选中商品的购买入口：先取服务端支付方式，再决定是否展示收银台。
+  Future<void> purchaseSelectedPlan() async {
+    final plan = state.selectedPlan;
+    if (plan == null) {
+      return;
+    }
+
+    try {
+      final options = await _fetchPaymentOptions(plan);
+      if (_isGoogleOnly(options)) {
+        await _startGooglePurchase(plan);
+      } else {
+        showConfirmation();
+      }
+    } catch (error, stackTrace) {
+      debugPrint('[Membership] payment options failed: $error\n$stackTrace');
+      state = state.copyWith(
+        purchaseStatus: MembershipPurchaseStatus.failed,
+        purchaseFailureKind: MembershipPurchaseFailureKind.paymentOptions,
+        error: error,
+      );
+    }
+  }
+
   void showConfirmation() {
     final selectedPlan = state.selectedPlan;
     if (selectedPlan == null) {
@@ -280,13 +311,17 @@ class MembershipController extends Notifier<MembershipState> {
       return;
     }
 
-    final purchaseGeneration = _purchaseGeneration;
-    final plan = state.confirmationPlan!;
-    StreamSubscription<PurchaseDetails>? sub;
-    StreamSubscription<Object>? errorSub;
+    await _startGooglePurchase(state.confirmationPlan!);
+  }
+
+  Future<void> _startGooglePurchase(MembershipPlan plan) async {
+    final purchaseGeneration = ++_purchaseGeneration;
     final loading = ref.read(paymentLoadingControllerProvider.notifier);
     loading.show(label: PaymentLoadingLabel.loading);
     try {
+      if (!PayChannel.isGoogle(plan.payChannel)) {
+        throw UnsupportedError('Payment channel is not supported yet.');
+      }
       final platformProductId = plan.platformProductId;
       if (platformProductId == null || platformProductId.isEmpty) {
         throw Exception('Plan has no platform product id: ${plan.id}');
@@ -335,110 +370,46 @@ class MembershipController extends Notifier<MembershipState> {
         throw Exception('IAP purchase service not available');
       }
 
-      final purchaseCompleter = Completer<PurchaseDetails?>();
-      sub = iapService.purchaseStream.listen((details) {
-        final isCurrentProduct = details.productID == productDetails!.id;
-        final isPurchaseError = details.status == PurchaseStatus.error;
-        final isCancellation =
-            details.status.name == 'canceled' ||
-            details.status == PurchaseStatus.error &&
-                _isUserCancelledPurchase(details);
-        if ((isCurrentProduct || isCancellation || isPurchaseError) &&
-            !purchaseCompleter.isCompleted) {
-          purchaseCompleter.complete(details);
-        }
-      });
-      errorSub = iapService.purchaseErrorStream.listen((error) {
-        if (!purchaseCompleter.isCompleted) {
-          purchaseCompleter.completeError(error);
-        }
-      });
-
-      state = state.copyWith(
-        purchaseStatus: MembershipPurchaseStatus.waitingPayment,
-      );
       await Future<void>.delayed(_paymentSheetDismissDelay);
       if (!_isCurrentPurchase(purchaseGeneration, plan.id)) {
         return;
       }
 
       loading.hide();
-      final started = await iapService.buyProduct(
-        product: productDetails,
-        applicationUserName: iapService.buildOrderApplicationUserName(
-          orderNo: paymentOrder.orderNo,
-          clientOrderNo: paymentOrder.clientOrderNo,
-        ),
-      );
-      if (!started) {
-        throw Exception('Failed to launch IAP purchase');
-      }
-
-      final purchaseDetails = await purchaseCompleter.future.timeout(
-        _purchaseResultTimeout,
-        onTimeout: () {
-          debugPrint('[Membership] purchase result timed out.');
-          return null;
-        },
-      );
+      final outcome = await ref
+          .read(paymentPurchaseCoordinatorProvider)
+          .executeGooglePurchase(
+            iapService: iapService,
+            order: paymentOrder,
+            product: productDetails,
+            isConsumable: false,
+            productType: _membershipProductType,
+            packageName: _packageName,
+            onPhase: (phase) {
+              state = state.copyWith(
+                purchaseStatus: switch (phase) {
+                  GooglePurchasePhase.waitingPayment =>
+                    MembershipPurchaseStatus.waitingPayment,
+                  GooglePurchasePhase.verifying =>
+                    MembershipPurchaseStatus.verifying,
+                },
+              );
+              if (phase == GooglePurchasePhase.verifying) loading.show();
+            },
+          );
 
       if (!_isCurrentPurchase(purchaseGeneration, plan.id)) {
         return;
       }
-      if (purchaseDetails == null) {
+      if (outcome == GooglePurchaseOutcome.cancelled) {
         _markPurchaseCancelled(plan.id);
         return;
       }
-
-      if (purchaseDetails.status == PurchaseStatus.pending) {
+      if (outcome == GooglePurchaseOutcome.pending) {
         state = state.copyWith(
           purchaseStatus: MembershipPurchaseStatus.pending,
         );
         return;
-      }
-      if (purchaseDetails.status == PurchaseStatus.error) {
-        if (_isUserCancelledPurchase(purchaseDetails)) {
-          _markPurchaseCancelled(plan.id);
-          return;
-        }
-        throw Exception('Purchase failed: ${purchaseDetails.error}');
-      }
-      if (purchaseDetails.status.name == 'canceled') {
-        _markPurchaseCancelled(plan.id);
-        return;
-      }
-      if (purchaseDetails.status != PurchaseStatus.purchased &&
-          purchaseDetails.status != PurchaseStatus.restored) {
-        throw Exception(
-          'Unsupported purchase status: ${purchaseDetails.status}',
-        );
-      }
-
-      state = state.copyWith(
-        purchaseStatus: MembershipPurchaseStatus.verifying,
-      );
-      loading.show();
-      final verifyResult = await payRepository.verifyGooglePayment(
-        orderNo: paymentOrder.orderNo,
-        channelProductId: purchaseDetails.productID,
-        packageName: _packageName,
-        productType: _membershipProductType,
-        purchaseToken: purchaseDetails.verificationData.serverVerificationData,
-        channelOrderId: purchaseDetails.purchaseID,
-        rawReceipt: purchaseDetails.verificationData.source,
-      );
-
-      if (!_isCurrentPurchase(purchaseGeneration, plan.id)) {
-        return;
-      }
-      if (verifyResult.orderStatus != 'ORDER_STATUS_SUCCESS') {
-        throw Exception(
-          'Payment verification returned ${verifyResult.orderStatus}',
-        );
-      }
-
-      if (purchaseDetails.pendingCompletePurchase) {
-        await iapService.completePurchase(purchaseDetails);
       }
 
       await _refreshAfterPurchase();
@@ -469,8 +440,6 @@ class MembershipController extends Notifier<MembershipState> {
         );
       }
     } finally {
-      await sub?.cancel();
-      await errorSub?.cancel();
       loading.hide();
     }
   }
@@ -483,9 +452,6 @@ class MembershipController extends Notifier<MembershipState> {
   }
 
   void _markPurchaseCancelled(String planId) {
-    if (state.confirmationPlanId != planId) {
-      return;
-    }
     state = state.copyWith(
       purchaseStatus: MembershipPurchaseStatus.cancelled,
       clearConfirmation: true,
@@ -494,20 +460,14 @@ class MembershipController extends Notifier<MembershipState> {
     );
   }
 
-  bool _isUserCancelledPurchase(PurchaseDetails details) {
-    final code = details.error?.code.toLowerCase();
-    final message = details.error?.message.toLowerCase();
-    return code?.contains('cancel') == true ||
-        code?.contains('user') == true ||
-        message?.contains('cancel') == true ||
-        message?.contains('user') == true;
-  }
-
   Future<Map<String, ProductDetails>> _queryIapProducts(
     List<MembershipPlan> plans,
   ) async {
     final productIds = <String>{};
     for (final plan in plans) {
+      if (!PayChannel.isGoogle(plan.payChannel)) {
+        continue;
+      }
       final productId = plan.platformProductId;
       if (productId != null && productId.isNotEmpty) {
         productIds.add(productId);
@@ -525,26 +485,19 @@ class MembershipController extends Notifier<MembershipState> {
     List<MembershipPlan> plans,
     Map<String, ProductDetails> iapDetails,
   ) {
-    final hasPlatformProducts = plans.any((plan) {
-      final productId = plan.platformProductId;
-      return productId != null && productId.isNotEmpty;
-    });
-    if (!hasPlatformProducts) {
-      return plans;
-    }
-
-    if (iapDetails.isEmpty) {
-      return const [];
-    }
-
-    final priceService = ref.read(iapPriceServiceProvider);
+    final priceService = iapDetails.isEmpty
+        ? null
+        : ref.read(iapPriceServiceProvider);
     return [
       for (final plan in plans)
-        if (iapDetails.containsKey(plan.platformProductId))
+        if (PayChannel.isOther(plan.payChannel))
+          plan
+        else if (PayChannel.isGoogle(plan.payChannel) &&
+            iapDetails.containsKey(plan.platformProductId))
           _mergePlanPricing(
             plan,
             iapDetails[plan.platformProductId],
-            priceService,
+            priceService!,
           ),
     ];
   }
@@ -632,6 +585,7 @@ class MembershipController extends Notifier<MembershipState> {
       dailyPriceLabel: dailyPriceLabel ?? plan.dailyPriceLabel,
       period: plan.period,
       platformProductId: plan.platformProductId,
+      payChannel: plan.payChannel,
       badgeLabel: plan.badgeLabel,
       originalPriceLabel: originalPriceLabel ?? plan.originalPriceLabel,
       promotionPriceLabel: promotionPriceLabel ?? plan.promotionPriceLabel,
@@ -712,7 +666,25 @@ class MembershipController extends Notifier<MembershipState> {
 
   bool _isCurrentPurchase(int purchaseGeneration, String planId) {
     return purchaseGeneration == _purchaseGeneration &&
-        state.confirmationPlanId == planId &&
         state.purchaseStatus != MembershipPurchaseStatus.idle;
   }
+
+  Future<PaymentMethodOptions> _fetchPaymentOptions(MembershipPlan plan) {
+    return ref
+        .read(payRepositoryProvider)
+        .getPaymentOrderOptions(
+          countryCode: ref.read(apiRegionCodeProvider),
+          osType: _clientOsType,
+          payScene: 2,
+          productId: int.tryParse(plan.id) ?? 0,
+          productType: _membershipProductType,
+          scene: 'membership',
+        );
+  }
+
+  bool _isGoogleOnly(PaymentMethodOptions options) =>
+      options.options.length == 1 &&
+      PayChannel.isGoogle(options.options.single.payChannel);
+
+  int get _clientOsType => defaultTargetPlatform == TargetPlatform.iOS ? 1 : 2;
 }

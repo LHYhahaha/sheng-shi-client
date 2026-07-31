@@ -1,6 +1,8 @@
 import 'package:drama_client/core/network/api_client.dart';
 import '../dto/payment_order_create_request_dto.dart';
 import '../dto/payment_order_dto.dart';
+import '../dto/payment_order_options_dto.dart';
+import '../dto/payment_order_options_request_dto.dart';
 import '../dto/payment_order_verify_request_dto.dart';
 import '../dto/payment_order_verify_response_dto.dart';
 
@@ -9,14 +11,28 @@ import '../dto/payment_order_verify_response_dto.dart';
 /// 处理支付订单创建、验证等网络请求
 class PayRemoteDataSource {
   const PayRemoteDataSource({required ApiClient apiClient})
-      : _apiClient = apiClient;
+    : _apiClient = apiClient;
 
   final ApiClient _apiClient;
+
+  /// 获取商品在当前场景可用的支付方式。
+  Future<PaymentOrderOptionsDto> getPaymentOrderOptions(
+    PaymentOrderOptionsRequestDto request,
+  ) {
+    return _apiClient.post<PaymentOrderOptionsDto>(
+      '/api/payment/order/options',
+      data: request.toJson(),
+      authPolicy: ApiAuthPolicy.required,
+      decoder: PaymentOrderOptionsDto.fromJson,
+    );
+  }
 
   /// 创建支付订单（通用接口）
   ///
   /// 所有下单都经过这个接口，支持金币商品和会员商品
-  Future<PaymentOrderDto> createPaymentOrder(PaymentOrderCreateRequestDto request) {
+  Future<PaymentOrderDto> createPaymentOrder(
+    PaymentOrderCreateRequestDto request,
+  ) {
     return _apiClient.post<PaymentOrderDto>(
       '/api/payment/order/create',
       data: request.toJson(),

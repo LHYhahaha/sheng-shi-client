@@ -1,7 +1,7 @@
 import '../../../../core/network/json_field_parser.dart';
 
 /// 金币产品DTO
-/// 
+///
 /// 对应API返回的 `/api/payment/recharge/page` 中的 `coinProducts` 字段。
 class CoinProductDto {
   const CoinProductDto({
@@ -11,6 +11,7 @@ class CoinProductDto {
     required this.bonusExpireEnabled,
     this.bonusExpireDays,
     required this.channelProductId,
+    required this.currencySymbol,
     required this.payChannel,
     required this.priceText,
     this.productName,
@@ -26,6 +27,7 @@ class CoinProductDto {
   final bool bonusExpireEnabled;
   final int? bonusExpireDays;
   final String channelProductId;
+  final String currencySymbol;
   final String payChannel;
   final String priceText;
   final String? productName;
@@ -35,23 +37,16 @@ class CoinProductDto {
   final DateTime updatedAt;
 
   factory CoinProductDto.fromJson(Object? json) {
-    final map = JsonFieldParser.requireMap(
-      json,
-      dtoName: 'CoinProductDto',
-    );
+    final map = JsonFieldParser.requireMap(json, dtoName: 'CoinProductDto');
     const dtoName = 'CoinProductDto';
-    
+
     return CoinProductDto(
       productId: JsonFieldParser.requireString(
         map,
         'productId',
         dtoName: dtoName,
       ),
-      coin: JsonFieldParser.requireString(
-        map,
-        'coin',
-        dtoName: dtoName,
-      ),
+      coin: JsonFieldParser.requireString(map, 'coin', dtoName: dtoName),
       bonusCoin: JsonFieldParser.requireString(
         map,
         'bonusCoin',
@@ -66,6 +61,11 @@ class CoinProductDto {
       channelProductId: JsonFieldParser.requireString(
         map,
         'channelProductId',
+        dtoName: dtoName,
+      ),
+      currencySymbol: JsonFieldParser.requireString(
+        map,
+        'currencySymbol',
         dtoName: dtoName,
       ),
       payChannel: JsonFieldParser.requireString(

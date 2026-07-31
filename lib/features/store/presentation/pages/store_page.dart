@@ -102,6 +102,31 @@ class _StorePageState extends ConsumerState<StorePage> {
         );
       },
     );
+    ref.listen(
+      storeControllerProvider.select((state) => state.purchaseStatus),
+      (previous, next) {
+        final purchaseState = ref.read(storeControllerProvider);
+        // 有确认弹框的流程由上面的 modal result 统一处理；这里仅处理直付 Google。
+        if (purchaseState.confirmationPackage != null) {
+          return;
+        }
+        if (next == StorePurchaseStatus.success) {
+          ref.read(appToastProvider).success(l10n.storePurchaseSuccess);
+          _returnAfterPurchaseSuccess();
+        } else if (next == StorePurchaseStatus.failed) {
+          ref
+              .read(appToastProvider)
+              .error(
+                purchaseState.purchaseFailureKind ==
+                        StorePurchaseFailureKind.paymentOptions
+                    ? l10n.networkError
+                    : l10n.storePurchaseFailed,
+              );
+        } else if (next == StorePurchaseStatus.cancelled) {
+          ref.read(appToastProvider).info(l10n.storePurchaseCancelled);
+        }
+      },
+    );
 
     return PopScope(
       canPop: !isPaymentLoading,
@@ -152,8 +177,7 @@ class _StorePageState extends ConsumerState<StorePage> {
                       state: state,
                       onRetry: controller.retry,
                       onSelect: (id) {
-                        controller.selectPackage(id);
-                        controller.showConfirmation();
+                        unawaited(controller.selectPackageForPurchase(id));
                       },
                     ),
                   ),

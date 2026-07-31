@@ -1,4 +1,5 @@
 import '../../../../features/pay/domain/iap_product_info.dart';
+import '../../../../features/pay/domain/pay_channel.dart';
 import '../../../../features/store/data/dto/coin_product_dto.dart';
 import '../../../../features/store/data/dto/member_product_dto.dart';
 import '../../domain/player_recharge_unlock_offer.dart';
@@ -23,12 +24,14 @@ class PlayerRechargeUnlockMapper {
     return PlayerRechargeUnlockOffer(
       requiredCoins: requiredCoins,
       coinPackages: coinProducts
+          .where((p) => _isVisible(p as CoinProductDto, iapDetails))
           .map((p) => mapCoinProduct(p as CoinProductDto, iapDetails))
           .toList(),
       // 如果用户已是会员，不返回会员商品
       membershipPackages: isMember
           ? []
           : memberProducts
+                .where((p) => _isVisible(p as MemberProductDto, iapDetails))
                 .map((p) => mapMemberProduct(p as MemberProductDto, iapDetails))
                 .toList(),
       benefits: _defaultBenefits(),
@@ -51,7 +54,9 @@ class PlayerRechargeUnlockMapper {
       baseCoins: baseCoins,
       bonusCoins: bonusCoins,
       googleProductId: dto.channelProductId,
-      googlePriceLabel: iapInfo?.displayPrice ?? dto.priceText,
+      googlePriceLabel:
+          iapInfo?.displayPrice ??
+          _serverPriceLabel(dto.currencySymbol, dto.priceText),
       iapInfo: iapInfo,
     );
   }
@@ -62,8 +67,7 @@ class PlayerRechargeUnlockMapper {
   ) {
     final iapInfo = iapDetails[dto.channelProductId];
 
-    final backendPromotionExpireSeconds =
-        int.tryParse(dto.promotionExpireSeconds ?? '0') ?? 0;
+    final backendPromotionExpireSeconds = dto.promotionExpireSeconds ?? 0;
     final hasIapPromo = iapInfo?.hasPromo == true;
     final promotionExpireSeconds = hasIapPromo
         ? backendPromotionExpireSeconds > 0
@@ -75,7 +79,9 @@ class PlayerRechargeUnlockMapper {
       id: dto.productId,
       periodLabel: _periodLabel(dto.periodType, dto.periodValue),
       googleProductId: dto.channelProductId,
-      googlePriceLabel: iapInfo?.displayPrice ?? dto.priceText,
+      googlePriceLabel:
+          iapInfo?.displayPrice ??
+          _serverPriceLabel(dto.currencySymbol, dto.priceText),
       periodIso: _periodIso(dto.periodType, dto.periodValue),
       originalPriceLabel: iapInfo?.displayOriginalPrice,
       isPromotional: hasIapPromo,
@@ -112,6 +118,20 @@ class PlayerRechargeUnlockMapper {
       _ => null,
     };
   }
+
+  static bool _isVisible(
+    dynamic product,
+    Map<String, IapProductInfo> iapDetails,
+  ) {
+    final payChannel = product.payChannel as String;
+    final channelProductId = product.channelProductId as String;
+    return PayChannel.isOther(payChannel) ||
+        (PayChannel.isGoogle(payChannel) &&
+            iapDetails.containsKey(channelProductId));
+  }
+
+  static String _serverPriceLabel(String currencySymbol, String priceText) =>
+      '$currencySymbol$priceText';
 
   static List<PlayerRechargeBenefit> _defaultBenefits() {
     return const [

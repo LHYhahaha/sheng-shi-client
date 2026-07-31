@@ -37,8 +37,12 @@ class StoreRechargeDataDto {
   }
 }
 
-String _string(Object? value, {String fallback = '0'}) =>
-    value is String ? value : fallback;
+/// 充值页余额字段当前为数值；兼容历史字符串返回，供现有 mapper 使用。
+String _string(Object? value, {String fallback = '0'}) => switch (value) {
+  String value => value,
+  num value => value.toString(),
+  _ => fallback,
+};
 
 List<T> _list<T>(Object? value, T Function(Object? json) mapper) {
   if (value is List) return value.map(mapper).toList(growable: false);

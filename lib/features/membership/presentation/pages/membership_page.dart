@@ -159,6 +159,31 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
         );
       },
     );
+    ref.listen(
+      membershipControllerProvider.select((state) => state.purchaseStatus),
+      (previous, next) {
+        final purchaseState = ref.read(membershipControllerProvider);
+        // 有确认弹框的流程由 modal result 处理；仅直付 Google 在这里收尾。
+        if (purchaseState.confirmationPlan != null) {
+          return;
+        }
+        if (next == MembershipPurchaseStatus.success) {
+          ref.read(appToastProvider).success(l10n.storePurchaseSuccess);
+          _goBack(result: MembershipRouteResult.purchaseCompleted);
+        } else if (next == MembershipPurchaseStatus.failed) {
+          ref
+              .read(appToastProvider)
+              .error(
+                purchaseState.purchaseFailureKind ==
+                        MembershipPurchaseFailureKind.paymentOptions
+                    ? l10n.networkError
+                    : l10n.storePurchaseFailed,
+              );
+        } else if (next == MembershipPurchaseStatus.cancelled) {
+          ref.read(appToastProvider).info(l10n.storePurchaseCancelled);
+        }
+      },
+    );
 
     final page = Scaffold(
       backgroundColor: MembershipLayout.background,
@@ -196,7 +221,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
               enabled: state.selectedPlan != null,
               onPurchase: state.selectedPlan == null
                   ? null
-                  : controller.showConfirmation,
+                  : () => unawaited(controller.purchaseSelectedPlan()),
               floating: useFloatingPurchaseButton,
             ),
         ],

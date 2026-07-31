@@ -1,6 +1,8 @@
 import '../../domain/pay_repository.dart';
 import '../../domain/payment_order.dart';
+import '../../domain/payment_method_options.dart';
 import '../dto/payment_order_create_request_dto.dart';
+import '../dto/payment_order_options_request_dto.dart';
 import '../dto/payment_order_verify_request_dto.dart';
 import '../dto/payment_order_verify_response_dto.dart';
 import '../remote/pay_remote_data_source.dart';
@@ -11,6 +13,32 @@ class RemotePayRepository implements PayRepository {
     : _remoteDataSource = remoteDataSource;
 
   final PayRemoteDataSource _remoteDataSource;
+
+  @override
+  Future<PaymentMethodOptions> getPaymentOrderOptions({
+    required int osType,
+    required int payScene,
+    required int productId,
+    required int productType,
+    String? countryCode,
+    int? dramaId,
+    int? episodeId,
+    int? episodeNo,
+    String? scene,
+  }) async {
+    final request = PaymentOrderOptionsRequestDto(
+      countryCode: countryCode,
+      dramaId: dramaId,
+      episodeId: episodeId,
+      episodeNo: episodeNo,
+      osType: osType,
+      payScene: payScene,
+      productId: productId,
+      productType: productType,
+      scene: scene,
+    );
+    return (await _remoteDataSource.getPaymentOrderOptions(request)).toDomain();
+  }
 
   @override
   Future<PaymentOrder> createPaymentOrder({

@@ -1,5 +1,6 @@
 import '../../../../features/pay/application/iap_price_service.dart';
 import '../../../../features/pay/domain/iap_product_info.dart';
+import '../../../../features/pay/domain/pay_channel.dart';
 import '../dto/player_episode_unlock_dto.dart';
 import '../mapper/player_recharge_unlock_mapper.dart';
 import '../../domain/player_recharge_unlock_offer.dart';
@@ -32,13 +33,15 @@ class PlayerRechargeUnlockRepositoryImpl
     // 如果用户已是会员，不需要查询会员商品价格
     final channelProductIds = <String>{};
     for (final pkg in dto.coinProducts) {
-      if (pkg.channelProductId.isNotEmpty) {
+      if (PayChannel.isGoogle(pkg.payChannel) &&
+          pkg.channelProductId.isNotEmpty) {
         channelProductIds.add(pkg.channelProductId);
       }
     }
     if (!isMember) {
       for (final pkg in dto.memberProducts) {
-        if (pkg.channelProductId.isNotEmpty) {
+        if (PayChannel.isGoogle(pkg.payChannel) &&
+            pkg.channelProductId.isNotEmpty) {
           channelProductIds.add(pkg.channelProductId);
         }
       }

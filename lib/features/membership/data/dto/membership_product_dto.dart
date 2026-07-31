@@ -11,6 +11,8 @@ class MembershipProductDto {
     required this.productId,
     required this.productName,
     required this.channelProductId,
+    required this.currencySymbol,
+    required this.memberType,
     required this.priceText,
     required this.originalPriceText,
     required this.periodType,
@@ -32,11 +34,13 @@ class MembershipProductDto {
   final int productId;
   final String productName;
   final String channelProductId;
+  final String currencySymbol;
+  final String memberType;
   final String priceText;
   final String originalPriceText;
-  final int periodType;
+  final String periodType;
   final int periodValue;
-  final int payChannel;
+  final String payChannel;
   final int status;
   final int sort;
   final String? promotionText;
@@ -89,11 +93,13 @@ class MembershipProductDto {
       productId: parseInt(map['productId']),
       productName: parseString(map['productName'], fallback: 'Membership'),
       channelProductId: parseString(map['channelProductId']),
+      currencySymbol: parseString(map['currencySymbol']),
+      memberType: parseString(map['memberType']),
       priceText: parseString(map['priceText']),
       originalPriceText: parseString(map['originalPriceText']),
-      periodType: parseInt(map['periodType']),
+      periodType: parseString(map['periodType']),
       periodValue: parseInt(map['periodValue']),
-      payChannel: parseInt(map['payChannel']),
+      payChannel: parseString(map['payChannel']),
       status: parseInt(map['status']),
       sort: parseInt(map['sort']),
       promotionText: parseString(map['promotionText']),

@@ -1,5 +1,6 @@
 import '../../domain/membership_plan.dart';
 import '../../../../core/utils/period_iso_parser.dart';
+import '../../../pay/domain/pay_channel.dart';
 import '../dto/membership_data_dto.dart';
 import '../dto/membership_product_dto.dart';
 
@@ -20,7 +21,11 @@ class MembershipMapper {
   }
 
   MembershipPlan mapProduct(MembershipProductDto dto) {
-    final priceLabel = dto.iapPriceText ?? dto.priceText;
+    final priceLabel =
+        dto.iapPriceText ??
+        (PayChannel.isOther(dto.payChannel)
+            ? _serverPriceLabel(dto.currencySymbol, dto.priceText)
+            : dto.priceText);
     final hasIapPromo = dto.iapHasPromo == true;
     final originalPriceLabel = hasIapPromo ? dto.iapRegularPriceText : null;
 
@@ -29,8 +34,11 @@ class MembershipMapper {
       title: dto.productName,
       priceLabel: priceLabel,
       dailyPriceLabel: _calculateDailyPrice(dto.periodValue),
-      period: _mapPeriodIso(dto.iapPromoPeriod ?? dto.iapRegularPeriod),
+      period: _mapPeriodIso(
+        dto.iapPromoPeriod ?? dto.iapRegularPeriod ?? _serverPeriodIso(dto),
+      ),
       platformProductId: dto.channelProductId,
+      payChannel: dto.payChannel,
       badgeLabel: null,
       originalPriceLabel: originalPriceLabel,
       promotionPriceLabel: dto.iapPriceText,
@@ -42,7 +50,7 @@ class MembershipMapper {
       description: dto.productName,
       enabled: dto.status == 0,
       promoPeriodIso: hasIapPromo ? dto.iapPromoPeriod : null,
-      regularPeriodIso: dto.iapRegularPeriod,
+      regularPeriodIso: dto.iapRegularPeriod ?? _serverPeriodIso(dto),
     );
   }
 
@@ -50,6 +58,20 @@ class MembershipMapper {
     if (iso == null) return null;
     return PeriodIsoParser.toDisplayLabel(iso);
   }
+
+  String? _serverPeriodIso(MembershipProductDto dto) {
+    if (dto.periodValue <= 0) return null;
+    return switch (dto.periodType) {
+      'MEMBER_PERIOD_TYPE_WEEK' => 'P${dto.periodValue}W',
+      'MEMBER_PERIOD_TYPE_MONTH' => 'P${dto.periodValue}M',
+      'MEMBER_PERIOD_TYPE_QUARTER' => 'P${dto.periodValue * 3}M',
+      'MEMBER_PERIOD_TYPE_YEAR' => 'P${dto.periodValue}Y',
+      _ => null,
+    };
+  }
+
+  String _serverPriceLabel(String currencySymbol, String priceText) =>
+      '$currencySymbol$priceText';
 
   // ── 日均价计算 ─────────────────────────────────────
 

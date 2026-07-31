@@ -40,10 +40,11 @@ class StoreMapper {
       id: dto.productId,
       kind: StorePackageKind.coins,
       title: dto.coin,
-      priceLabel: dto.priceText, // API返回的展示价格
+      priceLabel: _serverPriceLabel(dto.currencySymbol, dto.priceText),
       baseCoins: baseCoins,
       bonusCoins: bonusCoins,
       platformProductId: dto.channelProductId, // 用于IAP查询和购买
+      payChannel: dto.payChannel,
       productType: 'consumable',
       sortOrder: dto.sort,
       enabled: dto.status == 1,
@@ -59,10 +60,11 @@ class StoreMapper {
       title: dto.productName?.isNotEmpty == true
           ? dto.productName!
           : _defaultTitleForPeriod(dto.periodType, dto.periodValue),
-      priceLabel: dto.priceText, // API返回的展示价格
+      priceLabel: _serverPriceLabel(dto.currencySymbol, dto.priceText),
       baseCoins: 0,
       bonusCoins: 0,
       platformProductId: dto.channelProductId, // 用于IAP查询和购买
+      payChannel: dto.payChannel,
       periodIso: _periodIso(dto.periodType, dto.periodValue),
       productType: 'subscription',
       sortOrder: dto.sort,
@@ -82,6 +84,9 @@ class StoreMapper {
     if (percent <= 0) return null;
     return '+$percent%';
   }
+
+  String _serverPriceLabel(String currencySymbol, String priceText) =>
+      '$currencySymbol$priceText';
 
   String _defaultTitleForPeriod(String periodType, int periodValue) {
     switch (periodType) {

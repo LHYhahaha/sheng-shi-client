@@ -1,7 +1,21 @@
 import '../domain/payment_order.dart';
+import 'payment_method_options.dart';
 import '../data/dto/payment_order_verify_response_dto.dart';
 
 abstract interface class PayRepository {
+  /// 获取商品在当前支付场景下可用的支付方式。
+  Future<PaymentMethodOptions> getPaymentOrderOptions({
+    required int osType,
+    required int payScene,
+    required int productId,
+    required int productType,
+    String? countryCode,
+    int? dramaId,
+    int? episodeId,
+    int? episodeNo,
+    String? scene,
+  });
+
   /// 创建支付订单（通用接口）
   ///
   /// 所有下单都经过这个接口，支持金币商品和会员商品

@@ -19,6 +19,7 @@ class StorePackage {
     this.currencyCode,
     this.originalPriceMicros,
     this.platformProductId,
+    this.payChannel = 'PAY_CHANNEL_GOOGLE',
     this.periodIso,
     this.basePlanId,
     this.offerId,
@@ -79,6 +80,9 @@ class StorePackage {
   ///
   /// 真实 IAP 下单使用平台商品 id，不要用展示标题反查。
   final String? platformProductId;
+
+  /// 服务端支付渠道，用于决定是否需要查询平台商品价格。
+  final String payChannel;
 
   /// Subscription period in ISO 8601 format, such as P1W / P1M / P3M / P1Y.
   final String? periodIso;
@@ -156,6 +160,7 @@ class StorePackage {
     String? currencyCode,
     int? originalPriceMicros,
     String? platformProductId,
+    String? payChannel,
     String? periodIso,
     String? basePlanId,
     String? offerId,
@@ -183,6 +188,7 @@ class StorePackage {
       currencyCode: currencyCode ?? this.currencyCode,
       originalPriceMicros: originalPriceMicros ?? this.originalPriceMicros,
       platformProductId: platformProductId ?? this.platformProductId,
+      payChannel: payChannel ?? this.payChannel,
       periodIso: periodIso ?? this.periodIso,
       basePlanId: basePlanId ?? this.basePlanId,
       offerId: offerId ?? this.offerId,

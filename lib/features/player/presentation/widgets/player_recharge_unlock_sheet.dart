@@ -53,6 +53,8 @@ class PlayerRechargeUnlockSheet extends ConsumerStatefulWidget {
 class _PlayerRechargeUnlockSheetState
     extends ConsumerState<PlayerRechargeUnlockSheet> {
   Timer? _timer;
+  var _paymentMethodOpen = false;
+  var _didHandleDirectPaymentTerminal = false;
 
   @override
   void initState() {
@@ -77,9 +79,11 @@ class _PlayerRechargeUnlockSheetState
     if (!mounted) {
       return;
     }
+    _paymentMethodOpen = true;
     final result = await ref
         .read(playerPaymentMethodModalCoordinatorProvider(widget.sessionKey))
         .showPaymentMethod(sessionKey: widget.sessionKey, selection: selection);
+    _paymentMethodOpen = false;
     if (!mounted) {
       return;
     }
@@ -108,10 +112,59 @@ class _PlayerRechargeUnlockSheetState
     }
   }
 
+  Future<void> _onCoinPackageTap(PlayerRechargeCoinPackage package) async {
+    _didHandleDirectPaymentTerminal = false;
+    final shouldShowCashier = await ref
+        .read(
+          playerRechargeUnlockControllerProvider(widget.sessionKey).notifier,
+        )
+        .prepareCoinPackagePurchase(package.id);
+    if (shouldShowCashier && mounted) {
+      await _presentPaymentMethod(PlayerPaymentSelection.coin(package));
+    }
+  }
+
+  Future<void> _onMembershipPackageTap(
+    PlayerRechargeMembershipPackage package,
+  ) async {
+    _didHandleDirectPaymentTerminal = false;
+    final shouldShowCashier = await ref
+        .read(
+          playerRechargeUnlockControllerProvider(widget.sessionKey).notifier,
+        )
+        .prepareMembershipPackagePurchase(package.id);
+    if (shouldShowCashier && mounted) {
+      await _presentPaymentMethod(PlayerPaymentSelection.membership(package));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = playerRechargeUnlockControllerProvider(widget.sessionKey);
     final state = ref.watch(provider);
+
+    ref.listen(provider.select((state) => state.status), (previous, next) {
+      if (_paymentMethodOpen || _didHandleDirectPaymentTerminal || !mounted) {
+        return;
+      }
+      if (next == PlayerRechargeUnlockStatus.success) {
+        _didHandleDirectPaymentTerminal = true;
+        Navigator.of(context).pop(true);
+      } else if (next == PlayerRechargeUnlockStatus.failed) {
+        _didHandleDirectPaymentTerminal = true;
+        ref
+            .read(appToastProvider)
+            .error(
+              ref.read(provider).purchaseFailureKind ==
+                      PlayerRechargePurchaseFailureKind.paymentOptions
+                  ? context.l10n.networkError
+                  : context.l10n.storePurchaseFailed,
+            );
+      } else if (next == PlayerRechargeUnlockStatus.cancelled) {
+        _didHandleDirectPaymentTerminal = true;
+        ref.read(appToastProvider).info(context.l10n.storePurchaseCancelled);
+      }
+    });
 
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final screenHeight = MediaQuery.sizeOf(context).height;
@@ -143,9 +196,7 @@ class _PlayerRechargeUnlockSheetState
                     .where((package) => package.id == id)
                     .firstOrNull;
                 if (package != null) {
-                  unawaited(
-                    _presentPaymentMethod(PlayerPaymentSelection.coin(package)),
-                  );
+                  unawaited(_onCoinPackageTap(package));
                 }
               },
               onMembershipTap: (id) {
@@ -153,11 +204,7 @@ class _PlayerRechargeUnlockSheetState
                     .where((package) => package.id == id)
                     .firstOrNull;
                 if (package != null) {
-                  unawaited(
-                    _presentPaymentMethod(
-                      PlayerPaymentSelection.membership(package),
-                    ),
-                  );
+                  unawaited(_onMembershipPackageTap(package));
                 }
               },
               onUnlockWithCoin: hasEnoughCoins
