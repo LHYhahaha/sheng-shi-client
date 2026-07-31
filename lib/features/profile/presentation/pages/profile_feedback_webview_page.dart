@@ -61,6 +61,7 @@ class _ProfileFeedbackWebViewPageState
     final bridgeData = _ProfileFeedbackBridgeData(
       appName: context.l10n.appTitle,
       statusBarHeight: MediaQuery.paddingOf(context).top,
+      safeAreaBottom: MediaQuery.paddingOf(context).bottom,
       // 这里使用后端返回后保存在 UserInfoStore 中的资料，不传本地默认头像。
       // 后端没有返回时按 H5 协议传空字符串。
       nickname: userInfo.nickname ?? '',
@@ -157,7 +158,8 @@ class _ProfileFeedbackWebViewPageState
         window.JSBridge.appName = ${jsonEncode(bridgeData.appName)};
         window.JSBridge.appBaseInfo = {
         appName:${jsonEncode(bridgeData.appName)},
-        statusBarHeight:${bridgeData.statusBarHeight}
+        statusBarHeight:${bridgeData.statusBarHeight},
+        safeAreaBottom:${bridgeData.safeAreaBottom}
         };
 
         window.JSBridge.userInfo = {
@@ -283,10 +285,12 @@ class _ProfileFeedbackBridgeData {
     required this.avatarUrl,
     required this.i18n,
     required this.headers,
+    required this.safeAreaBottom,
   });
 
   final String appName;
   final double statusBarHeight;
+  final double safeAreaBottom;
   final String nickname;
   final String avatarUrl;
   final Map<String, dynamic> i18n;
