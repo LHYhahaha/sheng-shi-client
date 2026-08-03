@@ -39,7 +39,7 @@ class StoreMapper {
     return StorePackage(
       id: dto.productId,
       kind: StorePackageKind.coins,
-      title: dto.productName?.isNotEmpty == true ? dto.productName! : dto.coin,
+      title: dto.coin,
       priceLabel: dto.priceText, // API返回的展示价格
       baseCoins: baseCoins,
       bonusCoins: bonusCoins,
