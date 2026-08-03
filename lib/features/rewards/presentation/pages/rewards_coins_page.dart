@@ -207,11 +207,9 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
           if (currentStatus.isPermanentlyDenied) {
             await permissions.openAppSettings();
           } else {
-            final requestedStatus = await permissions.Permission.notification
-                .request();
-            if (!_hasNotificationPermission(requestedStatus)) {
-              await permissions.openAppSettings();
-            }
+            await permissions.Permission.notification.request();
+            // A rejection dismisses the system prompt only. On a later tap,
+            // `isPermanentlyDenied` above will send the user to Settings.
           }
         }
         await ref

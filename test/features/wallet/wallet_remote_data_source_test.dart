@@ -3,6 +3,7 @@ import 'package:drama_client/core/network/api_client.dart';
 import 'package:drama_client/core/network/api_request_context.dart';
 import 'package:drama_client/features/wallet/data/dto/wallet_page_dto.dart';
 import 'package:drama_client/features/wallet/data/dto/wallet_reward_coin_record_dto.dart';
+import 'package:drama_client/features/wallet/data/dto/wallet_transaction_record_dto.dart';
 import 'package:drama_client/features/wallet/data/mapper/wallet_mapper.dart';
 import 'package:drama_client/features/wallet/data/remote/wallet_remote_data_source.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +12,16 @@ import '../../helpers/fake_api_envelope.dart';
 import '../../helpers/recording_http_adapter.dart';
 
 void main() {
+  test('timezone-less order times are parsed as UTC', () {
+    final dto = WalletTransactionRecordDto.fromJson({
+      'orderNo': 'order-1',
+      'paidAt': '2026-08-03T12:34:56',
+    });
+
+    expect(dto.createdAt, DateTime.utc(2026, 8, 3, 12, 34, 56));
+    expect(dto.createdAt!.isUtc, isTrue);
+  });
+
   test('history endpoints stay GET and send page query parameters', () async {
     final adapter = RecordingHttpAdapter(
       defaultResponse: RecordingHttpResponse(

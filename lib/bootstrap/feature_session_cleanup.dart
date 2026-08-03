@@ -4,6 +4,7 @@ import '../core/auth/session_cleanup_coordinator.dart';
 import '../core/auth/user_info_store.dart';
 import '../core/modal/app_modal_business_cleanup.dart';
 import '../core/modal/app_modal_provider.dart';
+import '../core/user_library/user_library_sync_controller.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/entitlement/application/entitlement_controller.dart';
 import '../features/membership/application/membership_controller.dart';
@@ -30,6 +31,9 @@ final featureSessionCleanupRegistrationProvider = Provider<void>((ref) {
   final myListController = ref.read(myListControllerProvider.notifier);
   final storeController = ref.read(storeControllerProvider.notifier);
   final membershipController = ref.read(membershipControllerProvider.notifier);
+  final userLibrarySyncController = ref.read(
+    userLibrarySyncControllerProvider.notifier,
+  );
   coordinator.registerFeatureHooks([
     (_) async {
       dismissAllBlockingBusinessModals(modalService);
@@ -52,6 +56,9 @@ final featureSessionCleanupRegistrationProvider = Provider<void>((ref) {
     (reason) async {
       myListController.resetForSessionCleanup(reason);
     },
+    (reason) async {
+      userLibrarySyncController.resetForSessionCleanup(reason);
+    },
     (_) async {
       await runPlayerSessionCleanupWith(
         read: <T>(dynamic provider) => ref.read(provider),
@@ -71,7 +78,9 @@ final featureSessionCleanupRegistrationProvider = Provider<void>((ref) {
           reason == SessionCleanupReason.guestSessionExpiredExit) {
         return;
       }
-      print('[FeatureSessionCleanup] Triggering re-login after cleanup for reason: $reason');
+      print(
+        '[FeatureSessionCleanup] Triggering re-login after cleanup for reason: $reason',
+      );
       try {
         await authController.load();
         print('[FeatureSessionCleanup] Re-login completed successfully');

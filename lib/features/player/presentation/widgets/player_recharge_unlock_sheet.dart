@@ -14,6 +14,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
 import '../../../../shared/theme/app_spacing.dart';
+import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
 import '../../domain/player_recharge_unlock_offer.dart';
@@ -390,6 +391,9 @@ class _OfferContent extends ConsumerWidget {
     final isProcessing = state.status == PlayerRechargeUnlockStatus.processing;
     // 检查用户是否已是会员
     final isMember = ref.watch(entitlementControllerProvider).isMember;
+    final hasNoPackages =
+        offer.coinPackages.isEmpty &&
+        (isMember || offer.membershipPackages.isEmpty);
 
     return Stack(
       children: [
@@ -423,54 +427,70 @@ class _OfferContent extends ConsumerWidget {
                 ],
                 _UnlockInfo(offer: offer),
                 const SizedBox(height: 19),
-                SizedBox(
-                  height: 85,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      const gap = 8.0;
-                      const visibleCardCount = 2.2;
-                      const visibleGapCount = 2;
-                      final cardWidth =
-                          (constraints.maxWidth - gap * visibleGapCount) /
-                          visibleCardCount;
-
-                      return ListView.separated(
-                        clipBehavior: Clip.none,
-                        scrollDirection: Axis.horizontal,
-                        physics: const BouncingScrollPhysics(),
-                        itemCount: offer.coinPackages.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(width: gap),
-                        itemBuilder: (context, index) {
-                          final package = offer.coinPackages[index];
-                          return _CoinPackageCard(
-                            sessionKey: sessionKey,
-                            package: package,
-                            selected: state.selectedCoinPackageId == package.id,
-                            enabled: !isProcessing,
-                            width: cardWidth,
-                            onTap: () => onCoinTap(package.id),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 20),
-                // 如果用户不是会员，显示会员商品
-                if (!isMember)
-                  for (final package in offer.membershipPackages) ...[
-                    _MembershipPackageCard(
-                      key: ValueKey('player_recharge_membership_${package.id}'),
-                      sessionKey: sessionKey,
-                      package: package,
-                      benefits: offer.benefits,
-                      selected: state.selectedMembershipPackageId == package.id,
-                      enabled: !isProcessing,
-                      onTap: () => onMembershipTap(package.id),
+                if (hasNoPackages)
+                  Container(
+                    height: 180,
+                    alignment: Alignment.center,
+                    child: AppEmptyState(
+                      message: context.l10n.noData,
+                      imageSize: 72,
+                      spacing: 4,
                     ),
-                    const SizedBox(height: 8),
-                  ],
+                  )
+                else ...[
+                  SizedBox(
+                    height: 85,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        const gap = 8.0;
+                        const visibleCardCount = 2.2;
+                        const visibleGapCount = 2;
+                        final cardWidth =
+                            (constraints.maxWidth - gap * visibleGapCount) /
+                            visibleCardCount;
+
+                        return ListView.separated(
+                          clipBehavior: Clip.none,
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: offer.coinPackages.length,
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(width: gap),
+                          itemBuilder: (context, index) {
+                            final package = offer.coinPackages[index];
+                            return _CoinPackageCard(
+                              sessionKey: sessionKey,
+                              package: package,
+                              selected:
+                                  state.selectedCoinPackageId == package.id,
+                              enabled: !isProcessing,
+                              width: cardWidth,
+                              onTap: () => onCoinTap(package.id),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // 如果用户不是会员，显示会员商品
+                  if (!isMember)
+                    for (final package in offer.membershipPackages) ...[
+                      _MembershipPackageCard(
+                        key: ValueKey(
+                          'player_recharge_membership_${package.id}',
+                        ),
+                        sessionKey: sessionKey,
+                        package: package,
+                        benefits: offer.benefits,
+                        selected:
+                            state.selectedMembershipPackageId == package.id,
+                        enabled: !isProcessing,
+                        onTap: () => onMembershipTap(package.id),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                ],
                 const SizedBox(height: 4),
                 if (isProcessing)
                   Row(

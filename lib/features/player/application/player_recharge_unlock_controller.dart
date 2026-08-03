@@ -283,15 +283,6 @@ class PlayerRechargeUnlockController
     }
 
     try {
-      final packageSupportsGoogle = isCoinPackage
-          ? offer!.coinPackages
-                    .firstWhere((package) => package.id == packageId)
-                    .iapInfo !=
-                null
-          : offer!.membershipPackages
-                    .firstWhere((package) => package.id == packageId)
-                    .iapInfo !=
-                null;
       final options = await ref
           .read(payRepositoryProvider)
           .getPaymentOrderOptions(
@@ -305,29 +296,33 @@ class PlayerRechargeUnlockController
                 : _membershipProductType,
             scene: isCoinPackage ? 'player_coin' : 'player_membership',
           );
-      if (options.options.isEmpty) {
+      final supportedMethods = _supportedPaymentMethods(options.options);
+      if (supportedMethods.isEmpty) {
         await _startPreparedPayment(
           packageId,
           isCoinPackage: isCoinPackage,
           payChannel: _defaultPaymentChannel,
-          packageSupportsGoogle: packageSupportsGoogle,
         );
-      } else if (_isGoogleOnly(options)) {
+      } else if (supportedMethods.length == 1) {
         await _startPreparedPayment(
           packageId,
           isCoinPackage: isCoinPackage,
-          payChannel: options.options.single.payChannel,
-          packageSupportsGoogle: packageSupportsGoogle,
+          payChannel: supportedMethods.single.payChannel,
         );
       } else {
-        _preparePaymentMethodSelection(options);
+        _preparePaymentMethodSelection(options, supportedMethods);
         return true;
       }
-    } catch (error) {
-      state = state.copyWith(
-        status: PlayerRechargeUnlockStatus.failed,
-        purchaseFailureKind: PlayerRechargePurchaseFailureKind.paymentOptions,
-        error: error,
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[PlayerRecharge] payment options failed, using default payment: '
+        '$error\n$stackTrace',
+      );
+      // 支付方式接口不可用时，按空列表处理，走设备默认支付方式兜底。
+      await _startPreparedPayment(
+        packageId,
+        isCoinPackage: isCoinPackage,
+        payChannel: _defaultPaymentChannel,
       );
     }
     return false;
@@ -357,18 +352,6 @@ class PlayerRechargeUnlockController
     required String packageId,
     required bool isCoinPackage,
   }) async {
-    final offer = state.offer;
-    final packageSupportsGoogle = isCoinPackage
-        ? offer?.coinPackages
-                  .where((package) => package.id == packageId)
-                  .firstOrNull
-                  ?.iapInfo !=
-              null
-        : offer?.membershipPackages
-                  .where((package) => package.id == packageId)
-                  .firstOrNull
-                  ?.iapInfo !=
-              null;
     final method = state.paymentMethods
         .where((method) => method.methodCode == state.selectedPaymentMethodCode)
         .firstOrNull;
@@ -380,7 +363,6 @@ class PlayerRechargeUnlockController
       packageId,
       isCoinPackage: isCoinPackage,
       payChannel: method.payChannel,
-      packageSupportsGoogle: packageSupportsGoogle == true,
     );
   }
 
@@ -394,15 +376,16 @@ class PlayerRechargeUnlockController
     state = state.copyWith(selectedPaymentMethodCode: methodCode);
   }
 
-  void _preparePaymentMethodSelection(PaymentMethodOptions options) {
+  void _preparePaymentMethodSelection(
+    PaymentMethodOptions options,
+    List<PaymentMethodOption> methods,
+  ) {
     final selected =
-        options.options.any(
-          (method) => method.methodCode == options.defaultMethodCode,
-        )
+        methods.any((method) => method.methodCode == options.defaultMethodCode)
         ? options.defaultMethodCode
-        : options.options.first.methodCode;
+        : methods.first.methodCode;
     state = state.copyWith(
-      paymentMethods: List<PaymentMethodOption>.unmodifiable(options.options),
+      paymentMethods: List<PaymentMethodOption>.unmodifiable(methods),
       selectedPaymentMethodCode: selected,
     );
   }
@@ -411,9 +394,8 @@ class PlayerRechargeUnlockController
     String packageId, {
     required bool isCoinPackage,
     required String payChannel,
-    required bool packageSupportsGoogle,
   }) async {
-    if (PayChannel.isGoogle(payChannel) && packageSupportsGoogle) {
+    if (PayChannel.isGoogle(payChannel)) {
       if (isCoinPackage) {
         await selectCoinPackage(packageId);
       } else {
@@ -837,9 +819,17 @@ class PlayerRechargeUnlockController
         message?.contains('user') == true;
   }
 
-  bool _isGoogleOnly(PaymentMethodOptions options) =>
-      options.options.length == 1 &&
-      PayChannel.isGoogle(options.options.single.payChannel);
+  List<PaymentMethodOption> _supportedPaymentMethods(
+    List<PaymentMethodOption> methods,
+  ) => [
+    for (final method in methods)
+      if (_isSupportedPaymentChannel(method.payChannel)) method,
+  ];
+
+  bool _isSupportedPaymentChannel(String payChannel) =>
+      defaultTargetPlatform == TargetPlatform.iOS
+      ? PayChannel.isApple(payChannel)
+      : PayChannel.isGoogle(payChannel);
 
   String get _defaultPaymentChannel =>
       defaultTargetPlatform == TargetPlatform.iOS

@@ -12,6 +12,7 @@ import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_spacing.dart';
+import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../application/store_controller.dart';
@@ -326,47 +327,61 @@ class _StoreBody extends StatelessWidget {
     }
 
     final tips = state.tips;
+    final hasNoPackages =
+        state.coinPackages.isEmpty && state.vipPackages.isEmpty;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
       children: [
-        SizedBox(
-          height: 85,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              const visibleCardCount = 2.2;
-              const visibleGapCount = 2;
-              final cardWidth =
-                  (constraints.maxWidth - AppSpacing.sm * visibleGapCount) /
-                  visibleCardCount;
+        if (hasNoPackages)
+          Container(
+            height: 180,
+            alignment: Alignment.center,
+            child: AppEmptyState(
+              message: context.l10n.noData,
+              imageSize: 72,
+              spacing: 4,
+            ),
+          )
+        else ...[
+          SizedBox(
+            height: 85,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const visibleCardCount = 2.2;
+                const visibleGapCount = 2;
+                final cardWidth =
+                    (constraints.maxWidth - AppSpacing.sm * visibleGapCount) /
+                    visibleCardCount;
 
-              return ListView.separated(
-                scrollDirection: Axis.horizontal,
-                clipBehavior: Clip.none,
-                itemCount: state.coinPackages.length,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(width: AppSpacing.sm),
-                itemBuilder: (context, index) {
-                  final package = state.coinPackages[index];
-                  return StoreCoinPackageCard(
-                    package: package,
-                    selected: state.selectedPackageId == package.id,
-                    width: cardWidth,
-                    onTap: () => onSelect(package.id),
-                  );
-                },
-              );
-            },
+                return ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  clipBehavior: Clip.none,
+                  itemCount: state.coinPackages.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(width: AppSpacing.sm),
+                  itemBuilder: (context, index) {
+                    final package = state.coinPackages[index];
+                    return StoreCoinPackageCard(
+                      package: package,
+                      selected: state.selectedPackageId == package.id,
+                      width: cardWidth,
+                      onTap: () => onSelect(package.id),
+                    );
+                  },
+                );
+              },
+            ),
           ),
-        ),
-        const SizedBox(height: 20),
-        for (final package in state.vipPackages) ...[
-          StoreVipPackageCard(
-            package: package,
-            selected: state.selectedPackageId == package.id,
-            onTap: () => onSelect(package.id),
-          ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: 20),
+          for (final package in state.vipPackages) ...[
+            StoreVipPackageCard(
+              package: package,
+              selected: state.selectedPackageId == package.id,
+              onTap: () => onSelect(package.id),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
         ],
         if (tips != null) ...[const SizedBox(height: 4), StoreTipsSection()],
       ],

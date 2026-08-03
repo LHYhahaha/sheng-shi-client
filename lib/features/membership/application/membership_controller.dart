@@ -277,21 +277,19 @@ class MembershipController extends Notifier<MembershipState> {
 
     try {
       final options = await _fetchPaymentOptions(plan);
-      if (options.options.isEmpty) {
+      final supportedMethods = _supportedPaymentMethods(options.options);
+      if (supportedMethods.isEmpty) {
         await _startPayment(plan, _defaultPaymentChannel);
-      } else if (_isGoogleOnly(options)) {
-        await _startPayment(plan, options.options.single.payChannel);
+      } else if (supportedMethods.length == 1) {
+        await _startPayment(plan, supportedMethods.single.payChannel);
       } else {
-        _preparePaymentMethodSelection(options);
+        _preparePaymentMethodSelection(options, supportedMethods);
         showConfirmation();
       }
     } catch (error, stackTrace) {
       debugPrint('[Membership] payment options failed: $error\n$stackTrace');
-      state = state.copyWith(
-        purchaseStatus: MembershipPurchaseStatus.failed,
-        purchaseFailureKind: MembershipPurchaseFailureKind.paymentOptions,
-        error: error,
-      );
+      // 支付方式接口不可用时，按空列表处理，走设备默认支付方式兜底。
+      await _startPayment(plan, _defaultPaymentChannel);
     }
   }
 
@@ -346,22 +344,22 @@ class MembershipController extends Notifier<MembershipState> {
     state = state.copyWith(selectedPaymentMethodCode: methodCode);
   }
 
-  void _preparePaymentMethodSelection(PaymentMethodOptions options) {
+  void _preparePaymentMethodSelection(
+    PaymentMethodOptions options,
+    List<PaymentMethodOption> methods,
+  ) {
     final selected =
-        options.options.any(
-          (method) => method.methodCode == options.defaultMethodCode,
-        )
+        methods.any((method) => method.methodCode == options.defaultMethodCode)
         ? options.defaultMethodCode
-        : options.options.first.methodCode;
+        : methods.first.methodCode;
     state = state.copyWith(
-      paymentMethods: List<PaymentMethodOption>.unmodifiable(options.options),
+      paymentMethods: List<PaymentMethodOption>.unmodifiable(methods),
       selectedPaymentMethodCode: selected,
     );
   }
 
   Future<void> _startPayment(MembershipPlan plan, String payChannel) async {
-    if (PayChannel.isGoogle(payChannel) &&
-        PayChannel.isGoogle(plan.payChannel)) {
+    if (PayChannel.isGoogle(payChannel)) {
       await _startGooglePurchase(plan);
       return;
     }
@@ -374,9 +372,6 @@ class MembershipController extends Notifier<MembershipState> {
     final loading = ref.read(paymentLoadingControllerProvider.notifier);
     loading.show(label: PaymentLoadingLabel.loading);
     try {
-      if (!PayChannel.isGoogle(plan.payChannel)) {
-        throw UnsupportedError('Payment channel is not supported yet.');
-      }
       final platformProductId = plan.platformProductId;
       if (platformProductId == null || platformProductId.isEmpty) {
         throw Exception('Plan has no platform product id: ${plan.id}');
@@ -748,9 +743,17 @@ class MembershipController extends Notifier<MembershipState> {
         );
   }
 
-  bool _isGoogleOnly(PaymentMethodOptions options) =>
-      options.options.length == 1 &&
-      PayChannel.isGoogle(options.options.single.payChannel);
+  List<PaymentMethodOption> _supportedPaymentMethods(
+    List<PaymentMethodOption> methods,
+  ) => [
+    for (final method in methods)
+      if (_isSupportedPaymentChannel(method.payChannel)) method,
+  ];
+
+  bool _isSupportedPaymentChannel(String payChannel) =>
+      defaultTargetPlatform == TargetPlatform.iOS
+      ? PayChannel.isApple(payChannel)
+      : PayChannel.isGoogle(payChannel);
 
   String get _defaultPaymentChannel =>
       defaultTargetPlatform == TargetPlatform.iOS

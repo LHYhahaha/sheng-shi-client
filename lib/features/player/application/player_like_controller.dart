@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/user_library/user_library_sync_controller.dart';
 import '../data/local/player_like_cache.dart';
 import '../data/player_remote_data_source_provider.dart';
 import '../data/remote/player_remote_data_source.dart';
@@ -73,13 +74,25 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
   @override
   PlayerLikeState build() {
     _remoteDataSource = ref.watch(playerRemoteDataSourceProvider);
+    final syncedIsLiked = ref
+        .read(userLibrarySyncControllerProvider)
+        .favoriteFor(dramaId);
+    ref.listen<UserLibrarySyncState>(userLibrarySyncControllerProvider, (
+      previous,
+      next,
+    ) {
+      final isLiked = next.favoriteFor(dramaId);
+      if (isLiked != null) {
+        applyExternalFavoriteState(isLiked);
+      }
+    });
 
     // 先从缓存读取点赞状态，避免UI闪烁
     final cachedIsLiked = PlayerLikeCache.getCachedLikeStatus(dramaId);
     final cachedDelta = PlayerLikeCache.getCachedLikeCountDelta(dramaId);
 
     return PlayerLikeState(
-      isLiked: cachedIsLiked ?? false,
+      isLiked: syncedIsLiked ?? cachedIsLiked ?? false,
       likeCountDelta: cachedDelta,
       serverFavoriteCount: PlayerLikeCache.getCachedInitialLikeCount(dramaId),
       isLoading: false,
@@ -92,6 +105,17 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
   /// 本地点击记录优先于接口回包；只有服务端状态追上本地状态时，才接受新回包并
   /// 清除乐观计数差值，避免接口延迟期间图标或数量回退。
   void syncFeedLikeState({required bool? isLiked, required int favoriteCount}) {
+    final librarySync = ref.read(userLibrarySyncControllerProvider.notifier);
+    librarySync.observeFavoriteFromServer(
+      dramaId: dramaId,
+      isFavorited: isLiked,
+    );
+    final syncedIsLiked = ref
+        .read(userLibrarySyncControllerProvider)
+        .favoriteFor(dramaId);
+    if (syncedIsLiked != null) {
+      isLiked = syncedIsLiked;
+    }
     final cachedIsLiked = PlayerLikeCache.getCachedLikeStatus(dramaId);
     final cachedDelta = PlayerLikeCache.getCachedLikeCountDelta(dramaId);
 
@@ -145,10 +169,13 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
         dramaId: dramaIdInt,
       );
 
-      // 更新缓存
-      PlayerLikeCache.setLikeStatus(dramaId, isLiked);
-
-      state = state.copyWith(isLiked: isLiked, likeCountDelta: 0);
+      ref
+          .read(userLibrarySyncControllerProvider.notifier)
+          .observeFavoriteFromServer(dramaId: dramaId, isFavorited: isLiked);
+      applyExternalFavoriteState(
+        ref.read(userLibrarySyncControllerProvider).favoriteFor(dramaId) ??
+            isLiked,
+      );
     } catch (e) {
       // 静默处理错误，不影响 UI
       state = state.copyWith(error: e.toString());
@@ -185,6 +212,9 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
       isLoading: true,
       error: null,
     );
+    ref
+        .read(userLibrarySyncControllerProvider.notifier)
+        .setFavorite(dramaId: dramaId, isFavorited: newIsLiked);
 
     try {
       if (currentIsLiked) {
@@ -213,7 +243,25 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
         isLoading: false,
         error: e.toString(),
       );
+      ref
+          .read(userLibrarySyncControllerProvider.notifier)
+          .setFavorite(dramaId: dramaId, isFavorited: currentIsLiked);
     }
+  }
+
+  /// 接收 My List 等其它入口发出的收藏变更，并同步当前播放器 UI。
+  void applyExternalFavoriteState(bool isLiked) {
+    if (state.isLiked == isLiked) {
+      PlayerLikeCache.setLikeStatus(dramaId, isLiked);
+      return;
+    }
+    // 尚未拿到内容接口的计数基线时，只同步图标；不能凭空给数量加减一。
+    final nextDelta = state.serverFavoriteCount == null
+        ? state.likeCountDelta
+        : state.likeCountDelta + (isLiked ? 1 : -1);
+    PlayerLikeCache.setLikeStatus(dramaId, isLiked);
+    PlayerLikeCache.setLikeCountDelta(dramaId, nextDelta);
+    state = state.copyWith(isLiked: isLiked, likeCountDelta: nextDelta);
   }
 
   /// 设置初始点赞状态（从服务端获取）。

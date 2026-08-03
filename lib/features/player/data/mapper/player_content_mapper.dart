@@ -22,7 +22,10 @@ class PlayerContentMapper {
       title: dto.title.isNotEmpty ? dto.title : _displayTitleFallback,
       playTitle: dto.title.isNotEmpty ? dto.title : _displayTitleFallback,
       synopsis: dto.summary,
-      viewCountLabel: formatCompactCount(dto.playCount),
+      viewCountLabel: formatCompactCount(
+        dto.playCount,
+        emptyWhenNonPositive: true,
+      ),
       likeCountLabel: formatCompactCount(dto.favoriteCount),
       backgroundAssetPath: 'assets/images/player/player_background.png',
       posterAssetPath: 'assets/images/player/detail_cover.png',

@@ -45,6 +45,11 @@ final authControllerProvider = NotifierProvider<AuthController, AuthState>(
   AuthController.new,
 );
 
+/// 三方授权或登录请求没有回调时，避免登录页一直保持 loading。
+final thirdPartyLoginTimeoutProvider = Provider<Duration>(
+  (ref) => const Duration(minutes: 1),
+);
+
 /// 全局登录态。
 ///
 /// `session` 是唯一可信登录来源，`pendingProvider/failedAction/error` 只是 UI 过程态。
@@ -326,9 +331,12 @@ class AuthController extends Notifier<AuthState> {
     try {
       await ref.read(installIdProvider.future);
       // 调用 repository 的 login 方法，会自动获取 token 和用户信息
-      final repositorySession = await ref
-          .read(authRepositoryProvider)
-          .login(provider);
+      final login = ref.read(authRepositoryProvider).login(provider);
+      final repositorySession = switch (provider) {
+        AuthProviderType.google || AuthProviderType.facebook =>
+          await login.timeout(ref.read(thirdPartyLoginTimeoutProvider)),
+        AuthProviderType.device => await login,
+      };
 
       final session = await _syncCurrentSession(
         fallbackProvider: provider,

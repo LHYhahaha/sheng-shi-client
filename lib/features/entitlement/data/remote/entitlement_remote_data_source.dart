@@ -1,4 +1,5 @@
 import '../../../../core/network/api_client.dart';
+import '../../../../core/network/json_field_parser.dart';
 import '../dto/unlock_episode_request_dto.dart';
 import '../dto/unlock_episode_response_dto.dart';
 import '../dto/user_entitlement_state_dto.dart';
@@ -53,7 +54,7 @@ class EntitlementRemoteDataSource {
       isGuest: userInfo['isGuest'] as bool? ?? true,
       isMember: membership['isMember'] as bool? ?? false,
       membershipExpiresAt: membership['membershipExpiresAt'] != null
-          ? DateTime.tryParse(membership['membershipExpiresAt'] as String)
+          ? JsonFieldParser.optionalDateTime(membership, 'membershipExpiresAt')
           : null,
       coinBalance: _intValue(wallet['coinBalance']),
       bonusBalance: _intValue(wallet['bonusBalance']),

@@ -8,6 +8,7 @@ void main() {
     expect(formatCompactCount(999949), '999.9K');
     expect(formatCompactCount(999950), '1.0M');
     expect(formatCompactCount(1000000), '1.0M');
+    expect(formatCompactCount(156800), '156.8K');
   });
 
   test('supports existing presentation variants', () {

@@ -147,7 +147,25 @@ int? _nullableInt(Object? value) {
 
 DateTime? _date(Object? value) {
   if (value is String && value.isNotEmpty) {
-    return DateTime.tryParse(value);
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) return null;
+    if (parsed.isUtc) return parsed;
+    final hasExplicitOffset = RegExp(
+      r'(?:Z|[+-]\d{2}:?\d{2})$',
+      caseSensitive: false,
+    ).hasMatch(value);
+    return hasExplicitOffset
+        ? parsed.toUtc()
+        : DateTime.utc(
+            parsed.year,
+            parsed.month,
+            parsed.day,
+            parsed.hour,
+            parsed.minute,
+            parsed.second,
+            parsed.millisecond,
+            parsed.microsecond,
+          );
   }
   return null;
 }

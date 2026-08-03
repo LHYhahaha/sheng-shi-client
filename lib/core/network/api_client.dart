@@ -203,6 +203,7 @@ class ApiClient {
         options: _optionsWithAuthPolicy(options, authPolicy),
       ),
       authPolicy: authPolicy,
+      reportAccountBan: _shouldReportAccountBan(options),
       decoder: decoder,
     );
   }
@@ -225,6 +226,7 @@ class ApiClient {
         options: _optionsWithAuthPolicy(options, authPolicy),
       ),
       authPolicy: authPolicy,
+      reportAccountBan: _shouldReportAccountBan(options),
       decoder: decoder,
     );
   }
@@ -247,6 +249,7 @@ class ApiClient {
         options: _optionsWithAuthPolicy(options, authPolicy),
       ),
       authPolicy: authPolicy,
+      reportAccountBan: _shouldReportAccountBan(options),
       decoder: decoder,
     );
   }
@@ -269,6 +272,7 @@ class ApiClient {
         options: _optionsWithAuthPolicy(options, authPolicy),
       ),
       authPolicy: authPolicy,
+      reportAccountBan: _shouldReportAccountBan(options),
       decoder: decoder,
     );
   }
@@ -291,6 +295,7 @@ class ApiClient {
         options: _optionsWithAuthPolicy(options, authPolicy),
       ),
       authPolicy: authPolicy,
+      reportAccountBan: _shouldReportAccountBan(options),
       decoder: decoder,
     );
   }
@@ -298,6 +303,7 @@ class ApiClient {
   Future<T> _request<T>(
     Future<Response<Object?>> Function() send, {
     required ApiAuthPolicy authPolicy,
+    required bool reportAccountBan,
     required T Function(Object? data) decoder,
   }) async {
     var hasRetriedAfterRefresh = false;
@@ -307,7 +313,7 @@ class ApiClient {
         final response = await send();
         return _decode(response, decoder);
       } on ApiException catch (error) {
-        _reportBusinessError(error);
+        _reportBusinessError(error, reportAccountBan: reportAccountBan);
         if (await _recoverFromSessionExpiredBusinessCode(error)) {
           rethrow;
         }
@@ -328,7 +334,7 @@ class ApiClient {
         final apiError = error.error is ApiException
             ? error.error! as ApiException
             : ApiException.fromDio(error);
-        _reportBusinessError(apiError);
+        _reportBusinessError(apiError, reportAccountBan: reportAccountBan);
         if (await _recoverFromSessionExpiredBusinessCode(apiError)) {
           throw apiError;
         }
@@ -360,9 +366,12 @@ class ApiClient {
     }
   }
 
-  void _reportBusinessError(ApiException error) {
+  void _reportBusinessError(
+    ApiException error, {
+    required bool reportAccountBan,
+  }) {
     // 由封禁状态机负责去重；账号解封后再次收到 3116 时仍必须能重新弹出。
-    if (error.businessCode == 3116) {
+    if (reportAccountBan && error.businessCode == 3116) {
       _onBusinessError?.call(error);
     }
   }
@@ -516,6 +525,10 @@ class ApiClient {
     return (options ?? Options()).copyWith(extra: mergedExtra);
   }
 
+  bool _shouldReportAccountBan(Options? options) {
+    return options?.extra?[apiSkipAccountBanReportExtraKey] != true;
+  }
+
   ApiAuthPolicy _authPolicyFromOptions(RequestOptions options) {
     final value = options.extra[_authPolicyExtraKey];
     if (value == ApiAuthPolicy.required.name) {
@@ -562,3 +575,7 @@ class ApiClient {
 
 /// 标记 refresh 请求，避免 refresh 自身 401 时再次进入 refresh 死循环。
 const String apiSkipAuthRefreshExtraKey = 'apiSkipAuthRefresh';
+
+/// Prevents a request's 3116 response from opening the global account-ban UI.
+/// The caller remains responsible for presenting an appropriate error state.
+const String apiSkipAccountBanReportExtraKey = 'apiSkipAccountBanReport';

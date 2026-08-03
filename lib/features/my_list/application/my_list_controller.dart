@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/auth/session_cleanup_types.dart';
+import '../../../core/user_library/user_library_sync_controller.dart';
 import '../data/my_list_repository_provider.dart';
 import '../domain/my_list_item.dart';
 
@@ -151,7 +152,15 @@ class MyListController extends Notifier<MyListState> {
   bool _isLoadMoreRequestInFlight = false;
 
   @override
-  MyListState build() => const MyListState.initial();
+  MyListState build() {
+    ref.listen<UserLibrarySyncState>(userLibrarySyncControllerProvider, (
+      previous,
+      next,
+    ) {
+      _applyLibrarySync();
+    });
+    return const MyListState.initial();
+  }
 
   /// 清空登录态片单缓存，下次进入 tab 会重新 load。
   void resetForSessionCleanup(SessionCleanupReason reason) {
@@ -185,7 +194,7 @@ class MyListController extends Notifier<MyListState> {
       }
 
       state = state.copyWith(
-        items: List<MyListItem>.unmodifiable(page.items),
+        items: _mergeLibrarySync(page.items, tab: state.selectedTab),
         nextPageToken: page.nextPageToken,
         clearNextPageToken: page.nextPageToken == null,
         isLoading: false,
@@ -238,7 +247,7 @@ class MyListController extends Notifier<MyListState> {
       }
 
       state = state.copyWith(
-        items: List<MyListItem>.unmodifiable(refreshedItems),
+        items: _mergeLibrarySync(refreshedItems, tab: tab),
         nextPageToken: nextPageToken,
         clearNextPageToken: nextPageToken == null,
         clearLoadMoreError: true,
@@ -289,7 +298,7 @@ class MyListController extends Notifier<MyListState> {
       }
 
       state = state.copyWith(
-        items: List<MyListItem>.unmodifiable([...state.items, ...page.items]),
+        items: _mergeLibrarySync([...state.items, ...page.items], tab: tab),
         nextPageToken: page.nextPageToken,
         clearNextPageToken: page.nextPageToken == null,
         isLoadingMore: false,
@@ -375,6 +384,12 @@ class MyListController extends Notifier<MyListState> {
 
     final selectedDramaIds = state.selectedIds;
     final tab = state.selectedTab;
+    if (tab == MyListTab.collection) {
+      final sync = ref.read(userLibrarySyncControllerProvider.notifier);
+      for (final dramaId in selectedDramaIds) {
+        sync.setFavorite(dramaId: '$dramaId', isFavorited: false);
+      }
+    }
 
     // 乐观更新：先本地删除
     state = state.copyWith(
@@ -390,7 +405,7 @@ class MyListController extends Notifier<MyListState> {
     try {
       final repository = ref.read(myListRepositoryProvider);
       final isCollection = tab == MyListTab.collection;
-      
+
       if (isCollection) {
         // 收藏列表：使用 dramaId 删除
         await repository.deleteFavorites(dramaIds: selectedDramaIds.toList());
@@ -401,6 +416,12 @@ class MyListController extends Notifier<MyListState> {
         );
       }
     } catch (error) {
+      if (tab == MyListTab.collection) {
+        final sync = ref.read(userLibrarySyncControllerProvider.notifier);
+        for (final dramaId in selectedDramaIds) {
+          sync.setFavorite(dramaId: '$dramaId', isFavorited: true);
+        }
+      }
       // 删除失败时重新加载列表
       await load();
     }
@@ -408,6 +429,11 @@ class MyListController extends Notifier<MyListState> {
 
   Future<void> deleteItem(int dramaId) async {
     final tab = state.selectedTab;
+    if (tab == MyListTab.collection) {
+      ref
+          .read(userLibrarySyncControllerProvider.notifier)
+          .setFavorite(dramaId: '$dramaId', isFavorited: false);
+    }
 
     state = state.copyWith(
       items: List<MyListItem>.unmodifiable(
@@ -432,6 +458,11 @@ class MyListController extends Notifier<MyListState> {
         await repository.deletePlayHistory(historyId: dramaId);
       }
     } catch (error) {
+      if (tab == MyListTab.collection) {
+        ref
+            .read(userLibrarySyncControllerProvider.notifier)
+            .setFavorite(dramaId: '$dramaId', isFavorited: true);
+      }
       // 删除失败时重新加载列表
       await load();
     }
@@ -460,4 +491,24 @@ class MyListController extends Notifier<MyListState> {
   }
 
   bool _isCurrent(int generation) => generation == _generation;
+
+  List<MyListItem> _mergeLibrarySync(
+    List<MyListItem> items, {
+    required MyListTab tab,
+  }) {
+    final sync = ref.read(userLibrarySyncControllerProvider);
+    if (tab != MyListTab.collection) {
+      return List<MyListItem>.unmodifiable(items);
+    }
+    return List<MyListItem>.unmodifiable(
+      items.where((item) => sync.favoriteFor('${item.dramaId}') != false),
+    );
+  }
+
+  void _applyLibrarySync() {
+    if (state.isLoading || state.items.isEmpty) return;
+    state = state.copyWith(
+      items: _mergeLibrarySync(state.items, tab: state.selectedTab),
+    );
+  }
 }

@@ -59,61 +59,71 @@ class ProfileHeader extends StatelessWidget {
               child: _buildAvatarImage(),
             ),
             const SizedBox(width: 13),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  displayName,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: AppColors.textPrimary,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    height: 1.3,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: AppColors.textPrimary,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      height: 1.3,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 1),
-                GestureDetector(
-                  onTap: secondaryText == null
-                      ? () {
-                          final showId = state.showId;
-                          if (showId != null) {
-                            Clipboard.setData(ClipboardData(text: showId));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(l10n.profileCopySuccess),
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
+                  const SizedBox(height: 1),
+                  GestureDetector(
+                    onTap: secondaryText == null
+                        ? () {
+                            final showId = state.showId;
+                            if (showId != null) {
+                              Clipboard.setData(ClipboardData(text: showId));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(l10n.profileCopySuccess),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            }
                           }
-                        }
-                      : null,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        secondaryText ?? 'ID:${state.showId ?? '--'}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textPrimary.withValues(alpha: 0.8),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w300,
-                          height: 1.3,
-                        ),
-                      ),
-                      if (secondaryText == null) ...[
-                        const SizedBox(width: 4),
-                        SvgPicture.asset(
-                          'assets/images/profile/copy.svg',
-                          colorFilter: ColorFilter.mode(
-                            AppColors.textPrimary.withValues(alpha: 0.8),
-                            BlendMode.srcIn,
+                        : null,
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            secondaryText ?? 'ID:${state.showId ?? '--'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: AppColors.textPrimary.withValues(
+                                    alpha: 0.8,
+                                  ),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w300,
+                                  height: 1.3,
+                                ),
                           ),
                         ),
+                        if (secondaryText == null) ...[
+                          const SizedBox(width: 4),
+                          SvgPicture.asset(
+                            'assets/images/profile/copy.svg',
+                            colorFilter: ColorFilter.mode(
+                              AppColors.textPrimary.withValues(alpha: 0.8),
+                              BlendMode.srcIn,
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),

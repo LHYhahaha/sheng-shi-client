@@ -48,6 +48,15 @@ void main() {
       );
     });
 
+    test('timezone-less API times are interpreted as UTC', () {
+      final parsed = JsonFieldParser.optionalDateTime({
+        'expiresAt': '2026-08-03T12:34:56',
+      }, 'expiresAt');
+
+      expect(parsed, DateTime.utc(2026, 8, 3, 12, 34, 56));
+      expect(parsed!.isUtc, isTrue);
+    });
+
     test('requireMap rejects non-object payload', () {
       expect(
         () => JsonFieldParser.requireMap([], dtoName: 'TestDto'),

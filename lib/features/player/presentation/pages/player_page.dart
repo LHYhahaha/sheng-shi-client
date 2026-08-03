@@ -365,7 +365,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   @override
   void dispose() {
     // 涓婃姤瑙傜湅閫€鍑轰簨浠?
-    unawaited(_playbackController.reportWatchProgress(eventType: 4)); // 4: exit
+    unawaited(_playbackController.reportWatchProgress(eventType: 4));
     WidgetsBinding.instance.removeObserver(this);
     playerRouteObserver.unsubscribe(this);
     _cancelExitRecommendationRequestIfPending();

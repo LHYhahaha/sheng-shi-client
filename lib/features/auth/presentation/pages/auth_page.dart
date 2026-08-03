@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/account/account_ban_controller.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/oauth/oauth_service.dart';
 import '../../../../core/toast/app_toast_provider.dart';
@@ -62,6 +63,9 @@ class _AuthPageState extends ConsumerState<AuthPage> {
       final error = next.error;
       if (error is OAuthLoginCancelledException) {
         toast.info(l10n.authLoginCanceled);
+      } else if (error is ApiException &&
+          error.businessCode == accountBannedBusinessCode) {
+        toast.error(l10n.appAccountBannedDialogMessage);
       } else if (error is ApiException && error.canRetry) {
         toast.error(l10n.networkError);
       } else {
@@ -234,9 +238,7 @@ class _SocialLoginButton extends StatelessWidget {
           foregroundColor: foregroundColor,
           disabledBackgroundColor: backgroundColor.withValues(alpha: 0.65),
           disabledForegroundColor: foregroundColor.withValues(alpha: 0.75),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
             fontSize: 14,
             fontWeight: FontWeight.w700,

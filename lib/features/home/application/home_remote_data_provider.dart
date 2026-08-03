@@ -53,8 +53,6 @@ class HomeRemoteData {
             viewCountLabel: formatCompactCount(
               homeDrama.playCount,
               emptyWhenNonPositive: true,
-              spaceBeforeSuffix: true,
-              omitFractionForTenOrMore: true,
             ),
             episodeCount: homeDrama.episodeTotal,
             categoryId: tab.id.toString(),

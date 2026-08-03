@@ -121,7 +121,7 @@ class JsonFieldParser {
       return value;
     }
     if (value is String && value.isNotEmpty) {
-      final parsed = DateTime.tryParse(value);
+      final parsed = _parseUtcDateTime(value);
       if (parsed != null) {
         return parsed;
       }
@@ -139,9 +139,34 @@ class JsonFieldParser {
       return value;
     }
     if (value is String && value.isNotEmpty) {
-      return DateTime.tryParse(value);
+      return _parseUtcDateTime(value);
     }
     return null;
+  }
+
+  /// API timestamps represent UTC. A timezone-less ISO value is therefore
+  /// interpreted as UTC instead of the device's local time.
+  static DateTime? _parseUtcDateTime(String value) {
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) return null;
+    if (parsed.isUtc) return parsed;
+
+    final hasExplicitOffset = RegExp(
+      r'(?:Z|[+-]\d{2}:?\d{2})$',
+      caseSensitive: false,
+    ).hasMatch(value);
+    return hasExplicitOffset
+        ? parsed.toUtc()
+        : DateTime.utc(
+            parsed.year,
+            parsed.month,
+            parsed.day,
+            parsed.hour,
+            parsed.minute,
+            parsed.second,
+            parsed.millisecond,
+            parsed.microsecond,
+          );
   }
 
   static T parseEnumStrict<T extends Enum>(

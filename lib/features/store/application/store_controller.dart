@@ -276,21 +276,19 @@ class StoreController extends Notifier<StoreState> {
 
     try {
       final options = await _fetchPaymentOptions(package);
-      if (options.options.isEmpty) {
+      final supportedMethods = _supportedPaymentMethods(options.options);
+      if (supportedMethods.isEmpty) {
         await _startPayment(package, _defaultPaymentChannel);
-      } else if (_isGoogleOnly(options)) {
-        await _startPayment(package, options.options.single.payChannel);
+      } else if (supportedMethods.length == 1) {
+        await _startPayment(package, supportedMethods.single.payChannel);
       } else {
-        _preparePaymentMethodSelection(options);
+        _preparePaymentMethodSelection(options, supportedMethods);
         showConfirmation();
       }
     } catch (error, stackTrace) {
       debugPrint('[Store] payment options failed: $error\n$stackTrace');
-      state = state.copyWith(
-        purchaseStatus: StorePurchaseStatus.failed,
-        purchaseFailureKind: StorePurchaseFailureKind.paymentOptions,
-        error: error,
-      );
+      // 支付方式接口不可用时，按空列表处理，走设备默认支付方式兜底。
+      await _startPayment(package, _defaultPaymentChannel);
     }
   }
 
@@ -345,22 +343,22 @@ class StoreController extends Notifier<StoreState> {
     state = state.copyWith(selectedPaymentMethodCode: methodCode);
   }
 
-  void _preparePaymentMethodSelection(PaymentMethodOptions options) {
+  void _preparePaymentMethodSelection(
+    PaymentMethodOptions options,
+    List<PaymentMethodOption> methods,
+  ) {
     final selected =
-        options.options.any(
-          (method) => method.methodCode == options.defaultMethodCode,
-        )
+        methods.any((method) => method.methodCode == options.defaultMethodCode)
         ? options.defaultMethodCode
-        : options.options.first.methodCode;
+        : methods.first.methodCode;
     state = state.copyWith(
-      paymentMethods: List<PaymentMethodOption>.unmodifiable(options.options),
+      paymentMethods: List<PaymentMethodOption>.unmodifiable(methods),
       selectedPaymentMethodCode: selected,
     );
   }
 
   Future<void> _startPayment(StorePackage package, String payChannel) async {
-    if (PayChannel.isGoogle(payChannel) &&
-        PayChannel.isGoogle(package.payChannel)) {
+    if (PayChannel.isGoogle(payChannel)) {
       await _startGooglePurchase(package);
       return;
     }
@@ -373,9 +371,6 @@ class StoreController extends Notifier<StoreState> {
     final loading = ref.read(paymentLoadingControllerProvider.notifier);
     loading.show(label: PaymentLoadingLabel.loading);
     try {
-      if (!PayChannel.isGoogle(package.payChannel)) {
-        throw UnsupportedError('Payment channel is not supported yet.');
-      }
       final platformProductId = package.platformProductId;
       if (platformProductId == null || platformProductId.isEmpty) {
         throw Exception('Package has no platform product id: ${package.id}');
@@ -616,9 +611,17 @@ class StoreController extends Notifier<StoreState> {
         );
   }
 
-  bool _isGoogleOnly(PaymentMethodOptions options) =>
-      options.options.length == 1 &&
-      PayChannel.isGoogle(options.options.single.payChannel);
+  List<PaymentMethodOption> _supportedPaymentMethods(
+    List<PaymentMethodOption> methods,
+  ) => [
+    for (final method in methods)
+      if (_isSupportedPaymentChannel(method.payChannel)) method,
+  ];
+
+  bool _isSupportedPaymentChannel(String payChannel) =>
+      defaultTargetPlatform == TargetPlatform.iOS
+      ? PayChannel.isApple(payChannel)
+      : PayChannel.isGoogle(payChannel);
 
   String get _defaultPaymentChannel =>
       defaultTargetPlatform == TargetPlatform.iOS

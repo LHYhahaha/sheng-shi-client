@@ -90,6 +90,26 @@ void main() {
     expect(state.error, isNull);
   });
 
+  test('third-party login times out and clears its pending state', () async {
+    final repository = _BlockingAuthRepository();
+    final container = ProviderContainer(
+      overrides: [
+        authRepositoryProvider.overrideWithValue(repository),
+        thirdPartyLoginTimeoutProvider.overrideWithValue(Duration.zero),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(authControllerProvider.notifier);
+
+    await controller.login(AuthProviderType.google);
+
+    final state = container.read(authControllerProvider);
+    expect(state.isLoggedIn, isFalse);
+    expect(state.pendingProvider, isNull);
+    expect(state.failedAction, AuthFailureAction.login);
+    expect(state.error, isA<TimeoutException>());
+  });
+
   test('load failure keeps guest state and can retry', () async {
     final repository = _FailingAuthRepository(failFetch: true);
     final container = ProviderContainer(
@@ -236,9 +256,6 @@ class _FailingAuthRepository implements AuthRepository {
       throw StateError('delete failed');
     }
     _session = const AuthSession.guest();
-    return DeleteAccountResult(
-      session: _session,
-      shouldExitApp: true,
-    );
+    return DeleteAccountResult(session: _session, shouldExitApp: true);
   }
 }

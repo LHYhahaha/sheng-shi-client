@@ -43,7 +43,7 @@ void main() {
     expect(content.id, '1');
     expect(content.title, 'Found You');
     expect(content.synopsis, 'Remote synopsis');
-    expect(content.viewCountLabel, '52 episodes');
+    expect(content.viewCountLabel, '52.0M');
     expect(content.episodes, hasLength(1));
     expect(content.episodes.single.id, '4');
     expect(content.episodes.single.number, 4);

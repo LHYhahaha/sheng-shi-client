@@ -70,6 +70,8 @@ class AuthRemoteDataSource {
       data: request.toJson(),
       // 三方登录用于将当前游客会话升级为正式账号，需携带已有 App token。
       authPolicy: ApiAuthPolicy.required,
+      // 登录页会将 3116 显示为 toast，不应打开全局封禁遮罩。
+      options: Options(extra: {apiSkipAccountBanReportExtraKey: true}),
       decoder: AuthSessionDto.fromJson,
     );
   }

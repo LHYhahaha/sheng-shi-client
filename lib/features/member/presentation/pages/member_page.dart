@@ -161,9 +161,8 @@ class _MemberPageState extends ConsumerState<MemberPage> {
     final authUser = auth.user;
     final pointBalance =
         points.exchangeOptions?.balance ?? entitlement.totalPointBalance;
-    final tiers = _sortedExchangeTiers(
-      points.exchangeOptions?.list ?? const <MemberPointExchangeTier>[],
-    );
+    final tiers =
+        points.exchangeOptions?.list ?? const <MemberPointExchangeTier>[];
     final dailyRewardPoints = _dailyRewardAvailablePoints(points.data);
     final membershipExpiresAt = entitlement.membershipExpiresAt;
     final membershipValidityText =
@@ -613,7 +612,7 @@ class _PrivilegesSection extends StatelessWidget {
           subtitle: context.l10n.benefitSeriesHighlight,
         ),
         const SizedBox(height: 20),
-         _PrivilegeItem(
+        _PrivilegeItem(
           icon: 'assets/images/membership/member_download.png',
           title: context.l10n.benefitDownload,
         ),
@@ -630,7 +629,7 @@ class _PrivilegesSection extends StatelessWidget {
           title: context.l10n.benefitMembersOnly,
         ),
         const SizedBox(height: 20),
-         _PrivilegeItem(
+        _PrivilegeItem(
           icon: 'assets/images/membership/member_hd.png',
           title: context.l10n.benefitHd,
         ),
@@ -758,12 +757,6 @@ class _PrivilegeItem extends StatelessWidget {
       ],
     );
   }
-}
-
-List<MemberPointExchangeTier> _sortedExchangeTiers(
-  List<MemberPointExchangeTier> tiers,
-) {
-  return [...tiers]..sort((a, b) => a.priority.compareTo(b.priority));
 }
 
 int _dailyRewardAvailablePoints(MemberPointDailyDetail? dailyDetail) {
