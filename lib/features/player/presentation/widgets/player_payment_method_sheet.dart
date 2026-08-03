@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/utils/period_iso_parser.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/app_payment_method_sheet.dart';
+import '../../../pay/domain/pay_channel.dart';
+import '../../../pay/domain/payment_method_options.dart';
 import '../../application/player_recharge_unlock_controller.dart';
 import '../../domain/player_recharge_unlock_offer.dart';
 
@@ -126,7 +128,7 @@ class _PlayerPaymentMethodSheetState
       key: const ValueKey('player_recharge_payment_sheet'),
       child: AppPaymentMethodSheet(
         orderTitle: widget.selection.titleFor(context),
-        totalLabel: widget.selection.priceLabel,
+        totalLabel: _selectedPriceLabel(state),
         statusLabel: statusLabel,
         isProcessing: isProcessing,
         isComplete: isComplete,
@@ -136,7 +138,14 @@ class _PlayerPaymentMethodSheetState
         onBuyNow: () {
           final coin = widget.selection.coinPackage;
           if (coin != null) {
-            unawaited(ref.read(provider.notifier).selectCoinPackage(coin.id));
+            unawaited(
+              ref
+                  .read(provider.notifier)
+                  .purchasePackageWithSelectedPayment(
+                    packageId: coin.id,
+                    isCoinPackage: true,
+                  ),
+            );
             return;
           }
           final membership = widget.selection.membershipPackage;
@@ -144,11 +153,52 @@ class _PlayerPaymentMethodSheetState
             unawaited(
               ref
                   .read(provider.notifier)
-                  .selectMembershipPackage(membership.id),
+                  .purchasePackageWithSelectedPayment(
+                    packageId: membership.id,
+                    isCoinPackage: false,
+                  ),
             );
           }
         },
+        paymentMethods: _displayMethods(context, state.paymentMethods),
+        selectedPaymentMethodId: state.selectedPaymentMethodCode,
+        onPaymentMethodSelected: ref
+            .read(provider.notifier)
+            .selectPaymentMethod,
       ),
     );
+  }
+
+  List<AppPaymentMethod> _displayMethods(
+    BuildContext context,
+    List<PaymentMethodOption> methods,
+  ) => [
+    for (final method in methods)
+      AppPaymentMethod(
+        id: method.methodCode,
+        label: PayChannel.isGoogle(method.payChannel)
+            ? context.l10n.paymentModalMethodGooglePay
+            : PayChannel.isApple(method.payChannel)
+            ? context.l10n.paymentModalMethodApplePay
+            : method.methodName,
+        iconAsset: PayChannel.isGoogle(method.payChannel)
+            ? 'assets/images/membership/google_pay_icon.png'
+            : PayChannel.isApple(method.payChannel)
+            ? 'assets/images/membership/apple_pay_icon.png'
+            : 'assets/images/membership/other_pay_icon.png',
+        priceLabel: method.promotionPriceText.isNotEmpty
+            ? method.promotionPriceText
+            : method.priceText,
+      ),
+  ];
+
+  String _selectedPriceLabel(PlayerRechargeUnlockState state) {
+    final method = state.paymentMethods
+        .where((method) => method.methodCode == state.selectedPaymentMethodCode)
+        .firstOrNull;
+    if (method == null) return widget.selection.priceLabel;
+    return method.promotionPriceText.isNotEmpty
+        ? method.promotionPriceText
+        : method.priceText;
   }
 }

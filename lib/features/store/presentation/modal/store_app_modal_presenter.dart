@@ -79,6 +79,9 @@ class StoreAppModalPresenter implements AppModalPresenter {
                 package: package,
                 status: sheetState.purchaseStatus,
                 onConfirm: sheetController.confirmPurchase,
+                paymentMethods: sheetState.paymentMethods,
+                selectedPaymentMethodCode: sheetState.selectedPaymentMethodCode,
+                onPaymentMethodSelected: sheetController.selectPaymentMethod,
                 onClose: () {
                   Navigator.of(
                     sheetContext,

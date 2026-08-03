@@ -81,6 +81,9 @@ class MembershipAppModalPresenter implements AppModalPresenter {
                 plan: plan,
                 status: sheetState.purchaseStatus,
                 onConfirm: sheetController.confirmPurchase,
+                paymentMethods: sheetState.paymentMethods,
+                selectedPaymentMethodCode: sheetState.selectedPaymentMethodCode,
+                onPaymentMethodSelected: sheetController.selectPaymentMethod,
                 onClose: () {
                   Navigator.of(
                     sheetContext,

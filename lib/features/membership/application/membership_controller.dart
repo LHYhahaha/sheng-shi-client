@@ -57,6 +57,8 @@ class MembershipState {
     required this.purchaseStatus,
     required this.purchaseFailureKind,
     required this.iapProductDetails,
+    required this.paymentMethods,
+    required this.selectedPaymentMethodCode,
     this.error,
   });
 
@@ -71,6 +73,8 @@ class MembershipState {
       purchaseStatus = MembershipPurchaseStatus.idle,
       purchaseFailureKind = null,
       iapProductDetails = const {},
+      paymentMethods = const [],
+      selectedPaymentMethodCode = null,
       error = null;
 
   final bool isLoading;
@@ -83,6 +87,8 @@ class MembershipState {
   final MembershipPurchaseStatus purchaseStatus;
   final MembershipPurchaseFailureKind? purchaseFailureKind;
   final Map<String, ProductDetails> iapProductDetails;
+  final List<PaymentMethodOption> paymentMethods;
+  final String? selectedPaymentMethodCode;
   final Object? error;
 
   bool get hasContent => !isLoading && error == null;
@@ -115,6 +121,8 @@ class MembershipState {
     MembershipPurchaseStatus? purchaseStatus,
     MembershipPurchaseFailureKind? purchaseFailureKind,
     Map<String, ProductDetails>? iapProductDetails,
+    List<PaymentMethodOption>? paymentMethods,
+    String? selectedPaymentMethodCode,
     Object? error,
     bool clearError = false,
     bool clearConfirmation = false,
@@ -135,6 +143,9 @@ class MembershipState {
           ? null
           : purchaseFailureKind ?? this.purchaseFailureKind,
       iapProductDetails: iapProductDetails ?? this.iapProductDetails,
+      paymentMethods: paymentMethods ?? this.paymentMethods,
+      selectedPaymentMethodCode:
+          selectedPaymentMethodCode ?? this.selectedPaymentMethodCode,
       error: clearError ? null : error ?? this.error,
     );
   }
@@ -266,9 +277,12 @@ class MembershipController extends Notifier<MembershipState> {
 
     try {
       final options = await _fetchPaymentOptions(plan);
-      if (_isGoogleOnly(options)) {
-        await _startGooglePurchase(plan);
+      if (options.options.isEmpty) {
+        await _startPayment(plan, _defaultPaymentChannel);
+      } else if (_isGoogleOnly(options)) {
+        await _startPayment(plan, options.options.single.payChannel);
       } else {
+        _preparePaymentMethodSelection(options);
         showConfirmation();
       }
     } catch (error, stackTrace) {
@@ -311,7 +325,48 @@ class MembershipController extends Notifier<MembershipState> {
       return;
     }
 
-    await _startGooglePurchase(state.confirmationPlan!);
+    final methodCode = state.selectedPaymentMethodCode;
+    final methods = state.paymentMethods.where(
+      (method) => method.methodCode == methodCode,
+    );
+    if (methods.isEmpty) {
+      _markUnsupportedPayment();
+      return;
+    }
+    await _startPayment(state.confirmationPlan!, methods.first.payChannel);
+  }
+
+  void selectPaymentMethod(String methodCode) {
+    if (state.purchaseStatus != MembershipPurchaseStatus.idle ||
+        !state.paymentMethods.any(
+          (method) => method.methodCode == methodCode,
+        )) {
+      return;
+    }
+    state = state.copyWith(selectedPaymentMethodCode: methodCode);
+  }
+
+  void _preparePaymentMethodSelection(PaymentMethodOptions options) {
+    final selected =
+        options.options.any(
+          (method) => method.methodCode == options.defaultMethodCode,
+        )
+        ? options.defaultMethodCode
+        : options.options.first.methodCode;
+    state = state.copyWith(
+      paymentMethods: List<PaymentMethodOption>.unmodifiable(options.options),
+      selectedPaymentMethodCode: selected,
+    );
+  }
+
+  Future<void> _startPayment(MembershipPlan plan, String payChannel) async {
+    if (PayChannel.isGoogle(payChannel) &&
+        PayChannel.isGoogle(plan.payChannel)) {
+      await _startGooglePurchase(plan);
+      return;
+    }
+    // Apple/三方支付入口预留：接入后在这里分别创建订单并调起对应 SDK。
+    _markUnsupportedPayment();
   }
 
   Future<void> _startGooglePurchase(MembershipPlan plan) async {
@@ -460,6 +515,14 @@ class MembershipController extends Notifier<MembershipState> {
     );
   }
 
+  void _markUnsupportedPayment() {
+    state = state.copyWith(
+      purchaseStatus: MembershipPurchaseStatus.failed,
+      purchaseFailureKind: MembershipPurchaseFailureKind.payment,
+      clearError: true,
+    );
+  }
+
   Future<Map<String, ProductDetails>> _queryIapProducts(
     List<MembershipPlan> plans,
   ) async {
@@ -491,6 +554,9 @@ class MembershipController extends Notifier<MembershipState> {
     return [
       for (final plan in plans)
         if (PayChannel.isOther(plan.payChannel))
+          plan
+        else if (PayChannel.isApple(plan.payChannel) &&
+            defaultTargetPlatform == TargetPlatform.iOS)
           plan
         else if (PayChannel.isGoogle(plan.payChannel) &&
             iapDetails.containsKey(plan.platformProductId))
@@ -685,6 +751,11 @@ class MembershipController extends Notifier<MembershipState> {
   bool _isGoogleOnly(PaymentMethodOptions options) =>
       options.options.length == 1 &&
       PayChannel.isGoogle(options.options.single.payChannel);
+
+  String get _defaultPaymentChannel =>
+      defaultTargetPlatform == TargetPlatform.iOS
+      ? PayChannel.apple
+      : PayChannel.google;
 
   int get _clientOsType => defaultTargetPlatform == TargetPlatform.iOS ? 1 : 2;
 }

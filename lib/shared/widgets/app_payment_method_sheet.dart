@@ -14,6 +14,9 @@ class AppPaymentMethodSheet extends StatelessWidget {
     required this.isComplete,
     required this.onBuyNow,
     required this.onClose,
+    required this.paymentMethods,
+    required this.selectedPaymentMethodId,
+    required this.onPaymentMethodSelected,
     this.height,
     this.closeButtonKey = const ValueKey('app_payment_close'),
     this.buyButtonKey = const ValueKey('app_payment_buy_now'),
@@ -27,6 +30,9 @@ class AppPaymentMethodSheet extends StatelessWidget {
   final bool isComplete;
   final VoidCallback onBuyNow;
   final VoidCallback onClose;
+  final List<AppPaymentMethod> paymentMethods;
+  final String? selectedPaymentMethodId;
+  final ValueChanged<String> onPaymentMethodSelected;
   final double? height;
   final Key closeButtonKey;
   final Key buyButtonKey;
@@ -85,34 +91,13 @@ class AppPaymentMethodSheet extends StatelessWidget {
                 ],
               ),
               Divider(height: 1, color: Colors.white.withValues(alpha: 0.08)),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 17,
+              for (final method in paymentMethods)
+                _PaymentMethodRow(
+                  method: method,
+                  selected: method.id == selectedPaymentMethodId,
+                  enabled: !isProcessing,
+                  onTap: () => onPaymentMethodSelected(method.id),
                 ),
-                child: Row(
-                  children: [
-                    const _PaymentRadio(),
-                    const SizedBox(width: 12),
-                    Image.asset(
-                      'assets/images/membership/google_pay_icon.png',
-                      width: 22,
-                      height: 22,
-                      fit: BoxFit.contain,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      context.l10n.paymentModalMethodGooglePay,
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.normal,
-                        height: 1.25,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
               Divider(height: 1, color: Colors.white.withValues(alpha: 0.08)),
               const SizedBox(height: 20),
               Padding(
@@ -173,31 +158,99 @@ class AppPaymentMethodSheet extends StatelessWidget {
   }
 }
 
-class _PaymentRadio extends StatelessWidget {
-  const _PaymentRadio();
+class AppPaymentMethod {
+  const AppPaymentMethod({
+    required this.id,
+    required this.label,
+    required this.iconAsset,
+    this.priceLabel,
+  });
+
+  final String id;
+  final String label;
+  final String iconAsset;
+  final String? priceLabel;
+}
+
+class _PaymentMethodRow extends StatelessWidget {
+  const _PaymentMethodRow({
+    required this.method,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final AppPaymentMethod method;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 18,
-      height: 18,
-      padding: EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.transparent,
-        border: Border.all(color: Colors.white, width: 1.4),
-      ),
-      alignment: Alignment.center,
-      child: Container(
-        width: 12,
-        height: 12,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.primary,
+    return Column(
+      children: [
+        InkWell(
+          onTap: enabled ? onTap : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+            child: Row(
+              children: [
+                _PaymentRadio(selected: selected),
+                const SizedBox(width: 12),
+                Image.asset(method.iconAsset, width: 22, height: 22),
+                const SizedBox(width: 8),
+                Text(
+                  method.label,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.normal,
+                    height: 1.25,
+                  ),
+                ),
+                if (method.priceLabel != null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    method.priceLabel!,
+                    style: TextStyle(
+                      color: AppColors.textPrimary.withValues(alpha: 0.45),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
-      ),
+        Divider(height: 1, color: Colors.white.withValues(alpha: 0.08)),
+      ],
     );
   }
+}
+
+class _PaymentRadio extends StatelessWidget {
+  const _PaymentRadio({required this.selected});
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 18,
+    height: 18,
+    padding: const EdgeInsets.all(2),
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      border: Border.all(color: Colors.white, width: 1.4),
+    ),
+    child: selected
+        ? const DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.primary,
+            ),
+          )
+        : null,
+  );
 }
 
 class _PaymentButtonContent extends StatelessWidget {

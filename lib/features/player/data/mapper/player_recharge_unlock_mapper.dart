@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../../../features/pay/domain/iap_product_info.dart';
 import '../../../../features/pay/domain/pay_channel.dart';
 import '../../../../features/store/data/dto/coin_product_dto.dart';
@@ -126,6 +128,8 @@ class PlayerRechargeUnlockMapper {
     final payChannel = product.payChannel as String;
     final channelProductId = product.channelProductId as String;
     return PayChannel.isOther(payChannel) ||
+        (PayChannel.isApple(payChannel) &&
+            defaultTargetPlatform == TargetPlatform.iOS) ||
         (PayChannel.isGoogle(payChannel) &&
             iapDetails.containsKey(channelProductId));
   }

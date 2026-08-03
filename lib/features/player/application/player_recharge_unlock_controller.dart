@@ -59,6 +59,8 @@ class PlayerRechargeUnlockState {
     this.offer,
     this.selectedCoinPackageId,
     this.selectedMembershipPackageId,
+    this.paymentMethods = const [],
+    this.selectedPaymentMethodCode,
     this.paymentStage,
     this.purchaseFailureKind,
     this.error,
@@ -70,6 +72,8 @@ class PlayerRechargeUnlockState {
       offer = null,
       selectedCoinPackageId = null,
       selectedMembershipPackageId = null,
+      paymentMethods = const [],
+      selectedPaymentMethodCode = null,
       paymentStage = null,
       purchaseFailureKind = null,
       error = null;
@@ -79,6 +83,8 @@ class PlayerRechargeUnlockState {
   final PlayerRechargeUnlockOffer? offer;
   final String? selectedCoinPackageId;
   final String? selectedMembershipPackageId;
+  final List<PaymentMethodOption> paymentMethods;
+  final String? selectedPaymentMethodCode;
   final PlayerRechargePaymentStage? paymentStage;
   final PlayerRechargePurchaseFailureKind? purchaseFailureKind;
   final Object? error;
@@ -119,6 +125,8 @@ class PlayerRechargeUnlockState {
     PlayerRechargeUnlockOffer? offer,
     String? selectedCoinPackageId,
     String? selectedMembershipPackageId,
+    List<PaymentMethodOption>? paymentMethods,
+    String? selectedPaymentMethodCode,
     PlayerRechargePaymentStage? paymentStage,
     PlayerRechargePurchaseFailureKind? purchaseFailureKind,
     Object? error,
@@ -137,6 +145,9 @@ class PlayerRechargeUnlockState {
       selectedMembershipPackageId: clearSelection
           ? null
           : selectedMembershipPackageId ?? this.selectedMembershipPackageId,
+      paymentMethods: paymentMethods ?? this.paymentMethods,
+      selectedPaymentMethodCode:
+          selectedPaymentMethodCode ?? this.selectedPaymentMethodCode,
       paymentStage: clearPaymentStage
           ? null
           : paymentStage ?? this.paymentStage,
@@ -272,6 +283,15 @@ class PlayerRechargeUnlockController
     }
 
     try {
+      final packageSupportsGoogle = isCoinPackage
+          ? offer!.coinPackages
+                    .firstWhere((package) => package.id == packageId)
+                    .iapInfo !=
+                null
+          : offer!.membershipPackages
+                    .firstWhere((package) => package.id == packageId)
+                    .iapInfo !=
+                null;
       final options = await ref
           .read(payRepositoryProvider)
           .getPaymentOrderOptions(
@@ -285,17 +305,28 @@ class PlayerRechargeUnlockController
                 : _membershipProductType,
             scene: isCoinPackage ? 'player_coin' : 'player_membership',
           );
-      if (!_isGoogleOnly(options)) {
-        return true;
-      }
-      if (isCoinPackage) {
-        await selectCoinPackage(packageId);
+      if (options.options.isEmpty) {
+        await _startPreparedPayment(
+          packageId,
+          isCoinPackage: isCoinPackage,
+          payChannel: _defaultPaymentChannel,
+          packageSupportsGoogle: packageSupportsGoogle,
+        );
+      } else if (_isGoogleOnly(options)) {
+        await _startPreparedPayment(
+          packageId,
+          isCoinPackage: isCoinPackage,
+          payChannel: options.options.single.payChannel,
+          packageSupportsGoogle: packageSupportsGoogle,
+        );
       } else {
-        await selectMembershipPackage(packageId);
+        _preparePaymentMethodSelection(options);
+        return true;
       }
     } catch (error) {
       state = state.copyWith(
         status: PlayerRechargeUnlockStatus.failed,
+        purchaseFailureKind: PlayerRechargePurchaseFailureKind.paymentOptions,
         error: error,
       );
     }
@@ -320,6 +351,78 @@ class PlayerRechargeUnlockController
       clearError: true,
     );
     return _startRemotePurchase();
+  }
+
+  Future<void> purchasePackageWithSelectedPayment({
+    required String packageId,
+    required bool isCoinPackage,
+  }) async {
+    final offer = state.offer;
+    final packageSupportsGoogle = isCoinPackage
+        ? offer?.coinPackages
+                  .where((package) => package.id == packageId)
+                  .firstOrNull
+                  ?.iapInfo !=
+              null
+        : offer?.membershipPackages
+                  .where((package) => package.id == packageId)
+                  .firstOrNull
+                  ?.iapInfo !=
+              null;
+    final method = state.paymentMethods
+        .where((method) => method.methodCode == state.selectedPaymentMethodCode)
+        .firstOrNull;
+    if (method == null) {
+      _markUnsupportedPayment();
+      return;
+    }
+    await _startPreparedPayment(
+      packageId,
+      isCoinPackage: isCoinPackage,
+      payChannel: method.payChannel,
+      packageSupportsGoogle: packageSupportsGoogle == true,
+    );
+  }
+
+  void selectPaymentMethod(String methodCode) {
+    if (state.isProcessing ||
+        !state.paymentMethods.any(
+          (method) => method.methodCode == methodCode,
+        )) {
+      return;
+    }
+    state = state.copyWith(selectedPaymentMethodCode: methodCode);
+  }
+
+  void _preparePaymentMethodSelection(PaymentMethodOptions options) {
+    final selected =
+        options.options.any(
+          (method) => method.methodCode == options.defaultMethodCode,
+        )
+        ? options.defaultMethodCode
+        : options.options.first.methodCode;
+    state = state.copyWith(
+      paymentMethods: List<PaymentMethodOption>.unmodifiable(options.options),
+      selectedPaymentMethodCode: selected,
+    );
+  }
+
+  Future<void> _startPreparedPayment(
+    String packageId, {
+    required bool isCoinPackage,
+    required String payChannel,
+    required bool packageSupportsGoogle,
+  }) async {
+    if (PayChannel.isGoogle(payChannel) && packageSupportsGoogle) {
+      if (isCoinPackage) {
+        await selectCoinPackage(packageId);
+      } else {
+        await selectMembershipPackage(packageId);
+      }
+      return;
+    }
+    // Apple/三方支付入口预留：接入后在这里分别创建订单并调起对应 SDK。
+    _markUnsupportedPayment();
   }
 
   void close() {
@@ -716,6 +819,15 @@ class PlayerRechargeUnlockController
     );
   }
 
+  void _markUnsupportedPayment() {
+    state = state.copyWith(
+      status: PlayerRechargeUnlockStatus.failed,
+      purchaseFailureKind: PlayerRechargePurchaseFailureKind.payment,
+      clearPaymentStage: true,
+      clearError: true,
+    );
+  }
+
   bool _isUserCancelledPurchase(PurchaseDetails details) {
     final code = details.error?.code.toLowerCase();
     final message = details.error?.message.toLowerCase();
@@ -728,6 +840,11 @@ class PlayerRechargeUnlockController
   bool _isGoogleOnly(PaymentMethodOptions options) =>
       options.options.length == 1 &&
       PayChannel.isGoogle(options.options.single.payChannel);
+
+  String get _defaultPaymentChannel =>
+      defaultTargetPlatform == TargetPlatform.iOS
+      ? PayChannel.apple
+      : PayChannel.google;
 
   int get _clientOsType => defaultTargetPlatform == TargetPlatform.iOS ? 1 : 2;
 }

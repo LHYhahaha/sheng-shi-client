@@ -52,6 +52,8 @@ class StoreState {
     required this.purchaseStatus,
     required this.purchaseFailureKind,
     required this.iapProductDetails,
+    required this.paymentMethods,
+    required this.selectedPaymentMethodCode,
     this.error,
   });
 
@@ -66,6 +68,8 @@ class StoreState {
       purchaseStatus = StorePurchaseStatus.idle,
       purchaseFailureKind = null,
       iapProductDetails = const {},
+      paymentMethods = const [],
+      selectedPaymentMethodCode = null,
       error = null;
 
   final bool isLoading;
@@ -78,6 +82,8 @@ class StoreState {
   final StorePurchaseStatus purchaseStatus;
   final StorePurchaseFailureKind? purchaseFailureKind;
   final Map<String, ProductDetails> iapProductDetails;
+  final List<PaymentMethodOption> paymentMethods;
+  final String? selectedPaymentMethodCode;
   final Object? error;
 
   List<StorePackage> get packages => [...coinPackages, ...vipPackages];
@@ -112,6 +118,8 @@ class StoreState {
     StorePurchaseStatus? purchaseStatus,
     StorePurchaseFailureKind? purchaseFailureKind,
     Map<String, ProductDetails>? iapProductDetails,
+    List<PaymentMethodOption>? paymentMethods,
+    String? selectedPaymentMethodCode,
     Object? error,
     bool clearError = false,
     bool clearConfirmation = false,
@@ -132,6 +140,9 @@ class StoreState {
           ? null
           : purchaseFailureKind ?? this.purchaseFailureKind,
       iapProductDetails: iapProductDetails ?? this.iapProductDetails,
+      paymentMethods: paymentMethods ?? this.paymentMethods,
+      selectedPaymentMethodCode:
+          selectedPaymentMethodCode ?? this.selectedPaymentMethodCode,
       error: clearError ? null : error ?? this.error,
     );
   }
@@ -265,9 +276,12 @@ class StoreController extends Notifier<StoreState> {
 
     try {
       final options = await _fetchPaymentOptions(package);
-      if (_isGoogleOnly(options)) {
-        await _startGooglePurchase(package);
+      if (options.options.isEmpty) {
+        await _startPayment(package, _defaultPaymentChannel);
+      } else if (_isGoogleOnly(options)) {
+        await _startPayment(package, options.options.single.payChannel);
       } else {
+        _preparePaymentMethodSelection(options);
         showConfirmation();
       }
     } catch (error, stackTrace) {
@@ -310,7 +324,48 @@ class StoreController extends Notifier<StoreState> {
       return;
     }
 
-    await _startGooglePurchase(state.confirmationPackage!);
+    final methodCode = state.selectedPaymentMethodCode;
+    final method = state.paymentMethods.where(
+      (method) => method.methodCode == methodCode,
+    );
+    if (method.isEmpty) {
+      _markUnsupportedPayment();
+      return;
+    }
+    await _startPayment(state.confirmationPackage!, method.first.payChannel);
+  }
+
+  void selectPaymentMethod(String methodCode) {
+    if (state.purchaseStatus != StorePurchaseStatus.idle ||
+        !state.paymentMethods.any(
+          (method) => method.methodCode == methodCode,
+        )) {
+      return;
+    }
+    state = state.copyWith(selectedPaymentMethodCode: methodCode);
+  }
+
+  void _preparePaymentMethodSelection(PaymentMethodOptions options) {
+    final selected =
+        options.options.any(
+          (method) => method.methodCode == options.defaultMethodCode,
+        )
+        ? options.defaultMethodCode
+        : options.options.first.methodCode;
+    state = state.copyWith(
+      paymentMethods: List<PaymentMethodOption>.unmodifiable(options.options),
+      selectedPaymentMethodCode: selected,
+    );
+  }
+
+  Future<void> _startPayment(StorePackage package, String payChannel) async {
+    if (PayChannel.isGoogle(payChannel) &&
+        PayChannel.isGoogle(package.payChannel)) {
+      await _startGooglePurchase(package);
+      return;
+    }
+    // Apple/三方支付入口预留：接入后在这里分别创建订单并调起对应 SDK。
+    _markUnsupportedPayment();
   }
 
   Future<void> _startGooglePurchase(StorePackage package) async {
@@ -457,6 +512,14 @@ class StoreController extends Notifier<StoreState> {
     );
   }
 
+  void _markUnsupportedPayment() {
+    state = state.copyWith(
+      purchaseStatus: StorePurchaseStatus.failed,
+      purchaseFailureKind: StorePurchaseFailureKind.payment,
+      clearError: true,
+    );
+  }
+
   bool _isCurrent(int generation) => generation == _generation;
 
   int _productTypeFor(StorePackage package) =>
@@ -470,6 +533,9 @@ class StoreController extends Notifier<StoreState> {
     return [
       for (final package in packages)
         if (PayChannel.isOther(package.payChannel))
+          package
+        else if (PayChannel.isApple(package.payChannel) &&
+            defaultTargetPlatform == TargetPlatform.iOS)
           package
         else if (PayChannel.isGoogle(package.payChannel) &&
             iapDetails.containsKey(package.platformProductId))
@@ -553,6 +619,11 @@ class StoreController extends Notifier<StoreState> {
   bool _isGoogleOnly(PaymentMethodOptions options) =>
       options.options.length == 1 &&
       PayChannel.isGoogle(options.options.single.payChannel);
+
+  String get _defaultPaymentChannel =>
+      defaultTargetPlatform == TargetPlatform.iOS
+      ? PayChannel.apple
+      : PayChannel.google;
 
   int get _clientOsType => defaultTargetPlatform == TargetPlatform.iOS ? 1 : 2;
 }

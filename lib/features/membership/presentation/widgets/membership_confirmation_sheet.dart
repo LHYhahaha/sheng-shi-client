@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/utils/period_iso_parser.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/app_payment_method_sheet.dart';
+import '../../../pay/domain/pay_channel.dart';
+import '../../../pay/domain/payment_method_options.dart';
 import '../../application/membership_controller.dart';
 import '../../domain/membership_plan.dart';
 
@@ -11,6 +13,9 @@ class MembershipConfirmationSheet extends StatelessWidget {
     required this.plan,
     required this.status,
     required this.onConfirm,
+    required this.paymentMethods,
+    required this.selectedPaymentMethodCode,
+    required this.onPaymentMethodSelected,
     required this.onClose,
     super.key,
   });
@@ -18,6 +23,9 @@ class MembershipConfirmationSheet extends StatelessWidget {
   final MembershipPlan plan;
   final MembershipPurchaseStatus status;
   final VoidCallback onConfirm;
+  final List<PaymentMethodOption> paymentMethods;
+  final String? selectedPaymentMethodCode;
+  final ValueChanged<String> onPaymentMethodSelected;
   final VoidCallback onClose;
 
   @override
@@ -53,12 +61,45 @@ class MembershipConfirmationSheet extends StatelessWidget {
 
     return AppPaymentMethodSheet(
       orderTitle: title,
-      totalLabel: plan.priceLabel,
+      totalLabel: _selectedPriceLabel,
       statusLabel: statusLabel,
       isProcessing: isProcessing,
       isComplete: isComplete,
       onBuyNow: onConfirm,
       onClose: onClose,
+      paymentMethods: _displayMethods(context),
+      selectedPaymentMethodId: selectedPaymentMethodCode,
+      onPaymentMethodSelected: onPaymentMethodSelected,
     );
+  }
+
+  List<AppPaymentMethod> _displayMethods(BuildContext context) => [
+    for (final method in paymentMethods)
+      AppPaymentMethod(
+        id: method.methodCode,
+        label: PayChannel.isGoogle(method.payChannel)
+            ? context.l10n.paymentModalMethodGooglePay
+            : PayChannel.isApple(method.payChannel)
+            ? context.l10n.paymentModalMethodApplePay
+            : method.methodName,
+        iconAsset: PayChannel.isGoogle(method.payChannel)
+            ? 'assets/images/membership/google_pay_icon.png'
+            : PayChannel.isApple(method.payChannel)
+            ? 'assets/images/membership/apple_pay_icon.png'
+            : 'assets/images/membership/other_pay_icon.png',
+        priceLabel: method.promotionPriceText.isNotEmpty
+            ? method.promotionPriceText
+            : method.priceText,
+      ),
+  ];
+
+  String get _selectedPriceLabel {
+    final method = paymentMethods
+        .where((method) => method.methodCode == selectedPaymentMethodCode)
+        .firstOrNull;
+    if (method == null) return plan.priceLabel;
+    return method.promotionPriceText.isNotEmpty
+        ? method.promotionPriceText
+        : method.priceText;
   }
 }
