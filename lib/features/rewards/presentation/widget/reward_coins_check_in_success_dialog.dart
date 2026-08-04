@@ -92,7 +92,7 @@ class _RewardCoinsCheckInSuccessDialog extends StatelessWidget {
                 Positioned(
                   top: 105,
                   child: Text(
-                    context.l10n.rewardsSigninSuccessCoins(rewardAmount),
+                    "+${context.l10n.rewardsSigninSuccessCoins(rewardAmount)}",
                     key: const Key('rewards_coins_claim_success_amount'),
                     style: const TextStyle(
                       color: Color(0xFFFFD9B4),

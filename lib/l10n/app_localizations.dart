@@ -1730,8 +1730,8 @@ class AppLocalizations {
 
   String rewardsSigninSuccessCoins(Object coins) => _remoteText(
     'rewards.signin.success.coins',
-    en: '{coins} coins earned',
-    zh: '获得{coins}金币',
+    en: '{coins} coins',
+    zh: '{coins}金币',
   ).replaceAll('{coins}', coins.toString());
 
   String get rewardsSigninSuccessConfirm =>
@@ -1739,8 +1739,8 @@ class AppLocalizations {
 
   String rewardsClaimSuccessCoins(Object coins) => _remoteText(
     'rewards.claim_success.coins',
-    en: '{coins} coins added',
-    zh: '{coins}金币已到账',
+    en: '{coins} coins',
+    zh: '{coins}金币',
   ).replaceAll('{coins}', coins.toString());
 
   String rewardsSigninDaysCount(Object days) => _remoteText(

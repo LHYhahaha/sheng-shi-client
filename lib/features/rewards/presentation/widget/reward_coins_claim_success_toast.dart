@@ -40,7 +40,7 @@ class _RewardCoinsClaimSuccessToast extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              '+$rewardAmount ${context.l10n.unitCoin}',
+              "+${context.l10n.rewardsClaimSuccessCoins(rewardAmount)}",
               style: const TextStyle(color: Colors.white, fontSize: 12),
             ),
           ],
