@@ -491,36 +491,6 @@ class _OfferContent extends ConsumerWidget {
                       const SizedBox(height: 8),
                     ],
                 ],
-                const SizedBox(height: 4),
-                if (isProcessing)
-                  Row(
-                    key: const ValueKey('player_recharge_unlock_processing'),
-                    children: [
-                      const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        context.l10n.storePurchaseProcessing,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  )
-                else if (state.status == PlayerRechargeUnlockStatus.failed)
-                  Text(
-                    context.l10n.playerUnlockFailed,
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 12,
-                    ),
-                  ),
                 const SizedBox(height: 12),
                 const _RechargeTipsSection(
                   key: ValueKey('player_recharge_unlock_tips'),
