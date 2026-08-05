@@ -16,6 +16,7 @@ import '../../../../core/analytics/analytics_definition.dart';
 import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/analytics/analytics_popup_names.dart';
+import '../../../../core/analytics/analytics_service.dart';
 import '../../../../core/config/app_environment.dart';
 import '../../../../core/modal/app_modal_provider.dart';
 import '../../../../core/modal/app_modal_service.dart';
@@ -174,6 +175,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _resumePlaybackOnLifecycleResume = false;
   bool _resumePlaybackOnRouteReturn = false;
   bool _isCoveredByAnotherRoute = false;
+  String? _analyticsPlayingItemId;
+  PlayerFeedItem? _analyticsPlayingItem;
+  DateTime? _analyticsPlaybackStartedAt;
+  Duration _analyticsPlaybackProgress = Duration.zero;
+  String? _analyticsSubtitleLanguage;
+  Timer? _analyticsPauseTimer;
+  late final AnalyticsService _analyticsService;
   ModalRoute<dynamic>? _route;
   final ValueNotifier<double> _overlayOpacityNotifier = ValueNotifier<double>(
     1.0,
@@ -199,6 +207,131 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         instanceId: identityHashCode(this),
       ),
     };
+  }
+
+  Future<void> _trackPlaybackStart(String itemId) async {
+    if (_analyticsPlayingItemId == itemId) {
+      return;
+    }
+    if (_analyticsPlayingItemId != null) {
+      await _trackPlaybackEnd(reason: 'episode_switch');
+    }
+
+    final item = _feedItemForId(itemId);
+    if (item == null) {
+      return;
+    }
+    _analyticsPlayingItemId = itemId;
+    _analyticsPlayingItem = item;
+    _analyticsPlaybackStartedAt = DateTime.now();
+    final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
+    _analyticsPlaybackProgress = playback.position;
+    _analyticsSubtitleLanguage = _subtitleLanguageForAnalytics(playback);
+    await _analyticsService.track(
+      AnalyticsEvent(AnalyticsDefinitions.dramaPlayStart, {
+        'drama_id': item.content.id,
+        'episode_id': item.episode.id,
+        'episode_no': item.episode.number,
+        'subtitle_language': _analyticsSubtitleLanguage!,
+        'viewing_entitlement_type': item.episode.unlockType.name,
+      }),
+    );
+  }
+
+  Future<void> _trackPlaybackEnd({
+    required String reason,
+    String? itemId,
+  }) async {
+    _cancelAnalyticsPauseTimer();
+    final activeItemId = _analyticsPlayingItemId;
+    if (activeItemId == null || (itemId != null && itemId != activeItemId)) {
+      return;
+    }
+    final item = _analyticsPlayingItem;
+    _analyticsPlayingItemId = null;
+    _analyticsPlayingItem = null;
+    final startedAt = _analyticsPlaybackStartedAt;
+    _analyticsPlaybackStartedAt = null;
+    if (item == null || startedAt == null) {
+      return;
+    }
+
+    await _analyticsService.track(
+      AnalyticsEvent(AnalyticsDefinitions.dramaPlayEnd, {
+        'drama_id': item.content.id,
+        'episode_id': item.episode.id,
+        'episode_no': item.episode.number,
+        'play_duration_ms': DateTime.now().difference(startedAt).inMilliseconds,
+        'play_progress_ms': _analyticsPlaybackProgress.inMilliseconds,
+        'play_end_reason': reason,
+        'subtitle_language': _analyticsSubtitleLanguage ?? 'off',
+        'viewing_entitlement_type': item.episode.unlockType.name,
+      }),
+    );
+  }
+
+  PlayerFeedItem? _feedItemForId(String itemId) {
+    final items = ref.read(playerFeedControllerProvider(_sessionKey)).items;
+    for (final item in items) {
+      if (item.id == itemId) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  String _subtitleLanguageForAnalytics(PlayerPlaybackState playback) {
+    final hasSubtitleCapability =
+        playback.availableSubtitles.isNotEmpty ||
+        playback.availableEpisodeSources.isNotEmpty;
+    if (!hasSubtitleCapability) {
+      return 'none';
+    }
+    final language = playback.currentSubtitleLanguage?.trim();
+    if (language == null || language.isEmpty) {
+      return 'off';
+    }
+    for (final subtitle in playback.availableSubtitles) {
+      if (subtitle.language == language) {
+        final code = subtitle.languageCode.trim();
+        return code.isEmpty ? language : code;
+      }
+    }
+    for (final source in playback.availableEpisodeSources) {
+      if (source.language == language) {
+        final code = source.languageCode.trim();
+        return code.isEmpty ? language : code;
+      }
+    }
+    return language;
+  }
+
+  void _onAnalyticsPlayingChanged(bool isPlaying) {
+    if (isPlaying) {
+      _cancelAnalyticsPauseTimer();
+      final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
+      if (_analyticsPlayingItemId == null &&
+          playback.hasFirstFrame &&
+          playback.currentItemId != null) {
+        unawaited(_trackPlaybackStart(playback.currentItemId!));
+      }
+      return;
+    }
+    if (_analyticsPlayingItemId == null || _analyticsPauseTimer != null) {
+      return;
+    }
+    _analyticsPauseTimer = Timer(const Duration(seconds: 30), () {
+      _analyticsPauseTimer = null;
+      if (!mounted) {
+        return;
+      }
+      unawaited(_trackPlaybackEnd(reason: 'pause'));
+    });
+  }
+
+  void _cancelAnalyticsPauseTimer() {
+    _analyticsPauseTimer?.cancel();
+    _analyticsPauseTimer = null;
   }
 
   @override
@@ -250,6 +383,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _playbackController = ref.read(
       playerPlaybackControllerProvider(_sessionKey).notifier,
     );
+    _analyticsService = ref.read(analyticsServiceProvider);
     _overlayOrchestrator = ref.read(
       playerOverlayOrchestratorProvider(_sessionKey).notifier,
     );
@@ -369,6 +503,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   @override
   void dispose() {
     // 涓婃姤瑙傜湅閫€鍑轰簨浠?
+    _cancelAnalyticsPauseTimer();
+    unawaited(_trackPlaybackEnd(reason: 'exit'));
     unawaited(_playbackController.reportWatchProgress(eventType: 4));
     WidgetsBinding.instance.removeObserver(this);
     playerRouteObserver.unsubscribe(this);
@@ -1167,6 +1303,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
 
     ref.listen(
+      playerPlaybackControllerProvider(
+        sessionKey,
+      ).select((state) => state.isPlaying),
+      (previous, next) {
+        if (_shouldIgnoreRouteListener || previous == next) {
+          return;
+        }
+        _onAnalyticsPlayingChanged(next);
+      },
+    );
+
+    ref.listen(
       playerPlaybackControllerProvider(sessionKey).select(
         (state) => (
           state.currentItemId,
@@ -1179,6 +1327,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       (previous, next) {
         if (_shouldIgnoreRouteListener) {
           return;
+        }
+        if (next.$1 == _analyticsPlayingItemId) {
+          _analyticsPlaybackProgress = next.$3;
         }
         if (next.$1 == null ||
             next.$2 == null ||
@@ -1228,6 +1379,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         if (next.$1 == null || !next.$2) {
           return;
         }
+        unawaited(_trackPlaybackStart(next.$1!));
         _recordExitRecommendationEpisode(itemId: next.$1!);
       },
     );
@@ -1249,6 +1401,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         )) {
           return;
         }
+        unawaited(_trackPlaybackEnd(reason: 'completed', itemId: next.$1!));
         // 涓婃姤瑙傜湅瀹屾垚浜嬩欢
         unawaited(
           playbackController.reportWatchProgress(eventType: 6),

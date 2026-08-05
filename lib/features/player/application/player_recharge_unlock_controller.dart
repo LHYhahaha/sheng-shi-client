@@ -4,6 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
+import '../../../core/analytics/analytics_definition.dart';
+import '../../../core/analytics/analytics_event.dart';
+import '../../../core/analytics/analytics_provider.dart';
 import '../../entitlement/application/entitlement_controller.dart';
 import '../../../core/runtime/api_region_code_provider.dart';
 import '../../pay/application/iap_pending_purchase_cleaner.dart';
@@ -241,7 +244,10 @@ class PlayerRechargeUnlockController
     }
   }
 
-  Future<void> selectCoinPackage(String packageId) {
+  Future<void> selectCoinPackage(
+    String packageId, {
+    PaymentMethodOption? paymentMethod,
+  }) {
     if (state.isProcessing || state.offer == null) {
       return Future<void>.value();
     }
@@ -256,7 +262,7 @@ class PlayerRechargeUnlockController
       clearPurchaseFailure: true,
       clearError: true,
     );
-    return _startRemotePurchase();
+    return _startRemotePurchase(paymentMethod: paymentMethod);
   }
 
   /// 商品卡片点击入口：先由服务端决定可用支付方式。
@@ -308,6 +314,7 @@ class PlayerRechargeUnlockController
           packageId,
           isCoinPackage: isCoinPackage,
           payChannel: supportedMethods.single.payChannel,
+          paymentMethod: supportedMethods.single,
         );
       } else {
         _preparePaymentMethodSelection(options, supportedMethods);
@@ -328,7 +335,10 @@ class PlayerRechargeUnlockController
     return false;
   }
 
-  Future<void> selectMembershipPackage(String packageId) {
+  Future<void> selectMembershipPackage(
+    String packageId, {
+    PaymentMethodOption? paymentMethod,
+  }) {
     if (state.isProcessing || state.offer == null) {
       return Future<void>.value();
     }
@@ -345,7 +355,7 @@ class PlayerRechargeUnlockController
       clearPurchaseFailure: true,
       clearError: true,
     );
-    return _startRemotePurchase();
+    return _startRemotePurchase(paymentMethod: paymentMethod);
   }
 
   Future<void> purchasePackageWithSelectedPayment({
@@ -363,6 +373,7 @@ class PlayerRechargeUnlockController
       packageId,
       isCoinPackage: isCoinPackage,
       payChannel: method.payChannel,
+      paymentMethod: method,
     );
   }
 
@@ -394,12 +405,13 @@ class PlayerRechargeUnlockController
     String packageId, {
     required bool isCoinPackage,
     required String payChannel,
+    PaymentMethodOption? paymentMethod,
   }) async {
     if (PayChannel.isGoogle(payChannel)) {
       if (isCoinPackage) {
-        await selectCoinPackage(packageId);
+        await selectCoinPackage(packageId, paymentMethod: paymentMethod);
       } else {
-        await selectMembershipPackage(packageId);
+        await selectMembershipPackage(packageId, paymentMethod: paymentMethod);
       }
       return;
     }
@@ -450,7 +462,9 @@ class PlayerRechargeUnlockController
     return remaining > 0 ? remaining : 0;
   }
 
-  Future<void> _startRemotePurchase() async {
+  Future<void> _startRemotePurchase({
+    PaymentMethodOption? paymentMethod,
+  }) async {
     final purchaseGeneration = ++_purchaseGeneration;
     state = state.copyWith(
       status: PlayerRechargeUnlockStatus.processing,
@@ -585,6 +599,19 @@ class PlayerRechargeUnlockController
       }
 
       loading.hide();
+      await ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.paymentStart, {
+              'payment_method_id': paymentMethod?.methodCode ?? 'google_play',
+              'payment_method_type': PayChannel.analyticsPaymentMethodTypeFor(
+                paymentMethod?.payChannel ?? PayChannel.google,
+              ),
+              'order_id': order.orderNo,
+              'product_id': packageId,
+              'product_type': isCoinPackage ? 'coin' : 'vip_subscription',
+            }),
+          );
       final started = await iapService.buyProduct(
         product: productDetails,
         isConsumable: isConsumable,

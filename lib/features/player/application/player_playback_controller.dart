@@ -3610,6 +3610,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
     final selected = _selectSubtitleForCurrentLanguage(subtitles);
     _preferredSubtitleLanguage = _subtitleMatchCode(selected);
+    // 字幕文件会在首帧后异步加载；在此提前记录已预选语言，供 UI 和埋点在
+    // 实际播放开始时读取，不能把“加载中”误判成用户关闭字幕。
+    state = state.copyWith(currentSubtitleLanguage: selected.language);
     if (!state.hasFirstFrame) {
       _pendingSubtitleLoadItem = item;
       _logTiming(

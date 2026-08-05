@@ -2,6 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
+import '../../../core/analytics/analytics_definition.dart';
+import '../../../core/analytics/analytics_event.dart';
+import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/auth/session_cleanup_types.dart';
 import '../../../core/runtime/api_region_code_provider.dart';
 import '../../entitlement/application/entitlement_controller.dart';
@@ -280,7 +283,11 @@ class StoreController extends Notifier<StoreState> {
       if (supportedMethods.isEmpty) {
         await _startPayment(package, _defaultPaymentChannel);
       } else if (supportedMethods.length == 1) {
-        await _startPayment(package, supportedMethods.single.payChannel);
+        await _startPayment(
+          package,
+          supportedMethods.single.payChannel,
+          paymentMethod: supportedMethods.single,
+        );
       } else {
         _preparePaymentMethodSelection(options, supportedMethods);
         showConfirmation();
@@ -330,7 +337,11 @@ class StoreController extends Notifier<StoreState> {
       _markUnsupportedPayment();
       return;
     }
-    await _startPayment(state.confirmationPackage!, method.first.payChannel);
+    await _startPayment(
+      state.confirmationPackage!,
+      method.first.payChannel,
+      paymentMethod: method.first,
+    );
   }
 
   void selectPaymentMethod(String methodCode) {
@@ -357,16 +368,23 @@ class StoreController extends Notifier<StoreState> {
     );
   }
 
-  Future<void> _startPayment(StorePackage package, String payChannel) async {
+  Future<void> _startPayment(
+    StorePackage package,
+    String payChannel, {
+    PaymentMethodOption? paymentMethod,
+  }) async {
     if (PayChannel.isGoogle(payChannel)) {
-      await _startGooglePurchase(package);
+      await _startGooglePurchase(package, paymentMethod: paymentMethod);
       return;
     }
     // Apple/三方支付入口预留：接入后在这里分别创建订单并调起对应 SDK。
     _markUnsupportedPayment();
   }
 
-  Future<void> _startGooglePurchase(StorePackage package) async {
+  Future<void> _startGooglePurchase(
+    StorePackage package, {
+    PaymentMethodOption? paymentMethod,
+  }) async {
     final purchaseGeneration = ++_purchaseGeneration;
     final loading = ref.read(paymentLoadingControllerProvider.notifier);
     loading.show(label: PaymentLoadingLabel.loading);
@@ -429,6 +447,19 @@ class StoreController extends Notifier<StoreState> {
       }
 
       loading.hide();
+      await ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.paymentStart, {
+              'payment_method_id': paymentMethod?.methodCode ?? 'google_play',
+              'payment_method_type': PayChannel.analyticsPaymentMethodTypeFor(
+                paymentMethod?.payChannel ?? PayChannel.google,
+              ),
+              'order_id': paymentOrder.orderNo,
+              'product_id': package.id,
+              'product_type': _analyticsProductTypeFor(package),
+            }),
+          );
       final outcome = await ref
           .read(paymentPurchaseCoordinatorProvider)
           .executeGooglePurchase(
@@ -489,6 +520,15 @@ class StoreController extends Notifier<StoreState> {
     } finally {
       loading.hide();
     }
+  }
+
+  String _analyticsProductTypeFor(StorePackage package) {
+    if (package.isCoinPackage) {
+      return 'coin';
+    }
+    return package.productType == 'subscription'
+        ? 'vip_subscription'
+        : 'vip_once';
   }
 
   void cancelPurchase() {

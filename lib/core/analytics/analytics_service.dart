@@ -90,7 +90,18 @@ class AnalyticsService {
   final AnalyticsValidationErrorListener? _onValidationError;
 
   /// 校验并写入埋点队列。校验失败不抛出到业务调用方，也不发送事件。
-  Future<AnalyticsPayload?> track(AnalyticsEvent event) async {
+  Future<AnalyticsPayload?> track(
+    AnalyticsEvent event, {
+
+    /// 事件真实发生时间。用于页面首帧等需要等待公共上下文就绪后才写入队列的场景。
+    /// 未传时使用当前时间。
+    DateTime? occurredAt,
+
+    /// 事件发生时已捕获的公共上下文。
+    ///
+    /// 用于登出成功后账户资料已清理、但事件仍须归属到退出前用户的场景。
+    AnalyticsContext? context,
+  }) async {
     try {
       _validator.validate(event);
     } on AnalyticsValidationError catch (error) {
@@ -98,11 +109,11 @@ class AnalyticsService {
       return null;
     }
 
-    final now = _clock().toUtc();
+    final now = (occurredAt ?? _clock()).toUtc();
     final commonParams = AnalyticsCommonParams(
       eventId: _eventIdGenerator(),
       eventTime: now.millisecondsSinceEpoch,
-      context: _contextReader(),
+      context: context ?? _contextReader(),
     );
     final payload = AnalyticsPayload(
       eventName: event.name,

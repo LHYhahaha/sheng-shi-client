@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/modal/app_modal_policy.dart';
 import '../../../../core/modal/app_modal_provider.dart';
 import '../../../../core/modal/app_modal_request.dart';
@@ -101,6 +104,16 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final keyword = value.trim();
     if (keyword.isEmpty) return;
     _searchDebounce?.cancel();
+    // 只记录用户提交动作，不等待搜索接口、历史记录写入或页面状态更新。
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.searchSubmit, {
+              'search_keyword': keyword,
+            }),
+          ),
+    );
     FocusScope.of(context).unfocus();
     setState(() {
       _viewMode = _SearchViewMode.results;
@@ -889,6 +902,21 @@ class _SubmittedSearchResults extends ConsumerWidget {
                 return _SearchDramaTile(
                   drama: drama,
                   onTap: () {
+                    // 客户端点击埋点不依赖服务端搜索统计接口的返回。
+                    unawaited(
+                      ref
+                          .read(analyticsServiceProvider)
+                          .track(
+                            AnalyticsEvent(
+                              AnalyticsDefinitions.searchResultClick,
+                              {
+                                'drama_id': drama.id,
+                                'search_keyword': state.keyword,
+                                'position': index + 1,
+                              },
+                            ),
+                          ),
+                    );
                     unawaited(
                       ref
                           .read(searchResultsControllerProvider.notifier)

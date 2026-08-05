@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../auth/auth_token_store.dart';
+import '../auth/user_info_store.dart';
 import '../channel/channel_config_service.dart';
 import '../runtime/api_lang_provider.dart';
 import '../runtime/api_platform_provider.dart';
@@ -16,19 +16,16 @@ import 'analytics_service.dart';
 /// `session_id` 与 `app_session_id` 已按当前需求移除；页面和来源字段将由后续
 /// 路由/深链追踪模块提供。
 final analyticsContextProvider = Provider<AnalyticsContext>((ref) {
-  final token = ref.watch(authTokenStoreProvider);
+  final userInfo = ref.watch(userInfoStoreProvider);
   final channel = ref.watch(channelConfigServiceProvider).cachedConfig;
   final page = ref.watch(analyticsPageContextProvider);
-  final authenticatedUserId =
-      token.sessionKind == AuthTokenSessionKind.authenticated
-      ? token.subjectId
-      : null;
 
   return AnalyticsContext(
     platform: ref.watch(apiPlatformProvider),
     appVersion: ref.watch(apiAppVersionProvider),
     language: ref.watch(apiLangProvider),
-    userId: authenticatedUserId,
+    // 埋点表的 user_id 口径是对外展示的 showId，不使用 JWT subject/userId。
+    userId: userInfo.showId,
     channelId: channel?.channelFlag,
     merchantId: channel?.merchantId,
     regionCode: ref.watch(apiRegionCodeProvider),

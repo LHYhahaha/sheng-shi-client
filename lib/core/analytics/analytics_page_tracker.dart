@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'analytics_definition.dart';
 import 'analytics_event.dart';
+import 'analytics_lifecycle_tracker.dart';
 import 'analytics_page_context.dart';
 import 'analytics_provider.dart';
 import 'analytics_service.dart';
@@ -34,13 +35,16 @@ class AnalyticsPageTracker {
   AnalyticsPageTracker({
     required AnalyticsService analytics,
     required AnalyticsPageContextController pageContext,
+    AnalyticsStartupGate? startupGate,
     DateTime Function()? now,
   }) : _analytics = analytics,
        _pageContext = pageContext,
+       _startupGate = startupGate ?? AnalyticsStartupGate(isReady: true),
        _now = now ?? DateTime.now;
 
   final AnalyticsService _analytics;
   final AnalyticsPageContextController _pageContext;
+  final AnalyticsStartupGate _startupGate;
   final DateTime Function() _now;
   final List<String> _pageStack = <String>[];
   DateTime? _enteredAt;
@@ -118,8 +122,14 @@ class AnalyticsPageTracker {
 
   Future<void> _show(String pageName, {required String? previousPage}) async {
     _pageContext.show(pageName, previousPage: previousPage);
-    _enteredAt = _now();
-    await _analytics.track(const AnalyticsEvent(AnalyticsDefinitions.pageView));
+    // 页面已经在首帧可见；即使需要等待启动公共参数，也必须保留真实进入时刻。
+    final enteredAt = _now();
+    _enteredAt = enteredAt;
+    await _startupGate.ready;
+    await _analytics.track(
+      const AnalyticsEvent(AnalyticsDefinitions.pageView),
+      occurredAt: enteredAt,
+    );
   }
 }
 
@@ -128,6 +138,7 @@ final analyticsPageTrackerProvider = Provider<AnalyticsPageTracker>((ref) {
   return AnalyticsPageTracker(
     analytics: ref.watch(analyticsServiceProvider),
     pageContext: pageController,
+    startupGate: ref.watch(analyticsStartupGateProvider),
   );
 });
 

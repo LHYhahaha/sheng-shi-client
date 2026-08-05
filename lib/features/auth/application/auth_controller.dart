@@ -3,12 +3,16 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/account/account_ban_controller.dart';
+import '../../../core/analytics/analytics_definition.dart';
+import '../../../core/analytics/analytics_event.dart';
+import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/auth/auth_token_store.dart';
 import '../../../core/auth/auth_refresh_executor_provider.dart';
 import '../../../core/auth/session_cleanup_types.dart';
 import '../../../core/auth/user_info_manager.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/notification/startup_notification_permission_reporter.dart';
+import '../../../core/oauth/oauth_service.dart';
 import '../../../core/runtime/install_id_provider.dart';
 import '../../entitlement/application/entitlement_controller.dart';
 import '../data/auth_repository_provider.dart';
@@ -352,6 +356,7 @@ class AuthController extends Notifier<AuthState> {
       );
       _syncNotificationPermission(session);
     } catch (error) {
+      _trackLoginFailure(provider, error);
       state = state.copyWith(
         isLoading: false,
         error: error,
@@ -457,9 +462,23 @@ class AuthController extends Notifier<AuthState> {
       clearError: true,
       clearFailedAction: true,
     );
+    final logoutContext = state.isLoggedIn
+        ? ref.read(analyticsContextProvider)
+        : null;
     try {
       final repository = ref.read(authRepositoryProvider);
       await repository.logout();
+      if (logoutContext != null) {
+        // repository.logout() 会清空用户资料，因此这里使用退出前捕获的公共上下文。
+        unawaited(
+          ref
+              .read(analyticsServiceProvider)
+              .track(
+                const AnalyticsEvent(AnalyticsDefinitions.userLogout),
+                context: logoutContext,
+              ),
+        );
+      }
       final repositorySession = await repository.login(AuthProviderType.device);
       final session = await _syncCurrentSession(
         fallbackProvider: AuthProviderType.device,
@@ -481,6 +500,29 @@ class AuthController extends Notifier<AuthState> {
         clearPendingProvider: true,
       );
     }
+  }
+
+  void _trackLoginFailure(AuthProviderType provider, Object error) {
+    final isCancelled = error is OAuthLoginCancelledException;
+    final analytics = ref.read(analyticsServiceProvider);
+    final context = ref.read(analyticsContextProvider);
+    final parameters = <String, Object?>{
+      'login_provider': provider.name,
+      'result_status': isCancelled ? 'cancelled' : 'failed',
+      if (!isCancelled) 'login_fail_reason': _loginFailureReason(error),
+    };
+    unawaited(
+      analytics.track(
+        AnalyticsEvent(AnalyticsDefinitions.loginFail, parameters),
+        context: context,
+      ),
+    );
+  }
+
+  String _loginFailureReason(Object error) {
+    if (error is TimeoutException) return 'timeout';
+    if (error is ApiException) return error.code.name;
+    return 'unknown';
   }
 
   Future<DeleteAccountResult?> deleteAccount() async {

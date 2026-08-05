@@ -76,6 +76,56 @@ void main() {
     );
   });
 
+  test('first page view waits for cold app launch', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final sink = AnalyticsInMemoryEventSink();
+    final gate = AnalyticsStartupGate();
+    var now = DateTime.utc(2026, 8, 5, 0, 0);
+    final service = _service(sink, () => now);
+    final lifecycle = AnalyticsLifecycleTracker(
+      analytics: service,
+      firstOpenStore: _FirstOpenStore(),
+      startupGate: gate,
+    );
+    final pageTracker = AnalyticsPageTracker(
+      analytics: service,
+      pageContext: container.read(analyticsPageContextProvider.notifier),
+      startupGate: gate,
+      now: () => now,
+    );
+
+    final pageView = pageTracker.push(AnalyticsPageNames.home);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(sink.events, isEmpty);
+    expect(
+      container.read(analyticsPageContextProvider).currentPage,
+      AnalyticsPageNames.home,
+    );
+
+    now = now.add(const Duration(seconds: 2));
+    await lifecycle.onApplicationReady();
+    await pageView;
+
+    expect(sink.events.map((event) => event.eventName), [
+      'app_first_open',
+      'app_launch',
+      'page_view',
+    ]);
+    expect(
+      sink.events.last.commonParams.toJson()['event_time'],
+      DateTime.utc(2026, 8, 5).millisecondsSinceEpoch,
+    );
+
+    now = now.add(const Duration(seconds: 3));
+    await pageTracker.push(AnalyticsPageNames.search);
+    expect(
+      sink.events[sink.events.length - 2].eventParams['stay_duration_ms'],
+      5000,
+    );
+  });
+
   test('page tracker emits leave immediately for a popped page', () async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
@@ -111,14 +161,14 @@ void main() {
 
       await tracker.push(AnalyticsPageNames.my);
       await tracker.push(AnalyticsPageNames.vipPurchase);
-    await tracker.pop(AnalyticsPageNames.vipPurchase);
+      await tracker.pop(AnalyticsPageNames.vipPurchase);
 
-    expect(tracker.pageStack, [AnalyticsPageNames.my]);
-    expect(sink.events.last.eventName, 'page_view');
-    expect(
-      container.read(analyticsPageContextProvider).currentPage,
-      AnalyticsPageNames.my,
-    );
+      expect(tracker.pageStack, [AnalyticsPageNames.my]);
+      expect(sink.events.last.eventName, 'page_view');
+      expect(
+        container.read(analyticsPageContextProvider).currentPage,
+        AnalyticsPageNames.my,
+      );
     },
   );
 

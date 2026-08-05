@@ -32,6 +32,13 @@ void main() {
     final commonParams = payload!.commonParams.toJson();
     expect(commonParams['event_id'], 'evt-1');
     expect(commonParams['event_time'], 1785823200000);
+    expect(commonParams['channel_id'], '');
+    expect(commonParams['merchant_id'], '');
+    expect(commonParams['region_code'], '');
+    expect(commonParams['previous_page'], '');
+    expect(commonParams['entry_source_type'], '');
+    expect(commonParams['entry_source_id'], '');
+    expect(commonParams['h5_visitor_id'], '');
     expect(commonParams.containsKey('session_id'), isFalse);
     expect(commonParams.containsKey('app_session_id'), isFalse);
     expect(payload.toJson().containsKey('event_id'), isFalse);
@@ -84,6 +91,62 @@ void main() {
     expect(payload, isNull);
     expect(sink.values, isEmpty);
   });
+
+  test('payment start only accepts documented payment method types', () {
+    final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+    const baseParams = {
+      'payment_method_id': 'google_play',
+      'order_id': 'order-1',
+      'product_id': '358',
+      'product_type': 'vip_subscription',
+    };
+
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.paymentStart, {
+          ...baseParams,
+          'payment_method_type': 'google_play',
+        }),
+      ),
+      returnsNormally,
+    );
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.paymentStart, {
+          ...baseParams,
+          'payment_method_type': 'PAY_CHANNEL_GOOGLE',
+        }),
+      ),
+      throwsA(isA<AnalyticsValidationError>()),
+    );
+  });
+
+  test(
+    'search result click requires drama, keyword and one-based position',
+    () {
+      final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+
+      expect(
+        () => validator.validate(
+          const AnalyticsEvent(AnalyticsDefinitions.searchResultClick, {
+            'drama_id': '636',
+            'search_keyword': ' romance ',
+            'position': 1,
+          }),
+        ),
+        returnsNormally,
+      );
+      expect(
+        () => validator.validate(
+          const AnalyticsEvent(AnalyticsDefinitions.searchResultClick, {
+            'drama_id': '636',
+            'search_keyword': 'romance',
+          }),
+        ),
+        throwsA(isA<AnalyticsValidationError>()),
+      );
+    },
+  );
 
   test('requires conditional parameters only when their condition is met', () {
     final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);

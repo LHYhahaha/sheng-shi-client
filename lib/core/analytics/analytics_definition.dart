@@ -71,6 +71,7 @@ abstract final class AnalyticsDefinitions {
   static const dramaPlayStart = 'drama_play_start';
   static const dramaPlayEnd = 'drama_play_end';
   static const searchSubmit = 'search_submit';
+  static const searchResultClick = 'search_result_click';
   static const paymentStart = 'payment_start';
   static const loginFail = 'login_fail';
   static const episodeUnlockRequest = 'episode_unlock_request';
@@ -152,7 +153,7 @@ abstract final class AnalyticsDefinitions {
         'drama_id': _requiredString,
         'episode_id': _requiredString,
         'episode_no': _number,
-        'subtitle_language': _string,
+        'subtitle_language': _requiredString,
         'viewing_entitlement_type': _string,
       },
     ),
@@ -173,19 +174,41 @@ abstract final class AnalyticsDefinitions {
       name: searchSubmit,
       parameters: {'search_keyword': _requiredString},
     ),
+    searchResultClick: AnalyticsEventDefinition(
+      name: searchResultClick,
+      parameters: {
+        'drama_id': _requiredString,
+        'search_keyword': _requiredString,
+        'position': _requiredNumber,
+      },
+    ),
     paymentStart: AnalyticsEventDefinition(
       name: paymentStart,
       parameters: {
         'payment_method_id': _requiredString,
-        'payment_method_type': _requiredString,
+        'payment_method_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          required: true,
+          allowedValues: {'apple_iap', 'google_play', 'third_party_h5'},
+        ),
         'order_id': _requiredString,
+        'product_id': _requiredString,
+        'product_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          required: true,
+          allowedValues: {'coin', 'vip_once', 'vip_subscription'},
+        ),
       },
     ),
     loginFail: AnalyticsEventDefinition(
       name: loginFail,
       parameters: {
         'login_provider': _requiredString,
-        'result_status': _requiredString,
+        'result_status': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          required: true,
+          allowedValues: {'failed', 'cancelled'},
+        ),
         'login_fail_reason': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
           requiredWhen: (params) => params['result_status'] == 'failed',

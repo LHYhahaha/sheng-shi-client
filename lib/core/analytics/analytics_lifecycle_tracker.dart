@@ -2,6 +2,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'dart:async';
+
 import 'analytics_definition.dart';
 import 'analytics_event.dart';
 import 'analytics_provider.dart';
@@ -9,6 +11,24 @@ import 'analytics_service.dart';
 
 abstract interface class AnalyticsFirstOpenStore {
   Future<bool> markFirstOpenIfNeeded();
+}
+
+/// 协调冷启动事件与首个页面事件的顺序。
+///
+/// 页面可在路由首帧写入页面上下文，但必须等 `app_launch` 的公共参数就绪后，
+/// 才允许真正上报 `page_view`。
+class AnalyticsStartupGate {
+  AnalyticsStartupGate({bool isReady = false}) {
+    if (isReady) _ready.complete();
+  }
+
+  final Completer<void> _ready = Completer<void>();
+
+  Future<void> get ready => _ready.future;
+
+  void markReady() {
+    if (!_ready.isCompleted) _ready.complete();
+  }
 }
 
 class SharedPreferencesAnalyticsFirstOpenStore
@@ -31,13 +51,16 @@ class AnalyticsLifecycleTracker {
   AnalyticsLifecycleTracker({
     required AnalyticsService analytics,
     required AnalyticsFirstOpenStore firstOpenStore,
+    AnalyticsStartupGate? startupGate,
     DateTime Function()? now,
   }) : _analytics = analytics,
        _firstOpenStore = firstOpenStore,
+       _startupGate = startupGate ?? AnalyticsStartupGate(isReady: true),
        _now = now ?? DateTime.now;
 
   final AnalyticsService _analytics;
   final AnalyticsFirstOpenStore _firstOpenStore;
+  final AnalyticsStartupGate _startupGate;
   final DateTime Function() _now;
 
   DateTime? _foregroundStartedAt;
@@ -48,16 +71,21 @@ class AnalyticsLifecycleTracker {
     if (_initialized) return;
     _initialized = true;
     _foregroundStartedAt = _now();
-    if (await _firstOpenStore.markFirstOpenIfNeeded()) {
+    try {
+      if (await _firstOpenStore.markFirstOpenIfNeeded()) {
+        await _analytics.track(
+          const AnalyticsEvent(AnalyticsDefinitions.appFirstOpen),
+        );
+      }
       await _analytics.track(
-        const AnalyticsEvent(AnalyticsDefinitions.appFirstOpen),
+        const AnalyticsEvent(AnalyticsDefinitions.appLaunch, {
+          'launch_type': 'cold',
+        }),
       );
+    } finally {
+      // 即使埋点 Sink 发生异常，也不能永久阻塞首个页面事件。
+      _startupGate.markReady();
     }
-    await _analytics.track(
-      const AnalyticsEvent(AnalyticsDefinitions.appLaunch, {
-        'launch_type': 'cold',
-      }),
-    );
   }
 
   Future<void> onLifecycleChanged(AppLifecycleState state) async {
@@ -97,11 +125,16 @@ final analyticsFirstOpenStoreProvider = Provider<AnalyticsFirstOpenStore>((
   return SharedPreferencesAnalyticsFirstOpenStore();
 });
 
+final analyticsStartupGateProvider = Provider<AnalyticsStartupGate>((ref) {
+  return AnalyticsStartupGate();
+});
+
 final analyticsLifecycleTrackerProvider = Provider<AnalyticsLifecycleTracker>((
   ref,
 ) {
   return AnalyticsLifecycleTracker(
     analytics: ref.watch(analyticsServiceProvider),
     firstOpenStore: ref.watch(analyticsFirstOpenStoreProvider),
+    startupGate: ref.watch(analyticsStartupGateProvider),
   );
 });

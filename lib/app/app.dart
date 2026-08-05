@@ -268,6 +268,10 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     } catch (e, stackTrace) {
       debugPrint('[TokenInit] Token initialization failed: $e');
       debugPrint('[TokenInit] Stack trace: $stackTrace');
+      // 鉴权失败仍要释放首个 page_view；公共参数会按当前可用信息上报。
+      unawaited(
+        ref.read(analyticsLifecycleTrackerProvider).onApplicationReady(),
+      );
     }
 
     try {

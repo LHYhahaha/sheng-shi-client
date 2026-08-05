@@ -2,6 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
+import '../../../core/analytics/analytics_definition.dart';
+import '../../../core/analytics/analytics_event.dart';
+import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/auth/session_cleanup_types.dart';
 import '../../../core/auth/user_info_store.dart';
 import '../../../core/notification/startup_notification_permission_reporter.dart';
@@ -281,7 +284,11 @@ class MembershipController extends Notifier<MembershipState> {
       if (supportedMethods.isEmpty) {
         await _startPayment(plan, _defaultPaymentChannel);
       } else if (supportedMethods.length == 1) {
-        await _startPayment(plan, supportedMethods.single.payChannel);
+        await _startPayment(
+          plan,
+          supportedMethods.single.payChannel,
+          paymentMethod: supportedMethods.single,
+        );
       } else {
         _preparePaymentMethodSelection(options, supportedMethods);
         showConfirmation();
@@ -331,7 +338,11 @@ class MembershipController extends Notifier<MembershipState> {
       _markUnsupportedPayment();
       return;
     }
-    await _startPayment(state.confirmationPlan!, methods.first.payChannel);
+    await _startPayment(
+      state.confirmationPlan!,
+      methods.first.payChannel,
+      paymentMethod: methods.first,
+    );
   }
 
   void selectPaymentMethod(String methodCode) {
@@ -358,16 +369,23 @@ class MembershipController extends Notifier<MembershipState> {
     );
   }
 
-  Future<void> _startPayment(MembershipPlan plan, String payChannel) async {
+  Future<void> _startPayment(
+    MembershipPlan plan,
+    String payChannel, {
+    PaymentMethodOption? paymentMethod,
+  }) async {
     if (PayChannel.isGoogle(payChannel)) {
-      await _startGooglePurchase(plan);
+      await _startGooglePurchase(plan, paymentMethod: paymentMethod);
       return;
     }
     // Apple/三方支付入口预留：接入后在这里分别创建订单并调起对应 SDK。
     _markUnsupportedPayment();
   }
 
-  Future<void> _startGooglePurchase(MembershipPlan plan) async {
+  Future<void> _startGooglePurchase(
+    MembershipPlan plan, {
+    PaymentMethodOption? paymentMethod,
+  }) async {
     final purchaseGeneration = ++_purchaseGeneration;
     final loading = ref.read(paymentLoadingControllerProvider.notifier);
     loading.show(label: PaymentLoadingLabel.loading);
@@ -426,6 +444,19 @@ class MembershipController extends Notifier<MembershipState> {
       }
 
       loading.hide();
+      await ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.paymentStart, {
+              'payment_method_id': paymentMethod?.methodCode ?? 'google_play',
+              'payment_method_type': PayChannel.analyticsPaymentMethodTypeFor(
+                paymentMethod?.payChannel ?? PayChannel.google,
+              ),
+              'order_id': paymentOrder.orderNo,
+              'product_id': plan.id,
+              'product_type': 'vip_subscription',
+            }),
+          );
       final outcome = await ref
           .read(paymentPurchaseCoordinatorProvider)
           .executeGooglePurchase(
