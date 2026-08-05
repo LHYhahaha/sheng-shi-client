@@ -550,6 +550,7 @@ void main() {
       _RecordedPopupEvent(1, PopupEventType.show),
       _RecordedPopupEvent(1, PopupEventType.close),
       _RecordedPopupEvent(2, PopupEventType.show),
+      _RecordedPopupEvent(2, PopupEventType.close),
     ]);
 
     controller.markPendingPopupImageReady(thirdPopup);

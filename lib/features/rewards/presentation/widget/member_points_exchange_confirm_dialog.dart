@@ -1,5 +1,12 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
+import '../../../../core/analytics/analytics_popup_names.dart';
 import '../../../../l10n/app_localizations.dart';
 
 Future<bool> showMemberPointsExchangeConfirmDialog(
@@ -7,34 +14,59 @@ Future<bool> showMemberPointsExchangeConfirmDialog(
   required int memberDays,
   required int pointCost,
 }) async {
-  final confirmed = await showGeneralDialog<bool>(
-    context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.76),
-    barrierDismissible: true,
-    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-    transitionDuration: const Duration(milliseconds: 180),
-    pageBuilder: (context, animation, secondaryAnimation) {
-      return _MemberPointsExchangeConfirmDialog(
-        memberDays: memberDays,
-        pointCost: pointCost,
-      );
-    },
-    transitionBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      );
-      return FadeTransition(
-        opacity: curved,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
-          child: child,
-        ),
-      );
-    },
+  final analytics = ProviderScope.containerOf(
+    context,
+    listen: false,
+  ).read(analyticsServiceProvider);
+  // `showGeneralDialog` 创建路由即代表弹框已进入展示流程；关闭事件统一由 finally
+  // 兜底，包含点击确认、关闭按钮、系统返回和点击遮罩。
+  unawaited(
+    analytics.track(
+      AnalyticsEvent(AnalyticsDefinitions.popupShow, {
+        'popup_name': AnalyticsPopupNames.memberPointsExchangeConfirm,
+        'member_days': memberDays,
+        'point_cost': pointCost,
+      }),
+    ),
   );
-  return confirmed ?? false;
+  try {
+    final confirmed = await showGeneralDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.76),
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return _MemberPointsExchangeConfirmDialog(
+          memberDays: memberDays,
+          pointCost: pointCost,
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    );
+    return confirmed ?? false;
+  } finally {
+    unawaited(
+      analytics.track(
+        AnalyticsEvent(AnalyticsDefinitions.popupClose, {
+          'popup_name': AnalyticsPopupNames.memberPointsExchangeConfirm,
+        }),
+      ),
+    );
+  }
 }
 
 class _MemberPointsExchangeConfirmDialog extends StatelessWidget {

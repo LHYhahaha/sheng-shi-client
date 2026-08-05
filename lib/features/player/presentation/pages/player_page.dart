@@ -12,6 +12,10 @@ import '../../../../app/router/route_paths.dart';
 import '../../../../app/router/player_route_observer.dart';
 import '../../../../app/shell/app_shell.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
+import '../../../../core/analytics/analytics_popup_names.dart';
 import '../../../../core/config/app_environment.dart';
 import '../../../../core/modal/app_modal_provider.dart';
 import '../../../../core/modal/app_modal_service.dart';
@@ -2142,8 +2146,26 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _isModalOpen = true;
     _syncAutoImmersiveBlockers();
     _markExitRecommendationShown();
-    // TODO: Enable if player exit recommendation popup show reporting is required.
-    // _reportExitRecommendationShowIfNeeded();
+    final currentItem = ref
+        .read(playerFeedControllerProvider(_sessionKey))
+        .currentItem;
+    if (currentItem == null) {
+      _isModalOpen = false;
+      _syncAutoImmersiveBlockers();
+      return false;
+    }
+    final analytics = ProviderScope.containerOf(
+      context,
+      listen: false,
+    ).read(analyticsServiceProvider);
+    unawaited(
+      analytics.track(
+        AnalyticsEvent(AnalyticsDefinitions.popupShow, {
+          'popup_name': AnalyticsPopupNames.dramaExitRecommend,
+          'drama_id': currentItem.content.id,
+        }),
+      ),
+    );
     final result = await showGeneralDialog<_ExitRecommendationDialogResult>(
       context: context,
       barrierDismissible: true,
@@ -2182,6 +2204,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       },
     );
 
+    unawaited(
+      analytics.track(
+        AnalyticsEvent(AnalyticsDefinitions.popupClose, {
+          'popup_name': AnalyticsPopupNames.dramaExitRecommend,
+        }),
+      ),
+    );
     if (!mounted) {
       return true;
     }
@@ -2610,6 +2639,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }) {
     _isModalOpen = true;
     _syncAutoImmersiveBlockers();
+    final isEpisodeSelector = initialTab == PlayerDetailTab.episodes;
+    final analytics = ref.read(analyticsServiceProvider);
+    if (isEpisodeSelector) {
+      unawaited(
+        analytics.track(
+          AnalyticsEvent(AnalyticsDefinitions.popupShow, {
+            'popup_name': AnalyticsPopupNames.episodeSelector,
+            'drama_id': content.id,
+          }),
+        ),
+      );
+    }
 
     // 閲嶆柊鑾峰彇瀹屾暣鐨?content锛堝寘鍚帹鑽愬垪琛級
     final contentRepository = ref.read(playerContentRepositoryProvider);
@@ -2649,6 +2690,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         );
       },
     ).whenComplete(() {
+      if (isEpisodeSelector) {
+        unawaited(
+          analytics.track(
+            AnalyticsEvent(AnalyticsDefinitions.popupClose, {
+              'popup_name': AnalyticsPopupNames.episodeSelector,
+            }),
+          ),
+        );
+      }
       _isModalOpen = false;
       if (mounted) {
         _syncAutoImmersiveBlockers();
@@ -2659,6 +2709,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   Future<void> _showShareSheet(String dramaId, String dramaTitle) {
     _isModalOpen = true;
     _syncAutoImmersiveBlockers();
+    final analytics = ref.read(analyticsServiceProvider);
+    unawaited(
+      analytics.track(
+        AnalyticsEvent(AnalyticsDefinitions.popupShow, {
+          'popup_name': AnalyticsPopupNames.share,
+          'drama_id': dramaId,
+        }),
+      ),
+    );
     return showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -2676,6 +2735,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         },
       ),
     ).whenComplete(() {
+      unawaited(
+        analytics.track(
+          AnalyticsEvent(AnalyticsDefinitions.popupClose, {
+            'popup_name': AnalyticsPopupNames.share,
+          }),
+        ),
+      );
       _isModalOpen = false;
       if (mounted) {
         _syncAutoImmersiveBlockers();

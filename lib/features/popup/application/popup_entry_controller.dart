@@ -3,9 +3,13 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics_definition.dart';
+import '../../../core/analytics/analytics_event.dart';
+import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/network/api_client_provider.dart';
 import '../data/popup_repository_provider.dart';
 import '../domain/popup.dart';
+import 'popup_analytics.dart';
 
 class PopupEntryState {
   const PopupEntryState({
@@ -71,6 +75,7 @@ class PopupEntryController extends Notifier<PopupEntryState> {
   int _flowDisplayedCount = 0;
   PopupPlacementCode? _flowPlacement;
   PopupConfig? _readyPopup;
+  final Set<PopupConfig> _shownPopups = <PopupConfig>{};
   final Set<PopupPlacementCode> _cancelledPlacements = <PopupPlacementCode>{};
 
   @override
@@ -142,14 +147,20 @@ class PopupEntryController extends Notifier<PopupEntryState> {
     _flowDisplayedCount = 0;
     _flowPlacement = null;
     _readyPopup = null;
+    final activePopup = state.activePopup;
     state = state.copyWith(pendingPopup: null, activePopup: null);
+    if (activePopup != null) {
+      _reportActivePopupClosed(activePopup);
+    }
   }
 
   void dismissActivePopup() {
-    if (state.activePopup == null) {
+    final popup = state.activePopup;
+    if (popup == null) {
       return;
     }
     state = state.copyWith(activePopup: null);
+    _reportActivePopupClosed(popup);
     _showReadyPopupOrAdvance();
   }
 
@@ -175,13 +186,7 @@ class PopupEntryController extends Notifier<PopupEntryState> {
   }
 
   void closeActivePopup() {
-    final popup = state.activePopup;
-    if (popup == null) {
-      return;
-    }
-    state = state.copyWith(activePopup: null);
-    unawaited(_reportPopupEvent(popup, PopupEventType.close));
-    _showReadyPopupOrAdvance();
+    dismissActivePopup();
   }
 
   void tapActivePopupImage(PopupConfig popup) {
@@ -198,8 +203,21 @@ class PopupEntryController extends Notifier<PopupEntryState> {
         _flowPlacement == null) {
       return;
     }
+    final activePopup = state.activePopup;
     _finishPopupFlow();
     state = state.copyWith(activePopup: null);
+    if (activePopup != null) {
+      _reportActivePopupClosed(activePopup);
+    }
+  }
+
+  void _reportActivePopupClosed(PopupConfig popup) {
+    // 只有图片预加载成功、已真正展示过的弹框才允许产生关闭事件。
+    if (!_shownPopups.remove(popup)) {
+      return;
+    }
+    unawaited(_trackPopupClose(popup));
+    unawaited(_reportPopupEvent(popup, PopupEventType.close));
   }
 
   Future<void> onLifecycleChanged(
@@ -283,8 +301,38 @@ class PopupEntryController extends Notifier<PopupEntryState> {
 
   void _showPopup(PopupConfig popup) {
     state = state.copyWith(activePopup: popup);
+    _shownPopups.add(popup);
     _flowDisplayedCount++;
+    unawaited(_trackPopupShow(popup));
     unawaited(_reportPopupEvent(popup, PopupEventType.show));
+  }
+
+  Future<void> _trackPopupShow(PopupConfig popup) async {
+    final parameters = popupShowParams(popup);
+    if (parameters == null) {
+      debugPrint(
+        '[Analytics] Skip popup_show: popup name or target type is unavailable.',
+      );
+      return;
+    }
+    await ref
+        .read(analyticsServiceProvider)
+        .track(AnalyticsEvent(AnalyticsDefinitions.popupShow, parameters));
+  }
+
+  Future<void> _trackPopupClose(PopupConfig popup) async {
+    final popupName = popupCloseName(popup);
+    if (popupName == null) {
+      debugPrint('[Analytics] Skip popup_close: popup name is unavailable.');
+      return;
+    }
+    await ref
+        .read(analyticsServiceProvider)
+        .track(
+          AnalyticsEvent(AnalyticsDefinitions.popupClose, {
+            'popup_name': popupName,
+          }),
+        );
   }
 
   Future<void> _reportPopupEvent(

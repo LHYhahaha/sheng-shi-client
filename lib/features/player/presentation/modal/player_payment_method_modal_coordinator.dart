@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/modal/app_modal_controller.dart';
+import '../../../../core/analytics/analytics_popup_names.dart';
 import '../../../../core/modal/app_modal_policy.dart';
 import '../../../../core/modal/app_modal_provider.dart';
 import '../../../../core/modal/app_modal_request.dart';
@@ -35,6 +36,9 @@ class PlayerPaymentMethodModalCoordinator {
           sessionKey: sessionKey,
           selection: selection,
         ),
+        analyticsPopupShowParameters: {
+          'popup_name': AnalyticsPopupNames.payment,
+        },
         type: AppModalType.paymentConfirm,
         priority: AppModalPriority.high,
         dismissPolicy: AppModalDismissPolicy.standard,

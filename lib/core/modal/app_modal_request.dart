@@ -33,6 +33,7 @@ sealed class AppModalRequest {
     required this.dismissPolicy,
     required this.createdAt,
     required this.type,
+    this.analyticsPopupShowParameters,
   });
 
   final String requestId;
@@ -41,6 +42,11 @@ sealed class AppModalRequest {
   final AppModalDismissPolicy dismissPolicy;
   final DateTime createdAt;
   final AppModalType type;
+
+  /// 非空时，该请求被真正展示后会自动上报 `popup_show`。
+  ///
+  /// 参数由 feature 提供，避免 core 依赖具体业务 payload 类型。
+  final Map<String, Object?>? analyticsPopupShowParameters;
 }
 
 /// 通用确认弹窗请求（O1 skeleton）。
@@ -79,6 +85,7 @@ final class FeatureAppModalRequest extends AppModalRequest {
     super.dismissPolicy = AppModalDismissPolicy.standard,
     DateTime? createdAt,
     super.type = AppModalType.unknown,
+    super.analyticsPopupShowParameters,
     this.stackOnCurrent = false,
   }) : super(createdAt: createdAt ?? DateTime.now());
 

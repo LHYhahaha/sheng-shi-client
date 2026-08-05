@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/app_environment.dart';
+import '../../core/analytics/analytics_page_tracker.dart';
 import '../app_root_navigator_key.dart';
 import '../shell/app_shell.dart';
 import '../../features/auth/presentation/pages/account_cancellation_page.dart';
@@ -41,7 +42,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: appRootNavigatorKey,
     initialLocation: RoutePaths.home,
-    observers: [BotToastNavigatorObserver(), playerRouteObserver],
+    observers: [
+      BotToastNavigatorObserver(),
+      playerRouteObserver,
+      ref.watch(analyticsNavigatorObserverProvider),
+    ],
     routes: [
       // 底部五个主 tab 使用 indexedStack 保持页面状态。
       //

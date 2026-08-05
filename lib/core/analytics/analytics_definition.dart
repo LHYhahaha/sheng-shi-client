@@ -1,0 +1,336 @@
+import 'analytics_event.dart';
+
+/// 参数的运行时校验类型。
+enum AnalyticsParameterType { string, number }
+
+typedef AnalyticsRequiredWhen = bool Function(Map<String, Object?> params);
+
+class AnalyticsParameterRule {
+  const AnalyticsParameterRule({
+    required this.type,
+    this.required = false,
+    this.requiredWhen,
+    this.allowedValues,
+  });
+
+  final AnalyticsParameterType type;
+  final bool required;
+  final AnalyticsRequiredWhen? requiredWhen;
+  final Set<Object>? allowedValues;
+
+  bool isRequired(Map<String, Object?> params) =>
+      required || (requiredWhen?.call(params) ?? false);
+}
+
+/// 单个事件的本地定义。事件与参数名必须与埋点表完全一致。
+class AnalyticsEventDefinition {
+  const AnalyticsEventDefinition({
+    required this.name,
+    this.parameters = const {},
+    this.allowAdditionalParameters = false,
+  });
+
+  final String name;
+  final Map<String, AnalyticsParameterRule> parameters;
+  final bool allowAdditionalParameters;
+}
+
+/// 事件定义校验失败。
+class AnalyticsValidationError implements Exception {
+  const AnalyticsValidationError({
+    required this.eventName,
+    required this.reason,
+    this.parameterName,
+  });
+
+  final String eventName;
+  final String reason;
+  final String? parameterName;
+
+  @override
+  String toString() {
+    final parameter = parameterName == null ? '' : ' ($parameterName)';
+    return 'AnalyticsValidationError: $eventName$parameter: $reason';
+  }
+}
+
+/// 当前客户端埋点表已确认的事件与参数定义。
+///
+/// `session_start`、公共参数 `session_id` 与 `app_session_id` 已按当前需求移除。
+abstract final class AnalyticsDefinitions {
+  static const appFirstOpen = 'app_first_open';
+  static const appLaunch = 'app_launch';
+  static const appExit = 'app_exit';
+  static const pageView = 'page_view';
+  static const pageLeave = 'page_leave';
+  static const popupShow = 'popup_show';
+  static const popupClose = 'popup_close';
+  static const elementClick = 'element_click';
+  static const userLogout = 'user_logout';
+
+  static const dramaPlayStart = 'drama_play_start';
+  static const dramaPlayEnd = 'drama_play_end';
+  static const searchSubmit = 'search_submit';
+  static const paymentStart = 'payment_start';
+  static const loginFail = 'login_fail';
+  static const episodeUnlockRequest = 'episode_unlock_request';
+  static const pushPermissionResult = 'push_permission_result';
+  static const pushNotificationOpen = 'push_notification_open';
+  static const homeBannerExposure = 'home_banner_exposure';
+  static const dynamicTabExposure = 'dynamic_tab_exposure';
+  static const adUnlockEntryExposure = 'ad_unlock_entry_exposure';
+  static const adViewStart = 'ad_view_start';
+  static const adViewEnd = 'ad_view_end';
+  static const shareAppOpen = 'share_app_open';
+
+  static const _string = AnalyticsParameterRule(
+    type: AnalyticsParameterType.string,
+  );
+  static const _requiredString = AnalyticsParameterRule(
+    type: AnalyticsParameterType.string,
+    required: true,
+  );
+  static const _number = AnalyticsParameterRule(
+    type: AnalyticsParameterType.number,
+  );
+  static const _requiredNumber = AnalyticsParameterRule(
+    type: AnalyticsParameterType.number,
+    required: true,
+  );
+
+  static final Map<String, AnalyticsEventDefinition> events = Map.unmodifiable({
+    appFirstOpen: const AnalyticsEventDefinition(name: appFirstOpen),
+    appLaunch: AnalyticsEventDefinition(
+      name: appLaunch,
+      parameters: {
+        'launch_type': const AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          required: true,
+          allowedValues: {'cold', 'hot'},
+        ),
+      },
+    ),
+    appExit: AnalyticsEventDefinition(
+      name: appExit,
+      parameters: {'foreground_duration_ms': _requiredNumber},
+    ),
+    pageView: const AnalyticsEventDefinition(name: pageView),
+    pageLeave: AnalyticsEventDefinition(
+      name: pageLeave,
+      parameters: {'stay_duration_ms': _requiredNumber},
+    ),
+    popupShow: AnalyticsEventDefinition(
+      name: popupShow,
+      parameters: {
+        'popup_name': _requiredString,
+        'popup_config_id': _string,
+        // 仅 /api/popup 返回的运营弹框携带该字段；本地业务弹框不传。
+        'popup_target_type': _string,
+        'target_drama_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => params['popup_target_type'] == 'drama',
+        ),
+      },
+      // 弹框名称字典中，不同弹框还会携带短剧、剧集、商品等业务字段。
+      allowAdditionalParameters: true,
+    ),
+    // 当前口径：关闭弹窗只允许上报 popup_name。
+    popupClose: AnalyticsEventDefinition(
+      name: popupClose,
+      parameters: {'popup_name': _requiredString},
+    ),
+    elementClick: AnalyticsEventDefinition(
+      name: elementClick,
+      parameters: {'element_name': _requiredString, 'position': _number},
+      // 元素字典后续会为不同 element_name 注入短剧、商品等附加字段。
+      allowAdditionalParameters: true,
+    ),
+    userLogout: const AnalyticsEventDefinition(name: userLogout),
+    dramaPlayStart: AnalyticsEventDefinition(
+      name: dramaPlayStart,
+      parameters: {
+        'drama_id': _requiredString,
+        'episode_id': _requiredString,
+        'episode_no': _number,
+        'subtitle_language': _string,
+        'viewing_entitlement_type': _string,
+      },
+    ),
+    dramaPlayEnd: AnalyticsEventDefinition(
+      name: dramaPlayEnd,
+      parameters: {
+        'drama_id': _requiredString,
+        'episode_id': _requiredString,
+        'episode_no': _number,
+        'play_duration_ms': _requiredNumber,
+        'play_progress_ms': _number,
+        'play_end_reason': _requiredString,
+        'subtitle_language': _string,
+        'viewing_entitlement_type': _string,
+      },
+    ),
+    searchSubmit: AnalyticsEventDefinition(
+      name: searchSubmit,
+      parameters: {'search_keyword': _requiredString},
+    ),
+    paymentStart: AnalyticsEventDefinition(
+      name: paymentStart,
+      parameters: {
+        'payment_method_id': _requiredString,
+        'payment_method_type': _requiredString,
+        'order_id': _requiredString,
+      },
+    ),
+    loginFail: AnalyticsEventDefinition(
+      name: loginFail,
+      parameters: {
+        'login_provider': _requiredString,
+        'result_status': _requiredString,
+        'login_fail_reason': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => params['result_status'] == 'failed',
+        ),
+      },
+    ),
+    episodeUnlockRequest: AnalyticsEventDefinition(
+      name: episodeUnlockRequest,
+      parameters: {
+        'drama_id': _requiredString,
+        'episode_id': _requiredString,
+        'unlock_type': _requiredString,
+        'unlock_trigger_type': _requiredString,
+        'required_coin_amount': _requiredNumber,
+        'request_id': _requiredString,
+      },
+    ),
+    pushPermissionResult: AnalyticsEventDefinition(
+      name: pushPermissionResult,
+      parameters: {'permission_status': _requiredString},
+    ),
+    pushNotificationOpen: AnalyticsEventDefinition(
+      name: pushNotificationOpen,
+      parameters: {
+        'push_id': _requiredString,
+        'push_target_type': _requiredString,
+        'drama_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => params['push_target_type'] == 'drama',
+        ),
+      },
+    ),
+    homeBannerExposure: AnalyticsEventDefinition(
+      name: homeBannerExposure,
+      parameters: {
+        'banner_id': _requiredString,
+        'banner_target_type': _requiredString,
+        'target_drama_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => params['banner_target_type'] == 'drama',
+        ),
+      },
+    ),
+    dynamicTabExposure: AnalyticsEventDefinition(
+      name: dynamicTabExposure,
+      parameters: {
+        'tab_config_id': _requiredString,
+        'replace_tab_key': _requiredString,
+      },
+    ),
+    adUnlockEntryExposure: AnalyticsEventDefinition(
+      name: adUnlockEntryExposure,
+      parameters: {
+        'drama_id': _requiredString,
+        'episode_id': _requiredString,
+        'drama_access_type': _requiredString,
+        'ad_material_id': _requiredString,
+      },
+    ),
+    adViewStart: AnalyticsEventDefinition(
+      name: adViewStart,
+      parameters: {
+        'ad_session_id': _requiredString,
+        'ad_material_id': _requiredString,
+        'drama_id': _string,
+        'episode_id': _string,
+      },
+    ),
+    adViewEnd: AnalyticsEventDefinition(
+      name: adViewEnd,
+      parameters: {
+        'ad_session_id': _requiredString,
+        'ad_material_id': _requiredString,
+        'drama_id': _string,
+        'episode_id': _string,
+        'ad_view_duration_ms': _requiredNumber,
+        'ad_view_result': _requiredString,
+      },
+    ),
+    shareAppOpen: AnalyticsEventDefinition(
+      name: shareAppOpen,
+      parameters: {'landing_type': _requiredString},
+    ),
+  });
+}
+
+/// 基于已登记事件定义进行校验。
+class AnalyticsEventValidator {
+  AnalyticsEventValidator(this._definitions);
+
+  final Map<String, AnalyticsEventDefinition> _definitions;
+
+  void validate(AnalyticsEvent event) {
+    final definition = _definitions[event.name];
+    if (definition == null) {
+      throw AnalyticsValidationError(eventName: event.name, reason: '事件未登记');
+    }
+
+    for (final entry in definition.parameters.entries) {
+      final value = event.parameters[entry.key];
+      final rule = entry.value;
+      if (value == null || (value is String && value.isEmpty)) {
+        if (rule.isRequired(event.parameters)) {
+          throw AnalyticsValidationError(
+            eventName: event.name,
+            parameterName: entry.key,
+            reason: '缺少必传参数',
+          );
+        }
+        continue;
+      }
+      if (!_matchesType(value, rule.type)) {
+        throw AnalyticsValidationError(
+          eventName: event.name,
+          parameterName: entry.key,
+          reason: '参数类型不正确',
+        );
+      }
+      final allowedValues = rule.allowedValues;
+      if (allowedValues != null && !allowedValues.contains(value)) {
+        throw AnalyticsValidationError(
+          eventName: event.name,
+          parameterName: entry.key,
+          reason: '参数枚举值不合法',
+        );
+      }
+    }
+
+    if (!definition.allowAdditionalParameters) {
+      for (final parameterName in event.parameters.keys) {
+        if (!definition.parameters.containsKey(parameterName)) {
+          throw AnalyticsValidationError(
+            eventName: event.name,
+            parameterName: parameterName,
+            reason: '该事件不允许此参数',
+          );
+        }
+      }
+    }
+  }
+
+  bool _matchesType(Object value, AnalyticsParameterType type) {
+    return switch (type) {
+      AnalyticsParameterType.string => value is String,
+      AnalyticsParameterType.number => value is num,
+    };
+  }
+}

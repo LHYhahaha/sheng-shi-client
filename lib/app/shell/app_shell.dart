@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/router/route_paths.dart';
 import '../../core/account/account_ban_controller.dart';
+import '../../core/analytics/analytics_page_tracker.dart';
 import '../../features/player/application/player_playback_controller.dart';
 import '../../features/popup/application/popup_entry_controller.dart';
 import '../../features/popup/domain/popup.dart';
@@ -101,6 +102,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         return;
       }
       _requestPopupForIndex(widget.navigationShell.currentIndex);
+      _trackPageForIndex(widget.navigationShell.currentIndex);
     });
   }
 
@@ -113,6 +115,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         to: navigationIndex,
       );
       _lastNavigationIndex = navigationIndex;
+      _trackPageForIndex(navigationIndex);
     }
     final showBottomNavigation = ref.watch(
       appShellBottomNavigationVisibleProvider,
@@ -179,6 +182,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       initialLocation: index == currentIndex,
     );
     _requestPopupForIndex(index);
+    _trackPageForIndex(index);
   }
 
   /// Handles both bottom-navigation taps and router-driven branch changes.
@@ -233,6 +237,20 @@ class _AppShellState extends ConsumerState<AppShell> {
           .read(popupEntryControllerProvider.notifier)
           .requestForPlacement(placement),
     );
+  }
+
+  void _trackPageForIndex(int index) {
+    final pageName = switch (index) {
+      AppShellDestinations.homeIndex => AnalyticsPageNames.home,
+      AppShellDestinations.forYouIndex => AnalyticsPageNames.recommend,
+      AppShellDestinations.memberIndex => AnalyticsPageNames.vipTab,
+      AppShellDestinations.myListIndex => AnalyticsPageNames.favorite,
+      AppShellDestinations.profileIndex => AnalyticsPageNames.my,
+      _ => null,
+    };
+    if (pageName != null) {
+      unawaited(ref.read(analyticsPageTrackerProvider).replace(pageName));
+    }
   }
 }
 

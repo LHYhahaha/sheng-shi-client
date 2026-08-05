@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/modal/app_modal_controller.dart';
+import '../../../core/analytics/analytics_popup_names.dart';
 import '../../../core/modal/app_modal_policy.dart';
 import '../../../core/modal/app_modal_provider.dart';
 import '../../../core/modal/app_modal_request.dart';
@@ -43,6 +44,11 @@ class MembershipModalCoordinator {
       channel: MembershipModalChannels.purchaseConfirmation,
       type: AppModalType.membershipPurchase,
       payload: MembershipPurchaseModalPayload(planId: plan.id),
+      analyticsPopupShowParameters: {
+        'popup_name': AnalyticsPopupNames.payment,
+        'product_id': plan.id,
+        'product_type': 'membership',
+      },
       priority: AppModalPriority.high,
     );
 
@@ -57,8 +63,7 @@ class MembershipModalCoordinator {
         const MembershipPurchaseModalResult.cancelled(),
       AppModalResultKind.dismissed =>
         const MembershipPurchaseModalResult.dismissed(),
-      AppModalResultKind.failed =>
-        const MembershipPurchaseModalResult.failed(),
+      AppModalResultKind.failed => const MembershipPurchaseModalResult.failed(),
     };
   }
 

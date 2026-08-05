@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/modal/app_modal_controller.dart';
+import '../../../core/analytics/analytics_popup_names.dart';
 import '../../../core/modal/app_modal_policy.dart';
 import '../../../core/modal/app_modal_provider.dart';
 import '../../../core/modal/app_modal_request.dart';
@@ -118,6 +119,12 @@ class PlayerUnlockModalCoordinator {
         itemId: item.id,
         price: item.episode.requiredCoins,
       ),
+      analyticsPopupShowParameters: {
+        'popup_name': AnalyticsPopupNames.episodeUnlockConfirm,
+        'drama_id': item.content.id,
+        'episode_id': item.episode.id,
+        'required_coin_amount': item.episode.requiredCoins,
+      },
     );
 
     final result = await _modalService.show(request);
@@ -176,6 +183,12 @@ class PlayerUnlockModalCoordinator {
         cover: item.content.coverUrl ?? '',
         episodeId: episodeId,
       ),
+      analyticsPopupShowParameters: {
+        'popup_name': AnalyticsPopupNames.coinRecharge,
+        'drama_id': item.content.id,
+        'episode_id': item.episode.id,
+        'required_coin_amount': item.episode.requiredCoins,
+      },
     );
 
     final result = await _modalService.show(request);
@@ -239,12 +252,14 @@ class PlayerUnlockModalCoordinator {
     required String channel,
     required AppModalType type,
     required Object? payload,
+    Map<String, Object?>? analyticsPopupShowParameters,
   }) {
     return FeatureAppModalRequest(
       requestId: _modalController.nextRequestId(),
       source: AppModalSource.player,
       channel: channel,
       payload: payload,
+      analyticsPopupShowParameters: analyticsPopupShowParameters,
       type: type,
       priority: AppModalPriority.high,
       dismissPolicy: AppModalDismissPolicy.standard,

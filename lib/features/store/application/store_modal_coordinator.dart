@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/modal/app_modal_controller.dart';
+import '../../../core/analytics/analytics_popup_names.dart';
 import '../../../core/modal/app_modal_policy.dart';
 import '../../../core/modal/app_modal_provider.dart';
 import '../../../core/modal/app_modal_request.dart';
@@ -43,6 +44,11 @@ class StoreModalCoordinator {
       channel: StoreModalChannels.purchaseConfirmation,
       type: AppModalType.storeConfirm,
       payload: StorePurchaseModalPayload(packageId: package.id),
+      analyticsPopupShowParameters: {
+        'popup_name': AnalyticsPopupNames.payment,
+        'product_id': package.id,
+        'product_type': 'coin_package',
+      },
       priority: AppModalPriority.high,
     );
 

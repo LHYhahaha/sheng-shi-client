@@ -13,6 +13,7 @@ import '../bootstrap/i18n_bootstrap.dart';
 import '../core/active/app_active_reporter.dart';
 import '../core/account/account_ban_controller.dart';
 import '../core/account/account_banned_overlay.dart';
+import '../core/analytics/analytics_lifecycle_tracker.dart';
 import '../core/i18n/i18n.dart';
 import '../core/locale/app_locale_controller.dart';
 import '../core/modal/app_modal_host.dart';
@@ -232,6 +233,9 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       return;
     }
     unawaited(ref.read(appActiveReporterProvider).onLifecycleChanged(state));
+    unawaited(
+      ref.read(analyticsLifecycleTrackerProvider).onLifecycleChanged(state),
+    );
     final currentPlacement = ref.read(appShellBottomNavigationVisibleProvider)
         ? AppShellDestinations.popupPlacementForIndex(
             ref.read(appShellCurrentTabIndexProvider),
@@ -256,6 +260,9 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       debugPrint('[TokenInit] Starting token initialization...');
       await ref.read(authControllerProvider.notifier).load();
       debugPrint('[TokenInit] AuthController.load() completed');
+      unawaited(
+        ref.read(analyticsLifecycleTrackerProvider).onApplicationReady(),
+      );
       unawaited(_reportAppLaunchSafely());
       unawaited(_requestStartupPopupSafely());
     } catch (e, stackTrace) {

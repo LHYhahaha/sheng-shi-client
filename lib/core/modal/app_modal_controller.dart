@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'app_modal_observer.dart';
+import 'app_modal_analytics_tracker.dart';
 import 'app_modal_queue.dart';
 import 'app_modal_request.dart';
 import 'app_modal_result.dart';
@@ -28,13 +29,16 @@ class AppModalController extends ChangeNotifier {
     AppModalQueue? queue,
     AppModalObserver? observer,
     AppModalRuntimeConfig? runtimeConfig,
+    AppModalAnalyticsTracker? analyticsTracker,
   }) : _queue = queue ?? AppModalQueue(),
        _observer = observer ?? const NoOpAppModalObserver(),
-       _runtimeConfig = runtimeConfig ?? AppModalRuntimeConfig.defaults;
+       _runtimeConfig = runtimeConfig ?? AppModalRuntimeConfig.defaults,
+       _analyticsTracker = analyticsTracker;
 
   final AppModalQueue _queue;
   final AppModalObserver _observer;
   final AppModalRuntimeConfig _runtimeConfig;
+  final AppModalAnalyticsTracker? _analyticsTracker;
 
   AppModalPresentation? _current;
   final List<AppModalPresentation> _stacked = [];
@@ -127,6 +131,7 @@ class AppModalController extends ChangeNotifier {
     if (presentation == null) {
       return;
     }
+    _analyticsTracker?.onPresented(presentation.request);
     _emit(
       AppModalObserverEvent(
         kind: AppModalObserverEventKind.presented,
@@ -290,6 +295,7 @@ class AppModalController extends ChangeNotifier {
     AppModalPresentation presentation,
     AppModalResult result,
   ) {
+    _analyticsTracker?.onClosed(presentation.request);
     if (!presentation.completer.isCompleted) {
       presentation.completer.complete(result);
     }
