@@ -215,27 +215,35 @@ class _StorePageState extends ConsumerState<StorePage> {
     }
   }
 
-  void _selectPackageForPurchase(StorePackage package, int position) {
+  Future<void> _selectPackageForPurchase(
+    StorePackage package,
+    int position,
+  ) async {
     final isCoinPackage = package.kind == StorePackageKind.coins;
-    unawaited(
-      ref
-          .read(analyticsServiceProvider)
-          .track(
-            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
-              'element_name': isCoinPackage
-                  ? 'coin_product_card'
-                  : 'vip_product_card',
-              'product_id': package.id,
-              'product_type': _analyticsProductTypeForPackage(package),
-              'position': position,
-            }),
-          ),
-    );
-    unawaited(
-      ref
-          .read(storeControllerProvider.notifier)
-          .selectPackageForPurchase(package.id),
-    );
+    await ref
+        .read(storeControllerProvider.notifier)
+        .selectPackageForPurchase(
+          package.id,
+          onPaymentActionResolved: (shouldShowCashier) {
+            unawaited(
+              ref
+                  .read(analyticsServiceProvider)
+                  .track(
+                    AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                      'element_name': isCoinPackage
+                          ? 'coin_product_card'
+                          : 'vip_product_card',
+                      'product_id': package.id,
+                      'product_type': _analyticsProductTypeForPackage(package),
+                      'position': position,
+                      'payment_click_action': shouldShowCashier
+                          ? 'open_payment_popup'
+                          : 'start_payment',
+                    }),
+                  ),
+            );
+          },
+        );
   }
 }
 

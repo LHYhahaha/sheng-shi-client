@@ -189,9 +189,30 @@ class _PlayerPaymentMethodSheetState
         },
         paymentMethods: _displayMethods(context, state.paymentMethods),
         selectedPaymentMethodId: state.selectedPaymentMethodCode,
-        onPaymentMethodSelected: ref
-            .read(provider.notifier)
-            .selectPaymentMethod,
+        onPaymentMethodSelected: (methodCode) {
+          final position = state.paymentMethods.indexWhere(
+            (method) => method.methodCode == methodCode,
+          );
+          if (position >= 0) {
+            final method = state.paymentMethods[position];
+            unawaited(
+              ref
+                  .read(analyticsServiceProvider)
+                  .track(
+                    AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                      'element_name': 'payment_method_item',
+                      'payment_method_id': method.methodCode,
+                      'payment_method_type':
+                          PayChannel.analyticsPaymentMethodTypeFor(
+                            method.payChannel,
+                          ),
+                      'position': position + 1,
+                    }),
+                  ),
+            );
+          }
+          ref.read(provider.notifier).selectPaymentMethod(methodCode);
+        },
       ),
     );
   }

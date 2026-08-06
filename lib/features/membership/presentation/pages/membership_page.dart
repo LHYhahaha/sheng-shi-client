@@ -274,6 +274,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
                       .plans
                       .indexWhere((item) => item.id == plan.id) +
                   1,
+              'payment_click_action': 'select_product',
             }),
           ),
     );

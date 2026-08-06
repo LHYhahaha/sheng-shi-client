@@ -268,16 +268,29 @@ class PlayerRechargeUnlockController
   /// 商品卡片点击入口：先由服务端决定可用支付方式。
   ///
   /// 返回 true 表示需展示应用内购买确认弹框；仅 Google Play 时已直接拉起 IAP。
-  Future<bool> prepareCoinPackagePurchase(String packageId) =>
-      _preparePackagePurchase(packageId, isCoinPackage: true);
+  Future<bool> prepareCoinPackagePurchase(
+    String packageId, {
+    void Function(bool shouldShowCashier)? onPaymentActionResolved,
+  }) => _preparePackagePurchase(
+    packageId,
+    isCoinPackage: true,
+    onPaymentActionResolved: onPaymentActionResolved,
+  );
 
   /// 商品卡片点击入口：先由服务端决定可用支付方式。
-  Future<bool> prepareMembershipPackagePurchase(String packageId) =>
-      _preparePackagePurchase(packageId, isCoinPackage: false);
+  Future<bool> prepareMembershipPackagePurchase(
+    String packageId, {
+    void Function(bool shouldShowCashier)? onPaymentActionResolved,
+  }) => _preparePackagePurchase(
+    packageId,
+    isCoinPackage: false,
+    onPaymentActionResolved: onPaymentActionResolved,
+  );
 
   Future<bool> _preparePackagePurchase(
     String packageId, {
     required bool isCoinPackage,
+    void Function(bool shouldShowCashier)? onPaymentActionResolved,
   }) async {
     final offer = state.offer;
     final exists = isCoinPackage
@@ -304,12 +317,14 @@ class PlayerRechargeUnlockController
           );
       final supportedMethods = _supportedPaymentMethods(options.options);
       if (supportedMethods.isEmpty) {
+        onPaymentActionResolved?.call(false);
         await _startPreparedPayment(
           packageId,
           isCoinPackage: isCoinPackage,
           payChannel: _defaultPaymentChannel,
         );
       } else if (supportedMethods.length == 1) {
+        onPaymentActionResolved?.call(false);
         await _startPreparedPayment(
           packageId,
           isCoinPackage: isCoinPackage,
@@ -318,6 +333,7 @@ class PlayerRechargeUnlockController
         );
       } else {
         _preparePaymentMethodSelection(options, supportedMethods);
+        onPaymentActionResolved?.call(true);
         return true;
       }
     } catch (error, stackTrace) {
@@ -326,6 +342,7 @@ class PlayerRechargeUnlockController
         '$error\n$stackTrace',
       );
       // 支付方式接口不可用时，按空列表处理，走设备默认支付方式兜底。
+      onPaymentActionResolved?.call(false);
       await _startPreparedPayment(
         packageId,
         isCoinPackage: isCoinPackage,

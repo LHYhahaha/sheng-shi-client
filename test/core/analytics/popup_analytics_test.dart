@@ -39,4 +39,37 @@ void main() {
     expect(popupShowParams(const PopupConfig(jumpType: 99)), isNull);
     expect(popupCloseName(const PopupConfig(jumpType: 99)), isNull);
   });
+
+  test('maps a specified drama campaign click from the popup API', () {
+    final params = campaignContentClickParams(
+      const PopupConfig(
+        id: 12,
+        jumpType: 3,
+        shortJumpMode: 1,
+        shortDramaId: 99,
+      ),
+    );
+
+    expect(params, {
+      'element_name': 'campaign_content',
+      'popup_config_id': '12',
+      'popup_target_type': 'drama',
+      'target_drama_id': '99',
+      'drama_recommend_type': 'specified',
+    });
+  });
+
+  test('maps an automatic drama campaign click from the popup API', () {
+    final params = campaignContentClickParams(
+      const PopupConfig(
+        id: 13,
+        jumpType: 3,
+        shortJumpMode: 2,
+        shortDramaId: 100,
+      ),
+    );
+
+    expect(params?['drama_recommend_type'], 'auto');
+    expect(params?['target_drama_id'], '100');
+  });
 }

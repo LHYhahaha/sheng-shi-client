@@ -4,6 +4,8 @@ import 'analytics_event.dart';
 enum AnalyticsParameterType { string, number }
 
 typedef AnalyticsRequiredWhen = bool Function(Map<String, Object?> params);
+typedef AnalyticsAllowedValuesWhen =
+    Set<Object>? Function(Map<String, Object?> params);
 
 class AnalyticsParameterRule {
   const AnalyticsParameterRule({
@@ -11,15 +13,20 @@ class AnalyticsParameterRule {
     this.required = false,
     this.requiredWhen,
     this.allowedValues,
+    this.allowedValuesWhen,
   });
 
   final AnalyticsParameterType type;
   final bool required;
   final AnalyticsRequiredWhen? requiredWhen;
   final Set<Object>? allowedValues;
+  final AnalyticsAllowedValuesWhen? allowedValuesWhen;
 
   bool isRequired(Map<String, Object?> params) =>
       required || (requiredWhen?.call(params) ?? false);
+
+  Set<Object>? allowedValuesFor(Map<String, Object?> params) =>
+      allowedValuesWhen?.call(params) ?? allowedValues;
 }
 
 /// 单个事件的本地定义。事件与参数名必须与埋点表完全一致。
@@ -144,7 +151,95 @@ abstract final class AnalyticsDefinitions {
       name: elementClick,
       parameters: {
         'element_name': _requiredString,
-        'position': _number,
+        'position': AnalyticsParameterRule(
+          type: AnalyticsParameterType.number,
+          requiredWhen: (params) =>
+              params['element_name'] == 'payment_method_item' ||
+              params['element_name'] == 'home_category_tab' ||
+              params['element_name'] == 'vip_product_card' ||
+              params['element_name'] == 'coin_product_card',
+        ),
+        'category_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'home_category_tab',
+        ),
+        'favorite_tab': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => params['element_name'] == 'favorite_tab',
+          allowedValues: {'watching', 'history'},
+        ),
+        'popup_config_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'campaign_content',
+        ),
+        'popup_target_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'campaign_content',
+          allowedValues: {'close', 'h5', 'page', 'drama'},
+        ),
+        'target_drama_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'campaign_content' &&
+              params['popup_target_type'] == 'drama',
+        ),
+        'drama_recommend_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'campaign_content' &&
+              params['popup_target_type'] == 'drama',
+          allowedValues: {'specified', 'auto'},
+        ),
+        'product_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'vip_product_card' ||
+              params['element_name'] == 'coin_product_card',
+        ),
+        'product_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'vip_product_card' ||
+              params['element_name'] == 'coin_product_card',
+          allowedValuesWhen: (params) => switch (params['element_name']) {
+            'coin_product_card' => {'coin'},
+            'vip_product_card' => {'vip_once', 'vip_subscription'},
+            _ => null,
+          },
+        ),
+        'payment_click_action': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'vip_product_card' ||
+              params['element_name'] == 'coin_product_card',
+          allowedValuesWhen: (params) => switch (params['element_name']) {
+            'coin_product_card' => {'open_payment_popup', 'start_payment'},
+            'vip_product_card' => {
+              'select_product',
+              'open_payment_popup',
+              'start_payment',
+            },
+            _ => null,
+          },
+        ),
+        'recharge_popup_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          allowedValues: {'with_coin', 'vip_only'},
+        ),
+        'payment_method_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'payment_method_item',
+        ),
+        'payment_method_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'payment_method_item',
+          allowedValues: {'apple_iap', 'google_play', 'third_party_h5'},
+        ),
         'drama_id': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
           requiredWhen: (params) =>
@@ -350,7 +445,7 @@ class AnalyticsEventValidator {
           reason: '参数类型不正确',
         );
       }
-      final allowedValues = rule.allowedValues;
+      final allowedValues = rule.allowedValuesFor(event.parameters);
       if (allowedValues != null && !allowedValues.contains(value)) {
         throw AnalyticsValidationError(
           eventName: event.name,

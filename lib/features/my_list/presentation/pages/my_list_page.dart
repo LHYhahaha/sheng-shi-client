@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,9 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../core/utils/text_over_ellipsis.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -211,7 +215,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
                   ),
                   _MyListTabs(
                     selectedTab: state.selectedTab,
-                    onSelected: controller.selectTab,
+                    onSelected: _selectMyListTab,
                   ),
                   Expanded(
                     child: _buildBody(
@@ -238,6 +242,26 @@ class _MyListPageState extends ConsumerState<MyListPage> {
         ),
       ),
     );
+  }
+
+  void _selectMyListTab(MyListTab tab) {
+    if (ref.read(myListControllerProvider).selectedTab == tab) {
+      return;
+    }
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+              'element_name': 'favorite_tab',
+              'favorite_tab': switch (tab) {
+                MyListTab.collection => 'watching',
+                MyListTab.play => 'history',
+              },
+            }),
+          ),
+    );
+    unawaited(ref.read(myListControllerProvider.notifier).selectTab(tab));
   }
 
   Widget _buildBody(

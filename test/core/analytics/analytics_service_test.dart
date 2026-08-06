@@ -121,6 +121,72 @@ void main() {
     );
   });
 
+  test('vip product card requires the documented click action', () {
+    final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+    const baseParams = {
+      'element_name': 'vip_product_card',
+      'product_id': '358',
+      'product_type': 'vip_subscription',
+      'position': 1,
+    };
+
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+          ...baseParams,
+          'payment_click_action': 'select_product',
+          'recharge_popup_type': 'with_coin',
+        }),
+      ),
+      returnsNormally,
+    );
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.elementClick, baseParams),
+      ),
+      throwsA(isA<AnalyticsValidationError>()),
+    );
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+          ...baseParams,
+          'payment_click_action': 'choose',
+        }),
+      ),
+      throwsA(isA<AnalyticsValidationError>()),
+    );
+  });
+
+  test('coin product card only accepts coin payment actions', () {
+    final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+    const baseParams = {
+      'element_name': 'coin_product_card',
+      'product_id': '100',
+      'product_type': 'coin',
+      'position': 1,
+    };
+
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+          ...baseParams,
+          'payment_click_action': 'open_payment_popup',
+          'recharge_popup_type': 'with_coin',
+        }),
+      ),
+      returnsNormally,
+    );
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+          ...baseParams,
+          'payment_click_action': 'select_product',
+        }),
+      ),
+      throwsA(isA<AnalyticsValidationError>()),
+    );
+  });
+
   test(
     'search result click requires drama, keyword and one-based position',
     () {

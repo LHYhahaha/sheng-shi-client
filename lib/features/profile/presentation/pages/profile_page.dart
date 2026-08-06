@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell.dart';
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/auth/user_info_store.dart';
 import '../../../../core/network/test_network_config.dart';
 import '../../../../core/network/test_network_config_dialog.dart';
@@ -117,11 +122,25 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             const SizedBox(height: 21),
             ProfileMembershipCard(
               membership: state.membership,
-              onTap: () => context.push(
-                state.membership.isActive
-                    ? RoutePaths.myMember
-                    : RoutePaths.membershipLocation(returnToProfile: true),
-              ),
+              onTap: () {
+                if (!state.membership.isActive) {
+                  unawaited(
+                    ref
+                        .read(analyticsServiceProvider)
+                        .track(
+                          const AnalyticsEvent(
+                            AnalyticsDefinitions.elementClick,
+                            {'element_name': 'vip_entry'},
+                          ),
+                        ),
+                  );
+                }
+                context.push(
+                  state.membership.isActive
+                      ? RoutePaths.myMember
+                      : RoutePaths.membershipLocation(returnToProfile: true),
+                );
+              },
             ),
             const SizedBox(height: 12),
             ProfileCoinsCard(

@@ -270,19 +270,25 @@ class StoreController extends Notifier<StoreState> {
   /// 商品点击入口：先向服务端获取可用支付方式。
   ///
   /// 仅 Google Play 时直接进入既有 IAP 流程；存在其他渠道时再展示收银台。
-  Future<void> selectPackageForPurchase(String id) async {
+  /// 返回 true 表示展示支付方式弹窗；false 表示已直接尝试拉起支付。
+  Future<bool> selectPackageForPurchase(
+    String id, {
+    void Function(bool shouldShowCashier)? onPaymentActionResolved,
+  }) async {
     selectPackage(id);
     final package = state.selectedPackage;
     if (package == null) {
-      return;
+      return false;
     }
 
     try {
       final options = await _fetchPaymentOptions(package);
       final supportedMethods = _supportedPaymentMethods(options.options);
       if (supportedMethods.isEmpty) {
+        onPaymentActionResolved?.call(false);
         await _startPayment(package, _defaultPaymentChannel);
       } else if (supportedMethods.length == 1) {
+        onPaymentActionResolved?.call(false);
         await _startPayment(
           package,
           supportedMethods.single.payChannel,
@@ -291,12 +297,16 @@ class StoreController extends Notifier<StoreState> {
       } else {
         _preparePaymentMethodSelection(options, supportedMethods);
         showConfirmation();
+        onPaymentActionResolved?.call(true);
+        return true;
       }
     } catch (error, stackTrace) {
       debugPrint('[Store] payment options failed: $error\n$stackTrace');
       // 支付方式接口不可用时，按空列表处理，走设备默认支付方式兜底。
+      onPaymentActionResolved?.call(false);
       await _startPayment(package, _defaultPaymentChannel);
     }
+    return false;
   }
 
   void showConfirmation() {

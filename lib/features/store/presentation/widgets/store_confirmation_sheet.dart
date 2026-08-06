@@ -1,5 +1,11 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/utils/period_iso_parser.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/app_payment_method_sheet.dart';
@@ -8,7 +14,7 @@ import '../../../pay/domain/payment_method_options.dart';
 import '../../application/store_controller.dart';
 import '../../domain/store_package.dart';
 
-class StoreConfirmationSheet extends StatelessWidget {
+class StoreConfirmationSheet extends ConsumerWidget {
   const StoreConfirmationSheet({
     required this.package,
     required this.status,
@@ -29,7 +35,7 @@ class StoreConfirmationSheet extends StatelessWidget {
   final VoidCallback onClose;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final languageCode = Localizations.localeOf(context).languageCode;
     final title = package.isCoinPackage
@@ -70,7 +76,30 @@ class StoreConfirmationSheet extends StatelessWidget {
       onClose: onClose,
       paymentMethods: _displayMethods(context),
       selectedPaymentMethodId: selectedPaymentMethodCode,
-      onPaymentMethodSelected: onPaymentMethodSelected,
+      onPaymentMethodSelected: (methodCode) {
+        final position = paymentMethods.indexWhere(
+          (method) => method.methodCode == methodCode,
+        );
+        if (position >= 0) {
+          final method = paymentMethods[position];
+          unawaited(
+            ref
+                .read(analyticsServiceProvider)
+                .track(
+                  AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                    'element_name': 'payment_method_item',
+                    'payment_method_id': method.methodCode,
+                    'payment_method_type':
+                        PayChannel.analyticsPaymentMethodTypeFor(
+                          method.payChannel,
+                        ),
+                    'position': position + 1,
+                  }),
+                ),
+          );
+        }
+        onPaymentMethodSelected(methodCode);
+      },
     );
   }
 

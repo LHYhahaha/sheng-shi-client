@@ -118,30 +118,30 @@ class _PlayerRechargeUnlockSheetState
 
   Future<void> _onCoinPackageTap(PlayerRechargeCoinPackage package) async {
     _didHandleDirectPaymentTerminal = false;
+    final offer = ref
+        .read(playerRechargeUnlockControllerProvider(widget.sessionKey))
+        .offer;
     final position =
-        ref
-            .read(playerRechargeUnlockControllerProvider(widget.sessionKey))
-            .offer
-            ?.coinPackages
-            .indexWhere((item) => item.id == package.id) ??
-        -1;
-    unawaited(
-      ref
-          .read(analyticsServiceProvider)
-          .track(
-            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
-              'element_name': 'coin_product_card',
-              'product_id': package.id,
-              'product_type': 'coin',
-              'position': position + 1,
-            }),
-          ),
-    );
+        offer?.coinPackages.indexWhere((item) => item.id == package.id) ?? -1;
     final shouldShowCashier = await ref
         .read(
           playerRechargeUnlockControllerProvider(widget.sessionKey).notifier,
         )
-        .prepareCoinPackagePurchase(package.id);
+        .prepareCoinPackagePurchase(
+          package.id,
+          onPaymentActionResolved: (shouldShowCashier) {
+            _trackRechargeProductCard(
+              elementName: 'coin_product_card',
+              productId: package.id,
+              productType: 'coin',
+              position: position + 1,
+              shouldShowCashier: shouldShowCashier,
+              rechargePopupType: offer?.coinPackages.isNotEmpty == true
+                  ? 'with_coin'
+                  : 'vip_only',
+            );
+          },
+        );
     if (shouldShowCashier && mounted) {
       await _presentPaymentMethod(PlayerPaymentSelection.coin(package));
     }
@@ -151,35 +151,62 @@ class _PlayerRechargeUnlockSheetState
     PlayerRechargeMembershipPackage package,
   ) async {
     _didHandleDirectPaymentTerminal = false;
+    final offer = ref
+        .read(playerRechargeUnlockControllerProvider(widget.sessionKey))
+        .offer;
     final position =
-        ref
-            .read(playerRechargeUnlockControllerProvider(widget.sessionKey))
-            .offer
-            ?.membershipPackages
-            .indexWhere((item) => item.id == package.id) ??
+        offer?.membershipPackages.indexWhere((item) => item.id == package.id) ??
         -1;
+    final shouldShowCashier = await ref
+        .read(
+          playerRechargeUnlockControllerProvider(widget.sessionKey).notifier,
+        )
+        .prepareMembershipPackagePurchase(
+          package.id,
+          onPaymentActionResolved: (shouldShowCashier) {
+            _trackRechargeProductCard(
+              elementName: 'vip_product_card',
+              productId: package.id,
+              productType: package.periodIso == null
+                  ? 'vip_once'
+                  : 'vip_subscription',
+              position: position + 1,
+              shouldShowCashier: shouldShowCashier,
+              rechargePopupType: offer?.coinPackages.isNotEmpty == true
+                  ? 'with_coin'
+                  : 'vip_only',
+            );
+          },
+        );
+    if (shouldShowCashier && mounted) {
+      await _presentPaymentMethod(PlayerPaymentSelection.membership(package));
+    }
+  }
+
+  void _trackRechargeProductCard({
+    required String elementName,
+    required String productId,
+    required String productType,
+    required int position,
+    required bool shouldShowCashier,
+    required String rechargePopupType,
+  }) {
     unawaited(
       ref
           .read(analyticsServiceProvider)
           .track(
             AnalyticsEvent(AnalyticsDefinitions.elementClick, {
-              'element_name': 'vip_product_card',
-              'product_id': package.id,
-              'product_type': package.periodIso == null
-                  ? 'vip_once'
-                  : 'vip_subscription',
-              'position': position + 1,
+              'element_name': elementName,
+              'product_id': productId,
+              'product_type': productType,
+              'position': position,
+              'payment_click_action': shouldShowCashier
+                  ? 'open_payment_popup'
+                  : 'start_payment',
+              'recharge_popup_type': rechargePopupType,
             }),
           ),
     );
-    final shouldShowCashier = await ref
-        .read(
-          playerRechargeUnlockControllerProvider(widget.sessionKey).notifier,
-        )
-        .prepareMembershipPackagePurchase(package.id);
-    if (shouldShowCashier && mounted) {
-      await _presentPaymentMethod(PlayerPaymentSelection.membership(package));
-    }
   }
 
   @override

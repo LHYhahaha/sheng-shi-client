@@ -13,7 +13,10 @@ import '../bootstrap/i18n_bootstrap.dart';
 import '../core/active/app_active_reporter.dart';
 import '../core/account/account_ban_controller.dart';
 import '../core/account/account_banned_overlay.dart';
+import '../core/analytics/analytics_definition.dart';
+import '../core/analytics/analytics_event.dart';
 import '../core/analytics/analytics_lifecycle_tracker.dart';
+import '../core/analytics/analytics_provider.dart';
 import '../core/i18n/i18n.dart';
 import '../core/locale/app_locale_controller.dart';
 import '../core/modal/app_modal_host.dart';
@@ -23,6 +26,7 @@ import '../core/notification/fcm_notification_service.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/pay/application/payment_loading_controller.dart';
 import '../features/popup/application/popup_entry_controller.dart';
+import '../features/popup/application/popup_analytics.dart';
 import '../features/popup/domain/popup.dart';
 import '../features/popup/presentation/widgets/popup_entry_overlay.dart';
 import '../l10n/app_localizations.dart';
@@ -311,6 +315,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   }
 
   void _handlePopupImageTap(GoRouter router, PopupConfig popup) {
+    _trackCampaignContentClick(popup);
     ref.read(popupEntryControllerProvider.notifier).tapActivePopupImage(popup);
     final contentMode = popup.contentMode;
     if (contentMode == 2) {
@@ -343,7 +348,20 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   }
 
   void _handlePopupPlayTap(GoRouter router, PopupConfig popup) {
+    _trackCampaignContentClick(popup);
     _closePopupAndOpenDrama(router, popup);
+  }
+
+  void _trackCampaignContentClick(PopupConfig popup) {
+    final params = campaignContentClickParams(popup);
+    if (params == null) {
+      return;
+    }
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(AnalyticsEvent(AnalyticsDefinitions.elementClick, params)),
+    );
   }
 
   void _dismissActivePopup() {

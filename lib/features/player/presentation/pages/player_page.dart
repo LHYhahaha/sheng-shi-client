@@ -29,6 +29,7 @@ import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/url/external_url_launcher.dart';
 import '../../../pay/application/payment_loading_controller.dart';
+import '../../../entitlement/application/entitlement_controller.dart';
 import '../../data/player_exit_recommendation_history_repository_provider.dart';
 import '../../../auth/application/auth_controller.dart';
 import '../../../auth/domain/auth_session.dart';
@@ -3078,6 +3079,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _openMembership() async {
+    if (!ref.read(entitlementControllerProvider).isMember) {
+      unawaited(
+        ref
+            .read(analyticsServiceProvider)
+            .track(
+              const AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                'element_name': 'vip_entry',
+              }),
+            ),
+      );
+    }
     final item = ref
         .read(playerFeedControllerProvider(_sessionKey))
         .currentItem;

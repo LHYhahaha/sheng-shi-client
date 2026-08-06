@@ -192,6 +192,17 @@ class _HomePageState extends ConsumerState<HomePage> {
         return;
       }
 
+      unawaited(
+        ref
+            .read(analyticsServiceProvider)
+            .track(
+              AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                'element_name': 'home_category_tab',
+                'category_id': remoteData.categories[index].id,
+                'position': index + 1,
+              }),
+            ),
+      );
       _saveCurrentTabScrollOffset(remoteData);
       setState(() {
         _remoteDataSelectedIndex = index;
@@ -627,11 +638,24 @@ class _HomeTitleBarState extends ConsumerState<_HomeTitleBar> {
         ),
         GestureDetector(
           key: const ValueKey('home_vip_entry'),
-          onTap: () => context.push(
-            isMember
-                ? RoutePaths.myMember
-                : RoutePaths.membershipLocation(returnToProfile: true),
-          ),
+          onTap: () {
+            if (!isMember) {
+              unawaited(
+                ref
+                    .read(analyticsServiceProvider)
+                    .track(
+                      const AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                        'element_name': 'vip_entry',
+                      }),
+                    ),
+              );
+            }
+            context.push(
+              isMember
+                  ? RoutePaths.myMember
+                  : RoutePaths.membershipLocation(returnToProfile: true),
+            );
+          },
           child: const Padding(
             padding: EdgeInsets.only(right: 1, left: 7),
             child: _VipCrown(),
