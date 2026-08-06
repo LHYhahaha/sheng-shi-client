@@ -1,4 +1,6 @@
-import 'package:flutter/foundation.dart';
+import 'dart:async';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/user_info_store.dart';
@@ -8,6 +10,7 @@ import '../runtime/api_lang_provider.dart';
 import '../runtime/api_platform_provider.dart';
 import '../runtime/api_region_code_provider.dart';
 import '../runtime/app_version_provider.dart';
+import '../network/api_client_provider.dart';
 import 'analytics_context.dart';
 import 'analytics_page_context.dart';
 import 'analytics_service.dart';
@@ -37,9 +40,26 @@ final analyticsContextProvider = Provider<AnalyticsContext>((ref) {
   );
 });
 
-/// 后端埋点接口未接入前的进程内缓冲；联调时替换为持久化上传 Sink。
+/// 后端埋点上传队列：启动恢复未发送事件，网络恢复后立即补发。
+final analyticsUploadSinkProvider = Provider<AnalyticsBatchUploadEventSink>((
+  ref,
+) {
+  final sink = AnalyticsBatchUploadEventSink(
+    apiClient: ref.watch(apiClientProvider),
+  );
+  unawaited(sink.initialize());
+  final subscription = Connectivity().onConnectivityChanged.listen((results) {
+    if (results.any((result) => result != ConnectivityResult.none)) {
+      unawaited(sink.flush());
+    }
+  });
+  ref.onDispose(subscription.cancel);
+  ref.onDispose(sink.dispose);
+  return sink;
+});
+
 final analyticsEventSinkProvider = Provider<AnalyticsEventSink>((ref) {
-  return AnalyticsInMemoryEventSink(logEvents: kDebugMode);
+  return ref.watch(analyticsUploadSinkProvider);
 });
 
 final analyticsServiceProvider = Provider<AnalyticsService>((ref) {

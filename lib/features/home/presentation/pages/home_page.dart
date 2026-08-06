@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell.dart';
 import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/drama_card_exposure.dart';
 import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/auth/auth_token_store.dart';
@@ -36,6 +37,7 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
+  final Object _dramaExposureSession = Object();
   final _scrollController = ScrollController();
   final Map<int, double> _tabScrollOffsets = <int, double>{};
   int _remoteDataSelectedIndex = 0; // 远程数据的选中分类索引
@@ -405,40 +407,47 @@ class _HomePageState extends ConsumerState<HomePage> {
                         itemBuilder: (context, index) {
                           final item = items[index];
 
-                          return _HomeDramaCard(
-                            key: ValueKey('home_drama_card_$index'),
-                            data: item,
-                            coverCacheWidth: coverCacheWidth,
-                            onTap: () {
-                              unawaited(
-                                ref
-                                    .read(analyticsServiceProvider)
-                                    .track(
-                                      AnalyticsEvent(
-                                        AnalyticsDefinitions.elementClick,
-                                        {
-                                          'element_name': 'drama_card',
-                                          'drama_id': item.id,
-                                          'position': index + 1,
-                                          'category_id':
-                                              selectedRemoteTab?.id
-                                                  .toString() ??
-                                              '',
-                                        },
+                          return DramaCardExposure(
+                            pageSession: _dramaExposureSession,
+                            analytics: ref.read(analyticsServiceProvider),
+                            dramaId: item.id,
+                            position: index + 1,
+                            categoryId: selectedRemoteTab?.id.toString() ?? '',
+                            child: _HomeDramaCard(
+                              key: ValueKey('home_drama_card_$index'),
+                              data: item,
+                              coverCacheWidth: coverCacheWidth,
+                              onTap: () {
+                                unawaited(
+                                  ref
+                                      .read(analyticsServiceProvider)
+                                      .track(
+                                        AnalyticsEvent(
+                                          AnalyticsDefinitions.elementClick,
+                                          {
+                                            'element_name': 'drama_card',
+                                            'drama_id': item.id,
+                                            'position': index + 1,
+                                            'category_id':
+                                                selectedRemoteTab?.id
+                                                    .toString() ??
+                                                '',
+                                          },
+                                        ),
                                       ),
-                                    ),
-                              );
-                              final tappedAt = DateTime.now();
-                              context.push(
-                                RoutePaths.playerLocation(
-                                  dramaId: item.id,
-                                  episodeId: '1',
-                                  trigger: 'home_card_tap',
-                                  userActionAtMs:
-                                      tappedAt.millisecondsSinceEpoch,
-                                ),
-                              );
-                            },
+                                );
+                                final tappedAt = DateTime.now();
+                                context.push(
+                                  RoutePaths.playerLocation(
+                                    dramaId: item.id,
+                                    episodeId: '1',
+                                    trigger: 'home_card_tap',
+                                    userActionAtMs:
+                                        tappedAt.millisecondsSinceEpoch,
+                                  ),
+                                );
+                              },
+                            ),
                           );
                         },
                       );

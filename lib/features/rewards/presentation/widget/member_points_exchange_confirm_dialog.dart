@@ -169,7 +169,22 @@ class _MemberPointsExchangeConfirmDialog extends StatelessWidget {
                           key: const Key(
                             'member_points_exchange_confirm_button',
                           ),
-                          onPressed: () => Navigator.of(context).pop(true),
+                          onPressed: () {
+                            unawaited(
+                              ProviderScope.containerOf(context)
+                                  .read(analyticsServiceProvider)
+                                  .track(
+                                    const AnalyticsEvent(
+                                      AnalyticsDefinitions.elementClick,
+                                      {
+                                        'element_name':
+                                            'member_points_exchange_confirm_button',
+                                      },
+                                    ),
+                                  ),
+                            );
+                            Navigator.of(context).pop(true);
+                          },
                           style: FilledButton.styleFrom(
                             backgroundColor: const Color(0xFFFF0080),
                             foregroundColor: Colors.white,

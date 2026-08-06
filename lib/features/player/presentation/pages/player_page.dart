@@ -2621,13 +2621,25 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _openRecommendationFromDetailSheet(
-    PlayerRecommendation recommendation,
-  ) async {
+    PlayerRecommendation recommendation, {
+    required int position,
+  }) async {
     if (_isOpeningRecommendation) {
       return;
     }
     _isOpeningRecommendation = true;
     try {
+      unawaited(
+        ref
+            .read(analyticsServiceProvider)
+            .track(
+              AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                'element_name': 'drama_card',
+                'drama_id': recommendation.id,
+                'position': position,
+              }),
+            ),
+      );
       final shouldResumeWhenRecommendationReturns = ref
           .read(playerPlaybackControllerProvider(_sessionKey))
           .isPlaying;
@@ -2873,8 +2885,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               onEpisodeSelected: (episode) {
                 _closeSheetAndSelectEpisode(sheetContext, episode);
               },
-              onRecommendationSelected: (recommendation) {
-                unawaited(_openRecommendationFromDetailSheet(recommendation));
+              onRecommendationSelected: (recommendation, position) {
+                unawaited(
+                  _openRecommendationFromDetailSheet(
+                    recommendation,
+                    position: position,
+                  ),
+                );
               },
             );
           },

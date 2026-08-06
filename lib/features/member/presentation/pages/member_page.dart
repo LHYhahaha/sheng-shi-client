@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell.dart';
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/auth/user_info_store.dart';
 import '../../../../core/toast/app_center_toast.dart';
 import '../../../../features/auth/application/auth_controller.dart';
@@ -252,14 +257,27 @@ class _MemberPageState extends ConsumerState<MemberPage> {
               needDivider: true,
               topPadding: 20,
               listPadding: EdgeInsetsGeometry.only(left: 16),
-              onDramaTap: (drama) => context.push(
-                RoutePaths.playerLocation(
-                  dramaId: drama.id,
-                  episodeId: '1',
-                  trigger: 'member_center_vip_only_drama_tap',
-                  userActionAtMs: DateTime.now().millisecondsSinceEpoch,
-                ),
-              ),
+              onDramaTap: (drama, position) {
+                unawaited(
+                  ref
+                      .read(analyticsServiceProvider)
+                      .track(
+                        AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                          'element_name': 'drama_card',
+                          'drama_id': drama.id,
+                          'position': position,
+                        }),
+                      ),
+                );
+                context.push(
+                  RoutePaths.playerLocation(
+                    dramaId: drama.id,
+                    episodeId: '1',
+                    trigger: 'member_center_vip_only_drama_tap',
+                    userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -482,6 +500,19 @@ class _RedeemCard extends ConsumerWidget {
                         );
                         return;
                       }
+                      unawaited(
+                        ref
+                            .read(analyticsServiceProvider)
+                            .track(
+                              const AnalyticsEvent(
+                                AnalyticsDefinitions.elementClick,
+                                {
+                                  'element_name':
+                                      'member_points_exchange_button',
+                                },
+                              ),
+                            ),
+                      );
                       final confirmed =
                           await showMemberPointsExchangeConfirmDialog(
                             context,

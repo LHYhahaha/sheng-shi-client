@@ -316,7 +316,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
         SizedBox(height: 220, child: _EmptyMyList(description: emptyText)),
       );
     } else {
-      for (final item in state.items) {
+      for (final (index, item) in state.items.indexed) {
         children.add(
           Padding(
             padding: EdgeInsets.only(
@@ -337,7 +337,13 @@ class _MyListPageState extends ConsumerState<MyListPage> {
                 selected: state.selectedIds.contains(item.dramaId),
                 onTap: state.isCollectionEditing
                     ? () => controller.toggleSelection(item.dramaId)
-                    : () => _openMyListItem(l10n, state, controller, item),
+                    : () => _openMyListItem(
+                        l10n,
+                        state,
+                        controller,
+                        item,
+                        position: index + 1,
+                      ),
               ),
             ),
           ),
@@ -365,7 +371,8 @@ class _MyListPageState extends ConsumerState<MyListPage> {
       children.add(
         _HotPlaysSection(
           dramas: hotPlays,
-          onTap: (drama) => _openHotPlay(controller, drama),
+          onTap: (drama, position) =>
+              _openHotPlay(controller, drama, position: position),
         ),
       );
     }
@@ -388,8 +395,9 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     AppLocalizations l10n,
     MyListState state,
     MyListController controller,
-    MyListItem item,
-  ) async {
+    MyListItem item, {
+    required int position,
+  }) async {
     if (item.dramaStatus == 2) {
       ref.read(appToastProvider).info(l10n.myListDramaOffShelf);
       return;
@@ -399,6 +407,17 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     final episodeId = item.episodeId != null && item.episodeId! > 0
         ? item.episodeId.toString()
         : '1';
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+              'element_name': 'drama_card',
+              'drama_id': item.dramaId.toString(),
+              'position': position,
+            }),
+          ),
+    );
     await context.push(
       RoutePaths.playerLocation(
         dramaId: item.dramaId.toString(),
@@ -411,8 +430,20 @@ class _MyListPageState extends ConsumerState<MyListPage> {
 
   Future<void> _openHotPlay(
     MyListController controller,
-    SearchRankDrama drama,
-  ) async {
+    SearchRankDrama drama, {
+    required int position,
+  }) async {
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+              'element_name': 'drama_card',
+              'drama_id': drama.id,
+              'position': position,
+            }),
+          ),
+    );
     await context.push(
       RoutePaths.playerLocation(
         dramaId: drama.id,
@@ -429,7 +460,7 @@ class _HotPlaysSection extends StatelessWidget {
   const _HotPlaysSection({required this.dramas, required this.onTap});
 
   final List<SearchRankDrama> dramas;
-  final ValueChanged<SearchRankDrama> onTap;
+  final void Function(SearchRankDrama drama, int position) onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -462,7 +493,7 @@ class _HotPlaysSection extends StatelessWidget {
               return _HotPlayCard(
                 drama: drama,
                 ranking: index + 1,
-                onTap: () => onTap(drama),
+                onTap: () => onTap(drama, index + 1),
               );
             },
           ),

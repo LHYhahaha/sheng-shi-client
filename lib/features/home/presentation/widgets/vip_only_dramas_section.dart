@@ -23,10 +23,11 @@ class VipOnlyDramasSection extends ConsumerWidget {
     this.backgroundColor,
     this.border,
     super.key,
-    this.topPadding, this.needDivider,
+    this.topPadding,
+    this.needDivider,
   });
 
-  final ValueChanged<VipOnlyDrama> onDramaTap;
+  final void Function(VipOnlyDrama drama, int position) onDramaTap;
   final EdgeInsetsGeometry padding;
   final EdgeInsetsGeometry listPadding;
   final Color? backgroundColor;
@@ -90,7 +91,7 @@ class VipOnlyDramasSection extends ConsumerWidget {
                       return _VipOnlyDramaCard(
                         width: cardWidth,
                         drama: drama,
-                        onTap: () => onDramaTap(drama),
+                        onTap: () => onDramaTap(drama, index + 1),
                       );
                     },
                   ),

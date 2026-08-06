@@ -18,6 +18,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   dio: ^5.9.2
   drift: ^2.33.0
+  crypto: ^3.0.7
   firebase_analytics: ^12.3.0
   firebase_core: ^4.7.0
   firebase_messaging: ^16.2.0

@@ -438,14 +438,27 @@ class _MembershipBody extends StatelessWidget {
                 listPadding: const EdgeInsets.symmetric(
                   horizontal: MembershipLayout.horizontalPadding,
                 ),
-                onDramaTap: (drama) => context.push(
-                  RoutePaths.playerLocation(
-                    dramaId: drama.id,
-                    episodeId: '1',
-                    trigger: 'membership_vip_only_drama_tap',
-                    userActionAtMs: DateTime.now().millisecondsSinceEpoch,
-                  ),
-                ),
+                onDramaTap: (drama, position) {
+                  unawaited(
+                    ProviderScope.containerOf(context)
+                        .read(analyticsServiceProvider)
+                        .track(
+                          AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                            'element_name': 'drama_card',
+                            'drama_id': drama.id,
+                            'position': position,
+                          }),
+                        ),
+                  );
+                  context.push(
+                    RoutePaths.playerLocation(
+                      dramaId: drama.id,
+                      episodeId: '1',
+                      trigger: 'membership_vip_only_drama_tap',
+                      userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+                    ),
+                  );
+                },
               ),
             ),
           ],

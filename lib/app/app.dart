@@ -132,6 +132,17 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     final openType = data['h5_open_type']?.trim() ?? data['open_type']?.trim();
     final router = ref.read(appRouterProvider);
 
+    _trackPushNotificationOpen(
+      notification: notification,
+      targetType: switch (type) {
+        'player' || 'drama' || 'drama_detail' || 'detail' => 'drama',
+        'page' => 'page',
+        'h5' || 'webview' || 'web' => 'h5',
+        _ => null,
+      },
+      dramaId: dramaId,
+    );
+
     if (type == 'player' && dramaId != null && dramaId.isNotEmpty) {
       router.go(
         RoutePaths.playerLocation(
@@ -183,6 +194,32 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     }
 
     debugPrint('[FCM] Ignored notification tap with unsupported data: $data');
+  }
+
+  void _trackPushNotificationOpen({
+    required FcmNotification notification,
+    required String? targetType,
+    required String? dramaId,
+  }) {
+    final pushId =
+        notification.id?.trim() ??
+        notification.data['push_id']?.trim() ??
+        notification.data['id']?.trim();
+    if (pushId == null || pushId.isEmpty || targetType == null) return;
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.pushNotificationOpen, {
+              'push_id': pushId,
+              'push_target_type': targetType,
+              if (targetType == 'drama' &&
+                  dramaId != null &&
+                  dramaId.isNotEmpty)
+                'drama_id': dramaId,
+            }),
+          ),
+    );
   }
 
   void _openFcmPage(GoRouter router, String? rawPage) {
@@ -237,9 +274,15 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       return;
     }
     unawaited(ref.read(appActiveReporterProvider).onLifecycleChanged(state));
-    unawaited(
-      ref.read(analyticsLifecycleTrackerProvider).onLifecycleChanged(state),
-    );
+    final analyticsLifecycleUpdate = ref
+        .read(analyticsLifecycleTrackerProvider)
+        .onLifecycleChanged(state);
+    unawaited(analyticsLifecycleUpdate);
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      unawaited(_flushAnalyticsAfterLifecycleUpdate(analyticsLifecycleUpdate));
+    }
     final currentPlacement = ref.read(appShellBottomNavigationVisibleProvider)
         ? AppShellDestinations.popupPlacementForIndex(
             ref.read(appShellCurrentTabIndexProvider),
@@ -250,6 +293,14 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
           .read(popupEntryControllerProvider.notifier)
           .onLifecycleChanged(state, currentPlacement: currentPlacement),
     );
+  }
+
+  Future<void> _flushAnalyticsAfterLifecycleUpdate(
+    Future<void> analyticsLifecycleUpdate,
+  ) async {
+    // 先确保 app_exit 已成功入队，再发送，避免切后台时漏掉最后一条事件。
+    await analyticsLifecycleUpdate;
+    await ref.read(analyticsUploadSinkProvider).flush();
   }
 
   Future<void> _setPreferredOrientations() async {

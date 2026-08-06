@@ -8,6 +8,9 @@ import 'package:gradient_borders/box_borders/gradient_box_border.dart';
 import 'package:permission_handler/permission_handler.dart' as permissions;
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/notification/startup_notification_permission_reporter.dart';
 import '../../../../core/auth/user_info_store.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
@@ -160,7 +163,7 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage>
               _CheckInPanel(
                 status: status,
                 isClaiming: rewardCoinsState.isClaiming,
-                onCheckIn: () => _claimCheckIn(context),
+                onCheckIn: (day) => _claimCheckIn(context, day),
               )
           else
             const _RewardsSectionNoData(
@@ -188,7 +191,17 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage>
     );
   }
 
-  Future<void> _claimCheckIn(BuildContext context) async {
+  Future<void> _claimCheckIn(BuildContext context, int checkInDay) async {
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+              'element_name': 'check_in_claim_button',
+              'check_in_day': checkInDay,
+            }),
+          ),
+    );
     try {
       final result = await ref
           .read(rewardCoinsControllerProvider.notifier)
@@ -221,6 +234,17 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage>
 
   Future<void> _handleTaskTap(BuildContext context, RewardTask task) async {
     if (task.claimed) return;
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+              'element_name': 'task_action_button',
+              'task_code': task.taskKey,
+              'task_action': task.completed ? 'claim' : 'go_complete',
+            }),
+          ),
+    );
     if (task.completed) {
       await _claimTask(context, task.taskKey);
       return;
@@ -446,7 +470,7 @@ class _CheckInPanel extends StatelessWidget {
 
   final RewardCoinsCheckInStatus status;
   final bool isClaiming;
-  final VoidCallback onCheckIn;
+  final ValueChanged<int> onCheckIn;
 
   @override
   Widget build(BuildContext context) {
@@ -522,7 +546,9 @@ class _CheckInPanel extends StatelessWidget {
           GestureDetector(
             key: const Key('rewards_coins_sign_in'),
             behavior: HitTestBehavior.opaque,
-            onTap: canCheckIn ? onCheckIn : null,
+            onTap: canCheckIn
+                ? () => onCheckIn(checkInStatus.currentDay)
+                : null,
             child: Container(
               width: double.infinity,
               height: 44,

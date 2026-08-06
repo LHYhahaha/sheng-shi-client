@@ -7,6 +7,9 @@ import 'package:gradient_borders/box_borders/gradient_box_border.dart';
 import 'package:permission_handler/permission_handler.dart' as permissions;
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/notification/startup_notification_permission_reporter.dart';
 import '../../../../core/auth/user_info_store.dart';
 import '../../../../core/toast/app_center_toast.dart';
@@ -274,14 +277,27 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
               ),
               listPadding: EdgeInsetsGeometry.only(left: 16),
               backgroundColor: const Color(0XFF0E0016),
-              onDramaTap: (drama) => context.push(
-                RoutePaths.playerLocation(
-                  dramaId: drama.id,
-                  episodeId: '1',
-                  trigger: 'member_points_vip_only_drama_tap',
-                  userActionAtMs: DateTime.now().millisecondsSinceEpoch,
-                ),
-              ),
+              onDramaTap: (drama, position) {
+                unawaited(
+                  ref
+                      .read(analyticsServiceProvider)
+                      .track(
+                        AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                          'element_name': 'drama_card',
+                          'drama_id': drama.id,
+                          'position': position,
+                        }),
+                      ),
+                );
+                context.push(
+                  RoutePaths.playerLocation(
+                    dramaId: drama.id,
+                    episodeId: '1',
+                    trigger: 'member_points_vip_only_drama_tap',
+                    userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+                  ),
+                );
+              },
             )
           else
             const _VipSeriesPanel(),
@@ -1092,6 +1108,18 @@ class _MemberTasksPanel extends ConsumerWidget {
   ) async {
     if (item.task.claimed) return;
 
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+              'element_name': item.actionType == _MemberTaskActionType.dailyDraw
+                  ? 'check_in_claim_button'
+                  : 'task_action_button',
+            }),
+          ),
+    );
+
     switch (item.actionType) {
       case _MemberTaskActionType.dailyDraw:
         await _claimTask(context, ref, item.task.taskKey);
@@ -1381,6 +1409,15 @@ class _RedeemPointsPanel extends ConsumerWidget {
     WidgetRef ref,
     MemberPointExchangeTier tier,
   ) async {
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            const AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+              'element_name': 'member_points_exchange_button',
+            }),
+          ),
+    );
     final confirmed = await showMemberPointsExchangeConfirmDialog(
       context,
       memberDays: tier.memberDays,
@@ -1817,11 +1854,11 @@ class _VipBenefitTitle extends StatelessWidget {
   }
 }
 
-class _VipSeriesPanel extends StatelessWidget {
+class _VipSeriesPanel extends ConsumerWidget {
   const _VipSeriesPanel();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Column(
       children: [
         const _VipBenefitsPanel(),
@@ -1830,14 +1867,27 @@ class _VipSeriesPanel extends StatelessWidget {
           needDivider: true,
           listPadding: EdgeInsetsGeometry.only(left: 16),
           backgroundColor: const Color(0xFF0E0016),
-          onDramaTap: (drama) => context.push(
-            RoutePaths.playerLocation(
-              dramaId: drama.id,
-              episodeId: '1',
-              trigger: 'member_points_vip_only_drama_tap',
-              userActionAtMs: DateTime.now().millisecondsSinceEpoch,
-            ),
-          ),
+          onDramaTap: (drama, position) {
+            unawaited(
+              ref
+                  .read(analyticsServiceProvider)
+                  .track(
+                    AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                      'element_name': 'drama_card',
+                      'drama_id': drama.id,
+                      'position': position,
+                    }),
+                  ),
+            );
+            context.push(
+              RoutePaths.playerLocation(
+                dramaId: drama.id,
+                episodeId: '1',
+                trigger: 'member_points_vip_only_drama_tap',
+                userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+              ),
+            );
+          },
         ),
       ],
     );

@@ -1,7 +1,13 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:dio/dio.dart';
+import 'package:crypto/crypto.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../network/api_client.dart';
 
 import 'analytics_context.dart';
 import 'analytics_definition.dart';
@@ -43,6 +49,204 @@ class AnalyticsInMemoryEventSink implements AnalyticsEventSink {
         '[Analytics] ${const JsonEncoder.withIndent('  ').convert(payload.toJson())}',
       );
     }
+  }
+}
+
+/// 自研埋点批量上传 Sink。
+///
+/// 事件会先持久化到本地，再按「最多 20 条或 5 秒」发送；失败事件保留原始
+/// payload，因此重试时不会改变 event_id 和 event_time。
+class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
+  AnalyticsBatchUploadEventSink({
+    required ApiClient apiClient,
+    this.batchSize = 20,
+    this.flushDelay = const Duration(seconds: 5),
+  }) : assert(batchSize > 0),
+       _apiClient = apiClient;
+
+  final ApiClient _apiClient;
+  final int batchSize;
+  final Duration flushDelay;
+  final List<AnalyticsPayload> _pending = <AnalyticsPayload>[];
+  Future<void>? _uploading;
+  Future<void>? _initializing;
+  Timer? _flushTimer;
+
+  static const _pendingStorageKey = 'analytics.pending_events.v1';
+
+  static const _trackSignSecret =
+      '17dce3b10ae0a0b0a337fa266b11cd0ac6f2f3f8847f08cb7a3cdb9783aba3ac';
+
+  /// 恢复上次未成功发送的事件，并在应用启动时立即尝试补发。
+  Future<void> initialize() {
+    return _initializing ??= _restorePending().then((_) => _flushPending());
+  }
+
+  @override
+  Future<void> enqueue(AnalyticsPayload payload) async {
+    await initialize();
+    _pending.add(payload);
+    await _persistPending();
+    if (_pending.length >= batchSize) {
+      await _flushPending();
+      return;
+    }
+    _scheduleFlush();
+  }
+
+  /// 供切后台、网络恢复等时机立即补发。
+  Future<void> flush() async {
+    await initialize();
+    await _flushPending();
+  }
+
+  void dispose() {
+    _flushTimer?.cancel();
+  }
+
+  void _scheduleFlush() {
+    _flushTimer?.cancel();
+    _flushTimer = Timer(flushDelay, () {
+      unawaited(flush());
+    });
+  }
+
+  Future<void> _flushPending() async {
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    if (_uploading != null) return _uploading!;
+    _uploading = _doFlush();
+    try {
+      await _uploading;
+    } finally {
+      _uploading = null;
+    }
+  }
+
+  Future<void> _doFlush() async {
+    while (_pending.isNotEmpty) {
+      final batch = _pending.take(batchSize).toList(growable: false);
+      final timestamp = DateTime.now()
+          .toUtc()
+          .millisecondsSinceEpoch
+          .toString();
+      final rawBody = jsonEncode({
+        'events': batch.map(_toRequestEvent).toList(growable: false),
+      });
+      final bodySha256 = sha256.convert(utf8.encode(rawBody)).toString();
+      final trackSign = Hmac(
+        sha256,
+        utf8.encode(_trackSignSecret),
+      ).convert(utf8.encode('$timestamp\n$bodySha256')).toString();
+      try {
+        await _apiClient.post<Map<String, Object?>>(
+          '/api/analytics/event/batch-upload',
+          data: rawBody,
+          options: Options(
+            contentType: Headers.jsonContentType,
+            headers: {'Track-Timestamp': timestamp, 'Track-Sign': trackSign},
+          ),
+          decoder: (data) => Map<String, Object?>.from(data! as Map),
+        );
+        _pending.removeRange(0, batch.length);
+        await _persistPending();
+      } catch (error) {
+        debugPrint('[Analytics] Batch upload failed: $error');
+        _scheduleFlush();
+        return;
+      }
+    }
+  }
+
+  Future<void> _restorePending() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final storedEvents = preferences.getStringList(_pendingStorageKey);
+      if (storedEvents == null) return;
+      for (final encoded in storedEvents) {
+        final decoded = jsonDecode(encoded);
+        if (decoded is Map<String, Object?>) {
+          _pending.add(_payloadFromJson(decoded));
+        } else if (decoded is Map) {
+          _pending.add(_payloadFromJson(Map<String, Object?>.from(decoded)));
+        }
+      }
+    } catch (error) {
+      debugPrint('[Analytics] Failed to restore pending events: $error');
+    }
+  }
+
+  Future<void> _persistPending() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      if (_pending.isEmpty) {
+        await preferences.remove(_pendingStorageKey);
+        return;
+      }
+      await preferences.setStringList(
+        _pendingStorageKey,
+        _pending
+            .map((payload) => jsonEncode(payload.toJson()))
+            .toList(growable: false),
+      );
+    } catch (error) {
+      debugPrint('[Analytics] Failed to persist pending events: $error');
+    }
+  }
+
+  AnalyticsPayload _payloadFromJson(Map<String, Object?> json) {
+    final common = Map<String, Object?>.from(json['common_params']! as Map);
+    final eventParams = Map<String, Object?>.from(json['event_params']! as Map);
+    return AnalyticsPayload(
+      eventName: json['event_name']! as String,
+      commonParams: AnalyticsCommonParams(
+        eventId: common['event_id']! as String,
+        eventTime: common['event_time']! as int,
+        context: AnalyticsContext(
+          platform: common['platform']! as String,
+          appVersion: common['app_version']! as String,
+          language: common['language']! as String,
+          userId: common['user_id'] as String?,
+          channelId: common['channel_id'] as String?,
+          merchantId: common['merchant_id'] as String?,
+          regionCode: common['region_code'] as String?,
+          pageName: common['page_name'] as String?,
+          previousPage: common['previous_page'] as String?,
+          entrySourceType: common['entry_source_type'] as String?,
+          entrySourceId: common['entry_source_id'] as String?,
+          h5VisitorId: common['h5_visitor_id'] as String?,
+        ),
+      ),
+      eventParams: eventParams,
+    );
+  }
+
+  Map<String, Object?> _toRequestEvent(AnalyticsPayload payload) {
+    final common = payload.commonParams.toJson();
+    return {
+      'eventName': payload.eventName,
+      'commonParams': {
+        'appSessionId': '',
+        'appVersion': common['app_version'],
+        'channelId': common['channel_id'],
+        'entrySourceId': common['entry_source_id'],
+        'entrySourceType': common['entry_source_type'],
+        'eventId': common['event_id'],
+        'eventTime': common['event_time'],
+        'h5VisitorId': common['h5_visitor_id'],
+        'language': common['language'],
+        'merchantId': common['merchant_id'],
+        'pageName': common['page_name'],
+        'platform': common['platform'],
+        'previousPage': common['previous_page'],
+        'regionCode': common['region_code'],
+        'sessionId': '',
+        'userId': common['user_id'],
+      },
+      'eventParams': payload.eventParams.isEmpty
+          ? ''
+          : jsonEncode(payload.eventParams),
+    };
   }
 }
 

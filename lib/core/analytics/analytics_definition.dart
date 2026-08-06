@@ -86,6 +86,7 @@ abstract final class AnalyticsDefinitions {
   static const pushNotificationOpen = 'push_notification_open';
   static const homeBannerExposure = 'home_banner_exposure';
   static const dynamicTabExposure = 'dynamic_tab_exposure';
+  static const dramaCardExposure = 'drama_card_exposure';
   static const adUnlockEntryExposure = 'ad_unlock_entry_exposure';
   static const adViewStart = 'ad_view_start';
   static const adViewEnd = 'ad_view_end';
@@ -127,6 +128,16 @@ abstract final class AnalyticsDefinitions {
       name: pageLeave,
       parameters: {'stay_duration_ms': _requiredNumber},
     ),
+    dramaCardExposure: AnalyticsEventDefinition(
+      name: dramaCardExposure,
+      parameters: {
+        'drama_id': _requiredString,
+        'position': _requiredNumber,
+        'category_id': _string,
+        'card_scene': _string,
+        'search_keyword': _string,
+      },
+    ),
     popupShow: AnalyticsEventDefinition(
       name: popupShow,
       parameters: {
@@ -157,7 +168,8 @@ abstract final class AnalyticsDefinitions {
               params['element_name'] == 'payment_method_item' ||
               params['element_name'] == 'home_category_tab' ||
               params['element_name'] == 'vip_product_card' ||
-              params['element_name'] == 'coin_product_card',
+              params['element_name'] == 'coin_product_card' ||
+              params['element_name'] == 'drama_card',
         ),
         'category_id': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
@@ -168,6 +180,22 @@ abstract final class AnalyticsDefinitions {
           type: AnalyticsParameterType.string,
           requiredWhen: (params) => params['element_name'] == 'favorite_tab',
           allowedValues: {'watching', 'history'},
+        ),
+        'check_in_day': AnalyticsParameterRule(
+          type: AnalyticsParameterType.number,
+          requiredWhen: (params) =>
+              params['element_name'] == 'check_in_claim_button',
+        ),
+        'task_code': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'task_action_button',
+        ),
+        'task_action': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'task_action_button',
+          allowedValues: {'go_complete', 'claim'},
         ),
         'popup_config_id': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
@@ -243,7 +271,8 @@ abstract final class AnalyticsDefinitions {
         'drama_id': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
           requiredWhen: (params) =>
-              params['element_name'] == 'episode_unlock_button',
+              params['element_name'] == 'episode_unlock_button' ||
+              params['element_name'] == 'drama_card',
         ),
         'episode_id': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,

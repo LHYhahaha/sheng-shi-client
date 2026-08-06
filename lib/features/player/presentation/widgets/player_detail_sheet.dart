@@ -33,7 +33,8 @@ class PlayerDetailSheet extends StatefulWidget {
   final int currentEpisode;
   final String? currentEpisodeId;
   final ValueChanged<PlayerEpisode> onEpisodeSelected;
-  final ValueChanged<PlayerRecommendation> onRecommendationSelected;
+  final void Function(PlayerRecommendation recommendation, int position)
+  onRecommendationSelected;
   final Future<List<PlayerRecommendation>>? recommendationsFuture;
 
   @override
@@ -417,7 +418,8 @@ class _SynopsisPanel extends StatefulWidget {
   });
 
   final PlayerContent content;
-  final ValueChanged<PlayerRecommendation> onRecommendationSelected;
+  final void Function(PlayerRecommendation recommendation, int position)
+  onRecommendationSelected;
   final Future<List<PlayerRecommendation>>? recommendationsFuture;
 
   @override
@@ -524,7 +526,10 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
                   return _RecommendationCard(
                     recommendation: recommendation,
                     onTap: () {
-                      widget.onRecommendationSelected(recommendation);
+                      widget.onRecommendationSelected(
+                        recommendation,
+                        index + 1,
+                      );
                     },
                   );
                 },
@@ -553,7 +558,7 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
               return _RecommendationCard(
                 recommendation: recommendation,
                 onTap: () {
-                  widget.onRecommendationSelected(recommendation);
+                  widget.onRecommendationSelected(recommendation, index + 1);
                 },
               );
             },
