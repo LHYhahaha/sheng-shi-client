@@ -8,6 +8,9 @@ import 'package:flutter_svg/svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/modal/app_modal_result.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -115,6 +118,25 @@ class _PlayerRechargeUnlockSheetState
 
   Future<void> _onCoinPackageTap(PlayerRechargeCoinPackage package) async {
     _didHandleDirectPaymentTerminal = false;
+    final position =
+        ref
+            .read(playerRechargeUnlockControllerProvider(widget.sessionKey))
+            .offer
+            ?.coinPackages
+            .indexWhere((item) => item.id == package.id) ??
+        -1;
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+              'element_name': 'coin_product_card',
+              'product_id': package.id,
+              'product_type': 'coin',
+              'position': position + 1,
+            }),
+          ),
+    );
     final shouldShowCashier = await ref
         .read(
           playerRechargeUnlockControllerProvider(widget.sessionKey).notifier,
@@ -129,6 +151,27 @@ class _PlayerRechargeUnlockSheetState
     PlayerRechargeMembershipPackage package,
   ) async {
     _didHandleDirectPaymentTerminal = false;
+    final position =
+        ref
+            .read(playerRechargeUnlockControllerProvider(widget.sessionKey))
+            .offer
+            ?.membershipPackages
+            .indexWhere((item) => item.id == package.id) ??
+        -1;
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+              'element_name': 'vip_product_card',
+              'product_id': package.id,
+              'product_type': package.periodIso == null
+                  ? 'vip_once'
+                  : 'vip_subscription',
+              'position': position + 1,
+            }),
+          ),
+    );
     final shouldShowCashier = await ref
         .read(
           playerRechargeUnlockControllerProvider(widget.sessionKey).notifier,

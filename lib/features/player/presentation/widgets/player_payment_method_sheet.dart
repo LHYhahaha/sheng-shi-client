@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/utils/period_iso_parser.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/app_payment_method_sheet.dart';
@@ -140,6 +143,17 @@ class _PlayerPaymentMethodSheetState
           if (coin != null) {
             unawaited(
               ref
+                  .read(analyticsServiceProvider)
+                  .track(
+                    AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                      'element_name': 'payment_confirm_button',
+                      'product_id': coin.id,
+                      'product_type': 'coin',
+                    }),
+                  ),
+            );
+            unawaited(
+              ref
                   .read(provider.notifier)
                   .purchasePackageWithSelectedPayment(
                     packageId: coin.id,
@@ -150,6 +164,19 @@ class _PlayerPaymentMethodSheetState
           }
           final membership = widget.selection.membershipPackage;
           if (membership != null) {
+            unawaited(
+              ref
+                  .read(analyticsServiceProvider)
+                  .track(
+                    AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                      'element_name': 'payment_confirm_button',
+                      'product_id': membership.id,
+                      'product_type': membership.periodIso == null
+                          ? 'vip_once'
+                          : 'vip_subscription',
+                    }),
+                  ),
+            );
             unawaited(
               ref
                   .read(provider.notifier)

@@ -326,6 +326,21 @@ class AuthController extends Notifier<AuthState> {
       return;
     }
 
+    if (provider == AuthProviderType.google ||
+        provider == AuthProviderType.facebook ||
+        provider.name == 'apple') {
+      unawaited(
+        ref
+            .read(analyticsServiceProvider)
+            .track(
+              AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                'element_name': 'login_provider_button',
+                'login_provider': provider.name,
+              }),
+            ),
+      );
+    }
+
     state = state.copyWith(
       pendingProvider: provider,
       clearError: true,

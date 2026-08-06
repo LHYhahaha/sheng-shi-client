@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/player_like_controller.dart';
@@ -246,6 +251,18 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
           onMetaTap: onMetaTap,
           onLikeTap: isSettledPage
               ? () {
+                  final favoriteAction = likeState.isLiked ? 'remove' : 'add';
+                  unawaited(
+                    ref
+                        .read(analyticsServiceProvider)
+                        .track(
+                          AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                            'element_name': 'favorite_toggle_button',
+                            'drama_id': item.content.id,
+                            'favorite_action': favoriteAction,
+                          }),
+                        ),
+                  );
                   ref
                       .read(
                         playerLikeControllerProvider(item.content.id).notifier,
@@ -257,10 +274,37 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
           showUnlockButton: isLockedSettledPage,
           unlockLabel: lockedActionLabel,
           onUnlockTap: isLockedSettledPage
-              ? (accessPresentation ==
-                        PlayerAccessPresentationState.lockedMembership
-                    ? onOpenMembership
-                    : onUnlockTap)
+              ? () {
+                  final unlockButtonAction = switch (accessPresentation) {
+                    PlayerAccessPresentationState.lockedCoins =>
+                      'open_recharge_with_coin',
+                    PlayerAccessPresentationState.lockedRecharge =>
+                      'open_recharge_with_coin',
+                    PlayerAccessPresentationState.lockedMembership =>
+                      'open_recharge_vip_only',
+                    _ => null,
+                  };
+                  if (unlockButtonAction != null) {
+                    unawaited(
+                      ref
+                          .read(analyticsServiceProvider)
+                          .track(
+                            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                              'element_name': 'episode_unlock_button',
+                              'drama_id': item.content.id,
+                              'episode_id': item.episode.id,
+                              'unlock_button_action': unlockButtonAction,
+                            }),
+                          ),
+                    );
+                  }
+                  if (accessPresentation ==
+                      PlayerAccessPresentationState.lockedMembership) {
+                    onOpenMembership();
+                    return;
+                  }
+                  onUnlockTap();
+                }
               : () {},
           forYouLayout: forYouLayout,
           isLiked: likeState.isLiked,

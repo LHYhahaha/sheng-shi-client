@@ -3,10 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../app/app_modal_context.dart';
 import '../../../../core/analytics/analytics_definition.dart';
 import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
+
+import '../../../../app/app_modal_context.dart';
 import '../../../../core/modal/app_modal_presenter.dart';
 import '../../../../core/modal/app_modal_request.dart';
 import '../../../../core/modal/app_modal_result.dart';
@@ -118,6 +119,19 @@ class PlayerAppModalPresenter implements AppModalPresenter {
                 navigator.pop(false);
                 return;
               }
+
+              unawaited(
+                container
+                    .read(analyticsServiceProvider)
+                    .track(
+                      AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                        'element_name': 'episode_unlock_button',
+                        'drama_id': item.content.id,
+                        'episode_id': item.episode.id,
+                        'unlock_button_action': 'confirm_unlock',
+                      }),
+                    ),
+              );
 
               // 用户明确确认金币解锁后、调用业务解锁接口前上报一次请求事件。
               // requestId 来自本次 AppModal 请求，可用于同一次弹框操作的链路关联。

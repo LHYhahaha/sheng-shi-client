@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/modal/app_modal_provider.dart';
 import '../../../../core/modal/app_modal_service.dart';
 import '../../../../core/modal/app_modal_source.dart';
@@ -17,6 +20,7 @@ import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../application/store_controller.dart';
 import '../../application/store_modal_coordinator.dart';
+import '../../domain/store_package.dart';
 import '../modal/store_modal_results.dart';
 import '../widgets/store_coin_package_card.dart';
 import '../widgets/store_tips.dart';
@@ -177,9 +181,7 @@ class _StorePageState extends ConsumerState<StorePage> {
                     child: _StoreBody(
                       state: state,
                       onRetry: controller.retry,
-                      onSelect: (id) {
-                        unawaited(controller.selectPackageForPurchase(id));
-                      },
+                      onSelect: _selectPackageForPurchase,
                     ),
                   ),
                 ],
@@ -212,6 +214,38 @@ class _StorePageState extends ConsumerState<StorePage> {
       context.go(RoutePaths.profile);
     }
   }
+
+  void _selectPackageForPurchase(StorePackage package, int position) {
+    final isCoinPackage = package.kind == StorePackageKind.coins;
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+              'element_name': isCoinPackage
+                  ? 'coin_product_card'
+                  : 'vip_product_card',
+              'product_id': package.id,
+              'product_type': _analyticsProductTypeForPackage(package),
+              'position': position,
+            }),
+          ),
+    );
+    unawaited(
+      ref
+          .read(storeControllerProvider.notifier)
+          .selectPackageForPurchase(package.id),
+    );
+  }
+}
+
+String _analyticsProductTypeForPackage(StorePackage package) {
+  if (package.kind == StorePackageKind.coins) {
+    return 'coin';
+  }
+  return package.productType == 'subscription'
+      ? 'vip_subscription'
+      : 'vip_once';
 }
 
 class _StoreHeader extends StatelessWidget {
@@ -292,7 +326,7 @@ class _StoreBody extends StatelessWidget {
 
   final StoreState state;
   final VoidCallback onRetry;
-  final ValueChanged<String> onSelect;
+  final void Function(StorePackage package, int position) onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -366,7 +400,7 @@ class _StoreBody extends StatelessWidget {
                       package: package,
                       selected: state.selectedPackageId == package.id,
                       width: cardWidth,
-                      onTap: () => onSelect(package.id),
+                      onTap: () => onSelect(package, index + 1),
                     );
                   },
                 );
@@ -374,11 +408,11 @@ class _StoreBody extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          for (final package in state.vipPackages) ...[
+          for (var index = 0; index < state.vipPackages.length; index++) ...[
             StoreVipPackageCard(
-              package: package,
-              selected: state.selectedPackageId == package.id,
-              onTap: () => onSelect(package.id),
+              package: state.vipPackages[index],
+              selected: state.selectedPackageId == state.vipPackages[index].id,
+              onTap: () => onSelect(state.vipPackages[index], index + 1),
             ),
             const SizedBox(height: AppSpacing.sm),
           ],

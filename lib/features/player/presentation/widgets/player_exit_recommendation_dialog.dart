@@ -12,12 +12,14 @@ class PlayerExitRecommendationDialog extends StatefulWidget {
     required this.recommendations,
     required this.onExit,
     required this.onPlay,
+    this.onCardTap,
     super.key,
   });
 
   final List<PopupExitRecommendation> recommendations;
   final VoidCallback onExit;
   final ValueChanged<PopupExitRecommendation> onPlay;
+  final ValueChanged<PopupExitRecommendation>? onCardTap;
 
   @override
   State<PlayerExitRecommendationDialog> createState() =>
@@ -133,7 +135,10 @@ class _PlayerExitRecommendationDialogState
                                           'player_exit_recommendation_cover_tap_target_$index',
                                         ),
                                   behavior: HitTestBehavior.opaque,
-                                  onTap: () => widget.onPlay(recommendation),
+                                  onTap: () =>
+                                      (widget.onCardTap ?? widget.onPlay)(
+                                        recommendation,
+                                      ),
                                   child: const SizedBox(
                                     width: _coverWidth,
                                     height: _coverHeight,

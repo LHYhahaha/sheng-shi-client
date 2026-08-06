@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/modal/app_modal_provider.dart';
 import '../../../../core/modal/app_modal_service.dart';
 import '../../../../core/modal/app_modal_source.dart';
@@ -194,6 +197,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
             state: state,
             controller: controller,
             useFloatingPurchaseButton: useFloatingPurchaseButton,
+            onPlanTap: _selectPlan,
           ),
           if (state.hasContent)
             _MembershipHeroContent(
@@ -221,7 +225,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
               enabled: state.selectedPlan != null,
               onPurchase: state.selectedPlan == null
                   ? null
-                  : () => unawaited(controller.purchaseSelectedPlan()),
+                  : () => unawaited(_purchaseSelectedPlan()),
               floating: useFloatingPurchaseButton,
             ),
         ],
@@ -250,6 +254,54 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
     );
   }
 
+  void _selectPlan(String planId) {
+    final plan = ref.read(membershipControllerProvider).planById(planId);
+    if (plan == null) {
+      return;
+    }
+
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+              'element_name': 'vip_product_card',
+              'product_id': plan.id,
+              'product_type': _analyticsProductTypeForPlan(plan),
+              'position':
+                  ref
+                      .read(membershipControllerProvider)
+                      .plans
+                      .indexWhere((item) => item.id == plan.id) +
+                  1,
+            }),
+          ),
+    );
+    ref.read(membershipControllerProvider.notifier).selectPlan(planId);
+  }
+
+  Future<void> _purchaseSelectedPlan() async {
+    final plan = ref.read(membershipControllerProvider).selectedPlan;
+    if (plan == null) {
+      return;
+    }
+
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+              'element_name': 'vip_purchase_button',
+              'product_id': plan.id,
+              'product_type': _analyticsProductTypeForPlan(plan),
+            }),
+          ),
+    );
+    await ref
+        .read(membershipControllerProvider.notifier)
+        .purchaseSelectedPlan();
+  }
+
   void _goBack({Object? result}) {
     if (context.canPop()) {
       context.pop(result);
@@ -264,11 +316,13 @@ class _MembershipBody extends StatelessWidget {
     required this.state,
     required this.controller,
     required this.useFloatingPurchaseButton,
+    required this.onPlanTap,
   });
 
   final MembershipState state;
   final MembershipController controller;
   final bool useFloatingPurchaseButton;
+  final ValueChanged<String> onPlanTap;
 
   @override
   Widget build(BuildContext context) {
@@ -324,7 +378,7 @@ class _MembershipBody extends StatelessWidget {
             _MembershipPlanCardsRow(
               plans: state.plans,
               selectedPlanId: state.selectedPlanId,
-              onPlanTap: controller.selectPlan,
+              onPlanTap: onPlanTap,
             ),
             // 促销文案（根据语言动态组装）
             const SizedBox(height: 8),
@@ -399,6 +453,9 @@ class _MembershipBody extends StatelessWidget {
     );
   }
 }
+
+String _analyticsProductTypeForPlan(MembershipPlan plan) =>
+    plan.period == null ? 'vip_once' : 'vip_subscription';
 
 String? _buildPromoText(MembershipPlan plan, String languageCode) {
   final promoPrice = plan.promotionPriceLabel;

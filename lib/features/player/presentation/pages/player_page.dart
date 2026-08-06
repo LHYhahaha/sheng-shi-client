@@ -2331,7 +2331,22 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           onExit: () => Navigator.of(
             dialogContext,
           ).pop(const _ExitRecommendationExitResult()),
+          onCardTap: (recommendation) {
+            _trackExitRecommendationClick(
+              elementName: 'exit_recommend_drama_card',
+              recommendation: recommendation,
+              recommendations: recommendations,
+            );
+            Navigator.of(
+              dialogContext,
+            ).pop(_ExitRecommendationPlayResult(recommendation));
+          },
           onPlay: (recommendation) {
+            _trackExitRecommendationClick(
+              elementName: 'exit_recommend_play_button',
+              recommendation: recommendation,
+              recommendations: recommendations,
+            );
             Navigator.of(
               dialogContext,
             ).pop(_ExitRecommendationPlayResult(recommendation));
@@ -2456,6 +2471,28 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       userActionAtMs: DateTime.now().millisecondsSinceEpoch,
     );
     context.pushReplacement(location);
+  }
+
+  void _trackExitRecommendationClick({
+    required String elementName,
+    required PopupExitRecommendation recommendation,
+    required List<PopupExitRecommendation> recommendations,
+  }) {
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+              'element_name': elementName,
+              'drama_id': '${recommendation.id}',
+              'position':
+                  recommendations.indexWhere(
+                    (item) => item.id == recommendation.id,
+                  ) +
+                  1,
+            }),
+          ),
+    );
   }
 
   // ignore: unused_element
@@ -2865,6 +2902,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final analytics = ref.read(analyticsServiceProvider);
     unawaited(
       analytics.track(
+        AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+          'element_name': 'share_entry',
+          'drama_id': dramaId,
+        }),
+      ),
+    );
+    unawaited(
+      analytics.track(
         AnalyticsEvent(AnalyticsDefinitions.popupShow, {
           'popup_name': AnalyticsPopupNames.share,
           'drama_id': dramaId,
@@ -2879,10 +2924,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       enableDrag: true,
       builder: (context) => PlayerShareSheet(
         onFacebookTap: () {
+          unawaited(_trackShareChannelClick(dramaId, 'facebook'));
           unawaited(_reportDramaShareAction(dramaId, 'facebook'));
           unawaited(_shareToFacebook(dramaId, dramaTitle));
         },
         onCopyLinkTap: () {
+          unawaited(_trackShareChannelClick(dramaId, 'copy_link'));
           unawaited(_reportDramaShareAction(dramaId, 'copy_link'));
           unawaited(_copyShareLink(dramaId, dramaTitle));
         },
@@ -2901,6 +2948,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       }
     });
   }
+
+  Future<void> _trackShareChannelClick(String dramaId, String shareMethod) =>
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+              'element_name': 'share_channel',
+              'drama_id': dramaId,
+              'share_method': shareMethod,
+            }),
+          );
 
   Future<void> _reportDramaShareAction(
     String dramaId,

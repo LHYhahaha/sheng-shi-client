@@ -10,6 +10,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell.dart';
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/auth/auth_token_store.dart';
 import '../../../../core/network/api_client_provider.dart';
 import '../../../../core/notification/startup_notification_permission_reporter.dart';
@@ -396,6 +399,24 @@ class _HomePageState extends ConsumerState<HomePage> {
                             data: item,
                             coverCacheWidth: coverCacheWidth,
                             onTap: () {
+                              unawaited(
+                                ref
+                                    .read(analyticsServiceProvider)
+                                    .track(
+                                      AnalyticsEvent(
+                                        AnalyticsDefinitions.elementClick,
+                                        {
+                                          'element_name': 'drama_card',
+                                          'drama_id': item.id,
+                                          'position': index + 1,
+                                          'category_id':
+                                              selectedRemoteTab?.id
+                                                  .toString() ??
+                                              '',
+                                        },
+                                      ),
+                                    ),
+                              );
                               final tappedAt = DateTime.now();
                               context.push(
                                 RoutePaths.playerLocation(

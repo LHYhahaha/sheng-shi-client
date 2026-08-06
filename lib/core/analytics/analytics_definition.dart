@@ -142,7 +142,30 @@ abstract final class AnalyticsDefinitions {
     ),
     elementClick: AnalyticsEventDefinition(
       name: elementClick,
-      parameters: {'element_name': _requiredString, 'position': _number},
+      parameters: {
+        'element_name': _requiredString,
+        'position': _number,
+        'drama_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'episode_unlock_button',
+        ),
+        'episode_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'episode_unlock_button',
+        ),
+        'unlock_button_action': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'episode_unlock_button',
+          allowedValues: {
+            'open_recharge_with_coin',
+            'open_recharge_vip_only',
+            'confirm_unlock',
+          },
+        ),
+      },
       // 元素字典后续会为不同 element_name 注入短剧、商品等附加字段。
       allowAdditionalParameters: true,
     ),
