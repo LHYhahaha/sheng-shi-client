@@ -379,6 +379,7 @@ void main() {
         await source.setAutoUnlockEnabled(true);
 
         expect(dto.isMember, isTrue);
+        expect(dto.userId, '9223372036854775807');
         expect(dto.coinBalance, 900);
         expect(dto.bonusBalance, 100);
         expect(dto.totalPointBalance, 85);
@@ -569,6 +570,7 @@ const _entitlementAggregateJson = {
     'language': 'en',
     'nickname': 'Mira',
     'showId': '15589299',
+    'userId': '9223372036854775807',
     'status': 1,
   },
   'wallet': {'bonusBalance': '100', 'coinBalance': '900'},

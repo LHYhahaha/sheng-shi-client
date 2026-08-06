@@ -35,7 +35,8 @@ class UserInfoSnapshot {
       bonusCoin = null,
       autoUnlock = null;
 
-  final int? userId;
+  /// 业务用户 ID（int64 数值字符串），不可转为 int。
+  final String? userId;
   final String? showId;
   final String? nickname;
   final String? avatar;
@@ -81,7 +82,7 @@ class UserInfoSnapshot {
     }
 
     return UserInfoSnapshot(
-      userId: _nullableInt(json['userId']),
+      userId: _nullableUserId(json['userId']),
       showId:
           _nullableString(json['showId']) ?? _nullableString(json['showid']),
       nickname: _nullableString(json['nickname']),
@@ -115,6 +116,12 @@ class UserInfoSnapshot {
     if (value is String) {
       return int.tryParse(value);
     }
+    return null;
+  }
+
+  static String? _nullableUserId(Object? value) {
+    if (value is String && value.isNotEmpty) return value;
+    if (value is int) return value.toString();
     return null;
   }
 }
@@ -171,7 +178,7 @@ class UserInfoStore extends Notifier<UserInfoSnapshot> {
   Future<void> saveFromMap(Map<String, dynamic> data) async {
     _hydrateFinished = true;
     final snapshot = UserInfoSnapshot(
-      userId: _parseInt(data['userId']),
+      userId: _parseUserId(data['userId']),
       showId: _parseString(data['showId']) ?? _parseString(data['showid']),
       nickname: _parseString(data['nickname']),
       avatar:
@@ -212,6 +219,12 @@ class UserInfoStore extends Notifier<UserInfoSnapshot> {
     if (value is String) {
       return int.tryParse(value);
     }
+    return null;
+  }
+
+  static String? _parseUserId(dynamic value) {
+    if (value is String && value.isNotEmpty) return value;
+    if (value is int) return value.toString();
     return null;
   }
 }

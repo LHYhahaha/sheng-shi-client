@@ -88,4 +88,14 @@ void main() {
     expect(camelCase.avatar, 'https://cdn.example.com/avatar-camel.jpg');
     expect(snakeCase.avatar, 'https://cdn.example.com/avatar-snake.jpg');
   });
+
+  test('user info keeps int64 business user id as a string', () {
+    final user = UserInfoDto.fromJson({
+      'userId': '9223372036854775807',
+      'showId': '10001',
+      'nickname': 'Guest',
+    });
+
+    expect(user.userId, '9223372036854775807');
+  });
 }

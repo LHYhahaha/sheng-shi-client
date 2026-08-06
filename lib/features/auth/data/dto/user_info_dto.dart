@@ -17,7 +17,8 @@ class UserInfoDto {
     this.autoUnlock,
   });
 
-  final int? userId;
+  /// 业务用户 ID（int64 数值字符串），用于客户端埋点，不能转为 int 以免精度丢失。
+  final String? userId;
   final String showId;
   final String nickname;
   final String? avatar;
@@ -32,7 +33,7 @@ class UserInfoDto {
     final map = JsonFieldParser.requireMap(json, dtoName: 'UserInfoDto');
 
     return UserInfoDto(
-      userId: JsonFieldParser.optionalInt(map, 'userId'),
+      userId: _optionalUserId(map['userId']),
       showId: _requiredShowId(map),
       nickname:
           JsonFieldParser.optionalString(map, 'nickname') ??
@@ -60,6 +61,12 @@ class UserInfoDto {
     'bonusCoin': bonusCoin,
     'autoUnlock': autoUnlock,
   };
+}
+
+String? _optionalUserId(Object? value) {
+  if (value is String && value.isNotEmpty) return value;
+  if (value is int) return value.toString();
+  return null;
 }
 
 String _requiredShowId(Map<String, Object?> map) {

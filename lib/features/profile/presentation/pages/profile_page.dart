@@ -75,7 +75,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
     final state = profileState.copyWith(
       isLoggedIn: hasLinkedAccount,
-      userId: authUser?.id ?? userInfoState.showId,
+      userId: authUser?.id ?? userInfoState.userId,
       showId: authUser?.showId ?? userInfoState.showId,
       nickname: authUser?.nickname ?? userInfoState.nickname,
       avatarAssetPath:

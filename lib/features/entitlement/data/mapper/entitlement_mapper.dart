@@ -13,6 +13,7 @@ class EntitlementMapper {
   UserEntitlementState mapState(UserEntitlementStateDto dto) {
     return UserEntitlementState(
       isGuest: dto.isGuest,
+      userId: dto.userId,
       isMember: dto.isMember,
       coinBalance: dto.coinBalance,
       bonusBalance: dto.bonusBalance,

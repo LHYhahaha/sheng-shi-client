@@ -97,13 +97,59 @@ class MemberPointsPage extends ConsumerStatefulWidget {
   ConsumerState<MemberPointsPage> createState() => _MemberPointsPageState();
 }
 
-class _MemberPointsPageState extends ConsumerState<MemberPointsPage> {
+class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
+    with WidgetsBindingObserver {
   bool _vipDramasRefreshRequested = false;
+  bool _awaitingNotificationSettingsReturn = false;
+  bool _notificationSettingsWasBackgrounded = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _refreshIfNeeded();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_awaitingNotificationSettingsReturn) return;
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      _notificationSettingsWasBackgrounded = true;
+      return;
+    }
+    if (state != AppLifecycleState.resumed ||
+        !_notificationSettingsWasBackgrounded) {
+      return;
+    }
+
+    _awaitingNotificationSettingsReturn = false;
+    _notificationSettingsWasBackgrounded = false;
+    unawaited(_refreshNotificationPermissionTask());
+  }
+
+  Future<void> _openNotificationSettingsForTask() async {
+    _awaitingNotificationSettingsReturn = true;
+    _notificationSettingsWasBackgrounded = false;
+    final opened = await debugOpenMemberPointsNotificationSettings();
+    if (!opened) {
+      _awaitingNotificationSettingsReturn = false;
+    }
+  }
+
+  Future<void> _refreshNotificationPermissionTask() async {
+    if (!mounted || !widget.isActive) return;
+    await ref
+        .read(startupNotificationPermissionReporterProvider)
+        .syncForAccount(ref.read(userInfoStoreProvider).showId);
+    if (!mounted || !widget.isActive) return;
+    await ref.read(memberPointsControllerProvider.notifier).loadDailyDetail();
   }
 
   @override
@@ -207,6 +253,8 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage> {
               child: _MemberTasksPanel(
                 isMember: isMember,
                 tasks: dailyDetail?.tasks,
+                onOpenNotificationSettings: _openNotificationSettingsForTask,
+                onRefreshNotificationTask: _refreshNotificationPermissionTask,
               ),
             ),
           ],
@@ -923,10 +971,17 @@ class _DailyRewardsProgressPainter extends CustomPainter {
 }
 
 class _MemberTasksPanel extends ConsumerWidget {
-  const _MemberTasksPanel({required this.isMember, this.tasks});
+  const _MemberTasksPanel({
+    required this.isMember,
+    required this.onOpenNotificationSettings,
+    required this.onRefreshNotificationTask,
+    this.tasks,
+  });
 
   final bool isMember;
   final List<MemberPointTask>? tasks;
+  final Future<void> Function() onOpenNotificationSettings;
+  final Future<void> Function() onRefreshNotificationTask;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1054,23 +1109,13 @@ class _MemberTasksPanel extends ConsumerWidget {
           await _claimTask(context, ref, item.task.taskKey);
           return;
         }
-        final granted = await debugRequestMemberPointsNotificationPermission();
+        final status = await debugGetMemberPointsNotificationPermissionStatus();
         if (!context.mounted) return;
-        await ref
-            .read(startupNotificationPermissionReporterProvider)
-            .syncForAccount(ref.read(userInfoStoreProvider).showId);
-        if (!context.mounted) return;
-        await ref
-            .read(memberPointsControllerProvider.notifier)
-            .loadDailyDetail();
-        if (!context.mounted) return;
-        if (!granted) {
-          showAppCenterToast(
-            AppLocalizations.maybeOf(context).rewardsTaskEnablePush,
-          );
+        if (_hasNotificationPermission(status)) {
+          await onRefreshNotificationTask();
           return;
         }
-        // 授权任务由服务端在上报后更新为可领取，用户刷新后再主动领取。
+        await onOpenNotificationSettings();
         return;
     }
   }

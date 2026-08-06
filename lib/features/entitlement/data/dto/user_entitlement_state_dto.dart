@@ -3,6 +3,7 @@ import '../../../../core/network/json_field_parser.dart';
 class UserEntitlementStateDto {
   const UserEntitlementStateDto({
     required this.isGuest,
+    this.userId,
     required this.isMember,
     this.membershipExpiresAt,
     required this.coinBalance,
@@ -16,6 +17,7 @@ class UserEntitlementStateDto {
   });
 
   final bool isGuest;
+  final String? userId;
   final bool isMember;
   final DateTime? membershipExpiresAt;
   final int coinBalance;
@@ -35,6 +37,7 @@ class UserEntitlementStateDto {
     const dtoName = 'UserEntitlementStateDto';
     return UserEntitlementStateDto(
       isGuest: JsonFieldParser.requireBool(map, 'isGuest', dtoName: dtoName),
+      userId: JsonFieldParser.optionalString(map, 'userId'),
       isMember: JsonFieldParser.requireBool(map, 'isMember', dtoName: dtoName),
       membershipExpiresAt: JsonFieldParser.optionalDateTime(
         map,

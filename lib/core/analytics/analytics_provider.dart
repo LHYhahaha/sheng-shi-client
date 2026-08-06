@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/user_info_store.dart';
 import '../channel/channel_config_service.dart';
+import '../../features/entitlement/application/entitlement_controller.dart';
 import '../runtime/api_lang_provider.dart';
 import '../runtime/api_platform_provider.dart';
 import '../runtime/api_region_code_provider.dart';
@@ -17,6 +18,7 @@ import 'analytics_service.dart';
 /// 路由/深链追踪模块提供。
 final analyticsContextProvider = Provider<AnalyticsContext>((ref) {
   final userInfo = ref.watch(userInfoStoreProvider);
+  final entitlement = ref.watch(entitlementControllerProvider);
   final channel = ref.watch(channelConfigServiceProvider).cachedConfig;
   final page = ref.watch(analyticsPageContextProvider);
 
@@ -24,8 +26,9 @@ final analyticsContextProvider = Provider<AnalyticsContext>((ref) {
     platform: ref.watch(apiPlatformProvider),
     appVersion: ref.watch(apiAppVersionProvider),
     language: ref.watch(apiLangProvider),
-    // 埋点表的 user_id 口径是对外展示的 showId，不使用 JWT subject/userId。
-    userId: userInfo.showId,
+    // 埋点 user_id 使用服务端业务用户 ID（int64 字符串），不使用展示用 showId。
+    // 权益接口完成刷新前，回退到 /api/user/get 已保存的同一字段。
+    userId: entitlement.userId ?? userInfo.userId,
     channelId: channel?.channelFlag,
     merchantId: channel?.merchantId,
     regionCode: ref.watch(apiRegionCodeProvider),

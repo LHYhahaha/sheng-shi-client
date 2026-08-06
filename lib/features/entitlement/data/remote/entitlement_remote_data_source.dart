@@ -52,6 +52,7 @@ class EntitlementRemoteDataSource {
 
     final dto = UserEntitlementStateDto(
       isGuest: userInfo['isGuest'] as bool? ?? true,
+      userId: _stringValue(userInfo['userId'] ?? data['userId']),
       isMember: membership['isMember'] as bool? ?? false,
       membershipExpiresAt: membership['membershipExpiresAt'] != null
           ? JsonFieldParser.optionalDateTime(membership, 'membershipExpiresAt')
@@ -121,4 +122,10 @@ int _intValue(Object? value) {
     return int.tryParse(value) ?? 0;
   }
   return 0;
+}
+
+String? _stringValue(Object? value) {
+  if (value is String && value.isNotEmpty) return value;
+  if (value is int) return value.toString();
+  return null;
 }

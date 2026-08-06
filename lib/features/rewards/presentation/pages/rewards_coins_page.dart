@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -52,11 +54,40 @@ class RewardsCoinsPage extends ConsumerStatefulWidget {
   ConsumerState<RewardsCoinsPage> createState() => _RewardsCoinsPageState();
 }
 
-class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
+class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage>
+    with WidgetsBindingObserver {
+  bool _awaitingNotificationSettingsReturn = false;
+  bool _notificationSettingsWasBackgrounded = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _refreshIfNeeded();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_awaitingNotificationSettingsReturn) return;
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      _notificationSettingsWasBackgrounded = true;
+      return;
+    }
+    if (state != AppLifecycleState.resumed ||
+        !_notificationSettingsWasBackgrounded) {
+      return;
+    }
+
+    _awaitingNotificationSettingsReturn = false;
+    _notificationSettingsWasBackgrounded = false;
+    unawaited(_refreshNotificationPermissionTask());
   }
 
   @override
@@ -203,20 +234,15 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
         return;
       case 'coin.enable_push':
         final currentStatus = await permissions.Permission.notification.status;
-        if (!_hasNotificationPermission(currentStatus)) {
-          if (currentStatus.isPermanentlyDenied) {
-            await permissions.openAppSettings();
-          } else {
-            await permissions.Permission.notification.request();
-            // A rejection dismisses the system prompt only. On a later tap,
-            // `isPermanentlyDenied` above will send the user to Settings.
-          }
+        if (_hasNotificationPermission(currentStatus)) {
+          await _refreshNotificationPermissionTask();
+          return;
         }
-        await ref
-            .read(startupNotificationPermissionReporterProvider)
-            .syncForAccount(ref.read(userInfoStoreProvider).showId);
-        if (mounted) {
-          await ref.read(rewardCoinsControllerProvider.notifier).loadTasks();
+        _awaitingNotificationSettingsReturn = true;
+        _notificationSettingsWasBackgrounded = false;
+        final opened = await permissions.openAppSettings();
+        if (!opened) {
+          _awaitingNotificationSettingsReturn = false;
         }
         return;
       case 'coin.share_drama':
@@ -230,6 +256,15 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
 
   bool _hasNotificationPermission(permissions.PermissionStatus status) {
     return status.isGranted || status.isProvisional;
+  }
+
+  Future<void> _refreshNotificationPermissionTask() async {
+    if (!mounted || !widget.isActive) return;
+    await ref
+        .read(startupNotificationPermissionReporterProvider)
+        .syncForAccount(ref.read(userInfoStoreProvider).showId);
+    if (!mounted || !widget.isActive) return;
+    await ref.read(rewardCoinsControllerProvider.notifier).loadTasks();
   }
 
   Future<void> _claimTask(BuildContext context, String taskKey) async {

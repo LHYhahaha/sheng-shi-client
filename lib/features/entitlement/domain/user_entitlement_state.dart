@@ -36,6 +36,7 @@ class UserEntitlementState {
     required this.coinBalance,
     required this.autoUnlockEnabled,
     required this.unlockedEpisodeIds,
+    this.userId,
     this.bonusBalance = 0,
     this.totalPointBalance = 0,
     this.membershipExpiresAt,
@@ -55,6 +56,7 @@ class UserEntitlementState {
       totalPointBalance = 0,
       autoUnlockEnabled = false,
       unlockedEpisodeIds = const <String>{},
+      userId = null,
       membershipExpiresAt = null,
       pendingOperationId = null,
       serverTime = null,
@@ -68,6 +70,9 @@ class UserEntitlementState {
   /// MVP 中游客可以看免费内容，但付费/会员内容会被当作非会员处理。未来如果产品要求
   /// 先登录再解锁，应在 entitlement 决策层扩展，不要让 PlayerPage 自己判断。
   final bool isGuest;
+
+  /// 业务用户 ID（int64 数值字符串），来自用户权益接口，用于客户端埋点。
+  final String? userId;
 
   /// 当前账号是否有会员权益。
   ///
@@ -131,6 +136,7 @@ class UserEntitlementState {
 
   UserEntitlementState copyWith({
     bool? isGuest,
+    String? userId,
     bool? isMember,
     int? coinBalance,
     int? bonusBalance,
@@ -150,6 +156,7 @@ class UserEntitlementState {
   }) {
     return UserEntitlementState(
       isGuest: isGuest ?? this.isGuest,
+      userId: userId ?? this.userId,
       isMember: isMember ?? this.isMember,
       coinBalance: coinBalance ?? this.coinBalance,
       bonusBalance: bonusBalance ?? this.bonusBalance,
