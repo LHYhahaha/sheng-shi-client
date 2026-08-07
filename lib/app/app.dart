@@ -439,7 +439,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         _finishActivePopupFlow();
         router.go(RoutePaths.member);
         return;
-      case 'vip_open':
+      case 'member_open':
         _finishActivePopupFlow();
         router.push(RoutePaths.membership);
         return;
