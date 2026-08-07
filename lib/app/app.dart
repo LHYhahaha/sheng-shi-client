@@ -240,7 +240,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       case 'member_point':
         router.go(RoutePaths.rewardsLocation(tab: RoutePaths.memberPointsTab));
         return;
-      case 'vip_open':
+      case 'member_open':
         router.push(RoutePaths.membership);
         return;
       case 'recharge':
