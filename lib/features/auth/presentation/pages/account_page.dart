@@ -61,7 +61,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'ID:${user?.id ?? '--'}',
+                          'ID:${user?.showId ?? '--'}',
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
                                 color: Colors.white.withValues(alpha: 0.65),

@@ -114,6 +114,8 @@ android {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    implementation("com.google.android.gms:play-services-ads-identifier:18.1.0")
+    implementation("com.android.installreferrer:installreferrer:2.2")
 }
 
 flutter {

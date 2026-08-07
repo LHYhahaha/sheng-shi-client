@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
+import '../../../core/adjust/adjust_event_reporter_provider.dart';
 import '../../../core/analytics/analytics_definition.dart';
 import '../../../core/analytics/analytics_event.dart';
 import '../../../core/analytics/analytics_provider.dart';
@@ -647,6 +648,14 @@ class PlayerRechargeUnlockController
       if (!started) {
         throw Exception('Failed to launch IAP purchase');
       }
+      ref
+          .read(adjustEventReporterProvider)
+          .reportCheckoutStart(
+            productType: isCoinPackage ? 'coin' : 'vip_subscription',
+            productId: packageId,
+            price: productDetails.rawPrice,
+            currency: productDetails.currencyCode,
+          );
 
       // 8. 等待购买结果（设置超时）
       final purchaseDetails = await completer.future.timeout(

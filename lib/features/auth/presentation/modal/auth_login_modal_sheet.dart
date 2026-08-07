@@ -42,7 +42,7 @@ class _AuthLoginModalSheetState extends ConsumerState<AuthLoginModalSheet> {
           Navigator.of(context).pop(
             LoginModalResult.success(
               provider: user.provider.name,
-              userId: user.id,
+              userId: user.userId,
               userNickname: user.nickname,
               accountLinked: session.guestId != null,
             ),

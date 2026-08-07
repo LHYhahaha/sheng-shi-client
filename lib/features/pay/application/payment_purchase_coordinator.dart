@@ -61,6 +61,7 @@ class PaymentPurchaseCoordinator {
     required String packageName,
     String? offerToken,
     void Function(GooglePurchasePhase phase)? onPhase,
+    void Function()? onGooglePlayCheckoutStarted,
   }) async {
     StreamSubscription<PurchaseDetails>? purchaseSubscription;
     StreamSubscription<Object>? errorSubscription;
@@ -97,6 +98,10 @@ class PaymentPurchaseCoordinator {
       if (!started) {
         throw StateError('Failed to launch Google Play payment.');
       }
+      // Billing 弹窗已成功拉起后再派发 Adjust 事件，回调异常不能干扰购买流程。
+      try {
+        onGooglePlayCheckoutStarted?.call();
+      } catch (_) {}
 
       final details = await completer.future.timeout(
         const Duration(seconds: 30),

@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell.dart';
+import '../../../../core/adjust/adjust_event_reporter_provider.dart';
 import '../../../../core/analytics/analytics_definition.dart';
 import '../../../../core/analytics/drama_card_exposure.dart';
 import '../../../../core/analytics/analytics_event.dart';
@@ -46,6 +47,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   ProviderSubscription<bool>? _accessTokenListener;
   bool _notificationPermissionCheckScheduled = false;
   bool _notificationPermissionChecked = false;
+  bool _homeFirstViewCheckScheduled = false;
 
   List image = [
     "assets/images/home/picture1.png",
@@ -123,6 +125,24 @@ class _HomePageState extends ConsumerState<HomePage> {
             .read(startupNotificationPermissionReporterProvider)
             .checkAndReportOnHomeArrival(),
       );
+    });
+  }
+
+  void _reportHomeFirstViewAfterDisplay() {
+    if (_homeFirstViewCheckScheduled) return;
+    _homeFirstViewCheckScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _homeFirstViewCheckScheduled = false;
+      if (!mounted) return;
+
+      final remoteData = ref.read(homeRemoteDataProvider);
+      final homeDataState = ref.read(homeDataControllerProvider);
+      final isStillLoading =
+          homeDataState.isLoading ||
+          (remoteData == null && homeDataState.error == null);
+      if (isStillLoading || homeDataState.error != null) return;
+
+      unawaited(ref.read(adjustEventReporterProvider).reportHomeFirstView());
     });
   }
 
@@ -265,6 +285,10 @@ class _HomePageState extends ConsumerState<HomePage> {
         (remoteData == null && homeDataState.error == null);
     final error = homeDataState.error;
     final isEmpty = items.isEmpty;
+
+    if (!isLoading && error == null) {
+      _reportHomeFirstViewAfterDisplay();
+    }
 
     return Scaffold(
       backgroundColor: AppColors.black,

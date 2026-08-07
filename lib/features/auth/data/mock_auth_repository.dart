@@ -31,7 +31,7 @@ class MockAuthRepository
     final linkGuestId = _session.guestId ?? _session.sessionId;
     _session = AuthSession(
       user: AuthUser(
-        id: '15589299',
+        userId: '15589299',
         nickname: switch (provider) {
           AuthProviderType.device => 'Device User',
           AuthProviderType.google => 'Google User',

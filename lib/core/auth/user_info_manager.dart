@@ -22,7 +22,11 @@ class UserInfoManager {
     UserInfoSnapshot userInfo, {
     AuthProviderType provider = AuthProviderType.device,
   }) {
-    if (provider != AuthProviderType.device && userInfo.hasUserInfo) {
+    final userId = userInfo.userId?.trim();
+    if (provider != AuthProviderType.device &&
+        userInfo.hasUserInfo &&
+        userId != null &&
+        userId.isNotEmpty) {
       print(
         '[UserInfoManager] Building authenticated session for showId: ${userInfo.showId}',
       );
@@ -36,7 +40,7 @@ class UserInfoManager {
           : const MediaResource.asset(authDefaultAvatarAssetPath);
 
       final user = AuthUser(
-        id: displayId,
+        userId: userId,
         nickname: userInfo.nickname ?? displayId,
         avatarAssetPath: authDefaultAvatarAssetPath,
         avatarResource: avatarResource,

@@ -123,7 +123,7 @@ class SearchHistoryController extends Notifier<SearchHistoryState> {
   }
 
   static String? _userKey(AuthSession session) {
-    final userId = session.user?.id.trim();
+    final userId = session.user?.userId.trim();
     if (userId != null && userId.isNotEmpty) {
       return 'user:$userId';
     }

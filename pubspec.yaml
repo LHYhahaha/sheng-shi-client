@@ -48,6 +48,7 @@ dependencies:
   in_app_purchase_android: ^0.5.0
   device_info_plus: ^13.1.0
   android_id: ^0.5.1
+  adjust_sdk: ^5.7.1
   flutter_udid: ^2.0.2
   url_launcher: ^6.3.2
   webview_flutter: ^4.10.0

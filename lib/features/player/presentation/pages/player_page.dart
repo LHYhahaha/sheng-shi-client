@@ -12,6 +12,7 @@ import '../../../../app/router/route_paths.dart';
 import '../../../../app/router/player_route_observer.dart';
 import '../../../../app/shell/app_shell.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
+import '../../../../core/adjust/adjust_event_reporter_provider.dart';
 import '../../../../core/analytics/analytics_definition.dart';
 import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
@@ -228,6 +229,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
     _analyticsPlaybackProgress = playback.position;
     _analyticsSubtitleLanguage = _subtitleLanguageForAnalytics(playback);
+    ref.read(adjustEventReporterProvider).reportDramaPlayStart();
     await _analyticsService.track(
       AnalyticsEvent(AnalyticsDefinitions.dramaPlayStart, {
         'drama_id': item.content.id,
@@ -2445,7 +2447,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   static String _exitRecommendationUserKey(AuthSession session) {
-    final userId = session.user?.id.trim();
+    final userId = session.user?.userId.trim();
     if (userId != null && userId.isNotEmpty) {
       return 'user:$userId';
     }

@@ -25,7 +25,7 @@ sealed class AuthLoginModalResult {
       AppModalResultKind.completed => AuthLoginModalSuccess(
         provider: AuthProviderType.values.byName(result.provider!),
         user: AuthUser(
-          id: result.userId!,
+          userId: result.userId!,
           nickname: result.userNickname!,
           avatarAssetPath: authDefaultAvatarAssetPath,
           provider: AuthProviderType.values.byName(result.provider!),
@@ -64,7 +64,7 @@ final class AuthLoginModalSuccess extends AuthLoginModalResult {
   LoginModalResult toLoginModalResult() {
     return LoginModalResult.success(
       provider: provider.name,
-      userId: user.id,
+      userId: user.userId,
       userNickname: user.nickname,
       accountLinked: accountLinked,
     );

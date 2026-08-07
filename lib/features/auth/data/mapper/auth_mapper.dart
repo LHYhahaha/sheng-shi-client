@@ -12,10 +12,7 @@ class AuthMapper {
 
   AuthSession mapSession(AuthSessionDto dto) {
     if (!dto.isAuthenticated || dto.user == null || dto.user!.isGuest) {
-      return AuthSession.guest(
-        sessionId: dto.sessionId,
-        guestId: dto.guestId,
-      );
+      return AuthSession.guest(sessionId: dto.sessionId, guestId: dto.guestId);
     }
     return AuthSession(
       user: mapUser(dto.user!),
@@ -26,7 +23,7 @@ class AuthMapper {
 
   AuthUser mapUser(AuthUserDto dto) {
     return AuthUser(
-      id: dto.userId,
+      userId: dto.userId,
       nickname: dto.nickname,
       avatarAssetPath: authDefaultAvatarAssetPath,
       avatarResource: dto.avatarUrl == null

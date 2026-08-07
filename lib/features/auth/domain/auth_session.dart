@@ -22,7 +22,8 @@ const authDefaultAvatarAssetPath =
 /// 这个模型，避免被 UI 或日志无意暴露。
 class AuthUser {
   const AuthUser({
-    required this.id,
+    String? userId,
+    @Deprecated('Use userId instead.') String? id,
     required this.nickname,
     required this.avatarAssetPath,
     required this.provider,
@@ -34,34 +35,41 @@ class AuthUser {
     this.coin,
     this.bonusCoin,
     this.autoUnlock,
-  });
+  }) : assert(userId != null || id != null),
+       userId = userId ?? id ?? '';
 
-  /// 用户 id（正式账号）。游客展示 id 见 [AuthSession.guestId] / [AuthSession.sessionId]。
-  final String id;
+  /// 服务端业务用户 ID（int64 数值字符串），仅用于后台请求、数据隔离和归因绑定。
+  ///
+  /// 不能用于 UI 展示；展示账号标识请使用 [showId]。
+  final String userId;
+
+  /// 兼容旧调用点；新代码必须使用 [userId]。
+  @Deprecated('Use userId instead.')
+  String get id => userId;
 
   final String nickname;
   final String avatarAssetPath;
   final MediaResource? avatarResource;
   final AuthProviderType provider;
-  
-  /// 展示用的用户 id
+
+  /// 用户可见的展示账号 ID，不可作为后台业务用户 ID。
   final String? showId;
-  
+
   /// 用户语言设置
   final String? language;
-  
+
   /// 用户状态
   final int? status;
-  
+
   /// VIP 过期时间
   final String? vipExpireAt;
-  
+
   /// 用户金币
   final int? coin;
-  
+
   /// 用户奖励金币
   final int? bonusCoin;
-  
+
   /// 自动解锁
   final int? autoUnlock;
 }
