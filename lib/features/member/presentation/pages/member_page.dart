@@ -169,6 +169,13 @@ class _MemberPageState extends ConsumerState<MemberPage> {
         '${context.l10n.memberCenterLabelValidUntil}: '
         '${_formatMembershipExpiry(membershipExpiresAt)}';
     final hasLinkedAccount = !auth.session.isGuest;
+    final showId = authUser?.showId ?? userInfo.showId;
+    final nickname = authUser?.nickname ?? userInfo.nickname;
+    final displayName = hasLinkedAccount && nickname?.trim().isNotEmpty == true
+        ? nickname!.trim()
+        : (showId?.trim().isNotEmpty == true
+              ? showId!.trim()
+              : context.l10n.profileLogin);
     final avatarResource =
         authUser?.avatarResource ??
         (userInfo.avatar != null && userInfo.avatar!.isNotEmpty
@@ -177,8 +184,8 @@ class _MemberPageState extends ConsumerState<MemberPage> {
     final headerState = profileState.copyWith(
       isLoggedIn: hasLinkedAccount,
       userId: authUser?.id ?? userInfo.showId,
-      showId: authUser?.showId ?? userInfo.showId,
-      nickname: authUser?.nickname ?? userInfo.nickname,
+      showId: showId,
+      nickname: nickname,
       avatarAssetPath:
           authUser?.avatarAssetPath ?? profileState.avatarAssetPath,
       avatarResource: avatarResource,
@@ -205,17 +212,7 @@ class _MemberPageState extends ConsumerState<MemberPage> {
                   ProfileHeader(
                     state: headerState,
                     secondaryText: membershipValidityText,
-                    onLoginTap: () {
-                      if (auth.session.isGuest) {
-                        context.push(RoutePaths.auth);
-                      }
-                    },
-                    onAccountTap: () => context.push(RoutePaths.account),
-                    onGuestTap: () {
-                      if (auth.session.isGuest) {
-                        context.push(RoutePaths.auth);
-                      }
-                    },
+                    displayName: displayName,
                   ),
                   const SizedBox(height: 42),
                   if (hasMemberInfoError)
@@ -489,9 +486,21 @@ class _RedeemCard extends ConsumerWidget {
                             pointCost: tier.pointCost,
                           );
                       if (!confirmed || !context.mounted) return;
-                      ref
-                          .read(memberPointsControllerProvider.notifier)
-                          .exchange(tierId: tier.tierId);
+                      try {
+                        final result = await ref
+                            .read(memberPointsControllerProvider.notifier)
+                            .exchange(tierId: tier.tierId);
+                        if (!context.mounted || result == null) return;
+                        showAppCenterToast(
+                          result.isSuccess
+                              ? l10n.memberCenterExchangeSuccess
+                              : l10n.networkError,
+                        );
+                      } catch (_) {
+                        if (context.mounted) {
+                          showAppCenterToast(l10n.networkError);
+                        }
+                      }
                     }
                   : null,
               style: TextButton.styleFrom(

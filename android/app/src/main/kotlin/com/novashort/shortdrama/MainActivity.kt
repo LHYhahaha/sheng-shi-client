@@ -1,10 +1,13 @@
 package com.novashort.shortdrama
 
+import android.app.Activity
+import android.app.Application
 import android.provider.Settings
 import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.lang.ref.WeakReference
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.ProxySelector
@@ -17,7 +20,32 @@ class MainActivity : FlutterActivity() {
     private val DEVICE_UUID_CHANNEL = "com.yushi.drama/device_uuid"
     private val SYSTEM_PROXY_CHANNEL = "com.yushi.drama/system_proxy"
     private val SYSTEM_INFO_CHANNEL = "com.yushi.drama/system_info"
+    private val FACEBOOK_AUTH_RECOVERY_CHANNEL = "com.yushi.drama/facebook_auth_recovery"
+    private var facebookActivity: WeakReference<Activity>? = null
 
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) = Unit
+            override fun onActivityStarted(activity: Activity) = Unit
+
+            override fun onActivityResumed(activity: Activity) {
+                if (activity.javaClass.name == "com.facebook.FacebookActivity") {
+                    facebookActivity = WeakReference(activity)
+                }
+            }
+
+            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivityStopped(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, outState: android.os.Bundle) = Unit
+
+            override fun onActivityDestroyed(activity: Activity) {
+                if (facebookActivity?.get() === activity) {
+                    facebookActivity = null
+                }
+            }
+        })
+    }
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -54,6 +82,22 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, FACEBOOK_AUTH_RECOVERY_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "finishFacebookActivity" -> {
+                        val activity = facebookActivity?.get()
+                        val wasFinished = activity != null && !activity.isFinishing
+                        if (wasFinished) {
+                            activity?.finish()
+                        }
+                        result.success(wasFinished)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
     }
 
     private fun getSystemInfo(): Map<String, String> {

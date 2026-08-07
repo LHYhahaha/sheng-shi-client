@@ -409,8 +409,14 @@ class PlayerRechargeUnlockController
 
   void close() {
     _purchaseGeneration++;
+    // 仅在实际支付过程中关闭时才表示“取消支付”。直接关闭充值抽屉并未
+    // 创建订单，若也标记为 cancelled，页面会错误地提示“已取消支付”。
+    final isCancellingPurchase = state.isProcessing;
     state = state.copyWith(
-      status: PlayerRechargeUnlockStatus.cancelled,
+      status: isCancellingPurchase
+          ? PlayerRechargeUnlockStatus.cancelled
+          : PlayerRechargeUnlockStatus.idle,
+      clearSelection: true,
       clearPaymentStage: true,
       clearPurchaseFailure: true,
       clearError: true,

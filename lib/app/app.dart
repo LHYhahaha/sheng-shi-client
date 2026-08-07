@@ -19,6 +19,7 @@ import '../core/modal/app_modal_host.dart';
 import '../core/network/api_client_provider.dart';
 import '../core/notification/fcm_notification.dart';
 import '../core/notification/fcm_notification_service.dart';
+import '../core/notification/startup_notification_permission_requester.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/pay/application/payment_loading_controller.dart';
 import '../features/popup/application/popup_entry_controller.dart';
@@ -34,9 +35,14 @@ import 'shell/app_shell_chrome.dart';
 import 'theme/app_theme.dart';
 
 class DramaClientApp extends ConsumerStatefulWidget {
-  const DramaClientApp({this.fcmNotificationService, super.key});
+  const DramaClientApp({
+    this.fcmNotificationService,
+    this.fcmNotificationServiceFuture,
+    super.key,
+  });
 
   final FcmNotificationService? fcmNotificationService;
+  final Future<FcmNotificationService?>? fcmNotificationServiceFuture;
 
   @override
   ConsumerState<DramaClientApp> createState() => _DramaClientAppState();
@@ -46,6 +52,9 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     with WidgetsBindingObserver {
   StreamSubscription<Uri>? _appLinkSubscription;
   StreamSubscription<FcmNotification>? _fcmNotificationTapSubscription;
+  FcmNotificationService? _fcmNotificationService;
+  final _notificationPermissionRequester =
+      StartupNotificationPermissionRequester();
 
   @override
   void initState() {
@@ -53,7 +62,14 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     WidgetsBinding.instance.addObserver(this);
     _setPreferredOrientations();
     _listenForAppLinks();
+    _fcmNotificationService = widget.fcmNotificationService;
     _listenForFcmNotificationTaps();
+    unawaited(_listenForFcmNotificationTapsWhenReady());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_notificationPermissionRequester.requestIfNeeded());
+      }
+    });
     Future.microtask(_bootstrapSessionAndI18n);
   }
 
@@ -101,7 +117,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   }
 
   void _listenForFcmNotificationTaps() {
-    final service = widget.fcmNotificationService;
+    final service = _fcmNotificationService;
     if (service == null) return;
     _fcmNotificationTapSubscription = service.onNotificationTap.listen(
       _handleFcmNotificationTap,
@@ -110,6 +126,17 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     if (initialNotification != null) {
       Future.microtask(() => _handleFcmNotificationTap(initialNotification));
     }
+  }
+
+  Future<void> _listenForFcmNotificationTapsWhenReady() async {
+    final service = await widget.fcmNotificationServiceFuture;
+    if (!mounted ||
+        service == null ||
+        identical(service, _fcmNotificationService)) {
+      return;
+    }
+    _fcmNotificationService = service;
+    _listenForFcmNotificationTaps();
   }
 
   void _handleFcmNotificationTap(FcmNotification notification) {
@@ -128,6 +155,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     final router = ref.read(appRouterProvider);
 
     if (type == 'player' && dramaId != null && dramaId.isNotEmpty) {
+      _cancelPopupForCurrentRouteExit();
       router.go(
         RoutePaths.playerLocation(
           dramaId: dramaId,
@@ -143,6 +171,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     if ((type == 'drama' || type == 'drama_detail' || type == 'detail') &&
         dramaId != null &&
         dramaId.isNotEmpty) {
+      _cancelPopupForCurrentRouteExit();
       router.go(
         RoutePaths.playerLocation(
           dramaId: dramaId,
@@ -155,6 +184,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     }
 
     if (type == 'page') {
+      _cancelPopupForCurrentRouteExit();
       _openFcmPage(router, data['page']);
       return;
     }
@@ -167,17 +197,30 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     if ((type == 'h5' || type == 'webview' || type == 'web') &&
         url != null &&
         url.isNotEmpty) {
+      _cancelPopupForCurrentRouteExit();
       if (openType == '2') {
         unawaited(_openFcmExternalUrl(url));
         return;
       }
-      router.go(
+      router.push(
         RoutePaths.webviewLocation(url: url, title: notification.title),
       );
       return;
     }
 
     debugPrint('[FCM] Ignored notification tap with unsupported data: $data');
+  }
+
+  void _cancelPopupForCurrentRouteExit() {
+    final placement = AppShellDestinations.popupPlacementForIndex(
+      ref.read(appShellCurrentTabIndexProvider),
+    );
+    final controller = ref.read(popupEntryControllerProvider.notifier);
+    if (placement == null) {
+      controller.finishActivePopupFlow();
+      return;
+    }
+    controller.cancelPlacementFlow(placement);
   }
 
   void _openFcmPage(GoRouter router, String? rawPage) {

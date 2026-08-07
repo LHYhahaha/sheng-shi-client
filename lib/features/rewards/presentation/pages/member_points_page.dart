@@ -7,6 +7,7 @@ import 'package:gradient_borders/box_borders/gradient_box_border.dart';
 import 'package:permission_handler/permission_handler.dart' as permissions;
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/network/api_exception.dart';
 import '../../../../core/notification/startup_notification_permission_reporter.dart';
 import '../../../../core/auth/user_info_store.dart';
 import '../../../../core/toast/app_center_toast.dart';
@@ -1093,10 +1094,26 @@ class _MemberTasksPanel extends ConsumerWidget {
         context,
         rewardAmount: result!.rewardAmount,
       );
+    } on ApiException catch (error) {
+      if (!context.mounted) return;
+      showAppCenterToast(
+        _claimBusinessErrorMessage(error) ??
+            AppLocalizations.maybeOf(context).networkError,
+      );
     } catch (_) {
       if (!context.mounted) return;
       showAppCenterToast(AppLocalizations.maybeOf(context).networkError);
     }
+  }
+
+  String? _claimBusinessErrorMessage(ApiException error) {
+    if (error.code != ApiErrorCode.badResponse || error.data is! Map) {
+      return null;
+    }
+    final message = (error.data as Map)['message'];
+    return message is String && message.trim().isNotEmpty
+        ? message.trim()
+        : null;
   }
 }
 

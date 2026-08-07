@@ -36,7 +36,7 @@ class _AccountCancellationPageState
     final result = await _showDeleteConfirmSheet(
       title: l10n.accountCancellationTitle,
       message: l10n.accountCancellationConfirmMessage,
-      confirmLabel: 'Confirm',
+      confirmLabel: l10n.accountCancellationConfirmDelete,
       cancelLabel: l10n.accountCancellationConfirmCancel,
     );
 

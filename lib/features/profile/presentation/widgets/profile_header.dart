@@ -15,6 +15,7 @@ class ProfileHeader extends StatelessWidget {
     this.onAccountTap,
     this.onGuestTap,
     this.secondaryText,
+    this.displayName,
     super.key,
   });
 
@@ -26,12 +27,15 @@ class ProfileHeader extends StatelessWidget {
   /// 传入时替换默认的 Show ID 展示，不提供复制操作。
   final String? secondaryText;
 
+  /// 传入时替换默认的昵称/登录文案。
+  final String? displayName;
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final displayName = state.isLoggedIn
-        ? (state.nickname ?? '--')
-        : l10n.profileLogin;
+    final resolvedDisplayName =
+        displayName ??
+        (state.isLoggedIn ? (state.nickname ?? '--') : l10n.profileLogin);
 
     void handleTap() {
       if (onGuestTap != null) {
@@ -65,7 +69,7 @@ class ProfileHeader extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    displayName,
+                    resolvedDisplayName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(

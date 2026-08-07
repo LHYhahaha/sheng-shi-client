@@ -111,7 +111,8 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage> {
             const _RewardsSectionLoading(
               key: Key('rewards_coins_check_in_loading'),
             )
-          else if (rewardCoinsState.checkInError != null)
+          else if (rewardCoinsState.checkInError != null &&
+              rewardCoinsState.checkInStatus == null)
             _RewardsSectionLoadFailed(
               key: const Key('rewards_coins_check_in_error'),
               onRetry: () {
@@ -446,7 +447,7 @@ class _CheckInPanel extends StatelessWidget {
                   ).createShader(bounds),
                   child: Text(
                     context.l10n.rewardsSigninDaysCount(
-                      checkInStatus.currentDay,
+                      checkInStatus.checkedDays,
                     ),
                     maxLines: 1,
                     style: TextStyle(
