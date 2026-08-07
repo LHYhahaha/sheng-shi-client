@@ -448,9 +448,12 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         router.push(RoutePaths.store);
         return;
       case 'reward_coin':
+        _finishActivePopupFlow();
+        router.go(RoutePaths.rewardsLocation());
+        return;
       case 'points':
         _finishActivePopupFlow();
-        debugPrint('[PopupEntryOverlay] Reserved page_code: $pageCode');
+        router.go(RoutePaths.rewardsLocation(tab: RoutePaths.memberPointsTab));
         return;
       default:
         _dismissActivePopup();
