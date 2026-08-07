@@ -110,6 +110,15 @@ class _AppShellState extends ConsumerState<AppShell> {
   Widget build(BuildContext context) {
     final navigationIndex = widget.navigationShell.currentIndex;
     if (_lastNavigationIndex != navigationIndex) {
+      final previousIndex = _lastNavigationIndex;
+      final previousPlacement = AppShellDestinations.popupPlacementForIndex(
+        previousIndex,
+      );
+      if (previousPlacement != null) {
+        ref
+            .read(popupEntryControllerProvider.notifier)
+            .cancelPlacementFlow(previousPlacement);
+      }
       _syncForYouVisibilityForNavigationChange(
         from: _lastNavigationIndex,
         to: navigationIndex,
@@ -121,10 +130,21 @@ class _AppShellState extends ConsumerState<AppShell> {
       appShellBottomNavigationVisibleProvider,
     );
 
-    // 单剧播放器覆盖 Shell 时会隐藏底部导航。若应用在播放器页停留超过
-    // 30 分钟，PopupEntryController 只会重置请求周期而不会请求；返回到可展示
-    // 弹窗的首页/For You 后，再由这里按当前 tab 发起检查与请求。
+    // 单剧播放器覆盖 Shell 时，需要立即取消首页/For You 的弹框 flow。
+    // 返回时仍交给 controller 的「当前前台周期是否已请求」保护：普通返回不会
+    // 重复弹窗；若后台停留超过 30 分钟已重置请求周期，则回到对应 Tab 时会重拉。
     ref.listen<bool>(appShellBottomNavigationVisibleProvider, (previous, next) {
+      if (previous == true && !next) {
+        final placement = AppShellDestinations.popupPlacementForIndex(
+          widget.navigationShell.currentIndex,
+        );
+        if (placement != null) {
+          ref
+              .read(popupEntryControllerProvider.notifier)
+              .cancelPlacementFlow(placement);
+        }
+        return;
+      }
       if (previous == false && next) {
         _requestPopupForIndex(widget.navigationShell.currentIndex);
       }

@@ -7,8 +7,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/drama_card_exposure.dart';
 import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
+import '../../../../core/analytics/analytics_service.dart';
 import '../../../../core/modal/app_modal_provider.dart';
 import '../../../../core/modal/app_modal_service.dart';
 import '../../../../core/modal/app_modal_source.dart';
@@ -45,6 +47,7 @@ class MembershipPage extends ConsumerStatefulWidget {
 }
 
 class _MembershipPageState extends ConsumerState<MembershipPage> {
+  final _dramaExposureSession = Object();
   bool _modalOpen = false;
   late final AppModalService _modalService;
   late final bool _returnToProfile;
@@ -79,6 +82,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
 
   @override
   void dispose() {
+    DramaCardExposure.releasePageSession(_dramaExposureSession);
     _modalService.dismissForSource(AppModalSource.membership);
     super.dispose();
   }
@@ -197,6 +201,8 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
             state: state,
             controller: controller,
             useFloatingPurchaseButton: useFloatingPurchaseButton,
+            dramaExposureSession: _dramaExposureSession,
+            analytics: ref.read(analyticsServiceProvider),
             onPlanTap: _selectPlan,
           ),
           if (state.hasContent)
@@ -317,12 +323,16 @@ class _MembershipBody extends StatelessWidget {
     required this.state,
     required this.controller,
     required this.useFloatingPurchaseButton,
+    required this.dramaExposureSession,
+    required this.analytics,
     required this.onPlanTap,
   });
 
   final MembershipState state;
   final MembershipController controller;
   final bool useFloatingPurchaseButton;
+  final Object dramaExposureSession;
+  final AnalyticsService analytics;
   final ValueChanged<String> onPlanTap;
 
   @override
@@ -435,6 +445,8 @@ class _MembershipBody extends StatelessWidget {
             ),
             MembershipBenefitsPanel(
               betweenBenefitsAndTips: VipOnlyDramasSection(
+                exposurePageSession: dramaExposureSession,
+                exposureAnalytics: analytics,
                 listPadding: const EdgeInsets.symmetric(
                   horizontal: MembershipLayout.horizontalPadding,
                 ),

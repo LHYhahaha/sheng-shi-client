@@ -1,8 +1,8 @@
-import 'dart:ffi';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/analytics/drama_card_exposure.dart';
+import '../../../../core/analytics/analytics_service.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../application/vip_only_dramas_provider.dart';
@@ -25,6 +25,8 @@ class VipOnlyDramasSection extends ConsumerWidget {
     super.key,
     this.topPadding,
     this.needDivider,
+    this.exposurePageSession,
+    this.exposureAnalytics,
   });
 
   final void Function(VipOnlyDrama drama, int position) onDramaTap;
@@ -34,6 +36,8 @@ class VipOnlyDramasSection extends ConsumerWidget {
   final BoxBorder? border;
   final double? topPadding;
   final bool? needDivider;
+  final Object? exposurePageSession;
+  final AnalyticsService? exposureAnalytics;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -88,10 +92,22 @@ class VipOnlyDramasSection extends ConsumerWidget {
                     separatorBuilder: (_, _) => const SizedBox(width: 8),
                     itemBuilder: (context, index) {
                       final drama = collection.dramas[index];
-                      return _VipOnlyDramaCard(
+                      final card = _VipOnlyDramaCard(
                         width: cardWidth,
                         drama: drama,
                         onTap: () => onDramaTap(drama, index + 1),
+                      );
+                      final pageSession = exposurePageSession;
+                      final analytics = exposureAnalytics;
+                      if (pageSession == null || analytics == null) {
+                        return card;
+                      }
+                      return DramaCardExposure(
+                        pageSession: pageSession,
+                        analytics: analytics,
+                        dramaId: drama.id,
+                        position: index + 1,
+                        child: card,
                       );
                     },
                   ),

@@ -78,7 +78,6 @@ abstract final class AnalyticsDefinitions {
   static const dramaPlayStart = 'drama_play_start';
   static const dramaPlayEnd = 'drama_play_end';
   static const searchSubmit = 'search_submit';
-  static const searchResultClick = 'search_result_click';
   static const paymentStart = 'payment_start';
   static const loginFail = 'login_fail';
   static const episodeUnlockRequest = 'episode_unlock_request';
@@ -134,8 +133,26 @@ abstract final class AnalyticsDefinitions {
         'drama_id': _requiredString,
         'position': _requiredNumber,
         'category_id': _string,
-        'card_scene': _string,
-        'search_keyword': _string,
+        'card_scene': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          allowedValues: {
+            'search_hot_search_rank',
+            'search_hot_play_rank',
+            'search_new_drama_rank',
+            'search_typing',
+            'search_result',
+            'search_recommend',
+            'favorite_watching',
+            'favorite_history',
+            'favorite_recommend',
+          },
+        ),
+        'search_keyword': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['card_scene'] == 'search_typing' ||
+              params['card_scene'] == 'search_result',
+        ),
       },
     ),
     popupShow: AnalyticsEventDefinition(
@@ -175,6 +192,27 @@ abstract final class AnalyticsDefinitions {
           type: AnalyticsParameterType.string,
           requiredWhen: (params) =>
               params['element_name'] == 'home_category_tab',
+        ),
+        'card_scene': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          allowedValues: {
+            'search_hot_search_rank',
+            'search_hot_play_rank',
+            'search_new_drama_rank',
+            'search_typing',
+            'search_result',
+            'search_recommend',
+            'favorite_watching',
+            'favorite_history',
+            'favorite_recommend',
+          },
+        ),
+        'search_keyword': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'drama_card' &&
+              (params['card_scene'] == 'search_typing' ||
+                  params['card_scene'] == 'search_result'),
         ),
         'favorite_tab': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
@@ -320,14 +358,6 @@ abstract final class AnalyticsDefinitions {
     searchSubmit: AnalyticsEventDefinition(
       name: searchSubmit,
       parameters: {'search_keyword': _requiredString},
-    ),
-    searchResultClick: AnalyticsEventDefinition(
-      name: searchResultClick,
-      parameters: {
-        'drama_id': _requiredString,
-        'search_keyword': _requiredString,
-        'position': _requiredNumber,
-      },
     ),
     paymentStart: AnalyticsEventDefinition(
       name: paymentStart,

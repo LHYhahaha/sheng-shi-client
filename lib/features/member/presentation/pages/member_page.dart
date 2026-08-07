@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell.dart';
 import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/drama_card_exposure.dart';
 import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/auth/user_info_store.dart';
@@ -126,6 +127,7 @@ class MemberPage extends ConsumerStatefulWidget {
 }
 
 class _MemberPageState extends ConsumerState<MemberPage> {
+  final _dramaExposureSession = Object();
   bool _vipDramasRefreshRequested = false;
 
   @override
@@ -153,6 +155,12 @@ class _MemberPageState extends ConsumerState<MemberPage> {
   }
 
   @override
+  void dispose() {
+    DramaCardExposure.releasePageSession(_dramaExposureSession);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final userInfo = ref.watch(userInfoStoreProvider);
@@ -174,6 +182,13 @@ class _MemberPageState extends ConsumerState<MemberPage> {
         '${context.l10n.memberCenterLabelValidUntil}: '
         '${_formatMembershipExpiry(membershipExpiresAt)}';
     final hasLinkedAccount = !auth.session.isGuest;
+    final showId = authUser?.showId ?? userInfo.showId;
+    final nickname = authUser?.nickname ?? userInfo.nickname;
+    final displayName = hasLinkedAccount && nickname?.trim().isNotEmpty == true
+        ? nickname!.trim()
+        : (showId?.trim().isNotEmpty == true
+              ? showId!.trim()
+              : context.l10n.profileLogin);
     final avatarResource =
         authUser?.avatarResource ??
         (userInfo.avatar != null && userInfo.avatar!.isNotEmpty
@@ -182,8 +197,8 @@ class _MemberPageState extends ConsumerState<MemberPage> {
     final headerState = profileState.copyWith(
       isLoggedIn: hasLinkedAccount,
       userId: authUser?.id ?? userInfo.showId,
-      showId: authUser?.showId ?? userInfo.showId,
-      nickname: authUser?.nickname ?? userInfo.nickname,
+      showId: showId,
+      nickname: nickname,
       avatarAssetPath:
           authUser?.avatarAssetPath ?? profileState.avatarAssetPath,
       avatarResource: avatarResource,
@@ -210,17 +225,7 @@ class _MemberPageState extends ConsumerState<MemberPage> {
                   ProfileHeader(
                     state: headerState,
                     secondaryText: membershipValidityText,
-                    onLoginTap: () {
-                      if (auth.session.isGuest) {
-                        context.push(RoutePaths.auth);
-                      }
-                    },
-                    onAccountTap: () => context.push(RoutePaths.account),
-                    onGuestTap: () {
-                      if (auth.session.isGuest) {
-                        context.push(RoutePaths.auth);
-                      }
-                    },
+                    displayName: displayName,
                   ),
                   const SizedBox(height: 42),
                   if (hasMemberInfoError)
@@ -254,6 +259,8 @@ class _MemberPageState extends ConsumerState<MemberPage> {
               ),
             ),
             VipOnlyDramasSection(
+              exposurePageSession: _dramaExposureSession,
+              exposureAnalytics: ref.read(analyticsServiceProvider),
               needDivider: true,
               topPadding: 20,
               listPadding: EdgeInsetsGeometry.only(left: 16),
@@ -520,9 +527,21 @@ class _RedeemCard extends ConsumerWidget {
                             pointCost: tier.pointCost,
                           );
                       if (!confirmed || !context.mounted) return;
-                      ref
-                          .read(memberPointsControllerProvider.notifier)
-                          .exchange(tierId: tier.tierId);
+                      try {
+                        final result = await ref
+                            .read(memberPointsControllerProvider.notifier)
+                            .exchange(tierId: tier.tierId);
+                        if (!context.mounted || result == null) return;
+                        showAppCenterToast(
+                          result.isSuccess
+                              ? l10n.memberCenterExchangeSuccess
+                              : l10n.networkError,
+                        );
+                      } catch (_) {
+                        if (context.mounted) {
+                          showAppCenterToast(l10n.networkError);
+                        }
+                      }
                     }
                   : null,
               style: TextButton.styleFrom(

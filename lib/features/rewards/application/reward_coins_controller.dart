@@ -72,12 +72,21 @@ class RewardCoinsController extends Notifier<RewardCoinsState> {
 
   Future<void> loadCheckInStatus() async {
     final generation = ++_checkInGeneration;
-    state = state.copyWith(isCheckInLoading: true, clearCheckInError: true);
+    final hasCurrentStatus = state.checkInStatus != null;
+    // 已展示签到卡片时在后台静默刷新，避免每次进入页面都替换成 loading
+    // 占位。只有初次加载才展示 loading 状态。
+    if (!hasCurrentStatus) {
+      state = state.copyWith(isCheckInLoading: true, clearCheckInError: true);
+    }
     try {
       final status = await ref
           .read(rewardCoinsRepositoryProvider)
           .getCheckInStatus();
       if (generation != _checkInGeneration) return;
+      if (hasCurrentStatus &&
+          _isSameCheckInStatus(state.checkInStatus!, status)) {
+        return;
+      }
       state = state.copyWith(
         checkInStatus: status,
         isCheckInLoading: false,
@@ -85,6 +94,8 @@ class RewardCoinsController extends Notifier<RewardCoinsState> {
       );
     } catch (error) {
       if (generation != _checkInGeneration) return;
+      // 后台刷新失败时继续展示上一次成功的签到信息，不打断用户浏览。
+      if (hasCurrentStatus) return;
       state = state.copyWith(isCheckInLoading: false, checkInError: error);
     }
   }
@@ -168,4 +179,28 @@ class RewardCoinsController extends Notifier<RewardCoinsState> {
       if (state.isClaiming) state = state.copyWith(isClaiming: false);
     }
   }
+}
+
+bool _isSameCheckInStatus(
+  RewardCoinsCheckInStatus current,
+  RewardCoinsCheckInStatus next,
+) {
+  if (current.checkedDays != next.checkedDays ||
+      current.checkedToday != next.checkedToday ||
+      current.currentDay != next.currentDay ||
+      current.days.length != next.days.length) {
+    return false;
+  }
+  for (var index = 0; index < current.days.length; index++) {
+    final currentDay = current.days[index];
+    final nextDay = next.days[index];
+    if (currentDay.checked != nextDay.checked ||
+        currentDay.claimable != nextDay.claimable ||
+        currentDay.current != nextDay.current ||
+        currentDay.day != nextDay.day ||
+        currentDay.rewardCoin != nextDay.rewardCoin) {
+      return false;
+    }
+  }
+  return true;
 }

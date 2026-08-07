@@ -11,8 +11,10 @@ import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
 import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/drama_card_exposure.dart';
 import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
+import '../../../../core/analytics/analytics_service.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../core/utils/text_over_ellipsis.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -41,6 +43,7 @@ class MyListPage extends ConsumerStatefulWidget {
 class _MyListPageState extends ConsumerState<MyListPage> {
   AppShellBottomNavigationVisible? _shellChrome;
   late final ScrollController _scrollController;
+  final _dramaExposureSession = Object();
   bool _didTriggerLoadMoreNearEnd = false;
 
   @override
@@ -59,6 +62,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
 
   @override
   void dispose() {
+    DramaCardExposure.releasePageSession(_dramaExposureSession);
     _scrollController
       ..removeListener(_handleScroll)
       ..dispose();
@@ -323,27 +327,36 @@ class _MyListPageState extends ConsumerState<MyListPage> {
               bottom: 16,
               right: state.isCollectionEditing ? 4 : 0,
             ),
-            child: _MyListRowSwipeAction(
-              // 两个 tab 都支持左滑删除，但编辑模式下禁用
-              enabled: !state.isCollectionEditing,
-              item: item,
-              onDelete: () =>
-                  _deleteItemAndFillIfShort(controller, item.dramaId),
-              onOpened: () => controller.openPlayItem(item.dramaId),
-              onClosed: () => controller.closeOpenPlayItem(item.dramaId),
-              child: _MyListRow(
+            child: DramaCardExposure(
+              pageSession: _dramaExposureSession,
+              analytics: ref.read(analyticsServiceProvider),
+              dramaId: item.dramaId.toString(),
+              position: index + 1,
+              cardScene: state.selectedTab == MyListTab.collection
+                  ? 'favorite_watching'
+                  : 'favorite_history',
+              child: _MyListRowSwipeAction(
+                // 两个 tab 都支持左滑删除，但编辑模式下禁用
+                enabled: !state.isCollectionEditing,
                 item: item,
-                choosing: state.isCollectionEditing,
-                selected: state.selectedIds.contains(item.dramaId),
-                onTap: state.isCollectionEditing
-                    ? () => controller.toggleSelection(item.dramaId)
-                    : () => _openMyListItem(
-                        l10n,
-                        state,
-                        controller,
-                        item,
-                        position: index + 1,
-                      ),
+                onDelete: () =>
+                    _deleteItemAndFillIfShort(controller, item.dramaId),
+                onOpened: () => controller.openPlayItem(item.dramaId),
+                onClosed: () => controller.closeOpenPlayItem(item.dramaId),
+                child: _MyListRow(
+                  item: item,
+                  choosing: state.isCollectionEditing,
+                  selected: state.selectedIds.contains(item.dramaId),
+                  onTap: state.isCollectionEditing
+                      ? () => controller.toggleSelection(item.dramaId)
+                      : () => _openMyListItem(
+                          l10n,
+                          state,
+                          controller,
+                          item,
+                          position: index + 1,
+                        ),
+                ),
               ),
             ),
           ),
@@ -371,6 +384,8 @@ class _MyListPageState extends ConsumerState<MyListPage> {
       children.add(
         _HotPlaysSection(
           dramas: hotPlays,
+          pageSession: _dramaExposureSession,
+          analytics: ref.read(analyticsServiceProvider),
           onTap: (drama, position) =>
               _openHotPlay(controller, drama, position: position),
         ),
@@ -415,6 +430,9 @@ class _MyListPageState extends ConsumerState<MyListPage> {
               'element_name': 'drama_card',
               'drama_id': item.dramaId.toString(),
               'position': position,
+              'card_scene': isCollection
+                  ? 'favorite_watching'
+                  : 'favorite_history',
             }),
           ),
     );
@@ -441,6 +459,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
               'element_name': 'drama_card',
               'drama_id': drama.id,
               'position': position,
+              'card_scene': 'favorite_recommend',
             }),
           ),
     );
@@ -457,9 +476,16 @@ class _MyListPageState extends ConsumerState<MyListPage> {
 }
 
 class _HotPlaysSection extends StatelessWidget {
-  const _HotPlaysSection({required this.dramas, required this.onTap});
+  const _HotPlaysSection({
+    required this.dramas,
+    required this.pageSession,
+    required this.analytics,
+    required this.onTap,
+  });
 
   final List<SearchRankDrama> dramas;
+  final Object pageSession;
+  final AnalyticsService analytics;
   final void Function(SearchRankDrama drama, int position) onTap;
 
   @override
@@ -490,10 +516,17 @@ class _HotPlaysSection extends StatelessWidget {
             ),
             itemBuilder: (context, index) {
               final drama = dramas[index];
-              return _HotPlayCard(
-                drama: drama,
-                ranking: index + 1,
-                onTap: () => onTap(drama, index + 1),
+              return DramaCardExposure(
+                pageSession: pageSession,
+                analytics: analytics,
+                dramaId: drama.id,
+                position: index + 1,
+                cardScene: 'favorite_recommend',
+                child: _HotPlayCard(
+                  drama: drama,
+                  ranking: index + 1,
+                  onTap: () => onTap(drama, index + 1),
+                ),
               );
             },
           ),

@@ -819,8 +819,6 @@ class AppLocalizations {
     zh: '确认购买',
   );
 
-  String get storeConfirm =>
-      _remoteText('delete_account.confirm.confirm', en: 'Confirm', zh: '确认');
 
   String get storeClose =>
       _remoteText('payment_modal.button.done', en: 'Done', zh: '完成');

@@ -8,8 +8,11 @@ import 'package:permission_handler/permission_handler.dart' as permissions;
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/drama_card_exposure.dart';
 import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
+import '../../../../core/analytics/analytics_service.dart';
+import '../../../../core/network/api_exception.dart';
 import '../../../../core/notification/startup_notification_permission_reporter.dart';
 import '../../../../core/auth/user_info_store.dart';
 import '../../../../core/toast/app_center_toast.dart';
@@ -102,7 +105,7 @@ class MemberPointsPage extends ConsumerStatefulWidget {
 
 class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
     with WidgetsBindingObserver {
-  bool _vipDramasRefreshRequested = false;
+  final _dramaExposureSession = Object();
   bool _awaitingNotificationSettingsReturn = false;
   bool _notificationSettingsWasBackgrounded = false;
 
@@ -115,6 +118,7 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
 
   @override
   void dispose() {
+    DramaCardExposure.releasePageSession(_dramaExposureSession);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -156,16 +160,6 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // 嵌在 Member tab 时由父页面统一刷新；独立页面自行刷新。
-    if (!widget.useParentBackground && !_vipDramasRefreshRequested) {
-      _vipDramasRefreshRequested = true;
-      ref.invalidate(vipOnlyDramasProvider);
-    }
-  }
-
-  @override
   void didUpdateWidget(MemberPointsPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!oldWidget.isActive && widget.isActive) {
@@ -175,6 +169,9 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
 
   void _refreshIfNeeded() {
     if (!widget.isActive || widget.isMember != null) return;
+    // 每次进入会员积分页都刷新会员推荐短剧。RewardsPage 使用
+    // IndexedStack 保留子页面，因此不能只依赖页面首次创建时的请求。
+    ref.invalidate(vipOnlyDramasProvider);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || !widget.isActive) return;
       await ref
@@ -272,6 +269,8 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
           const SizedBox(height: 16),
           if (isMember)
             VipOnlyDramasSection(
+              exposurePageSession: _dramaExposureSession,
+              exposureAnalytics: ref.read(analyticsServiceProvider),
               border: Border(
                 top: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
               ),
@@ -300,7 +299,10 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
               },
             )
           else
-            const _VipSeriesPanel(),
+            _VipSeriesPanel(
+              dramaExposureSession: _dramaExposureSession,
+              analytics: ref.read(analyticsServiceProvider),
+            ),
         ],
       ),
     );
@@ -1166,10 +1168,26 @@ class _MemberTasksPanel extends ConsumerWidget {
         context,
         rewardAmount: result!.rewardAmount,
       );
+    } on ApiException catch (error) {
+      if (!context.mounted) return;
+      showAppCenterToast(
+        _claimBusinessErrorMessage(error) ??
+            AppLocalizations.maybeOf(context).networkError,
+      );
     } catch (_) {
       if (!context.mounted) return;
       showAppCenterToast(AppLocalizations.maybeOf(context).networkError);
     }
+  }
+
+  String? _claimBusinessErrorMessage(ApiException error) {
+    if (error.code != ApiErrorCode.badResponse || error.data is! Map) {
+      return null;
+    }
+    final message = (error.data as Map)['message'];
+    return message is String && message.trim().isNotEmpty
+        ? message.trim()
+        : null;
   }
 }
 
@@ -1855,7 +1873,13 @@ class _VipBenefitTitle extends StatelessWidget {
 }
 
 class _VipSeriesPanel extends ConsumerWidget {
-  const _VipSeriesPanel();
+  const _VipSeriesPanel({
+    required this.dramaExposureSession,
+    required this.analytics,
+  });
+
+  final Object dramaExposureSession;
+  final AnalyticsService analytics;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1863,6 +1887,8 @@ class _VipSeriesPanel extends ConsumerWidget {
       children: [
         const _VipBenefitsPanel(),
         VipOnlyDramasSection(
+          exposurePageSession: dramaExposureSession,
+          exposureAnalytics: analytics,
           topPadding: 6,
           needDivider: true,
           listPadding: EdgeInsetsGeometry.only(left: 16),

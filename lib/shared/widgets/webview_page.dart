@@ -29,7 +29,8 @@ class WebViewPage extends ConsumerStatefulWidget {
     this.javaScriptMessageHandlers = const {},
     this.onControllerCreated,
     this.onPageStarted,
-    this.onPageFinished, this.feedbackColor,
+    this.onPageFinished,
+    this.feedbackColor,
   });
 
   @override
@@ -46,7 +47,7 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       // Android WebView 默认白底会在 H5 首帧绘制前短暂露出。
-      ..setBackgroundColor(widget.feedbackColor??AppColors.white)
+      ..setBackgroundColor(widget.feedbackColor ?? AppColors.white)
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (String url) {
@@ -117,51 +118,60 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.black,
-      appBar: widget.showAppBar
-          ? AppBar(
-              backgroundColor: AppColors.black,
-              leading: IconButton(
-                icon: const Icon(
-                  Icons.chevron_left_rounded,
-                  color: AppColors.textPrimary,
-                  size: 28,
+    final canPop = context.canPop();
+    return PopScope(
+      canPop: canPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && mounted) {
+          context.go(RoutePaths.home);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.black,
+        appBar: widget.showAppBar
+            ? AppBar(
+                backgroundColor: AppColors.black,
+                leading: IconButton(
+                  icon: const Icon(
+                    Icons.chevron_left_rounded,
+                    color: AppColors.textPrimary,
+                    size: 28,
+                  ),
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                      return;
+                    }
+                    context.go(RoutePaths.home);
+                  },
                 ),
-                onPressed: () {
-                  if (context.canPop()) {
-                    context.pop();
-                    return;
-                  }
-                  context.go(RoutePaths.profile);
-                },
-              ),
-              title: Text(
-                widget.title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.textPrimary,
-                  // fontSize: 18,
-                  // fontWeight: FontWeight.w700,
+                title: Text(
+                  widget.title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AppColors.textPrimary,
+                    // fontSize: 18,
+                    // fontWeight: FontWeight.w700,
+                  ),
+                ),
+                centerTitle: true,
+              )
+            : null,
+        body: Stack(
+          children: [
+            WebViewWidget(controller: _controller),
+            if (_isLoading)
+              Positioned.fill(
+                // Keep the native WebView's default white first frame hidden
+                // until the H5 page has finished rendering.
+                child: ColoredBox(
+                  color: widget.feedbackColor ?? AppColors.white,
+                  child: Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  ),
                 ),
               ),
-              centerTitle: true,
-            )
-          : null,
-      body: Stack(
-        children: [
-          WebViewWidget(controller: _controller),
-          if (_isLoading)
-             Positioned.fill(
-              // Keep the native WebView's default white first frame hidden
-              // until the H5 page has finished rendering.
-              child: ColoredBox(
-                color:widget.feedbackColor?? AppColors.white,
-                child: Center(
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                ),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -88,6 +88,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   void dispose() {
+    DramaCardExposure.releasePageSession(_dramaExposureSession);
     // 取消滚动请求的监听
     _scrollToTopListener?.close();
     _accessTokenListener?.close();

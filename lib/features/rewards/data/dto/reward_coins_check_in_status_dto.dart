@@ -3,17 +3,24 @@ import '../../domain/reward_coins_check_in_status.dart';
 
 class RewardCoinsCheckInStatusDto {
   const RewardCoinsCheckInStatusDto({
+    required this.checkedDays,
     required this.checkedToday,
     required this.currentDay,
     required this.days,
   });
 
+  final int checkedDays;
   final bool checkedToday;
   final int currentDay;
   final List<RewardCoinsCheckInDayDto> days;
 
   factory RewardCoinsCheckInStatusDto.fromJson(Map<String, Object?> json) {
     return RewardCoinsCheckInStatusDto(
+      checkedDays: JsonFieldParser.requireInt(
+        json,
+        'checkedDays',
+        dtoName: 'RewardCoinsCheckInStatusDto',
+      ),
       checkedToday: JsonFieldParser.requireBool(
         json,
         'checkedToday',
@@ -43,6 +50,7 @@ class RewardCoinsCheckInStatusDto {
   }
 
   RewardCoinsCheckInStatus toDomain() => RewardCoinsCheckInStatus(
+    checkedDays: checkedDays,
     checkedToday: checkedToday,
     currentDay: currentDay,
     days: days.map((item) => item.toDomain()).toList(growable: false),

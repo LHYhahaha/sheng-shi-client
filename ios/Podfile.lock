@@ -1,18 +1,30 @@
 PODS:
   - app_links (7.0.0):
     - Flutter
+  - AppAuth (2.1.0):
+    - AppAuth/Core (= 2.1.0)
+    - AppAuth/ExternalUserAgent (= 2.1.0)
+  - AppAuth/Core (2.1.0)
+  - AppAuth/ExternalUserAgent (2.1.0):
+    - AppAuth/Core
+  - AppCheckCore (11.3.1):
+    - GoogleUtilities/Environment (~> 8.0)
+    - GoogleUtilities/UserDefaults (~> 8.0)
+    - PromisesObjC (~> 2.4)
+    - PromisesSwift (~> 2.4)
+    - RecaptchaInterop (~> 101.0)
   - connectivity_plus (0.0.1):
     - Flutter
   - device_info_plus (0.0.1):
     - Flutter
-  - FBAEMKit (16.3.1):
-    - FBSDKCoreKit_Basics (= 16.3.1)
-  - FBSDKCoreKit (16.3.1):
-    - FBAEMKit (= 16.3.1)
-    - FBSDKCoreKit_Basics (= 16.3.1)
-  - FBSDKCoreKit_Basics (16.3.1)
-  - FBSDKLoginKit (16.3.1):
-    - FBSDKCoreKit (= 16.3.1)
+  - FBAEMKit (18.0.2):
+    - FBSDKCoreKit_Basics (= 18.0.2)
+  - FBSDKCoreKit (18.0.2):
+    - FBAEMKit (= 18.0.2)
+    - FBSDKCoreKit_Basics (= 18.0.2)
+  - FBSDKCoreKit_Basics (18.0.2)
+  - FBSDKLoginKit (18.0.2):
+    - FBSDKCoreKit (= 18.0.2)
   - Firebase/CoreOnly (12.12.0):
     - FirebaseCore (~> 12.12.0)
   - Firebase/Messaging (12.12.0):
@@ -68,14 +80,22 @@ PODS:
     - GoogleUtilities/UserDefaults (~> 8.1)
     - nanopb (~> 3.30910.0)
   - Flutter (1.0.0)
-  - flutter_facebook_auth (6.0.4):
-    - FBSDKLoginKit (~> 16.3.1)
+  - flutter_facebook_auth (7.1.5):
+    - FBSDKLoginKit (= 18.0.2)
     - Flutter
-  - flutter_secure_storage (6.0.0):
+  - flutter_local_notifications (0.0.1):
     - Flutter
+  - flutter_secure_storage_darwin (10.0.0):
+    - Flutter
+    - FlutterMacOS
   - flutter_udid (0.0.1):
     - Flutter
     - SAMKeychain
+  - google_sign_in_ios (0.0.1):
+    - Flutter
+    - FlutterMacOS
+    - GoogleSignIn (~> 9.0)
+    - GTMSessionFetcher (>= 3.4.0)
   - GoogleAdsOnDeviceConversion (3.4.2):
     - GoogleUtilities/Environment (~> 8.1)
     - GoogleUtilities/Logger (~> 8.1)
@@ -106,6 +126,11 @@ PODS:
   - GoogleDataTransport (10.1.0):
     - nanopb (~> 3.30910.0)
     - PromisesObjC (~> 2.4)
+  - GoogleSignIn (9.2.0):
+    - AppAuth (~> 2.1)
+    - AppCheckCore (~> 11.0)
+    - GTMAppAuth (~> 5.0)
+    - GTMSessionFetcher/Core (~> 3.3)
   - GoogleUtilities/AppDelegateSwizzler (8.1.0):
     - GoogleUtilities/Environment
     - GoogleUtilities/Logger
@@ -133,6 +158,16 @@ PODS:
   - GoogleUtilities/UserDefaults (8.1.0):
     - GoogleUtilities/Logger
     - GoogleUtilities/Privacy
+  - GTMAppAuth (5.0.0):
+    - AppAuth/Core (~> 2.0)
+    - GTMSessionFetcher/Core (< 4.0, >= 3.3)
+  - GTMSessionFetcher (3.5.0):
+    - GTMSessionFetcher/Full (= 3.5.0)
+  - GTMSessionFetcher/Core (3.5.0)
+  - GTMSessionFetcher/Full (3.5.0):
+    - GTMSessionFetcher/Core
+  - image_picker_ios (0.0.1):
+    - Flutter
   - in_app_purchase_storekit (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -152,6 +187,9 @@ PODS:
   - permission_handler_apple (9.4.8):
     - Flutter
   - PromisesObjC (2.4.0)
+  - PromisesSwift (2.4.0):
+    - PromisesObjC (= 2.4.0)
+  - RecaptchaInterop (101.0.0)
   - SAMKeychain (1.5.3)
   - Sentry/HybridSDK (8.58.2)
   - sentry_flutter (9.20.0):
@@ -164,6 +202,8 @@ PODS:
   - sqflite_darwin (0.0.4):
     - Flutter
     - FlutterMacOS
+  - url_launcher_ios (0.0.1):
+    - Flutter
   - wakelock_plus (0.0.1):
     - Flutter
   - webview_flutter_wkwebview (0.0.1):
@@ -179,8 +219,11 @@ DEPENDENCIES:
   - firebase_messaging (from `.symlinks/plugins/firebase_messaging/ios`)
   - Flutter (from `Flutter`)
   - flutter_facebook_auth (from `.symlinks/plugins/flutter_facebook_auth/ios`)
-  - flutter_secure_storage (from `.symlinks/plugins/flutter_secure_storage/ios`)
+  - flutter_local_notifications (from `.symlinks/plugins/flutter_local_notifications/ios`)
+  - flutter_secure_storage_darwin (from `.symlinks/plugins/flutter_secure_storage_darwin/darwin`)
   - flutter_udid (from `.symlinks/plugins/flutter_udid/ios`)
+  - google_sign_in_ios (from `.symlinks/plugins/google_sign_in_ios/darwin`)
+  - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
   - in_app_purchase_storekit (from `.symlinks/plugins/in_app_purchase_storekit/darwin`)
   - integration_test (from `.symlinks/plugins/integration_test/ios`)
   - media_kit_libs_ios_video (from `.symlinks/plugins/media_kit_libs_ios_video/ios`)
@@ -190,11 +233,14 @@ DEPENDENCIES:
   - sentry_flutter (from `.symlinks/plugins/sentry_flutter/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
   - sqflite_darwin (from `.symlinks/plugins/sqflite_darwin/darwin`)
+  - url_launcher_ios (from `.symlinks/plugins/url_launcher_ios/ios`)
   - wakelock_plus (from `.symlinks/plugins/wakelock_plus/ios`)
   - webview_flutter_wkwebview (from `.symlinks/plugins/webview_flutter_wkwebview/darwin`)
 
 SPEC REPOS:
   trunk:
+    - AppAuth
+    - AppCheckCore
     - FBAEMKit
     - FBSDKCoreKit
     - FBSDKCoreKit_Basics
@@ -208,9 +254,14 @@ SPEC REPOS:
     - GoogleAdsOnDeviceConversion
     - GoogleAppMeasurement
     - GoogleDataTransport
+    - GoogleSignIn
     - GoogleUtilities
+    - GTMAppAuth
+    - GTMSessionFetcher
     - nanopb
     - PromisesObjC
+    - PromisesSwift
+    - RecaptchaInterop
     - SAMKeychain
     - Sentry
 
@@ -231,10 +282,16 @@ EXTERNAL SOURCES:
     :path: Flutter
   flutter_facebook_auth:
     :path: ".symlinks/plugins/flutter_facebook_auth/ios"
-  flutter_secure_storage:
-    :path: ".symlinks/plugins/flutter_secure_storage/ios"
+  flutter_local_notifications:
+    :path: ".symlinks/plugins/flutter_local_notifications/ios"
+  flutter_secure_storage_darwin:
+    :path: ".symlinks/plugins/flutter_secure_storage_darwin/darwin"
   flutter_udid:
     :path: ".symlinks/plugins/flutter_udid/ios"
+  google_sign_in_ios:
+    :path: ".symlinks/plugins/google_sign_in_ios/darwin"
+  image_picker_ios:
+    :path: ".symlinks/plugins/image_picker_ios/ios"
   in_app_purchase_storekit:
     :path: ".symlinks/plugins/in_app_purchase_storekit/darwin"
   integration_test:
@@ -253,6 +310,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
   sqflite_darwin:
     :path: ".symlinks/plugins/sqflite_darwin/darwin"
+  url_launcher_ios:
+    :path: ".symlinks/plugins/url_launcher_ios/ios"
   wakelock_plus:
     :path: ".symlinks/plugins/wakelock_plus/ios"
   webview_flutter_wkwebview:
@@ -260,12 +319,14 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   app_links: a754cbec3c255bd4bbb4d236ecc06f28cd9a7ce8
+  AppAuth: ef4da5a3fc2e10b90c09a0a94a9baeaedc0341d5
+  AppCheckCore: e215d35177a9cf469927863e69c13e220df32a8b
   connectivity_plus: cb623214f4e1f6ef8fe7403d580fdad517d2f7dd
   device_info_plus: 21fcca2080fbcd348be798aa36c3e5ed849eefbe
-  FBAEMKit: 6c7b5eb77c96861bb59e040842c6e55bf39512ce
-  FBSDKCoreKit: 5e4dd478947ab1bcc887e8cfadeae0727af1a942
-  FBSDKCoreKit_Basics: cd7b5f5d1e8868c26706917919d058999ca672c3
-  FBSDKLoginKit: 572cca0bc6c90067ef197187697cb3b584310c52
+  FBAEMKit: 56a4f5a9607957b547b6458b17a98c5bb2736367
+  FBSDKCoreKit: 54f1240567e16862ab71c53c33dc347db5c524c5
+  FBSDKCoreKit_Basics: eb530cd6a79030dbb11df460aafb2767bcad9028
+  FBSDKLoginKit: 6a70798793e499335a98fab1a758d7da34af196e
   Firebase: aa154fee4e9b8eac17aa42344988865b3e857d33
   firebase_analytics: e5f4faccf1f7040d3788e835b7eb7b57dc84a911
   firebase_core: 9156a152117c843440b0b990c785aa0259bc5447
@@ -276,13 +337,19 @@ SPEC CHECKSUMS:
   FirebaseInstallations: 4e6e162aa4abaaeeeb01dd00179dfc5ad9c2194e
   FirebaseMessaging: 341004946fa7ffc741344b20f1b667514fc93e31
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
-  flutter_facebook_auth: 81e624a905d30b1f97ebffb8b2feaf9e5330537a
-  flutter_secure_storage: 2c2ff13db9e0a5647389bff88b0ecac56e3f3418
+  flutter_facebook_auth: fe770ba7c3b26637a955662b84b33c4ab33d3a14
+  flutter_local_notifications: 643a3eda1ce1c0599413ca31672536d423dee214
+  flutter_secure_storage_darwin: acdb3f316ed05a3e68f856e0353b133eec373a23
   flutter_udid: ae1de3aafc160cef344ecdd7ad9defa0b6a2b2b3
+  google_sign_in_ios: 000870aa06da9b28d1d0bf7ef70ff0213059dd28
   GoogleAdsOnDeviceConversion: 02fc8fe599acd867e328321effb0d9b2d023a38a
   GoogleAppMeasurement: 3b4687de50ab25ee2d4d541849f10ca8df862a12
   GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7
+  GoogleSignIn: e449a40a92e9f2eea56e98b5214d13725dc5a00a
   GoogleUtilities: 00c88b9a86066ef77f0da2fab05f65d7768ed8e1
+  GTMAppAuth: 217a876b249c3c585a54fd6f73e6b58c4f5c4238
+  GTMSessionFetcher: 5aea5ba6bd522a239e236100971f10cb71b96ab6
+  image_picker_ios: e0ece4aa2a75771a7de3fa735d26d90817041326
   in_app_purchase_storekit: 22cca7d08eebca9babdf4d07d0baccb73325d3c8
   integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
   media_kit_libs_ios_video: 5a18affdb97d1f5d466dc79988b13eff6c5e2854
@@ -291,11 +358,14 @@ SPEC CHECKSUMS:
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   permission_handler_apple: 92d754bbaa7361d436db2d6c3c1c2a0fdcec462e
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
+  PromisesSwift: 9d77319bbe72ebf6d872900551f7eeba9bce2851
+  RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
   SAMKeychain: 483e1c9f32984d50ca961e26818a534283b4cd5c
   Sentry: de29b881e83bd91cf99a927f82f1fd86bfb39db2
   sentry_flutter: cbb414ef141b64f901bc1ba32daa871349510ce4
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
+  url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
   wakelock_plus: e29112ab3ef0b318e58cfa5c32326458be66b556
   webview_flutter_wkwebview: 8ebf4fded22593026f7dbff1fbff31ea98573c8d
 

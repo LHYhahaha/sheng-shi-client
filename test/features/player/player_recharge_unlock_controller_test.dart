@@ -154,6 +154,22 @@ void main() {
     expect(pay.verifiedOrderNo, isNull);
     expect(iap.completedCount, 0);
   });
+
+  test(
+    'closing an untouched sheet does not report a cancelled payment',
+    () async {
+      final container = _container();
+      addTearDown(container.dispose);
+
+      final provider = playerRechargeUnlockControllerProvider('single-a');
+      final controller = container.read(provider.notifier);
+      await controller.open(itemId: '123', requiredCoins: 60);
+
+      controller.close();
+
+      expect(container.read(provider).status, PlayerRechargeUnlockStatus.idle);
+    },
+  );
 }
 
 ProviderContainer _container({

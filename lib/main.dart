@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -17,7 +19,6 @@ import 'core/runtime/install_id_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final fcmNotificationService = await _initializeFcmNotifications();
 
   MediaKit.ensureInitialized();
 
@@ -35,6 +36,11 @@ Future<void> main() async {
   await container.read(installIdProvider.future);
   container.dispose();
 
+  // FCM 包含 Token 拉取等可能依赖网络的操作，绝不能阻塞 Flutter 首帧。
+  final fcmNotificationService = _initializeFcmNotifications();
+  final fcmServiceHandle = _FcmNotificationServiceHandle();
+  unawaited(fcmNotificationService.then(fcmServiceHandle.attach));
+
   runApp(
     ProviderScope(
       overrides: [
@@ -46,12 +52,14 @@ Future<void> main() async {
         ),
         testNetworkConfigProvider.overrideWithValue(testNetworkConfig),
         pushTokenReaderProvider.overrideWithValue(
-          fcmNotificationService?.getPushToken ?? _unavailablePushToken,
+          fcmServiceHandle.getPushToken,
         ),
         ...appModalRegistryOverrides,
       ],
       child: TestNetworkBootstrap(
-        child: DramaClientApp(fcmNotificationService: fcmNotificationService),
+        child: DramaClientApp(
+          fcmNotificationServiceFuture: fcmNotificationService,
+        ),
       ),
     ),
   );
@@ -67,11 +75,11 @@ Future<FcmNotificationService?> _initializeFcmNotifications() async {
      * Android 会自动读取 android/app/google-services.json，
      * 所以这里不需要 firebase_options.dart。
      */
-    await Firebase.initializeApp();
+    await Firebase.initializeApp().timeout(const Duration(seconds: 5));
     FirebaseMessaging.onBackgroundMessage(fcmBackgroundMessageHandler);
 
     final service = FcmNotificationService();
-    await service.initialize();
+    await service.initialize().timeout(const Duration(seconds: 8));
     return service;
   } catch (error, stackTrace) {
     debugPrint(
@@ -79,5 +87,19 @@ Future<FcmNotificationService?> _initializeFcmNotifications() async {
     );
     debugPrintStack(stackTrace: stackTrace);
     return null;
+  }
+}
+
+/// 允许应用先启动；FCM 就绪后，后续活跃上报才带上 push token。
+class _FcmNotificationServiceHandle {
+  FcmNotificationService? _service;
+
+  void attach(FcmNotificationService? service) {
+    _service = service;
+  }
+
+  Future<String?> getPushToken() {
+    final service = _service;
+    return service?.getPushToken() ?? _unavailablePushToken();
   }
 }

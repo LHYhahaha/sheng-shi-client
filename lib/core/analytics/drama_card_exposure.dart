@@ -14,6 +14,8 @@ class DramaCardExposure extends StatefulWidget {
     required this.dramaId,
     required this.position,
     this.categoryId,
+    this.cardScene,
+    this.searchKeyword,
     required this.child,
     super.key,
   });
@@ -23,7 +25,14 @@ class DramaCardExposure extends StatefulWidget {
   final String dramaId;
   final int position;
   final String? categoryId;
+  final String? cardScene;
+  final String? searchKeyword;
   final Widget child;
+
+  /// 页面销毁时释放该会话的去重记录，避免静态缓存累积。
+  static void releasePageSession(Object pageSession) {
+    _DramaCardExposureState._reported.remove(pageSession);
+  }
 
   @override
   State<DramaCardExposure> createState() => _DramaCardExposureState();
@@ -34,7 +43,17 @@ class _DramaCardExposureState extends State<DramaCardExposure> {
   Timer? _timer;
   Timer? _visibilityPoller;
 
-  String get _dedupeKey => '${widget.categoryId ?? ''}:${widget.dramaId}';
+  String get _dedupeKey {
+    final categoryId = widget.categoryId;
+    if (categoryId != null && categoryId.isNotEmpty) {
+      return 'category:$categoryId:${widget.dramaId}';
+    }
+    final cardScene = widget.cardScene ?? '';
+    final searchKeyword = cardScene == 'search_result'
+        ? widget.searchKeyword ?? ''
+        : '';
+    return 'scene:$cardScene:$searchKeyword:${widget.dramaId}';
+  }
 
   @override
   void initState() {
@@ -84,7 +103,9 @@ class _DramaCardExposureState extends State<DramaCardExposure> {
         AnalyticsEvent(AnalyticsDefinitions.dramaCardExposure, {
           'drama_id': widget.dramaId,
           'position': widget.position,
-          if (widget.categoryId != null) 'category_id': widget.categoryId!,
+          ...?_optionalStringParameter('category_id', widget.categoryId),
+          ...?_optionalStringParameter('card_scene', widget.cardScene),
+          ...?_optionalStringParameter('search_keyword', widget.searchKeyword),
         }),
       ),
     );
@@ -99,4 +120,8 @@ class _DramaCardExposureState extends State<DramaCardExposure> {
         },
         child: widget.child,
       );
+}
+
+Map<String, Object?>? _optionalStringParameter(String key, String? value) {
+  return value == null ? null : <String, Object?>{key: value};
 }

@@ -1,10 +1,13 @@
 class RewardCoinsCheckInStatus {
   const RewardCoinsCheckInStatus({
+    required this.checkedDays,
     required this.checkedToday,
     required this.currentDay,
     required this.days,
   });
 
+  /// 当前签到周期内已经完成签到的天数。
+  final int checkedDays;
   final bool checkedToday;
   final int currentDay;
   final List<RewardCoinsCheckInDay> days;

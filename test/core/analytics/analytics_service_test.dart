@@ -187,33 +187,6 @@ void main() {
     );
   });
 
-  test(
-    'search result click requires drama, keyword and one-based position',
-    () {
-      final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
-
-      expect(
-        () => validator.validate(
-          const AnalyticsEvent(AnalyticsDefinitions.searchResultClick, {
-            'drama_id': '636',
-            'search_keyword': ' romance ',
-            'position': 1,
-          }),
-        ),
-        returnsNormally,
-      );
-      expect(
-        () => validator.validate(
-          const AnalyticsEvent(AnalyticsDefinitions.searchResultClick, {
-            'drama_id': '636',
-            'search_keyword': 'romance',
-          }),
-        ),
-        throwsA(isA<AnalyticsValidationError>()),
-      );
-    },
-  );
-
   test('requires conditional parameters only when their condition is met', () {
     final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
 

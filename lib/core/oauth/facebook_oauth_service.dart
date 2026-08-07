@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -8,6 +12,12 @@ import 'oauth_service.dart';
 /// 封装 flutter_facebook_auth SDK，处理登录流程和错误。上层只需要调用
 /// [signInWithFacebook] 获取 access token，不需要关心 SDK 细节。
 class FacebookOAuthService implements OAuthService {
+  static const _facebookAuthorizationTimeout = Duration(seconds: 15);
+  static const _facebookCleanupTimeout = Duration(seconds: 5);
+  static const _facebookRecoveryChannel = MethodChannel(
+    'com.yushi.drama/facebook_auth_recovery',
+  );
+
   FacebookOAuthService({FacebookAuth? facebookAuth})
     : _facebookAuth = facebookAuth ?? FacebookAuth.instance;
 
@@ -32,9 +42,23 @@ class FacebookOAuthService implements OAuthService {
   Future<String?> signInWithFacebook() async {
     try {
       // 1. 调用 Facebook 登录
-      final LoginResult result = await _facebookAuth.login(
-        permissions: ['email', 'public_profile'],
-      );
+      final LoginResult result = await _facebookAuth
+          .login(
+            permissions: ['email', 'public_profile'],
+            // 7.x 在 iOS 默认启用 limited login，会返回无法直接用于现有
+            // Facebook 后端登录接口的 OIDC token。保持原有 classic token 协议。
+            loginTracking: LoginTracking.enabled,
+          )
+          .timeout(
+            _facebookAuthorizationTimeout,
+            onTimeout: () async {
+              // 超时不仅要释放 Dart Future，也要结束仍停在前台的 Android
+              // FacebookActivity，否则用户看到的原生 loading 会一直存在。
+              await _finishStuckFacebookActivity();
+              await _resetFacebookLoginState();
+              throw TimeoutException('Facebook authorization timed out');
+            },
+          );
 
       // 2. 处理登录结果
       switch (result.status) {
@@ -46,8 +70,13 @@ class FacebookOAuthService implements OAuthService {
               'Login succeeded but access token is null',
             );
           }
-          // AccessToken 的 token 属性包含实际的 token 字符串
-          return accessToken.token;
+          if (accessToken is! ClassicToken) {
+            throw const OAuthException(
+              'facebook',
+              'Limited Facebook login is not supported by this backend.',
+            );
+          }
+          return accessToken.tokenString;
 
         case LoginStatus.cancelled:
           // 用户取消登录，返回 null
@@ -57,27 +86,50 @@ class FacebookOAuthService implements OAuthService {
           throw OAuthException('facebook', result.message ?? 'Login failed');
 
         case LoginStatus.operationInProgress:
+          await _resetFacebookLoginState();
           throw const OAuthException(
             'facebook',
-            'Another login operation is in progress',
+            'A previous Facebook login did not finish. Please try again.',
           );
       }
-    } catch (e) {
-      if (e is OAuthException) {
+    } catch (error) {
+      if (error is TimeoutException) {
         rethrow;
       }
-      throw OAuthException('facebook', 'Unexpected error during login', e);
+      if (error is OAuthException) {
+        rethrow;
+      }
+      await _resetFacebookLoginState();
+      throw OAuthException('facebook', 'Unexpected error during login', error);
+    }
+  }
+
+  Future<void> _resetFacebookLoginState() async {
+    try {
+      await _facebookAuth.logOut().timeout(_facebookCleanupTimeout);
+    } catch (error) {
+      // 清理失败不能继续阻塞登录页；外层会释放 pending 状态并允许用户重试。
+      debugPrint('[FacebookOAuth] Failed to reset login state: $error');
+    }
+  }
+
+  Future<void> _finishStuckFacebookActivity() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    try {
+      await _facebookRecoveryChannel
+          .invokeMethod<void>('finishFacebookActivity')
+          .timeout(_facebookCleanupTimeout);
+    } catch (error) {
+      // 原生活动已经自行关闭或通道不可用时，仍继续释放登录状态。
+      debugPrint('[FacebookOAuth] Failed to close Facebook activity: $error');
     }
   }
 
   @override
   Future<void> signOutFacebook() async {
-    try {
-      await _facebookAuth.logOut();
-    } catch (e) {
-      // 登出失败不应该阻塞流程，只记录日志
-      print('Failed to sign out from Facebook: $e');
-    }
+    await _resetFacebookLoginState();
   }
 
   /// 获取当前 Facebook 登录状态（可选，用于调试）。
@@ -85,7 +137,7 @@ class FacebookOAuthService implements OAuthService {
     try {
       return await _facebookAuth.accessToken;
     } catch (e) {
-      print('Failed to get current access token: $e');
+      debugPrint('Failed to get current access token: $e');
       return null;
     }
   }
@@ -97,7 +149,7 @@ class FacebookOAuthService implements OAuthService {
     try {
       return await _facebookAuth.getUserData();
     } catch (e) {
-      print('Failed to get user data: $e');
+      debugPrint('Failed to get user data: $e');
       return null;
     }
   }
@@ -150,7 +202,7 @@ class FacebookOAuthService implements OAuthService {
       await _initializeGoogleSignIn();
       await _googleSignIn.signOut();
     } catch (error) {
-      print('Failed to sign out from Google: $error');
+      debugPrint('Failed to sign out from Google: $error');
     }
   }
 }

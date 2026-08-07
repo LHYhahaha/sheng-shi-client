@@ -8,6 +8,7 @@ import 'package:drama_client/features/entitlement/data/entitlement_repository_pr
 import 'package:drama_client/features/entitlement/domain/entitlement_repository.dart';
 import 'package:drama_client/features/entitlement/domain/user_entitlement_state.dart';
 import 'package:drama_client/features/pay/application/payment_loading_controller.dart';
+import 'package:drama_client/core/network/api_exception.dart';
 import 'package:drama_client/features/rewards/application/member_points_controller.dart';
 import 'package:drama_client/features/rewards/data/reward_coins_repository_provider.dart';
 import 'package:drama_client/features/rewards/data/member_points_repository_provider.dart';
@@ -100,6 +101,7 @@ void main() {
           rewardCoinsRepositoryProvider.overrideWithValue(
             const _FakeRewardCoinsRepository(
               status: RewardCoinsCheckInStatus(
+                checkedDays: 3,
                 checkedToday: true,
                 currentDay: 4,
                 days: [
@@ -155,7 +157,7 @@ void main() {
       find.byKey(const Key('rewards_coins_check_in_panel')),
       findsOneWidget,
     );
-    expect(find.text(l10n.rewardsSigninDaysCount(4)), findsOneWidget);
+    expect(find.text(l10n.rewardsSigninDaysCount(3)), findsOneWidget);
     expect(find.text('+20'), findsOneWidget);
     expect(find.text(l10n.rewardsSigninDayIndex(4)), findsOneWidget);
     expect(find.byKey(const Key('rewards_coins_sign_in')), findsOneWidget);
@@ -647,6 +649,55 @@ void main() {
       tester.element(find.byKey(const Key('member_points_page'))),
     );
     expect(container.read(entitlementControllerProvider).totalPointBalance, 5);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('member points claim shows the API error message', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(375, 812));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeMemberPointsRepository(
+      claimError: const ApiException(
+        code: ApiErrorCode.badResponse,
+        businessCode: 4001,
+        message: 'Already claimed',
+        data: {'code': 4001, 'message': 'Already claimed'},
+      ),
+    );
+    final botToastBuilder = BotToastInit();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          memberPointsRepositoryProvider.overrideWithValue(repository),
+          entitlementRepositoryProvider.overrideWithValue(
+            _FakeEntitlementRepository(
+              states: [_memberEntitlement(pointBalance: 0)],
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          builder: botToastBuilder,
+          navigatorObservers: [BotToastNavigatorObserver()],
+          home: const MemberPointsPage(isMember: true),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const Key('member_points_action_daily_lottery_draw')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('app_center_toast')),
+        matching: find.text('Already claimed'),
+      ),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -1219,6 +1270,7 @@ class _FakeMemberPointsRepository implements MemberPointsRepository {
     this.dailyDetailError,
     this.exchangeOptions,
     this.exchangeCompleter,
+    this.claimError,
     this.tasks = const [],
     this.details,
   });
@@ -1227,6 +1279,7 @@ class _FakeMemberPointsRepository implements MemberPointsRepository {
   final Object? dailyDetailError;
   final MemberPointExchangeOptions? exchangeOptions;
   final Completer<MemberPointExchangeResult>? exchangeCompleter;
+  final Object? claimError;
   final List<MemberPointTask> tasks;
   final List<MemberPointDetailRecord>? details;
   final List<String> claimedTaskKeys = [];
@@ -1250,6 +1303,8 @@ class _FakeMemberPointsRepository implements MemberPointsRepository {
   @override
   Future<MemberPointClaimResult> claimReward({required String taskKey}) async {
     claimedTaskKeys.add(taskKey);
+    final error = claimError;
+    if (error != null) throw error;
     return const MemberPointClaimResult(
       claimNo: 'claim-test',
       grantedAt: '2026-07-15T00:00:00Z',
@@ -1400,6 +1455,7 @@ List<RewardTask> _rewardCoinTasks() => const [
 
 RewardCoinsCheckInStatus _rewardCoinsStatus() {
   return const RewardCoinsCheckInStatus(
+    checkedDays: 1,
     checkedToday: false,
     currentDay: 2,
     days: [

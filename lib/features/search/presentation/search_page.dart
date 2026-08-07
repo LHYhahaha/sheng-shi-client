@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/drama_card_exposure.dart';
 import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/modal/app_modal_policy.dart';
@@ -40,6 +41,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   final _searchController = TextEditingController();
   final _rankingScrollController = ScrollController();
+  final _dramaExposureSession = Object();
   Timer? _searchDebounce;
   double _rankingViewportWidth = 0;
   _SearchViewMode _viewMode = _SearchViewMode.initial;
@@ -58,6 +60,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   @override
   void dispose() {
+    DramaCardExposure.releasePageSession(_dramaExposureSession);
     _searchDebounce?.cancel();
     _searchController.dispose();
     _rankingScrollController.dispose();
@@ -303,6 +306,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                           horizontal: 6,
                                         ),
                                         child: _RankingPanel(
+                                          pageSession: _dramaExposureSession,
                                           type: type,
                                           state: state.rankingFor(type),
                                           onRetry: () => ref
@@ -323,6 +327,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 ] else if (_viewMode == _SearchViewMode.suggestions)
                   Expanded(
                     child: _SuggestionResults(
+                      pageSession: _dramaExposureSession,
                       state: suggestions,
                       onRetry: () => ref
                           .read(searchSuggestionsControllerProvider.notifier)
@@ -330,7 +335,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                       onLoadMore: () => ref
                           .read(searchSuggestionsControllerProvider.notifier)
                           .loadMore(),
-                      onTap: (drama) {
+                      onTap: (drama, position) {
+                        _trackSearchDramaCard(
+                          ref,
+                          dramaId: drama.id,
+                          position: position,
+                          cardScene: 'search_typing',
+                          searchKeyword: _searchController.text.trim(),
+                        );
                         _searchController
                           ..text = drama.title
                           ..selection = TextSelection.collapsed(
@@ -347,6 +359,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   ),
                   Expanded(
                     child: _SubmittedSearchResults(
+                      pageSession: _dramaExposureSession,
                       state: results,
                       scrollKey: PageStorageKey<String>(
                         'search-results:${results.keyword}:${_selectedSort.value}',
@@ -725,21 +738,23 @@ class _SearchBarState extends State<_SearchBar> {
   }
 }
 
-class _SuggestionResults extends StatelessWidget {
+class _SuggestionResults extends ConsumerWidget {
   const _SuggestionResults({
+    required this.pageSession,
     required this.state,
     required this.onRetry,
     required this.onLoadMore,
     required this.onTap,
   });
 
+  final Object pageSession;
   final SearchSuggestionsState state;
   final VoidCallback onRetry;
   final VoidCallback onLoadMore;
-  final ValueChanged<SearchResultDrama> onTap;
+  final void Function(SearchResultDrama drama, int position) onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (state.isLoading) {
       return const Center(child: CircularProgressIndicator(strokeWidth: 2));
     }
@@ -772,7 +787,18 @@ class _SuggestionResults extends StatelessWidget {
         itemBuilder: (context, index) {
           if (index < dramas.length) {
             final drama = dramas[index];
-            return _SearchDramaTile(drama: drama, onTap: () => onTap(drama));
+            return DramaCardExposure(
+              pageSession: pageSession,
+              analytics: ref.read(analyticsServiceProvider),
+              dramaId: drama.id,
+              position: index + 1,
+              cardScene: 'search_typing',
+              searchKeyword: state.keyword.trim(),
+              child: _SearchDramaTile(
+                drama: drama,
+                onTap: () => onTap(drama, index + 1),
+              ),
+            );
           }
           if (state.isLoadingMore) {
             return const Padding(
@@ -834,6 +860,7 @@ class _ResultSortTabs extends StatelessWidget {
 
 class _SubmittedSearchResults extends ConsumerWidget {
   const _SubmittedSearchResults({
+    required this.pageSession,
     required this.state,
     required this.scrollKey,
     required this.onRetry,
@@ -843,6 +870,7 @@ class _SubmittedSearchResults extends ConsumerWidget {
   static const _minimumRecommendationCount = 5;
   static const _maximumRecommendationCount = 10;
 
+  final Object pageSession;
   final SearchResultsState state;
   final PageStorageKey<String> scrollKey;
   final VoidCallback onRetry;
@@ -876,7 +904,7 @@ class _SubmittedSearchResults extends ConsumerWidget {
               child: AppEmptyState(message: context.l10n.searchEmptyNoResult),
             ),
           ),
-          ..._recommendationSlivers(context, recommendationItems),
+          ..._recommendationSlivers(context, ref, recommendationItems),
         ],
       );
     }
@@ -899,31 +927,31 @@ class _SubmittedSearchResults extends ConsumerWidget {
               separatorBuilder: (_, _) => const SizedBox(height: 16),
               itemBuilder: (context, index) {
                 final drama = dramas[index];
-                return _SearchDramaTile(
-                  drama: drama,
-                  onTap: () {
-                    // 客户端点击埋点不依赖服务端搜索统计接口的返回。
-                    unawaited(
-                      ref
-                          .read(analyticsServiceProvider)
-                          .track(
-                            AnalyticsEvent(
-                              AnalyticsDefinitions.searchResultClick,
-                              {
-                                'drama_id': drama.id,
-                                'search_keyword': state.keyword,
-                                'position': index + 1,
-                              },
-                            ),
-                          ),
-                    );
-                    unawaited(
-                      ref
-                          .read(searchResultsControllerProvider.notifier)
-                          .reportSearchResultClick(drama.id),
-                    );
-                    _openDrama(context, drama.id);
-                  },
+                return DramaCardExposure(
+                  pageSession: pageSession,
+                  analytics: ref.read(analyticsServiceProvider),
+                  dramaId: drama.id,
+                  position: index + 1,
+                  cardScene: 'search_result',
+                  searchKeyword: state.keyword.trim(),
+                  child: _SearchDramaTile(
+                    drama: drama,
+                    onTap: () {
+                      _trackSearchDramaCard(
+                        ref,
+                        dramaId: drama.id,
+                        position: index + 1,
+                        cardScene: 'search_result',
+                        searchKeyword: state.keyword.trim(),
+                      );
+                      unawaited(
+                        ref
+                            .read(searchResultsControllerProvider.notifier)
+                            .reportSearchResultClick(drama.id),
+                      );
+                      _openDrama(context, drama.id);
+                    },
+                  ),
                 );
               },
             ),
@@ -932,7 +960,7 @@ class _SubmittedSearchResults extends ConsumerWidget {
             child: _SearchResultsFooter(state: state, onLoadMore: onLoadMore),
           ),
           if (recommendationItems != null)
-            ..._recommendationSlivers(context, recommendationItems),
+            ..._recommendationSlivers(context, ref, recommendationItems),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
       ),
@@ -951,6 +979,7 @@ class _SubmittedSearchResults extends ConsumerWidget {
 
   List<Widget> _recommendationSlivers(
     BuildContext context,
+    WidgetRef ref,
     List<SearchResultDrama> items,
   ) {
     return [
@@ -968,7 +997,25 @@ class _SubmittedSearchResults extends ConsumerWidget {
         separatorBuilder: (_, _) => const SizedBox(height: 16),
         itemBuilder: (context, index) => Padding(
           padding: const EdgeInsets.only(left: 6, right: 16),
-          child: _RecommendationTile(drama: items[index]),
+          child: DramaCardExposure(
+            pageSession: pageSession,
+            analytics: ref.read(analyticsServiceProvider),
+            dramaId: items[index].id,
+            position: index + 1,
+            cardScene: 'search_recommend',
+            child: _RecommendationTile(
+              drama: items[index],
+              onTap: () {
+                _trackSearchDramaCard(
+                  ref,
+                  dramaId: items[index].id,
+                  position: index + 1,
+                  cardScene: 'search_recommend',
+                );
+                _openDrama(context, items[index].id);
+              },
+            ),
+          ),
         ),
       ),
     ];
@@ -977,6 +1024,30 @@ class _SubmittedSearchResults extends ConsumerWidget {
 
 void _scheduleLoadMore(VoidCallback onLoadMore) {
   WidgetsBinding.instance.addPostFrameCallback((_) => onLoadMore());
+}
+
+void _trackSearchDramaCard(
+  WidgetRef ref, {
+  required String dramaId,
+  required int position,
+  required String cardScene,
+  String? searchKeyword,
+}) {
+  unawaited(
+    ref
+        .read(analyticsServiceProvider)
+        .track(
+          AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+            'element_name': 'drama_card',
+            'drama_id': dramaId,
+            'position': position,
+            'card_scene': cardScene,
+            ...?searchKeyword == null
+                ? null
+                : <String, Object?>{'search_keyword': searchKeyword},
+          }),
+        ),
+  );
 }
 
 class _SearchResultsFooter extends StatelessWidget {
@@ -1033,9 +1104,10 @@ class _SearchDramaTile extends StatelessWidget {
 }
 
 class _RecommendationTile extends StatelessWidget {
-  const _RecommendationTile({required this.drama});
+  const _RecommendationTile({required this.drama, required this.onTap});
 
   final SearchResultDrama drama;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1044,7 +1116,7 @@ class _RecommendationTile extends StatelessWidget {
       title: drama.title,
       tags: drama.tags,
       summary: drama.summary,
-      onTap: () => _openDrama(context, drama.id),
+      onTap: onTap,
     );
   }
 }
@@ -1530,13 +1602,15 @@ class _RankingTabs extends StatelessWidget {
   }
 }
 
-class _RankingPanel extends StatelessWidget {
+class _RankingPanel extends ConsumerWidget {
   const _RankingPanel({
+    required this.pageSession,
     required this.type,
     required this.state,
     required this.onRetry,
   });
 
+  final Object pageSession;
   final SearchRankingType type;
   final SearchRankingState state;
   final VoidCallback onRetry;
@@ -1548,7 +1622,7 @@ class _RankingPanel extends StatelessWidget {
   };
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       padding: EdgeInsets.only(top: 4, left: 10, right: 10),
       decoration: BoxDecoration(
@@ -1574,20 +1648,43 @@ class _RankingPanel extends StatelessWidget {
               separatorBuilder: (_, _) => const SizedBox(height: 16),
               itemBuilder: (context, index) {
                 final drama = state.data!.dramas[index];
-                return _RankingDramaTile(
-                  drama: drama,
-                  ranking: index + 1,
-                  onTap: () {
-                    final tappedAt = DateTime.now();
-                    context.push(
-                      RoutePaths.playerLocation(
-                        dramaId: drama.id,
-                        episodeId: '1',
-                        trigger: 'search_ranking_tap',
-                        userActionAtMs: tappedAt.millisecondsSinceEpoch,
-                      ),
-                    );
+                return DramaCardExposure(
+                  pageSession: pageSession,
+                  analytics: ref.read(analyticsServiceProvider),
+                  dramaId: drama.id,
+                  position: index + 1,
+                  cardScene: switch (type) {
+                    SearchRankingType.hotSearches => 'search_hot_search_rank',
+                    SearchRankingType.hotPlays => 'search_hot_play_rank',
+                    SearchRankingType.newOnline => 'search_new_drama_rank',
                   },
+                  child: _RankingDramaTile(
+                    drama: drama,
+                    ranking: index + 1,
+                    onTap: () {
+                      _trackSearchDramaCard(
+                        ref,
+                        dramaId: drama.id,
+                        position: index + 1,
+                        cardScene: switch (type) {
+                          SearchRankingType.hotSearches =>
+                            'search_hot_search_rank',
+                          SearchRankingType.hotPlays => 'search_hot_play_rank',
+                          SearchRankingType.newOnline =>
+                            'search_new_drama_rank',
+                        },
+                      );
+                      final tappedAt = DateTime.now();
+                      context.push(
+                        RoutePaths.playerLocation(
+                          dramaId: drama.id,
+                          episodeId: '1',
+                          trigger: 'search_ranking_tap',
+                          userActionAtMs: tappedAt.millisecondsSinceEpoch,
+                        ),
+                      );
+                    },
+                  ),
                 );
               },
             ),
