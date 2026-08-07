@@ -435,7 +435,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         _finishActivePopupFlow();
         router.go(RoutePaths.forYou);
         return;
-      case 'vip_tab':
+      case 'member_tab':
         _finishActivePopupFlow();
         router.go(RoutePaths.member);
         return;
@@ -451,7 +451,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         _finishActivePopupFlow();
         router.go(RoutePaths.rewardsLocation());
         return;
-      case 'points':
+      case 'member_point':
         _finishActivePopupFlow();
         router.go(RoutePaths.rewardsLocation(tab: RoutePaths.memberPointsTab));
         return;
