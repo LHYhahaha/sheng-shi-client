@@ -15,6 +15,7 @@ class PlayerEpisodeDto {
     required this.subtitles,
     required this.isUnlocked,
     required this.isVipOnly,
+    this.viewingEntitlementType,
     this.episodeSources = const [],
   });
 
@@ -38,6 +39,9 @@ class PlayerEpisodeDto {
   /// 0 = 非会员专属，1 = 会员专属。
   final int isVipOnly;
 
+  /// 当前用户观看该集的实际权益来源；由详情接口返回。
+  final String? viewingEntitlementType;
+
   factory PlayerEpisodeDto.fromJson(Map<String, Object?> json) {
     return PlayerEpisodeDto(
       id: JsonFieldParser.optionalInt(json, 'id') ?? 0,
@@ -53,6 +57,10 @@ class PlayerEpisodeDto {
       episodeSources: _parseEpisodeSources(json['episode_sources']),
       isUnlocked: JsonFieldParser.optionalInt(json, 'is_unlocked') ?? 0,
       isVipOnly: JsonFieldParser.optionalInt(json, 'is_vip_only') ?? 0,
+      viewingEntitlementType: JsonFieldParser.optionalString(
+        json,
+        'viewing_entitlement_type',
+      ),
     );
   }
 

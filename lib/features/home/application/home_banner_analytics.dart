@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart';
+
 import '../../../core/analytics/analytics_definition.dart';
+import '../../../core/analytics/analytics_entry_source.dart';
 import '../../../core/analytics/analytics_event.dart';
 import '../../../core/analytics/analytics_service.dart';
 
@@ -22,6 +25,23 @@ class HomeBannerAnalyticsItem {
     'banner_target_type': targetType,
     if (targetType == 'drama') 'target_drama_id': targetDramaId,
   };
+}
+
+/// Banner 点击且即将进入 App 内目标页时调用。
+///
+/// 当前首页尚未接入服务端 Banner 点击 UI；后续接入时在实际路由前调用本方法。
+void prepareHomeBannerEntrySource(
+  AnalyticsEntrySourceController entrySource,
+  HomeBannerAnalyticsItem banner,
+) {
+  final bannerId = banner.bannerId.trim();
+  if (bannerId.isEmpty) {
+    debugPrint(
+      '[Analytics] Entry source data-quality error: banner target is missing banner_id.',
+    );
+    return;
+  }
+  entrySource.prepare(type: 'banner', id: bannerId);
 }
 
 /// 首页 Banner 曝光去重器。

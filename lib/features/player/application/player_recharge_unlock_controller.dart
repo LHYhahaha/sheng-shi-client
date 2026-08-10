@@ -815,6 +815,16 @@ class PlayerRechargeUnlockController
               bonusBalance: result.bonusCoin,
             );
 
+        // 详情接口不会在当前播放会话中重新请求，先同步本地权益来源，确保
+        // drama_play_end 能记录本次实际通过金币解锁观看。
+        ref
+            .read(playerFeedControllerProvider(sessionKey).notifier)
+            .updateEpisodeViewingEntitlementType(
+              dramaId: result.dramaId.toString(),
+              episodeId: episodeIdStr,
+              viewingEntitlementType: 'coin',
+            );
+
         // 2. 更新 feed 中对应 episode 的播放地址（如果 API 返回了 sourceUrl）
         if (result.sourceUrl != null && result.sourceUrl!.isNotEmpty) {
           final success = ref

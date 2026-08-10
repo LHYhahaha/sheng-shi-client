@@ -8,6 +8,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'episode mapper keeps viewing entitlement type from detail response',
+    () {
+      final episode = PlayerEpisodeDto.fromJson({
+        'id': 1,
+        'episode_no': 1,
+        'source_url': 'https://cdn.test/episode.m3u8',
+        'status': 1,
+        'is_unlocked': 1,
+        'viewing_entitlement_type': 'drama_gift',
+      });
+
+      expect(
+        const PlayerContentMapper().mapEpisode(episode).viewingEntitlementType,
+        'drama_gift',
+      );
+    },
+  );
+
   test('episode mapper parses external and embedded subtitle metadata', () {
     final external = PlayerEpisodeDto.fromJson({
       'id': 1,

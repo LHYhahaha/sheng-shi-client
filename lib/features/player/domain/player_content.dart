@@ -139,6 +139,7 @@ class PlayerEpisode {
     required this.number,
     required this.isLocked,
     this.unlockType = EpisodeUnlockType.free,
+    this.viewingEntitlementType = 'free',
     this.requiredCoins = 60,
     this.videoAssetPath,
     this.videoUrl,
@@ -178,6 +179,11 @@ class PlayerEpisode {
   /// `isLocked` 只是播放器层的保护位：只要为 true，PlayerPlaybackController 就不会
   /// open/preload/prepare。`unlockType` 才描述为什么锁定以及 UI 下一步去哪。
   final EpisodeUnlockType unlockType;
+
+  /// 当前实际观看权益来源，直接对应埋点枚举。
+  ///
+  /// 详情接口提供初始值；播放期间的金币或会员解锁会在本地立即更新。
+  final String viewingEntitlementType;
 
   /// 解锁该集需要的金币数。
   ///
@@ -219,6 +225,7 @@ class PlayerEpisode {
     int? number,
     bool? isLocked,
     EpisodeUnlockType? unlockType,
+    String? viewingEntitlementType,
     int? requiredCoins,
     String? videoAssetPath,
     String? videoUrl,
@@ -233,6 +240,8 @@ class PlayerEpisode {
       number: number ?? this.number,
       isLocked: isLocked ?? this.isLocked,
       unlockType: unlockType ?? this.unlockType,
+      viewingEntitlementType:
+          viewingEntitlementType ?? this.viewingEntitlementType,
       requiredCoins: requiredCoins ?? this.requiredCoins,
       videoAssetPath: videoAssetPath ?? this.videoAssetPath,
       videoUrl: videoUrl ?? this.videoUrl,

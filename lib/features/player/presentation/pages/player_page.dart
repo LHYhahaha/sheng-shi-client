@@ -236,7 +236,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         'episode_id': item.episode.id,
         'episode_no': item.episode.number,
         'subtitle_language': _analyticsSubtitleLanguage!,
-        'viewing_entitlement_type': item.episode.unlockType.name,
+        'viewing_entitlement_type': item.episode.viewingEntitlementType,
       }),
     );
   }
@@ -268,7 +268,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         'play_progress_ms': _analyticsPlaybackProgress.inMilliseconds,
         'play_end_reason': reason,
         'subtitle_language': _analyticsSubtitleLanguage ?? 'off',
-        'viewing_entitlement_type': item.episode.unlockType.name,
+        'viewing_entitlement_type': _currentViewingEntitlementType(item),
       }),
     );
   }
@@ -281,6 +281,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       }
     }
     return null;
+  }
+
+  String _currentViewingEntitlementType(PlayerFeedItem startedItem) {
+    return _feedItemForId(startedItem.id)?.episode.viewingEntitlementType ??
+        startedItem.episode.viewingEntitlementType;
   }
 
   String _subtitleLanguageForAnalytics(PlayerPlaybackState playback) {

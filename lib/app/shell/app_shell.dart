@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../app/router/route_paths.dart';
 import '../../core/account/account_ban_controller.dart';
 import '../../core/analytics/analytics_page_tracker.dart';
+import '../../core/analytics/analytics_entry_source.dart';
 import '../../features/player/application/player_playback_controller.dart';
 import '../../features/popup/application/popup_entry_controller.dart';
 import '../../features/popup/domain/popup.dart';
@@ -269,7 +270,16 @@ class _AppShellState extends ConsumerState<AppShell> {
       _ => null,
     };
     if (pageName != null) {
-      unawaited(ref.read(analyticsPageTrackerProvider).replace(pageName));
+      unawaited(
+        ref
+            .read(analyticsPageTrackerProvider)
+            .replace(
+              pageName,
+              forcePageView: ref
+                  .read(analyticsEntrySourceProvider.notifier)
+                  .hasPending,
+            ),
+      );
     }
   }
 }

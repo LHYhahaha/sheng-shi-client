@@ -60,6 +60,7 @@ class PlayerContentMapper {
       number: dto.episodeNo,
       isLocked: isLocked,
       unlockType: unlockType,
+      viewingEntitlementType: _viewingEntitlementType(dto),
       requiredCoins: pricePerEpisode,
       // 从 PlayerContentDto 的 pricePerEpisode 获取
       videoUrl: dto.sourceUrl.isNotEmpty ? dto.sourceUrl : null,
@@ -140,5 +141,25 @@ class PlayerContentMapper {
 
     // 需要解锁的剧集（isVipOnly=0 且 isUnlocked=0）
     return EpisodeUnlockType.coins;
+  }
+
+  String _viewingEntitlementType(PlayerEpisodeDto dto) {
+    const supported = <String>{
+      'free',
+      'coin',
+      'vip',
+      'ad',
+      'trial',
+      'temp_vip',
+      'drama_gift',
+      'locked',
+    };
+    final value = dto.viewingEntitlementType?.trim().toLowerCase();
+    if (value != null && supported.contains(value)) return value;
+
+    // 兼容旧接口尚未返回该字段时的保守推导。
+    if (dto.isUnlocked == 1) return 'free';
+    if (dto.isVipOnly == 1) return 'locked';
+    return 'locked';
   }
 }

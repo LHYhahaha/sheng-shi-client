@@ -31,6 +31,23 @@ class AnalyticsContext {
   final String? entrySourceId;
   final String? h5VisitorId;
 
+  AnalyticsContext copyWith({String? entrySourceType, String? entrySourceId}) {
+    return AnalyticsContext(
+      platform: platform,
+      appVersion: appVersion,
+      language: language,
+      userId: userId,
+      channelId: channelId,
+      merchantId: merchantId,
+      regionCode: regionCode,
+      pageName: pageName,
+      previousPage: previousPage,
+      entrySourceType: entrySourceType ?? this.entrySourceType,
+      entrySourceId: entrySourceId ?? this.entrySourceId,
+      h5VisitorId: h5VisitorId,
+    );
+  }
+
   Map<String, Object?> toJson() {
     // 公共参数是后端固定 Schema：字段不可省略。当前上下文字段均为 string，
     // 缺失值以空字符串表示；后续若增加 number/bool/object/array 字段，也必须分别

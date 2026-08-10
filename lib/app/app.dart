@@ -14,6 +14,7 @@ import '../core/active/app_active_reporter.dart';
 import '../core/account/account_ban_controller.dart';
 import '../core/account/account_banned_overlay.dart';
 import '../core/analytics/analytics_definition.dart';
+import '../core/analytics/analytics_entry_source.dart';
 import '../core/analytics/analytics_event.dart';
 import '../core/analytics/analytics_lifecycle_tracker.dart';
 import '../core/analytics/analytics_provider.dart';
@@ -111,6 +112,9 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       return;
     }
 
+    // 当前 App Link 仅支持分享短剧播放器链接；分享没有稳定配置 ID，按约定留空。
+    _prepareEntrySource(type: 'share_deeplink');
+
     final location = RoutePaths.playerLocation(
       dramaId: dramaId,
       episodeId: '1',
@@ -172,6 +176,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
 
     if (type == 'player' && dramaId != null && dramaId.isNotEmpty) {
       _cancelPopupForCurrentRouteExit();
+      _preparePushEntrySource(notification);
       router.go(
         RoutePaths.playerLocation(
           dramaId: dramaId,
@@ -188,6 +193,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         dramaId != null &&
         dramaId.isNotEmpty) {
       _cancelPopupForCurrentRouteExit();
+      _preparePushEntrySource(notification);
       router.go(
         RoutePaths.playerLocation(
           dramaId: dramaId,
@@ -201,6 +207,9 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
 
     if (type == 'page') {
       _cancelPopupForCurrentRouteExit();
+      if (_isSupportedFcmPage(data['page'])) {
+        _preparePushEntrySource(notification);
+      }
       _openFcmPage(router, data['page']);
       return;
     }
@@ -267,6 +276,35 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
             }),
           ),
     );
+  }
+
+  void _preparePushEntrySource(FcmNotification notification) {
+    final pushId =
+        notification.id?.trim() ??
+        notification.data['push_id']?.trim() ??
+        notification.data['id']?.trim();
+    _prepareEntrySource(type: 'push', id: pushId);
+  }
+
+  void _preparePopupEntrySource(PopupConfig popup) {
+    _prepareEntrySource(type: 'popup', id: popup.id?.toString());
+  }
+
+  void _prepareEntrySource({required String type, String? id}) {
+    if (type != 'share_deeplink' && (id == null || id.trim().isEmpty)) {
+      debugPrint(
+        '[Analytics] Entry source data-quality error: $type target is missing its stable ID.',
+      );
+      return;
+    }
+    ref.read(analyticsEntrySourceProvider.notifier).prepare(type: type, id: id);
+  }
+
+  bool _isSupportedFcmPage(String? rawPage) {
+    return switch (rawPage?.trim().toLowerCase()) {
+      'home' || 'recommend_tab' || 'member_tab' || 'recharge' => true,
+      _ => false,
+    };
   }
 
   void _openFcmPage(GoRouter router, String? rawPage) {
@@ -481,6 +519,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       unawaited(_openPopupExternalUrl(url));
       return;
     }
+    // 内嵌 H5 的来源需在 H5 安全上下文中单独传递；当前不污染后续 App page_view。
     router.push(RoutePaths.webviewLocation(url: url, title: popup.name));
   }
 
@@ -498,6 +537,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       return;
     }
     _finishActivePopupFlow();
+    _preparePopupEntrySource(popup);
     router.push(
       RoutePaths.playerLocation(
         dramaId: '$dramaId',
@@ -513,30 +553,37 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     switch (pageCode) {
       case 'home':
         _finishActivePopupFlow();
+        _preparePopupEntrySource(popup);
         router.go(RoutePaths.home);
         return;
       case 'recommend_tab':
         _finishActivePopupFlow();
+        _preparePopupEntrySource(popup);
         router.go(RoutePaths.forYou);
         return;
       case 'member_tab':
         _finishActivePopupFlow();
+        _preparePopupEntrySource(popup);
         router.go(RoutePaths.member);
         return;
       case 'member_open':
         _finishActivePopupFlow();
+        _preparePopupEntrySource(popup);
         router.push(RoutePaths.membership);
         return;
       case 'recharge':
         _finishActivePopupFlow();
+        _preparePopupEntrySource(popup);
         router.push(RoutePaths.store);
         return;
       case 'reward_coin':
         _finishActivePopupFlow();
+        _preparePopupEntrySource(popup);
         router.go(RoutePaths.rewardsLocation());
         return;
       case 'member_point':
         _finishActivePopupFlow();
+        _preparePopupEntrySource(popup);
         router.go(RoutePaths.rewardsLocation(tab: RoutePaths.memberPointsTab));
         return;
       default:

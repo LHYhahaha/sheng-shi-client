@@ -1,4 +1,6 @@
 import 'package:drama_client/core/analytics/analytics_context.dart';
+import 'package:drama_client/core/analytics/analytics_definition.dart';
+import 'package:drama_client/core/analytics/analytics_entry_source.dart';
 import 'package:drama_client/core/analytics/analytics_lifecycle_tracker.dart';
 import 'package:drama_client/core/analytics/analytics_page_context.dart';
 import 'package:drama_client/core/analytics/analytics_page_tracker.dart';
@@ -57,6 +59,8 @@ void main() {
         },
       ),
       pageContext: container.read(analyticsPageContextProvider.notifier),
+      contextReader: () => _pageContext(container),
+      entrySource: container.read(analyticsEntrySourceProvider.notifier),
       now: () => now,
     );
 
@@ -91,6 +95,8 @@ void main() {
     final pageTracker = AnalyticsPageTracker(
       analytics: service,
       pageContext: container.read(analyticsPageContextProvider.notifier),
+      contextReader: () => _pageContext(container),
+      entrySource: container.read(analyticsEntrySourceProvider.notifier),
       startupGate: gate,
       now: () => now,
     );
@@ -134,6 +140,8 @@ void main() {
     final tracker = AnalyticsPageTracker(
       analytics: _service(sink, () => now),
       pageContext: container.read(analyticsPageContextProvider.notifier),
+      contextReader: () => _pageContext(container),
+      entrySource: container.read(analyticsEntrySourceProvider.notifier),
       now: () => now,
     );
 
@@ -157,6 +165,8 @@ void main() {
       final tracker = AnalyticsPageTracker(
         analytics: _service(sink, DateTime.now),
         pageContext: container.read(analyticsPageContextProvider.notifier),
+        contextReader: () => _pageContext(container),
+        entrySource: container.read(analyticsEntrySourceProvider.notifier),
       );
 
       await tracker.push(AnalyticsPageNames.my);
@@ -172,12 +182,50 @@ void main() {
     },
   );
 
+  test('entry source is consumed by one forced target page view', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final sink = AnalyticsInMemoryEventSink();
+    final entrySource = container.read(analyticsEntrySourceProvider.notifier);
+    final tracker = AnalyticsPageTracker(
+      analytics: _service(sink, DateTime.now),
+      pageContext: container.read(analyticsPageContextProvider.notifier),
+      contextReader: () => _pageContext(container),
+      entrySource: entrySource,
+    );
+
+    await tracker.replace(AnalyticsPageNames.dramaPlay);
+    entrySource.prepare(type: 'push', id: 'push-42');
+    await tracker.replace(AnalyticsPageNames.dramaPlay, forcePageView: true);
+    await tracker.push(AnalyticsPageNames.search);
+
+    final pageViews = sink.events
+        .where((event) => event.eventName == AnalyticsDefinitions.pageView)
+        .toList(growable: false);
+    expect(pageViews, hasLength(3));
+    expect(pageViews[1].commonParams.toJson()['entry_source_type'], 'push');
+    expect(pageViews[1].commonParams.toJson()['entry_source_id'], 'push-42');
+    expect(pageViews[2].commonParams.toJson()['entry_source_type'], '');
+    expect(pageViews[2].commonParams.toJson()['entry_source_id'], '');
+  });
+
   test('maps confirmed profile, wallet, recharge and login page names', () {
     expect(analyticsPageNameForRoute('profile'), AnalyticsPageNames.my);
     expect(analyticsPageNameForRoute('wallet'), AnalyticsPageNames.wallet);
     expect(analyticsPageNameForRoute('store'), AnalyticsPageNames.coinRecharge);
     expect(analyticsPageNameForRoute('auth'), AnalyticsPageNames.login);
   });
+}
+
+AnalyticsContext _pageContext(ProviderContainer container) {
+  final page = container.read(analyticsPageContextProvider);
+  return AnalyticsContext(
+    platform: 'android',
+    appVersion: '1.0.3',
+    language: 'zh-CN',
+    pageName: page.currentPage,
+    previousPage: page.previousPage,
+  );
 }
 
 AnalyticsService _service(

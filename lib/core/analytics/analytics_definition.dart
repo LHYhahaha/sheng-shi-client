@@ -339,7 +339,7 @@ abstract final class AnalyticsDefinitions {
         'episode_id': _requiredString,
         'episode_no': _number,
         'subtitle_language': _requiredString,
-        'viewing_entitlement_type': _string,
+        'viewing_entitlement_type': _requiredString,
       },
     ),
     dramaPlayEnd: AnalyticsEventDefinition(
@@ -352,7 +352,7 @@ abstract final class AnalyticsDefinitions {
         'play_progress_ms': _number,
         'play_end_reason': _requiredString,
         'subtitle_language': _string,
-        'viewing_entitlement_type': _string,
+        'viewing_entitlement_type': _requiredString,
       },
     ),
     searchSubmit: AnalyticsEventDefinition(

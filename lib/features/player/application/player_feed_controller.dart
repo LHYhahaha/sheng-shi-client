@@ -481,6 +481,7 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
       number: item.episode.number,
       isLocked: false, // 解锁后不再锁定
       unlockType: EpisodeUnlockType.free, // 解锁后变为免费
+      viewingEntitlementType: 'coin',
       requiredCoins: item.episode.requiredCoins,
       videoUrl: sourceUrl, // 更新播放地址
       videoAssetPath: item.episode.videoAssetPath,
@@ -505,6 +506,30 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
       'episodeId=$episodeId, sourceUrl=$sourceUrl',
     );
     return true;
+  }
+
+  /// 在当前播放会话内同步更新权益来源，不必等待再次请求详情接口。
+  PlayerFeedItem? updateEpisodeViewingEntitlementType({
+    required String dramaId,
+    required String episodeId,
+    required String viewingEntitlementType,
+  }) {
+    final itemIndex = state.items.indexWhere((item) {
+      return item.content.id == dramaId && item.episode.id == episodeId;
+    });
+    if (itemIndex == -1) return null;
+    final updatedItems = [...state.items];
+    final updatedItem = updatedItems[itemIndex].copyWith(
+      episode: updatedItems[itemIndex].episode.copyWith(
+        isLocked: false,
+        viewingEntitlementType: viewingEntitlementType,
+      ),
+    );
+    updatedItems[itemIndex] = updatedItem;
+    state = state.copyWith(
+      items: List<PlayerFeedItem>.unmodifiable(updatedItems),
+    );
+    return updatedItem;
   }
 
   bool _isCurrent(int generation) => generation == _generation;

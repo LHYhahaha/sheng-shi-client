@@ -39,6 +39,7 @@ class AdjustService {
       }
 
       final config = AdjustConfig(_configuredAppToken, _adjustEnvironment);
+      _configureAttributionLogging(config);
       if (kDebugMode) {
         _configureDebugLogging(config);
       }
@@ -71,6 +72,12 @@ class AdjustService {
         'timestamp=${session.timestamp}.',
       );
     };
+  }
+
+  /// Adjust 在首次归因和归因变化时都会回调。
+  ///
+  /// 不只在 Debug 注册，以便正式包联调时也能从设备日志确认广告来源。
+  void _configureAttributionLogging(AdjustConfig config) {
     config.attributionCallback = (attribution) {
       debugPrint(
         '[Adjust] Attribution: '
