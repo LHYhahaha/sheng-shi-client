@@ -13,8 +13,11 @@ import '../../../../app/shell/app_shell.dart';
 import '../../../../core/adjust/adjust_event_reporter_provider.dart';
 import '../../../../core/analytics/analytics_definition.dart';
 import '../../../../core/analytics/drama_card_exposure.dart';
+import '../../../../core/analytics/analytics_page_context.dart';
+import '../../../../core/analytics/analytics_page_tracker.dart';
 import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
+import '../../../../core/analytics/analytics_entry_source.dart';
 import '../../../../core/auth/auth_token_store.dart';
 import '../../../../core/network/api_client_provider.dart';
 import '../../../../core/notification/startup_notification_permission_reporter.dart';
@@ -27,8 +30,12 @@ import '../../../../shared/theme/app_radii.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
+import '../../../../shared/url/external_url_launcher.dart';
 import '../../application/home_data_controller.dart';
+import '../../application/home_banner_config_controller.dart';
+import '../../application/home_banner_analytics.dart';
 import '../../application/home_remote_data_provider.dart';
+import '../../data/dto/home_banner_response_dto.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -45,22 +52,28 @@ class _HomePageState extends ConsumerState<HomePage> {
   int _lastScrollToTopRequest = 0; // 跟踪上次的滚动请求计数
   ProviderSubscription<int>? _scrollToTopListener; // 监听滚动请求的订阅
   ProviderSubscription<bool>? _accessTokenListener;
+  ProviderSubscription<AnalyticsPageContext>? _homePageSessionListener;
+  late final HomeBannerExposureTracker _bannerExposureTracker;
   bool _notificationPermissionCheckScheduled = false;
   bool _notificationPermissionChecked = false;
   bool _homeFirstViewCheckScheduled = false;
-
-  List image = [
-    "assets/images/home/picture1.png",
-    "assets/images/home/picture2.png",
-    "assets/images/home/picture3.png",
-    "assets/images/home/picture4.png",
-    "assets/images/home/picture5.png",
-    "assets/images/home/picture6.png",
-  ];
+  bool _bannerNavigationInProgress = false;
 
   @override
   void initState() {
     super.initState();
+    _bannerExposureTracker = HomeBannerExposureTracker(
+      analytics: ref.read(analyticsServiceProvider),
+    );
+    _homePageSessionListener = ref.listenManual(analyticsPageContextProvider, (
+      previous,
+      next,
+    ) {
+      if (next.currentPage == AnalyticsPageNames.home &&
+          previous?.currentPage != AnalyticsPageNames.home) {
+        _bannerExposureTracker.beginPageSession();
+      }
+    }, fireImmediately: true);
     _scrollController.addListener(_onScroll);
 
     // 监听滚动到顶部的请求
@@ -94,6 +107,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     // 取消滚动请求的监听
     _scrollToTopListener?.close();
     _accessTokenListener?.close();
+    _homePageSessionListener?.close();
 
     _scrollController
       ..removeListener(_onScroll)
@@ -262,6 +276,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     // 监听远程数据
     final remoteData = ref.watch(homeRemoteDataProvider);
     final homeDataState = ref.watch(homeDataControllerProvider);
+    final bannerState = ref.watch(homeBannerConfigControllerProvider);
 
     // 监听 mock 数据
 
@@ -337,44 +352,17 @@ class _HomePageState extends ConsumerState<HomePage> {
                   },
                 ),
               ),
-              SliverToBoxAdapter(
-                child: Container(
-                  margin: const EdgeInsets.only(
-                    bottom: 10,
-                    left: 14,
-                    right: 14,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  height: 200,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Swiper(
-                      itemBuilder: (BuildContext context, int index) {
-                        return Image.asset(image[index], fit: BoxFit.fill);
-                      },
-                      autoplay: true,
-                      itemCount: image.length,
-                      pagination: SwiperPagination(
-                        alignment: Alignment.bottomCenter,
-                        margin: EdgeInsets.only(bottom: 10),
-                        builder: SwiperCustomPagination(
-                          builder: (context, config) {
-                            return _HomeBannerSliderIndicator(
-                              activeIndex: config.activeIndex,
-                              itemCount: config.itemCount,
-                            );
-                          },
-                        ),
-                      ),
-                      // 隐藏左右按钮
-                      control: null,
-                    ),
+              if (bannerState.visibleBanners.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: _HomeRemoteBannerCarousel(
+                    banners: bannerState.visibleBanners,
+                    onImageError: (bannerId) => ref
+                        .read(homeBannerConfigControllerProvider.notifier)
+                        .disableBanner(bannerId),
+                    onTap: _handleBannerTap,
+                    onVisible: _trackBannerExposure,
                   ),
                 ),
-              ),
               if (isLoading)
                 SliverFillRemaining(
                   hasScrollBody: false,
@@ -500,6 +488,239 @@ class _HomePageState extends ConsumerState<HomePage> {
       ),
     );
   }
+
+  Future<void> _handleBannerTap(HomeBannerDto banner) async {
+    if (_bannerNavigationInProgress) return;
+    final jumpType = banner.jumpType.trim().toLowerCase();
+    if (jumpType == 'none') return;
+    _bannerNavigationInProgress = true;
+    try {
+      final analyticsBanner = HomeBannerAnalyticsItem(
+        bannerId: banner.bannerId,
+        targetType: jumpType,
+        targetDramaId: jumpType == 'drama' ? banner.jumpParam : null,
+      );
+      unawaited(
+        ref
+            .read(analyticsServiceProvider)
+            .track(
+              AnalyticsEvent(
+                AnalyticsDefinitions.elementClick,
+                analyticsBanner.toEventParameters(),
+              ),
+            ),
+      );
+      final value = banner.jumpParam.trim();
+      switch (jumpType) {
+        case 'internal_h5':
+          final url = banner.normalizedH5Url;
+          if (url == null) {
+            return;
+          }
+          prepareHomeBannerEntrySource(
+            ref.read(analyticsEntrySourceProvider.notifier),
+            analyticsBanner,
+          );
+          if (mounted) {
+            context.push(RoutePaths.webviewLocation(url: url));
+          }
+          return;
+        case 'external_h5':
+          final url = banner.normalizedH5Url;
+          if (url != null) {
+            await ref.read(externalUrlLauncherProvider).open(url);
+          }
+          return;
+        case 'drama':
+          if (value.isEmpty || !RegExp(r'^\d+$').hasMatch(value)) {
+            return;
+          }
+          prepareHomeBannerEntrySource(
+            ref.read(analyticsEntrySourceProvider.notifier),
+            analyticsBanner,
+          );
+          if (mounted) {
+            context.push(
+              RoutePaths.playerLocation(
+                dramaId: value,
+                episodeId: '1',
+                trigger: 'home_banner',
+                userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+              ),
+            );
+          }
+          return;
+        case 'app_page':
+          _openBannerAppPage(value, analyticsBanner);
+          return;
+      }
+    } finally {
+      _bannerNavigationInProgress = false;
+    }
+  }
+
+  void _trackBannerExposure(HomeBannerDto banner) {
+    if (!mounted) return;
+    final targetType = banner.jumpType.trim().toLowerCase();
+    unawaited(
+      _bannerExposureTracker.trackVisible(
+        HomeBannerAnalyticsItem(
+          bannerId: banner.bannerId,
+          targetType: targetType,
+          targetDramaId: targetType == 'drama' ? banner.jumpParam.trim() : null,
+        ),
+      ),
+    );
+  }
+
+  void _openBannerAppPage(String pageCode, HomeBannerAnalyticsItem banner) {
+    final location = switch (pageCode) {
+      'home' => RoutePaths.home,
+      'recommend_tab' => RoutePaths.forYou,
+      'member_tab' => RoutePaths.member,
+      'member_open' => RoutePaths.membership,
+      'recharge' => RoutePaths.store,
+      'reward_coin' => RoutePaths.rewardsLocation(),
+      'member_point' => RoutePaths.rewardsLocation(
+        tab: RoutePaths.memberPointsTab,
+      ),
+      _ => null,
+    };
+    if (location == null || !mounted) return;
+    prepareHomeBannerEntrySource(
+      ref.read(analyticsEntrySourceProvider.notifier),
+      banner,
+    );
+    if (pageCode == 'member_open' || pageCode == 'recharge') {
+      context.push(location);
+    } else {
+      context.go(location);
+    }
+  }
+}
+
+class _HomeRemoteBannerCarousel extends StatefulWidget {
+  const _HomeRemoteBannerCarousel({
+    required this.banners,
+    required this.onImageError,
+    required this.onTap,
+    required this.onVisible,
+  });
+
+  final List<HomeBannerDto> banners;
+  final ValueChanged<String> onImageError;
+  final ValueChanged<HomeBannerDto> onTap;
+  final ValueChanged<HomeBannerDto> onVisible;
+
+  @override
+  State<_HomeRemoteBannerCarousel> createState() =>
+      _HomeRemoteBannerCarouselState();
+}
+
+class _HomeRemoteBannerCarouselState extends State<_HomeRemoteBannerCarousel> {
+  Timer? _visibilityTimer;
+  Timer? _visibilityPoller;
+  int _activeIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _evaluateVisibility());
+    _visibilityPoller = Timer.periodic(
+      const Duration(milliseconds: 200),
+      (_) => _evaluateVisibility(),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeRemoteBannerCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_activeIndex >= widget.banners.length) {
+      _activeIndex = 0;
+      _resetVisibilityTimer();
+    }
+  }
+
+  @override
+  void dispose() {
+    _visibilityTimer?.cancel();
+    _visibilityPoller?.cancel();
+    super.dispose();
+  }
+
+  void _onIndexChanged(int index) {
+    if (_activeIndex == index) return;
+    setState(() => _activeIndex = index);
+    _resetVisibilityTimer();
+    _evaluateVisibility();
+  }
+
+  void _resetVisibilityTimer() {
+    _visibilityTimer?.cancel();
+    _visibilityTimer = null;
+  }
+
+  void _evaluateVisibility() {
+    if (!mounted || widget.banners.isEmpty || !_isAtLeastHalfVisible()) {
+      _resetVisibilityTimer();
+      return;
+    }
+    _visibilityTimer ??= Timer(const Duration(seconds: 1), () {
+      _visibilityTimer = null;
+      if (!mounted || !_isAtLeastHalfVisible()) return;
+      final index = _activeIndex % widget.banners.length;
+      widget.onVisible(widget.banners[index]);
+    });
+  }
+
+  bool _isAtLeastHalfVisible() {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return false;
+    final rect = box.localToGlobal(Offset.zero) & box.size;
+    final viewport = Offset.zero & MediaQuery.sizeOf(context);
+    final visible = rect.intersect(viewport);
+    if (rect.isEmpty || visible.isEmpty) return false;
+    return visible.width * visible.height >= rect.width * rect.height * .5;
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const Key('home_remote_banner_carousel'),
+    height: 200,
+    margin: const EdgeInsets.only(bottom: 10, left: 14, right: 14),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: Swiper(
+        autoplay: widget.banners.length > 1,
+        autoplayDelay: 3000,
+        itemCount: widget.banners.length,
+        itemBuilder: (context, index) {
+          final banner = widget.banners[index];
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => widget.onTap(banner),
+            child: AppCachedNetworkImage(
+              imageUrl: banner.imageUrl,
+              fit: BoxFit.fill,
+              onError: () => widget.onImageError(banner.bannerId),
+            ),
+          );
+        },
+        onIndexChanged: _onIndexChanged,
+        pagination: SwiperPagination(
+          alignment: Alignment.bottomCenter,
+          margin: const EdgeInsets.only(bottom: 10),
+          builder: SwiperCustomPagination(
+            builder: (context, config) => _HomeBannerSliderIndicator(
+              activeIndex: config.activeIndex,
+              itemCount: config.itemCount,
+            ),
+          ),
+        ),
+        control: null,
+      ),
+    ),
+  );
 }
 
 class _HomeBannerSliderIndicator extends StatelessWidget {
@@ -513,12 +734,14 @@ class _HomeBannerSliderIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final alignmentX = itemCount <= 1
-        ? 0.0
-        : -1.0 + (2.0 * activeIndex / (itemCount - 1));
+    const trackWidth = 72.0;
+    final count = itemCount < 1 ? 1 : itemCount;
+    final index = activeIndex.clamp(0, count - 1).toDouble();
+    final alignmentX = count <= 1 ? 0.0 : -1.0 + (2.0 * index / (count - 1));
+    final activeWidth = trackWidth / count;
 
     return Container(
-      width: 72,
+      width: trackWidth,
       height: 4,
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.24),
@@ -530,7 +753,7 @@ class _HomeBannerSliderIndicator extends StatelessWidget {
         curve: Curves.easeOutCubic,
         alignment: Alignment(alignmentX, 0),
         child: Container(
-          width: 24,
+          width: activeWidth,
           height: 4,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.6),

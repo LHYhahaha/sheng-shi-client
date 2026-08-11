@@ -79,6 +79,12 @@ class HomeBannerExposureTracker {
       if (payload != null) {
         _exposedBannerIds.add(bannerId);
       }
+    } catch (error, stackTrace) {
+      // 热重启或 ProviderScope 重建时，旧页面的延迟曝光回调可能持有已经释放的
+      // AnalyticsService。该回调不能影响页面，也不应每秒重复抛错。
+      _exposedBannerIds.add(bannerId);
+      debugPrint('[Analytics] Banner exposure skipped: $error');
+      debugPrintStack(stackTrace: stackTrace);
     } finally {
       _pendingBannerIds.remove(bannerId);
     }

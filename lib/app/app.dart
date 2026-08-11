@@ -26,6 +26,7 @@ import '../core/notification/fcm_notification.dart';
 import '../core/notification/fcm_notification_service.dart';
 import '../core/notification/startup_notification_permission_requester.dart';
 import '../features/auth/application/auth_controller.dart';
+import '../features/bottom_tab_config/application/bottom_tab_config_controller.dart';
 import '../features/pay/application/payment_loading_controller.dart';
 import '../features/popup/application/popup_entry_controller.dart';
 import '../features/popup/application/popup_analytics.dart';
@@ -71,6 +72,9 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     _fcmNotificationService = widget.fcmNotificationService;
     _listenForFcmNotificationTaps();
     unawaited(_listenForFcmNotificationTapsWhenReady());
+    // 与 DeviceId、认证并行读取渠道配置。ApiClient 仍会等待同一份配置完成后再
+    // 发送请求；原生未提供配置时按约定使用空渠道头继续。
+    unawaited(ref.read(channelConfigInitializerProvider.future));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(_notificationPermissionRequester.requestIfNeeded());
@@ -413,6 +417,10 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         ref.read(analyticsLifecycleTrackerProvider).onApplicationReady(),
       );
     }
+
+    // 认证完成后即可读取动态 Tab；标题尚未拿到远程语言包时会回退到客户端原文案，
+    // 语言包加载完成后的状态更新会自动刷新标题，不让 i18n 阻塞首屏。
+    unawaited(ref.read(bottomTabConfigControllerProvider.notifier).loadOnce());
 
     try {
       await ref.read(i18nInitializerProvider.future);

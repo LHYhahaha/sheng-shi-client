@@ -8,6 +8,7 @@ import '../../app/router/route_paths.dart';
 import '../../core/account/account_ban_controller.dart';
 import '../../core/analytics/analytics_page_tracker.dart';
 import '../../core/analytics/analytics_entry_source.dart';
+import '../../features/bottom_tab_config/application/bottom_tab_config_controller.dart';
 import '../../features/player/application/player_playback_controller.dart';
 import '../../features/popup/application/popup_entry_controller.dart';
 import '../../features/popup/domain/popup.dart';
@@ -93,23 +94,37 @@ class _AppShellState extends ConsumerState<AppShell> {
   bool _resumeForYouOnReturn = false;
   Future<void> _forYouVisibilityOperation = Future<void>.value();
   late int _lastNavigationIndex;
+  bool _shellReadyEffectsStarted = false;
 
   @override
   void initState() {
     super.initState();
     _lastNavigationIndex = widget.navigationShell.currentIndex;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _requestPopupForIndex(widget.navigationShell.currentIndex);
-      _trackPageForIndex(widget.navigationShell.currentIndex);
-    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final bottomTabConfig = ref.watch(bottomTabConfigControllerProvider);
+    // 冷启动先完成动态 Tab 配置判定。无论接口成功还是失败，hasLoaded 均会置为 true；
+    // 失败时随后展示完整默认导航，避免默认首页先绘制再被 H5 替换。
+    if (!bottomTabConfig.hasLoaded) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0A0014),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final navigationIndex = widget.navigationShell.currentIndex;
+    if (!_shellReadyEffectsStarted) {
+      _shellReadyEffectsStarted = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _requestPopupForIndex(widget.navigationShell.currentIndex);
+        _trackPageForIndex(widget.navigationShell.currentIndex);
+      });
+    }
     if (_lastNavigationIndex != navigationIndex) {
       final previousIndex = _lastNavigationIndex;
       final previousPlacement = AppShellDestinations.popupPlacementForIndex(

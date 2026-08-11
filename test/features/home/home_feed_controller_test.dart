@@ -90,4 +90,3 @@ final _drama = Drama(
   tags: ['Rebirth'],
   coverAspectRatio: 171 / 226,
 );
-

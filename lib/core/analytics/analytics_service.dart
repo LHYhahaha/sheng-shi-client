@@ -126,10 +126,7 @@ class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
   Future<void> _doFlush() async {
     while (_pending.isNotEmpty) {
       final batch = _pending.take(batchSize).toList(growable: false);
-      final timestamp = DateTime.now()
-          .toUtc()
-          .millisecondsSinceEpoch
-          .toString();
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
       final rawBody = jsonEncode({
         'events': batch.map(_toRequestEvent).toList(growable: false),
       });

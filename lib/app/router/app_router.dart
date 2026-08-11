@@ -10,6 +10,7 @@ import '../shell/app_shell.dart';
 import '../../features/auth/presentation/pages/account_cancellation_page.dart';
 import '../../features/auth/presentation/pages/account_page.dart';
 import '../../features/auth/presentation/pages/auth_page.dart';
+import '../../features/bottom_tab_config/presentation/bottom_tab_content_slot.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/member/presentation/pages/member_page.dart';
 import '../../features/membership/presentation/pages/membership_page.dart';
@@ -62,7 +63,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: RoutePaths.home,
                 name: RouteNames.home,
-                builder: (context, state) => const HomePage(),
+                builder: (context, state) => BottomTabContentSlot(
+                  slot: 'home',
+                  defaultTitle: context.l10n.navHome,
+                  child: const HomePage(),
+                ),
               ),
             ],
           ),
@@ -71,7 +76,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: RoutePaths.forYou,
                 name: RouteNames.forYou,
-                builder: (context, state) => const PlayerPage.forYou(),
+                builder: (context, state) => BottomTabContentSlot(
+                  slot: 'recommend_tab',
+                  defaultTitle: context.l10n.navForYou,
+                  child: const PlayerPage.forYou(),
+                ),
               ),
             ],
           ),
@@ -80,7 +89,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: RoutePaths.member,
                 name: RouteNames.member,
-                builder: (context, state) => const MemberTabPage(),
+                builder: (context, state) => BottomTabContentSlot(
+                  slot: 'member_tab',
+                  defaultTitle: context.l10n.navMember,
+                  child: const MemberTabPage(),
+                ),
               ),
             ],
           ),
@@ -89,7 +102,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: RoutePaths.myList,
                 name: RouteNames.myList,
-                builder: (context, state) => const MyListPage(),
+                builder: (context, state) => BottomTabContentSlot(
+                  slot: 'favorites',
+                  defaultTitle: context.l10n.navMyList,
+                  child: const MyListPage(),
+                ),
               ),
             ],
           ),
@@ -98,7 +115,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: RoutePaths.profile,
                 name: RouteNames.profile,
-                builder: (context, state) => const ProfilePage(),
+                builder: (context, state) => BottomTabContentSlot(
+                  slot: 'profile',
+                  defaultTitle: context.l10n.navProfile,
+                  child: const ProfilePage(),
+                ),
               ),
             ],
           ),

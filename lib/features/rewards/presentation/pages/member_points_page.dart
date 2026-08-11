@@ -113,7 +113,13 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _refreshIfNeeded();
+    // _refreshIfNeeded 会调用 ref.invalidate；ConsumerState 在 initState 阶段尚
+    // 未完成 ProviderScope 依赖注册，延迟至首帧后再触发以避免进入会员 Tab 崩溃。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _refreshIfNeeded();
+      }
+    });
   }
 
   @override
