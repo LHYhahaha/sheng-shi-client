@@ -68,6 +68,17 @@ class PlayerContentMapper {
       isAvailable: dto.status == 1,
       subtitles: _mapSubtitles(dto.subtitles),
       episodeSources: _mapEpisodeSources(dto.episodeSources),
+      adUnlock: dto.adUnlock == null
+          ? null
+          : PlayerAdUnlockOffer(
+              isAvailable: dto.adUnlock!.available,
+              watchedToday: dto.adUnlock!.watchedToday,
+              dailyLimit: dto.adUnlock!.dailyLimit,
+              closeAfter: Duration(seconds: dto.adUnlock!.closeAfterSec),
+              placementId: dto.adUnlock!.placementId,
+              adVideoUrl: dto.adUnlock!.adVideoUrl,
+              taskToken: dto.adUnlock!.taskToken,
+            ),
     );
   }
 

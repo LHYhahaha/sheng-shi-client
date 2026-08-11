@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../app/router/route_names.dart';
 import '../../../../app/router/player_route_observer.dart';
 import '../../../../app/shell/app_shell.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
@@ -36,6 +37,7 @@ import '../../../auth/application/auth_controller.dart';
 import '../../../auth/domain/auth_session.dart';
 import '../../application/player_feed_controller.dart';
 import '../../application/player_feed_engine.dart';
+import '../../application/player_runtime_coordinator.dart';
 import '../../application/player_feed_engine_access_flow.dart';
 import '../../application/for_you_playback_progress_controller.dart';
 import '../../application/player_like_controller.dart';
@@ -66,6 +68,7 @@ import '../widgets/player_detail_sheet.dart';
 import '../widgets/player_exit_recommendation_dialog.dart';
 import '../widgets/player_feed_page_shell.dart';
 import '../widgets/player_playback_layer.dart';
+import 'ad_unlock_page.dart';
 
 sealed class _ExitRecommendationDialogResult {
   const _ExitRecommendationDialogResult();
@@ -1666,6 +1669,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               onUnlockTap: () {
                 unawaited(_showPendingUnlockActionSheet());
               },
+              onAdUnlockTap: () {
+                unawaited(_openAdUnlock(item));
+              },
               onOpenMembership: () {
                 unawaited(_openMembership());
               },
@@ -3100,6 +3106,36 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       _activeRechargeSheetItemId = currentItem.id;
     }
     await _presentSheetIntent(context, currentItem, intent);
+  }
+
+  Future<void> _openAdUnlock(PlayerFeedItem item) async {
+    final offer = item.episode.adUnlock;
+    if (offer == null || !offer.isAvailable || _isModalOpen) return;
+    final result = await context.pushNamed<AdUnlockResult>(
+      RouteNames.adUnlock,
+      extra: offer,
+    );
+    if (!mounted || result is! AdUnlockResult) return;
+
+    // TODO(ad API): 此处改为使用完成广告接口返回的 source_url / entitlement。
+    // 当前先使用页面完成结果打通 UI；真正授权仍必须由服务端回包确认。
+    final feedController = ref.read(
+      playerFeedControllerProvider(_sessionKey).notifier,
+    );
+    final unlockedItem = feedController.updateEpisodeViewingEntitlementType(
+      dramaId: item.content.id,
+      episodeId: item.episode.id,
+      viewingEntitlementType: 'ad',
+    );
+    if (unlockedItem == null) return;
+    final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+    await ref
+        .read(playerRuntimeCoordinatorProvider(_sessionKey).notifier)
+        .onViewportSettled(
+          item: unlockedItem,
+          index: feedState.currentIndex,
+          playbackTrigger: 'ad_unlock',
+        );
   }
 
   Future<void> _openMembership() async {

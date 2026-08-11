@@ -2,6 +2,7 @@ abstract final class RouteNames {
   static const home = 'home';
   static const forYou = 'for-you';
   static const player = 'player';
+  static const adUnlock = 'ad-unlock';
   static const myList = 'my-list';
   static const game = 'game';
   static const member = 'member';

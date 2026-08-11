@@ -17,6 +17,7 @@ import 'package:drama_client/features/player/data/dto/player_feed_page_dto.dart'
 import 'package:drama_client/features/player/data/mapper/playback_source_mapper.dart';
 import 'package:drama_client/features/player/data/mapper/player_content_mapper.dart';
 import 'package:drama_client/features/player/data/mock_player_content_repository.dart';
+import 'package:drama_client/features/player/data/mock_player_feed_repository.dart';
 import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
 import 'package:drama_client/features/player/data/player_content_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
@@ -389,15 +390,33 @@ void main() {
     },
   );
 
-  test('player feed provider always uses remote repository', () {
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
+  test(
+    'player feed provider uses remote repository when the switch is enabled',
+    () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
 
-    expect(
-      container.read(playerFeedRepositoryProvider),
-      isA<RemotePlayerFeedRepository>(),
-    );
-  });
+      expect(
+        container.read(playerFeedRepositoryProvider),
+        isA<RemotePlayerFeedRepository>(),
+      );
+    },
+  );
+
+  test(
+    'player feed provider uses mock repository when the switch is disabled',
+    () {
+      final container = ProviderContainer(
+        overrides: [useRemotePlayerApiProvider.overrideWithValue(false)],
+      );
+      addTearDown(container.dispose);
+
+      expect(
+        container.read(playerFeedRepositoryProvider),
+        isA<MockPlayerFeedRepository>(),
+      );
+    },
+  );
 
   test('remote switch provider can enable remote repository skeletons', () {
     final container = ProviderContainer(

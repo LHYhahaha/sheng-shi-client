@@ -148,6 +148,7 @@ class PlayerEpisode {
     this.isAvailable = true,
     this.subtitles = const [],
     this.episodeSources = const [],
+    this.adUnlock,
   });
 
   /// 该集可用的字幕轨道列表。
@@ -157,6 +158,9 @@ class PlayerEpisode {
 
   /// 已将对应语言字幕烧录进画面的视频资源。
   final List<PlayerEpisodeSource> episodeSources;
+
+  /// 广告解锁资格；为空或不可用时，播放页不展示广告解锁入口。
+  final PlayerAdUnlockOffer? adUnlock;
 
   /// 剧集 id。
   ///
@@ -234,6 +238,7 @@ class PlayerEpisode {
     bool? isAvailable,
     List<PlayerSubtitle>? subtitles,
     List<PlayerEpisodeSource>? episodeSources,
+    PlayerAdUnlockOffer? adUnlock,
   }) {
     return PlayerEpisode(
       id: id ?? this.id,
@@ -250,6 +255,7 @@ class PlayerEpisode {
       isAvailable: isAvailable ?? this.isAvailable,
       subtitles: subtitles ?? this.subtitles,
       episodeSources: episodeSources ?? this.episodeSources,
+      adUnlock: adUnlock ?? this.adUnlock,
     );
   }
 
@@ -262,6 +268,27 @@ class PlayerEpisode {
     }
     return null;
   }
+}
+
+/// 由剧集详情接口下发的广告解锁展示与播放配置。
+class PlayerAdUnlockOffer {
+  const PlayerAdUnlockOffer({
+    required this.isAvailable,
+    required this.watchedToday,
+    required this.dailyLimit,
+    required this.closeAfter,
+    this.placementId,
+    this.adVideoUrl,
+    this.taskToken,
+  });
+
+  final bool isAvailable;
+  final int watchedToday;
+  final int dailyLimit;
+  final Duration closeAfter;
+  final String? placementId;
+  final String? adVideoUrl;
+  final String? taskToken;
 }
 
 /// 播放详情页推荐项。

@@ -39,6 +39,9 @@ class PlayerChrome extends StatefulWidget {
     this.onLikeTap = _noop,
     this.showUnlockButton = false,
     this.unlockLabel,
+    this.showAdUnlockButton = false,
+    this.adUnlockSubtitle,
+    this.onAdUnlockTap,
     this.overlayOpacity = 1.0,
     this.overlayOpacityListenable,
     this.showViewportBackdrop = true,
@@ -84,6 +87,9 @@ class PlayerChrome extends StatefulWidget {
   final VoidCallback onLikeTap;
   final bool showUnlockButton;
   final String? unlockLabel;
+  final bool showAdUnlockButton;
+  final String? adUnlockSubtitle;
+  final VoidCallback? onAdUnlockTap;
   final double overlayOpacity;
   final ValueListenable<double>? overlayOpacityListenable;
   final bool showViewportBackdrop;
@@ -167,6 +173,12 @@ class _PlayerChromeState extends State<PlayerChrome> {
   bool get showUnlockButton => widget.showUnlockButton;
 
   String? get unlockLabel => widget.unlockLabel;
+
+  bool get showAdUnlockButton => widget.showAdUnlockButton;
+
+  String? get adUnlockSubtitle => widget.adUnlockSubtitle;
+
+  VoidCallback? get onAdUnlockTap => widget.onAdUnlockTap;
 
   double get overlayOpacity => widget.overlayOpacity;
 
@@ -281,6 +293,9 @@ class _PlayerChromeState extends State<PlayerChrome> {
             label: unlockLabel ?? context.l10n.playerUnlockNow,
             bottomInset: bottomFrameHeight,
             onTap: onUnlockTap,
+            showAdUnlockButton: showAdUnlockButton,
+            adUnlockSubtitle: adUnlockSubtitle,
+            onAdUnlockTap: onAdUnlockTap,
           )
         else if (showCenterPlayButton)
           _CenterPlayButton(onTap: onTogglePlay),
@@ -755,11 +770,17 @@ class _PlayerUnlockOverlay extends StatelessWidget {
     required this.label,
     required this.bottomInset,
     required this.onTap,
+    required this.showAdUnlockButton,
+    this.adUnlockSubtitle,
+    this.onAdUnlockTap,
   });
 
   final String label;
   final double bottomInset;
   final VoidCallback onTap;
+  final bool showAdUnlockButton;
+  final String? adUnlockSubtitle;
+  final VoidCallback? onAdUnlockTap;
 
   @override
   Widget build(BuildContext context) {
@@ -771,31 +792,84 @@ class _PlayerUnlockOverlay extends StatelessWidget {
       child: RepaintBoundary(
         key: const ValueKey('player_unlock_repaint_boundary'),
         child: Center(
-          child: GestureDetector(
-            key: const ValueKey('player_unlock_button'),
-            behavior: HitTestBehavior.opaque,
-            onTap: onTap,
-            child: Container(
-              width: 275,
-              height: 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _UnlockButton(
+                key: const ValueKey('player_unlock_button'),
+                label: label,
                 color: AppColors.primary,
-                borderRadius: BorderRadius.circular(6),
+                onTap: onTap,
               ),
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  height: 18 / 14,
+              if (showAdUnlockButton) ...[
+                const SizedBox(height: 8),
+                _UnlockButton(
+                  key: const ValueKey('player_ad_unlock_button'),
+                  label: 'Watch Ads to unlock for free',
+                  subtitle: adUnlockSubtitle,
+                  color: const Color(0xFF626262),
+                  onTap: onAdUnlockTap,
                 ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UnlockButton extends StatelessWidget {
+  const _UnlockButton({
+    required super.key,
+    required this.label,
+    required this.color,
+    required this.onTap,
+    this.subtitle,
+  });
+
+  final String label;
+  final String? subtitle;
+  final Color color;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: 315,
+        height: subtitle == null ? 52 : 52,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                height: 18 / 14,
               ),
             ),
-          ),
+            if (subtitle != null)
+              Text(
+                subtitle!,
+                style: const TextStyle(
+                  color: Color(0xFFCECECE),
+                  fontSize: 12,
+                  height: 16 / 12,
+                ),
+              ),
+          ],
         ),
       ),
     );

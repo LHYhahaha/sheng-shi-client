@@ -17,6 +17,7 @@ class PlayerEpisodeDto {
     required this.isVipOnly,
     this.viewingEntitlementType,
     this.episodeSources = const [],
+    this.adUnlock,
   });
 
   final int id;
@@ -41,6 +42,7 @@ class PlayerEpisodeDto {
 
   /// 当前用户观看该集的实际权益来源；由详情接口返回。
   final String? viewingEntitlementType;
+  final PlayerEpisodeAdUnlockDto? adUnlock;
 
   factory PlayerEpisodeDto.fromJson(Map<String, Object?> json) {
     return PlayerEpisodeDto(
@@ -61,6 +63,7 @@ class PlayerEpisodeDto {
         json,
         'viewing_entitlement_type',
       ),
+      adUnlock: PlayerEpisodeAdUnlockDto.fromJsonOrNull(json['ad_unlock']),
     );
   }
 
@@ -78,6 +81,39 @@ class PlayerEpisodeDto {
         .whereType<Map<String, Object?>>()
         .map(PlayerEpisodeSourceDto.fromJson)
         .toList(growable: false);
+  }
+}
+
+class PlayerEpisodeAdUnlockDto {
+  const PlayerEpisodeAdUnlockDto({
+    required this.available,
+    required this.watchedToday,
+    required this.dailyLimit,
+    required this.closeAfterSec,
+    this.placementId,
+    this.adVideoUrl,
+    this.taskToken,
+  });
+
+  final bool available;
+  final int watchedToday;
+  final int dailyLimit;
+  final int closeAfterSec;
+  final String? placementId;
+  final String? adVideoUrl;
+  final String? taskToken;
+
+  static PlayerEpisodeAdUnlockDto? fromJsonOrNull(Object? value) {
+    if (value is! Map<String, Object?>) return null;
+    return PlayerEpisodeAdUnlockDto(
+      available: JsonFieldParser.optionalBool(value, 'available') ?? false,
+      watchedToday: JsonFieldParser.optionalInt(value, 'watched_today') ?? 0,
+      dailyLimit: JsonFieldParser.optionalInt(value, 'daily_limit') ?? 0,
+      closeAfterSec: JsonFieldParser.optionalInt(value, 'close_after_sec') ?? 0,
+      placementId: JsonFieldParser.optionalString(value, 'placement_id'),
+      adVideoUrl: JsonFieldParser.optionalString(value, 'ad_video_url'),
+      taskToken: JsonFieldParser.optionalString(value, 'task_token'),
+    );
   }
 }
 
