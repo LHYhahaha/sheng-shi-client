@@ -5,6 +5,7 @@ import 'package:adjust_sdk/adjust_config.dart';
 import 'package:flutter/foundation.dart';
 
 import '../config/app_environment.dart';
+import 'adjust_device_identifier_reporter.dart';
 
 /// NovaShort 的 Adjust 初始化边界。
 ///
@@ -14,8 +15,10 @@ class AdjustService {
   AdjustService({
     String appToken = _novaShortAppToken,
     AppEnvironment? environment,
+    AdjustDeviceIdentifierReporter? deviceIdentifierReporter,
   }) : _configuredAppToken = appToken,
-       _environment = environment ?? AppConfig.current.environment;
+       _environment = environment ?? AppConfig.current.environment,
+       _deviceIdentifierReporter = deviceIdentifierReporter;
 
   /// NovaShort 在 Adjust 后台登记的应用识别码。
   static const _novaShortAppToken = 'i3xfcgiqzsao';
@@ -23,6 +26,7 @@ class AdjustService {
 
   final String _configuredAppToken;
   final AppEnvironment _environment;
+  final AdjustDeviceIdentifierReporter? _deviceIdentifierReporter;
 
   /// 初始化 Android Adjust SDK。
   ///
@@ -50,8 +54,8 @@ class AdjustService {
           '[Adjust] SDK initialization requested: '
           'environment=${_adjustEnvironment.name}.',
         );
-        unawaited(_logDebugDeviceInfo());
       }
+      unawaited(_readAndReportDeviceIdentifiers());
     } catch (error, stackTrace) {
       debugPrint('[Adjust] Initialization failed: $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -90,20 +94,27 @@ class AdjustService {
     };
   }
 
-  Future<void> _logDebugDeviceInfo() async {
+  Future<void> _readAndReportDeviceIdentifiers() async {
     try {
       final adid = await Adjust.getAdidWithTimeout(5000);
       final googleAdId = await Adjust.getGoogleAdId().timeout(
         const Duration(seconds: 5),
         onTimeout: () => null,
       );
-      debugPrint(
-        '[Adjust] Device identifiers: '
-        'adjust_adid=${adid ?? '<unavailable>'}, '
-        'gps_adid=${googleAdId ?? '<unavailable>'}.',
+      if (kDebugMode) {
+        debugPrint(
+          '[Adjust] Device identifiers: '
+          'adjust_adid=${adid ?? '<unavailable>'}, '
+          'gps_adid=${googleAdId ?? '<unavailable>'}.',
+        );
+      }
+      if (adid == null || adid.trim().isEmpty) return;
+      await _deviceIdentifierReporter?.report(
+        adjustAdid: adid,
+        gpsAdid: googleAdId,
       );
     } catch (error, stackTrace) {
-      debugPrint('[Adjust] Failed to read debug device identifiers: $error');
+      debugPrint('[Adjust] Failed to read device identifiers: $error');
       debugPrintStack(stackTrace: stackTrace);
     }
   }

@@ -4,20 +4,22 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-/// 本地 HLS proxy 的 spike 配置。
+import 'hls_disk_cache_store.dart';
+
+/// 本地 HLS proxy 的缓存配置。
 ///
-/// 默认必须关闭：本地代理会启动 loopback server、重写 playlist 和缓存 segment，
-/// 这会改变播放器实际访问路径。没有覆盖真机、后台、网络安全策略和 CDN 行为前，
-/// 不能把它作为默认播放链路。
+/// 当前已解锁 source_url 的服务端契约是 HLS m3u8，即使入口是通用
+/// `/api/video/source` 地址，最终响应也必须是 playlist。若未来允许 MP4 等其他
+/// 格式，必须由后端同时下发 stream_format，再按单条 source 决定是否启用代理。
 class HlsLocalProxyConfig {
   const HlsLocalProxyConfig({
-    this.enabled = false,
+    this.enabled = true,
     this.timeout = const Duration(seconds: 4),
   });
 
   /// 是否启用本地代理 spike。
   ///
-  /// 默认 false，必须通过编译期开关显式开启。
+  /// 默认开启；可通过编译期开关在异常源或紧急回退时关闭。
   final bool enabled;
 
   /// 代理向远端请求 playlist/segment 的超时。
@@ -151,17 +153,18 @@ class HlsLocalCacheStore {
   }
 }
 
-/// 本地 HLS proxy spike，用于验证“playlist 重写 + segment 本地缓存”的可行性。
+/// 本地 HLS proxy，用于 HLS playlist 重写和分片缓存。
 ///
-/// 这不是正式缓存层。它只适合受控调试：生产链路仍应优先播放远端签名 URL，
-/// 避免本地 server 生命周期、缓存过期、鉴权续期和错误回退影响播放稳定性。
+/// 调用方必须先确认资源格式为 HLS；它不能作为通用视频地址的格式探测器。
 class HlsLocalProxyServer {
   HlsLocalProxyServer({
     HlsLocalProxyHttpClient? client,
     HlsLocalCacheStore? cacheStore,
+    HlsDiskCacheStore? diskCacheStore,
     this.timeout = const Duration(seconds: 4),
   }) : _client = client ?? DartIoHlsLocalProxyHttpClient(),
-       _cacheStore = cacheStore ?? HlsLocalCacheStore();
+       _cacheStore = cacheStore ?? HlsLocalCacheStore(),
+       _diskCacheStore = diskCacheStore ?? HlsDiskCacheStore();
 
   /// 代理向远端拉取 playlist/segment 的 HTTP client。
   final HlsLocalProxyHttpClient _client;
@@ -170,6 +173,7 @@ class HlsLocalProxyServer {
   ///
   /// 只缓存 segment bytes，不缓存业务授权状态。
   final HlsLocalCacheStore _cacheStore;
+  final HlsDiskCacheStore _diskCacheStore;
 
   /// 远端请求超时。
   final Duration timeout;
@@ -195,8 +199,7 @@ class HlsLocalProxyServer {
   }
 
   Future<void> stop() async {
-    // stop 会失效所有进行中的 segment 请求并清缓存。后台/释放时不保留本地数据，
-    // 避免 spike 缓存被误当成跨会话持久缓存。
+    // stop 只清一级内存缓存；App 私有磁盘缓存需要跨播放器页面与 App 重启复用。
     _generation += 1;
     _client.releasePending();
     final server = _server;
@@ -259,16 +262,38 @@ class HlsLocalProxyServer {
         contentType: 'application/vnd.apple.mpegurl',
       );
     } else {
-      response = await _fetch(remoteUri);
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        await _sendText(
-          request,
-          HttpStatus.badGateway,
-          'Playlist fetch failed: ${response.statusCode}',
+      final disk = await _diskCacheStore.read(_diskKey(remoteUri));
+      if (disk != null) {
+        response = HlsLocalProxyResponse(
+          statusCode: HttpStatus.ok,
+          bytes: disk.bytes,
+          contentType: disk.contentType,
         );
-        return;
+        _cacheStore.write(cacheKey, response.bytes);
+      } else {
+        response = await _fetch(remoteUri);
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          await _sendText(
+            request,
+            HttpStatus.badGateway,
+            'Playlist fetch failed: ${response.statusCode}',
+          );
+          return;
+        }
+        _cacheStore.write(cacheKey, response.bytes);
+        await _diskCacheStore.write(
+          _diskKey(remoteUri),
+          response.bytes,
+          contentType: response.contentType,
+        );
       }
-      _cacheStore.write(cacheKey, response.bytes);
+    }
+    if (!response.body.trimLeft().startsWith('#EXTM3U')) {
+      await request.response.redirect(
+        remoteUri,
+        status: HttpStatus.temporaryRedirect,
+      );
+      return;
     }
     // 只重写 playlist 中的媒体 URI，不改 HLS tag。这样方便观察代理链路，
     // 也避免客户端在 spike 阶段承担完整 HLS manifest 解析职责。
@@ -303,6 +328,16 @@ class HlsLocalProxyServer {
       return;
     }
 
+    final disk = await _diskCacheStore.read(_diskKey(remoteUri));
+    if (disk != null) {
+      _cacheStore.write(cacheKey, disk.bytes);
+      await _sendBytes(request, disk.bytes, contentType: disk.contentType);
+      _log(
+        'segment proxy disk hit source=$remoteUri bytes=${disk.bytes.length}',
+      );
+      return;
+    }
+
     final generation = _generation;
     final startedAt = DateTime.now();
     final response = await _fetch(remoteUri);
@@ -319,6 +354,11 @@ class HlsLocalProxyServer {
       return;
     }
     _cacheStore.write(cacheKey, response.bytes);
+    await _diskCacheStore.write(
+      _diskKey(remoteUri),
+      response.bytes,
+      contentType: response.contentType,
+    );
     await _sendBytes(
       request,
       response.bytes,
@@ -356,6 +396,15 @@ class HlsLocalProxyServer {
       throw FormatException('Unsupported HLS proxy scheme.', remoteUrl);
     }
     return uri;
+  }
+
+  String _diskKey(Uri uri) {
+    final stableQuery = Map<String, String>.from(uri.queryParameters)
+      ..remove('expires')
+      ..remove('verify');
+    return uri
+        .replace(queryParameters: stableQuery.isEmpty ? null : stableQuery)
+        .toString();
   }
 
   Future<void> _sendText(

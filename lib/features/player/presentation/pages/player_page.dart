@@ -159,6 +159,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _hasPendingForYouLanguageReload = false;
   bool _isRefreshingForYouFeed = false;
   bool _isLeavingRoute = false;
+  bool _isDisposing = false;
   bool _isPressingPlaybackSurface = false;
   bool _isPageScrolling = false;
   bool _isExitRecommendationHistoryLoading = true;
@@ -287,6 +288,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   String _currentViewingEntitlementType(PlayerFeedItem startedItem) {
+    // dispose 阶段仍需上报 play_end，但 ConsumerState 的 ref 已不可访问。
+    // 此时使用开始播放时保留在 item 上的权益类型；正常页面存活期仍读取最新
+    // feed item，覆盖播放中完成解锁后的权益变化。
+    if (_isDisposing || !mounted) {
+      return startedItem.episode.viewingEntitlementType;
+    }
     return _feedItemForId(startedItem.id)?.episode.viewingEntitlementType ??
         startedItem.episode.viewingEntitlementType;
   }
@@ -514,6 +521,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   @override
   void dispose() {
     // 涓婃姤瑙傜湅閫€鍑轰簨浠?
+    _isDisposing = true;
     _cancelAnalyticsPauseTimer();
     unawaited(_trackPlaybackEnd(reason: 'exit'));
     unawaited(_playbackController.reportWatchProgress(eventType: 4));
@@ -881,9 +889,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     // owns the episode timeline, so calculate its rewind from the normal feed
     // duration instead of reusing a potentially different For You HLS length.
     final duration = targetItem.episode.duration ?? handoff.duration;
+    // 不只处理 For You 已经播完后自动跳转的情况。用户在 For You 剩余 8 秒内
+    // 手动进入普通播放器时，若下一集待解锁，也应先回退当前集，避免刚进入就触发
+    // 自动切到锁集。
     final shouldRewindBeforeLockedNext =
-        handoff.rewoundFromCompletion &&
-        _shouldRewindBeforeLockedNext(item: targetItem, feedState: feedState);
+        _shouldRewindBeforeLockedNext(item: targetItem, feedState: feedState) &&
+        (handoff.rewoundFromCompletion ||
+            _isAtOrNearEnd(handoff.position, duration));
     final normalizedPosition = shouldRewindBeforeLockedNext
         ? _rewindPositionBeforeEnd(duration)
         : handoff.position;
@@ -927,6 +939,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     return duration - _lockedNextEpisodeRewind;
   }
 
+  bool _isAtOrNearEnd(Duration position, Duration duration) {
+    return duration > Duration.zero &&
+        position >= duration - _lockedNextEpisodeRewind;
+  }
+
   Future<void> _applyStartupRemoteResumeProgress(
     PlayerFeedState feedState,
   ) async {
@@ -958,13 +975,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         remotePosition < remoteDuration - const Duration(seconds: 2);
     var resumePosition = canResume ? remotePosition : Duration.zero;
     var resumeDuration = canResume ? remoteDuration : Duration.zero;
-    if (!canResume && remoteItemIndex + 1 < feedState.items.length) {
+    if (remoteItemIndex + 1 < feedState.items.length) {
       final nextItem = feedState.items[remoteItemIndex + 1];
       final shouldRewindBeforeLockedNext =
           widget.feedMode == PlayerFeedMode.singleDrama &&
           remoteDuration > Duration.zero &&
           _feedEngine.accessPresentationFor(nextItem) !=
-              PlayerAccessPresentationState.playable;
+              PlayerAccessPresentationState.playable &&
+          (!canResume || _isAtOrNearEnd(remotePosition, remoteDuration));
       if (shouldRewindBeforeLockedNext) {
         targetIndex = remoteItemIndex;
         resumePosition = remoteDuration > _lockedNextEpisodeRewind
@@ -973,7 +991,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         resumeDuration = remoteDuration;
         _lockedNextRewoundCompletionItemId =
             feedState.items[remoteItemIndex].id;
-      } else {
+      } else if (!canResume) {
         targetIndex = remoteItemIndex + 1;
       }
     }
@@ -1584,8 +1602,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           itemCount: items.length,
           onPageChanged: (index) {
             feedEngine.onPageChanged(index);
+            // 在倒数第二条就取下一页，让用户真正滑到末条时网络请求通常已经完成。
+            // 仍由 feed controller 的 isLoadingMore/hasMore 去重，短列表（仅一条）
+            // 会在首条触发一次，保持首次数据不足时的兜底行为。
             if (widget.feedMode == PlayerFeedMode.forYou &&
-                index == items.length - 1) {
+                index >= items.length - 2) {
               final latestFeed = ref.read(
                 playerFeedControllerProvider(_sessionKey),
               );
@@ -2052,7 +2073,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           ? playbackState.duration
           : item.episode.duration ?? Duration.zero;
       final shouldUseCurrentPlayback = isCurrentPlayableItem;
-      final targetEpisodeId = shouldUseCurrentPlayback ? item.episode.id : '1';
+      // 推荐接口返回的就是当前可播放剧集。即使用户在首帧 opening 阶段点击，
+      // 也必须把这集带入详情播放器；不能退回硬编码的第 1 集，否则会错集、
+      // 丢失可复用的 HLS 首段，并可能落到未解锁集。
+      final targetEpisodeId = item.episode.id;
       final initialPosition = shouldUseCurrentPlayback
           ? rewindFromEnd
                 ? Duration(

@@ -1458,10 +1458,26 @@ class _RedeemPointsPanel extends ConsumerWidget {
       showAppCenterToast(
         result.isSuccess ? l10n.memberCenterExchangeSuccess : l10n.networkError,
       );
+    } on ApiException catch (error) {
+      if (!context.mounted) return;
+      showAppCenterToast(
+        _exchangeBusinessErrorMessage(error) ??
+            AppLocalizations.maybeOf(context).networkError,
+      );
     } catch (_) {
       if (!context.mounted) return;
       showAppCenterToast(AppLocalizations.maybeOf(context).networkError);
     }
+  }
+
+  String? _exchangeBusinessErrorMessage(ApiException error) {
+    if (error.code != ApiErrorCode.badResponse || error.data is! Map) {
+      return null;
+    }
+    final message = (error.data as Map)['message'];
+    return message is String && message.trim().isNotEmpty
+        ? message.trim()
+        : null;
   }
 }
 

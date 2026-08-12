@@ -2769,6 +2769,49 @@ void main() {
     },
   );
 
+  test(
+    'retained session is reused when a pending resume position is present',
+    () async {
+      final firstSession = _FakePlaybackSession();
+      final secondSession = _FakePlaybackSession();
+      final nextSession = _FakePlaybackSession();
+      var index = 0;
+      final sessions = [firstSession, secondSession, nextSession];
+      PlayerPlaybackSession sessionFactory() => sessions[index++];
+      final container = _createPrepareContainer(sessionFactory);
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+      final firstItem = _item(1);
+
+      await controller.playItem(firstItem);
+      firstSession.emitDuration(const Duration(seconds: 120));
+      firstSession.emitPosition(const Duration(seconds: 42));
+      await Future<void>.delayed(Duration.zero);
+      await controller.preloadAround([firstItem, _item(2)], 0);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await controller.playItem(_item(2));
+
+      controller.setPendingResumeProgress(
+        PlaybackProgress(
+          itemId: firstItem.id,
+          position: const Duration(seconds: 42),
+          duration: const Duration(seconds: 120),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      await controller.playItem(firstItem);
+
+      expect(firstSession.openedSources, [_videoUrl]);
+      expect(secondSession.openedSources, [_secondVideoUrl]);
+      expect(nextSession.openedSources, isEmpty);
+      expect(
+        controller.timingEvents.map((event) => event.name),
+        contains('retained hit previous'),
+      );
+    },
+  );
+
   test('session window keeps at most previous and next sessions', () async {
     final sessions = [
       _FakePlaybackSession(),

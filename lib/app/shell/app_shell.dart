@@ -9,7 +9,9 @@ import '../../core/account/account_ban_controller.dart';
 import '../../core/analytics/analytics_page_tracker.dart';
 import '../../core/analytics/analytics_entry_source.dart';
 import '../../features/bottom_tab_config/application/bottom_tab_config_controller.dart';
+import '../../features/player/application/player_feed_controller.dart';
 import '../../features/player/application/player_playback_controller.dart';
+import '../../features/player/domain/player_feed.dart';
 import '../../features/popup/application/popup_entry_controller.dart';
 import '../../features/popup/domain/popup.dart';
 import '../../shared/widgets/navigation/app_bottom_navigation.dart';
@@ -95,6 +97,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   Future<void> _forYouVisibilityOperation = Future<void>.value();
   late int _lastNavigationIndex;
   bool _shellReadyEffectsStarted = false;
+  bool _forYouFeedPreloadStarted = false;
 
   @override
   void initState() {
@@ -123,6 +126,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         }
         _requestPopupForIndex(widget.navigationShell.currentIndex);
         _trackPageForIndex(widget.navigationShell.currentIndex);
+        _scheduleForYouFeedPreload();
       });
     }
     if (_lastNavigationIndex != navigationIndex) {
@@ -219,6 +223,52 @@ class _AppShellState extends ConsumerState<AppShell> {
     );
     _requestPopupForIndex(index);
     _trackPageForIndex(index);
+  }
+
+  /// 在首页首帧稳定后预取 For You 的推荐首屏。
+  ///
+  /// 此处只请求推荐接口并保留 feed 数据；不创建媒体播放器、不打开视频 URL，也不
+  /// 触发解码。因此不会与首页或正在播放的页面争抢解码器。进入 For You 时
+  /// [PlayerFeedController.load] 会复用这份状态，省去一次推荐接口等待。
+  void _scheduleForYouFeedPreload() {
+    if (_forYouFeedPreloadStarted ||
+        ref.read(accountBanControllerProvider).isBanned) {
+      return;
+    }
+    _forYouFeedPreloadStarted = true;
+    unawaited(_preloadForYouFeedAfterHomeFrame());
+  }
+
+  Future<void> _preloadForYouFeedAfterHomeFrame() async {
+    // 首帧已经提交后立即开始：For You 的首条媒体预热本身还需要数秒，不能再额外
+    // 等待。若用户已主动进入 For You，页面会自行加载。
+    if (!mounted ||
+        widget.navigationShell.currentIndex ==
+            AppShellDestinations.forYouIndex ||
+        ref.read(accountBanControllerProvider).isBanned) {
+      return;
+    }
+
+    final feedProvider = playerFeedControllerProvider(
+      PlayerPlaybackSessionKeys.forYouTab,
+    );
+    await ref.read(feedProvider.notifier).load(const PlayerFeedConfig.forYou());
+    if (!mounted ||
+        widget.navigationShell.currentIndex ==
+            AppShellDestinations.forYouIndex) {
+      return;
+    }
+    final firstItem = ref.read(feedProvider).currentItem;
+    if (firstItem == null) {
+      return;
+    }
+    await ref
+        .read(
+          playerPlaybackControllerProvider(
+            PlayerPlaybackSessionKeys.forYouTab,
+          ).notifier,
+        )
+        .warmUpForYouEntry(firstItem);
   }
 
   /// Handles both bottom-navigation taps and router-driven branch changes.

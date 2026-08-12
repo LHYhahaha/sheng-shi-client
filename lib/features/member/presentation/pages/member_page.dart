@@ -11,6 +11,7 @@ import '../../../../core/analytics/drama_card_exposure.dart';
 import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/auth/user_info_store.dart';
+import '../../../../core/network/api_exception.dart';
 import '../../../../core/toast/app_center_toast.dart';
 import '../../../../features/auth/application/auth_controller.dart';
 import '../../../../features/entitlement/application/entitlement_controller.dart';
@@ -537,6 +538,12 @@ class _RedeemCard extends ConsumerWidget {
                               ? l10n.memberCenterExchangeSuccess
                               : l10n.networkError,
                         );
+                      } on ApiException catch (error) {
+                        if (!context.mounted) return;
+                        showAppCenterToast(
+                          _exchangeBusinessErrorMessage(error) ??
+                              l10n.networkError,
+                        );
                       } catch (_) {
                         if (context.mounted) {
                           showAppCenterToast(l10n.networkError);
@@ -569,6 +576,16 @@ class _RedeemCard extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  String? _exchangeBusinessErrorMessage(ApiException error) {
+    if (error.code != ApiErrorCode.badResponse || error.data is! Map) {
+      return null;
+    }
+    final message = (error.data as Map)['message'];
+    return message is String && message.trim().isNotEmpty
+        ? message.trim()
+        : null;
   }
 }
 

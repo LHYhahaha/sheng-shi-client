@@ -578,6 +578,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   DateTime? _playingBeforeFirstFrameAt;
   DateTime? _positionBeforeFirstFrameAt;
   String? _currentPlaybackItemId;
+  String? _forYouEntryWarmItemId;
+  Timer? _forYouEntryWarmReleaseTimer;
   PlaybackSource? _currentPlaybackSource;
   bool _currentPlaybackHasFirstFrame = false;
   Duration _currentPlaybackPosition = Duration.zero;
@@ -783,6 +785,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       _restoreFloorTimer?.cancel();
       _firstFrameProgressProbeTimer?.cancel();
       _firstFrameTimeoutTimer?.cancel();
+      _forYouEntryWarmReleaseTimer?.cancel();
       _stopWatchProgressReportTimer();
       unawaited(_disposePreloads(syncState: false));
       unawaited(_releaseSessionWindowFor('provider dispose'));
@@ -802,6 +805,80 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   /// 防止短时间内重复调用 playItem 导致多次 open
   PlayerFeedItem? _lastPlayItemRequest;
   DateTime _lastPlayItemTime = DateTime.now();
+
+  /// 在 For You Tab 仍隐藏时，为首条可播放视频建立一个静音 prepared session。
+  ///
+  /// 仅允许用于稳定的 For You session，且不修改当前播放状态、不上报观看进度。
+  /// 等用户真正进入 Tab 时，[playItem] 会接管该 session；这才覆盖了仅预取推荐
+  /// 列表无法覆盖的 HLS 首帧下载与解码等待。
+  Future<void> warmUpForYouEntry(PlayerFeedItem item) async {
+    if (sessionKey != PlayerPlaybackSessionKeys.forYouTab ||
+        _isSessionDisposed ||
+        state.currentItemId != null ||
+        item.mode != PlayerFeedMode.forYou ||
+        item.episode.isLocked ||
+        item.episode.isUnavailable ||
+        item.episode.videoSource == null) {
+      return;
+    }
+    final startedAt = DateTime.now();
+    _forYouEntryWarmReleaseTimer?.cancel();
+    _forYouEntryWarmItemId = item.id;
+    _logTiming(
+      'for you initial prepare start',
+      itemId: item.id,
+      source: item.episode.videoSource,
+    );
+    final prepared = await _prepareManager.prepare(
+      item: item,
+      sourceRepository: ref.read(playerPlaybackSourceRepositoryProvider),
+      // 首页首条的用户进入窗口比相邻滑动更长。仅这个隐藏态 session 继续静音
+      // 解码最多 8 秒，避免 4 秒时暂停后又在用户点入时重新恢复解码。
+      warmUpTimeout: const Duration(seconds: 8),
+    );
+    if (!ref.mounted || _isSessionDisposed || state.currentItemId != null) {
+      if (prepared != null) {
+        await _prepareManager.releaseItem(
+          prepared.itemId,
+          reason: 'for you initial prepare no longer needed',
+        );
+      }
+      if (_forYouEntryWarmItemId == item.id) {
+        _forYouEntryWarmItemId = null;
+      }
+      return;
+    }
+    _logTiming(
+      prepared == null
+          ? 'for you initial prepare failed'
+          : 'for you initial prepare end',
+      itemId: item.id,
+      source: item.episode.videoSource,
+      elapsed: DateTime.now().difference(startedAt),
+      details: prepared == null
+          ? null
+          : 'firstFrameReady=${prepared.hasFirstFrame}',
+    );
+    if (prepared != null) {
+      // 首页停留很久时不能把一个隐藏 decoder 永久留在窗口里。超过短暂的用户
+      // 决策窗口仍未进入 For You，就释放它；下次进 Tab 再正常打开即可。
+      _forYouEntryWarmReleaseTimer = Timer(const Duration(seconds: 12), () {
+        if (!ref.mounted ||
+            _isSessionDisposed ||
+            _forYouEntryWarmItemId != item.id ||
+            state.currentItemId != null) {
+          return;
+        }
+        _forYouEntryWarmItemId = null;
+        unawaited(
+          _prepareManager.releaseItem(
+            item.id,
+            reason: 'for you initial prepare expired',
+          ),
+        );
+      });
+    }
+  }
 
   Future<void> playItem(
     PlayerFeedItem? item, {
@@ -1035,8 +1112,16 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       final windowItemsBeforeTake = _windowItemsText();
       // prepared/retained 命中时直接接管已经 open 的 session，避免同一个 item
       // 重复 open。命中窗口只覆盖相邻滑动，不承诺覆盖所有 HLS preload 候选。
+      final isForYouEntryWarmup = _forYouEntryWarmItemId == item.id;
       final prepared = _prepareManager.takeIfMatches(item.id);
-      if (prepared != null && resumeStart != null && resumeProgressWasPending) {
+      if (isForYouEntryWarmup) {
+        _forYouEntryWarmReleaseTimer?.cancel();
+        _forYouEntryWarmItemId = null;
+      }
+      if (prepared != null &&
+          prepared.kind != PreparedPlaybackSessionKind.retained &&
+          resumeStart != null &&
+          resumeProgressWasPending) {
         _logTiming(
           'prepared session skipped for resume start',
           itemId: item.id,
@@ -1067,7 +1152,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         ]),
       );
       if (prepared != null &&
-          !(resumeStart != null && resumeProgressWasPending)) {
+          (prepared.kind == PreparedPlaybackSessionKind.retained ||
+              !(resumeStart != null && resumeProgressWasPending))) {
         final hitEvent = prepared.kind == PreparedPlaybackSessionKind.retained
             ? 'retained hit previous'
             : 'prepared hit next';
@@ -1134,6 +1220,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         _setPlayingStateAndSyncProgressTimer(
           isBuffering: !prepared.hasFirstFrame,
         );
+        // 页面在 prepared session 接管前可能已把“预热下一条”延迟到当前首帧。
+        // 接管的 session 若本来已有首帧，width stream 不一定会再次发射，导致延迟
+        // 任务永远不 flush，用户只看一两秒就继续下滑时第三条会变成冷开。
+        if (prepared.hasFirstFrame) {
+          _flushDeferredPreloadAfterFirstFrame(
+            reason: 'prepared session takeover',
+          );
+        }
         return;
       }
 

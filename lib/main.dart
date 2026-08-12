@@ -13,7 +13,6 @@ import 'bootstrap/test_network_bootstrap.dart';
 import 'core/auth/auth_token_storage_provider.dart';
 import 'core/auth/flutter_secure_auth_token_storage.dart';
 import 'core/active/app_active_reporter.dart';
-import 'core/adjust/adjust_service.dart';
 import 'core/network/test_network_config.dart';
 import 'core/notification/fcm_notification_service.dart';
 import 'core/runtime/install_id_provider.dart';
@@ -111,8 +110,6 @@ class _StartupBootstrapState extends State<_StartupBootstrap> {
         widget.fcmNotificationService.complete(service);
       }),
     );
-    // Adjust 不参与首屏关键路径：抓包配置确认/首屏完成后再启动。
-    unawaited(Future<void>(() => AdjustService().initialize()));
   }
 }
 

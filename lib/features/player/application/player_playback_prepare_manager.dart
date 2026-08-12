@@ -147,6 +147,7 @@ class PlayerPlaybackPrepareManager {
   Future<PreparedPlaybackSession?> prepare({
     required PlayerFeedItem item,
     required PlayerPlaybackSourceRepository sourceRepository,
+    Duration? warmUpTimeout,
   }) async {
     if (item.episode.isLocked ||
         item.episode.isUnavailable ||
@@ -163,6 +164,7 @@ class PlayerPlaybackPrepareManager {
     }
 
     final generation = ++_generation;
+    final effectiveWarmUpTimeout = warmUpTimeout ?? this.warmUpTimeout;
     PlayerPlaybackSession? session;
     StreamSubscription<Duration>? positionSubscription;
     StreamSubscription<int?>? widthSubscription;
@@ -246,7 +248,7 @@ class PlayerPlaybackPrepareManager {
         source: source.playableSource,
         details: _details([
           'playMuted=true',
-          'timeoutMs=${warmUpTimeout.inMilliseconds}',
+          'timeoutMs=${effectiveWarmUpTimeout.inMilliseconds}',
         ]),
       );
       // warm-up 必须静音播放到首帧或超时。media_kit 只有真正 open/play 后才会推进
@@ -302,6 +304,7 @@ class PlayerPlaybackPrepareManager {
           firstFrame: firstFrameCompleter.future,
           cancel: warmUpCancel.future,
           session: session,
+          warmUpTimeout: effectiveWarmUpTimeout,
         ),
       );
       return prepared;
@@ -423,6 +426,7 @@ class PlayerPlaybackPrepareManager {
     required Future<void> firstFrame,
     required Future<void> cancel,
     required PlayerPlaybackSession session,
+    required Duration warmUpTimeout,
   }) async {
     _WarmUpResult result;
     try {
@@ -538,6 +542,7 @@ class NoopPlayerPlaybackPrepareManager extends PlayerPlaybackPrepareManager {
   Future<PreparedPlaybackSession?> prepare({
     required PlayerFeedItem item,
     required PlayerPlaybackSourceRepository sourceRepository,
+    Duration? warmUpTimeout,
   }) async {
     return null;
   }

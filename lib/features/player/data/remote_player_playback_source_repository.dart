@@ -33,20 +33,29 @@ class RemotePlayerPlaybackSourceRepository
     // 直接使用 episode.videoSource（来自首页 API 的 source_url），无需调用 playback-source API
     final remoteUrl = item.episode.videoSource;
     if (remoteUrl == null || remoteUrl.isEmpty) {
-      throw StateError('Episode has no playable source.');
+      final dto = await _remoteDataSource.getPlaybackSource(
+        episodeId: item.episode.id,
+      );
+      return _applyProxy(
+        _mapper.mapSource(
+          dto,
+          item: item,
+          status: PlaybackSourceStatus.resolved,
+        ),
+      );
     }
 
-    final playableSource =
-        await _proxyResolver?.resolvePlayableSource(remoteUrl) ?? remoteUrl;
-    return PlaybackSource(
-      itemId: item.id,
-      remoteUrl: remoteUrl,
-      playableSource: playableSource,
-      cacheKey: _cacheKey(item),
-      expiresAt: DateTime.now().add(const Duration(minutes: 30)),
-      codecHint: 'hls',
-      status: PlaybackSourceStatus.resolved,
-      httpHeaders: _httpHeaders,
+    return _applyProxy(
+      PlaybackSource(
+        itemId: item.id,
+        remoteUrl: remoteUrl,
+        playableSource: remoteUrl,
+        cacheKey: _cacheKey(item),
+        expiresAt: DateTime.now().add(const Duration(minutes: 30)),
+        codecHint: 'hls',
+        status: PlaybackSourceStatus.resolved,
+        httpHeaders: _httpHeaders,
+      ),
     );
   }
 
@@ -55,27 +64,58 @@ class RemotePlayerPlaybackSourceRepository
     // 直接使用 episode.videoSource，无需调用 playback-source API
     final remoteUrl = item.episode.videoSource;
     if (remoteUrl == null || remoteUrl.isEmpty) {
-      return PlaybackPreloadState(
-        itemId: item.id,
-        sourceUrl: '',
-        status: PlaybackPreloadStatus.failed,
-        startedAt: DateTime.now(),
-        completedAt: DateTime.now(),
-        error: StateError('Episode has no playable source.'),
+      final dto = await _remoteDataSource.getPlaybackSource(
+        episodeId: item.episode.id,
       );
+      final source = await _applyProxy(
+        _mapper.mapSource(
+          dto,
+          item: item,
+          status: PlaybackSourceStatus.preloaded,
+        ),
+      );
+      return _preloadKnownSource(item, source);
     }
 
-    final source = PlaybackSource(
-      itemId: item.id,
-      remoteUrl: remoteUrl,
-      playableSource: remoteUrl,
-      cacheKey: _cacheKey(item),
-      expiresAt: DateTime.now().add(const Duration(minutes: 30)),
-      codecHint: 'hls',
-      status: PlaybackSourceStatus.preloaded,
-      httpHeaders: _httpHeaders,
+    // 已解锁 source_url 的服务端契约是 HLS m3u8。入口可以是通用
+    // `/api/video/source`，不以 URL 后缀判断；未来支持非 HLS 时应由后端下发
+    // stream_format，再在这里按格式决定是否预热。
+    return _preloadKnownSource(
+      item,
+      PlaybackSource(
+        itemId: item.id,
+        remoteUrl: remoteUrl,
+        playableSource: remoteUrl,
+        cacheKey: _cacheKey(item),
+        expiresAt: DateTime.now().add(const Duration(minutes: 30)),
+        codecHint: 'hls',
+        status: PlaybackSourceStatus.preloaded,
+        httpHeaders: _httpHeaders,
+      ),
     );
+  }
+
+  Future<PlaybackPreloadState> _preloadKnownSource(
+    PlayerFeedItem item,
+    PlaybackSource source,
+  ) async {
     return _preloadManager.preload(item: item, source: source);
+  }
+
+  Future<PlaybackSource> _applyProxy(PlaybackSource source) async {
+    final playableSource =
+        await _proxyResolver?.resolvePlayableSource(source.remoteUrl) ??
+        source.remoteUrl;
+    return PlaybackSource(
+      itemId: source.itemId,
+      remoteUrl: source.remoteUrl,
+      playableSource: playableSource,
+      cacheKey: source.cacheKey,
+      expiresAt: source.expiresAt,
+      codecHint: source.codecHint,
+      status: source.status,
+      httpHeaders: source.httpHeaders ?? _httpHeaders,
+    );
   }
 
   String _cacheKey(PlayerFeedItem item) {

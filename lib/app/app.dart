@@ -11,6 +11,8 @@ import 'package:go_router/go_router.dart';
 import '../bootstrap/feature_session_cleanup.dart';
 import '../bootstrap/i18n_bootstrap.dart';
 import '../core/active/app_active_reporter.dart';
+import '../core/adjust/adjust_device_identifier_reporter_provider.dart';
+import '../core/adjust/adjust_service.dart';
 import '../core/account/account_ban_controller.dart';
 import '../core/account/account_banned_overlay.dart';
 import '../core/analytics/analytics_definition.dart';
@@ -25,6 +27,7 @@ import '../core/network/api_client_provider.dart';
 import '../core/notification/fcm_notification.dart';
 import '../core/notification/fcm_notification_service.dart';
 import '../core/notification/startup_notification_permission_requester.dart';
+import '../core/runtime/install_id_provider.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/bottom_tab_config/application/bottom_tab_config_controller.dart';
 import '../features/pay/application/payment_loading_controller.dart';
@@ -75,12 +78,29 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     // 与 DeviceId、认证并行读取渠道配置。ApiClient 仍会等待同一份配置完成后再
     // 发送请求；原生未提供配置时按约定使用空渠道头继续。
     unawaited(ref.read(channelConfigInitializerProvider.future));
+    unawaited(_initializeAdjust());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(_notificationPermissionRequester.requestIfNeeded());
       }
     });
     Future.microtask(_bootstrapSessionAndI18n);
+  }
+
+  Future<void> _initializeAdjust() async {
+    try {
+      // 先确保内部 Device-Id 已生成，匿名 Adjust 上报即可携带稳定请求头。
+      await ref.read(installIdProvider.future);
+      if (!mounted) return;
+      AdjustService(
+        deviceIdentifierReporter: ref.read(
+          adjustDeviceIdentifierReporterProvider,
+        ),
+      ).initialize();
+    } catch (error, stackTrace) {
+      debugPrint('[Adjust] Startup initialization skipped: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   @override

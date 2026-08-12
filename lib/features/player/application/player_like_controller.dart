@@ -69,7 +69,9 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
 
   final String dramaId;
 
-  late final PlayerRemoteDataSource _remoteDataSource;
+  // Notifier.build may run more than once when a dependency is refreshed.
+  // This reference is reassigned on each build, so it must not be `late final`.
+  late PlayerRemoteDataSource _remoteDataSource;
 
   @override
   PlayerLikeState build() {

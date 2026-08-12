@@ -141,7 +141,26 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
   Future<void> load(
     PlayerFeedConfig config, {
     bool preserveVisibleItems = false,
+    bool forceRefresh = false,
   }) async {
+    final isReusableForYouFeed =
+        !forceRefresh &&
+        config.mode == PlayerFeedMode.forYou &&
+        state.config == config &&
+        (state.isLoading || (state.error == null && state.items.isNotEmpty));
+    if (isReusableForYouFeed) {
+      _logTiming(
+        'feed controller load reuse',
+        details: _details([
+          'session=$sessionKey',
+          'mode=${config.mode.name}',
+          'loading=${state.isLoading}',
+          'items=${state.items.length}',
+        ]),
+      );
+      return;
+    }
+
     final generation = ++_generation;
     _logTiming(
       'feed controller load start',
@@ -340,7 +359,7 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
     // For You refresh must not tear down the active Video widget while its
     // native session is still playing. Repeated surface removal/recreation on
     // Android can leave the decoder audible but detached from its texture.
-    await load(config, preserveVisibleItems: true);
+    await load(config, preserveVisibleItems: true, forceRefresh: true);
   }
 
   Future<PlayerFeedItem?> refreshCurrentDramaAtEpisode({
