@@ -29,6 +29,7 @@ void main() {
     final preloader = container.read(hlsPlaylistPreloaderProvider);
 
     expect(preloader.timeout, const Duration(milliseconds: 900));
+    expect(preloader.sharedRequestTimeout, const Duration(seconds: 12));
     expect(preloader.maxPreheatBytes, 1234);
   });
 
@@ -165,6 +166,56 @@ void main() {
     expect(result.segmentBytesPreheated, 11);
   });
 
+  test(
+    'resume preheat covers decoder bootstrap and the saved-position segment',
+    () async {
+      final client = _FakeHlsPlaylistHttpClient(
+        responses: const {
+          'https://cdn.example.test/drama/ep1.m3u8': HlsPlaylistHttpResponse(
+            statusCode: 200,
+            body:
+                '#EXTM3U\n'
+                '#EXTINF:4,\n'
+                'first.ts\n'
+                '#EXTINF:4,\n'
+                'second.ts\n'
+                '#EXTINF:4,\n'
+                'third.ts\n'
+                '#EXTINF:4,\n'
+                'fourth.ts\n',
+          ),
+          'https://cdn.example.test/drama/first.ts': HlsPlaylistHttpResponse(
+            statusCode: 200,
+            body: 'first',
+          ),
+          'https://cdn.example.test/drama/third.ts': HlsPlaylistHttpResponse(
+            statusCode: 200,
+            body: 'third',
+          ),
+          'https://cdn.example.test/drama/fourth.ts': HlsPlaylistHttpResponse(
+            statusCode: 200,
+            body: 'fourth',
+          ),
+        },
+      );
+      final preloader = HlsPlaylistPreloader(client: client);
+
+      final result = await preloader.prefetch(
+        'https://cdn.example.test/drama/ep1.m3u8',
+        preferredPosition: const Duration(seconds: 9),
+      );
+
+      expect(result.segmentUrls, [
+        'https://cdn.example.test/drama/first.ts',
+        'https://cdn.example.test/drama/third.ts',
+      ]);
+      expect(
+        client.requestedUris.map((uri) => uri.toString()),
+        isNot(contains('https://cdn.example.test/drama/second.ts')),
+      );
+    },
+  );
+
   test('max bytes stops additional segment preheat', () async {
     final client = _FakeHlsPlaylistHttpClient(
       responses: const {
@@ -239,6 +290,30 @@ void main() {
     expect(result.error, isA<TimeoutException>());
   });
 
+  test(
+    'preload wait budget does not shorten a shared request lifetime',
+    () async {
+      final client = _FakeHlsPlaylistHttpClient(pending: true);
+      final preloader = HlsPlaylistPreloader(
+        client: client,
+        timeout: const Duration(milliseconds: 1),
+        sharedRequestTimeout: const Duration(seconds: 12),
+      );
+
+      final future = preloader.prefetch(
+        'https://cdn.example.test/drama/ep1.m3u8',
+      );
+      await expectLater(future, throwsA(isA<TimeoutException>()));
+      expect(client.lastTimeout, const Duration(seconds: 12));
+
+      // 请求仍在运行；真实播放可以在 coordinator 中加入它，而不是重新回源。
+      client.complete(
+        null,
+        const HlsPlaylistHttpResponse(statusCode: 200, body: '#EXTM3U'),
+      );
+    },
+  );
+
   test('segment GET failure returns preload failed', () async {
     final manager = HlsPlayerPlaybackPreloadManager(
       preloader: HlsPlaylistPreloader(
@@ -306,7 +381,7 @@ void main() {
       final result = await preloadFuture;
 
       expect(result.status, PlaybackPreloadStatus.cancelled);
-      expect(client.releasePendingCount, 1);
+      expect(client.releasePendingCount, 0);
     },
   );
 
@@ -342,7 +417,7 @@ void main() {
       final result = await preloadFuture;
 
       expect(result.status, PlaybackPreloadStatus.cancelled);
-      expect(client.releasePendingCount, 1);
+      expect(client.releasePendingCount, 0);
     },
   );
 }
@@ -365,6 +440,7 @@ class _FakeHlsPlaylistHttpClient implements HlsPlaylistHttpClient {
   var getCount = 0;
   var releasePendingCount = 0;
   Uri? lastUri;
+  Duration? lastTimeout;
 
   @override
   Future<HlsPlaylistHttpResponse> get(
@@ -373,6 +449,7 @@ class _FakeHlsPlaylistHttpClient implements HlsPlaylistHttpClient {
   }) async {
     getCount += 1;
     lastUri = uri;
+    lastTimeout = timeout;
     requestedUris.add(uri);
     final uriText = uri.toString();
     if (pendingUrls.contains(uriText)) {

@@ -136,7 +136,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   static const _autoAdvanceDuration = Duration(milliseconds: 300);
   static const _pageTransitionDuration = Duration(milliseconds: 260);
   static const _dimmedOverlayOpacity = 0.64;
-  static const _remoteResumeInitialWait = Duration(milliseconds: 450);
+  // 普通播放器若先从 0 秒 open、再等远端续播进度回调 seek，会同时浪费起播
+  // 初始化分片和目标位置分片。实测进度接口常在 300~1100ms 返回，给一次有限
+  // 等待能让首次 open 直接使用正确 episode/position；超过该预算才走 late apply。
+  static const _remoteResumeInitialWait = Duration(milliseconds: 1200);
   static const _lockedNextEpisodeRewind = Duration(seconds: 8);
   static const _forYouNearEndRestartThreshold = Duration(seconds: 8);
 
@@ -722,8 +725,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
     try {
       final watchProgress = await ref
-          .read(playerRemoteDataSourceProvider)
-          .fetchWatchProgress(dramaId: dramaId);
+          .read(playerRemoteWatchProgressCacheProvider)
+          .get(dramaId);
       _playbackController.recordPlaybackTiming(
         'remote resume fetch end',
         elapsed: stopwatch.elapsed,

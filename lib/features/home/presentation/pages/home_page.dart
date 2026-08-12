@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -23,6 +24,7 @@ import '../../../../core/network/api_client_provider.dart';
 import '../../../../core/notification/startup_notification_permission_reporter.dart';
 import '../../../../features/drama/domain/drama.dart';
 import '../../../../features/entitlement/application/entitlement_controller.dart';
+import '../../../../features/player/application/player_entry_preload_coordinator.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/media/media_resource.dart';
 import '../../../../shared/theme/app_colors.dart';
@@ -36,6 +38,7 @@ import '../../application/home_banner_config_controller.dart';
 import '../../application/home_banner_analytics.dart';
 import '../../application/home_remote_data_provider.dart';
 import '../../data/dto/home_banner_response_dto.dart';
+import 'home_preload_candidate.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -58,6 +61,11 @@ class _HomePageState extends ConsumerState<HomePage> {
   bool _notificationPermissionChecked = false;
   bool _homeFirstViewCheckScheduled = false;
   bool _bannerNavigationInProgress = false;
+  String? _homeVisiblePreloadDramaId;
+  final ValueNotifier<int> _cardVisibilityRevision = ValueNotifier(0);
+  Timer? _cardVisibilityDebounce;
+  final Map<String, HomePreloadCandidate> _pendingVisibleCandidates = {};
+  Timer? _candidateSelectionDebounce;
 
   @override
   void initState() {
@@ -108,6 +116,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     _scrollToTopListener?.close();
     _accessTokenListener?.close();
     _homePageSessionListener?.close();
+    _cardVisibilityDebounce?.cancel();
+    _candidateSelectionDebounce?.cancel();
+    _cardVisibilityRevision.dispose();
 
     _scrollController
       ..removeListener(_onScroll)
@@ -161,6 +172,12 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   void _onScroll() {
+    // Cards evaluate after scrolling settles, then apply their own 400ms dwell
+    // rule. This avoids starting a candidate for every card passed at speed.
+    _cardVisibilityDebounce?.cancel();
+    _cardVisibilityDebounce = Timer(const Duration(milliseconds: 120), () {
+      if (mounted) _cardVisibilityRevision.value += 1;
+    });
     final remoteData = ref.read(homeRemoteDataProvider);
 
     // Remote home data keeps pagination per tab.
@@ -181,6 +198,38 @@ class _HomePageState extends ConsumerState<HomePage> {
       }
       return;
     }
+  }
+
+  void _preloadStableVisibleDrama(Drama drama, double visibleFraction) {
+    if (!mounted) return;
+    // 首屏中可能有多张卡在同一帧同时达到 50%。先收集极短的一批曝光，再选择
+    // 可见比例最高的一张，不能按 widget callback 的偶然顺序连续启动多部详情请求。
+    _pendingVisibleCandidates[drama.id] = HomePreloadCandidate(
+      drama: drama,
+      visibleFraction: visibleFraction,
+    );
+    _candidateSelectionDebounce?.cancel();
+    _candidateSelectionDebounce = Timer(const Duration(milliseconds: 32), () {
+      if (!mounted || _pendingVisibleCandidates.isEmpty) return;
+      final candidate = _pendingVisibleCandidates.values.reduce(
+        (best, value) =>
+            value.visibleFraction > best.visibleFraction ? value : best,
+      );
+      _pendingVisibleCandidates.clear();
+      if (_homeVisiblePreloadDramaId == candidate.drama.id) return;
+      _homeVisiblePreloadDramaId = candidate.drama.id;
+      debugPrint(
+        '[player-entry-preload] home selected candidate '
+        'dramaId=${candidate.drama.id} '
+        'visiblePercent=${(candidate.visibleFraction * 100).round()}',
+      );
+      ref
+          .read(playerEntryPreloadCoordinatorProvider.notifier)
+          .prepareVisibleCandidate(
+            dramaId: candidate.drama.id,
+            trigger: 'home_visible_candidate',
+          );
+    });
   }
 
   void _saveCurrentTabScrollOffset(HomeRemoteData remoteData) {
@@ -243,6 +292,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       _saveCurrentTabScrollOffset(remoteData);
       setState(() {
         _remoteDataSelectedIndex = index;
+        _homeVisiblePreloadDramaId = null;
       });
 
       _restoreScrollOffsetForTab(nextTab.id);
@@ -427,9 +477,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                             position: index + 1,
                             categoryId: selectedRemoteTab?.id.toString() ?? '',
                             child: _HomeDramaCard(
-                              key: ValueKey('home_drama_card_$index'),
+                              key: ValueKey('home_drama_card_${item.id}'),
                               data: item,
                               coverCacheWidth: coverCacheWidth,
+                              onStableVisible: (visibleFraction) =>
+                                  _preloadStableVisibleDrama(
+                                    item,
+                                    visibleFraction,
+                                  ),
+                              visibilityRevision: _cardVisibilityRevision,
                               onTap: () {
                                 unawaited(
                                   ref
@@ -1042,39 +1098,103 @@ class _HomeCategoryTab extends StatelessWidget {
   }
 }
 
-class _HomeDramaCard extends StatelessWidget {
+class _HomeDramaCard extends StatefulWidget {
   const _HomeDramaCard({
     required this.data,
     required this.coverCacheWidth,
     required this.onTap,
+    required this.onStableVisible,
+    required this.visibilityRevision,
     super.key,
   });
 
   final Drama data;
   final int coverCacheWidth;
   final VoidCallback onTap;
+  final ValueChanged<double> onStableVisible;
+  final ValueListenable<int> visibilityRevision;
+
+  @override
+  State<_HomeDramaCard> createState() => _HomeDramaCardState();
+}
+
+class _HomeDramaCardState extends State<_HomeDramaCard> {
+  Timer? _stableVisibleTimer;
+  var _didNotifyStableVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _evaluateVisibility();
+    });
+    widget.visibilityRevision.addListener(_evaluateVisibility);
+  }
+
+  @override
+  void dispose() {
+    _stableVisibleTimer?.cancel();
+    widget.visibilityRevision.removeListener(_evaluateVisibility);
+    super.dispose();
+  }
+
+  void _evaluateVisibility() {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return;
+    if (!_isAtLeastHalfVisible()) {
+      _stableVisibleTimer?.cancel();
+      _stableVisibleTimer = null;
+      _didNotifyStableVisible = false;
+      return;
+    }
+    if (_didNotifyStableVisible || _stableVisibleTimer != null) return;
+
+    _stableVisibleTimer = Timer(const Duration(milliseconds: 400), () {
+      _stableVisibleTimer = null;
+      if (!mounted || _didNotifyStableVisible || !_isAtLeastHalfVisible()) {
+        return;
+      }
+      _didNotifyStableVisible = true;
+      widget.onStableVisible(_visibleFraction());
+    });
+  }
+
+  bool _isAtLeastHalfVisible() {
+    return _visibleFraction() >= 0.5;
+  }
+
+  double _visibleFraction() {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return 0;
+    final topLeft = renderObject.localToGlobal(Offset.zero);
+    final viewport = MediaQuery.sizeOf(context);
+    final visibleHeight =
+        math.min(topLeft.dy + renderObject.size.height, viewport.height) -
+        math.max(topLeft.dy, 0);
+    return (visibleHeight / renderObject.size.height).clamp(0.0, 1.0);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final visibleTags = data.tags;
+    final visibleTags = widget.data.tags;
 
     return Material(
       color: Color(0XFF1C1821),
       borderRadius: BorderRadius.circular(AppRadii.sm),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AspectRatio(
-              aspectRatio: data.coverAspectRatio,
+              aspectRatio: widget.data.coverAspectRatio,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
                   _HomeCoverImage(
-                    resource: data.coverResource,
-                    cacheWidth: coverCacheWidth,
+                    resource: widget.data.coverResource,
+                    cacheWidth: widget.coverCacheWidth,
                   ),
                   const DecoratedBox(
                     decoration: BoxDecoration(
@@ -1089,7 +1209,7 @@ class _HomeDramaCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (data.isExclusive)
+                  if (widget.data.isExclusive)
                     const Positioned(
                       top: 0,
                       right: 0,
@@ -1098,7 +1218,7 @@ class _HomeDramaCard extends StatelessWidget {
                   Positioned(
                     right: 9,
                     bottom: 10,
-                    child: _ViewCount(label: data.viewCountLabel),
+                    child: _ViewCount(label: widget.data.viewCountLabel),
                   ),
                 ],
               ),
@@ -1110,7 +1230,7 @@ class _HomeDramaCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    data.title,
+                    widget.data.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(

@@ -1,12 +1,17 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../drama/domain/drama.dart';
+import '../data/drama_playback_target_repository_provider.dart';
+import '../data/player_content_repository_provider.dart';
 import '../data/player_feed_repository_provider.dart';
 import '../data/player_playback_source_repository_provider.dart';
 import '../data/player_preload_config_provider.dart';
+import '../data/player_remote_data_source_provider.dart';
 import '../domain/player_feed.dart';
+import '../domain/drama_playback_target.dart';
 import '../domain/player_preload_state.dart';
 import 'player_playback_timing_trace.dart';
 
@@ -123,22 +128,38 @@ class PlayerStartupPreloadController
   }
 
   Future<void> preloadFirstPlayableDrama(Drama? drama) async {
+    await preloadFirstPlayableDramaId(drama?.id);
+  }
+
+  /// 为任意普通播放器入口预取单剧首个可播放目标。
+  ///
+  /// 入口页通常只有 dramaId，没有 Home 的完整 [Drama] 卡片模型；预取层只需要
+  /// id 来请求详情和选择可播放集，不能要求 Search/My List/推送各自伪造卡片。
+  Future<void> preloadFirstPlayableDramaId(
+    String? dramaId, {
+    String? preferredEpisodeId,
+  }) async {
     final config = ref.read(playerPreloadConfigProvider);
     if (config.effectiveHomeStartupPreloadCount <= 0) {
       await cancel(reason: 'startup_preload_disabled');
       return;
     }
 
-    if (drama == null) {
+    if (dramaId == null || dramaId.isEmpty) {
       await cancel(reason: 'no candidate');
       return;
     }
 
     final generation = ++_generation;
+    final parsedDramaId = int.tryParse(dramaId);
+    final remoteProgressFuture =
+        ref.read(useRemotePlayerApiProvider) && parsedDramaId != null
+        ? ref.read(playerRemoteWatchProgressCacheProvider).get(parsedDramaId)
+        : null;
     _record(
       'startup preload request',
-      itemId: drama.id,
-      details: 'dramaId=${drama.id}',
+      itemId: dramaId,
+      details: 'dramaId=$dramaId',
     );
     // 每次只保留一个 startup pending。首页首屏候选变化时，旧请求继续跑只会浪费
     // 带宽，并可能把过期 drama 记录成成功命中。
@@ -151,27 +172,82 @@ class PlayerStartupPreloadController
     try {
       final items = await ref
           .read(playerFeedRepositoryProvider)
-          .listSingleDramaFeed(dramaId: drama.id, episodeId: '1');
+          .listSingleDramaFeed(dramaId: dramaId, episodeId: '1');
       if (!_isCurrent(generation)) {
         return;
       }
       // 不能预热 locked/unavailable/null source。即使 mock 数据能给出 URL，也要把
       // 可播放边界留给授权和内容状态，避免后续接真实接口时出现越权预取。
-      final item = _firstPlayableItem(items);
+      final target = await ref
+          .read(dramaPlaybackTargetRepositoryProvider)
+          .getForDrama(dramaId);
+      if (!_isCurrent(generation)) {
+        return;
+      }
+      DramaPlaybackTarget? remoteTarget;
+      if (remoteProgressFuture != null) {
+        try {
+          final progress = await remoteProgressFuture;
+          if (!_isCurrent(generation)) return;
+          final position = Duration(seconds: progress?.watchSecond ?? 0);
+          final duration = Duration(seconds: progress?.durationSecond ?? 0);
+          if (progress != null &&
+              position > Duration.zero &&
+              duration > Duration.zero &&
+              position < duration - const Duration(seconds: 2)) {
+            remoteTarget = DramaPlaybackTarget(
+              dramaId: dramaId,
+              episodeId: progress.episodeId.toString(),
+              position: position,
+              duration: duration,
+              updatedAt: DateTime.now(),
+            );
+          }
+        } catch (_) {
+          // 服务端进度只用于选择预热目标；失败仍可退回本地续播或首个可播集。
+        }
+      }
+      final item = _firstPlayableItem(
+        items,
+        preferredEpisodeId: preferredEpisodeId,
+        remoteTarget: remoteTarget,
+        target: target,
+      );
       if (item == null) {
         state = PlayerStartupPreloadState(
           status: PlayerStartupPreloadStatus.cancelled,
-          itemId: drama.id,
+          itemId: dramaId,
           completedAt: DateTime.now(),
           details: 'reason=no_playable_item',
         );
         _record(
           'startup preload cancelled',
-          itemId: drama.id,
+          itemId: dramaId,
           details: 'reason=no_playable_item',
         );
         return;
       }
+
+      final selectedTarget = preferredEpisodeId == item.episode.id
+          ? null
+          : remoteTarget?.episodeId == item.episode.id
+          ? remoteTarget
+          : target?.episodeId == item.episode.id
+          ? target
+          : null;
+
+      debugPrint(
+        '[player-entry-preload] selection dramaId=$dramaId '
+        'episodeId=${item.episode.id} '
+        'reason=${preferredEpisodeId == item.episode.id
+            ? 'route_episode'
+            : remoteTarget?.episodeId == item.episode.id
+            ? 'remote_resume'
+            : target?.episodeId == item.episode.id && target?.canResume == true
+            ? 'local_resume'
+            : 'first_playable'} '
+        'positionMs=${selectedTarget?.position.inMilliseconds ?? 0}',
+      );
 
       final source = item.episode.videoSource;
       final startedAt = DateTime.now();
@@ -185,12 +261,18 @@ class PlayerStartupPreloadController
         'startup preload start',
         itemId: item.id,
         source: source,
-        details: 'dramaId=${item.content.id} episodeId=${item.episode.id}',
+        details: [
+          'dramaId=${item.content.id}',
+          'episodeId=${item.episode.id}',
+          if (preferredEpisodeId == item.episode.id) 'target=route_episode',
+          if (selectedTarget != null)
+            'targetPositionMs=${selectedTarget.position.inMilliseconds}',
+        ].join(' '),
       );
 
       final preloadState = await ref
           .read(playerStartupPlaybackSourceRepositoryProvider)
-          .preload(item);
+          .preload(item, preferredPosition: selectedTarget?.position);
       if (!_isCurrent(generation)) {
         return;
       }
@@ -230,12 +312,12 @@ class PlayerStartupPreloadController
       }
       state = PlayerStartupPreloadState(
         status: PlayerStartupPreloadStatus.failed,
-        itemId: drama.id,
+        itemId: dramaId,
         startedAt: state.startedAt,
         completedAt: DateTime.now(),
         error: error,
       );
-      _record('startup preload failed', itemId: drama.id, error: error);
+      _record('startup preload failed', itemId: dramaId, error: error);
     }
   }
 
@@ -269,7 +351,42 @@ class PlayerStartupPreloadController
     );
   }
 
-  PlayerFeedItem? _firstPlayableItem(List<PlayerFeedItem> items) {
+  PlayerFeedItem? _firstPlayableItem(
+    List<PlayerFeedItem> items, {
+    String? preferredEpisodeId,
+    DramaPlaybackTarget? remoteTarget,
+    DramaPlaybackTarget? target,
+  }) {
+    if (preferredEpisodeId != null && preferredEpisodeId.isNotEmpty) {
+      for (final item in items) {
+        if (item.episode.id == preferredEpisodeId &&
+            !item.episode.isLocked &&
+            !item.episode.isUnavailable &&
+            item.episode.videoSource != null) {
+          return item;
+        }
+      }
+    }
+    if (remoteTarget?.canResume ?? false) {
+      for (final item in items) {
+        if (item.episode.id == remoteTarget!.episodeId &&
+            !item.episode.isLocked &&
+            !item.episode.isUnavailable &&
+            item.episode.videoSource != null) {
+          return item;
+        }
+      }
+    }
+    if (target?.canResume ?? false) {
+      for (final item in items) {
+        if (item.episode.id == target!.episodeId &&
+            !item.episode.isLocked &&
+            !item.episode.isUnavailable &&
+            item.episode.videoSource != null) {
+          return item;
+        }
+      }
+    }
     for (final item in items) {
       if (!item.episode.isLocked &&
           !item.episode.isUnavailable &&
@@ -297,6 +414,11 @@ class PlayerStartupPreloadController
       elapsed: elapsed,
       error: error,
       details: details,
+    );
+    debugPrint(
+      '[player-entry-preload] startup=$event itemId=${itemId ?? 'null'} '
+      'elapsedMs=${elapsed?.inMilliseconds ?? 0} '
+      '${details ?? ''}${error == null ? '' : ' error=$error'}',
     );
   }
 }

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:drama_client/features/player/data/hls_local_proxy_server.dart';
+import 'package:drama_client/features/player/data/hls_traffic_gate.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -95,6 +96,24 @@ void main() {
       expect(client.totalGetCount, 0);
     },
   );
+
+  test('For You suspension blocks only new remote fetches', () async {
+    final playlistUri = Uri.parse('https://cdn.example.com/hls/media.m3u8');
+    final gate = HlsTrafficGate()..suspendForYou();
+    final client = _FakeProxyHttpClient({
+      playlistUri.toString(): _textResponse('#EXTM3U\n'),
+    });
+    final server = HlsLocalProxyServer(client: client, trafficGate: gate);
+    addTearDown(server.stop);
+
+    final proxyUrl = await server.proxyUrlFor(
+      playlistUri.toString(),
+      owner: HlsTrafficOwner.forYou,
+    );
+    await _readBytes(Uri.parse(proxyUrl));
+
+    expect(client.totalGetCount, 0);
+  });
 
   test(
     'resolver falls back to remote source when proxy generation fails',
@@ -208,7 +227,10 @@ class _FakeProxyHttpClient implements HlsLocalProxyHttpClient {
 
 class _ThrowingProxyServer extends HlsLocalProxyServer {
   @override
-  Future<String> proxyUrlFor(String remoteUrl) {
+  Future<String> proxyUrlFor(
+    String remoteUrl, {
+    HlsTrafficOwner owner = HlsTrafficOwner.playback,
+  }) {
     throw StateError('proxy unavailable');
   }
 }

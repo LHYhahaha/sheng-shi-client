@@ -71,7 +71,10 @@ class PlaybackSource {
 abstract interface class PlayerPlaybackSourceRepository {
   Future<PlaybackSource> resolve(PlayerFeedItem item);
 
-  Future<PlaybackPreloadState> preload(PlayerFeedItem item);
+  Future<PlaybackPreloadState> preload(
+    PlayerFeedItem item, {
+    Duration? preferredPosition,
+  });
 }
 
 /// HLS/播放预热管理器边界。
@@ -82,6 +85,7 @@ abstract interface class PlayerPlaybackPreloadManager {
   Future<PlaybackPreloadState> preload({
     required PlayerFeedItem item,
     required PlaybackSource source,
+    Duration? preferredPosition,
   });
 
   Future<void> releasePending();

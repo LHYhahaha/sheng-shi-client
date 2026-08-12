@@ -10,10 +10,12 @@ import 'package:http/http.dart' as http;
 
 import '../../../core/locale/app_locale_controller.dart';
 import '../data/playback_progress_repository_provider.dart';
+import '../data/drama_playback_target_repository_provider.dart';
 import '../data/player_playback_source_repository_provider.dart';
 import '../data/player_preload_config_provider.dart';
 import '../data/player_remote_data_source_provider.dart';
 import '../domain/player_feed.dart';
+import '../domain/drama_playback_target.dart';
 import '../domain/player_content.dart';
 import '../domain/player_playback_progress.dart';
 import '../domain/player_playback_source.dart';
@@ -473,6 +475,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   static const videoSurfaceTeardownDelay = Duration(milliseconds: 450);
   static const _restoreFloorTimeout = Duration(seconds: 12);
   static const _firstFrameProgressProbeDelay = Duration(milliseconds: 800);
+  static const _firstFrameVideoRecoveryDelay = Duration(milliseconds: 2800);
+  static const _preloadReadinessAdvance = Duration(milliseconds: 750);
   static const _resumeOpenStartMinPosition = Duration(seconds: 10);
   static const _localResumeReadBudget = Duration(milliseconds: 180);
 
@@ -480,6 +484,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   bool _externalSubtitlesClosed = false;
   PlayerFeedItem? _currentOriginalItem;
   Timer? _firstFrameProgressProbeTimer;
+  Timer? _firstFrameVideoRecoveryTimer;
   Timer? _firstFrameTimeoutTimer;
   Timer? _watchProgressReportTimer;
   DateTime? _watchProgressReportTimerStartedAt;
@@ -524,6 +529,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   late final PlayerPlaybackPreloadManager _preloadManager;
   late final PlayerPlaybackPrepareManager _prepareManager;
   late final PlaybackProgressRepository _progressRepository;
+  late final DramaPlaybackTargetRepository _dramaPlaybackTargetRepository;
   var _subscriptions = <StreamSubscription<dynamic>>[];
   final _preloadedItemIds = <String>{};
   final _preloadStates = <String, PlaybackPreloadState>{};
@@ -582,9 +588,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   Timer? _forYouEntryWarmReleaseTimer;
   PlaybackSource? _currentPlaybackSource;
   bool _currentPlaybackHasFirstFrame = false;
+  bool _firstFrameVideoRecoveryAttempted = false;
   Duration _currentPlaybackPosition = Duration.zero;
   Duration _currentPlaybackDuration = Duration.zero;
   Duration _currentPlaybackBufferedPosition = Duration.zero;
+  Duration? _preloadReadinessStartPosition;
+  bool _preloadReadinessReached = false;
 
   List<PlayerPlaybackTimingEvent> get timingEvents => _timingTrace.events;
 
@@ -775,6 +784,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _prepareManager = ref.read(playerPlaybackPrepareManagerFactoryProvider)();
     _prepareManager.timingLogger = _logTiming;
     _progressRepository = ref.read(playbackProgressRepositoryProvider);
+    _dramaPlaybackTargetRepository = ref.read(
+      dramaPlaybackTargetRepositoryProvider,
+    );
     _attachSessionStreams(_session);
     _logTiming('create current session', details: 'reason=build');
     ref.onDispose(() {
@@ -784,6 +796,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       unawaited(_cancelSessionStreams());
       _restoreFloorTimer?.cancel();
       _firstFrameProgressProbeTimer?.cancel();
+      _firstFrameVideoRecoveryTimer?.cancel();
       _firstFrameTimeoutTimer?.cancel();
       _forYouEntryWarmReleaseTimer?.cancel();
       _stopWatchProgressReportTimer();
@@ -821,6 +834,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         item.episode.videoSource == null) {
       return;
     }
+    // 首页隐藏态预热也是真实 media session；必须登记，普通播放器进入时才能暂停它，
+    // 而不是让它在后台继续下载/解码并抢占首播资源。
+    ref.read(playerSessionRegistryProvider.notifier).register(sessionKey);
     final startedAt = DateTime.now();
     _forYouEntryWarmReleaseTimer?.cancel();
     _forYouEntryWarmItemId = item.id;
@@ -883,6 +899,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   Future<void> playItem(
     PlayerFeedItem? item, {
     bool resumeIfCurrentSource = false,
+    bool forceReopen = false,
   }) async {
     if (_isSessionDisposed) {
       return;
@@ -908,7 +925,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           item.id == _lastPlayItemRequest!.id &&
           item.episode.videoSource == _lastPlayItemRequest!.episode.videoSource;
       final timeSinceLastCall = DateTime.now().difference(_lastPlayItemTime);
-      if (isSameItem &&
+      if (!forceReopen &&
+          isSameItem &&
           state.status != PlayerPlaybackStatus.error &&
           timeSinceLastCall.inMilliseconds < 500) {
         developer.log(
@@ -956,6 +974,23 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           'startupSource=${startupPreload.sourceUrl ?? 'null'}',
         ]),
       );
+      if (startupPreload.status == PlayerStartupPreloadStatus.pending &&
+          startupPreload.itemId == item.id &&
+          startupPreload.sourceUrl == item.episode.videoSource) {
+        // 真实播放不能与首页的第 2 个首段预热并发抢同一条网络。已经完成的
+        // playlist/分片仍留在内存和磁盘；只取消尚未完成的 startup 请求，让当前
+        // 播放器优先回源需要的分片。
+        _logTiming(
+          'startup preload yielded to active playback',
+          itemId: item.id,
+          source: item.episode.videoSource,
+        );
+        unawaited(
+          ref
+              .read(playerStartupPreloadControllerProvider.notifier)
+              .cancel(reason: 'active_playback_takeover', syncState: false),
+        );
+      }
     }
 
     if (item == null) {
@@ -1012,7 +1047,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         state.currentSource != null &&
         _usesCurrentMediaSource(item) &&
         state.status != PlayerPlaybackStatus.error;
-    if (isSameSource && !state.hasEnded) {
+    if (!forceReopen && isSameSource && !state.hasEnded) {
       _applyMetadataDurationFallback(item.episode.duration);
       if (state.surfaceLifecycle != PlayerVideoSurfaceLifecycle.attached) {
         state = state.copyWith(
@@ -1048,12 +1083,16 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
 
     final generation = ++_generation;
+    if (!forceReopen) {
+      _firstFrameVideoRecoveryAttempted = false;
+    }
     _unexpectedPauseRecoveryDeadline = null;
     _unexpectedPauseRecoveryInFlight = false;
     _positionRollbackRecoveryInFlight = false;
     _userPauseRequested = false;
     _resetWatchProgressReportTimer();
     _firstFrameProgressProbeTimer?.cancel();
+    _firstFrameVideoRecoveryTimer?.cancel();
     _cancelFirstFrameTimeout();
     _pendingSubtitleLoadItem = null;
     _logTiming(
@@ -2110,6 +2149,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (_isSessionDisposed) {
       return;
     }
+    if (sessionKey == PlayerPlaybackSessionKeys.forYouTab) {
+      ref.read(hlsTrafficGateProvider).resumeForYou();
+    }
     final suspendedItem = _visibilitySuspendedItem;
     if (suspendedItem != null && state.currentSource == null) {
       _visibilitySuspendedItem = null;
@@ -2139,36 +2181,31 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _syncWatchProgressReportTimer();
   }
 
-  /// 离开 For You 去其他 tab 时释放当前解码器，而不销毁 provider。
+  /// 被普通播放器暂时抢占时暂停 For You，不销毁当前/已 prepared 的 session。
   ///
-  /// For You 自身还会准备下一条视频；若只 pause 当前 session，再打开普通播放器，
-  /// 低端 Android 设备会同时持有多套 MediaCodec，出现有进度但 renderFps=0 的黑屏。
-  /// 返回 For You 时由 [resumeAfterVisibilityPause] 使用保存的 item 重新打开。
+  /// 已下载分片保留在内存/磁盘；HLS traffic gate 会阻止 For You 后续回源，返回时
+  /// 解除冻结即可继续用现有 session 播放。
   Future<void> suspendForCompetingPlayer() async {
     if (_isSessionDisposed) return;
-    if (_visibilitySuspendedItem != null && state.currentSource == null) return;
-    _visibilitySuspendedItem = _currentOriginalItem;
-    await detachSurfaceForVisibility();
-    if (_isSessionDisposed) return;
-
-    // 给 Flutter 一帧时间把旧 Video widget 从树上卸载，再释放其 player/texture。
-    // 直接等待 endOfFrame 在没有挂载根节点的测试或极端路由阶段可能永不完成。
-    await Future<void>.delayed(const Duration(milliseconds: 32));
-    markSurfaceDetached();
-    await _cancelSessionStreams();
-    await _session.dispose();
-    _session = ref.read(playerPlaybackSessionFactoryProvider).call();
-    _attachSessionStreams(_session);
-    _currentPlaybackItemId = null;
-    _currentPlaybackSource = null;
-    _clearCurrentPlaybackSnapshot();
+    ref.read(hlsTrafficGateProvider).suspendForYou();
+    _pauseWhenOpenCompletes = true;
+    _pauseWatchProgressReportTimer();
+    ++_generation;
+    await _session.pause();
+    await _prepareManager.pauseAll(reason: 'competing player');
+    await _disposePreloads();
     if (!ref.mounted) return;
     state = state.copyWith(
-      status: PlayerPlaybackStatus.idle,
-      clearSource: true,
-      clearError: true,
+      status: state.currentSource == null
+          ? state.status
+          : PlayerPlaybackStatus.paused,
+      isBuffering: false,
       surfaceLifecycle: PlayerVideoSurfaceLifecycle.detached,
       clearVideoController: true,
+    );
+    _logTiming(
+      'for you suspended for competing player',
+      details: _timingDetails(['sessionRetained=true', 'networkGate=closed']),
     );
   }
 
@@ -2613,6 +2650,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         observedPosition: clamped,
       );
     }
+    _tryMarkPreloadReadyAfterProgress(clamped);
     state = state.copyWith(
       position: clamped,
       hasFirstFrame: _currentPlaybackHasFirstFrame,
@@ -2882,6 +2920,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _playingBeforeFirstFrameAt = null;
     _positionBeforeFirstFrameAt = null;
     _firstFrameProgressProbeTimer?.cancel();
+    _firstFrameVideoRecoveryTimer?.cancel();
     _cancelFirstFrameTimeout();
     state = state.copyWith(
       status: state.status == PlayerPlaybackStatus.opening
@@ -2891,9 +2930,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       isBuffering: false,
     );
     _currentPlaybackHasFirstFrame = true;
+    // 首帧仅表示已经有一张可渲染画面，不代表连续分片已经准备充分。下一条预热
+    // 必须等当前视频从此处再实际推进一小段，避免在首播 buffer 中抢占网络。
+    _preloadReadinessStartPosition ??= _currentPlaybackPosition;
     _syncWatchProgressReportTimer();
     _loadPendingSubtitlesAfterFirstFrame();
-    _flushDeferredPreloadAfterFirstFrame();
+    _flushDeferredPreloadAfterFirstFrame(reason: 'first frame');
   }
 
   void _armFirstFrameProgressProbe({
@@ -2925,13 +2967,59 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         ]),
       );
     });
+    _armFirstFrameVideoRecovery(
+      generation: generation,
+      itemId: itemId,
+      observedPosition: observedPosition,
+    );
+  }
+
+  /// 个别 Android/HLS 会先持续推进音频时钟，却迟迟收不到 video width。此时继续
+  /// 等完整 8 秒首帧超时只会让用户多看一段 loading。确认已推进且 2.8 秒仍无视频
+  /// 后，仅重开一次同一 source；已下载的 playlist/segment 会命中内存/磁盘缓存。
+  void _armFirstFrameVideoRecovery({
+    required int generation,
+    required String itemId,
+    required Duration observedPosition,
+  }) {
+    if (sessionKey == PlayerPlaybackSessionKeys.forYouTab ||
+        _firstFrameVideoRecoveryAttempted ||
+        _firstFrameVideoRecoveryTimer?.isActive == true) {
+      return;
+    }
+    _firstFrameVideoRecoveryTimer = Timer(_firstFrameVideoRecoveryDelay, () {
+      if (!ref.mounted ||
+          !_isCurrent(generation) ||
+          state.currentItemId != itemId ||
+          state.currentSource == null ||
+          state.hasFirstFrame ||
+          state.position < observedPosition ||
+          state.status == PlayerPlaybackStatus.paused ||
+          state.status == PlayerPlaybackStatus.error) {
+        return;
+      }
+      final item = _currentOriginalItem;
+      if (item == null || item.id != itemId) {
+        return;
+      }
+      _firstFrameVideoRecoveryAttempted = true;
+      _logTiming(
+        'first frame video recovery reopen',
+        itemId: itemId,
+        source: state.currentSource,
+        details: _timingDetails([
+          'positionMs=${state.position.inMilliseconds}',
+          'observedPositionMs=${observedPosition.inMilliseconds}',
+          'delayMs=${_firstFrameVideoRecoveryDelay.inMilliseconds}',
+        ]),
+      );
+      unawaited(playItem(item, forceReopen: true));
+    });
   }
 
   void _flushDeferredPreloadAfterFirstFrame({String reason = 'first frame'}) {
     final items = _deferredPreloadItems;
     final index = _deferredPreloadIndex;
-    _deferredPreloadItems = null;
-    _deferredPreloadIndex = null;
     if (items == null || index == null) {
       return;
     }
@@ -2942,6 +3030,24 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         items[index].id != state.currentItemId) {
       return;
     }
+    if (!_preloadReadinessReached || state.isBuffering) {
+      _logTiming(
+        'preload deferred awaiting stable playback',
+        itemId: state.currentItemId,
+        source: state.currentSource,
+        details: _timingDetails([
+          'reason=$reason',
+          'hasFirstFrame=${state.hasFirstFrame}',
+          'isBuffering=${state.isBuffering}',
+          'positionMs=${state.position.inMilliseconds}',
+          'baselineMs=${_preloadReadinessStartPosition?.inMilliseconds ?? -1}',
+          'requiredAdvanceMs=${_preloadReadinessAdvance.inMilliseconds}',
+        ]),
+      );
+      return;
+    }
+    _deferredPreloadItems = null;
+    _deferredPreloadIndex = null;
     _logTiming(
       'preload deferred flush',
       itemId: state.currentItemId,
@@ -2953,6 +3059,28 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       ]),
     );
     unawaited(preloadAround(items, index));
+  }
+
+  void _tryMarkPreloadReadyAfterProgress(Duration position) {
+    if (!state.hasFirstFrame || state.isBuffering || _preloadReadinessReached) {
+      return;
+    }
+    final baseline = _preloadReadinessStartPosition ??= position;
+    if (position < baseline + _preloadReadinessAdvance) {
+      return;
+    }
+    _preloadReadinessReached = true;
+    _logTiming(
+      'playback stable for deferred preload',
+      itemId: state.currentItemId,
+      source: state.currentSource,
+      details: _timingDetails([
+        'positionMs=${position.inMilliseconds}',
+        'baselineMs=${baseline.inMilliseconds}',
+        'advanceMs=${(position - baseline).inMilliseconds}',
+      ]),
+    );
+    _flushDeferredPreloadAfterFirstFrame(reason: 'stable playback');
   }
 
   void _handleError(String error) {
@@ -4090,6 +4218,22 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         ),
       ),
     );
+    final item = _currentOriginalItem;
+    if (item != null &&
+        item.id == itemId &&
+        item.mode == PlayerFeedMode.singleDrama) {
+      unawaited(
+        _dramaPlaybackTargetRepository.save(
+          DramaPlaybackTarget(
+            dramaId: item.content.id,
+            episodeId: item.episode.id,
+            position: nextPosition,
+            duration: nextDuration,
+            updatedAt: DateTime.now(),
+          ),
+        ),
+      );
+    }
   }
 
   bool _shouldSaveProgressSnapshot(
@@ -4245,10 +4389,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   void _clearCurrentPlaybackSnapshot() {
     _firstFrameProgressProbeTimer?.cancel();
+    _firstFrameVideoRecoveryTimer?.cancel();
     _currentPlaybackHasFirstFrame = false;
     _currentPlaybackPosition = Duration.zero;
     _currentPlaybackDuration = Duration.zero;
     _currentPlaybackBufferedPosition = Duration.zero;
+    _preloadReadinessStartPosition = null;
+    _preloadReadinessReached = false;
     _lastPositionUpdate = null;
     _lastProgressSaveAt = null;
     _lastSavedProgressItemId = null;

@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'hls_disk_cache_store.dart';
+import 'hls_network_request_coordinator.dart';
+import 'hls_traffic_gate.dart';
 
 /// 本地 HLS proxy 的缓存配置。
 ///
@@ -14,7 +16,7 @@ import 'hls_disk_cache_store.dart';
 class HlsLocalProxyConfig {
   const HlsLocalProxyConfig({
     this.enabled = true,
-    this.timeout = const Duration(seconds: 4),
+    this.timeout = const Duration(seconds: 12),
   });
 
   /// 是否启用本地代理 spike。
@@ -23,6 +25,9 @@ class HlsLocalProxyConfig {
   final bool enabled;
 
   /// 代理向远端请求 playlist/segment 的超时。
+  ///
+  /// 必须长于预热等待预算，播放接管预热 singleflight 时才能继续等待首段，而不是
+  /// 在 4 秒后放弃并重新回源。
   final Duration timeout;
 }
 
@@ -63,7 +68,8 @@ abstract interface class HlsLocalProxyHttpClient {
   void releasePending();
 }
 
-class DartIoHlsLocalProxyHttpClient implements HlsLocalProxyHttpClient {
+class DartIoHlsLocalProxyHttpClient
+    implements HlsLocalProxyHttpClient, HlsNetworkStreamingHttpClient {
   DartIoHlsLocalProxyHttpClient({HttpClient? client})
     : _client = client ?? HttpClient();
 
@@ -93,6 +99,31 @@ class DartIoHlsLocalProxyHttpClient implements HlsLocalProxyHttpClient {
     } finally {
       _pendingRequests.remove(request);
     }
+  }
+
+  @override
+  Future<HlsNetworkStreamResponse> open(
+    Uri uri, {
+    required Duration timeout,
+  }) async {
+    final request = await _client.getUrl(uri).timeout(timeout);
+    _pendingRequests.add(request);
+    final response = await request.close().timeout(timeout);
+    Stream<List<int>> chunks() async* {
+      try {
+        await for (final chunk in response) {
+          yield List<int>.from(chunk);
+        }
+      } finally {
+        _pendingRequests.remove(request);
+      }
+    }
+
+    return HlsNetworkStreamResponse(
+      statusCode: response.statusCode,
+      chunks: chunks(),
+      contentType: response.headers.contentType?.mimeType,
+    );
   }
 
   @override
@@ -161,10 +192,15 @@ class HlsLocalProxyServer {
     HlsLocalProxyHttpClient? client,
     HlsLocalCacheStore? cacheStore,
     HlsDiskCacheStore? diskCacheStore,
-    this.timeout = const Duration(seconds: 4),
+    HlsNetworkRequestCoordinator? networkCoordinator,
+    HlsTrafficGate? trafficGate,
+    this.timeout = const Duration(seconds: 12),
   }) : _client = client ?? DartIoHlsLocalProxyHttpClient(),
        _cacheStore = cacheStore ?? HlsLocalCacheStore(),
-       _diskCacheStore = diskCacheStore ?? HlsDiskCacheStore();
+       _diskCacheStore = diskCacheStore ?? HlsDiskCacheStore(),
+       _networkCoordinator =
+           networkCoordinator ?? HlsNetworkRequestCoordinator(),
+       _trafficGate = trafficGate ?? HlsTrafficGate();
 
   /// 代理向远端拉取 playlist/segment 的 HTTP client。
   final HlsLocalProxyHttpClient _client;
@@ -174,6 +210,8 @@ class HlsLocalProxyServer {
   /// 只缓存 segment bytes，不缓存业务授权状态。
   final HlsLocalCacheStore _cacheStore;
   final HlsDiskCacheStore _diskCacheStore;
+  final HlsNetworkRequestCoordinator _networkCoordinator;
+  final HlsTrafficGate _trafficGate;
 
   /// 远端请求超时。
   final Duration timeout;
@@ -182,7 +220,10 @@ class HlsLocalProxyServer {
 
   bool get isRunning => _server != null;
 
-  Future<String> proxyUrlFor(String remoteUrl) async {
+  Future<String> proxyUrlFor(
+    String remoteUrl, {
+    HlsTrafficOwner owner = HlsTrafficOwner.playback,
+  }) async {
     final remoteUri = _parseRemoteUri(remoteUrl);
     final server = await _ensureStarted();
     final proxyUri = Uri(
@@ -192,7 +233,7 @@ class HlsLocalProxyServer {
       host: 'localhost',
       port: server.port,
       path: '/playlist.m3u8',
-      queryParameters: {'url': remoteUri.toString()},
+      queryParameters: {'url': remoteUri.toString(), 'owner': owner.queryValue},
     );
     _log('proxy source generated source=$remoteUrl proxy=$proxyUri');
     return proxyUri.toString();
@@ -235,10 +276,13 @@ class HlsLocalProxyServer {
         return;
       }
       final remoteUri = _parseRemoteUri(remoteUrl);
+      final owner = HlsTrafficOwner.fromQuery(
+        request.uri.queryParameters['owner'],
+      );
       if (request.uri.path.endsWith('.m3u8')) {
-        await _proxyPlaylist(request, remoteUri);
+        await _proxyPlaylist(request, remoteUri, owner);
       } else {
-        await _proxySegment(request, remoteUri);
+        await _proxySegment(request, remoteUri, owner);
       }
     } catch (error) {
       _log('fallback remote source error=$error');
@@ -250,7 +294,11 @@ class HlsLocalProxyServer {
     }
   }
 
-  Future<void> _proxyPlaylist(HttpRequest request, Uri remoteUri) async {
+  Future<void> _proxyPlaylist(
+    HttpRequest request,
+    Uri remoteUri,
+    HlsTrafficOwner owner,
+  ) async {
     final startedAt = DateTime.now();
     final cacheKey = remoteUri.toString();
     final cached = _cacheStore.read(cacheKey);
@@ -262,7 +310,9 @@ class HlsLocalProxyServer {
         contentType: 'application/vnd.apple.mpegurl',
       );
     } else {
-      final disk = await _diskCacheStore.read(_diskKey(remoteUri));
+      final disk = await _diskCacheStore.read(
+        HlsDiskCacheStore.keyForUri(remoteUri),
+      );
       if (disk != null) {
         response = HlsLocalProxyResponse(
           statusCode: HttpStatus.ok,
@@ -271,6 +321,17 @@ class HlsLocalProxyServer {
         );
         _cacheStore.write(cacheKey, response.bytes);
       } else {
+        if (!_trafficGate.allowsRemoteFetch(owner)) {
+          await _sendText(
+            request,
+            HttpStatus.serviceUnavailable,
+            'For You paused',
+          );
+          _log(
+            'playlist remote fetch blocked owner=${owner.queryValue} source=$remoteUri',
+          );
+          return;
+        }
         response = await _fetch(remoteUri);
         if (response.statusCode < 200 || response.statusCode >= 300) {
           await _sendText(
@@ -282,7 +343,7 @@ class HlsLocalProxyServer {
         }
         _cacheStore.write(cacheKey, response.bytes);
         await _diskCacheStore.write(
-          _diskKey(remoteUri),
+          HlsDiskCacheStore.keyForUri(remoteUri),
           response.bytes,
           contentType: response.contentType,
         );
@@ -301,6 +362,7 @@ class HlsLocalProxyServer {
       remoteUri,
       response.body,
       localBaseUri: _localBaseUri(request),
+      owner: owner,
     );
     request.response.headers.contentType = ContentType(
       'application',
@@ -315,7 +377,11 @@ class HlsLocalProxyServer {
     );
   }
 
-  Future<void> _proxySegment(HttpRequest request, Uri remoteUri) async {
+  Future<void> _proxySegment(
+    HttpRequest request,
+    Uri remoteUri,
+    HlsTrafficOwner owner,
+  ) async {
     final cacheKey = remoteUri.toString();
     // segment 缓存只按完整 URL 命中，不做跨 token/跨清晰度合并，避免签名 URL 或
     // variant 切换时错用旧内容。
@@ -328,7 +394,9 @@ class HlsLocalProxyServer {
       return;
     }
 
-    final disk = await _diskCacheStore.read(_diskKey(remoteUri));
+    final disk = await _diskCacheStore.read(
+      HlsDiskCacheStore.keyForUri(remoteUri),
+    );
     if (disk != null) {
       _cacheStore.write(cacheKey, disk.bytes);
       await _sendBytes(request, disk.bytes, contentType: disk.contentType);
@@ -338,8 +406,29 @@ class HlsLocalProxyServer {
       return;
     }
 
+    if (!_trafficGate.allowsRemoteFetch(owner)) {
+      await _sendText(request, HttpStatus.serviceUnavailable, 'For You paused');
+      _log(
+        'segment remote fetch blocked owner=${owner.queryValue} source=$remoteUri',
+      );
+      return;
+    }
     final generation = _generation;
     final startedAt = DateTime.now();
+    final streamClient = _client;
+    if (streamClient is HlsNetworkStreamingHttpClient) {
+      final streamingClient = streamClient as HlsNetworkStreamingHttpClient;
+      await _proxySegmentStream(
+        request,
+        remoteUri,
+        cacheKey: cacheKey,
+        owner: owner,
+        generation: generation,
+        startedAt: startedAt,
+        client: streamingClient,
+      );
+      return;
+    }
     final response = await _fetch(remoteUri);
     if (generation != _generation) {
       await _sendText(request, 499, 'Proxy request cancelled');
@@ -355,7 +444,7 @@ class HlsLocalProxyServer {
     }
     _cacheStore.write(cacheKey, response.bytes);
     await _diskCacheStore.write(
-      _diskKey(remoteUri),
+      HlsDiskCacheStore.keyForUri(remoteUri),
       response.bytes,
       contentType: response.contentType,
     );
@@ -370,8 +459,94 @@ class HlsLocalProxyServer {
     );
   }
 
+  Future<void> _proxySegmentStream(
+    HttpRequest request,
+    Uri remoteUri, {
+    required String cacheKey,
+    required HlsTrafficOwner owner,
+    required int generation,
+    required DateTime startedAt,
+    required HlsNetworkStreamingHttpClient client,
+  }) async {
+    final handle = _networkCoordinator.streamFetch(
+      remoteUri,
+      priority: HlsRequestPriority.playback,
+      open: () => client.open(remoteUri, timeout: timeout),
+    );
+    final metadata = await handle.metadata;
+    if (generation != _generation) {
+      await _sendText(request, 499, 'Proxy request cancelled');
+      return;
+    }
+    if (metadata.statusCode < 200 || metadata.statusCode >= 300) {
+      await _sendText(
+        request,
+        HttpStatus.badGateway,
+        'Segment fetch failed: ${metadata.statusCode}',
+      );
+      return;
+    }
+    request.response.statusCode = HttpStatus.ok;
+    if (metadata.contentType != null) {
+      request.response.headers.set(
+        HttpHeaders.contentTypeHeader,
+        metadata.contentType!,
+      );
+    }
+    try {
+      await for (final chunk in handle.chunks) {
+        if (generation != _generation) break;
+        request.response.add(chunk);
+        await request.response.flush();
+      }
+      await request.response.close();
+      final completed = await handle.completed;
+      if (generation != _generation ||
+          completed.statusCode < 200 ||
+          completed.statusCode >= 300) {
+        return;
+      }
+      _cacheStore.write(cacheKey, completed.bytes);
+      await _diskCacheStore.write(
+        HlsDiskCacheStore.keyForUri(remoteUri),
+        completed.bytes,
+        contentType: completed.contentType,
+      );
+      _log(
+        'segment proxy stream fetch miss source=$remoteUri '
+        'elapsedMs=${_elapsedMs(startedAt)} bytes=${completed.bytes.length}',
+      );
+    } catch (error) {
+      try {
+        await request.response.close();
+      } catch (_) {}
+      rethrow;
+    }
+  }
+
   Future<HlsLocalProxyResponse> _fetch(Uri uri) {
-    return _client.get(uri, timeout: timeout).timeout(timeout);
+    return _networkCoordinator
+        .fetch(
+          uri,
+          priority: HlsRequestPriority.playback,
+          request: () async {
+            final response = await _client
+                .get(uri, timeout: timeout)
+                .timeout(timeout);
+            return HlsNetworkResponse(
+              statusCode: response.statusCode,
+              bytes: response.bytes,
+              contentType: response.contentType,
+            );
+          },
+        )
+        .then(
+          (response) => HlsLocalProxyResponse(
+            statusCode: response.statusCode,
+            bytes: response.bytes,
+            contentType: response.contentType,
+          ),
+        );
   }
 
   Uri _localBaseUri(HttpRequest request) {
@@ -396,15 +571,6 @@ class HlsLocalProxyServer {
       throw FormatException('Unsupported HLS proxy scheme.', remoteUrl);
     }
     return uri;
-  }
-
-  String _diskKey(Uri uri) {
-    final stableQuery = Map<String, String>.from(uri.queryParameters)
-      ..remove('expires')
-      ..remove('verify');
-    return uri
-        .replace(queryParameters: stableQuery.isEmpty ? null : stableQuery)
-        .toString();
   }
 
   Future<void> _sendText(
@@ -449,6 +615,7 @@ String rewritePlaylist(
   Uri playlistUri,
   String playlistBody, {
   required Uri localBaseUri,
+  HlsTrafficOwner owner = HlsTrafficOwner.playback,
 }) {
   final lines = const LineSplitter().convert(playlistBody);
   final rewrittenLines = lines.map((line) {
@@ -461,13 +628,20 @@ String rewritePlaylist(
         trimmed,
         playlistUri: playlistUri,
         localBaseUri: localBaseUri,
+        owner: owner,
       );
     }
     final resolved = playlistUri.resolve(trimmed);
     final isPlaylist = resolved.path.toLowerCase().endsWith('.m3u8');
     final path = isPlaylist ? '/playlist.m3u8' : '/segment';
     return localBaseUri
-        .replace(path: path, queryParameters: {'url': resolved.toString()})
+        .replace(
+          path: path,
+          queryParameters: {
+            'url': resolved.toString(),
+            'owner': owner.queryValue,
+          },
+        )
         .toString();
   });
   return rewrittenLines.join('\n');
@@ -477,6 +651,7 @@ String _rewriteTagUri(
   String line, {
   required Uri playlistUri,
   required Uri localBaseUri,
+  HlsTrafficOwner owner = HlsTrafficOwner.playback,
 }) {
   if (!line.startsWith('#EXT-X-KEY:') &&
       !line.startsWith('#EXT-X-MAP:') &&
@@ -488,7 +663,7 @@ String _rewriteTagUri(
     final isPlaylist = resolved.path.toLowerCase().endsWith('.m3u8');
     final local = localBaseUri.replace(
       path: isPlaylist ? '/playlist.m3u8' : '/segment',
-      queryParameters: {'url': resolved.toString()},
+      queryParameters: {'url': resolved.toString(), 'owner': owner.queryValue},
     );
     return 'URI="$local"';
   });
@@ -503,13 +678,16 @@ class HlsProxyPlaybackSourceResolver {
   final HlsLocalProxyConfig config;
   final HlsLocalProxyServer proxyServer;
 
-  Future<String> resolvePlayableSource(String remoteUrl) async {
+  Future<String> resolvePlayableSource(
+    String remoteUrl, {
+    HlsTrafficOwner owner = HlsTrafficOwner.playback,
+  }) async {
     if (!config.enabled) {
       return remoteUrl;
     }
     final startedAt = DateTime.now();
     try {
-      final proxyUrl = await proxyServer.proxyUrlFor(remoteUrl);
+      final proxyUrl = await proxyServer.proxyUrlFor(remoteUrl, owner: owner);
       const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');
       if (shouldPrint) {
         debugPrint(

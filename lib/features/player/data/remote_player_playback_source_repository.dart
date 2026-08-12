@@ -4,6 +4,7 @@ import '../domain/player_preload_state.dart';
 import 'mapper/playback_source_mapper.dart';
 import 'remote/playback_source_remote_data_source.dart';
 import 'hls_local_proxy_server.dart';
+import 'hls_traffic_gate.dart';
 
 /// 播放源远程 repository 骨架。
 ///
@@ -42,6 +43,7 @@ class RemotePlayerPlaybackSourceRepository
           item: item,
           status: PlaybackSourceStatus.resolved,
         ),
+        item: item,
       );
     }
 
@@ -56,11 +58,15 @@ class RemotePlayerPlaybackSourceRepository
         status: PlaybackSourceStatus.resolved,
         httpHeaders: _httpHeaders,
       ),
+      item: item,
     );
   }
 
   @override
-  Future<PlaybackPreloadState> preload(PlayerFeedItem item) async {
+  Future<PlaybackPreloadState> preload(
+    PlayerFeedItem item, {
+    Duration? preferredPosition,
+  }) async {
     // 直接使用 episode.videoSource，无需调用 playback-source API
     final remoteUrl = item.episode.videoSource;
     if (remoteUrl == null || remoteUrl.isEmpty) {
@@ -73,8 +79,13 @@ class RemotePlayerPlaybackSourceRepository
           item: item,
           status: PlaybackSourceStatus.preloaded,
         ),
+        item: item,
       );
-      return _preloadKnownSource(item, source);
+      return _preloadKnownSource(
+        item,
+        source,
+        preferredPosition: preferredPosition,
+      );
     }
 
     // 已解锁 source_url 的服务端契约是 HLS m3u8。入口可以是通用
@@ -92,19 +103,33 @@ class RemotePlayerPlaybackSourceRepository
         status: PlaybackSourceStatus.preloaded,
         httpHeaders: _httpHeaders,
       ),
+      preferredPosition: preferredPosition,
     );
   }
 
   Future<PlaybackPreloadState> _preloadKnownSource(
     PlayerFeedItem item,
-    PlaybackSource source,
-  ) async {
-    return _preloadManager.preload(item: item, source: source);
+    PlaybackSource source, {
+    Duration? preferredPosition,
+  }) async {
+    return _preloadManager.preload(
+      item: item,
+      source: source,
+      preferredPosition: preferredPosition,
+    );
   }
 
-  Future<PlaybackSource> _applyProxy(PlaybackSource source) async {
+  Future<PlaybackSource> _applyProxy(
+    PlaybackSource source, {
+    required PlayerFeedItem item,
+  }) async {
     final playableSource =
-        await _proxyResolver?.resolvePlayableSource(source.remoteUrl) ??
+        await _proxyResolver?.resolvePlayableSource(
+          source.remoteUrl,
+          owner: item.mode == PlayerFeedMode.forYou
+              ? HlsTrafficOwner.forYou
+              : HlsTrafficOwner.playback,
+        ) ??
         source.remoteUrl;
     return PlaybackSource(
       itemId: source.itemId,

@@ -2,6 +2,7 @@ import '../domain/player_feed.dart';
 import '../domain/player_playback_source.dart';
 import '../domain/player_preload_state.dart';
 import 'hls_local_proxy_server.dart';
+import 'hls_traffic_gate.dart';
 
 /// MVP 阶段的播放源 repository。
 ///
@@ -27,9 +28,16 @@ class MockPlayerPlaybackSourceRepository
   }
 
   @override
-  Future<PlaybackPreloadState> preload(PlayerFeedItem item) async {
+  Future<PlaybackPreloadState> preload(
+    PlayerFeedItem item, {
+    Duration? preferredPosition,
+  }) async {
     final source = await _resolve(item, status: PlaybackSourceStatus.preloaded);
-    return preloadManager.preload(item: item, source: source);
+    return preloadManager.preload(
+      item: item,
+      source: source,
+      preferredPosition: preferredPosition,
+    );
   }
 
   Future<PlaybackSource> _resolve(
@@ -50,6 +58,9 @@ class MockPlayerPlaybackSourceRepository
     // remoteUrl 仍用于业务识别和后续签名/过期策略，避免把本地 spike URL 写回领域层。
     final playableSource = await proxyResolver?.resolvePlayableSource(
       remoteUrl,
+      owner: item.mode == PlayerFeedMode.forYou
+          ? HlsTrafficOwner.forYou
+          : HlsTrafficOwner.playback,
     );
 
     return PlaybackSource(
@@ -80,6 +91,7 @@ class MockPlayerPlaybackPreloadManager implements PlayerPlaybackPreloadManager {
   Future<PlaybackPreloadState> preload({
     required PlayerFeedItem item,
     required PlaybackSource source,
+    Duration? preferredPosition,
   }) async {
     preloadCount += 1;
     final generation = _generation;

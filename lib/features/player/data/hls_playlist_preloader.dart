@@ -5,7 +5,9 @@ import 'dart:io';
 import '../domain/player_feed.dart';
 import '../domain/player_playback_source.dart';
 import '../domain/player_preload_state.dart';
+import 'hls_disk_cache_store.dart';
 import 'hls_local_proxy_server.dart';
+import 'hls_network_request_coordinator.dart';
 
 /// HLS 预热结果。
 ///
@@ -106,7 +108,8 @@ abstract interface class HlsPlaylistHttpClient {
   void releasePending();
 }
 
-class DartIoHlsPlaylistHttpClient implements HlsPlaylistHttpClient {
+class DartIoHlsPlaylistHttpClient
+    implements HlsPlaylistHttpClient, HlsNetworkStreamingHttpClient {
   DartIoHlsPlaylistHttpClient({HttpClient? client})
     : _client = client ?? HttpClient();
 
@@ -140,6 +143,31 @@ class DartIoHlsPlaylistHttpClient implements HlsPlaylistHttpClient {
   }
 
   @override
+  Future<HlsNetworkStreamResponse> open(
+    Uri uri, {
+    required Duration timeout,
+  }) async {
+    final request = await _client.getUrl(uri).timeout(timeout);
+    _pendingRequests.add(request);
+    final response = await request.close().timeout(timeout);
+    Stream<List<int>> chunks() async* {
+      try {
+        await for (final chunk in response) {
+          yield List<int>.from(chunk);
+        }
+      } finally {
+        _pendingRequests.remove(request);
+      }
+    }
+
+    return HlsNetworkStreamResponse(
+      statusCode: response.statusCode,
+      chunks: chunks(),
+      contentType: response.headers.contentType?.mimeType,
+    );
+  }
+
+  @override
   void releasePending() {
     for (final request in List<HttpClientRequest>.from(_pendingRequests)) {
       request.abort();
@@ -157,20 +185,36 @@ class HlsPlaylistPreloader {
   HlsPlaylistPreloader({
     HlsPlaylistHttpClient? client,
     this.timeout = const Duration(seconds: 4),
+    this.sharedRequestTimeout = const Duration(seconds: 12),
     this.maxSegments = 2,
     this.maxPreheatBytes = 2 * 1024 * 1024,
     HlsLocalCacheStore? cacheStore,
+    HlsDiskCacheStore? diskCacheStore,
+    HlsNetworkRequestCoordinator? networkCoordinator,
   }) : _client = client ?? DartIoHlsPlaylistHttpClient(),
-       _cacheStore = cacheStore;
+       _cacheStore = cacheStore,
+       _diskCacheStore = diskCacheStore,
+       _networkCoordinator =
+           networkCoordinator ?? HlsNetworkRequestCoordinator();
 
   /// HLS HTTP client。
   ///
   /// 通过接口注入，方便测试取消、超时和失败，不直接绑定 dart:io。
   final HlsPlaylistHttpClient _client;
   final HlsLocalCacheStore? _cacheStore;
+  final HlsDiskCacheStore? _diskCacheStore;
+  final HlsNetworkRequestCoordinator _networkCoordinator;
 
-  /// 单次 playlist/segment 请求超时。
+  /// 单次 playlist/segment 预热的等待预算。
+  ///
+  /// 到期后预热会尽快让出状态；已开始的共享请求仍可由真实播放复用。
   final Duration timeout;
+
+  /// 单个共享网络请求的最长寿命。
+  ///
+  /// 真实播放可能在预热开始后才加入同一请求，不能继承较短的预热预算，否则慢
+  /// 首段会在播放接管时被切断并触发一次重复回源。
+  final Duration sharedRequestTimeout;
 
   /// 最多预热的 segment 数量。
   ///
@@ -183,8 +227,36 @@ class HlsPlaylistPreloader {
   final int maxPreheatBytes;
   int _generation = 0;
 
-  Future<HlsPlaylistPrefetchResult> prefetch(String sourceUrl) async {
+  Future<HlsPlaylistPrefetchResult> prefetch(
+    String sourceUrl, {
+    Duration? preferredPosition,
+  }) {
     final generation = _generation;
+    return _prefetch(
+      sourceUrl,
+      generation: generation,
+      preferredPosition: preferredPosition,
+    ).timeout(
+      timeout,
+      onTimeout: () {
+        // 仅让本次预热停止后续步骤；不可 abort singleflight 中的 HTTP，因为
+        // 真实播放器可能已经加入并正在等待同一 playlist/segment。
+        if (generation == _generation) {
+          _generation += 1;
+        }
+        throw TimeoutException(
+          'HLS preload exceeded its wait budget.',
+          timeout,
+        );
+      },
+    );
+  }
+
+  Future<HlsPlaylistPrefetchResult> _prefetch(
+    String sourceUrl, {
+    required int generation,
+    Duration? preferredPosition,
+  }) async {
     final uri = _parseHttpUri(sourceUrl);
     final diagnostics = <String>[];
 
@@ -192,6 +264,7 @@ class HlsPlaylistPreloader {
     diagnostics.add('hls master playlist fetch start');
     final response = await _getOrThrow(uri, generation: generation);
     _cacheStore?.write(uri.toString(), response.rawBytes);
+    _writeDisk(uri, response.rawBytes, contentType: _playlistContentType);
     diagnostics.add(
       'hls master playlist fetch end ${_elapsedMs(playlistStartedAt)}ms',
     );
@@ -211,6 +284,11 @@ class HlsPlaylistPreloader {
           generation: generation,
         );
         _cacheStore?.write(variantUri.toString(), mediaResponse.rawBytes);
+        _writeDisk(
+          variantUri,
+          mediaResponse.rawBytes,
+          contentType: _playlistContentType,
+        );
         diagnostics.add(
           'hls media playlist fetch end ${_elapsedMs(mediaStartedAt)}ms',
         );
@@ -222,38 +300,88 @@ class HlsPlaylistPreloader {
       }
     }
 
-    final segmentUris = _parseSegmentUris(
+    final resumeTargetIndex = _resumeTargetSegmentIndex(
+      mediaPlaylistBody,
+      preferredPosition: preferredPosition,
+    );
+    final segmentUris = _segmentUrisAroundPosition(
       mediaPlaylistUri,
       mediaPlaylistBody,
+      resumeTargetIndex: resumeTargetIndex,
     ).take(maxSegments).toList(growable: false);
     final preheatedSegments = <Uri>[];
     var segmentBytesPreheated = 0;
 
-    // 只预热少量首段并受字节预算限制。短剧滑动场景下，用户可能马上离开当前 item，
-    // 过度预取会浪费流量并影响真正播放中的 source。
-    for (var index = 0; index < segmentUris.length; index += 1) {
-      if (segmentBytesPreheated >= maxPreheatBytes) {
-        diagnostics.add('segment preheat max bytes reached');
-        break;
+    // 续播有两个同等关键的冷点：播放器初始化所需的首段，以及目标时间附近的段。
+    // 原来顺序下载会让目标段必须等首段完成；当用户已经有 55/74 秒进度时，这正好
+    // 放大首播等待。仅在续播且实际有两个候选时并行这两个请求；非续播仍保持顺序和
+    // 严格字节预算，避免信息流场景多段抢占正在播放的资源。
+    final parallelResumeSegments =
+        resumeTargetIndex != null &&
+        resumeTargetIndex > 0 &&
+        segmentUris.length > 1;
+    if (parallelResumeSegments) {
+      diagnostics.add('resume first/target segment preheat parallel start');
+      final startedAt = DateTime.now();
+      final responses = await Future.wait(
+        segmentUris
+            .take(2)
+            .map(
+              (segmentUri) => _getOrThrow(segmentUri, generation: generation),
+            ),
+      );
+      for (var index = 0; index < responses.length; index += 1) {
+        final segmentUri = segmentUris[index];
+        final segmentResponse = responses[index];
+        _cacheStore?.write(segmentUri.toString(), segmentResponse.rawBytes);
+        _writeDisk(
+          segmentUri,
+          segmentResponse.rawBytes,
+          contentType: _segmentContentType(segmentUri),
+        );
+        final segmentBytes = segmentResponse.byteLength;
+        segmentBytesPreheated += segmentBytes;
+        preheatedSegments.add(segmentUri);
+        diagnostics.add(
+          'hls segment ${index + 1} parallel preheat end '
+          '${_elapsedMs(startedAt)}ms bytes=$segmentBytes',
+        );
       }
-      final segmentUri = segmentUris[index];
-      final segmentStartedAt = DateTime.now();
-      diagnostics.add('hls segment ${index + 1} preheat start');
-      final segmentResponse = await _getOrThrow(
-        segmentUri,
-        generation: generation,
-      );
-      _cacheStore?.write(segmentUri.toString(), segmentResponse.rawBytes);
-      final segmentBytes = segmentResponse.byteLength;
-      segmentBytesPreheated += segmentBytes;
-      preheatedSegments.add(segmentUri);
-      diagnostics.add(
-        'hls segment ${index + 1} preheat end '
-        '${_elapsedMs(segmentStartedAt)}ms bytes=$segmentBytes',
-      );
       if (segmentBytesPreheated >= maxPreheatBytes) {
         diagnostics.add('segment preheat max bytes reached');
-        break;
+      }
+    } else {
+      // 只预热少量首段并受字节预算限制。短剧滑动场景下，用户可能马上离开当前 item，
+      // 过度预取会浪费流量并影响真正播放中的 source。
+      for (var index = 0; index < segmentUris.length; index += 1) {
+        if (segmentBytesPreheated >= maxPreheatBytes) {
+          diagnostics.add('segment preheat max bytes reached');
+          break;
+        }
+        final segmentUri = segmentUris[index];
+        final segmentStartedAt = DateTime.now();
+        diagnostics.add('hls segment ${index + 1} preheat start');
+        final segmentResponse = await _getOrThrow(
+          segmentUri,
+          generation: generation,
+        );
+        _cacheStore?.write(segmentUri.toString(), segmentResponse.rawBytes);
+        _writeDisk(
+          segmentUri,
+          segmentResponse.rawBytes,
+          contentType: _segmentContentType(segmentUri),
+        );
+        final segmentBytes = segmentResponse.byteLength;
+        segmentBytesPreheated += segmentBytes;
+        preheatedSegments.add(segmentUri);
+        diagnostics.add(
+          'hls segment ${index + 1} preheat end '
+          '${_elapsedMs(segmentStartedAt)}ms bytes=$segmentBytes',
+        );
+        if (segmentBytesPreheated >= maxPreheatBytes) {
+          diagnostics.add('segment preheat max bytes reached');
+          break;
+        }
       }
     }
     diagnostics.add('segment preheat bytes=$segmentBytesPreheated');
@@ -275,7 +403,8 @@ class HlsPlaylistPreloader {
   void releasePending() {
     // generation 用来让已发出的异步请求在返回后自我失效；HTTP abort 只是尽力而为。
     _generation += 1;
-    _client.releasePending();
+    // 不 abort 底层 HTTP：真实播放器可能已加入同一 playlist/segment 的单飞请求。
+    // generation 会让已取消预热的结果不再写入其自身状态，下载仍可被播放代理复用。
   }
 
   Uri _parseHttpUri(String sourceUrl) {
@@ -293,7 +422,39 @@ class HlsPlaylistPreloader {
     Uri uri, {
     required int generation,
   }) async {
-    final response = await _client.get(uri, timeout: timeout).timeout(timeout);
+    final streamingClient = _client;
+    final HlsNetworkResponse shared;
+    if (streamingClient is HlsNetworkStreamingHttpClient) {
+      final client = streamingClient as HlsNetworkStreamingHttpClient;
+      shared = await _networkCoordinator
+          .streamFetch(
+            uri,
+            priority: HlsRequestPriority.preload,
+            open: () => client.open(uri, timeout: sharedRequestTimeout),
+          )
+          .completed;
+    } else {
+      shared = await _networkCoordinator.fetch(
+        uri,
+        priority: HlsRequestPriority.preload,
+        request: () async {
+          final response = await _client.get(
+            uri,
+            timeout: sharedRequestTimeout,
+          );
+          return HlsNetworkResponse(
+            statusCode: response.statusCode,
+            bytes: response.rawBytes,
+          );
+        },
+      );
+    }
+    final response = HlsPlaylistHttpResponse(
+      statusCode: shared.statusCode,
+      body: utf8.decode(shared.bytes, allowMalformed: true),
+      contentLength: shared.bytes.length,
+      bytes: shared.bytes,
+    );
     if (generation != _generation) {
       throw const HlsPlaylistPreloadCancelledException();
     }
@@ -359,8 +520,85 @@ class HlsPlaylistPreloader {
         .toList(growable: false);
   }
 
+  List<Uri> _segmentUrisAroundPosition(
+    Uri mediaPlaylistUri,
+    String playlistBody, {
+    int? resumeTargetIndex,
+  }) {
+    final segments = _parseSegmentUris(mediaPlaylistUri, playlistBody);
+    if (resumeTargetIndex == null || resumeTargetIndex <= 0) {
+      return segments;
+    }
+    // MediaKit 即使 open(start: savedPosition) 也通常需要先读取第一个分片来建
+    // demux/decoder；只预热 target/next 会让续播仍卡在 00001、00002 的首次回源。
+    // 因此续播优先级为：初始化首段 -> 目标段 -> 目标后一段。默认最多两段，正好
+    // 覆盖首段和目标段；若配置允许更多段，再顺序补目标后的连续分片。
+    return [segments.first, ...segments.skip(resumeTargetIndex)];
+  }
+
+  /// 返回续播位置落入的分片下标；位置仍在首分片时返回 0。
+  ///
+  /// 这时首分片本身就是目标，不能把第二段误当成“目标段”并行下载，否则会让
+  /// 2 秒续播这类情况白白多抢一条分片带宽。
+  int? _resumeTargetSegmentIndex(
+    String playlistBody, {
+    Duration? preferredPosition,
+  }) {
+    if (preferredPosition == null || preferredPosition <= Duration.zero) {
+      return null;
+    }
+    final durations = _segmentDurations(playlistBody);
+    if (durations.isEmpty) return null;
+    var accumulated = Duration.zero;
+    for (var index = 0; index < durations.length; index += 1) {
+      accumulated += durations[index];
+      if (preferredPosition < accumulated) return index;
+    }
+    return durations.length - 1;
+  }
+
+  List<Duration> _segmentDurations(String playlistBody) {
+    final durations = <Duration>[];
+    for (final line in const LineSplitter().convert(playlistBody)) {
+      final match = RegExp(r'^#EXTINF:([0-9.]+)').firstMatch(line.trim());
+      if (match == null) continue;
+      final seconds = double.tryParse(match.group(1)!);
+      if (seconds != null && seconds >= 0) {
+        durations.add(Duration(milliseconds: (seconds * 1000).round()));
+      }
+    }
+    return durations;
+  }
+
   int _elapsedMs(DateTime startedAt) {
     return DateTime.now().difference(startedAt).inMilliseconds;
+  }
+
+  void _writeDisk(Uri uri, List<int> bytes, {required String contentType}) {
+    final store = _diskCacheStore;
+    if (store == null) return;
+    // 落盘不占用预热完成或首帧关键路径；播放仍会从内存、磁盘或远端回退。
+    unawaited(
+      store.write(
+        HlsDiskCacheStore.keyForUri(uri),
+        bytes,
+        contentType: contentType,
+      ),
+    );
+  }
+
+  static const _playlistContentType = 'application/vnd.apple.mpegurl';
+
+  String _segmentContentType(Uri uri) {
+    final extension = uri.pathSegments.lastOrNull
+        ?.split('.')
+        .last
+        .toLowerCase();
+    return switch (extension) {
+      'm4s' || 'mp4' => 'video/mp4',
+      'aac' => 'audio/aac',
+      _ => 'video/mp2t',
+    };
   }
 }
 
@@ -381,10 +619,14 @@ class HlsPlayerPlaybackPreloadManager implements PlayerPlaybackPreloadManager {
   Future<PlaybackPreloadState> preload({
     required PlayerFeedItem item,
     required PlaybackSource source,
+    Duration? preferredPosition,
   }) async {
     final startedAt = DateTime.now();
     try {
-      final result = await _preloader.prefetch(source.playableSource);
+      final result = await _preloader.prefetch(
+        source.playableSource,
+        preferredPosition: preferredPosition,
+      );
       return PlaybackPreloadState(
         itemId: item.id,
         sourceUrl: source.playableSource,

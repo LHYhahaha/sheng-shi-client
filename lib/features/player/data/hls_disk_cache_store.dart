@@ -13,6 +13,21 @@ class HlsDiskCacheStore {
 
   final int maxBytes;
   Future<_HlsDiskIndex>? _indexFuture;
+  Future<void> _writeTail = Future<void>.value();
+
+  /// 由播放地址生成与签名无关的缓存 key。
+  ///
+  /// `expires` / `verify` 只控制本次回源授权；同一 HLS 内容重新签名后，已下载的
+  /// playlist 与分片仍可复用。视频内容替换后的精确失效将在接口提供
+  /// resource_version 后加入此 key。
+  static String keyForUri(Uri uri) {
+    final stableQuery = Map<String, String>.from(uri.queryParameters)
+      ..remove('expires')
+      ..remove('verify');
+    // Uri.replace(queryParameters: null) 的语义是“保留原 query”，不是清空。
+    // 传入空 Map 才会正确移除只有签名参数的 query。
+    return uri.replace(queryParameters: stableQuery).toString();
+  }
 
   Future<HlsDiskCacheEntry?> read(String key) async {
     try {
@@ -34,8 +49,24 @@ class HlsDiskCacheStore {
     }
   }
 
-  Future<void> write(String key, List<int> bytes, {String? contentType}) async {
-    if (bytes.isEmpty || bytes.length > maxBytes) return;
+  Future<void> write(String key, List<int> bytes, {String? contentType}) {
+    if (bytes.isEmpty || bytes.length > maxBytes) {
+      return Future<void>.value();
+    }
+    // 预热和真实播放可能同时写同一分片。串行化磁盘写，避免共用 .tmp/index 文件时
+    // 互相覆盖；缓存失败不会影响回源播放。
+    final operation = _writeTail.then(
+      (_) => _write(key, bytes, contentType: contentType),
+    );
+    _writeTail = operation.catchError((_) {});
+    return operation;
+  }
+
+  Future<void> _write(
+    String key,
+    List<int> bytes, {
+    String? contentType,
+  }) async {
     try {
       final index = await _index();
       final digest = sha256.convert(utf8.encode(key)).toString();

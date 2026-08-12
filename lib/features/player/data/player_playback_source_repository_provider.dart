@@ -7,6 +7,8 @@ import '../domain/player_playback_source.dart';
 import 'hls_playlist_preloader.dart';
 import 'hls_local_proxy_server.dart';
 import 'hls_disk_cache_store.dart';
+import 'hls_network_request_coordinator.dart';
+import 'hls_traffic_gate.dart';
 import 'mock_player_playback_source_repository.dart';
 import 'player_content_repository_provider.dart';
 import 'player_preload_config_provider.dart';
@@ -24,6 +26,8 @@ final hlsPlaylistPreloaderProvider = Provider<HlsPlaylistPreloader>((ref) {
     timeout: config.effectivePreloadTimeout,
     maxPreheatBytes: config.effectiveMaxPreloadBytes,
     cacheStore: ref.watch(hlsLocalCacheStoreProvider),
+    diskCacheStore: ref.watch(hlsDiskCacheStoreProvider),
+    networkCoordinator: ref.watch(hlsNetworkRequestCoordinatorProvider),
   );
   ref.onDispose(preloader.releasePending);
   return preloader;
@@ -54,6 +58,15 @@ final hlsLocalCacheStoreProvider = Provider<HlsLocalCacheStore>((ref) {
   return HlsLocalCacheStore();
 });
 
+final hlsNetworkRequestCoordinatorProvider =
+    Provider<HlsNetworkRequestCoordinator>((ref) {
+      return HlsNetworkRequestCoordinator();
+    });
+
+final hlsTrafficGateProvider = Provider<HlsTrafficGate>((ref) {
+  return HlsTrafficGate();
+});
+
 final hlsDiskCacheStoreProvider = Provider<HlsDiskCacheStore>((ref) {
   return HlsDiskCacheStore();
 });
@@ -64,6 +77,8 @@ final hlsLocalProxyServerProvider = Provider<HlsLocalProxyServer>((ref) {
     timeout: config.timeout,
     cacheStore: ref.watch(hlsLocalCacheStoreProvider),
     diskCacheStore: ref.watch(hlsDiskCacheStoreProvider),
+    networkCoordinator: ref.watch(hlsNetworkRequestCoordinatorProvider),
+    trafficGate: ref.watch(hlsTrafficGateProvider),
   );
   ref.onDispose(() {
     unawaited(server.stop());
@@ -91,6 +106,8 @@ final startupHlsPlaylistPreloaderProvider = Provider<HlsPlaylistPreloader>((
     timeout: config.effectivePreloadTimeout,
     maxPreheatBytes: config.effectiveMaxPreloadBytes,
     cacheStore: ref.watch(hlsLocalCacheStoreProvider),
+    diskCacheStore: ref.watch(hlsDiskCacheStoreProvider),
+    networkCoordinator: ref.watch(hlsNetworkRequestCoordinatorProvider),
   );
   ref.onDispose(preloader.releasePending);
   return preloader;
