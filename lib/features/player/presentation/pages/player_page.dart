@@ -50,6 +50,7 @@ import '../../application/player_session_registry.dart';
 import '../../application/player_ui_controller.dart';
 import '../../application/player_viewport_controller.dart';
 import '../../data/playback_progress_repository_provider.dart';
+import '../../data/drama_playback_target_repository_provider.dart';
 import '../../data/player_content_repository_provider.dart';
 import '../../data/player_remote_data_source_provider.dart';
 import '../../../popup/data/popup_repository_provider.dart';
@@ -61,6 +62,7 @@ import '../../domain/player_performance_policy.dart';
 import '../../domain/player_content.dart';
 import '../../domain/player_feed.dart';
 import '../../domain/player_playback_progress.dart';
+import '../../domain/drama_playback_target.dart';
 import '../../domain/player_subtitle.dart';
 import '../widgets/player_action_sheets.dart';
 import '../widgets/player_detail_sheet.dart';
@@ -83,6 +85,13 @@ final class _ExitRecommendationPlayResult
   const _ExitRecommendationPlayResult(this.recommendation);
 
   final PopupExitRecommendation recommendation;
+}
+
+class _InitialResumeCandidate {
+  const _InitialResumeCandidate({required this.source, required this.progress});
+
+  final String source;
+  final PlayerWatchProgress progress;
 }
 
 /// 鎾斁鍣?UI 瀹夸富锛氱旱鍚?[PageView] + 椤跺眰鍗曚緥 Video surface + sheet銆?
@@ -146,6 +155,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   AppShellBottomNavigationVisible? _shellChrome;
   PlaybackProgress? _resumeProgress;
   PlayerWatchProgress? _startupRemoteWatchProgress;
+  Future<DramaPlaybackTarget?>? _localResumeTargetFuture;
   String? _initialResumeEpisodeId;
   bool _isSeekDragging = false;
   bool _isModalOpen = false;
@@ -404,6 +414,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       playerOverlayOrchestratorProvider(_sessionKey).notifier,
     );
     _modalService = ref.read(appModalServiceProvider);
+    if (widget.feedMode == PlayerFeedMode.singleDrama &&
+        widget.dramaId != null &&
+        widget.dramaId!.isNotEmpty) {
+      // 与详情请求并行读取。第二次从未刷新的首页卡片进入时，优先使用这份本地
+      // 最新位置，避免退回首页接口里的旧 watch_progress。
+      _localResumeTargetFuture = ref
+          .read(dramaPlaybackTargetRepositoryProvider)
+          .getForDrama(widget.dramaId!);
+    }
     _exitRecommendationRecommendations =
         widget.initialExitRecommendationsForTesting;
     _exitRecommendationPopupId =
@@ -830,11 +849,24 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _applyDetailWatchProgress(PlayerFeedState feedState) async {
-    final watchProgress = _startupRemoteWatchProgress;
+    final detailWatchProgress = _startupRemoteWatchProgress;
+    final preferredCandidate = await _preferredInitialResumeCandidate(
+      feedState.items,
+    );
+    final watchProgress = preferredCandidate?.progress ?? detailWatchProgress;
     if (watchProgress == null || feedState.items.isEmpty) {
       return;
     }
     _startupRemoteWatchProgress = null;
+
+    _playbackController.recordPlaybackTiming(
+      'initial resume target selected',
+      details: [
+        'source=${preferredCandidate?.source ?? 'detail'}',
+        'episodeId=${watchProgress.episodeId}',
+        'positionMs=${watchProgress.position.inMilliseconds}',
+      ].join(' '),
+    );
 
     final remoteItemIndex = _indexForRemoteWatchProgress(
       feedState.items,
@@ -950,6 +982,98 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (mounted) {
       _settleViewportAtIndex(targetIndex);
     }
+  }
+
+  Future<_InitialResumeCandidate?> _preferredInitialResumeCandidate(
+    List<PlayerFeedItem> items,
+  ) async {
+    if (widget.feedMode != PlayerFeedMode.singleDrama ||
+        widget.dramaId == null ||
+        items.isEmpty) {
+      return null;
+    }
+
+    // 本地 SharedPreferences 异常时绝不能阻塞详情首播；它只用于让同一设备第二次
+    // 进入使用更近的播放位置。读取已在 initState 与详情并行启动。
+    DramaPlaybackTarget? localTarget;
+    final localFuture = _localResumeTargetFuture;
+    if (localFuture != null) {
+      try {
+        localTarget = await localFuture.timeout(
+          const Duration(milliseconds: 80),
+        );
+      } on TimeoutException {
+        _playbackController.recordPlaybackTiming(
+          'local resume target read timeout',
+          details: 'budgetMs=80',
+        );
+      } catch (_) {
+        // 退回首页 hint / 详情 watch_progress。
+      }
+    }
+    final localCandidate = _resumeCandidateForTarget(
+      items,
+      source: 'local',
+      target: localTarget,
+    );
+    if (localCandidate != null) return localCandidate;
+
+    final entry = ref.read(playerEntryPreloadCoordinatorProvider);
+    final hint = entry.dramaId == widget.dramaId ? entry.resumeHint : null;
+    if (hint == null || !hint.canResume) return null;
+    return _resumeCandidateForValues(
+      items,
+      source: 'home',
+      episodeId: hint.episodeId,
+      position: hint.position,
+      duration: hint.duration,
+    );
+  }
+
+  _InitialResumeCandidate? _resumeCandidateForTarget(
+    List<PlayerFeedItem> items, {
+    required String source,
+    required DramaPlaybackTarget? target,
+  }) {
+    if (target == null || !target.canResume) return null;
+    return _resumeCandidateForValues(
+      items,
+      source: source,
+      episodeId: target.episodeId,
+      position: target.position,
+      duration: target.duration,
+    );
+  }
+
+  _InitialResumeCandidate? _resumeCandidateForValues(
+    List<PlayerFeedItem> items, {
+    required String source,
+    required String episodeId,
+    required Duration position,
+    required Duration duration,
+  }) {
+    if (position <= Duration.zero || duration <= Duration.zero) return null;
+    final item = items.where((candidate) {
+      return candidate.episode.id == episodeId &&
+          _feedEngine.accessPresentationFor(candidate) ==
+              PlayerAccessPresentationState.playable;
+    }).firstOrNull;
+    if (item == null) return null;
+    final progress = PlayerWatchProgress(
+      episodeId: item.episode.id,
+      episodeNo: item.episode.number,
+      position: position,
+      duration: duration,
+      progressPercent: duration.inMilliseconds <= 0
+          ? 0
+          : (position.inMilliseconds * 100 ~/ duration.inMilliseconds).clamp(
+              0,
+              100,
+            ),
+    );
+    return progress.hasHistory
+        ? _InitialResumeCandidate(source: source, progress: progress)
+        : null;
   }
 
   int _indexForRemoteWatchProgress(

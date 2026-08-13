@@ -295,6 +295,30 @@ void main() {
     );
   });
 
+  test(
+    'replacing visible candidate retains completed startup metadata',
+    () async {
+      final sourceRepository = _FakePlaybackSourceRepository();
+      final container = _createContainer(sourceRepository: sourceRepository);
+      addTearDown(container.dispose);
+      final controller = container.read(
+        playerStartupPreloadControllerProvider.notifier,
+      );
+
+      await controller.preloadFirstPlayableDramaId('drama-a');
+      await controller.preloadFirstPlayableDramaId('drama-b');
+
+      final state = container.read(playerStartupPreloadControllerProvider);
+      expect(state.dramaId, 'drama-b');
+      expect(state.retainedCandidates, hasLength(1));
+      expect(state.retainedCandidates.single.dramaId, 'drama-a');
+      expect(
+        state.retainedCandidates.single.status,
+        PlayerStartupPreloadStatus.success,
+      );
+    },
+  );
+
   test('playItem records startup preload hit and miss', () async {
     final sourceRepository = _FakePlaybackSourceRepository();
     final container = _createContainer(sourceRepository: sourceRepository);

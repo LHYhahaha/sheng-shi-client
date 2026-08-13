@@ -103,7 +103,12 @@ final startupHlsPlaylistPreloaderProvider = Provider<HlsPlaylistPreloader>((
 ) {
   final config = ref.watch(playerPreloadConfigProvider);
   final preloader = HlsPlaylistPreloader(
-    timeout: config.effectivePreloadTimeout,
+    // 首页空闲候选只保留一部，允许它比播放页相邻预热拥有更长的关键分片窗口。
+    // 慢源的大首段常超过通用 4 秒预算；到 8 秒前仍只拉 playlist + 首段/续播段，
+    // 真正播放或候选切换仍可通过 singleflight 接管已在飞行的请求。
+    timeout: config.effectivePreloadTimeout < const Duration(seconds: 8)
+        ? const Duration(seconds: 8)
+        : config.effectivePreloadTimeout,
     maxPreheatBytes: config.effectiveMaxPreloadBytes,
     cacheStore: ref.watch(hlsLocalCacheStoreProvider),
     diskCacheStore: ref.watch(hlsDiskCacheStoreProvider),

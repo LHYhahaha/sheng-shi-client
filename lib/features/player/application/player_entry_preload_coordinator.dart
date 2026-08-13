@@ -102,14 +102,25 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
   }) {
     if (dramaId.isEmpty) return;
     final current = state;
+    final startupPreload = ref.read(playerStartupPreloadControllerProvider);
     // 卡片点击已携带首页的 watch_progress；随后路由层会以没有 hint 的兜底调用
     // 一次。后者不能覆盖前者，否则会重新启动详情/playlist 预热并丢失目标集。
     final routeFallbackCanReuseHint =
         resumeHint == null && current.resumeHint != null;
+    // 可见卡片预热本身会在详情返回后选择续播集，因此 coordinator 的 resumeHint
+    // 仍可能为空。若用户点击时携带的首页进度恰好对应这个已选中的 episode，不能
+    // 因为“hint 从无到有”重置已有 playlist/关键分片任务；只提升为用户意图并
+    // 把 hint 留给播放页。
+    final startupTargetMatchesRouteResume =
+        resumeHint?.canResume == true &&
+        startupPreload.itemId == 'single:$dramaId:${resumeHint!.episodeId}' &&
+        (startupPreload.status == PlayerStartupPreloadStatus.pending ||
+            startupPreload.status == PlayerStartupPreloadStatus.success);
     if (current.dramaId == dramaId &&
         current.preferredEpisodeId == preferredEpisodeId &&
         (_sameResumeHint(current.resumeHint, resumeHint) ||
-            routeFallbackCanReuseHint) &&
+            routeFallbackCanReuseHint ||
+            startupTargetMatchesRouteResume) &&
         current.isFresh) {
       // 同剧的可见预取已在跑或完成；点击只提升语义优先级，不重启详情/HLS 请求。
       if (isUserIntent && !current.isUserIntent) {
@@ -119,9 +130,16 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
           trigger: trigger,
           isUserIntent: true,
           requestedAt: current.requestedAt,
-          resumeHint: current.resumeHint,
+          resumeHint: resumeHint ?? current.resumeHint,
         );
-        _log('promote existing candidate', dramaId: dramaId, trigger: trigger);
+        _log(
+          'promote existing candidate',
+          dramaId: dramaId,
+          trigger: trigger,
+          extra: startupTargetMatchesRouteResume
+              ? 'reason=startup_target_matches_resume'
+              : null,
+        );
       } else {
         _log('reuse fresh candidate', dramaId: dramaId, trigger: trigger);
       }

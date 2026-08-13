@@ -226,11 +226,13 @@ class HlsPlaylistPreloader {
   /// 控制流量上限，避免首段过大时抢占当前播放带宽。
   final int maxPreheatBytes;
   int _generation = 0;
+  HlsRequestPriority _activePriority = HlsRequestPriority.preload;
 
   Future<HlsPlaylistPrefetchResult> prefetch(
     String sourceUrl, {
     Duration? preferredPosition,
   }) {
+    _activePriority = HlsRequestPriority.preload;
     final generation = _generation;
     return _prefetch(
       sourceUrl,
@@ -250,6 +252,14 @@ class HlsPlaylistPreloader {
         );
       },
     );
+  }
+
+  /// 普通播放器已接管同一 source 时，把尚未发出的关键段请求提升为 playback。
+  ///
+  /// 已经在飞行的请求不能重启，否则反而丢掉已下载字节；它们仍可通过 singleflight
+  /// 被代理加入。该提升只影响随后解析出的初始化段/目标段请求。
+  void promotePendingToPlayback() {
+    _activePriority = HlsRequestPriority.playback;
   }
 
   Future<HlsPlaylistPrefetchResult> _prefetch(
@@ -429,14 +439,14 @@ class HlsPlaylistPreloader {
       shared = await _networkCoordinator
           .streamFetch(
             uri,
-            priority: HlsRequestPriority.preload,
+            priority: _activePriority,
             open: () => client.open(uri, timeout: sharedRequestTimeout),
           )
           .completed;
     } else {
       shared = await _networkCoordinator.fetch(
         uri,
-        priority: HlsRequestPriority.preload,
+        priority: _activePriority,
         request: () async {
           final response = await _client.get(
             uri,

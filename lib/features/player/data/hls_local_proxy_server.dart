@@ -302,6 +302,7 @@ class HlsLocalProxyServer {
     final startedAt = DateTime.now();
     final cacheKey = remoteUri.toString();
     final cached = _cacheStore.read(cacheKey);
+    var cacheTier = 'memory';
     HlsLocalProxyResponse response;
     if (cached != null) {
       response = HlsLocalProxyResponse(
@@ -314,6 +315,7 @@ class HlsLocalProxyServer {
         HlsDiskCacheStore.keyForUri(remoteUri),
       );
       if (disk != null) {
+        cacheTier = 'disk';
         response = HlsLocalProxyResponse(
           statusCode: HttpStatus.ok,
           bytes: disk.bytes,
@@ -321,6 +323,7 @@ class HlsLocalProxyServer {
         );
         _cacheStore.write(cacheKey, response.bytes);
       } else {
+        cacheTier = 'remote';
         if (!_trafficGate.allowsRemoteFetch(owner)) {
           await _sendText(
             request,
@@ -375,7 +378,7 @@ class HlsLocalProxyServer {
     request.response.write(rewritten);
     await request.response.close();
     _log(
-      'playlist proxy fetch ${cached == null ? 'miss' : 'hit'} source=$remoteUri '
+      'playlist proxy fetch cacheTier=$cacheTier source=$remoteUri '
       'elapsedMs=${_elapsedMs(startedAt)} bytes=${response.bytes.length}',
     );
   }
@@ -392,7 +395,8 @@ class HlsLocalProxyServer {
     if (cachedBytes != null) {
       await _sendBytes(request, cachedBytes);
       _log(
-        'segment proxy fetch hit source=$remoteUri bytes=${cachedBytes.length}',
+        'segment proxy fetch cacheTier=memory source=$remoteUri '
+        'bytes=${cachedBytes.length}',
       );
       return;
     }
@@ -404,7 +408,8 @@ class HlsLocalProxyServer {
       _cacheStore.write(cacheKey, disk.bytes);
       await _sendBytes(request, disk.bytes, contentType: disk.contentType);
       _log(
-        'segment proxy disk hit source=$remoteUri bytes=${disk.bytes.length}',
+        'segment proxy fetch cacheTier=disk source=$remoteUri '
+        'bytes=${disk.bytes.length}',
       );
       return;
     }
@@ -457,7 +462,7 @@ class HlsLocalProxyServer {
       contentType: response.contentType,
     );
     _log(
-      'segment proxy fetch miss source=$remoteUri '
+      'segment proxy fetch cacheTier=remote source=$remoteUri '
       'elapsedMs=${_elapsedMs(startedAt)} bytes=${response.bytes.length}',
     );
   }
@@ -516,7 +521,7 @@ class HlsLocalProxyServer {
         contentType: completed.contentType,
       );
       _log(
-        'segment proxy stream fetch miss source=$remoteUri '
+        'segment proxy stream fetch cacheTier=remote source=$remoteUri '
         'elapsedMs=${_elapsedMs(startedAt)} bytes=${completed.bytes.length}',
       );
     } catch (error) {

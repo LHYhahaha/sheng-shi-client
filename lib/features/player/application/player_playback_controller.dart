@@ -475,7 +475,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   static const videoSurfaceTeardownDelay = Duration(milliseconds: 450);
   static const _restoreFloorTimeout = Duration(seconds: 12);
   static const _firstFrameProgressProbeDelay = Duration(milliseconds: 800);
-  static const _firstFrameVideoRecoveryDelay = Duration(milliseconds: 2800);
+  // 已确认音频时钟/续播位置在推进但没有 video width，说明不是单纯的网络首段
+  // 等待。此时 1.4 秒已足够区分正常 decoder 初始化与 Android HLS 卡住；更早重开
+  // 可直接复用刚下载的 playlist/关键段，避免旧的 2.8 秒空转。
+  static const _firstFrameVideoRecoveryDelay = Duration(milliseconds: 1400);
   static const _preloadReadinessAdvance = Duration(milliseconds: 750);
   static const _resumeOpenStartMinPosition = Duration(seconds: 10);
   static const _localResumeReadBudget = Duration(milliseconds: 180);
@@ -977,20 +980,20 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       if (startupPreload.status == PlayerStartupPreloadStatus.pending &&
           startupPreload.itemId == item.id &&
           startupPreload.sourceUrl == item.episode.videoSource) {
-        // startup 的 HLS 预热与本地代理的流式读取暂时还不是同一种请求类型，不能
-        // 把两者误当成可直接交接的同一条网络流。继续保留 startup 会让首段和高
-        // 续播目标段与真实播放并发抢带宽；先让真实播放优先，已完成的磁盘缓存仍可
-        // 复用。之后只有接入同一流式 singleflight 后才能安全放开这里。
+        // startup 预热只保留 playlist、初始化首段和续播目标段，且与本地代理共用
+        // 稳定 key 的 singleflight。真实播放加入后会优先消费同一资源；不再在刚
+        // 拿到地址的 20~30ms 内整体取消，避免高续播位置来不及拉到目标分片。
         _logTiming(
-          'startup preload yielded to active playback',
+          'startup critical segment relay retained for active playback',
           itemId: item.id,
           source: item.episode.videoSource,
         );
-        unawaited(
-          ref
-              .read(playerStartupPreloadControllerProvider.notifier)
-              .cancel(reason: 'active_playback_takeover', syncState: false),
-        );
+        ref
+            .read(playerStartupPreloadControllerProvider.notifier)
+            .promotePendingForActivePlayback(
+              itemId: item.id,
+              sourceUrl: item.episode.videoSource!,
+            );
       }
     }
 
@@ -1484,7 +1487,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     final config = ref.read(playerPreloadConfigProvider);
     final isForYou = items[currentIndex].mode == PlayerFeedMode.forYou;
     final forwardPreloadCount = config.forwardHlsPreloadCountFor(isForYou);
-    final backwardPreloadCount = config.backwardHlsPreloadCountFor(isForYou);
+    // For You 的网络优先级固定为 current > next。上一条的回滑体验由
+    // retained media session + 已落盘分片承担，不能再为它新开 HLS 回源；即使
+    // 未来远程配置误下发了 backward count，也不能抢 next 的首帧带宽。
+    final backwardPreloadCount = isForYou
+        ? 0
+        : config.backwardHlsPreloadCountFor(false);
     // HLS preload 只挑可播放的相邻 source。locked/unavailable/null source 不占有效名额，
     // 否则一个付费或下架 item 会把真正可预热的下一集挤掉。
     final forwardCandidates = _preloadCandidatesInDirection(
@@ -2976,7 +2984,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   /// 个别 Android/HLS 会先持续推进音频时钟，却迟迟收不到 video width。此时继续
-  /// 等完整 8 秒首帧超时只会让用户多看一段 loading。确认已推进且 2.8 秒仍无视频
+  /// 等完整 8 秒首帧超时只会让用户多看一段 loading。确认已推进且 1.4 秒仍无视频
   /// 后，仅重开一次同一 source；已下载的 playlist/segment 会命中内存/磁盘缓存。
   void _armFirstFrameVideoRecovery({
     required int generation,
