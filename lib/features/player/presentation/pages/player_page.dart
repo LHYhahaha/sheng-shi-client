@@ -152,6 +152,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   static const _dimmedOverlayOpacity = 0.64;
   static const _lockedNextEpisodeRewind = Duration(seconds: 8);
   static const _forYouNearEndRestartThreshold = Duration(seconds: 8);
+  static const _predictivePreloadPageThreshold = 0.60;
 
   late final PageController _pageController;
   late final String _sessionKey;
@@ -182,6 +183,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _allowRemoteResumeEpisodeSwitch = true;
   bool _enforceInitialHandoffRewindSeek = false;
   bool _isExitRecommendationRequestInFlight = false;
+  int? _lastPredictivePreloadIndex;
   DateTime? _lastForYouNoMoreToastAt;
   String? _activeCoinSheetItemId;
   String? _activeRechargeSheetItemId;
@@ -410,7 +412,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _pageController = PageController();
-    _pageController.addListener(_syncActiveVideoPagePosition);
+    _pageController.addListener(_handlePageControllerTick);
     _sessionKey = _createSessionKey();
     _playbackController = ref.read(
       playerPlaybackControllerProvider(_sessionKey).notifier,
@@ -569,7 +571,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
     _shellChrome?.show();
     _overlayOpacityNotifier.dispose();
-    _pageController.removeListener(_syncActiveVideoPagePosition);
+    _pageController.removeListener(_handlePageControllerTick);
     _pagePositionNotifier.dispose();
     _pageController.dispose();
     super.dispose();
@@ -1642,6 +1644,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           itemCount: items.length,
           onPageChanged: (index) {
             feedEngine.onPageChanged(index);
+            if (_isPageScrolling) {
+              _preloadForPredictedPageIndex(index);
+            }
             // 在倒数第二条就取下一页，让用户真正滑到末条时网络请求通常已经完成。
             // 仍由 feed controller 的 isLoadingMore/hasMore 去重，短列表（仅一条）
             // 会在首条触发一次，保持首次数据不足时的兜底行为。
@@ -1947,6 +1952,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         notification is ScrollUpdateNotification) {
       if (notification is ScrollStartNotification) {
         _allowRemoteResumeEpisodeSwitch = false;
+        _lastPredictivePreloadIndex = null;
         _feedEngine.onScrollStart();
         final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
         _playbackController.recordPlaybackUserAction(
@@ -1961,6 +1967,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
     if (notification is ScrollEndNotification) {
       _setPageScrolling(false);
+      _lastPredictivePreloadIndex = null;
       final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
       _feedEngine.onScrollEnd();
       if (feedState.items.isNotEmpty) {
@@ -1977,6 +1984,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             feedState.items.length - 1,
           );
           final settledItem = feedState.items[settledIndex];
+          _preloadForPredictedPageIndex(settledIndex);
           _feedEngine.settleViewport(
             index: settledIndex,
             itemId: settledItem.id,
@@ -1985,6 +1993,71 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       }
     }
     return false;
+  }
+
+  void _handlePageControllerTick() {
+    _syncActiveVideoPagePosition();
+    _preloadForPredictedPageDuringScroll();
+  }
+
+  void _preloadForPredictedPageDuringScroll() {
+    if (!_pageController.hasClients) {
+      return;
+    }
+    final page = _pageController.page;
+    if (page == null || !page.isFinite) {
+      return;
+    }
+    final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+    final items = feedState.items;
+    if (items.isEmpty) {
+      return;
+    }
+    final viewport = ref.read(playerViewportControllerProvider(_sessionKey));
+    if (viewport.scrollPhase == PlayerViewportScrollPhase.idle) {
+      return;
+    }
+    final settledIndex = viewport.settledIndex.clamp(0, items.length - 1);
+    final delta = page - settledIndex;
+    if (delta.abs() < _predictivePreloadPageThreshold) {
+      return;
+    }
+    final predictedIndex = (delta > 0 ? settledIndex + 1 : settledIndex - 1)
+        .clamp(0, items.length - 1);
+    if (predictedIndex == settledIndex ||
+        predictedIndex == _lastPredictivePreloadIndex) {
+      return;
+    }
+    _preloadForPredictedPageIndex(predictedIndex);
+  }
+
+  void _preloadForPredictedPageIndex(int predictedIndex) {
+    if (predictedIndex == _lastPredictivePreloadIndex) {
+      return;
+    }
+    final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+    final items = feedState.items;
+    if (predictedIndex < 0 || predictedIndex >= items.length) {
+      return;
+    }
+    if (predictedIndex == feedState.currentIndex) {
+      return;
+    }
+    final settledIndex = ref
+        .read(playerViewportControllerProvider(_sessionKey))
+        .settledIndex
+        .clamp(0, items.length - 1);
+    if (predictedIndex == settledIndex) {
+      return;
+    }
+    _lastPredictivePreloadIndex = predictedIndex;
+    unawaited(
+      _feedEngine.preloadForPredictedViewport(
+        items: items,
+        currentIndex: settledIndex,
+        predictedIndex: predictedIndex,
+      ),
+    );
   }
 
   void _showForYouNoMoreToast() {

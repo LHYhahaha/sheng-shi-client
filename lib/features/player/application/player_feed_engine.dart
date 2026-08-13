@@ -138,6 +138,25 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     _viewport.initialize(index: index, itemId: itemId);
   }
 
+  Future<void> preloadForPredictedViewport({
+    required List<PlayerFeedItem> items,
+    required int currentIndex,
+    required int predictedIndex,
+  }) async {
+    if (currentIndex < 0 || currentIndex >= items.length) {
+      return;
+    }
+    if (predictedIndex < 0 || predictedIndex >= items.length) {
+      return;
+    }
+    final predictedItem = items[predictedIndex];
+    if (accessPresentationFor(predictedItem) !=
+        PlayerAccessPresentationState.playable) {
+      return;
+    }
+    await _playback.preloadItemForPredictedViewport(predictedItem);
+  }
+
   /// 浠呭湪 viewport settled 鍚庤皟鐢紱drag 闃舵璋冪敤灏嗚蹇界暐銆?
   Future<void> onViewportSettled({
     required PlayerFeedItem item,

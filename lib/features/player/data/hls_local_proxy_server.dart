@@ -140,7 +140,7 @@ class DartIoHlsLocalProxyHttpClient
 /// 只在 proxy server 生命周期内有效，不是持久缓存。stop 时必须清空，避免 spike 数据
 /// 跨会话复用。
 class HlsLocalCacheStore {
-  HlsLocalCacheStore({this.maxBytes = 24 * 1024 * 1024});
+  HlsLocalCacheStore({this.maxBytes = 4 * 1024 * 1024});
 
   final int maxBytes;
   final _bytesByUrl = <String, List<int>>{};

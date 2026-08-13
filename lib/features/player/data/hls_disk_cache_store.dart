@@ -9,7 +9,7 @@ import 'package:path_provider/path_provider.dart';
 /// key 由 proxy 传入；当前会忽略 URL 的 expires/verify 签名参数。后端提供
 /// cache_version 后，调用方应把版本加入 key，以便内容替换时精确失效。
 class HlsDiskCacheStore {
-  HlsDiskCacheStore({this.maxBytes = 350 * 1024 * 1024});
+  HlsDiskCacheStore({this.maxBytes = 1024 * 1024 * 1024});
 
   final int maxBytes;
   Future<_HlsDiskIndex>? _indexFuture;

@@ -7,6 +7,7 @@ import 'package:flutter_svg/svg.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../application/player_like_count_provider.dart';
 import '../../domain/player_content.dart';
@@ -426,9 +427,9 @@ class _PlayerPosterLayer extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (showViewportBackdrop)
-              const RepaintBoundary(
-                key: ValueKey('player_poster_repaint_boundary'),
-                child: ColoredBox(color: AppColors.black),
+              RepaintBoundary(
+                key: const ValueKey('player_poster_repaint_boundary'),
+                child: _PlayerPosterArtwork(content: content),
               ),
             ?playbackLayer,
             if (showLoading)
@@ -438,6 +439,42 @@ class _PlayerPosterLayer extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _PlayerPosterArtwork extends StatelessWidget {
+  const _PlayerPosterArtwork({required this.content});
+
+  final PlayerContent content;
+
+  @override
+  Widget build(BuildContext context) {
+    final coverUrl = content.coverUrl?.trim();
+    final posterAssetPath = content.posterAssetPath.trim();
+    final assetFallback = posterAssetPath.isEmpty
+        ? const ColoredBox(color: AppColors.black)
+        : Image.asset(
+            posterAssetPath,
+            key: const ValueKey('player_poster_artwork'),
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.low,
+            errorBuilder: (context, error, stackTrace) =>
+                const ColoredBox(color: AppColors.black),
+          );
+
+    if (coverUrl == null || coverUrl.isEmpty) {
+      return assetFallback;
+    }
+
+    return AppCachedNetworkImage(
+      key: const ValueKey('player_poster_artwork'),
+      imageUrl: coverUrl,
+      fit: BoxFit.cover,
+      filterQuality: FilterQuality.low,
+      errorWidget: assetFallback,
+      placeholder: assetFallback,
+      fallbackBackgroundColor: AppColors.black,
     );
   }
 }

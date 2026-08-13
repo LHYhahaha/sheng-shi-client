@@ -35,10 +35,12 @@ import 'package:drama_client/features/player/application/player_performance_poli
 import 'package:drama_client/features/player/application/player_viewport_controller.dart';
 import 'package:drama_client/features/pay/application/payment_loading_controller.dart';
 import 'package:drama_client/features/player/domain/player_performance_policy.dart';
+import 'package:drama_client/features/player/data/player_preload_config_provider.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/domain/for_you_player_handoff.dart';
 import 'package:drama_client/features/player/domain/player_playback_source.dart';
+import 'package:drama_client/features/player/domain/player_preload_config.dart';
 import 'package:drama_client/core/toast/app_toast_provider.dart';
 import 'package:drama_client/features/player/presentation/pages/player_page.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_payment_method_modal_layer.dart';
@@ -347,6 +349,20 @@ void main() {
       findsNothing,
     );
     expect(find.text('A Life That Shines Again >'), findsOneWidget);
+  });
+
+  test('playback shell snapshot exposes first frame readiness', () {
+    final state = const PlayerPlaybackState.initial().copyWith(
+      status: PlayerPlaybackStatus.playing,
+      hasFirstFrame: true,
+      currentItemId: 'item-a',
+      currentSource: _mockVideoUrl,
+      surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
+    );
+
+    final snapshot = PlayerPlaybackShellSnapshot.fromState(state);
+
+    expect(snapshot.hasFirstFrame, isTrue);
   });
 
   testWidgets(
@@ -1565,6 +1581,56 @@ void main() {
     expect(find.byKey(const ValueKey('player_download_button')), findsNothing);
   });
 
+  testWidgets('PlayerChrome renders poster artwork behind playback surface', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ProviderScope(
+          child: PlayerChrome(
+            content: _content(const [
+              PlayerEpisode(
+                id: 'ep-1',
+                number: 1,
+                isLocked: false,
+                videoUrl: _mockVideoUrl,
+              ),
+            ]),
+            isPlaying: false,
+            showCenterPlayButton: false,
+            showViewportBackdrop: true,
+            onTogglePlay: () {},
+            onWatchNowTap: () {},
+            onEpisodesTap: () {},
+            onShareTap: () {},
+            onMoreTap: () {},
+            onUnlockTap: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final posterLayer = find.byKey(
+      const ValueKey('player_poster_repaint_boundary'),
+    );
+    expect(posterLayer, findsOneWidget);
+    expect(
+      find.descendant(
+        of: posterLayer,
+        matching: find.byKey(const ValueKey('player_poster_artwork')),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('single drama seek bar uses episode metadata duration fallback', (
     tester,
   ) async {
@@ -2258,6 +2324,60 @@ void main() {
     expect(preloadManager.preloadedItemIds, isEmpty);
     expect(preloadManager.preloadCount, 0);
     expect(preloadManager.releasePendingCount, 0);
+  });
+
+  testWidgets('page change toward playable episode starts predictive preload', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+    final preloadManager = MockPlayerPlaybackPreloadManager(
+      preloadDelay: Duration.zero,
+    );
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: 'drama-a',
+          episodeId: '2',
+        ),
+        repository: _FakePlayerFeedRepository._(
+          items: _itemsWithAccessPattern([
+            _EpisodeAccessFixture.free(1, _mockVideoUrl),
+            _EpisodeAccessFixture.free(2, _mockSecondVideoUrl),
+            _EpisodeAccessFixture.free(3, _mockThirdVideoUrl),
+          ]),
+        ),
+        playbackSessionFactory: () => playbackSession,
+        preloadManager: preloadManager,
+        providerOverrides: [
+          playerPreloadConfigProvider.overrideWithValue(
+            const PlayerPreloadConfig(
+              singleDramaForwardHlsPreloadCount: 0,
+              singleDramaBackwardHlsPreloadCount: 0,
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('EP.02'), findsOneWidget);
+
+    preloadManager.preloadedItemIds.clear();
+    preloadManager.preloadCount = 0;
+
+    await tester.fling(find.byType(PageView), const Offset(0, -700), 1600);
+    await tester.pumpAndSettle();
+
+    expect(preloadManager.preloadCount, 1);
+    await tester.pump(const Duration(milliseconds: 1));
+
+    expect(preloadManager.preloadedItemIds, contains('drama-a-ep-3'));
+    expect(playbackSession.openedSources, [
+      _mockSecondVideoUrl,
+      _mockThirdVideoUrl,
+    ]);
   });
 
   testWidgets(

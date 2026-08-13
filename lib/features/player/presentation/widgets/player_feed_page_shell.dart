@@ -199,7 +199,9 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
         shell.currentItemId == item.id &&
         shell.currentSource != null;
     final canHideViewportBackdrop =
-        canUsePlaybackSurface && shell.hasVideoController;
+        canUsePlaybackSurface &&
+        shell.hasVideoController &&
+        shell.hasFirstFrame;
 
     return Stack(
       children: [

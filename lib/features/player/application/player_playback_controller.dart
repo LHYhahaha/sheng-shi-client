@@ -117,9 +117,10 @@ enum PlayerPlaybackErrorKind {
 }
 
 class _SessionWindowSyncResult {
-  const _SessionWindowSyncResult(this.allowedIds);
+  const _SessionWindowSyncResult(this.allowedIds, {required this.generation});
 
   final Set<String> allowedIds;
+  final int generation;
 
   String get logSummary => allowedIds.isEmpty ? 'none' : allowedIds.join(',');
 }
@@ -525,15 +526,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (kIsWeb) {
       return false;
     }
-    final WidgetsBinding binding;
-    try {
-      binding = WidgetsBinding.instance;
-    } catch (_) {
-      return true;
-    }
-    return !binding.runtimeType.toString().contains(
-      'TestWidgetsFlutterBinding',
-    );
+    return true;
   }
 
   final String sessionKey;
@@ -1459,17 +1452,23 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
     final currentItem = items[currentIndex];
     final config = ref.read(playerPreloadConfigProvider);
-    final sessionWindowSynced = await _syncSessionWindowForItems(
-      items,
-      currentIndex,
-      config,
-      reason: 'stale generation/window trim',
-    );
-    if (_shouldDeferPreloadUntilFirstFrame &&
+    final shouldDeferForCurrentFirstFrame =
+        _shouldDeferPreloadUntilFirstFrame &&
         state.status == PlayerPlaybackStatus.opening &&
         state.currentItemId == currentItem.id &&
         state.currentSource != null &&
-        !state.hasFirstFrame) {
+        !state.hasFirstFrame;
+    final sessionWindowSynced = shouldDeferForCurrentFirstFrame
+        ? await _trimSessionWindowForIds({
+            if (state.currentItemId != null) state.currentItemId!,
+          }, reason: 'defer prepare until first frame')
+        : await _syncSessionWindowForItems(
+            items,
+            currentIndex,
+            config,
+            reason: 'stale generation/window trim',
+          );
+    if (shouldDeferForCurrentFirstFrame) {
       _deferredPreloadItems = List<PlayerFeedItem>.unmodifiable(items);
       _deferredPreloadIndex = currentIndex;
       _logTiming(
@@ -1620,6 +1619,93 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> preloadItemForPredictedViewport(PlayerFeedItem item) async {
+    if (_isSessionDisposed) {
+      return;
+    }
+    final preferredItem = _itemUsingPreferredEmbeddedSource(
+      item,
+      updatePreference: false,
+    );
+    final sourceUrl = preferredItem.episode.videoSource;
+    if (preferredItem.episode.isLocked ||
+        preferredItem.episode.isUnavailable ||
+        sourceUrl == null ||
+        preferredItem.id == state.currentItemId ||
+        _preloadedItemIds.contains(preferredItem.id) ||
+        _preloadStates[preferredItem.id]?.status ==
+            PlaybackPreloadStatus.pending) {
+      return;
+    }
+    final allowedIds = _activePreloadAllowedIds.toSet()..add(preferredItem.id);
+    if (state.currentItemId != null) {
+      allowedIds.add(state.currentItemId!);
+    }
+    final preloadGeneration = setEquals(_activePreloadAllowedIds, allowedIds)
+        ? _preloadGeneration
+        : ++_preloadGeneration;
+    _activePreloadAllowedIds = allowedIds;
+    _cancelPreloadsNotIn(allowedIds);
+    _setPreloadState(
+      PlaybackPreloadState(
+        itemId: preferredItem.id,
+        sourceUrl: sourceUrl,
+        status: PlaybackPreloadStatus.pending,
+        startedAt: DateTime.now(),
+      ),
+    );
+    try {
+      final preloadStartedAt = DateTime.now();
+      _logTiming(
+        'predictive preload start',
+        itemId: preferredItem.id,
+        source: sourceUrl,
+        details: _timingDetails(['reason=drag_threshold']),
+      );
+      final result = await ref
+          .read(playerPlaybackSourceRepositoryProvider)
+          .preload(preferredItem);
+      _logTiming(
+        'predictive preload end',
+        itemId: preferredItem.id,
+        source: sourceUrl,
+        elapsed: DateTime.now().difference(preloadStartedAt),
+        details: result.details == null
+            ? result.status.name
+            : '${result.status.name} | ${result.details}',
+      );
+      if (!ref.mounted ||
+          _isSessionDisposed ||
+          preloadGeneration != _preloadGeneration) {
+        return;
+      }
+      _setPreloadState(result);
+    } catch (error) {
+      _logTiming(
+        'predictive preload error',
+        itemId: preferredItem.id,
+        source: sourceUrl,
+        error: error,
+      );
+      if (!ref.mounted ||
+          _isSessionDisposed ||
+          preloadGeneration != _preloadGeneration) {
+        return;
+      }
+      _setPreloadState(
+        PlaybackPreloadState(
+          itemId: preferredItem.id,
+          sourceUrl: sourceUrl,
+          status: PlaybackPreloadStatus.failed,
+          startedAt:
+              _preloadStates[preferredItem.id]?.startedAt ?? DateTime.now(),
+          completedAt: DateTime.now(),
+          error: error,
+        ),
+      );
     }
   }
 
@@ -3015,6 +3101,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         index < 0 ||
         index >= items.length ||
         items[index].id != state.currentItemId) {
+      _deferredPreloadItems = null;
+      _deferredPreloadIndex = null;
       return;
     }
     if (!_preloadReadinessReached || state.isBuffering) {
@@ -3431,6 +3519,22 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     return true;
   }
 
+  Future<_SessionWindowSyncResult> _trimSessionWindowForIds(
+    Set<String> allowedIds, {
+    required String reason,
+  }) async {
+    await _retainSessionWindowOnly(allowedIds, reason: reason);
+    final sessionWindowGeneration =
+        setEquals(_activeSessionWindowAllowedIds, allowedIds)
+        ? _sessionWindowGeneration
+        : ++_sessionWindowGeneration;
+    _activeSessionWindowAllowedIds = allowedIds;
+    return _SessionWindowSyncResult(
+      allowedIds,
+      generation: sessionWindowGeneration,
+    );
+  }
+
   Future<_SessionWindowSyncResult> _syncSessionWindowForItems(
     List<PlayerFeedItem> items,
     int currentIndex,
@@ -3477,7 +3581,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       }
     }
 
-    return _SessionWindowSyncResult(allowedIds);
+    return _SessionWindowSyncResult(
+      allowedIds,
+      generation: sessionWindowGeneration,
+    );
   }
 
   Future<void> _prepareNextItem(

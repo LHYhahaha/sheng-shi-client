@@ -2196,7 +2196,7 @@ void main() {
   );
 
   test(
-    'opening playback prepares next session for immediate swipe readiness',
+    'opening playback defers next prepared session until first frame is stable',
     () async {
       var index = 0;
       final currentOpenCompleter = Completer<void>();
@@ -2226,15 +2226,24 @@ void main() {
       await controller.preloadAround([_item(1), _item(2)], 0);
       await Future<void>.delayed(const Duration(milliseconds: 200));
 
-      expect(preparedSession.openedSources, [_secondVideoUrl]);
+      expect(preparedSession.openedSources, isEmpty);
       expect(
         controller.exportTimingReport(),
-        contains('sessionAllowedIds=drama-a-ep-1,drama-a-ep-2'),
+        contains('preload deferred until first frame'),
       );
 
       currentOpenCompleter.complete();
       currentSession.emitWidth(1280);
+      currentSession.emitPosition(const Duration(milliseconds: 300));
       await playFuture;
+      currentSession.emitPosition(const Duration(milliseconds: 1200));
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+
+      expect(preparedSession.openedSources, [_secondVideoUrl]);
+      expect(
+        controller.exportTimingReport(),
+        contains('preload deferred flush'),
+      );
     },
   );
 

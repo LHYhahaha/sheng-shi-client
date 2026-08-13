@@ -8,6 +8,26 @@ import 'package:drama_client/features/player/data/hls_traffic_gate.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('default memory cache budget stays small for low-RAM playback', () {
+    final cacheStore = HlsLocalCacheStore();
+
+    expect(cacheStore.maxBytes, 4 * 1024 * 1024);
+  });
+
+  test('memory cache evicts least recently used entries within budget', () {
+    final cacheStore = HlsLocalCacheStore(maxBytes: 4)
+      ..write('seg-1.ts', [1, 1])
+      ..write('seg-2.ts', [2, 2]);
+
+    expect(cacheStore.read('seg-1.ts'), [1, 1]);
+
+    cacheStore.write('seg-3.ts', [3, 3]);
+
+    expect(cacheStore.contains('seg-1.ts'), isTrue);
+    expect(cacheStore.contains('seg-2.ts'), isFalse);
+    expect(cacheStore.contains('seg-3.ts'), isTrue);
+  });
+
   test('playlist rewrite resolves relative segment and playlist urls', () {
     final rewritten = rewritePlaylist(
       Uri.parse('https://cdn.example.com/hls/master.m3u8'),

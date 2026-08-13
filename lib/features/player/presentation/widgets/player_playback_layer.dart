@@ -132,6 +132,7 @@ class PlayerPlaybackShellSnapshot {
     required this.status,
     required this.surfaceLifecycle,
     required this.hasVideoController,
+    required this.hasFirstFrame,
     required this.playbackRate,
   });
 
@@ -142,6 +143,7 @@ class PlayerPlaybackShellSnapshot {
       status: state.status,
       surfaceLifecycle: state.surfaceLifecycle,
       hasVideoController: state.videoController != null,
+      hasFirstFrame: state.hasFirstFrame,
       playbackRate: state.playbackRate,
     );
   }
@@ -151,6 +153,7 @@ class PlayerPlaybackShellSnapshot {
   final PlayerPlaybackStatus status;
   final PlayerVideoSurfaceLifecycle surfaceLifecycle;
   final bool hasVideoController;
+  final bool hasFirstFrame;
   final double playbackRate;
 
   bool get shouldAttachVideoSurface =>
@@ -168,6 +171,7 @@ class PlayerPlaybackShellSnapshot {
         other.status == status &&
         other.surfaceLifecycle == surfaceLifecycle &&
         other.hasVideoController == hasVideoController &&
+        other.hasFirstFrame == hasFirstFrame &&
         other.playbackRate == playbackRate;
   }
 
@@ -178,6 +182,7 @@ class PlayerPlaybackShellSnapshot {
     status,
     surfaceLifecycle,
     hasVideoController,
+    hasFirstFrame,
     playbackRate,
   );
 }
