@@ -218,7 +218,9 @@ String? analyticsPageNameForRoute(String routeName) => switch (routeName) {
   'wallet' => AnalyticsPageNames.wallet,
   'store' => AnalyticsPageNames.coinRecharge,
   'auth' => AnalyticsPageNames.login,
-  'rewards' => AnalyticsPageNames.rewardCoin,
+  // RewardsPage 内有金币奖励、会员积分两个独立 page 会话；由容器按实际 Tab
+  // 负责 page_view/page_leave，路由观察器不能按固定值抢先上报。
+  'rewards' => null,
   'member-point-details' => AnalyticsPageNames.memberPoints,
   'settings' => AnalyticsPageNames.settings,
   'language' => AnalyticsPageNames.languageSettings,

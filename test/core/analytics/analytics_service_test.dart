@@ -121,6 +121,27 @@ void main() {
     );
   });
 
+  test('share app open only accepts documented landing types', () {
+    final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.shareAppOpen, {
+          'landing_type': 'normal_share',
+        }),
+      ),
+      returnsNormally,
+    );
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.shareAppOpen, {
+          'landing_type': 'unknown',
+        }),
+      ),
+      throwsA(isA<AnalyticsValidationError>()),
+    );
+  });
+
   test('vip product card requires the documented click action', () {
     final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
     const baseParams = {
@@ -210,6 +231,53 @@ void main() {
         const AnalyticsEvent(AnalyticsDefinitions.loginFail, {
           'login_provider': 'google',
           'result_status': 'cancelled',
+        }),
+      ),
+      returnsNormally,
+    );
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.loginFail, {
+          'login_provider': 'google',
+          'result_status': 'failed',
+          'login_fail_reason': 'network',
+        }),
+      ),
+      throwsA(isA<AnalyticsValidationError>()),
+    );
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.loginFail, {
+          'login_provider': 'google',
+          'result_status': 'failed',
+          'login_fail_reason': 'network_error',
+        }),
+      ),
+      returnsNormally,
+    );
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.loginFail, {
+          'login_provider': 'device',
+          'result_status': 'failed',
+          'login_fail_reason': 'unknown_error',
+        }),
+      ),
+      throwsA(isA<AnalyticsValidationError>()),
+    );
+  });
+
+  test('episode unlock request accepts documented auto coin parameters', () {
+    final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.episodeUnlockRequest, {
+          'drama_id': '100',
+          'episode_id': '200',
+          'unlock_trigger_type': 'auto',
+          'required_coin_amount': 60,
+          'request_id': 'episode_unlock_100_200_1',
         }),
       ),
       returnsNormally,

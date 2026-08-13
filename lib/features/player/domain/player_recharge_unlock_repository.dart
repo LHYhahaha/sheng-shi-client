@@ -23,5 +23,6 @@ abstract interface class PlayerRechargeUnlockRepository {
     required String shortTitle,
     required String cover,
     required int episodeId,
+    required String requestId,
   });
 }

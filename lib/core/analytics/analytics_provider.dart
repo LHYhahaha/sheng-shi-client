@@ -63,11 +63,13 @@ final analyticsEventSinkProvider = Provider<AnalyticsEventSink>((ref) {
 });
 
 final analyticsServiceProvider = Provider<AnalyticsService>((ref) {
-  // AnalyticsService 可能被 Banner 等延迟 UI 回调短暂持有。不要把 Ref.read 的闭包
-  // 交给它：ProviderScope 热重载/重建后，旧 service 再取上下文会访问已 dispose 的
-  // ref。watch 让上下文变化时创建新 service，而旧 service 使用创建当时的快照安全
-  // 完成已经发起的事件。
-  final context = ref.watch(analyticsContextProvider);
+  // 不能 watch analyticsContextProvider：page_view 写入当前页面后会使本 Provider
+  // 重建，连带销毁 AnalyticsPageTracker，下一次页面切换就丢失 enteredAt，导致所有
+  // page_leave 都无法生成。AnalyticsService 必须在整个 App 生命周期保持同一实例，
+  // 在事件发生时读取当前公共参数即可。
   final eventSink = ref.watch(analyticsEventSinkProvider);
-  return AnalyticsService(contextReader: () => context, eventSink: eventSink);
+  return AnalyticsService(
+    contextReader: () => ref.read(analyticsContextProvider),
+    eventSink: eventSink,
+  );
 });

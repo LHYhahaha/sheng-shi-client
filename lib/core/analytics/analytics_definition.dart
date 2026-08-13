@@ -380,7 +380,11 @@ abstract final class AnalyticsDefinitions {
     loginFail: AnalyticsEventDefinition(
       name: loginFail,
       parameters: {
-        'login_provider': _requiredString,
+        'login_provider': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          required: true,
+          allowedValues: {'facebook', 'google', 'apple'},
+        ),
         'result_status': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
           required: true,
@@ -389,6 +393,12 @@ abstract final class AnalyticsDefinitions {
         'login_fail_reason': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
           requiredWhen: (params) => params['result_status'] == 'failed',
+          allowedValues: {
+            'network_error',
+            'sdk_error',
+            'credential_missing',
+            'unknown_error',
+          },
         ),
       },
     ),
@@ -397,8 +407,11 @@ abstract final class AnalyticsDefinitions {
       parameters: {
         'drama_id': _requiredString,
         'episode_id': _requiredString,
-        'unlock_type': _requiredString,
-        'unlock_trigger_type': _requiredString,
+        'unlock_trigger_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          required: true,
+          allowedValues: {'manual', 'auto'},
+        ),
         'required_coin_amount': _requiredNumber,
         'request_id': _requiredString,
       },
@@ -477,7 +490,13 @@ abstract final class AnalyticsDefinitions {
     ),
     shareAppOpen: AnalyticsEventDefinition(
       name: shareAppOpen,
-      parameters: {'landing_type': _requiredString},
+      parameters: {
+        'landing_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          required: true,
+          allowedValues: {'normal_share', 'drama_gift', 'temp_vip_gift'},
+        ),
+      },
     ),
   });
 }

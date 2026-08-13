@@ -19,6 +19,8 @@ import '../core/analytics/analytics_definition.dart';
 import '../core/analytics/analytics_entry_source.dart';
 import '../core/analytics/analytics_event.dart';
 import '../core/analytics/analytics_lifecycle_tracker.dart';
+import '../core/analytics/analytics_page_context.dart';
+import '../core/analytics/analytics_page_tracker.dart';
 import '../core/analytics/analytics_provider.dart';
 import '../core/i18n/i18n.dart';
 import '../core/locale/app_locale_controller.dart';
@@ -122,7 +124,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     );
   }
 
-  void _handleAppLink(Uri uri) {
+  Future<void> _handleAppLink(Uri uri) async {
     if (ref.read(accountBanControllerProvider).isBanned) {
       return;
     }
@@ -137,8 +139,34 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       return;
     }
 
+    // 当前仅有短剧分享通过 player 深链接回流 App。埋点以成功解析为准，不把
+    // 无效 scheme、host 或 drama_id 缺失的外部 Intent 计为分享来源打开。
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            const AnalyticsEvent(AnalyticsDefinitions.shareAppOpen, {
+              'landing_type': 'normal_share',
+            }),
+          ),
+    );
+
     // 当前 App Link 仅支持分享短剧播放器链接；分享没有稳定配置 ID，按约定留空。
     _prepareEntrySource(type: 'share_deeplink');
+
+    // 与通知再次打开已展示的目标页一致：GoRouter 对相同 location 不一定产生新的
+    // Navigator 回调，因此需要主动结束当前页面会话并强制生成目标 page_view，确保
+    // share_deeplink 只附着到这一次实际被重新打开的播放器页面。
+    if (ref.read(analyticsPageContextProvider).currentPage ==
+        AnalyticsPageNames.dramaPlay) {
+      await ref
+          .read(analyticsPageTrackerProvider)
+          .replace(AnalyticsPageNames.dramaPlay, forcePageView: true);
+      if (!mounted) {
+        return;
+      }
+    }
+
     preparePlayerEntryPreload(
       context,
       dramaId: dramaId,
@@ -398,9 +426,8 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (ref.read(accountBanControllerProvider).isBanned) {
-      return;
-    }
+    // 生命周期埋点属于 App 级事件，不应因账号封禁等业务状态被跳过。
+    debugPrint('[Analytics] App lifecycle changed: ${state.name}');
     unawaited(ref.read(appActiveReporterProvider).onLifecycleChanged(state));
     final analyticsLifecycleUpdate = ref
         .read(analyticsLifecycleTrackerProvider)

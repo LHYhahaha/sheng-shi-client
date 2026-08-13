@@ -183,6 +183,7 @@ class PlayerRemoteDataSource {
     required String shortTitle,
     required String cover,
     required int episodeId,
+    required String requestId,
   }) {
     return _apiClient.post<PlayerEpisodeUnlockDto>(
       '/api/payment/episode/unlock',
@@ -193,6 +194,7 @@ class PlayerRemoteDataSource {
         'dramaId': dramaId,
         'episodeId': episodeId,
         'episodeNo': episodeNo,
+        'requestId': requestId,
         'shortTitle': shortTitle,
       }..removeWhere((_, value) => value == null),
       authPolicy: ApiAuthPolicy.required,

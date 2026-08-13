@@ -10,7 +10,9 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../core/account/account_ban_controller.dart';
+import '../../../../core/analytics/analytics_page_context.dart';
 import '../../../../core/auth/user_info_store.dart';
+import '../../../../core/channel/channel_config_service.dart';
 import '../../../../features/auth/application/auth_controller.dart';
 import '../../../../core/config/app_environment.dart';
 import '../../../../core/network/api_client_provider.dart';
@@ -58,6 +60,9 @@ class _ProfileFeedbackWebViewPageState
       headers['Authorization'] = 'Bearer $accessToken';
     }
     final userInfo = ref.watch(userInfoStoreProvider);
+    final channel = ref.read(channelConfigServiceProvider).cachedConfig;
+    final previousPage =
+        ref.read(analyticsPageContextProvider).currentPage ?? '';
     final bridgeData = _ProfileFeedbackBridgeData(
       appName: context.l10n.appTitle,
       statusBarHeight: MediaQuery.paddingOf(context).top,
@@ -83,7 +88,13 @@ class _ProfileFeedbackWebViewPageState
         url:
             // "http://192.168.1.55:5173/app/#/help",
             AppConfig.current
-                .helpUrlForLanguage(context.l10n.locale.languageCode)
+                .helpUrlForLanguage(
+                  context.l10n.locale.languageCode,
+                  userId: userInfo.userId ?? '',
+                  channelId: channel?.channelFlag ?? '',
+                  merchantId: channel?.merchantId ?? '',
+                  previousPage: previousPage,
+                )
                 .toString(),
         title: context.l10n.profileFeedback,
         showAppBar: false,
@@ -287,7 +298,8 @@ class _ProfileFeedbackBridgeData {
     required this.avatarUrl,
     required this.i18n,
     required this.headers,
-    required this.safeAreaBottom, required this.userId,
+    required this.safeAreaBottom,
+    required this.userId,
   });
 
   final String appName;

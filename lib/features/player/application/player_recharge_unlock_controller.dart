@@ -776,14 +776,31 @@ class PlayerRechargeUnlockController
     required String shortTitle,
     required String cover,
     required int episodeId,
+    String? requestId,
   }) async {
     final unlockGeneration = ++_purchaseGeneration;
     state = state.copyWith(status: PlayerRechargeUnlockStatus.processing);
+    final unlockRequestId =
+        requestId ??
+        'episode_unlock_${dramaId}_${episodeId}_${DateTime.now().microsecondsSinceEpoch}';
 
     try {
       debugPrint(
         '[PlayerRecharge] 开始使用金币解锁剧集: dramaId=$dramaId, episodeNo=$episodeNo, coin=$coin',
       );
+
+      // 必须先记录请求意图，再调用解锁接口；接口重试与服务端结果复用同一 requestId。
+      await ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.episodeUnlockRequest, {
+              'drama_id': dramaId.toString(),
+              'episode_id': episodeId.toString(),
+              'unlock_trigger_type': autoUnlockNext ? 'auto' : 'manual',
+              'required_coin_amount': coin,
+              'request_id': unlockRequestId,
+            }),
+          );
 
       final result = await ref
           .read(playerRechargeUnlockRepositoryProvider)
@@ -794,6 +811,7 @@ class PlayerRechargeUnlockController
             dramaId: dramaId,
             episodeId: episodeId,
             episodeNo: episodeNo,
+            requestId: unlockRequestId,
             shortTitle: shortTitle,
           );
 

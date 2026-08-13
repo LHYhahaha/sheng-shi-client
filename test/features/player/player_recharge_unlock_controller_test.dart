@@ -247,6 +247,7 @@ class _FakePlayerRechargeUnlockRepository
     required String shortTitle,
     String? cover,
     int? episodeId,
+    required String requestId,
   }) async {
     return PlayerEpisodeUnlockDto(
       autoUnlock: autoUnlockNext,

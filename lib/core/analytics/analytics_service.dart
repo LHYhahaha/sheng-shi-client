@@ -85,6 +85,14 @@ class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
   @override
   Future<void> enqueue(AnalyticsPayload payload) async {
     await initialize();
+    // 埋点接入批量上传后，事件会先在本地队列等待聚合；开发阶段仍须在“业务
+    // 发生时”立即打印，不能等到 5 秒后从网络请求日志间接确认，否则 page_view
+    // 和 page_leave 等事件会看起来像没有触发。
+    if (kDebugMode) {
+      debugPrint(
+        '[Analytics] ${const JsonEncoder.withIndent('  ').convert(payload.toJson())}',
+      );
+    }
     _pending.add(payload);
     await _persistPending();
     if (_pending.length >= batchSize) {
@@ -223,7 +231,6 @@ class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
     return {
       'eventName': payload.eventName,
       'commonParams': {
-        'appSessionId': '',
         'appVersion': common['app_version'],
         'channelId': common['channel_id'],
         'entrySourceId': common['entry_source_id'],
@@ -237,7 +244,6 @@ class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
         'platform': common['platform'],
         'previousPage': common['previous_page'],
         'regionCode': common['region_code'],
-        'sessionId': '',
         'userId': common['user_id'],
       },
       'eventParams': payload.eventParams.isEmpty

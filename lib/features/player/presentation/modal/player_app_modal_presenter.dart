@@ -133,26 +133,6 @@ class PlayerAppModalPresenter implements AppModalPresenter {
                     ),
               );
 
-              // 用户明确确认金币解锁后、调用业务解锁接口前上报一次请求事件。
-              // requestId 来自本次 AppModal 请求，可用于同一次弹框操作的链路关联。
-              unawaited(
-                container
-                    .read(analyticsServiceProvider)
-                    .track(
-                      AnalyticsEvent(
-                        AnalyticsDefinitions.episodeUnlockRequest,
-                        {
-                          'drama_id': item.content.id,
-                          'episode_id': item.episode.id,
-                          'unlock_type': 'coins',
-                          'unlock_trigger_type': 'manual',
-                          'required_coin_amount': price,
-                          'request_id': request.requestId,
-                        },
-                      ),
-                    ),
-              );
-
               final controller = container.read(
                 playerRechargeUnlockControllerProvider(sessionKey).notifier,
               );
@@ -164,6 +144,7 @@ class PlayerAppModalPresenter implements AppModalPresenter {
                 shortTitle: shortTitle,
                 cover: cover,
                 episodeId: episodeId,
+                requestId: request.requestId,
               );
 
               final unlockState = container.read(

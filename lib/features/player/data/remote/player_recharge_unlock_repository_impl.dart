@@ -74,6 +74,7 @@ class PlayerRechargeUnlockRepositoryImpl
     required String shortTitle,
     required String cover,
     required int episodeId,
+    required String requestId,
   }) async {
     return remoteDataSource.unlockEpisode(
       autoUnlockNext: autoUnlockNext,
@@ -82,6 +83,7 @@ class PlayerRechargeUnlockRepositoryImpl
       dramaId: dramaId,
       episodeId: episodeId,
       episodeNo: episodeNo,
+      requestId: requestId,
       shortTitle: shortTitle,
     );
   }

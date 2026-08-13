@@ -68,6 +68,8 @@ class FacebookOAuthService implements OAuthService {
             throw const OAuthException(
               'facebook',
               'Login succeeded but access token is null',
+              null,
+              OAuthFailureReason.credentialMissing,
             );
           }
           if (accessToken is! ClassicToken) {
@@ -171,6 +173,8 @@ class FacebookOAuthService implements OAuthService {
         throw const OAuthException(
           'google',
           'Login succeeded but Google ID token is missing',
+          null,
+          OAuthFailureReason.credentialMissing,
         );
       }
       return idToken;

@@ -7,7 +7,7 @@ abstract class OAuthService {
   /// 使用 Google 登录，返回 ID Token。
   ///
   /// 返回 null 表示用户取消登录。抛出异常表示登录失败。
-  /// 
+  ///
   /// 注意：当前项目暂不支持 Google 登录，此方法预留给未来使用。
   Future<String?> signInWithGoogle() {
     throw UnimplementedError('Google login not implemented yet');
@@ -21,14 +21,14 @@ abstract class OAuthService {
   /// 使用 Apple 登录，返回 ID Token（iOS 专用）。
   ///
   /// 返回 null 表示用户取消登录。抛出异常表示登录失败。
-  /// 
+  ///
   /// 注意：当前项目暂不支持 Apple 登录，此方法预留给未来使用。
   Future<String?> signInWithApple() {
     throw UnimplementedError('Apple login not implemented yet');
   }
 
   /// 登出 Google 账号（清除本地缓存）。
-  /// 
+  ///
   /// 注意：当前项目暂不支持 Google 登录，此方法预留给未来使用。
   Future<void> signOutGoogle() {
     throw UnimplementedError('Google login not implemented yet');
@@ -39,12 +39,20 @@ abstract class OAuthService {
 }
 
 /// OAuth 登录异常。
+enum OAuthFailureReason { sdkError, credentialMissing }
+
 class OAuthException implements Exception {
-  const OAuthException(this.provider, this.message, [this.originalError]);
+  const OAuthException(
+    this.provider,
+    this.message, [
+    this.originalError,
+    this.reason = OAuthFailureReason.sdkError,
+  ]);
 
   final String provider;
   final String message;
   final Object? originalError;
+  final OAuthFailureReason reason;
 
   @override
   String toString() => 'OAuthException($provider): $message';
