@@ -62,6 +62,27 @@ void main() {
     expect(repository.requestedPages, [1, 2]);
   });
 
+  test(
+    'reuses a preloaded for you first page until explicitly refreshed',
+    () async {
+      final repository = _PagedFakeFeedRepo();
+      final container = _createContainer(repository);
+      final provider = playerFeedControllerProvider('for-you-preloaded');
+      final controller = container.read(provider.notifier);
+      const config = PlayerFeedConfig.forYou();
+
+      await controller.load(config);
+      await controller.load(config);
+
+      expect(repository.requestedPages, [1]);
+      expect(container.read(provider).items.map((item) => item.id), ['page-1']);
+
+      await controller.load(config, forceRefresh: true);
+
+      expect(repository.requestedPages, [1, 1]);
+    },
+  );
+
   test('selects episode by moving to an existing feed item', () async {
     final container = _createContainer();
     final provider = playerFeedControllerProvider('single');

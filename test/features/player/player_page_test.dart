@@ -488,6 +488,59 @@ void main() {
     );
   });
 
+  testWidgets('remote near-end episode before locked next rewinds current', (
+    tester,
+  ) async {
+    final playbackSession = _FakePlaybackSession();
+    final repository = _FakePlayerFeedRepository.normal();
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.playerLocation(
+          dramaId: '1',
+          episodeId: '1',
+        ),
+        repository: repository,
+        playbackSessionFactory: () => playbackSession,
+        useDefaultRemoteDataSource: false,
+        providerOverrides: [
+          useRemotePlayerApiProvider.overrideWithValue(true),
+          playerRemoteDataSourceProvider.overrideWithValue(
+            _FakePlayerRemoteDataSource(
+              watchProgress: WatchProgressDto(
+                dramaId: 1,
+                episodeId: 1,
+                episodeNo: 1,
+                watchSecond: 115,
+                durationSecond: 120,
+                progressPercent: 96,
+              ),
+            ),
+          ),
+          apiClientProvider.overrideWithValue(
+            ApiClient(
+              requestContext: const ApiRequestContext.test(
+                deviceId: 'test-device-id',
+                accessToken: 'test-access-token',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastSingleDramaEpisodeId, '1');
+    expect(find.text('EP.01'), findsOneWidget);
+    expect(playbackSession.openedSources, [_mockVideoUrl]);
+    expect(
+      playbackSession.openStartPositions,
+      contains(const Duration(seconds: 112)),
+    );
+  });
+
   testWidgets('shows retry when playback open fails', (tester) async {
     await tester.pumpWidget(
       _buildPlayerApp(

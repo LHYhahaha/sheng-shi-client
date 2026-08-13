@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/account/account_ban_controller.dart';
@@ -200,27 +201,24 @@ class AuthController extends Notifier<AuthState> {
             return;
           }
 
-          try {
-            final session = await _syncCurrentSession();
-
-            if (!_isCurrent(generation)) {
-              return;
-            }
-
-            state = state.copyWith(
-              isLoading: false,
-              session: session,
-              clearError: true,
-              clearPendingProvider: true,
-              clearFailedAction: true,
-            );
-            _syncNotificationPermission(session);
+          // 有效 token 已可用于所有 required API。先从本地 user snapshot 恢复会话，
+          // 不等待 /api/user/get 或权益接口，避免它们成为首页首屏的串行门槛。
+          final localSession = await _sessionFromCurrentStores(
+            fallbackProvider: AuthProviderType.device,
+          );
+          if (!_isCurrent(generation)) {
             return;
-          } catch (e) {
-            print(
-              '[AuthController.load] Current token sync failed, falling back to device login: $e',
-            );
           }
+          state = state.copyWith(
+            isLoading: false,
+            session: localSession,
+            clearError: true,
+            clearPendingProvider: true,
+            clearFailedAction: true,
+          );
+          _syncNotificationPermission(localSession);
+          unawaited(_refreshCurrentSessionInBackground(generation));
+          return;
         }
 
         if (!refreshTokenExpired) {
@@ -636,6 +634,56 @@ class AuthController extends Notifier<AuthState> {
       fallbackProvider: fallbackProvider,
       fallbackSession: candidate,
     );
+  }
+
+  /// 有效 token 的冷启动后台同步：用户资料与权益并行刷新，任一失败都保留首屏已
+  /// 恢复的本地状态。若服务端实际判定 token 失效，ApiClient 的统一会话恢复流程
+  /// 会递增 generation，本方法不会覆盖其结果。
+  Future<void> _refreshCurrentSessionInBackground(int generation) async {
+    final repository = ref.read(authRepositoryProvider);
+    if (repository is! CurrentAuthSessionSynchronizer) {
+      return;
+    }
+    final synchronizer = repository as CurrentAuthSessionSynchronizer;
+
+    try {
+      final results = await Future.wait<Object?>([
+        synchronizer.syncCurrentSession(),
+        ref.read(entitlementControllerProvider.notifier).refreshFromServer(),
+      ]);
+      if (!_isCurrent(generation)) {
+        return;
+      }
+
+      final remoteSession = results[0]! as AuthSession;
+      final isEntitlementVerified = results[1]! as bool;
+      if (isEntitlementVerified) {
+        ref
+            .read(accountBanControllerProvider.notifier)
+            .clearAfterVerification();
+      }
+      final session = await _sessionFromCurrentStores(
+        fallbackProvider: AuthProviderType.device,
+        fallbackSession: remoteSession,
+      );
+      if (!_isCurrent(generation)) {
+        return;
+      }
+      state = state.copyWith(
+        session: session,
+        clearError: true,
+        clearFailedAction: true,
+      );
+      _syncNotificationPermission(session);
+    } catch (error, stackTrace) {
+      // 后台校验失败不触发设备登录，也不打断已恢复的首屏。
+      debugPrint(
+        '[AuthController.load] Background session sync failed: $error',
+      );
+      debugPrint(
+        '[AuthController.load] Background session sync stack: $stackTrace',
+      );
+    }
   }
 
   Future<AuthSession> _sessionFromCurrentStores({

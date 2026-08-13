@@ -52,4 +52,24 @@ class WatchProgressDto {
       lastWatchAt: JsonFieldParser.optionalString(json, 'lastWatchAt'),
     );
   }
+
+  /// `/api/home/detail` 使用 snake_case，并且续播对象不再重复 drama id。
+  ///
+  /// 无记录会以 `watch_episode_id=0` 返回，保留对象本身以便播放器明确回到第 1 集。
+  static WatchProgressDto? fromDetailJsonOrNull(
+    Object? value, {
+    required int dramaId,
+  }) {
+    if (value is! Map<String, Object?>) return null;
+    return WatchProgressDto(
+      dramaId: dramaId,
+      episodeId: JsonFieldParser.optionalInt(value, 'watch_episode_id') ?? 0,
+      episodeNo: JsonFieldParser.optionalInt(value, 'watch_episode_no') ?? 1,
+      watchSecond: JsonFieldParser.optionalInt(value, 'watch_second') ?? 0,
+      durationSecond:
+          JsonFieldParser.optionalInt(value, 'duration_second') ?? 0,
+      progressPercent:
+          JsonFieldParser.optionalInt(value, 'progress_percent') ?? 0,
+    );
+  }
 }

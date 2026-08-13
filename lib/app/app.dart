@@ -11,9 +11,12 @@ import 'package:go_router/go_router.dart';
 import '../bootstrap/feature_session_cleanup.dart';
 import '../bootstrap/i18n_bootstrap.dart';
 import '../core/active/app_active_reporter.dart';
+import '../core/adjust/adjust_device_identifier_reporter_provider.dart';
+import '../core/adjust/adjust_service.dart';
 import '../core/account/account_ban_controller.dart';
 import '../core/account/account_banned_overlay.dart';
 import '../core/analytics/analytics_definition.dart';
+import '../core/analytics/analytics_entry_source.dart';
 import '../core/analytics/analytics_event.dart';
 import '../core/analytics/analytics_lifecycle_tracker.dart';
 import '../core/analytics/analytics_provider.dart';
@@ -24,8 +27,11 @@ import '../core/network/api_client_provider.dart';
 import '../core/notification/fcm_notification.dart';
 import '../core/notification/fcm_notification_service.dart';
 import '../core/notification/startup_notification_permission_requester.dart';
+import '../core/runtime/install_id_provider.dart';
 import '../features/auth/application/auth_controller.dart';
+import '../features/bottom_tab_config/application/bottom_tab_config_controller.dart';
 import '../features/pay/application/payment_loading_controller.dart';
+import '../features/player/application/player_entry_preload_coordinator.dart';
 import '../features/popup/application/popup_entry_controller.dart';
 import '../features/popup/application/popup_analytics.dart';
 import '../features/popup/domain/popup.dart';
@@ -70,12 +76,32 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     _fcmNotificationService = widget.fcmNotificationService;
     _listenForFcmNotificationTaps();
     unawaited(_listenForFcmNotificationTapsWhenReady());
+    // 与 DeviceId、认证并行读取渠道配置。ApiClient 仍会等待同一份配置完成后再
+    // 发送请求；原生未提供配置时按约定使用空渠道头继续。
+    unawaited(ref.read(channelConfigInitializerProvider.future));
+    unawaited(_initializeAdjust());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(_notificationPermissionRequester.requestIfNeeded());
       }
     });
     Future.microtask(_bootstrapSessionAndI18n);
+  }
+
+  Future<void> _initializeAdjust() async {
+    try {
+      // 先确保内部 Device-Id 已生成，匿名 Adjust 上报即可携带稳定请求头。
+      await ref.read(installIdProvider.future);
+      if (!mounted) return;
+      AdjustService(
+        deviceIdentifierReporter: ref.read(
+          adjustDeviceIdentifierReporterProvider,
+        ),
+      ).initialize();
+    } catch (error, stackTrace) {
+      debugPrint('[Adjust] Startup initialization skipped: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   @override
@@ -110,6 +136,15 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       debugPrint('[AppLink] Missing drama_id: $uri');
       return;
     }
+
+    // 当前 App Link 仅支持分享短剧播放器链接；分享没有稳定配置 ID，按约定留空。
+    _prepareEntrySource(type: 'share_deeplink');
+    preparePlayerEntryPreload(
+      context,
+      dramaId: dramaId,
+      episodeId: '1',
+      trigger: 'app_link',
+    );
 
     final location = RoutePaths.playerLocation(
       dramaId: dramaId,
@@ -172,6 +207,13 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
 
     if (type == 'player' && dramaId != null && dramaId.isNotEmpty) {
       _cancelPopupForCurrentRouteExit();
+      _preparePushEntrySource(notification);
+      preparePlayerEntryPreload(
+        context,
+        dramaId: dramaId,
+        episodeId: episodeId?.isNotEmpty == true ? episodeId! : '1',
+        trigger: 'fcm_notification',
+      );
       router.go(
         RoutePaths.playerLocation(
           dramaId: dramaId,
@@ -188,6 +230,13 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         dramaId != null &&
         dramaId.isNotEmpty) {
       _cancelPopupForCurrentRouteExit();
+      _preparePushEntrySource(notification);
+      preparePlayerEntryPreload(
+        context,
+        dramaId: dramaId,
+        episodeId: '1',
+        trigger: 'fcm_notification_detail',
+      );
       router.go(
         RoutePaths.playerLocation(
           dramaId: dramaId,
@@ -201,6 +250,9 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
 
     if (type == 'page') {
       _cancelPopupForCurrentRouteExit();
+      if (_isSupportedFcmPage(data['page'])) {
+        _preparePushEntrySource(notification);
+      }
       _openFcmPage(router, data['page']);
       return;
     }
@@ -218,11 +270,8 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         unawaited(_openFcmExternalUrl(url));
         return;
       }
-<<<<<<< HEAD
       // 保留通知打开前的页面，物理返回键/返回手势应先回到来源页，
       // 而不是因 go() 替换路由后直接退出应用。
-=======
->>>>>>> 4968f98a5543f924dd83663ae2c58f2e35c7c770
       router.push(
         RoutePaths.webviewLocation(url: url, title: notification.title),
       );
@@ -232,11 +281,8 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     debugPrint('[FCM] Ignored notification tap with unsupported data: $data');
   }
 
-<<<<<<< HEAD
   /// 通知离开首页/For You 时，关闭该位置的展示中、预加载中或请求中的弹框。
   /// 否则根路由上的 overlay 会覆盖通知的目标页面。
-=======
->>>>>>> 4968f98a5543f924dd83663ae2c58f2e35c7c770
   void _cancelPopupForCurrentRouteExit() {
     final placement = AppShellDestinations.popupPlacementForIndex(
       ref.read(appShellCurrentTabIndexProvider),
@@ -249,7 +295,6 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     controller.cancelPlacementFlow(placement);
   }
 
-<<<<<<< HEAD
   void _trackPushNotificationOpen({
     required FcmNotification notification,
     required String? targetType,
@@ -276,8 +321,35 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     );
   }
 
-=======
->>>>>>> 4968f98a5543f924dd83663ae2c58f2e35c7c770
+  void _preparePushEntrySource(FcmNotification notification) {
+    final pushId =
+        notification.id?.trim() ??
+        notification.data['push_id']?.trim() ??
+        notification.data['id']?.trim();
+    _prepareEntrySource(type: 'push', id: pushId);
+  }
+
+  void _preparePopupEntrySource(PopupConfig popup) {
+    _prepareEntrySource(type: 'popup', id: popup.id?.toString());
+  }
+
+  void _prepareEntrySource({required String type, String? id}) {
+    if (type != 'share_deeplink' && (id == null || id.trim().isEmpty)) {
+      debugPrint(
+        '[Analytics] Entry source data-quality error: $type target is missing its stable ID.',
+      );
+      return;
+    }
+    ref.read(analyticsEntrySourceProvider.notifier).prepare(type: type, id: id);
+  }
+
+  bool _isSupportedFcmPage(String? rawPage) {
+    return switch (rawPage?.trim().toLowerCase()) {
+      'home' || 'recommend_tab' || 'member_tab' || 'recharge' => true,
+      _ => false,
+    };
+  }
+
   void _openFcmPage(GoRouter router, String? rawPage) {
     switch (rawPage?.trim().toLowerCase()) {
       case 'home':
@@ -385,6 +457,10 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       );
     }
 
+    // 认证完成后即可读取动态 Tab；标题尚未拿到远程语言包时会回退到客户端原文案，
+    // 语言包加载完成后的状态更新会自动刷新标题，不让 i18n 阻塞首屏。
+    unawaited(ref.read(bottomTabConfigControllerProvider.notifier).loadOnce());
+
     try {
       await ref.read(i18nInitializerProvider.future);
     } catch (e) {
@@ -490,6 +566,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       unawaited(_openPopupExternalUrl(url));
       return;
     }
+    // 内嵌 H5 的来源需在 H5 安全上下文中单独传递；当前不污染后续 App page_view。
     router.push(RoutePaths.webviewLocation(url: url, title: popup.name));
   }
 
@@ -507,6 +584,13 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       return;
     }
     _finishActivePopupFlow();
+    _preparePopupEntrySource(popup);
+    preparePlayerEntryPreload(
+      context,
+      dramaId: '$dramaId',
+      episodeId: '1',
+      trigger: 'popup',
+    );
     router.push(
       RoutePaths.playerLocation(
         dramaId: '$dramaId',
@@ -522,30 +606,37 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     switch (pageCode) {
       case 'home':
         _finishActivePopupFlow();
+        _preparePopupEntrySource(popup);
         router.go(RoutePaths.home);
         return;
       case 'recommend_tab':
         _finishActivePopupFlow();
+        _preparePopupEntrySource(popup);
         router.go(RoutePaths.forYou);
         return;
       case 'member_tab':
         _finishActivePopupFlow();
+        _preparePopupEntrySource(popup);
         router.go(RoutePaths.member);
         return;
       case 'member_open':
         _finishActivePopupFlow();
+        _preparePopupEntrySource(popup);
         router.push(RoutePaths.membership);
         return;
       case 'recharge':
         _finishActivePopupFlow();
+        _preparePopupEntrySource(popup);
         router.push(RoutePaths.store);
         return;
       case 'reward_coin':
         _finishActivePopupFlow();
+        _preparePopupEntrySource(popup);
         router.go(RoutePaths.rewardsLocation());
         return;
       case 'member_point':
         _finishActivePopupFlow();
+        _preparePopupEntrySource(popup);
         router.go(RoutePaths.rewardsLocation(tab: RoutePaths.memberPointsTab));
         return;
       default:

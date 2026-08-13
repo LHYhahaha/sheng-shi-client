@@ -9,6 +9,7 @@ import 'package:drama_client/features/player/application/player_runtime_coordina
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/data/mock_playback_progress_repository.dart';
 import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
+import 'package:drama_client/features/player/data/hls_local_proxy_server.dart';
 import 'package:drama_client/features/player/data/playback_progress_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
@@ -1169,34 +1170,27 @@ void main() {
     },
   );
 
-  testWidgets(
-    'For You suspension releases decoder and reopens current item on return',
-    (tester) async {
-      final currentSession = _FakePlaybackSession();
-      final resumedSession = _FakePlaybackSession();
-      var sessionIndex = 0;
-      final sessions = [currentSession, resumedSession];
-      final container = _createPrepareContainer(
-        () => sessions[sessionIndex++],
-        sourceRepository: _CountingPlaybackSourceRepository(),
-      );
-      addTearDown(container.dispose);
-      final provider = playerPlaybackControllerProvider('for-you-tab');
-      final controller = container.read(provider.notifier);
+  testWidgets('For You suspension retains its session while pausing playback', (
+    tester,
+  ) async {
+    final currentSession = _FakePlaybackSession();
+    final container = _createPrepareContainer(
+      () => currentSession,
+      sourceRepository: _CountingPlaybackSourceRepository(),
+    );
+    addTearDown(container.dispose);
+    final provider = playerPlaybackControllerProvider('for-you-tab');
+    final controller = container.read(provider.notifier);
 
-      await controller.playItem(_item(1, mode: PlayerFeedMode.forYou));
-      await tester.runAsync(controller.suspendForCompetingPlayer);
+    await controller.playItem(_item(1, mode: PlayerFeedMode.forYou));
+    await tester.runAsync(controller.suspendForCompetingPlayer);
 
-      expect(currentSession.isDisposed, isTrue);
-      expect(container.read(provider).currentSource, isNull);
-      expect(container.read(provider).status, PlayerPlaybackStatus.idle);
+    expect(currentSession.isDisposed, isFalse);
+    expect(container.read(provider).currentSource, _videoUrl);
+    expect(container.read(provider).status, PlayerPlaybackStatus.paused);
 
-      await tester.runAsync(controller.resumeAfterVisibilityPause);
-
-      expect(resumedSession.openedSources, [_videoUrl]);
-      expect(container.read(provider).status, PlayerPlaybackStatus.playing);
-    },
-  );
+    expect(currentSession.openedSources, [_videoUrl]);
+  });
 
   test('locked item pauses playback and detaches video surface', () async {
     final session = _FakePlaybackSession();
@@ -2810,6 +2804,49 @@ void main() {
     },
   );
 
+  test(
+    'retained session is reused when a pending resume position is present',
+    () async {
+      final firstSession = _FakePlaybackSession();
+      final secondSession = _FakePlaybackSession();
+      final nextSession = _FakePlaybackSession();
+      var index = 0;
+      final sessions = [firstSession, secondSession, nextSession];
+      PlayerPlaybackSession sessionFactory() => sessions[index++];
+      final container = _createPrepareContainer(sessionFactory);
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+      final firstItem = _item(1);
+
+      await controller.playItem(firstItem);
+      firstSession.emitDuration(const Duration(seconds: 120));
+      firstSession.emitPosition(const Duration(seconds: 42));
+      await Future<void>.delayed(Duration.zero);
+      await controller.preloadAround([firstItem, _item(2)], 0);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await controller.playItem(_item(2));
+
+      controller.setPendingResumeProgress(
+        PlaybackProgress(
+          itemId: firstItem.id,
+          position: const Duration(seconds: 42),
+          duration: const Duration(seconds: 120),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      await controller.playItem(firstItem);
+
+      expect(firstSession.openedSources, [_videoUrl]);
+      expect(secondSession.openedSources, [_secondVideoUrl]);
+      expect(nextSession.openedSources, isEmpty);
+      expect(
+        controller.timingEvents.map((event) => event.name),
+        contains('retained hit previous'),
+      );
+    },
+  );
+
   test('session window keeps at most previous and next sessions', () async {
     final sessions = [
       _FakePlaybackSession(),
@@ -3354,6 +3391,11 @@ ProviderContainer _createContainer(
       MockPlayerPlaybackPreloadManager(preloadDelay: Duration.zero);
   final container = ProviderContainer(
     overrides: [
+      // 本文件验证 controller/session 行为，不验证本地 HLS 代理；关闭代理让
+      // fake session 接收到稳定的原始 source，避免端口号影响断言。
+      hlsLocalProxyConfigProvider.overrideWithValue(
+        const HlsLocalProxyConfig(enabled: false),
+      ),
       playerPlaybackSessionFactoryProvider.overrideWithValue(() => session),
       playerPlaybackPreloadManagerProvider.overrideWithValue(
         playbackCacheManager,
@@ -3449,6 +3491,9 @@ ProviderContainer _createPrepareContainer(
 }) {
   final container = ProviderContainer(
     overrides: [
+      hlsLocalProxyConfigProvider.overrideWithValue(
+        const HlsLocalProxyConfig(enabled: false),
+      ),
       playerPlaybackSessionFactoryProvider.overrideWithValue(sessionFactory),
       playerPlaybackPrepareManagerFactoryProvider.overrideWithValue(
         () => PlayerPlaybackPrepareManager(
@@ -3547,7 +3592,10 @@ class _CountingPlaybackSourceRepository
   }
 
   @override
-  Future<PlaybackPreloadState> preload(PlayerFeedItem item) async {
+  Future<PlaybackPreloadState> preload(
+    PlayerFeedItem item, {
+    Duration? preferredPosition,
+  }) async {
     preloadCount += 1;
     return PlaybackPreloadState(
       itemId: item.id,
@@ -3567,6 +3615,7 @@ class _SequentialPreloadManager implements PlayerPlaybackPreloadManager {
   Future<PlaybackPreloadState> preload({
     required PlayerFeedItem item,
     required PlaybackSource source,
+    Duration? preferredPosition,
   }) {
     startedItemIds.add(item.id);
     final completer = Completer<PlaybackPreloadState>();

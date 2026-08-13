@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -13,13 +14,17 @@ import '../../../../app/shell/app_shell.dart';
 import '../../../../core/adjust/adjust_event_reporter_provider.dart';
 import '../../../../core/analytics/analytics_definition.dart';
 import '../../../../core/analytics/drama_card_exposure.dart';
+import '../../../../core/analytics/analytics_page_context.dart';
+import '../../../../core/analytics/analytics_page_tracker.dart';
 import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
+import '../../../../core/analytics/analytics_entry_source.dart';
 import '../../../../core/auth/auth_token_store.dart';
 import '../../../../core/network/api_client_provider.dart';
 import '../../../../core/notification/startup_notification_permission_reporter.dart';
 import '../../../../features/drama/domain/drama.dart';
 import '../../../../features/entitlement/application/entitlement_controller.dart';
+import '../../../../features/player/application/player_entry_preload_coordinator.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/media/media_resource.dart';
 import '../../../../shared/theme/app_colors.dart';
@@ -27,8 +32,13 @@ import '../../../../shared/theme/app_radii.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
+import '../../../../shared/url/external_url_launcher.dart';
 import '../../application/home_data_controller.dart';
+import '../../application/home_banner_config_controller.dart';
+import '../../application/home_banner_analytics.dart';
 import '../../application/home_remote_data_provider.dart';
+import '../../data/dto/home_banner_response_dto.dart';
+import 'home_preload_candidate.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -45,22 +55,33 @@ class _HomePageState extends ConsumerState<HomePage> {
   int _lastScrollToTopRequest = 0; // 跟踪上次的滚动请求计数
   ProviderSubscription<int>? _scrollToTopListener; // 监听滚动请求的订阅
   ProviderSubscription<bool>? _accessTokenListener;
+  ProviderSubscription<AnalyticsPageContext>? _homePageSessionListener;
+  late final HomeBannerExposureTracker _bannerExposureTracker;
   bool _notificationPermissionCheckScheduled = false;
   bool _notificationPermissionChecked = false;
   bool _homeFirstViewCheckScheduled = false;
-
-  List image = [
-    "assets/images/home/picture1.png",
-    "assets/images/home/picture2.png",
-    "assets/images/home/picture3.png",
-    "assets/images/home/picture4.png",
-    "assets/images/home/picture5.png",
-    "assets/images/home/picture6.png",
-  ];
+  bool _bannerNavigationInProgress = false;
+  String? _homeVisiblePreloadDramaId;
+  final ValueNotifier<int> _cardVisibilityRevision = ValueNotifier(0);
+  Timer? _cardVisibilityDebounce;
+  final Map<String, HomePreloadCandidate> _pendingVisibleCandidates = {};
+  Timer? _candidateSelectionDebounce;
 
   @override
   void initState() {
     super.initState();
+    _bannerExposureTracker = HomeBannerExposureTracker(
+      analytics: ref.read(analyticsServiceProvider),
+    );
+    _homePageSessionListener = ref.listenManual(analyticsPageContextProvider, (
+      previous,
+      next,
+    ) {
+      if (next.currentPage == AnalyticsPageNames.home &&
+          previous?.currentPage != AnalyticsPageNames.home) {
+        _bannerExposureTracker.beginPageSession();
+      }
+    }, fireImmediately: true);
     _scrollController.addListener(_onScroll);
 
     // 监听滚动到顶部的请求
@@ -94,6 +115,10 @@ class _HomePageState extends ConsumerState<HomePage> {
     // 取消滚动请求的监听
     _scrollToTopListener?.close();
     _accessTokenListener?.close();
+    _homePageSessionListener?.close();
+    _cardVisibilityDebounce?.cancel();
+    _candidateSelectionDebounce?.cancel();
+    _cardVisibilityRevision.dispose();
 
     _scrollController
       ..removeListener(_onScroll)
@@ -147,6 +172,12 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   void _onScroll() {
+    // Cards evaluate after scrolling settles, then apply their own 400ms dwell
+    // rule. This avoids starting a candidate for every card passed at speed.
+    _cardVisibilityDebounce?.cancel();
+    _cardVisibilityDebounce = Timer(const Duration(milliseconds: 120), () {
+      if (mounted) _cardVisibilityRevision.value += 1;
+    });
     final remoteData = ref.read(homeRemoteDataProvider);
 
     // Remote home data keeps pagination per tab.
@@ -167,6 +198,38 @@ class _HomePageState extends ConsumerState<HomePage> {
       }
       return;
     }
+  }
+
+  void _preloadStableVisibleDrama(Drama drama, double visibleFraction) {
+    if (!mounted) return;
+    // 首屏中可能有多张卡在同一帧同时达到 50%。先收集极短的一批曝光，再选择
+    // 可见比例最高的一张，不能按 widget callback 的偶然顺序连续启动多部详情请求。
+    _pendingVisibleCandidates[drama.id] = HomePreloadCandidate(
+      drama: drama,
+      visibleFraction: visibleFraction,
+    );
+    _candidateSelectionDebounce?.cancel();
+    _candidateSelectionDebounce = Timer(const Duration(milliseconds: 32), () {
+      if (!mounted || _pendingVisibleCandidates.isEmpty) return;
+      final candidate = _pendingVisibleCandidates.values.reduce(
+        (best, value) =>
+            value.visibleFraction > best.visibleFraction ? value : best,
+      );
+      _pendingVisibleCandidates.clear();
+      if (_homeVisiblePreloadDramaId == candidate.drama.id) return;
+      _homeVisiblePreloadDramaId = candidate.drama.id;
+      debugPrint(
+        '[player-entry-preload] home selected candidate '
+        'dramaId=${candidate.drama.id} '
+        'visiblePercent=${(candidate.visibleFraction * 100).round()}',
+      );
+      ref
+          .read(playerEntryPreloadCoordinatorProvider.notifier)
+          .prepareVisibleCandidate(
+            dramaId: candidate.drama.id,
+            trigger: 'home_visible_candidate',
+          );
+    });
   }
 
   void _saveCurrentTabScrollOffset(HomeRemoteData remoteData) {
@@ -229,6 +292,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       _saveCurrentTabScrollOffset(remoteData);
       setState(() {
         _remoteDataSelectedIndex = index;
+        _homeVisiblePreloadDramaId = null;
       });
 
       _restoreScrollOffsetForTab(nextTab.id);
@@ -262,6 +326,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     // 监听远程数据
     final remoteData = ref.watch(homeRemoteDataProvider);
     final homeDataState = ref.watch(homeDataControllerProvider);
+    final bannerState = ref.watch(homeBannerConfigControllerProvider);
 
     // 监听 mock 数据
 
@@ -337,44 +402,17 @@ class _HomePageState extends ConsumerState<HomePage> {
                   },
                 ),
               ),
-              SliverToBoxAdapter(
-                child: Container(
-                  margin: const EdgeInsets.only(
-                    bottom: 10,
-                    left: 14,
-                    right: 14,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  height: 200,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Swiper(
-                      itemBuilder: (BuildContext context, int index) {
-                        return Image.asset(image[index], fit: BoxFit.fill);
-                      },
-                      autoplay: true,
-                      itemCount: image.length,
-                      pagination: SwiperPagination(
-                        alignment: Alignment.bottomCenter,
-                        margin: EdgeInsets.only(bottom: 10),
-                        builder: SwiperCustomPagination(
-                          builder: (context, config) {
-                            return _HomeBannerSliderIndicator(
-                              activeIndex: config.activeIndex,
-                              itemCount: config.itemCount,
-                            );
-                          },
-                        ),
-                      ),
-                      // 隐藏左右按钮
-                      control: null,
-                    ),
+              if (bannerState.visibleBanners.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: _HomeRemoteBannerCarousel(
+                    banners: bannerState.visibleBanners,
+                    onImageError: (bannerId) => ref
+                        .read(homeBannerConfigControllerProvider.notifier)
+                        .disableBanner(bannerId),
+                    onTap: _handleBannerTap,
+                    onVisible: _trackBannerExposure,
                   ),
                 ),
-              ),
               if (isLoading)
                 SliverFillRemaining(
                   hasScrollBody: false,
@@ -439,9 +477,15 @@ class _HomePageState extends ConsumerState<HomePage> {
                             position: index + 1,
                             categoryId: selectedRemoteTab?.id.toString() ?? '',
                             child: _HomeDramaCard(
-                              key: ValueKey('home_drama_card_$index'),
+                              key: ValueKey('home_drama_card_${item.id}'),
                               data: item,
                               coverCacheWidth: coverCacheWidth,
+                              onStableVisible: (visibleFraction) =>
+                                  _preloadStableVisibleDrama(
+                                    item,
+                                    visibleFraction,
+                                  ),
+                              visibilityRevision: _cardVisibilityRevision,
                               onTap: () {
                                 unawaited(
                                   ref
@@ -462,6 +506,31 @@ class _HomePageState extends ConsumerState<HomePage> {
                                       ),
                                 );
                                 final tappedAt = DateTime.now();
+                                preparePlayerEntryPreload(
+                                  context,
+                                  dramaId: item.id,
+                                  episodeId: '1',
+                                  trigger: 'home_card_tap',
+                                  resumeHint:
+                                      item.watchProgress?.canResume == true
+                                      ? PlayerEntryResumeHint(
+                                          episodeId:
+                                              item.watchProgress!.episodeId,
+                                          episodeNo:
+                                              item.watchProgress!.episodeNo,
+                                          position: Duration(
+                                            seconds: item
+                                                .watchProgress!
+                                                .positionSeconds,
+                                          ),
+                                          duration: Duration(
+                                            seconds: item
+                                                .watchProgress!
+                                                .durationSeconds,
+                                          ),
+                                        )
+                                      : null,
+                                );
                                 context.push(
                                   RoutePaths.playerLocation(
                                     dramaId: item.id,
@@ -500,6 +569,245 @@ class _HomePageState extends ConsumerState<HomePage> {
       ),
     );
   }
+
+  Future<void> _handleBannerTap(HomeBannerDto banner) async {
+    if (_bannerNavigationInProgress) return;
+    final jumpType = banner.jumpType.trim().toLowerCase();
+    if (jumpType == 'none') return;
+    _bannerNavigationInProgress = true;
+    try {
+      final analyticsBanner = HomeBannerAnalyticsItem(
+        bannerId: banner.bannerId,
+        targetType: jumpType,
+        targetDramaId: jumpType == 'drama' ? banner.jumpParam : null,
+      );
+      unawaited(
+        ref
+            .read(analyticsServiceProvider)
+            .track(
+              AnalyticsEvent(
+                AnalyticsDefinitions.elementClick,
+                analyticsBanner.toEventParameters(),
+              ),
+            ),
+      );
+      final value = banner.jumpParam.trim();
+      switch (jumpType) {
+        case 'internal_h5':
+          final url = banner.normalizedH5Url;
+          if (url == null) {
+            return;
+          }
+          prepareHomeBannerEntrySource(
+            ref.read(analyticsEntrySourceProvider.notifier),
+            analyticsBanner,
+          );
+          if (mounted) {
+            context.push(RoutePaths.webviewLocation(url: url));
+          }
+          return;
+        case 'external_h5':
+          final url = banner.normalizedH5Url;
+          if (url != null) {
+            await ref.read(externalUrlLauncherProvider).open(url);
+          }
+          return;
+        case 'drama':
+          if (value.isEmpty || !RegExp(r'^\d+$').hasMatch(value)) {
+            return;
+          }
+          prepareHomeBannerEntrySource(
+            ref.read(analyticsEntrySourceProvider.notifier),
+            analyticsBanner,
+          );
+          if (mounted) {
+            preparePlayerEntryPreload(
+              context,
+              dramaId: value,
+              episodeId: '1',
+              trigger: 'home_banner',
+            );
+            context.push(
+              RoutePaths.playerLocation(
+                dramaId: value,
+                episodeId: '1',
+                trigger: 'home_banner',
+                userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+              ),
+            );
+          }
+          return;
+        case 'app_page':
+          _openBannerAppPage(value, analyticsBanner);
+          return;
+      }
+    } finally {
+      _bannerNavigationInProgress = false;
+    }
+  }
+
+  void _trackBannerExposure(HomeBannerDto banner) {
+    if (!mounted) return;
+    final targetType = banner.jumpType.trim().toLowerCase();
+    unawaited(
+      _bannerExposureTracker.trackVisible(
+        HomeBannerAnalyticsItem(
+          bannerId: banner.bannerId,
+          targetType: targetType,
+          targetDramaId: targetType == 'drama' ? banner.jumpParam.trim() : null,
+        ),
+      ),
+    );
+  }
+
+  void _openBannerAppPage(String pageCode, HomeBannerAnalyticsItem banner) {
+    final location = switch (pageCode) {
+      'home' => RoutePaths.home,
+      'recommend_tab' => RoutePaths.forYou,
+      'member_tab' => RoutePaths.member,
+      'member_open' => RoutePaths.membership,
+      'recharge' => RoutePaths.store,
+      'reward_coin' => RoutePaths.rewardsLocation(),
+      'member_point' => RoutePaths.rewardsLocation(
+        tab: RoutePaths.memberPointsTab,
+      ),
+      _ => null,
+    };
+    if (location == null || !mounted) return;
+    prepareHomeBannerEntrySource(
+      ref.read(analyticsEntrySourceProvider.notifier),
+      banner,
+    );
+    if (pageCode == 'member_open' || pageCode == 'recharge') {
+      context.push(location);
+    } else {
+      context.go(location);
+    }
+  }
+}
+
+class _HomeRemoteBannerCarousel extends StatefulWidget {
+  const _HomeRemoteBannerCarousel({
+    required this.banners,
+    required this.onImageError,
+    required this.onTap,
+    required this.onVisible,
+  });
+
+  final List<HomeBannerDto> banners;
+  final ValueChanged<String> onImageError;
+  final ValueChanged<HomeBannerDto> onTap;
+  final ValueChanged<HomeBannerDto> onVisible;
+
+  @override
+  State<_HomeRemoteBannerCarousel> createState() =>
+      _HomeRemoteBannerCarouselState();
+}
+
+class _HomeRemoteBannerCarouselState extends State<_HomeRemoteBannerCarousel> {
+  Timer? _visibilityTimer;
+  Timer? _visibilityPoller;
+  int _activeIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _evaluateVisibility());
+    _visibilityPoller = Timer.periodic(
+      const Duration(milliseconds: 200),
+      (_) => _evaluateVisibility(),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeRemoteBannerCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_activeIndex >= widget.banners.length) {
+      _activeIndex = 0;
+      _resetVisibilityTimer();
+    }
+  }
+
+  @override
+  void dispose() {
+    _visibilityTimer?.cancel();
+    _visibilityPoller?.cancel();
+    super.dispose();
+  }
+
+  void _onIndexChanged(int index) {
+    if (_activeIndex == index) return;
+    setState(() => _activeIndex = index);
+    _resetVisibilityTimer();
+    _evaluateVisibility();
+  }
+
+  void _resetVisibilityTimer() {
+    _visibilityTimer?.cancel();
+    _visibilityTimer = null;
+  }
+
+  void _evaluateVisibility() {
+    if (!mounted || widget.banners.isEmpty || !_isAtLeastHalfVisible()) {
+      _resetVisibilityTimer();
+      return;
+    }
+    _visibilityTimer ??= Timer(const Duration(seconds: 1), () {
+      _visibilityTimer = null;
+      if (!mounted || !_isAtLeastHalfVisible()) return;
+      final index = _activeIndex % widget.banners.length;
+      widget.onVisible(widget.banners[index]);
+    });
+  }
+
+  bool _isAtLeastHalfVisible() {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return false;
+    final rect = box.localToGlobal(Offset.zero) & box.size;
+    final viewport = Offset.zero & MediaQuery.sizeOf(context);
+    final visible = rect.intersect(viewport);
+    if (rect.isEmpty || visible.isEmpty) return false;
+    return visible.width * visible.height >= rect.width * rect.height * .5;
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: const Key('home_remote_banner_carousel'),
+    height: 200,
+    margin: const EdgeInsets.only(bottom: 10, left: 14, right: 14),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: Swiper(
+        autoplay: widget.banners.length > 1,
+        autoplayDelay: 3000,
+        itemCount: widget.banners.length,
+        itemBuilder: (context, index) {
+          final banner = widget.banners[index];
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => widget.onTap(banner),
+            child: AppCachedNetworkImage(
+              imageUrl: banner.imageUrl,
+              fit: BoxFit.fill,
+              onError: () => widget.onImageError(banner.bannerId),
+            ),
+          );
+        },
+        onIndexChanged: _onIndexChanged,
+        pagination: SwiperPagination(
+          alignment: Alignment.bottomCenter,
+          margin: const EdgeInsets.only(bottom: 10),
+          builder: SwiperCustomPagination(
+            builder: (context, config) => _HomeBannerSliderIndicator(
+              activeIndex: config.activeIndex,
+              itemCount: config.itemCount,
+            ),
+          ),
+        ),
+        control: null,
+      ),
+    ),
+  );
 }
 
 class _HomeBannerSliderIndicator extends StatelessWidget {
@@ -513,12 +821,14 @@ class _HomeBannerSliderIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final alignmentX = itemCount <= 1
-        ? 0.0
-        : -1.0 + (2.0 * activeIndex / (itemCount - 1));
+    const trackWidth = 72.0;
+    final count = itemCount < 1 ? 1 : itemCount;
+    final index = activeIndex.clamp(0, count - 1).toDouble();
+    final alignmentX = count <= 1 ? 0.0 : -1.0 + (2.0 * index / (count - 1));
+    final activeWidth = trackWidth / count;
 
     return Container(
-      width: 72,
+      width: trackWidth,
       height: 4,
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.24),
@@ -530,7 +840,7 @@ class _HomeBannerSliderIndicator extends StatelessWidget {
         curve: Curves.easeOutCubic,
         alignment: Alignment(alignmentX, 0),
         child: Container(
-          width: 24,
+          width: activeWidth,
           height: 4,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.6),
@@ -819,39 +1129,103 @@ class _HomeCategoryTab extends StatelessWidget {
   }
 }
 
-class _HomeDramaCard extends StatelessWidget {
+class _HomeDramaCard extends StatefulWidget {
   const _HomeDramaCard({
     required this.data,
     required this.coverCacheWidth,
     required this.onTap,
+    required this.onStableVisible,
+    required this.visibilityRevision,
     super.key,
   });
 
   final Drama data;
   final int coverCacheWidth;
   final VoidCallback onTap;
+  final ValueChanged<double> onStableVisible;
+  final ValueListenable<int> visibilityRevision;
+
+  @override
+  State<_HomeDramaCard> createState() => _HomeDramaCardState();
+}
+
+class _HomeDramaCardState extends State<_HomeDramaCard> {
+  Timer? _stableVisibleTimer;
+  var _didNotifyStableVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _evaluateVisibility();
+    });
+    widget.visibilityRevision.addListener(_evaluateVisibility);
+  }
+
+  @override
+  void dispose() {
+    _stableVisibleTimer?.cancel();
+    widget.visibilityRevision.removeListener(_evaluateVisibility);
+    super.dispose();
+  }
+
+  void _evaluateVisibility() {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return;
+    if (!_isAtLeastHalfVisible()) {
+      _stableVisibleTimer?.cancel();
+      _stableVisibleTimer = null;
+      _didNotifyStableVisible = false;
+      return;
+    }
+    if (_didNotifyStableVisible || _stableVisibleTimer != null) return;
+
+    _stableVisibleTimer = Timer(const Duration(milliseconds: 400), () {
+      _stableVisibleTimer = null;
+      if (!mounted || _didNotifyStableVisible || !_isAtLeastHalfVisible()) {
+        return;
+      }
+      _didNotifyStableVisible = true;
+      widget.onStableVisible(_visibleFraction());
+    });
+  }
+
+  bool _isAtLeastHalfVisible() {
+    return _visibleFraction() >= 0.5;
+  }
+
+  double _visibleFraction() {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return 0;
+    final topLeft = renderObject.localToGlobal(Offset.zero);
+    final viewport = MediaQuery.sizeOf(context);
+    final visibleHeight =
+        math.min(topLeft.dy + renderObject.size.height, viewport.height) -
+        math.max(topLeft.dy, 0);
+    return (visibleHeight / renderObject.size.height).clamp(0.0, 1.0);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final visibleTags = data.tags;
+    final visibleTags = widget.data.tags;
 
     return Material(
       color: Color(0XFF1C1821),
       borderRadius: BorderRadius.circular(AppRadii.sm),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AspectRatio(
-              aspectRatio: data.coverAspectRatio,
+              aspectRatio: widget.data.coverAspectRatio,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
                   _HomeCoverImage(
-                    resource: data.coverResource,
-                    cacheWidth: coverCacheWidth,
+                    resource: widget.data.coverResource,
+                    cacheWidth: widget.coverCacheWidth,
                   ),
                   const DecoratedBox(
                     decoration: BoxDecoration(
@@ -866,7 +1240,7 @@ class _HomeDramaCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (data.isExclusive)
+                  if (widget.data.isExclusive)
                     const Positioned(
                       top: 0,
                       right: 0,
@@ -875,7 +1249,7 @@ class _HomeDramaCard extends StatelessWidget {
                   Positioned(
                     right: 9,
                     bottom: 10,
-                    child: _ViewCount(label: data.viewCountLabel),
+                    child: _ViewCount(label: widget.data.viewCountLabel),
                   ),
                 ],
               ),
@@ -887,7 +1261,7 @@ class _HomeDramaCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    data.title,
+                    widget.data.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(

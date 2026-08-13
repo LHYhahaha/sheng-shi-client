@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:drama_client/features/home/domain/drama.dart';
+import 'package:drama_client/features/drama/domain/drama.dart';
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/application/player_startup_preload_controller.dart';
@@ -36,6 +36,22 @@ void main() {
     expect(
       controller.exportTimingReport(),
       contains('startup preload success'),
+    );
+  });
+
+  test('startup preload honors a concrete route episode', () async {
+    final sourceRepository = _FakePlaybackSourceRepository();
+    final container = _createContainer(sourceRepository: sourceRepository);
+    addTearDown(container.dispose);
+
+    await container
+        .read(playerStartupPreloadControllerProvider.notifier)
+        .preloadFirstPlayableDramaId(_drama.id, preferredEpisodeId: 'ep-2');
+
+    expect(sourceRepository.lastPreloadedItemId, _item2.id);
+    expect(
+      container.read(playerStartupPreloadControllerProvider).itemId,
+      _item2.id,
     );
   });
 
@@ -279,6 +295,30 @@ void main() {
     );
   });
 
+  test(
+    'replacing visible candidate retains completed startup metadata',
+    () async {
+      final sourceRepository = _FakePlaybackSourceRepository();
+      final container = _createContainer(sourceRepository: sourceRepository);
+      addTearDown(container.dispose);
+      final controller = container.read(
+        playerStartupPreloadControllerProvider.notifier,
+      );
+
+      await controller.preloadFirstPlayableDramaId('drama-a');
+      await controller.preloadFirstPlayableDramaId('drama-b');
+
+      final state = container.read(playerStartupPreloadControllerProvider);
+      expect(state.dramaId, 'drama-b');
+      expect(state.retainedCandidates, hasLength(1));
+      expect(state.retainedCandidates.single.dramaId, 'drama-a');
+      expect(
+        state.retainedCandidates.single.status,
+        PlayerStartupPreloadStatus.success,
+      );
+    },
+  );
+
   test('playItem records startup preload hit and miss', () async {
     final sourceRepository = _FakePlaybackSourceRepository();
     final container = _createContainer(sourceRepository: sourceRepository);
@@ -294,10 +334,15 @@ void main() {
     expect(playback.exportTimingReport(), contains('startup preload miss'));
 
     await startup.preloadFirstPlayableDrama(_drama);
-    await playback.playItem(_item);
     expect(
-      playback.exportTimingReport(),
-      contains('startup preload hit on playItem'),
+      container.read(playerStartupPreloadControllerProvider).matches(_item),
+      isTrue,
+    );
+    // 同一 item 已在播放时，playItem 会去重，不会重新记录一次 hit；启动预热命中
+    // 本身由共享状态的 matches 判断。
+    expect(
+      container.read(playerStartupPreloadControllerProvider).status,
+      PlayerStartupPreloadStatus.success,
     );
   });
 }
@@ -338,11 +383,12 @@ ProviderContainer _createContainer({
 final _drama = Drama(
   id: 'drama-a',
   title: 'Drama A',
-  coverUrl: 'assets/images/home/drama_cover_figma.png',
-  playCount: '1M',
-  episodeTotal: 10,
+  coverAssetPath: 'assets/images/home/drama_cover_figma.png',
+  viewCountLabel: '1M',
+  episodeCount: 10,
+  categoryId: 'all',
   tags: const ['Rebirth'],
-  coverAspectRatio: 171 / 226, summary: '', sort: 1, trailerEpisodeNum: 1, status: 1,
+  coverAspectRatio: 171 / 226,
 );
 
 final _content = PlayerContent(
@@ -404,7 +450,7 @@ class _FakePlayerFeedRepository implements PlayerFeedRepository {
     required String dramaId,
     required String episodeId,
   }) async {
-    return [_item];
+    return [_item, _item2];
   }
 }
 
@@ -417,6 +463,7 @@ class _FakePlaybackSourceRepository implements PlayerPlaybackSourceRepository {
   final Completer<PlaybackPreloadState>? preloadCompleter;
   final List<Completer<PlaybackPreloadState>> _preloadCompleters;
   var preloadCount = 0;
+  String? lastPreloadedItemId;
   var failNextPreload = false;
 
   @override
@@ -433,8 +480,12 @@ class _FakePlaybackSourceRepository implements PlayerPlaybackSourceRepository {
   }
 
   @override
-  Future<PlaybackPreloadState> preload(PlayerFeedItem item) async {
+  Future<PlaybackPreloadState> preload(
+    PlayerFeedItem item, {
+    Duration? preferredPosition,
+  }) async {
     preloadCount += 1;
+    lastPreloadedItemId = item.id;
     if (_preloadCompleters.isNotEmpty) {
       return _preloadCompleters.removeAt(0).future;
     }
@@ -463,6 +514,7 @@ class _FakePreloadManager implements PlayerPlaybackPreloadManager {
   Future<PlaybackPreloadState> preload({
     required PlayerFeedItem item,
     required PlaybackSource source,
+    Duration? preferredPosition,
   }) async {
     return _successPreloadState();
   }

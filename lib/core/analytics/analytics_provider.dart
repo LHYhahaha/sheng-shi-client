@@ -63,8 +63,11 @@ final analyticsEventSinkProvider = Provider<AnalyticsEventSink>((ref) {
 });
 
 final analyticsServiceProvider = Provider<AnalyticsService>((ref) {
-  return AnalyticsService(
-    contextReader: () => ref.read(analyticsContextProvider),
-    eventSink: ref.watch(analyticsEventSinkProvider),
-  );
+  // AnalyticsService 可能被 Banner 等延迟 UI 回调短暂持有。不要把 Ref.read 的闭包
+  // 交给它：ProviderScope 热重载/重建后，旧 service 再取上下文会访问已 dispose 的
+  // ref。watch 让上下文变化时创建新 service，而旧 service 使用创建当时的快照安全
+  // 完成已经发起的事件。
+  final context = ref.watch(analyticsContextProvider);
+  final eventSink = ref.watch(analyticsEventSinkProvider);
+  return AnalyticsService(contextReader: () => context, eventSink: eventSink);
 });

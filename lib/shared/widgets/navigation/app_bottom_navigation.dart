@@ -1,5 +1,12 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../features/bottom_tab_config/application/bottom_tab_config_controller.dart';
+import '../../../features/bottom_tab_config/application/dynamic_tab_analytics.dart';
+import '../../../features/bottom_tab_config/data/dto/bottom_tab_response_dto.dart';
+import '../../widgets/app_cached_network_image.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../theme/app_colors.dart';
 
@@ -7,7 +14,7 @@ import '../../theme/app_colors.dart';
 ///
 /// 只服务五个 shell tab。播放器全屏、My List 编辑等场景应通过 shell chrome provider
 /// 隐藏它，不要在单个页面里复制导航栏。
-class AppBottomNavigation extends StatelessWidget {
+class AppBottomNavigation extends ConsumerWidget {
   const AppBottomNavigation({
     required this.currentIndex,
     required this.onDestinationSelected,
@@ -21,30 +28,35 @@ class AppBottomNavigation extends StatelessWidget {
   static const _items = [
     _BottomNavigationItem(
       label: _BottomNavigationLabel.home,
+      slot: 'home',
       selectedAssetPath: 'assets/navigation/home_selected.png',
       unselectedAssetPath: 'assets/navigation/home_unselected.png',
       fallbackIcon: Icons.home_rounded,
     ),
     _BottomNavigationItem(
       label: _BottomNavigationLabel.forYou,
+      slot: 'recommend_tab',
       selectedAssetPath: 'assets/navigation/for_you_selected.png',
       unselectedAssetPath: 'assets/navigation/for_you_unselected.png',
       fallbackIcon: Icons.play_circle_fill_rounded,
     ),
     _BottomNavigationItem(
       label: _BottomNavigationLabel.member,
+      slot: 'member_tab',
       selectedAssetPath: 'assets/navigation/huiyuan__selected.png',
       unselectedAssetPath: 'assets/navigation/huiyuan_unselected.png',
       fallbackIcon: Icons.card_membership_rounded,
     ),
     _BottomNavigationItem(
       label: _BottomNavigationLabel.myList,
+      slot: 'favorites',
       selectedAssetPath: 'assets/navigation/my_list_selected.png',
       unselectedAssetPath: 'assets/navigation/my_list_unselected.png',
       fallbackIcon: Icons.explore_rounded,
     ),
     _BottomNavigationItem(
       label: _BottomNavigationLabel.profile,
+      slot: 'profile',
       selectedAssetPath: 'assets/navigation/profile_selected.png',
       unselectedAssetPath: 'assets/navigation/profile_unselected.png',
       fallbackIcon: Icons.person_rounded,
@@ -60,12 +72,28 @@ class AppBottomNavigation extends StatelessWidget {
   final ValueChanged<int> onDestinationSelected;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final mediaQuery = MediaQuery.of(context);
     final platform = Theme.of(context).platform;
     final isIos = platform == TargetPlatform.iOS;
     final contentHeight = isIos ? 84.0 : 64.0;
     final bottomInset = isIos ? 0.0 : mediaQuery.viewPadding.bottom;
+    final dynamicTabs = _items
+        .map((item) => _tabFor(ref, item))
+        .whereType<BottomTabDto>()
+        .toList(growable: false);
+
+    // Shell 仅在底部导航实际可见时创建本组件；post-frame 后代表动态 Tab 已进入
+    // 当前底部导航的可见区域。生命周期去重由 tracker 负责。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) {
+        return;
+      }
+      final tracker = ref.read(dynamicTabExposureTrackerProvider);
+      for (final tab in dynamicTabs) {
+        unawaited(tracker.trackVisible(tab));
+      }
+    });
 
     return Container(
       decoration: BoxDecoration(
@@ -91,9 +119,11 @@ class AppBottomNavigation extends StatelessWidget {
                     for (final item in _items.indexed)
                       _AppBottomNavigationItem(
                         key: ValueKey('bottom_nav_${item.$2.label.name}'),
-                        label: item.$2.label.resolve(context.l10n),
+                        label: _labelFor(context, ref, item.$2),
                         selectedAssetPath: item.$2.selectedAssetPath,
                         unselectedAssetPath: item.$2.unselectedAssetPath,
+                        normalIconUrl: _tabFor(ref, item.$2)?.normalIconUrl,
+                        selectedIconUrl: _tabFor(ref, item.$2)?.selectedIconUrl,
                         fallbackIcon: item.$2.fallbackIcon,
                         selected: item.$1 == currentIndex,
                         height: contentHeight,
@@ -108,6 +138,29 @@ class AppBottomNavigation extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  BottomTabDto? _tabFor(WidgetRef ref, _BottomNavigationItem item) {
+    ref.watch(bottomTabConfigControllerProvider);
+    return ref
+        .read(bottomTabConfigControllerProvider.notifier)
+        .tabForSlot(item.slot);
+  }
+
+  String _labelFor(
+    BuildContext context,
+    WidgetRef ref,
+    _BottomNavigationItem item,
+  ) {
+    final defaultLabel = item.label.resolve(context.l10n);
+    final tab = _tabFor(ref, item);
+    if (tab == null) {
+      return defaultLabel;
+    }
+    return context.l10n.resolveDynamicTabText(
+      tab.nameI18nKey,
+      fallback: defaultLabel,
     );
   }
 }
@@ -132,6 +185,8 @@ class _AppBottomNavigationItem extends StatelessWidget {
     required this.label,
     required this.selectedAssetPath,
     required this.unselectedAssetPath,
+    required this.normalIconUrl,
+    required this.selectedIconUrl,
     required this.fallbackIcon,
     required this.selected,
     required this.height,
@@ -142,6 +197,8 @@ class _AppBottomNavigationItem extends StatelessWidget {
   final String label;
   final String selectedAssetPath;
   final String unselectedAssetPath;
+  final String? normalIconUrl;
+  final String? selectedIconUrl;
   final IconData fallbackIcon;
   final bool selected;
   final double height;
@@ -164,20 +221,7 @@ class _AppBottomNavigationItem extends StatelessWidget {
               top: 9,
               child: SizedBox.square(
                 dimension: AppBottomNavigation._iconSize,
-                child: Image.asset(
-                  selected ? selectedAssetPath : unselectedAssetPath,
-                  width: AppBottomNavigation._iconSize,
-                  height: AppBottomNavigation._iconSize,
-                  fit: BoxFit.contain,
-                  filterQuality: FilterQuality.low,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Icon(
-                      fallbackIcon,
-                      size: AppBottomNavigation._iconSize,
-                      color: color,
-                    );
-                  },
-                ),
+                child: _icon(color),
               ),
             ),
             Positioned(
@@ -202,17 +246,48 @@ class _AppBottomNavigationItem extends StatelessWidget {
       ),
     );
   }
+
+  Widget _icon(Color color) {
+    final url = selected ? selectedIconUrl : normalIconUrl;
+    if (url != null) {
+      return AppCachedNetworkImage(
+        imageUrl: url,
+        width: AppBottomNavigation._iconSize,
+        height: AppBottomNavigation._iconSize,
+        fit: BoxFit.contain,
+        // 动态图标未完成加载或加载失败时都立即保留原状态图标，
+        // 避免切换 Tab 时短暂展示网络图组件的灰色占位。
+        placeholder: _localIcon(color),
+        errorWidget: _localIcon(color),
+      );
+    }
+    return _localIcon(color);
+  }
+
+  Widget _localIcon(Color color) {
+    return Image.asset(
+      selected ? selectedAssetPath : unselectedAssetPath,
+      width: AppBottomNavigation._iconSize,
+      height: AppBottomNavigation._iconSize,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.low,
+      errorBuilder: (context, error, stackTrace) =>
+          Icon(fallbackIcon, size: AppBottomNavigation._iconSize, color: color),
+    );
+  }
 }
 
 class _BottomNavigationItem {
   const _BottomNavigationItem({
     required this.label,
+    required this.slot,
     required this.selectedAssetPath,
     required this.unselectedAssetPath,
     required this.fallbackIcon,
   });
 
   final _BottomNavigationLabel label;
+  final String slot;
   final String selectedAssetPath;
   final String unselectedAssetPath;
   final IconData fallbackIcon;

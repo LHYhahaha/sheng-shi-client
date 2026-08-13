@@ -42,6 +42,15 @@ class PlayerContentMapper {
       favoriteCount: dto.favoriteCount,
       isFavorited: dto.isFavorited,
       episodeTotal: dto.episodeTotal,
+      watchProgress: dto.watchProgress == null
+          ? null
+          : PlayerWatchProgress(
+              episodeId: dto.watchProgress!.episodeId.toString(),
+              episodeNo: dto.watchProgress!.episodeNo,
+              position: Duration(seconds: dto.watchProgress!.watchSecond),
+              duration: Duration(seconds: dto.watchProgress!.durationSecond),
+              progressPercent: dto.watchProgress!.progressPercent,
+            ),
       recommendationsStatus: recommendationsStatus,
     );
   }
@@ -60,6 +69,7 @@ class PlayerContentMapper {
       number: dto.episodeNo,
       isLocked: isLocked,
       unlockType: unlockType,
+      viewingEntitlementType: _viewingEntitlementType(dto),
       requiredCoins: pricePerEpisode,
       // 从 PlayerContentDto 的 pricePerEpisode 获取
       videoUrl: dto.sourceUrl.isNotEmpty ? dto.sourceUrl : null,
@@ -67,6 +77,17 @@ class PlayerContentMapper {
       isAvailable: dto.status == 1,
       subtitles: _mapSubtitles(dto.subtitles),
       episodeSources: _mapEpisodeSources(dto.episodeSources),
+      adUnlock: dto.adUnlock == null
+          ? null
+          : PlayerAdUnlockOffer(
+              isAvailable: dto.adUnlock!.available,
+              watchedToday: dto.adUnlock!.watchedToday,
+              dailyLimit: dto.adUnlock!.dailyLimit,
+              closeAfter: Duration(seconds: dto.adUnlock!.closeAfterSec),
+              placementId: dto.adUnlock!.placementId,
+              adVideoUrl: dto.adUnlock!.adVideoUrl,
+              taskToken: dto.adUnlock!.taskToken,
+            ),
     );
   }
 
@@ -140,5 +161,36 @@ class PlayerContentMapper {
 
     // 需要解锁的剧集（isVipOnly=0 且 isUnlocked=0）
     return EpisodeUnlockType.coins;
+  }
+
+  String _viewingEntitlementType(PlayerEpisodeDto dto) {
+    const supported = <String>{
+      'free',
+      'coin',
+      'vip',
+      'ad',
+      'trial',
+      'temp_vip',
+      'drama_gift',
+      'locked',
+    };
+    final value = dto.viewingEntitlementType?.trim().toLowerCase();
+    if (value != null && supported.contains(value)) return value;
+
+    // 兼容部分详情灰度返回的数值权益来源。埋点枚举没有独立的“运营赠送/活动”
+    // 值，两者统一归到 drama_gift。
+    switch (value) {
+      case '1':
+        return 'coin';
+      case '2':
+        return 'vip';
+      case '3' || '4':
+        return 'drama_gift';
+    }
+
+    // 兼容旧接口尚未返回该字段时的保守推导。
+    if (dto.isUnlocked == 1) return 'free';
+    if (dto.isVipOnly == 1) return 'locked';
+    return 'locked';
   }
 }

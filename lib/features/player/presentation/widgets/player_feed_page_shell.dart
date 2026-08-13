@@ -40,6 +40,7 @@ class PlayerFeedPageShell extends ConsumerStatefulWidget {
     required this.onShareTap,
     required this.onMoreTap,
     required this.onUnlockTap,
+    required this.onAdUnlockTap,
     required this.onOpenMembership,
     this.onSearchTap,
     this.onMetaTap,
@@ -69,6 +70,7 @@ class PlayerFeedPageShell extends ConsumerStatefulWidget {
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
   final VoidCallback onUnlockTap;
+  final VoidCallback onAdUnlockTap;
   final VoidCallback onOpenMembership;
   final VoidCallback? onSearchTap;
   final VoidCallback? onMetaTap;
@@ -141,6 +143,7 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
   VoidCallback get onShareTap => widget.onShareTap;
   VoidCallback get onMoreTap => widget.onMoreTap;
   VoidCallback get onUnlockTap => widget.onUnlockTap;
+  VoidCallback get onAdUnlockTap => widget.onAdUnlockTap;
   VoidCallback get onOpenMembership => widget.onOpenMembership;
   VoidCallback? get onSearchTap => widget.onSearchTap;
   VoidCallback? get onMetaTap => widget.onMetaTap;
@@ -184,6 +187,9 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
         accessPresentation == PlayerAccessPresentationState.lockedMembership
         ? context.l10n.playerMemberUnlock
         : context.l10n.playerUnlockNow;
+    final adUnlock = item.episode.adUnlock;
+    final canShowAdUnlock =
+        isLockedSettledPage && adUnlock != null && adUnlock.isAvailable;
     final shell = playbackShell;
     final canUsePlaybackSurface =
         isSettledPage &&
@@ -273,6 +279,11 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
           onSearchTap: onSearchTap ?? () {},
           showUnlockButton: isLockedSettledPage,
           unlockLabel: lockedActionLabel,
+          showAdUnlockButton: canShowAdUnlock,
+          adUnlockSubtitle: canShowAdUnlock
+              ? 'Watched today (${adUnlock.watchedToday}/${adUnlock.dailyLimit})'
+              : null,
+          onAdUnlockTap: canShowAdUnlock ? onAdUnlockTap : null,
           onUnlockTap: isLockedSettledPage
               ? () {
                   final unlockButtonAction = switch (accessPresentation) {

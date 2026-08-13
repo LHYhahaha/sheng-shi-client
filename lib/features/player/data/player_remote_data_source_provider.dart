@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client_provider.dart';
 import 'player_drama_detail_cache.dart';
+import 'player_remote_watch_progress_cache.dart';
 import 'remote/player_remote_data_source.dart';
 
 /// 播放器远程数据源 provider。
@@ -15,3 +16,10 @@ final playerDramaDetailCacheProvider = Provider<PlayerDramaDetailCache>((ref) {
     remoteDataSource: ref.watch(playerRemoteDataSourceProvider),
   );
 });
+
+final playerRemoteWatchProgressCacheProvider =
+    Provider<PlayerRemoteWatchProgressCache>((ref) {
+      return PlayerRemoteWatchProgressCache(
+        remoteDataSource: ref.watch(playerRemoteDataSourceProvider),
+      );
+    });

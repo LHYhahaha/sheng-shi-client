@@ -93,6 +93,8 @@ class HomeDramaDto {
     required this.status,
     required this.episodeTotal,
     required this.tagsName,
+    this.isFavorited = 0,
+    this.watchProgress,
   });
 
   final int id;
@@ -106,6 +108,8 @@ class HomeDramaDto {
   final int status;
   final int episodeTotal;
   final List<String> tagsName;
+  final int isFavorited;
+  final HomeWatchProgressDto? watchProgress;
 
   factory HomeDramaDto.fromJson(Map<String, Object?> json) {
     return HomeDramaDto(
@@ -121,11 +125,54 @@ class HomeDramaDto {
       status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
       episodeTotal: JsonFieldParser.optionalInt(json, 'episode_total') ?? 0,
       tagsName: _parseTagsName(json['tags_name']),
+      isFavorited: JsonFieldParser.optionalInt(json, 'is_favorited') ?? 0,
+      watchProgress: HomeWatchProgressDto.fromJsonOrNull(
+        json['watch_progress'],
+      ),
     );
   }
 
   static List<String> _parseTagsName(Object? value) {
     if (value is! List) return const <String>[];
     return value.whereType<String>().toList(growable: false);
+  }
+}
+
+/// 首页剧卡附带的用户观看进度。
+///
+/// 它与详情接口的 `watch_progress` 使用同一 snake_case 契约，但首页层不依赖
+/// 播放器 DTO，避免首页数据模型反向耦合播放器功能。没有观看记录时后端会返回
+/// `watch_episode_id=0`、第 1 集和 0 秒；字段缺失时则保留为 null 以兼容旧接口。
+class HomeWatchProgressDto {
+  const HomeWatchProgressDto({
+    required this.watchEpisodeId,
+    required this.watchEpisodeNo,
+    required this.watchSecond,
+    required this.progressPercent,
+    required this.durationSecond,
+  });
+
+  final int watchEpisodeId;
+  final int watchEpisodeNo;
+  final int watchSecond;
+  final int progressPercent;
+  final int durationSecond;
+
+  factory HomeWatchProgressDto.fromJson(Map<String, Object?> json) {
+    return HomeWatchProgressDto(
+      watchEpisodeId:
+          JsonFieldParser.optionalInt(json, 'watch_episode_id') ?? 0,
+      watchEpisodeNo:
+          JsonFieldParser.optionalInt(json, 'watch_episode_no') ?? 1,
+      watchSecond: JsonFieldParser.optionalInt(json, 'watch_second') ?? 0,
+      progressPercent:
+          JsonFieldParser.optionalInt(json, 'progress_percent') ?? 0,
+      durationSecond: JsonFieldParser.optionalInt(json, 'duration_second') ?? 0,
+    );
+  }
+
+  static HomeWatchProgressDto? fromJsonOrNull(Object? value) {
+    if (value is! Map) return null;
+    return HomeWatchProgressDto.fromJson(Map<String, Object?>.from(value));
   }
 }

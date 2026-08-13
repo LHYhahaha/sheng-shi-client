@@ -485,10 +485,21 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     // 鍏呭€兼垨寮€閫氫細鍛樻垚鍔熷悗锛屽埛鏂版潈鐩婃暟鎹?
     // await ref.read(entitlementControllerProvider.notifier).load();
     if (grantedMembershipPackage) {
-      final decision = evaluateAccess(currentItem);
+      // 详情数据在当前观看会话内可能仍是购买前的快照；会员开通成功后，
+      // 立即把当前集标记为 vip，供本次 drama_play_end 使用。
+      final membershipItem =
+          ref
+              .read(playerFeedControllerProvider(sessionKey).notifier)
+              .updateEpisodeViewingEntitlementType(
+                dramaId: currentItem.content.id,
+                episodeId: currentItem.episode.id,
+                viewingEntitlementType: 'vip',
+              ) ??
+          currentItem;
+      final decision = evaluateAccess(membershipItem);
       if (decision.type == EpisodeAccessDecisionType.allowPlay) {
         await handleAccessDecision(
-          currentItem,
+          membershipItem,
           decision,
           autoPresentSheet: false,
         );

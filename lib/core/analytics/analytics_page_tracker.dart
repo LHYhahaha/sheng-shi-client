@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'analytics_definition.dart';
+import 'analytics_entry_source.dart';
 import 'analytics_event.dart';
 import 'analytics_lifecycle_tracker.dart';
 import 'analytics_page_context.dart';
@@ -35,15 +36,21 @@ class AnalyticsPageTracker {
   AnalyticsPageTracker({
     required AnalyticsService analytics,
     required AnalyticsPageContextController pageContext,
+    required AnalyticsContextReader contextReader,
+    required AnalyticsEntrySourceController entrySource,
     AnalyticsStartupGate? startupGate,
     DateTime Function()? now,
   }) : _analytics = analytics,
        _pageContext = pageContext,
+       _contextReader = contextReader,
+       _entrySource = entrySource,
        _startupGate = startupGate ?? AnalyticsStartupGate(isReady: true),
        _now = now ?? DateTime.now;
 
   final AnalyticsService _analytics;
   final AnalyticsPageContextController _pageContext;
+  final AnalyticsContextReader _contextReader;
+  final AnalyticsEntrySourceController _entrySource;
   final AnalyticsStartupGate _startupGate;
   final DateTime Function() _now;
   final List<String> _pageStack = <String>[];
@@ -53,22 +60,24 @@ class AnalyticsPageTracker {
   List<String> get pageStack => List.unmodifiable(_pageStack);
 
   /// Navigator push：保存当前页面并将新页面入栈。
-  Future<void> push(String pageName) => _enqueue(() => _push(pageName));
+  Future<void> push(String pageName, {bool forcePageView = false}) =>
+      _enqueue(() => _push(pageName, forcePageView: forcePageView));
 
-  Future<void> _push(String pageName) async {
+  Future<void> _push(String pageName, {required bool forcePageView}) async {
     final currentPage = _pageContext.current.currentPage;
-    if (currentPage == pageName) return;
+    if (currentPage == pageName && !forcePageView) return;
     await _leaveCurrent();
     _pageStack.add(pageName);
     await _show(pageName, previousPage: currentPage);
   }
 
   /// 路由替换或底部 Tab 切换：替换当前展示页，不新增返回栈层级。
-  Future<void> replace(String pageName) => _enqueue(() => _replace(pageName));
+  Future<void> replace(String pageName, {bool forcePageView = false}) =>
+      _enqueue(() => _replace(pageName, forcePageView: forcePageView));
 
-  Future<void> _replace(String pageName) async {
+  Future<void> _replace(String pageName, {required bool forcePageView}) async {
     final currentPage = _pageContext.current.currentPage;
-    if (currentPage == pageName) return;
+    if (currentPage == pageName && !forcePageView) return;
     await _leaveCurrent();
     if (_pageStack.isNotEmpty) _pageStack.removeLast();
     _pageStack.add(pageName);
@@ -125,10 +134,18 @@ class AnalyticsPageTracker {
     // 页面已经在首帧可见；即使需要等待启动公共参数，也必须保留真实进入时刻。
     final enteredAt = _now();
     _enteredAt = enteredAt;
+    final entrySource = _entrySource.consume();
+    final context = entrySource == null
+        ? _contextReader()
+        : _contextReader().copyWith(
+            entrySourceType: entrySource.type,
+            entrySourceId: entrySource.id,
+          );
     await _startupGate.ready;
     await _analytics.track(
       const AnalyticsEvent(AnalyticsDefinitions.pageView),
       occurredAt: enteredAt,
+      context: context,
     );
   }
 }
@@ -138,6 +155,8 @@ final analyticsPageTrackerProvider = Provider<AnalyticsPageTracker>((ref) {
   return AnalyticsPageTracker(
     analytics: ref.watch(analyticsServiceProvider),
     pageContext: pageController,
+    contextReader: () => ref.read(analyticsContextProvider),
+    entrySource: ref.read(analyticsEntrySourceProvider.notifier),
     startupGate: ref.watch(analyticsStartupGateProvider),
   );
 });
@@ -219,7 +238,16 @@ final analyticsNavigatorObserverProvider = Provider<AnalyticsNavigatorObserver>(
       },
       onRouteReplaced: (pageName) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          unawaited(ref.read(analyticsPageTrackerProvider).replace(pageName));
+          unawaited(
+            ref
+                .read(analyticsPageTrackerProvider)
+                .replace(
+                  pageName,
+                  forcePageView: ref
+                      .read(analyticsEntrySourceProvider.notifier)
+                      .hasPending,
+                ),
+          );
         });
       },
       onRoutePopped: (poppedPage, previousPage) {

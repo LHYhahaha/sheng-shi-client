@@ -29,16 +29,35 @@ class AppLocalizations {
   /// 由 I18nController 在语言包加载成功后设置。
   /// 所有 AppLocalizations 实例共享此映射。
   static Map<String, dynamic>? _remoteStrings;
+  static final Map<String, Map<String, dynamic>> _remoteStringsByLanguage =
+      <String, Map<String, dynamic>>{};
 
   /// 设置远程语言包。
   ///
   /// 由 I18nController 在语言包加载成功后调用。
-  static void setRemoteStrings(Map<String, dynamic>? strings) {
+  static void setRemoteStrings(
+    Map<String, dynamic>? strings, {
+    String languageCode = 'en',
+    bool isActiveLanguage = true,
+  }) {
+    if (strings == null) {
+      _remoteStringsByLanguage.remove(languageCode);
+    } else {
+      _remoteStringsByLanguage[languageCode] = strings;
+    }
+    if (!isActiveLanguage) {
+      return;
+    }
     _remoteStrings = strings;
   }
 
   /// 获取远程语言包。
   static Map<String, dynamic>? get remoteStrings => _remoteStrings;
+
+  static void clearRemoteStrings() {
+    _remoteStrings = null;
+    _remoteStringsByLanguage.clear();
+  }
 
   static AppLocalizations of(BuildContext context) {
     final localizations = Localizations.of<AppLocalizations>(
@@ -103,6 +122,26 @@ class AppLocalizations {
 
     var value = _remoteText(key, en: text.fallbackEn, zh: text.fallbackZh);
     return _interpolate(value, text.args);
+  }
+
+  /// 动态配置文案：当前语言 → 默认英语语言包 → 客户端原 Tab 文案。
+  String resolveDynamicTabText(String key, {required String fallback}) {
+    final current = _readRemoteString(_remoteStrings, key);
+    if (current != null) {
+      return current;
+    }
+    final defaultLanguage = _readRemoteString(
+      _remoteStringsByLanguage['en'],
+      key,
+    );
+    return defaultLanguage ?? fallback;
+  }
+
+  static String? _readRemoteString(Map<String, dynamic>? strings, String key) {
+    final value = strings?[key];
+    return value is String && value.isNotEmpty
+        ? value.replaceAll(r'\n', '\n')
+        : null;
   }
 
   String _interpolate(String value, Map<String, Object?> args) {
@@ -818,7 +857,6 @@ class AppLocalizations {
     en: 'Confirm purchase',
     zh: '确认购买',
   );
-
 
   String get storeClose =>
       _remoteText('payment_modal.button.done', en: 'Done', zh: '完成');

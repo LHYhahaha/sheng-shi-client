@@ -1,5 +1,6 @@
 import '../../../../core/network/json_field_parser.dart';
 import 'player_episode_dto.dart';
+import 'watch_progress_dto.dart';
 
 /// 播放器剧详情远程 DTO。
 ///
@@ -25,6 +26,7 @@ class PlayerContentDto {
     required this.episodeTotal,
     required this.onlineAt,
     required this.episodes,
+    this.watchProgress,
   });
 
   final int id;
@@ -48,6 +50,13 @@ class PlayerContentDto {
   final int episodeTotal;
   final String onlineAt;
   final List<PlayerEpisodeDto> episodes;
+
+  /// `/api/home/detail` 内联的当前用户续播记录。
+  ///
+  /// 它是普通播放器进入时选集/选续播位置的权威数据；不存在观看记录时接口仍会
+  /// 返回 episodeId=0、watchSecond=0 的对象，解析后保持为非 null，便于与旧接口
+  /// 的 null 语义区分。
+  final WatchProgressDto? watchProgress;
 
   factory PlayerContentDto.fromJson(Map<String, Object?> json) {
     return PlayerContentDto(
@@ -73,6 +82,10 @@ class PlayerContentDto {
       episodeTotal: JsonFieldParser.optionalInt(json, 'episode_total') ?? 0,
       onlineAt: JsonFieldParser.optionalString(json, 'online_at') ?? '',
       episodes: _parseEpisodes(json['episodes']),
+      watchProgress: WatchProgressDto.fromDetailJsonOrNull(
+        json['watch_progress'],
+        dramaId: JsonFieldParser.optionalInt(json, 'id') ?? 0,
+      ),
     );
   }
 

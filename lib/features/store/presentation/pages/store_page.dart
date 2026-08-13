@@ -144,7 +144,6 @@ class _StorePageState extends ConsumerState<StorePage> {
       child: Scaffold(
         backgroundColor: const Color(0xFF040404),
         body: SafeArea(
-          bottom: false,
           child: Stack(
             children: [
               Positioned(

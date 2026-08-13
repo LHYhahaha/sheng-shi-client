@@ -1048,6 +1048,61 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('member points exchange shows the API error message', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(375, 812));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _FakeMemberPointsRepository(
+      exchangeError: const ApiException(
+        code: ApiErrorCode.badResponse,
+        businessCode: 5102,
+        message: 'Item unavailable',
+        data: {'code': 5102, 'message': 'Item unavailable'},
+      ),
+    );
+    final botToastBuilder = BotToastInit();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          memberPointsRepositoryProvider.overrideWithValue(repository),
+          entitlementRepositoryProvider.overrideWithValue(
+            _FakeEntitlementRepository(
+              states: [_memberEntitlement(pointBalance: 1000)],
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          builder: botToastBuilder,
+          navigatorObservers: [BotToastNavigatorObserver()],
+          home: const MemberPointsPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final exchangeButton = find.byKey(
+      const Key('member_points_action_redeem_2'),
+    );
+    await tester.ensureVisible(exchangeButton);
+    await tester.tap(exchangeButton);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('member_points_exchange_confirm_button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('app_center_toast')),
+        matching: find.text('Item unavailable'),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('member points page shows check-in and task design', (
     tester,
   ) async {
@@ -1270,6 +1325,7 @@ class _FakeMemberPointsRepository implements MemberPointsRepository {
     this.dailyDetailError,
     this.exchangeOptions,
     this.exchangeCompleter,
+    this.exchangeError,
     this.claimError,
     this.tasks = const [],
     this.details,
@@ -1279,6 +1335,7 @@ class _FakeMemberPointsRepository implements MemberPointsRepository {
   final Object? dailyDetailError;
   final MemberPointExchangeOptions? exchangeOptions;
   final Completer<MemberPointExchangeResult>? exchangeCompleter;
+  final Object? exchangeError;
   final Object? claimError;
   final List<MemberPointTask> tasks;
   final List<MemberPointDetailRecord>? details;
@@ -1338,6 +1395,8 @@ class _FakeMemberPointsRepository implements MemberPointsRepository {
   @override
   Future<MemberPointExchangeResult> exchange({required int tierId}) {
     exchangeCallCount++;
+    final error = exchangeError;
+    if (error != null) return Future.error(error);
     final pendingResult = exchangeCompleter;
     if (pendingResult != null) return pendingResult.future;
     return Future.value(

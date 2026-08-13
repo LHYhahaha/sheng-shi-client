@@ -6,6 +6,9 @@ import '../../../core/network/api_client_provider.dart';
 import '../domain/player_playback_source.dart';
 import 'hls_playlist_preloader.dart';
 import 'hls_local_proxy_server.dart';
+import 'hls_disk_cache_store.dart';
+import 'hls_network_request_coordinator.dart';
+import 'hls_traffic_gate.dart';
 import 'mock_player_playback_source_repository.dart';
 import 'player_content_repository_provider.dart';
 import 'player_preload_config_provider.dart';
@@ -23,6 +26,8 @@ final hlsPlaylistPreloaderProvider = Provider<HlsPlaylistPreloader>((ref) {
     timeout: config.effectivePreloadTimeout,
     maxPreheatBytes: config.effectiveMaxPreloadBytes,
     cacheStore: ref.watch(hlsLocalCacheStoreProvider),
+    diskCacheStore: ref.watch(hlsDiskCacheStoreProvider),
+    networkCoordinator: ref.watch(hlsNetworkRequestCoordinatorProvider),
   );
   ref.onDispose(preloader.releasePending);
   return preloader;
@@ -39,17 +44,31 @@ final playerPlaybackPreloadManagerProvider =
       );
     });
 
-/// local HLS proxy spike 的配置入口。
+/// local HLS proxy 的配置入口。
 ///
-/// 它只用于诊断 media_kit 是否能从本地代理获益，默认必须关闭。该开关不应作为普通
-/// 缓存策略暴露给 UI，也不能替代服务端/CDN 的 HLS 优化。
+/// 当前已解锁 source_url 统一返回 HLS m3u8，因此默认经由本地代理消费 App 私有
+/// 分片缓存。若未来接口支持多种媒体封装，应改为根据后端 `stream_format` 按 source
+/// 启用；在异常源时可用编译期开关紧急关闭。
 final hlsLocalProxyConfigProvider = Provider<HlsLocalProxyConfig>((ref) {
-  const forceEnabled = bool.fromEnvironment('PLAYER_HLS_LOCAL_PROXY_SPIKE');
-  return HlsLocalProxyConfig(enabled: forceEnabled);
+  const disabled = bool.fromEnvironment('PLAYER_DISABLE_HLS_LOCAL_PROXY');
+  return HlsLocalProxyConfig(enabled: !disabled);
 });
 
 final hlsLocalCacheStoreProvider = Provider<HlsLocalCacheStore>((ref) {
   return HlsLocalCacheStore();
+});
+
+final hlsNetworkRequestCoordinatorProvider =
+    Provider<HlsNetworkRequestCoordinator>((ref) {
+      return HlsNetworkRequestCoordinator();
+    });
+
+final hlsTrafficGateProvider = Provider<HlsTrafficGate>((ref) {
+  return HlsTrafficGate();
+});
+
+final hlsDiskCacheStoreProvider = Provider<HlsDiskCacheStore>((ref) {
+  return HlsDiskCacheStore();
 });
 
 final hlsLocalProxyServerProvider = Provider<HlsLocalProxyServer>((ref) {
@@ -57,6 +76,9 @@ final hlsLocalProxyServerProvider = Provider<HlsLocalProxyServer>((ref) {
   final server = HlsLocalProxyServer(
     timeout: config.timeout,
     cacheStore: ref.watch(hlsLocalCacheStoreProvider),
+    diskCacheStore: ref.watch(hlsDiskCacheStoreProvider),
+    networkCoordinator: ref.watch(hlsNetworkRequestCoordinatorProvider),
+    trafficGate: ref.watch(hlsTrafficGateProvider),
   );
   ref.onDispose(() {
     unawaited(server.stop());
@@ -81,9 +103,16 @@ final startupHlsPlaylistPreloaderProvider = Provider<HlsPlaylistPreloader>((
 ) {
   final config = ref.watch(playerPreloadConfigProvider);
   final preloader = HlsPlaylistPreloader(
-    timeout: config.effectivePreloadTimeout,
+    // 首页空闲候选只保留一部，允许它比播放页相邻预热拥有更长的关键分片窗口。
+    // 慢源的大首段常超过通用 4 秒预算；到 8 秒前仍只拉 playlist + 首段/续播段，
+    // 真正播放或候选切换仍可通过 singleflight 接管已在飞行的请求。
+    timeout: config.effectivePreloadTimeout < const Duration(seconds: 8)
+        ? const Duration(seconds: 8)
+        : config.effectivePreloadTimeout,
     maxPreheatBytes: config.effectiveMaxPreloadBytes,
     cacheStore: ref.watch(hlsLocalCacheStoreProvider),
+    diskCacheStore: ref.watch(hlsDiskCacheStoreProvider),
+    networkCoordinator: ref.watch(hlsNetworkRequestCoordinatorProvider),
   );
   ref.onDispose(preloader.releasePending);
   return preloader;

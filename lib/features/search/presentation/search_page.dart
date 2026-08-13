@@ -23,6 +23,7 @@ import '../../../../shared/widgets/app_retry_button.dart';
 import '../application/search_history_controller.dart';
 import '../application/search_rankings_controller.dart';
 import '../application/search_results_controller.dart';
+import '../../player/application/player_entry_preload_coordinator.dart';
 import '../domain/search_rankings.dart';
 import '../domain/search_results.dart';
 
@@ -1292,6 +1293,12 @@ class _NetworkRetry extends StatelessWidget {
 }
 
 void _openDrama(BuildContext context, String dramaId) {
+  preparePlayerEntryPreload(
+    context,
+    dramaId: dramaId,
+    episodeId: '1',
+    trigger: 'search_result_tap',
+  );
   context.push(
     RoutePaths.playerLocation(
       dramaId: dramaId,
@@ -1675,6 +1682,12 @@ class _RankingPanel extends ConsumerWidget {
                         },
                       );
                       final tappedAt = DateTime.now();
+                      preparePlayerEntryPreload(
+                        context,
+                        dramaId: drama.id,
+                        episodeId: '1',
+                        trigger: 'search_ranking_tap',
+                      );
                       context.push(
                         RoutePaths.playerLocation(
                           dramaId: drama.id,

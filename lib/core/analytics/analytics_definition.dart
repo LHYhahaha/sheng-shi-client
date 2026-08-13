@@ -339,7 +339,7 @@ abstract final class AnalyticsDefinitions {
         'episode_id': _requiredString,
         'episode_no': _number,
         'subtitle_language': _requiredString,
-        'viewing_entitlement_type': _string,
+        'viewing_entitlement_type': _requiredString,
       },
     ),
     dramaPlayEnd: AnalyticsEventDefinition(
@@ -352,7 +352,7 @@ abstract final class AnalyticsDefinitions {
         'play_progress_ms': _number,
         'play_end_reason': _requiredString,
         'subtitle_language': _string,
-        'viewing_entitlement_type': _string,
+        'viewing_entitlement_type': _requiredString,
       },
     ),
     searchSubmit: AnalyticsEventDefinition(
@@ -422,7 +422,17 @@ abstract final class AnalyticsDefinitions {
       name: homeBannerExposure,
       parameters: {
         'banner_id': _requiredString,
-        'banner_target_type': _requiredString,
+        'banner_target_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          required: true,
+          allowedValues: {
+            'none',
+            'internal_h5',
+            'external_h5',
+            'drama',
+            'app_page',
+          },
+        ),
         'target_drama_id': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
           requiredWhen: (params) => params['banner_target_type'] == 'drama',

@@ -7,7 +7,11 @@ import 'package:go_router/go_router.dart';
 import '../../app/router/route_paths.dart';
 import '../../core/account/account_ban_controller.dart';
 import '../../core/analytics/analytics_page_tracker.dart';
+import '../../core/analytics/analytics_entry_source.dart';
+import '../../features/bottom_tab_config/application/bottom_tab_config_controller.dart';
+import '../../features/player/application/player_feed_controller.dart';
 import '../../features/player/application/player_playback_controller.dart';
+import '../../features/player/domain/player_feed.dart';
 import '../../features/popup/application/popup_entry_controller.dart';
 import '../../features/popup/domain/popup.dart';
 import '../../shared/widgets/navigation/app_bottom_navigation.dart';
@@ -92,23 +96,39 @@ class _AppShellState extends ConsumerState<AppShell> {
   bool _resumeForYouOnReturn = false;
   Future<void> _forYouVisibilityOperation = Future<void>.value();
   late int _lastNavigationIndex;
+  bool _shellReadyEffectsStarted = false;
+  bool _forYouFeedPreloadStarted = false;
 
   @override
   void initState() {
     super.initState();
     _lastNavigationIndex = widget.navigationShell.currentIndex;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _requestPopupForIndex(widget.navigationShell.currentIndex);
-      _trackPageForIndex(widget.navigationShell.currentIndex);
-    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final bottomTabConfig = ref.watch(bottomTabConfigControllerProvider);
+    // 冷启动先完成动态 Tab 配置判定。无论接口成功还是失败，hasLoaded 均会置为 true；
+    // 失败时随后展示完整默认导航，避免默认首页先绘制再被 H5 替换。
+    if (!bottomTabConfig.hasLoaded) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0A0014),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final navigationIndex = widget.navigationShell.currentIndex;
+    if (!_shellReadyEffectsStarted) {
+      _shellReadyEffectsStarted = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _requestPopupForIndex(widget.navigationShell.currentIndex);
+        _trackPageForIndex(widget.navigationShell.currentIndex);
+        _scheduleForYouFeedPreload();
+      });
+    }
     if (_lastNavigationIndex != navigationIndex) {
       final previousIndex = _lastNavigationIndex;
       final previousPlacement = AppShellDestinations.popupPlacementForIndex(
@@ -205,6 +225,52 @@ class _AppShellState extends ConsumerState<AppShell> {
     _trackPageForIndex(index);
   }
 
+  /// 在首页首帧稳定后预取 For You 的推荐首屏。
+  ///
+  /// 此处只请求推荐接口并保留 feed 数据；不创建媒体播放器、不打开视频 URL，也不
+  /// 触发解码。因此不会与首页或正在播放的页面争抢解码器。进入 For You 时
+  /// [PlayerFeedController.load] 会复用这份状态，省去一次推荐接口等待。
+  void _scheduleForYouFeedPreload() {
+    if (_forYouFeedPreloadStarted ||
+        ref.read(accountBanControllerProvider).isBanned) {
+      return;
+    }
+    _forYouFeedPreloadStarted = true;
+    unawaited(_preloadForYouFeedAfterHomeFrame());
+  }
+
+  Future<void> _preloadForYouFeedAfterHomeFrame() async {
+    // 首帧已经提交后立即开始：For You 的首条媒体预热本身还需要数秒，不能再额外
+    // 等待。若用户已主动进入 For You，页面会自行加载。
+    if (!mounted ||
+        widget.navigationShell.currentIndex ==
+            AppShellDestinations.forYouIndex ||
+        ref.read(accountBanControllerProvider).isBanned) {
+      return;
+    }
+
+    final feedProvider = playerFeedControllerProvider(
+      PlayerPlaybackSessionKeys.forYouTab,
+    );
+    await ref.read(feedProvider.notifier).load(const PlayerFeedConfig.forYou());
+    if (!mounted ||
+        widget.navigationShell.currentIndex ==
+            AppShellDestinations.forYouIndex) {
+      return;
+    }
+    final firstItem = ref.read(feedProvider).currentItem;
+    if (firstItem == null) {
+      return;
+    }
+    await ref
+        .read(
+          playerPlaybackControllerProvider(
+            PlayerPlaybackSessionKeys.forYouTab,
+          ).notifier,
+        )
+        .warmUpForYouEntry(firstItem);
+  }
+
   /// Handles both bottom-navigation taps and router-driven branch changes.
   ///
   /// `context.go('/home')` does not call [_goBranch], while the For You branch
@@ -269,7 +335,16 @@ class _AppShellState extends ConsumerState<AppShell> {
       _ => null,
     };
     if (pageName != null) {
-      unawaited(ref.read(analyticsPageTrackerProvider).replace(pageName));
+      unawaited(
+        ref
+            .read(analyticsPageTrackerProvider)
+            .replace(
+              pageName,
+              forcePageView: ref
+                  .read(analyticsEntrySourceProvider.notifier)
+                  .hasPending,
+            ),
+      );
     }
   }
 }

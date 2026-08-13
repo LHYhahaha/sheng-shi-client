@@ -1,12 +1,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client_provider.dart';
+import 'mock_player_feed_repository.dart';
+import 'player_content_repository_provider.dart';
 import '../domain/player_feed.dart';
 import 'player_remote_data_source_provider.dart';
 import 'remote/player_remote_data_source.dart';
 import 'remote_player_feed_repository.dart';
 
 final playerFeedRepositoryProvider = Provider<PlayerFeedRepository>((ref) {
+  if (!ref.watch(useRemotePlayerApiProvider)) {
+    return const MockPlayerFeedRepository();
+  }
   return RemotePlayerFeedRepository(
     remoteDataSource: PlayerRemoteDataSource(
       apiClient: ref.watch(apiClientProvider),

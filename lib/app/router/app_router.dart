@@ -10,12 +10,16 @@ import '../shell/app_shell.dart';
 import '../../features/auth/presentation/pages/account_cancellation_page.dart';
 import '../../features/auth/presentation/pages/account_page.dart';
 import '../../features/auth/presentation/pages/auth_page.dart';
+import '../../features/bottom_tab_config/presentation/bottom_tab_content_slot.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/member/presentation/pages/member_page.dart';
 import '../../features/membership/presentation/pages/membership_page.dart';
 import '../../features/my_list/presentation/pages/my_list_page.dart';
 import '../../features/player/presentation/pages/player_page.dart';
+import '../../features/player/presentation/pages/ad_unlock_page.dart';
+import '../../features/player/domain/player_content.dart';
 import '../../features/player/domain/for_you_player_handoff.dart';
+import '../../features/player/application/player_entry_preload_coordinator.dart';
 import '../../features/profile/presentation/pages/language_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/profile/presentation/pages/profile_feedback_webview_page.dart';
@@ -62,7 +66,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: RoutePaths.home,
                 name: RouteNames.home,
-                builder: (context, state) => const HomePage(),
+                builder: (context, state) => BottomTabContentSlot(
+                  slot: 'home',
+                  defaultTitle: context.l10n.navHome,
+                  child: const HomePage(),
+                ),
               ),
             ],
           ),
@@ -71,7 +79,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: RoutePaths.forYou,
                 name: RouteNames.forYou,
-                builder: (context, state) => const PlayerPage.forYou(),
+                builder: (context, state) => BottomTabContentSlot(
+                  slot: 'recommend_tab',
+                  defaultTitle: context.l10n.navForYou,
+                  child: const PlayerPage.forYou(),
+                ),
               ),
             ],
           ),
@@ -80,7 +92,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: RoutePaths.member,
                 name: RouteNames.member,
-                builder: (context, state) => const MemberTabPage(),
+                builder: (context, state) => BottomTabContentSlot(
+                  slot: 'member_tab',
+                  defaultTitle: context.l10n.navMember,
+                  child: const MemberTabPage(),
+                ),
               ),
             ],
           ),
@@ -89,7 +105,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: RoutePaths.myList,
                 name: RouteNames.myList,
-                builder: (context, state) => const MyListPage(),
+                builder: (context, state) => BottomTabContentSlot(
+                  slot: 'favorites',
+                  defaultTitle: context.l10n.navMyList,
+                  child: const MyListPage(),
+                ),
               ),
             ],
           ),
@@ -98,11 +118,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: RoutePaths.profile,
                 name: RouteNames.profile,
-                builder: (context, state) => const ProfilePage(),
+                builder: (context, state) => BottomTabContentSlot(
+                  slot: 'profile',
+                  defaultTitle: context.l10n.navProfile,
+                  child: const ProfilePage(),
+                ),
               ),
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: RoutePaths.adUnlock,
+        name: RouteNames.adUnlock,
+        builder: (context, state) {
+          final offer = state.extra! as PlayerAdUnlockOffer;
+          return AdUnlockPage(offer: offer);
+        },
       ),
       GoRoute(
         path: RoutePaths.player,
@@ -116,6 +148,24 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final forYouHandoff = state.extra is ForYouPlayerHandoff
               ? state.extra! as ForYouPlayerHandoff
               : null;
+
+          // 所有普通播放器路由统一从这里提交用户点击预取；For You handoff 已持有
+          // 当前播放器位置/session，不能重复启动普通详情/HLS 预热。
+          if (forYouHandoff == null) {
+            // GoRouter builder 属于 widget build 期，不能同步修改 Riverpod state。
+            // 用下一轮 event loop 派发，而不是等首帧 post-frame callback：这样详情、
+            // 播放进度和 HLS 首段会与 PlayerPage 首次 build 并行，但不会在 build 期
+            // 修改 provider。Coordinator 会对路由重建去重。
+            Future<void>(() {
+              ref
+                  .read(playerEntryPreloadCoordinatorProvider.notifier)
+                  .preparePlayerRoute(
+                    dramaId: dramaId,
+                    episodeId: episodeId,
+                    trigger: state.uri.queryParameters['trigger'],
+                  );
+            });
+          }
 
           // 单剧播放器是 shell 外 route，进入时隐藏/显示底部导航由 PlayerPage 的
           // hideShellNavigation 和 dispose 处理。这里仅传递触发来源和点击时间，

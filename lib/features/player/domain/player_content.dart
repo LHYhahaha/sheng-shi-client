@@ -39,6 +39,7 @@ class PlayerContent {
     this.isFavorited,
     this.likeCountDelta = 0,
     this.episodeTotal = 0,
+    this.watchProgress,
     this.recommendationsStatus = PlayerRecommendationLoadStatus.loaded,
   });
 
@@ -127,6 +128,27 @@ class PlayerContent {
   ///
   /// 从服务端返回的总集数，用于动态生成 episode tab。
   final int episodeTotal;
+
+  /// 详情接口下发的权威续播记录；只用于普通播放器初始目标选择。
+  final PlayerWatchProgress? watchProgress;
+}
+
+class PlayerWatchProgress {
+  const PlayerWatchProgress({
+    required this.episodeId,
+    required this.episodeNo,
+    required this.position,
+    required this.duration,
+    required this.progressPercent,
+  });
+
+  final String episodeId;
+  final int episodeNo;
+  final Duration position;
+  final Duration duration;
+  final int progressPercent;
+
+  bool get hasHistory => episodeId != '0' && position > Duration.zero;
 }
 
 /// 播放页 episode 模型。
@@ -139,6 +161,7 @@ class PlayerEpisode {
     required this.number,
     required this.isLocked,
     this.unlockType = EpisodeUnlockType.free,
+    this.viewingEntitlementType = 'free',
     this.requiredCoins = 60,
     this.videoAssetPath,
     this.videoUrl,
@@ -147,6 +170,7 @@ class PlayerEpisode {
     this.isAvailable = true,
     this.subtitles = const [],
     this.episodeSources = const [],
+    this.adUnlock,
   });
 
   /// 该集可用的字幕轨道列表。
@@ -156,6 +180,9 @@ class PlayerEpisode {
 
   /// 已将对应语言字幕烧录进画面的视频资源。
   final List<PlayerEpisodeSource> episodeSources;
+
+  /// 广告解锁资格；为空或不可用时，播放页不展示广告解锁入口。
+  final PlayerAdUnlockOffer? adUnlock;
 
   /// 剧集 id。
   ///
@@ -178,6 +205,11 @@ class PlayerEpisode {
   /// `isLocked` 只是播放器层的保护位：只要为 true，PlayerPlaybackController 就不会
   /// open/preload/prepare。`unlockType` 才描述为什么锁定以及 UI 下一步去哪。
   final EpisodeUnlockType unlockType;
+
+  /// 当前实际观看权益来源，直接对应埋点枚举。
+  ///
+  /// 详情接口提供初始值；播放期间的金币或会员解锁会在本地立即更新。
+  final String viewingEntitlementType;
 
   /// 解锁该集需要的金币数。
   ///
@@ -219,6 +251,7 @@ class PlayerEpisode {
     int? number,
     bool? isLocked,
     EpisodeUnlockType? unlockType,
+    String? viewingEntitlementType,
     int? requiredCoins,
     String? videoAssetPath,
     String? videoUrl,
@@ -227,12 +260,15 @@ class PlayerEpisode {
     bool? isAvailable,
     List<PlayerSubtitle>? subtitles,
     List<PlayerEpisodeSource>? episodeSources,
+    PlayerAdUnlockOffer? adUnlock,
   }) {
     return PlayerEpisode(
       id: id ?? this.id,
       number: number ?? this.number,
       isLocked: isLocked ?? this.isLocked,
       unlockType: unlockType ?? this.unlockType,
+      viewingEntitlementType:
+          viewingEntitlementType ?? this.viewingEntitlementType,
       requiredCoins: requiredCoins ?? this.requiredCoins,
       videoAssetPath: videoAssetPath ?? this.videoAssetPath,
       videoUrl: videoUrl ?? this.videoUrl,
@@ -241,6 +277,7 @@ class PlayerEpisode {
       isAvailable: isAvailable ?? this.isAvailable,
       subtitles: subtitles ?? this.subtitles,
       episodeSources: episodeSources ?? this.episodeSources,
+      adUnlock: adUnlock ?? this.adUnlock,
     );
   }
 
@@ -253,6 +290,27 @@ class PlayerEpisode {
     }
     return null;
   }
+}
+
+/// 由剧集详情接口下发的广告解锁展示与播放配置。
+class PlayerAdUnlockOffer {
+  const PlayerAdUnlockOffer({
+    required this.isAvailable,
+    required this.watchedToday,
+    required this.dailyLimit,
+    required this.closeAfter,
+    this.placementId,
+    this.adVideoUrl,
+    this.taskToken,
+  });
+
+  final bool isAvailable;
+  final int watchedToday;
+  final int dailyLimit;
+  final Duration closeAfter;
+  final String? placementId;
+  final String? adVideoUrl;
+  final String? taskToken;
 }
 
 /// 播放详情页推荐项。

@@ -13,62 +13,104 @@ import 'bootstrap/test_network_bootstrap.dart';
 import 'core/auth/auth_token_storage_provider.dart';
 import 'core/auth/flutter_secure_auth_token_storage.dart';
 import 'core/active/app_active_reporter.dart';
-import 'core/adjust/adjust_service.dart';
 import 'core/network/test_network_config.dart';
 import 'core/notification/fcm_notification_service.dart';
 import 'core/runtime/install_id_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  MediaKit.ensureInitialized();
-
-  final preferences = await SharedPreferences.getInstance();
-  final testNetworkConfig = TestNetworkConfigService.create(preferences);
-
-  // 预加载 install id，确保登录时已准备好真实值
-  final container = ProviderContainer(
-    overrides: [
-      installIdStorageProvider.overrideWithValue(
-        createSharedPreferencesInstallIdStorage(preferences),
-      ),
-    ],
-  );
-  await container.read(installIdProvider.future);
-  container.dispose();
-
-  // FCM 包含 Token 拉取等可能依赖网络的操作，绝不能阻塞 Flutter 首帧。
-  final fcmNotificationService = _initializeFcmNotifications();
   final fcmServiceHandle = _FcmNotificationServiceHandle();
-  unawaited(fcmNotificationService.then(fcmServiceHandle.attach));
+  final fcmNotificationService = Completer<FcmNotificationService?>();
 
   runApp(
-    ProviderScope(
-      overrides: [
-        installIdStorageProvider.overrideWithValue(
-          createSharedPreferencesInstallIdStorage(preferences),
-        ),
-        authTokenStorageProvider.overrideWithValue(
-          FlutterSecureAuthTokenStorage(),
-        ),
-        testNetworkConfigProvider.overrideWithValue(testNetworkConfig),
-        pushTokenReaderProvider.overrideWithValue(
-          fcmServiceHandle.getPushToken,
-        ),
-        ...appModalRegistryOverrides,
-      ],
-      child: TestNetworkBootstrap(
-        child: DramaClientApp(
-          fcmNotificationServiceFuture: fcmNotificationService,
-        ),
-      ),
+    _StartupBootstrap(
+      fcmServiceHandle: fcmServiceHandle,
+      fcmNotificationService: fcmNotificationService,
     ),
   );
+}
 
-  // Adjust 不参与首屏关键路径：首帧完成后再启动，且服务自身会吞掉初始化异常。
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    unawaited(Future<void>(() => AdjustService().initialize()));
+class _StartupBootstrap extends StatefulWidget {
+  const _StartupBootstrap({
+    required this.fcmServiceHandle,
+    required this.fcmNotificationService,
   });
+
+  final _FcmNotificationServiceHandle fcmServiceHandle;
+  final Completer<FcmNotificationService?> fcmNotificationService;
+
+  @override
+  State<_StartupBootstrap> createState() => _StartupBootstrapState();
+}
+
+class _StartupBootstrapState extends State<_StartupBootstrap> {
+  late final Future<SharedPreferences> _preferencesFuture;
+  bool _nonCriticalSdksStarted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _preferencesFuture = SharedPreferences.getInstance();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<SharedPreferences>(
+      future: _preferencesFuture,
+      builder: (context, snapshot) {
+        final preferences = snapshot.data;
+        if (preferences == null) {
+          return const MaterialApp(
+            debugShowCheckedModeBanner: false,
+            home: Scaffold(
+              backgroundColor: Colors.black,
+              body: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+
+        final testNetworkConfig = TestNetworkConfigService.create(preferences);
+        return ProviderScope(
+          overrides: [
+            installIdStorageProvider.overrideWithValue(
+              createSharedPreferencesInstallIdStorage(preferences),
+            ),
+            authTokenStorageProvider.overrideWithValue(
+              FlutterSecureAuthTokenStorage(),
+            ),
+            testNetworkConfigProvider.overrideWithValue(testNetworkConfig),
+            pushTokenReaderProvider.overrideWithValue(
+              widget.fcmServiceHandle.getPushToken,
+            ),
+            ...appModalRegistryOverrides,
+          ],
+          child: TestNetworkBootstrap(
+            onReady: _startNonCriticalSdks,
+            child: DramaClientApp(
+              fcmNotificationServiceFuture:
+                  widget.fcmNotificationService.future,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _startNonCriticalSdks() {
+    if (_nonCriticalSdksStarted) {
+      return;
+    }
+    _nonCriticalSdksStarted = true;
+    // 让抓包弹框或业务首屏先绘制完成，再初始化会占用平台线程的 SDK。
+    unawaited(
+      Future<void>(() async {
+        MediaKit.ensureInitialized();
+        final service = await _initializeFcmNotifications();
+        widget.fcmServiceHandle.attach(service);
+        widget.fcmNotificationService.complete(service);
+      }),
+    );
+  }
 }
 
 Future<String?> _unavailablePushToken() async => null;

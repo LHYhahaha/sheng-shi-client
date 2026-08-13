@@ -33,6 +33,7 @@ class Drama {
     required this.coverAspectRatio,
     MediaResource? coverResource,
     this.isExclusive = false,
+    this.watchProgress,
   }) : coverResource =
            coverResource ??
            MediaResource.asset(coverAssetPath, aspectRatio: coverAspectRatio);
@@ -93,6 +94,26 @@ class Drama {
   ///
   /// 只是营销标签，不代表播放权限或会员锁定。
   final bool isExclusive;
+
+  /// 首页接口随卡片下发的续播提示；不含播放地址，也不代表最终播放权限。
+  final DramaWatchProgress? watchProgress;
+}
+
+class DramaWatchProgress {
+  const DramaWatchProgress({
+    required this.episodeId,
+    required this.episodeNo,
+    required this.positionSeconds,
+    required this.durationSeconds,
+  });
+
+  final String episodeId;
+  final int episodeNo;
+  final int positionSeconds;
+  final int durationSeconds;
+
+  bool get canResume =>
+      episodeId != '0' && positionSeconds > 0 && durationSeconds > 0;
 }
 
 /// 首页剧卡分页结果。

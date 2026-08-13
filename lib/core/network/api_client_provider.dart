@@ -50,24 +50,44 @@ final apiRequestContextProvider = Provider<ApiRequestContext>((ref) {
 
 const _installIdLoadingFallback = 'install-id-pending';
 
-final apiClientProvider = Provider.autoDispose<ApiClient>((ref) {
+/// API client 是跨页面的基础设施。不能 autoDispose：页面退出后，已发出的 Dio
+/// 请求仍可能在拦截器阶段补齐 headers；若此时 Provider 已销毁，再调用 `ref.read`
+/// 会直接抛出未捕获异常。
+final apiClientProvider = Provider<ApiClient>((ref) {
   final testNetworkConfig = ref.watch(testNetworkConfigProvider);
   final options = ApiClient.defaultOptions
     ..baseUrl = testNetworkConfig.apiBaseUrl;
   final dio = Dio(options);
   configureDioWithProxy(dio, testNetworkConfig.proxy);
+  final channelConfigService = ref.read(channelConfigServiceProvider);
+
+  // 正常运行时必须同步读取最新上下文：设备登录刚保存 token 后，紧接着的用户
+  // 信息/首页请求就需要带上新 token，不能等 Provider listen 的异步传播。Provider
+  // 真正销毁后，Dio 仍可能完成已排队的拦截器，此时只回退到最后一次安全快照，避免
+  // 对已销毁 Ref 调用 read。
+  var requestContext = ref.read(apiRequestContextProvider);
+  var isDisposed = false;
+  ref.onDispose(() {
+    isDisposed = true;
+  });
 
   final apiClient = ApiClient(
     dio: dio,
-    requestContextReader: () => ref.read(apiRequestContextProvider),
+    requestContextReader: () {
+      if (!isDisposed) {
+        requestContext = ref.read(apiRequestContextProvider);
+      }
+      return requestContext;
+    },
     channelHeadersReader: () async {
-      final channelConfig = await ref.read(channelConfigProvider.future);
+      final channelConfig = await channelConfigService.getChannelConfig();
       return channelConfig.hasConfig
           ? channelConfig.toHeaders()
           : const <String, String>{};
     },
     sessionAuthHandler: null,
     onBusinessError: (error) {
+      if (isDisposed) return;
       ref
           .read(accountBanControllerProvider.notifier)
           .reportBusinessCode(error.businessCode);

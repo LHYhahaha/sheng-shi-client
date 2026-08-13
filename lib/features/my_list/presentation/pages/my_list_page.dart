@@ -24,6 +24,7 @@ import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../search/domain/search_rankings.dart';
+import '../../../player/application/player_entry_preload_coordinator.dart';
 import '../../application/my_list_hot_plays_controller.dart';
 import '../../application/my_list_controller.dart';
 import '../../domain/my_list_item.dart';
@@ -436,6 +437,12 @@ class _MyListPageState extends ConsumerState<MyListPage> {
             }),
           ),
     );
+    preparePlayerEntryPreload(
+      context,
+      dramaId: item.dramaId.toString(),
+      episodeId: episodeId,
+      trigger: isCollection ? 'my_list_collection_item' : 'play_history_item',
+    );
     await context.push(
       RoutePaths.playerLocation(
         dramaId: item.dramaId.toString(),
@@ -462,6 +469,12 @@ class _MyListPageState extends ConsumerState<MyListPage> {
               'card_scene': 'favorite_recommend',
             }),
           ),
+    );
+    preparePlayerEntryPreload(
+      context,
+      dramaId: drama.id,
+      episodeId: '1',
+      trigger: 'my_list_hot_play_tap',
     );
     await context.push(
       RoutePaths.playerLocation(

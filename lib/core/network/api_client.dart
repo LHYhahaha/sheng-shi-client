@@ -51,7 +51,9 @@ class ApiClient {
           final context = _readRequestContext();
 
           // 验证 deviceId 是否有效，拒绝使用 fallback 值发送请求
-          _validateDeviceId(context.deviceId, options, handler);
+          if (_validateDeviceId(context.deviceId, options, handler)) {
+            return;
+          }
 
           options.headers.addAll(context.toBaseHeaders());
           options.headers.addAll(await _channelHeadersReader());
@@ -145,7 +147,8 @@ class ApiClient {
   ApiRequestContext _readRequestContext() => _requestContextReader();
 
   /// 验证 deviceId 是否有效，拒绝使用 fallback 值发送请求
-  void _validateDeviceId(
+  /// Returns true when this method has rejected the request.
+  bool _validateDeviceId(
     String deviceId,
     RequestOptions options,
     RequestInterceptorHandler handler,
@@ -166,7 +169,7 @@ class ApiClient {
           ),
         ),
       );
-      return;
+      return true;
     }
 
     // 验证是否为有效的 UUID 格式（简单检查）
@@ -176,6 +179,7 @@ class ApiClient {
         'Expected UUID format. Request to ${options.path} will proceed but may cause issues.',
       );
     }
+    return false;
   }
 
   /// 简单的 UUID 格式验证（UUID v4: 8-4-4-4-12 十六进制字符）

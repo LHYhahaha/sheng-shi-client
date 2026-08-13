@@ -1,4 +1,5 @@
 import 'package:drama_client/features/player/data/dto/player_episode_dto.dart';
+import 'package:drama_client/features/player/data/dto/player_content_dto.dart';
 import 'package:drama_client/features/player/data/mapper/player_content_mapper.dart';
 import 'package:drama_client/features/player/domain/player_subtitle.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_playback_layer.dart';
@@ -8,6 +9,55 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('detail maps inline watch progress and numeric entitlement safely', () {
+    final detail = PlayerContentDto.fromJson({
+      'id': 1508,
+      'episodes': [
+        {
+          'id': 8519,
+          'episode_no': 1,
+          'is_unlocked': 1,
+          'status': 1,
+          'viewing_entitlement_type': 2,
+        },
+      ],
+      'watch_progress': {
+        'watch_episode_id': 8519,
+        'watch_episode_no': 1,
+        'watch_second': 84,
+        'duration_second': 190,
+        'progress_percent': 44,
+      },
+    });
+
+    expect(detail.watchProgress?.episodeId, 8519);
+    expect(detail.watchProgress?.watchSecond, 84);
+    expect(detail.episodes.single.viewingEntitlementType, '2');
+    final content = const PlayerContentMapper().mapContent(detail);
+    expect(content.watchProgress?.episodeId, '8519');
+    expect(content.watchProgress?.position, const Duration(seconds: 84));
+    expect(content.episodes.single.viewingEntitlementType, 'vip');
+  });
+
+  test(
+    'episode mapper keeps viewing entitlement type from detail response',
+    () {
+      final episode = PlayerEpisodeDto.fromJson({
+        'id': 1,
+        'episode_no': 1,
+        'source_url': 'https://cdn.test/episode.m3u8',
+        'status': 1,
+        'is_unlocked': 1,
+        'viewing_entitlement_type': 'drama_gift',
+      });
+
+      expect(
+        const PlayerContentMapper().mapEpisode(episode).viewingEntitlementType,
+        'drama_gift',
+      );
+    },
+  );
+
   test('episode mapper parses external and embedded subtitle metadata', () {
     final external = PlayerEpisodeDto.fromJson({
       'id': 1,

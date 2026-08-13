@@ -57,6 +57,15 @@ class I18nService {
     }
   }
 
+  /// 仅从本地元数据和文件恢复语言包，不触发版本接口或网络下载。
+  Future<LanguagePackage?> loadCachedPackage(String languageCode) async {
+    final localPackage = _getLocalPackage(languageCode);
+    if (localPackage == null || !await File(localPackage.filePath).exists()) {
+      return null;
+    }
+    return localPackage;
+  }
+
   /// 切换语言
   Future<LanguagePackage> switchLanguage(String languageCode) async {
     try {

@@ -147,6 +147,7 @@ class PlayerPlaybackPrepareManager {
   Future<PreparedPlaybackSession?> prepare({
     required PlayerFeedItem item,
     required PlayerPlaybackSourceRepository sourceRepository,
+    Duration? warmUpTimeout,
   }) async {
     if (item.episode.isLocked ||
         item.episode.isUnavailable ||
@@ -163,6 +164,7 @@ class PlayerPlaybackPrepareManager {
     }
 
     final generation = ++_generation;
+    final effectiveWarmUpTimeout = warmUpTimeout ?? this.warmUpTimeout;
     PlayerPlaybackSession? session;
     StreamSubscription<Duration>? positionSubscription;
     StreamSubscription<int?>? widthSubscription;
@@ -246,7 +248,7 @@ class PlayerPlaybackPrepareManager {
         source: source.playableSource,
         details: _details([
           'playMuted=true',
-          'timeoutMs=${warmUpTimeout.inMilliseconds}',
+          'timeoutMs=${effectiveWarmUpTimeout.inMilliseconds}',
         ]),
       );
       // warm-up 必须静音播放到首帧或超时。media_kit 只有真正 open/play 后才会推进
@@ -302,6 +304,7 @@ class PlayerPlaybackPrepareManager {
           firstFrame: firstFrameCompleter.future,
           cancel: warmUpCancel.future,
           session: session,
+          warmUpTimeout: effectiveWarmUpTimeout,
         ),
       );
       return prepared;
@@ -342,6 +345,22 @@ class PlayerPlaybackPrepareManager {
     // retained previous 必须先 pause 再入窗，防止 current 与 previous 同时出声。
     await session.session.pause();
     await _put(session);
+  }
+
+  /// 暂停所有已完成的 prepared session，但不释放它们。
+  ///
+  /// 用于 For You 被普通播放器暂时抢占：保留已打开的 decoder/session 与缓存命中机会，
+  /// 同时避免它继续播放。仍在 prepare 的 session 不在这里强制 dispose；外层网络闸门
+  /// 会阻止其继续回源，warm-up 自己会在首帧或超时后 pause。
+  Future<void> pauseAll({String reason = 'pause all'}) async {
+    final before = _windowItemsText;
+    for (final prepared in _window.values) {
+      await prepared.session.pause();
+    }
+    _log(
+      'prepare manager pause all',
+      details: _details(['reason=$reason', 'windowItems=$before']),
+    );
   }
 
   Future<void> releaseItem(
@@ -423,6 +442,7 @@ class PlayerPlaybackPrepareManager {
     required Future<void> firstFrame,
     required Future<void> cancel,
     required PlayerPlaybackSession session,
+    required Duration warmUpTimeout,
   }) async {
     _WarmUpResult result;
     try {
@@ -538,6 +558,7 @@ class NoopPlayerPlaybackPrepareManager extends PlayerPlaybackPrepareManager {
   Future<PreparedPlaybackSession?> prepare({
     required PlayerFeedItem item,
     required PlayerPlaybackSourceRepository sourceRepository,
+    Duration? warmUpTimeout,
   }) async {
     return null;
   }

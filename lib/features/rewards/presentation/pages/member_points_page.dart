@@ -21,6 +21,7 @@ import '../../../../core/auth/user_info_store.dart';
 import '../../../../core/toast/app_center_toast.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
+import '../../../player/application/player_entry_preload_coordinator.dart';
 import '../../../home/application/vip_only_dramas_provider.dart';
 import '../../../home/presentation/widgets/vip_only_dramas_section.dart';
 import '../../../membership/presentation/membership_route_result.dart';
@@ -116,7 +117,13 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _refreshIfNeeded();
+    // _refreshIfNeeded 会调用 ref.invalidate；ConsumerState 在 initState 阶段尚
+    // 未完成 ProviderScope 依赖注册，延迟至首帧后再触发以避免进入会员 Tab 崩溃。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _refreshIfNeeded();
+      }
+    });
   }
 
   @override
@@ -290,6 +297,12 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
                           'position': position,
                         }),
                       ),
+                );
+                preparePlayerEntryPreload(
+                  context,
+                  dramaId: drama.id,
+                  episodeId: '1',
+                  trigger: 'member_points_vip_only_drama_tap',
                 );
                 context.push(
                   RoutePaths.playerLocation(
@@ -1455,10 +1468,26 @@ class _RedeemPointsPanel extends ConsumerWidget {
       showAppCenterToast(
         result.isSuccess ? l10n.memberCenterExchangeSuccess : l10n.networkError,
       );
+    } on ApiException catch (error) {
+      if (!context.mounted) return;
+      showAppCenterToast(
+        _exchangeBusinessErrorMessage(error) ??
+            AppLocalizations.maybeOf(context).networkError,
+      );
     } catch (_) {
       if (!context.mounted) return;
       showAppCenterToast(AppLocalizations.maybeOf(context).networkError);
     }
+  }
+
+  String? _exchangeBusinessErrorMessage(ApiException error) {
+    if (error.code != ApiErrorCode.badResponse || error.data is! Map) {
+      return null;
+    }
+    final message = (error.data as Map)['message'];
+    return message is String && message.trim().isNotEmpty
+        ? message.trim()
+        : null;
   }
 }
 
@@ -1907,6 +1936,12 @@ class _VipSeriesPanel extends ConsumerWidget {
                       'position': position,
                     }),
                   ),
+            );
+            preparePlayerEntryPreload(
+              context,
+              dramaId: drama.id,
+              episodeId: '1',
+              trigger: 'member_points_vip_only_drama_tap',
             );
             context.push(
               RoutePaths.playerLocation(

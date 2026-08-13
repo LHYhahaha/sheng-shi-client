@@ -155,7 +155,9 @@ class PlayerPerformancePolicy {
     singleDramaForwardHlsPreloadCount: 1,
     singleDramaBackwardHlsPreloadCount: 1,
     forYouForwardHlsPreloadCount: 1,
-    forYouBackwardHlsPreloadCount: 1,
+    // For You 优先保证向下滑的下一条。上一条由 retained session 与磁盘缓存
+    // 覆盖，不再额外发起 HLS 回源，避免和当前播放/下一条首帧争抢网络。
+    forYouBackwardHlsPreloadCount: 0,
     preparedForwardSessionCount: 1,
     retainedBackwardSessionCount: 1,
     skipPreloadWhenCurrentItemLocked: false,
@@ -178,7 +180,9 @@ class PlayerPerformancePolicy {
     singleDramaForwardHlsPreloadCount: 1,
     singleDramaBackwardHlsPreloadCount: 1,
     forYouForwardHlsPreloadCount: 1,
-    forYouBackwardHlsPreloadCount: 1,
+    // Android 网络与解码资源更紧张，For You 仅预热下一条；previous 仍保留
+    // 已打开的 session，保证自然回滑无需重新创建播放器。
+    forYouBackwardHlsPreloadCount: 0,
     preparedForwardSessionCount: 1,
     retainedBackwardSessionCount: 1,
     skipPreloadWhenCurrentItemLocked: false,

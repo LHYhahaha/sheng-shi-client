@@ -288,6 +288,16 @@ class MockPlayerContentRepository implements PlayerContentRepository {
             videoAspectRatio: videoAsset.aspectRatio,
             duration: _durationForEpisode(number),
             isAvailable: number != 9,
+            // 供本地验收广告解锁 UI：第 4 集和会员专属第 7 集展示广告入口。
+            adUnlock: (number == 4 || number == 7)
+                ? const PlayerAdUnlockOffer(
+                    isAvailable: true,
+                    watchedToday: 0,
+                    dailyLimit: 5,
+                    closeAfter: Duration(seconds: 12),
+                    placementId: 'episode_unlock',
+                  )
+                : null,
           );
         }),
         recommendations: const [

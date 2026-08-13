@@ -65,6 +65,7 @@ class _ProfileFeedbackWebViewPageState
       // 这里使用后端返回后保存在 UserInfoStore 中的资料，不传本地默认头像。
       // 后端没有返回时按 H5 协议传空字符串。
       nickname: userInfo.nickname ?? '',
+      userId: userInfo.userId ?? '',
       avatarUrl: userInfo.avatar ?? '',
       i18n: AppLocalizations.remoteStrings ?? const <String, dynamic>{},
       headers: headers,
@@ -164,6 +165,7 @@ class _ProfileFeedbackWebViewPageState
 
         window.JSBridge.userInfo = {
         nickname:${jsonEncode(bridgeData.nickname)},
+        userId:${jsonEncode(bridgeData.userId)},
         avatarUrl:${jsonEncode(bridgeData.avatarUrl)}
         };
 
@@ -285,13 +287,14 @@ class _ProfileFeedbackBridgeData {
     required this.avatarUrl,
     required this.i18n,
     required this.headers,
-    required this.safeAreaBottom,
+    required this.safeAreaBottom, required this.userId,
   });
 
   final String appName;
   final double statusBarHeight;
   final double safeAreaBottom;
   final String nickname;
+  final String userId;
   final String avatarUrl;
   final Map<String, dynamic> i18n;
   final Map<String, String> headers;

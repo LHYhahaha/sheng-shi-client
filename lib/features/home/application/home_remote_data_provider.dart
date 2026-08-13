@@ -59,6 +59,14 @@ class HomeRemoteData {
             tags: homeDrama.tags,
             coverAspectRatio: 0.7,
             isExclusive: homeDrama.isVipOnly,
+            watchProgress: homeDrama.watchProgress == null
+                ? null
+                : DramaWatchProgress(
+                    episodeId: homeDrama.watchProgress!.episodeId,
+                    episodeNo: homeDrama.watchProgress!.episodeNo,
+                    positionSeconds: homeDrama.watchProgress!.positionSeconds,
+                    durationSeconds: homeDrama.watchProgress!.durationSeconds,
+                  ),
           ),
         )
         .toList(growable: false);
