@@ -5,9 +5,11 @@ import 'package:drama_client/features/player/application/player_entry_preload_co
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/application/player_startup_preload_controller.dart';
+import 'package:drama_client/features/player/data/drama_playback_target_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_preload_config_provider.dart';
+import 'package:drama_client/features/player/domain/drama_playback_target.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/domain/player_playback_source.dart';
@@ -20,6 +22,13 @@ const _videoUrl = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
 const _secondVideoUrl = 'https://test-streams.mux.dev/tos_ismc/main.m3u8';
 
 void main() {
+  test('entry preload default wait budget gives target preheat room', () {
+    expect(
+      playerEntryPreloadDefaultMaxWait,
+      const Duration(milliseconds: 1500),
+    );
+  });
+
   test('startup preload success records success state', () async {
     final sourceRepository = _FakePlaybackSourceRepository();
     final container = _createContainer(sourceRepository: sourceRepository);
@@ -53,6 +62,30 @@ void main() {
     expect(
       container.read(playerStartupPreloadControllerProvider).itemId,
       _item2.id,
+    );
+  });
+
+  test('startup preload follows detail progress skip-to-next target', () async {
+    final sourceRepository = _FakePlaybackSourceRepository();
+    final container = _createContainer(
+      sourceRepository: sourceRepository,
+      feedRepository: _FakePlayerFeedRepository(
+        items: [_watchedNearlyCompleteItem, _watchedNextItem],
+      ),
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(playerStartupPreloadControllerProvider.notifier)
+        .preloadFirstPlayableDramaId(
+          _watchedContent.id,
+          preferredEpisodeId: 'server-episode-100',
+        );
+
+    expect(sourceRepository.lastPreloadedItemId, _watchedNextItem.id);
+    expect(
+      container.read(playerStartupPreloadControllerProvider).itemId,
+      _watchedNextItem.id,
     );
   });
 
@@ -416,6 +449,32 @@ void main() {
     );
   });
 
+  test('playItem records pending startup preload relay as aligned', () async {
+    final preloadCompleter = Completer<PlaybackPreloadState>();
+    final sourceRepository = _FakePlaybackSourceRepository(
+      preloadCompleter: preloadCompleter,
+    );
+    final container = _createContainer(sourceRepository: sourceRepository);
+    addTearDown(container.dispose);
+    final startup = container.read(
+      playerStartupPreloadControllerProvider.notifier,
+    );
+    final playback = container.read(
+      playerPlaybackControllerProvider('single:drama-a:1').notifier,
+    );
+
+    unawaited(startup.preloadFirstPlayableDrama(_drama));
+    await Future<void>.delayed(Duration.zero);
+
+    await playback.playItem(_item);
+    final report = playback.exportTimingReport();
+
+    expect(report, contains('startup preload relay on playItem'));
+    expect(report, isNot(contains('startup preload miss on playItem')));
+
+    preloadCompleter.complete(_successPreloadStateFor(_item));
+  });
+
   test(
     'entry coordinator waits for startup preload success within entry budget',
     () async {
@@ -444,9 +503,176 @@ void main() {
       expect(result.status, PlayerEntryPreloadWaitStatus.ready);
       expect(result.itemId, _item.id);
       expect(result.shouldNavigate, isTrue);
+      expect(result.diagnosticSummary, contains('status=ready'));
+      expect(result.diagnosticSummary, contains('dramaId=drama-a'));
+      expect(result.diagnosticSummary, contains('itemId=drama-a-ep-1'));
       expect(
         container.read(playerStartupPreloadControllerProvider).status,
         PlayerStartupPreloadStatus.success,
+      );
+    },
+  );
+
+  test(
+    'visible candidate does not replace a fresh user entry intent',
+    () async {
+      final sourceRepository = _FakePlaybackSourceRepository();
+      final container = _createContainer(sourceRepository: sourceRepository);
+      addTearDown(container.dispose);
+      final coordinator = container.read(
+        playerEntryPreloadCoordinatorProvider.notifier,
+      );
+
+      coordinator.preparePlayerRoute(
+        dramaId: _drama.id,
+        episodeId: '1',
+        trigger: 'home_card_tap',
+      );
+      await Future<void>.delayed(Duration.zero);
+      coordinator.prepareVisibleCandidate(
+        dramaId: 'drama-b',
+        trigger: 'home_visible_candidate',
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final entryState = container.read(playerEntryPreloadCoordinatorProvider);
+      expect(entryState.dramaId, _drama.id);
+      expect(entryState.isUserIntent, isTrue);
+      expect(entryState.trigger, 'home_card_tap');
+      expect(
+        container.read(playerStartupPreloadControllerProvider).dramaId,
+        _drama.id,
+      );
+    },
+  );
+
+  test('visible candidate still replaces a non-user candidate', () async {
+    final sourceRepository = _FakePlaybackSourceRepository();
+    final container = _createContainer(sourceRepository: sourceRepository);
+    addTearDown(container.dispose);
+    final coordinator = container.read(
+      playerEntryPreloadCoordinatorProvider.notifier,
+    );
+
+    coordinator.prepareVisibleCandidate(
+      dramaId: _drama.id,
+      trigger: 'home_visible_candidate',
+    );
+    await Future<void>.delayed(Duration.zero);
+    coordinator.prepareVisibleCandidate(
+      dramaId: 'drama-b',
+      trigger: 'home_visible_candidate',
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final entryState = container.read(playerEntryPreloadCoordinatorProvider);
+    expect(entryState.dramaId, 'drama-b');
+    expect(entryState.isUserIntent, isFalse);
+    expect(
+      container.read(playerStartupPreloadControllerProvider).dramaId,
+      'drama-b',
+    );
+  });
+
+  test(
+    'route fallback does not restart matching pending user preload',
+    () async {
+      final preloadCompleter = Completer<PlaybackPreloadState>();
+      final sourceRepository = _FakePlaybackSourceRepository(
+        preloadCompleter: preloadCompleter,
+      );
+      final container = _createContainer(sourceRepository: sourceRepository);
+      addTearDown(container.dispose);
+      final coordinator = container.read(
+        playerEntryPreloadCoordinatorProvider.notifier,
+      );
+
+      coordinator.preparePlayerRoute(
+        dramaId: _drama.id,
+        episodeId: '1',
+        trigger: 'home_card_tap',
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(sourceRepository.preloadCount, 1);
+      expect(
+        container.read(playerStartupPreloadControllerProvider).itemId,
+        _item.id,
+      );
+
+      coordinator.preparePlayerRoute(
+        dramaId: _drama.id,
+        episodeId: 'ep-1',
+        trigger: 'home_card_tap',
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(sourceRepository.preloadCount, 1);
+      expect(
+        container.read(playerStartupPreloadControllerProvider).itemId,
+        _item.id,
+      );
+
+      preloadCompleter.complete(_successPreloadStateFor(_item));
+    },
+  );
+
+  test(
+    'route fallback keeps a fresh user preload selected by resume target',
+    () async {
+      final preloadCompleter = Completer<PlaybackPreloadState>();
+      final sourceRepository = _FakePlaybackSourceRepository(
+        preloadCompleter: preloadCompleter,
+      );
+      final container = _createContainer(
+        sourceRepository: sourceRepository,
+        feedRepository: _FakePlayerFeedRepository(
+          items: [_localResumeFirstItem, _localResumeTargetItem],
+        ),
+        playbackTargetRepository: _FakeDramaPlaybackTargetRepository(
+          target: DramaPlaybackTarget(
+            dramaId: _localResumeContent.id,
+            episodeId: 'server-episode-101',
+            episodeNo: 77,
+            position: const Duration(milliseconds: 566),
+            duration: const Duration(seconds: 100),
+            updatedAt: DateTime.now(),
+          ),
+        ),
+      );
+      addTearDown(container.dispose);
+      final coordinator = container.read(
+        playerEntryPreloadCoordinatorProvider.notifier,
+      );
+
+      coordinator.preparePlayerRoute(
+        dramaId: _localResumeContent.id,
+        episodeId: '1',
+        trigger: 'home_card_tap',
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(sourceRepository.preloadCount, 1);
+      expect(
+        container.read(playerStartupPreloadControllerProvider).itemId,
+        _localResumeTargetItem.id,
+      );
+
+      coordinator.preparePlayerRoute(
+        dramaId: _localResumeContent.id,
+        episodeId: '1',
+        trigger: 'home_card_tap',
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(sourceRepository.preloadCount, 1);
+      expect(
+        container.read(playerStartupPreloadControllerProvider).itemId,
+        _localResumeTargetItem.id,
+      );
+
+      preloadCompleter.complete(
+        _successPreloadStateFor(_localResumeTargetItem),
       );
     },
   );
@@ -473,6 +699,8 @@ void main() {
 
       expect(result.status, PlayerEntryPreloadWaitStatus.timeout);
       expect(result.shouldNavigate, isTrue);
+      expect(result.diagnosticSummary, contains('status=timeout'));
+      expect(result.diagnosticSummary, contains('waitMs='));
       expect(
         container.read(playerStartupPreloadControllerProvider).status,
         PlayerStartupPreloadStatus.pending,
@@ -490,12 +718,17 @@ ProviderContainer _createContainer({
   _FakePlaybackSourceRepository? playbackSourceRepository,
   _FakePreloadManager? playbackPreloadManager,
   PlayerPreloadConfig? preloadConfig,
+  PlayerFeedRepository? feedRepository,
+  DramaPlaybackTargetRepository? playbackTargetRepository,
 }) {
   final manager = preloadManager ?? _FakePreloadManager();
   return ProviderContainer(
     overrides: [
       playerFeedRepositoryProvider.overrideWithValue(
-        _FakePlayerFeedRepository(),
+        feedRepository ?? _FakePlayerFeedRepository(),
+      ),
+      dramaPlaybackTargetRepositoryProvider.overrideWithValue(
+        playbackTargetRepository ?? _FakeDramaPlaybackTargetRepository(),
       ),
       playerStartupPreloadManagerProvider.overrideWithValue(manager),
       playerStartupPlaybackSourceRepositoryProvider.overrideWithValue(
@@ -563,6 +796,99 @@ final _item2 = PlayerFeedItem(
   episode: _content.episodes[1],
 );
 
+final _watchedContent = PlayerContent(
+  id: 'drama-watched',
+  title: 'Watched Drama',
+  playTitle: 'Watched Drama',
+  synopsis: 'Synopsis',
+  viewCountLabel: '1M',
+  likeCountLabel: '1K',
+  backgroundAssetPath: 'assets/images/player/player_background.png',
+  posterAssetPath: 'assets/images/player/recommend_1.png',
+  episodes: const [
+    PlayerEpisode(
+      id: 'server-episode-100',
+      number: 76,
+      isLocked: false,
+      videoUrl: _videoUrl,
+      duration: Duration(seconds: 100),
+    ),
+    PlayerEpisode(
+      id: 'server-episode-101',
+      number: 77,
+      isLocked: false,
+      videoUrl: _secondVideoUrl,
+      duration: Duration(seconds: 100),
+    ),
+  ],
+  recommendations: const [],
+  episodeTotal: 2,
+  watchProgress: const PlayerWatchProgress(
+    episodeId: 'server-episode-100',
+    episodeNo: 76,
+    position: Duration(seconds: 99),
+    duration: Duration(seconds: 100),
+    progressPercent: 99,
+  ),
+);
+
+final _watchedNearlyCompleteItem = PlayerFeedItem(
+  id: 'watched-ep-100',
+  mode: PlayerFeedMode.singleDrama,
+  content: _watchedContent,
+  episode: _watchedContent.episodes.first,
+);
+
+final _watchedNextItem = PlayerFeedItem(
+  id: 'watched-ep-101',
+  mode: PlayerFeedMode.singleDrama,
+  content: _watchedContent,
+  episode: _watchedContent.episodes[1],
+);
+
+final _localResumeContent = PlayerContent(
+  id: 'drama-local-resume',
+  title: 'Local Resume Drama',
+  playTitle: 'Local Resume Drama',
+  synopsis: 'Synopsis',
+  viewCountLabel: '1M',
+  likeCountLabel: '1K',
+  backgroundAssetPath: 'assets/images/player/player_background.png',
+  posterAssetPath: 'assets/images/player/recommend_1.png',
+  episodes: const [
+    PlayerEpisode(
+      id: 'server-episode-100',
+      number: 76,
+      isLocked: false,
+      videoUrl: _videoUrl,
+      duration: Duration(seconds: 100),
+    ),
+    PlayerEpisode(
+      id: 'server-episode-101',
+      number: 77,
+      isLocked: false,
+      videoUrl: _secondVideoUrl,
+      duration: Duration(seconds: 100),
+    ),
+  ],
+  recommendations: const [],
+  episodeTotal: 2,
+);
+
+final _localResumeFirstItem = PlayerFeedItem(
+  id: 'local-resume-ep-100',
+  mode: PlayerFeedMode.singleDrama,
+  content: _localResumeContent,
+  episode: _localResumeContent.episodes.first,
+);
+
+final _localResumeTargetItem = PlayerFeedItem(
+  id: 'local-resume-ep-101',
+  mode: PlayerFeedMode.singleDrama,
+  content: _localResumeContent,
+  episode: _localResumeContent.episodes[1],
+);
+
 PlaybackPreloadState _successPreloadState() {
   return _successPreloadStateFor(_item);
 }
@@ -578,6 +904,11 @@ PlaybackPreloadState _successPreloadStateFor(PlayerFeedItem item) {
 }
 
 class _FakePlayerFeedRepository implements PlayerFeedRepository {
+  _FakePlayerFeedRepository({List<PlayerFeedItem>? items})
+    : _items = items ?? [_item, _item2];
+
+  final List<PlayerFeedItem> _items;
+
   @override
   Future<List<PlayerFeedItem>> listForYouFeed() async => [_item];
 
@@ -586,7 +917,26 @@ class _FakePlayerFeedRepository implements PlayerFeedRepository {
     required String dramaId,
     required String episodeId,
   }) async {
-    return [_item, _item2];
+    return _items;
+  }
+}
+
+class _FakeDramaPlaybackTargetRepository
+    implements DramaPlaybackTargetRepository {
+  _FakeDramaPlaybackTargetRepository({this.target});
+
+  DramaPlaybackTarget? target;
+
+  @override
+  Future<DramaPlaybackTarget?> getForDrama(String dramaId) async {
+    final current = target;
+    if (current == null || current.dramaId != dramaId) return null;
+    return current;
+  }
+
+  @override
+  Future<void> save(DramaPlaybackTarget target) async {
+    this.target = target;
   }
 }
 

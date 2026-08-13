@@ -9,6 +9,8 @@ import 'player_startup_preload_controller.dart';
 
 export 'player_startup_preload_controller.dart' show PlayerEntryResumeHint;
 
+const playerEntryPreloadDefaultMaxWait = Duration(milliseconds: 1500);
+
 /// 普通播放器入口的统一预取调度。
 ///
 /// For You 有独立的 feed/session 预热，不能走这里；其余入口无论来自首页、搜索、
@@ -51,7 +53,7 @@ Future<T?> openPlayerWithEntryPreload<T>(
   int? userActionAtMs,
   PlayerEntryResumeHint? resumeHint,
   Object? extra,
-  Duration maxWait = const Duration(milliseconds: 900),
+  Duration maxWait = playerEntryPreloadDefaultMaxWait,
 }) async {
   final container = ProviderScope.containerOf(context, listen: false);
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
@@ -82,7 +84,13 @@ Future<T?> openPlayerWithEntryPreload<T>(
     overlay?.insert(loadingOverlay);
   }
 
-  await waitFuture;
+  final waitResult = await waitFuture;
+  const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');
+  if (shouldPrint) {
+    debugPrint(
+      '[player-entry-preload] wait_result ${waitResult.diagnosticSummary}',
+    );
+  }
   loadingOverlay?.remove();
   if (!context.mounted) return null;
   return context.push<T>(
@@ -101,17 +109,29 @@ enum PlayerEntryPreloadWaitStatus { ready, failed, timeout, cancelled }
 class PlayerEntryPreloadWaitResult {
   const PlayerEntryPreloadWaitResult({
     required this.status,
+    required this.waitDuration,
     this.dramaId,
     this.itemId,
     this.sourceUrl,
   });
 
   final PlayerEntryPreloadWaitStatus status;
+  final Duration waitDuration;
   final String? dramaId;
   final String? itemId;
   final String? sourceUrl;
 
   bool get shouldNavigate => true;
+
+  String get diagnosticSummary {
+    return [
+      'status=${status.name}',
+      'waitMs=${waitDuration.inMilliseconds}',
+      'dramaId=${dramaId ?? 'null'}',
+      'itemId=${itemId ?? 'null'}',
+      'hasSource=${sourceUrl != null && sourceUrl!.isNotEmpty}',
+    ].join(' ');
+  }
 }
 
 class PlayerEntryPreloadState {
@@ -179,7 +199,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
     int? episodeNo,
     String? trigger,
     PlayerEntryResumeHint? resumeHint,
-    Duration maxWait = const Duration(milliseconds: 900),
+    Duration maxWait = playerEntryPreloadDefaultMaxWait,
   }) async {
     preparePlayerRoute(
       dramaId: dramaId,
@@ -189,6 +209,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
       resumeHint: resumeHint,
     );
     final startedAt = DateTime.now();
+    Duration elapsed() => DateTime.now().difference(startedAt);
     while (DateTime.now().difference(startedAt) < maxWait) {
       final startupState = ref.read(playerStartupPreloadControllerProvider);
       if (startupState.dramaId == dramaId) {
@@ -196,6 +217,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
           case PlayerStartupPreloadStatus.success:
             return PlayerEntryPreloadWaitResult(
               status: PlayerEntryPreloadWaitStatus.ready,
+              waitDuration: elapsed(),
               dramaId: startupState.dramaId,
               itemId: startupState.itemId,
               sourceUrl: startupState.sourceUrl,
@@ -203,6 +225,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
           case PlayerStartupPreloadStatus.failed:
             return PlayerEntryPreloadWaitResult(
               status: PlayerEntryPreloadWaitStatus.failed,
+              waitDuration: elapsed(),
               dramaId: startupState.dramaId,
               itemId: startupState.itemId,
               sourceUrl: startupState.sourceUrl,
@@ -210,6 +233,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
           case PlayerStartupPreloadStatus.cancelled:
             return PlayerEntryPreloadWaitResult(
               status: PlayerEntryPreloadWaitStatus.cancelled,
+              waitDuration: elapsed(),
               dramaId: startupState.dramaId,
               itemId: startupState.itemId,
               sourceUrl: startupState.sourceUrl,
@@ -224,6 +248,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
     final startupState = ref.read(playerStartupPreloadControllerProvider);
     return PlayerEntryPreloadWaitResult(
       status: PlayerEntryPreloadWaitStatus.timeout,
+      waitDuration: elapsed(),
       dramaId: startupState.dramaId == dramaId ? startupState.dramaId : dramaId,
       itemId: startupState.dramaId == dramaId ? startupState.itemId : null,
       sourceUrl: startupState.dramaId == dramaId
@@ -243,6 +268,19 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
     if (dramaId.isEmpty) return;
     final current = state;
     final startupPreload = ref.read(playerStartupPreloadControllerProvider);
+    if (!isUserIntent &&
+        current.isUserIntent &&
+        current.dramaId != null &&
+        current.dramaId != dramaId &&
+        current.isFresh) {
+      _log(
+        'ignore visible candidate',
+        dramaId: dramaId,
+        trigger: trigger,
+        extra: 'protectedDramaId=${current.dramaId}',
+      );
+      return;
+    }
     // 卡片点击已携带首页的 watch_progress；随后路由层会以没有 hint 的兜底调用
     // 一次。后者不能覆盖前者，否则会重新启动详情/playlist 预热并丢失目标集。
     final routeFallbackCanReuseHint =
@@ -314,6 +352,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
             preferredEpisodeId: preferredEpisodeId,
             preferredEpisodeNo: preferredEpisodeNo,
             resumeHint: resumeHint,
+            reuseMatchingCurrent: isUserIntent,
           ),
     );
   }

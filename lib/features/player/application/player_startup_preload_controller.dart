@@ -201,6 +201,7 @@ class PlayerStartupPreloadController
     String? preferredEpisodeId,
     int? preferredEpisodeNo,
     PlayerEntryResumeHint? resumeHint,
+    bool reuseMatchingCurrent = false,
   }) async {
     final config = ref.read(playerPreloadConfigProvider);
     if (config.effectiveHomeStartupPreloadCount <= 0) {
@@ -271,9 +272,7 @@ class PlayerStartupPreloadController
       final remoteTarget =
           detailProgress != null &&
               detailProgress.hasHistory &&
-              detailProgress.duration > Duration.zero &&
-              detailProgress.position <
-                  detailProgress.duration - const Duration(seconds: 2)
+              detailProgress.duration > Duration.zero
           ? DramaPlaybackTarget(
               dramaId: dramaId,
               episodeId: detailProgress.episodeId,
@@ -283,7 +282,7 @@ class PlayerStartupPreloadController
               updatedAt: DateTime.now(),
             )
           : null;
-      final item = _firstPlayableItem(
+      final selectedItem = _firstPlayableItem(
         items,
         preferredEpisodeId: preferredEpisodeId,
         preferredEpisodeNo: preferredEpisodeNo,
@@ -291,7 +290,10 @@ class PlayerStartupPreloadController
         entryTarget: entryTarget,
         remoteTarget: remoteTarget,
       );
-      if (item == null) {
+      final playbackItem = selectedItem == null
+          ? null
+          : _initialPlaybackItem(items, selectedItem, remoteTarget);
+      if (playbackItem == null) {
         state = PlayerStartupPreloadState(
           status: PlayerStartupPreloadStatus.cancelled,
           dramaId: dramaId,
@@ -307,12 +309,17 @@ class PlayerStartupPreloadController
         );
         return;
       }
+      final item = playbackItem;
 
       final requestedEpisodeNo =
           preferredEpisodeNo ?? int.tryParse(preferredEpisodeId ?? '');
       final routeEpisodeMatches =
           preferredEpisodeId == item.episode.id ||
           item.episode.number == requestedEpisodeNo;
+      final skippedCompletedRouteEpisode =
+          selectedItem != null &&
+          selectedItem.id != item.id &&
+          _targetMatchesItem(remoteTarget, selectedItem);
       final selectedTarget = routeEpisodeMatches
           ? null
           : _targetMatchesItem(localTarget, item) &&
@@ -329,7 +336,9 @@ class PlayerStartupPreloadController
         '[player-entry-preload] selection dramaId=$dramaId '
         'episodeId=${item.episode.id} '
         'episodeNo=${item.episode.number} '
-        'reason=${routeEpisodeMatches
+        'reason=${skippedCompletedRouteEpisode
+            ? 'detail_resume_next'
+            : routeEpisodeMatches
             ? 'route_episode'
             : _targetMatchesItem(localTarget, item) && localTarget?.canResume == true
             ? 'local_resume'
@@ -342,6 +351,24 @@ class PlayerStartupPreloadController
       );
 
       final source = item.episode.videoSource;
+      if (reuseMatchingCurrent &&
+          state.dramaId == dramaId &&
+          state.itemId == item.id &&
+          state.sourceUrl == source &&
+          (state.status == PlayerStartupPreloadStatus.pending ||
+              state.status == PlayerStartupPreloadStatus.success)) {
+        _record(
+          'startup preload reused',
+          itemId: item.id,
+          source: source,
+          details: [
+            'dramaId=${item.content.id}',
+            'episodeId=${item.episode.id}',
+            'status=${state.status.name}',
+          ].join(' '),
+        );
+        return;
+      }
       final startedAt = DateTime.now();
       state = PlayerStartupPreloadState(
         status: PlayerStartupPreloadStatus.pending,
@@ -358,6 +385,7 @@ class PlayerStartupPreloadController
         details: [
           'dramaId=${item.content.id}',
           'episodeId=${item.episode.id}',
+          if (skippedCompletedRouteEpisode) 'target=detail_resume_next',
           if (routeEpisodeMatches) 'target=route_episode',
           if (selectedTarget != null)
             'targetPositionMs=${selectedTarget.position.inMilliseconds}',
@@ -548,6 +576,33 @@ class PlayerStartupPreloadController
     }
     return item.episode.id == target.episodeId ||
         (target.episodeNo != null && item.episode.number == target.episodeNo);
+  }
+
+  PlayerFeedItem _initialPlaybackItem(
+    List<PlayerFeedItem> items,
+    PlayerFeedItem selectedItem,
+    DramaPlaybackTarget? remoteTarget,
+  ) {
+    if (!_targetMatchesItem(remoteTarget, selectedItem)) {
+      return selectedItem;
+    }
+    final index = items.indexWhere((item) => item.id == selectedItem.id);
+    if (index == -1 || index + 1 >= items.length) {
+      return selectedItem;
+    }
+    if (remoteTarget!.position <= Duration.zero ||
+        remoteTarget.duration <= Duration.zero ||
+        remoteTarget.position <
+            remoteTarget.duration - const Duration(seconds: 2)) {
+      return selectedItem;
+    }
+    final nextItem = items[index + 1];
+    if (nextItem.episode.isLocked ||
+        nextItem.episode.isUnavailable ||
+        nextItem.episode.videoSource == null) {
+      return selectedItem;
+    }
+    return nextItem;
   }
 
   bool _isCurrent(int generation) => ref.mounted && generation == _generation;

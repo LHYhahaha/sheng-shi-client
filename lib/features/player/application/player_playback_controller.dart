@@ -970,9 +970,15 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         item.episode.videoSource != null) {
       final startupPreload = ref.read(playerStartupPreloadControllerProvider);
       final isStartupHit = startupPreload.matches(item);
+      final isStartupRelay =
+          startupPreload.status == PlayerStartupPreloadStatus.pending &&
+          startupPreload.itemId == item.id &&
+          startupPreload.sourceUrl == item.episode.videoSource;
       _logTiming(
         isStartupHit
             ? 'startup preload hit on playItem'
+            : isStartupRelay
+            ? 'startup preload relay on playItem'
             : 'startup preload miss on playItem',
         itemId: item.id,
         source: item.episode.videoSource,
@@ -982,9 +988,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           'startupSource=${startupPreload.sourceUrl ?? 'null'}',
         ]),
       );
-      if (startupPreload.status == PlayerStartupPreloadStatus.pending &&
-          startupPreload.itemId == item.id &&
-          startupPreload.sourceUrl == item.episode.videoSource) {
+      if (isStartupRelay) {
         // startup 预热只保留 playlist、初始化首段和续播目标段，且与本地代理共用
         // 稳定 key 的 singleflight。真实播放加入后会优先消费同一资源；不再在刚
         // 拿到地址的 20~30ms 内整体取消，避免高续播位置来不及拉到目标分片。

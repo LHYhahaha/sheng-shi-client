@@ -47,6 +47,7 @@ import '../../application/player_overlay_orchestrator.dart';
 import '../../application/player_performance_policy_provider.dart';
 import '../../application/player_playback_controller.dart';
 import '../../application/player_unlock_modal_coordinator.dart';
+import '../../application/player_frame_jank_diagnostics.dart';
 import '../../application/player_rebuild_diagnostics.dart';
 import '../../application/player_session_registry.dart';
 import '../../application/player_ui_controller.dart';
@@ -159,6 +160,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   late final PageController _pageController;
   late final String _sessionKey;
   late final PlayerPlaybackController _playbackController;
+  late final PlayerFrameJankDiagnostics _frameJankDiagnostics;
   late final PlayerOverlayOrchestrator _overlayOrchestrator;
   late final AppModalService _modalService;
   AppShellBottomNavigationVisible? _shellChrome;
@@ -416,6 +418,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _pageController = PageController();
     _pageController.addListener(_handlePageControllerTick);
     _sessionKey = _createSessionKey();
+    _frameJankDiagnostics = PlayerFrameJankDiagnostics(sessionKey: _sessionKey);
+    _frameJankDiagnostics.start();
+    _frameJankDiagnostics.markPhase(
+      'entry_to_first_frame',
+      itemId: widget.episodeId == null ? null : 'ep-${widget.episodeId}',
+    );
     _playbackController = ref.read(
       playerPlaybackControllerProvider(_sessionKey).notifier,
     );
@@ -563,6 +571,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _modalService.dismissForSource(AppModalSource.player);
     _overlayOrchestrator.cancelPending();
     _playbackController.detachVideoSurfaceForTeardown();
+    _frameJankDiagnostics.stop();
     unawaited(
       _playbackController.disposeSession(
         syncState: false,
@@ -1452,6 +1461,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         if (next.$1 == null || !next.$2) {
           return;
         }
+        _frameJankDiagnostics.markPhase('steady_playback', itemId: next.$1);
         unawaited(_trackPlaybackStart(next.$1!));
         _recordExitRecommendationEpisode(itemId: next.$1!);
       },
@@ -1963,6 +1973,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           fromItemId: feedState.currentItem?.id,
           fromIndex: feedState.currentIndex,
         );
+        _frameJankDiagnostics.markPhase(
+          'page_scroll',
+          itemId: feedState.currentItem?.id,
+        );
       }
       _setPageScrolling(true);
       return false;
@@ -1986,6 +2000,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             feedState.items.length - 1,
           );
           final settledItem = feedState.items[settledIndex];
+          _frameJankDiagnostics.markPhase(
+            'page_settle_to_first_frame',
+            itemId: settledItem.id,
+          );
           _preloadForPredictedPageIndex(settledIndex);
           _feedEngine.settleViewport(
             index: settledIndex,
