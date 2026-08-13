@@ -199,6 +199,7 @@ class PlayerStartupPreloadController
   Future<void> preloadFirstPlayableDramaId(
     String? dramaId, {
     String? preferredEpisodeId,
+    int? preferredEpisodeNo,
     PlayerEntryResumeHint? resumeHint,
   }) async {
     final config = ref.read(playerPreloadConfigProvider);
@@ -256,6 +257,7 @@ class PlayerStartupPreloadController
           ? DramaPlaybackTarget(
               dramaId: dramaId,
               episodeId: resumeHint!.episodeId,
+              episodeNo: resumeHint.episodeNo,
               position: resumeHint.position,
               duration: resumeHint.duration,
               updatedAt: DateTime.now(),
@@ -275,6 +277,7 @@ class PlayerStartupPreloadController
           ? DramaPlaybackTarget(
               dramaId: dramaId,
               episodeId: detailProgress.episodeId,
+              episodeNo: detailProgress.episodeNo,
               position: detailProgress.position,
               duration: detailProgress.duration,
               updatedAt: DateTime.now(),
@@ -283,6 +286,7 @@ class PlayerStartupPreloadController
       final item = _firstPlayableItem(
         items,
         preferredEpisodeId: preferredEpisodeId,
+        preferredEpisodeNo: preferredEpisodeNo,
         localTarget: localTarget,
         entryTarget: entryTarget,
         remoteTarget: remoteTarget,
@@ -304,28 +308,34 @@ class PlayerStartupPreloadController
         return;
       }
 
-      final selectedTarget = preferredEpisodeId == item.episode.id
+      final requestedEpisodeNo =
+          preferredEpisodeNo ?? int.tryParse(preferredEpisodeId ?? '');
+      final routeEpisodeMatches =
+          preferredEpisodeId == item.episode.id ||
+          item.episode.number == requestedEpisodeNo;
+      final selectedTarget = routeEpisodeMatches
           ? null
-          : localTarget?.episodeId == item.episode.id &&
+          : _targetMatchesItem(localTarget, item) &&
                 localTarget?.canResume == true
           ? localTarget
-          : entryTarget?.episodeId == item.episode.id &&
+          : _targetMatchesItem(entryTarget, item) &&
                 entryTarget?.canResume == true
           ? entryTarget
-          : remoteTarget?.episodeId == item.episode.id
+          : _targetMatchesItem(remoteTarget, item)
           ? remoteTarget
           : null;
 
       debugPrint(
         '[player-entry-preload] selection dramaId=$dramaId '
         'episodeId=${item.episode.id} '
-        'reason=${preferredEpisodeId == item.episode.id
+        'episodeNo=${item.episode.number} '
+        'reason=${routeEpisodeMatches
             ? 'route_episode'
-            : localTarget?.episodeId == item.episode.id && localTarget?.canResume == true
+            : _targetMatchesItem(localTarget, item) && localTarget?.canResume == true
             ? 'local_resume'
-            : entryTarget?.episodeId == item.episode.id && entryTarget?.canResume == true
+            : _targetMatchesItem(entryTarget, item) && entryTarget?.canResume == true
             ? 'home_resume_hint'
-            : remoteTarget?.episodeId == item.episode.id
+            : _targetMatchesItem(remoteTarget, item)
             ? 'detail_resume'
             : 'first_playable'} '
         'positionMs=${selectedTarget?.position.inMilliseconds ?? 0}',
@@ -348,7 +358,7 @@ class PlayerStartupPreloadController
         details: [
           'dramaId=${item.content.id}',
           'episodeId=${item.episode.id}',
-          if (preferredEpisodeId == item.episode.id) 'target=route_episode',
+          if (routeEpisodeMatches) 'target=route_episode',
           if (selectedTarget != null)
             'targetPositionMs=${selectedTarget.position.inMilliseconds}',
         ].join(' '),
@@ -465,13 +475,26 @@ class PlayerStartupPreloadController
   PlayerFeedItem? _firstPlayableItem(
     List<PlayerFeedItem> items, {
     String? preferredEpisodeId,
+    int? preferredEpisodeNo,
     DramaPlaybackTarget? localTarget,
     DramaPlaybackTarget? entryTarget,
     DramaPlaybackTarget? remoteTarget,
   }) {
-    if (preferredEpisodeId != null && preferredEpisodeId.isNotEmpty) {
+    if (preferredEpisodeNo != null) {
       for (final item in items) {
-        if (item.episode.id == preferredEpisodeId &&
+        if (item.episode.number == preferredEpisodeNo &&
+            !item.episode.isLocked &&
+            !item.episode.isUnavailable &&
+            item.episode.videoSource != null) {
+          return item;
+        }
+      }
+    }
+    if (preferredEpisodeId != null && preferredEpisodeId.isNotEmpty) {
+      final requestedEpisodeNo = int.tryParse(preferredEpisodeId);
+      for (final item in items) {
+        if ((item.episode.id == preferredEpisodeId ||
+                item.episode.number == requestedEpisodeNo) &&
             !item.episode.isLocked &&
             !item.episode.isUnavailable &&
             item.episode.videoSource != null) {
@@ -481,7 +504,7 @@ class PlayerStartupPreloadController
     }
     if (localTarget?.canResume ?? false) {
       for (final item in items) {
-        if (item.episode.id == localTarget!.episodeId &&
+        if (_targetMatchesItem(localTarget, item) &&
             !item.episode.isLocked &&
             !item.episode.isUnavailable &&
             item.episode.videoSource != null) {
@@ -491,7 +514,7 @@ class PlayerStartupPreloadController
     }
     if (entryTarget?.canResume ?? false) {
       for (final item in items) {
-        if (item.episode.id == entryTarget!.episodeId &&
+        if (_targetMatchesItem(entryTarget, item) &&
             !item.episode.isLocked &&
             !item.episode.isUnavailable &&
             item.episode.videoSource != null) {
@@ -501,7 +524,7 @@ class PlayerStartupPreloadController
     }
     if (remoteTarget?.canResume ?? false) {
       for (final item in items) {
-        if (item.episode.id == remoteTarget!.episodeId &&
+        if (_targetMatchesItem(remoteTarget, item) &&
             !item.episode.isLocked &&
             !item.episode.isUnavailable &&
             item.episode.videoSource != null) {
@@ -517,6 +540,14 @@ class PlayerStartupPreloadController
       }
     }
     return null;
+  }
+
+  bool _targetMatchesItem(DramaPlaybackTarget? target, PlayerFeedItem item) {
+    if (target == null) {
+      return false;
+    }
+    return item.episode.id == target.episodeId ||
+        (target.episodeNo != null && item.episode.number == target.episodeNo);
   }
 
   bool _isCurrent(int generation) => ref.mounted && generation == _generation;

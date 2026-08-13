@@ -36,6 +36,7 @@ import '../../../../shared/url/external_url_launcher.dart';
 import '../../application/home_data_controller.dart';
 import '../../application/home_banner_config_controller.dart';
 import '../../application/home_banner_analytics.dart';
+import '../../application/home_player_entry_intent.dart';
 import '../../application/home_remote_data_provider.dart';
 import '../../data/dto/home_banner_response_dto.dart';
 import 'home_preload_candidate.dart';
@@ -506,16 +507,22 @@ class _HomePageState extends ConsumerState<HomePage> {
                                       ),
                                 );
                                 final tappedAt = DateTime.now();
+                                final entryIntent = buildHomePlayerEntryIntent(
+                                  drama: item,
+                                  userActionAt: tappedAt,
+                                );
                                 preparePlayerEntryPreload(
                                   context,
-                                  dramaId: item.id,
-                                  episodeId: '1',
-                                  trigger: 'home_card_tap',
+                                  dramaId: entryIntent.dramaId,
+                                  episodeId: entryIntent.episodeId,
+                                  trigger: entryIntent.trigger,
                                   resumeHint:
                                       item.watchProgress?.canResume == true
                                       ? PlayerEntryResumeHint(
-                                          episodeId:
-                                              item.watchProgress!.episodeId,
+                                          episodeId: item
+                                              .watchProgress!
+                                              .episodeId
+                                              .toString(),
                                           episodeNo:
                                               item.watchProgress!.episodeNo,
                                           position: Duration(
@@ -533,12 +540,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 );
                                 context.push(
                                   RoutePaths.playerLocation(
-                                    dramaId: item.id,
-                                    episodeId: '1',
-                                    trigger: 'home_card_tap',
+                                    dramaId: entryIntent.dramaId,
+                                    episodeId: entryIntent.episodeId,
+                                    trigger: entryIntent.trigger,
                                     userActionAtMs:
                                         tappedAt.millisecondsSinceEpoch,
                                   ),
+                                  extra: entryIntent,
                                 );
                               },
                             ),

@@ -55,6 +55,75 @@ void main() {
     );
   });
 
+  test('startup preload honors a route episode number fallback', () async {
+    final sourceRepository = _FakePlaybackSourceRepository();
+    final container = _createContainer(sourceRepository: sourceRepository);
+    addTearDown(container.dispose);
+    final controller = container.read(
+      playerStartupPreloadControllerProvider.notifier,
+    );
+
+    await controller.preloadFirstPlayableDramaId(
+      _drama.id,
+      preferredEpisodeId: '2',
+    );
+
+    expect(sourceRepository.lastPreloadedItemId, _item2.id);
+    expect(
+      container.read(playerStartupPreloadControllerProvider).itemId,
+      _item2.id,
+    );
+    expect(controller.exportTimingReport(), contains('target=route_episode'));
+  });
+
+  test(
+    'startup preload prefers explicit episode number over route episode id',
+    () async {
+      final sourceRepository = _FakePlaybackSourceRepository();
+      final container = _createContainer(sourceRepository: sourceRepository);
+      addTearDown(container.dispose);
+      final controller = container.read(
+        playerStartupPreloadControllerProvider.notifier,
+      );
+
+      await controller.preloadFirstPlayableDramaId(
+        _drama.id,
+        preferredEpisodeId: '1',
+        preferredEpisodeNo: 2,
+      );
+
+      expect(sourceRepository.lastPreloadedItemId, _item2.id);
+      expect(
+        container.read(playerStartupPreloadControllerProvider).itemId,
+        _item2.id,
+      );
+      expect(controller.exportTimingReport(), contains('target=route_episode'));
+    },
+  );
+
+  test('startup preload matches resume hint by episode number', () async {
+    final sourceRepository = _FakePlaybackSourceRepository();
+    final container = _createContainer(sourceRepository: sourceRepository);
+    addTearDown(container.dispose);
+    final controller = container.read(
+      playerStartupPreloadControllerProvider.notifier,
+    );
+
+    await controller.preloadFirstPlayableDramaId(
+      _drama.id,
+      resumeHint: const PlayerEntryResumeHint(
+        episodeId: 'stale-episode-id',
+        episodeNo: 2,
+        position: Duration(seconds: 35),
+        duration: Duration(seconds: 120),
+      ),
+    );
+
+    expect(sourceRepository.lastPreloadedItemId, _item2.id);
+    expect(sourceRepository.lastPreferredPosition, const Duration(seconds: 35));
+    expect(controller.exportTimingReport(), contains('targetPositionMs=35000'));
+  });
+
   test('startup preload can be disabled by config', () async {
     final sourceRepository = _FakePlaybackSourceRepository();
     final preloadManager = _FakePreloadManager();
@@ -464,6 +533,7 @@ class _FakePlaybackSourceRepository implements PlayerPlaybackSourceRepository {
   final List<Completer<PlaybackPreloadState>> _preloadCompleters;
   var preloadCount = 0;
   String? lastPreloadedItemId;
+  Duration? lastPreferredPosition;
   var failNextPreload = false;
 
   @override
@@ -486,6 +556,7 @@ class _FakePlaybackSourceRepository implements PlayerPlaybackSourceRepository {
   }) async {
     preloadCount += 1;
     lastPreloadedItemId = item.id;
+    lastPreferredPosition = preferredPosition;
     if (_preloadCompleters.isNotEmpty) {
       return _preloadCompleters.removeAt(0).future;
     }

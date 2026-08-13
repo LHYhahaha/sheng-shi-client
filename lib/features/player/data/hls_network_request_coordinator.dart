@@ -9,11 +9,13 @@ class HlsNetworkResponse {
   const HlsNetworkResponse({
     required this.statusCode,
     required this.bytes,
+    this.contentLength,
     this.contentType,
   });
 
   final int statusCode;
   final List<int> bytes;
+  final int? contentLength;
   final String? contentType;
 }
 

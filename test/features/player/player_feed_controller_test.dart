@@ -25,6 +25,25 @@ void main() {
     expect(state.currentItem?.episode.number, 3);
   });
 
+  test('loads single drama feed from explicit episode number', () async {
+    final container = _createContainer();
+    final provider = playerFeedControllerProvider('single-number');
+    final controller = container.read(provider.notifier);
+
+    await controller.load(
+      const PlayerFeedConfig.singleDrama(
+        dramaId: 'drama-a',
+        episodeId: '1',
+        episodeNo: 3,
+      ),
+    );
+    final state = container.read(provider);
+
+    expect(state.currentIndex, 2);
+    expect(state.currentItem?.episode.id, 'ep-3');
+    expect(state.currentItem?.episode.number, 3);
+  });
+
   test('loads for you feed and updates current index', () async {
     final container = _createContainer();
     final provider = playerFeedControllerProvider('for-you');

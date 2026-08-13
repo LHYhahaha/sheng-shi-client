@@ -1,5 +1,6 @@
 import '../../domain/search_rankings.dart';
 import '../../domain/search_results.dart';
+import '../../../home/domain/home_data.dart';
 import '../dto/search_ranking_response_dto.dart';
 import '../dto/search_results_response_dto.dart';
 
@@ -53,6 +54,15 @@ class SearchMapper {
       isVipOnly: dto.isVipOnly == 1,
       status: dto.status,
       episodeTotal: dto.episodeTotal,
+      watchProgress: dto.watchProgress == null
+          ? null
+          : HomeWatchProgress(
+              episodeId: dto.watchProgress!.watchEpisodeId.toString(),
+              episodeNo: dto.watchProgress!.watchEpisodeNo,
+              positionSeconds: dto.watchProgress!.watchSecond,
+              progressPercent: dto.watchProgress!.progressPercent,
+              durationSeconds: dto.watchProgress!.durationSecond,
+            ),
     );
   }
 }

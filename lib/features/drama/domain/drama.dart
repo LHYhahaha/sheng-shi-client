@@ -112,8 +112,12 @@ class DramaWatchProgress {
   final int positionSeconds;
   final int durationSeconds;
 
-  bool get canResume =>
-      episodeId != '0' && positionSeconds > 0 && durationSeconds > 0;
+  bool get canResume {
+    if (episodeId == '0' || positionSeconds <= 0 || durationSeconds <= 0) {
+      return false;
+    }
+    return positionSeconds < durationSeconds - 2;
+  }
 }
 
 /// 首页剧卡分页结果。

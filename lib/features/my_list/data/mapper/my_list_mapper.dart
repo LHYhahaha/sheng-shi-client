@@ -21,7 +21,7 @@ class MyListMapper {
       introduction: dto.summary ?? '',
       coverAssetPath: dto.coverUrl ?? fallbackAsset,
       coverResource: _coverResource(dto.coverUrl, dto.coverAspectRatio),
-      currentEpisode: dto.lastEpisodeNo ?? 1,
+      currentEpisode: dto.lastEpisodeNo,
       episodeCount: dto.episodeTotal,
       episodeId: dto.lastEpisodeId,
       dramaStatus: dto.dramaStatus,
@@ -40,6 +40,7 @@ class MyListMapper {
       episodeCount: dto.episodeTotal ?? 0,
       episodeId: dto.episodeId,
       watchSecond: dto.watchSecond,
+      durationSecond: dto.durationSecond,
       dramaStatus: dto.dramaStatus,
     );
   }

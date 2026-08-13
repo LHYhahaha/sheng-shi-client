@@ -198,11 +198,7 @@ class _MemberPageState extends ConsumerState<MemberPage> {
             : profileState.avatarResource);
     final headerState = profileState.copyWith(
       isLoggedIn: hasLinkedAccount,
-<<<<<<< HEAD
       userId: authUser?.userId ?? userInfo.userId,
-=======
-      userId: authUser?.id ?? userInfo.showId,
->>>>>>> 4968f98a5543f924dd83663ae2c58f2e35c7c770
       showId: showId,
       nickname: nickname,
       avatarAssetPath:

@@ -14,12 +14,14 @@ class PlayerFeedConfig {
   const PlayerFeedConfig.singleDrama({
     required this.dramaId,
     required this.episodeId,
+    this.episodeNo,
   }) : mode = PlayerFeedMode.singleDrama;
 
   const PlayerFeedConfig.forYou()
     : mode = PlayerFeedMode.forYou,
       dramaId = null,
-      episodeId = null;
+      episodeId = null,
+      episodeNo = null;
 
   /// feed 模式。
   ///
@@ -36,16 +38,23 @@ class PlayerFeedConfig {
   /// 只用于定位初始集；后续 PageView 当前集由 PlayerFeedState.currentIndex 管理。
   final String? episodeId;
 
+  /// 单剧 feed 的初始 episode number。
+  ///
+  /// 部分列表接口只可靠返回“当前第几集”，后端 episode id 可能滞后。该字段让入口
+  /// 明确表达按集数定位，避免把 episode number 伪装成 episode id。
+  final int? episodeNo;
+
   @override
   bool operator ==(Object other) {
     return other is PlayerFeedConfig &&
         other.mode == mode &&
         other.dramaId == dramaId &&
-        other.episodeId == episodeId;
+        other.episodeId == episodeId &&
+        other.episodeNo == episodeNo;
   }
 
   @override
-  int get hashCode => Object.hash(mode, dramaId, episodeId);
+  int get hashCode => Object.hash(mode, dramaId, episodeId, episodeNo);
 }
 
 /// 播放 feed 中的一个可展示 item。

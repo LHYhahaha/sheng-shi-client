@@ -1,4 +1,5 @@
 import '../../../../core/network/json_field_parser.dart';
+import '../../../home/data/dto/home_response_dto.dart';
 
 class SearchResultsResponseDto {
   const SearchResultsResponseDto({
@@ -54,6 +55,7 @@ class SearchResultDramaDto {
     required this.isVipOnly,
     required this.status,
     required this.episodeTotal,
+    this.watchProgress,
   });
 
   final int id;
@@ -68,6 +70,7 @@ class SearchResultDramaDto {
   final int isVipOnly;
   final int status;
   final int episodeTotal;
+  final HomeWatchProgressDto? watchProgress;
 
   factory SearchResultDramaDto.fromJson(Map<String, Object?> json) {
     return SearchResultDramaDto(
@@ -84,6 +87,9 @@ class SearchResultDramaDto {
       isVipOnly: JsonFieldParser.optionalInt(json, 'is_vip_only') ?? 0,
       status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
       episodeTotal: JsonFieldParser.optionalInt(json, 'episode_total') ?? 0,
+      watchProgress: HomeWatchProgressDto.fromJsonOrNull(
+        json['watch_progress'],
+      ),
     );
   }
 

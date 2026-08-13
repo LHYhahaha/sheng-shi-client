@@ -10,6 +10,7 @@ final appLocaleControllerProvider =
 class AppLocaleController extends Notifier<Locale> {
   static const preferenceKey = 'app_locale_language_code';
   static const defaultLanguageCode = 'en';
+  bool _hasUserSelectedLocale = false;
 
   @override
   Locale build() {
@@ -19,18 +20,23 @@ class AppLocaleController extends Notifier<Locale> {
 
   void select(Locale locale) {
     final languageCode = normalizeLanguageCode(locale.languageCode);
+    _hasUserSelectedLocale = true;
     state = Locale(languageCode);
     unawaited(_saveAndLoadLanguage(languageCode));
   }
 
   Future<void> selectAndSave(Locale locale) async {
     final languageCode = normalizeLanguageCode(locale.languageCode);
+    _hasUserSelectedLocale = true;
     state = Locale(languageCode);
     await _saveAndLoadLanguage(languageCode);
   }
 
   Future<void> _restoreSavedLocale() async {
     final languageCode = await readSavedLanguageCode();
+    if (!ref.mounted || _hasUserSelectedLocale) {
+      return;
+    }
     if (languageCode != state.languageCode) {
       state = Locale(languageCode);
     }

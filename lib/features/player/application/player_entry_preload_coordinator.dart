@@ -25,6 +25,7 @@ void preparePlayerEntryPreload(
   BuildContext context, {
   required String dramaId,
   required String episodeId,
+  int? episodeNo,
   required String trigger,
   PlayerEntryResumeHint? resumeHint,
 }) {
@@ -33,6 +34,7 @@ void preparePlayerEntryPreload(
       .preparePlayerRoute(
         dramaId: dramaId,
         episodeId: episodeId,
+        episodeNo: episodeNo,
         trigger: trigger,
         resumeHint: resumeHint,
       );
@@ -42,6 +44,7 @@ class PlayerEntryPreloadState {
   const PlayerEntryPreloadState({
     this.dramaId,
     this.preferredEpisodeId,
+    this.preferredEpisodeNo,
     this.trigger,
     this.isUserIntent = false,
     this.requestedAt,
@@ -50,6 +53,7 @@ class PlayerEntryPreloadState {
 
   final String? dramaId;
   final String? preferredEpisodeId;
+  final int? preferredEpisodeNo;
   final String? trigger;
   final bool isUserIntent;
   final DateTime? requestedAt;
@@ -79,6 +83,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
   void preparePlayerRoute({
     required String dramaId,
     required String episodeId,
+    int? episodeNo,
     String? trigger,
     PlayerEntryResumeHint? resumeHint,
   }) {
@@ -89,6 +94,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
       // `1` is the shared default for drama cards. A concrete route episode
       // (history/push/deep link) must win over a generic resume guess.
       preferredEpisodeId: episodeId == '1' ? null : episodeId,
+      preferredEpisodeNo: episodeNo,
       resumeHint: resumeHint,
     );
   }
@@ -98,6 +104,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
     required String trigger,
     required bool isUserIntent,
     String? preferredEpisodeId,
+    int? preferredEpisodeNo,
     PlayerEntryResumeHint? resumeHint,
   }) {
     if (dramaId.isEmpty) return;
@@ -118,6 +125,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
             startupPreload.status == PlayerStartupPreloadStatus.success);
     if (current.dramaId == dramaId &&
         current.preferredEpisodeId == preferredEpisodeId &&
+        current.preferredEpisodeNo == preferredEpisodeNo &&
         (_sameResumeHint(current.resumeHint, resumeHint) ||
             routeFallbackCanReuseHint ||
             startupTargetMatchesRouteResume) &&
@@ -127,6 +135,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
         state = PlayerEntryPreloadState(
           dramaId: dramaId,
           preferredEpisodeId: preferredEpisodeId,
+          preferredEpisodeNo: preferredEpisodeNo,
           trigger: trigger,
           isUserIntent: true,
           requestedAt: current.requestedAt,
@@ -158,6 +167,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
     state = PlayerEntryPreloadState(
       dramaId: dramaId,
       preferredEpisodeId: preferredEpisodeId,
+      preferredEpisodeNo: preferredEpisodeNo,
       trigger: trigger,
       isUserIntent: isUserIntent,
       requestedAt: DateTime.now(),
@@ -169,6 +179,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
           .preloadFirstPlayableDramaId(
             dramaId,
             preferredEpisodeId: preferredEpisodeId,
+            preferredEpisodeNo: preferredEpisodeNo,
             resumeHint: resumeHint,
           ),
     );

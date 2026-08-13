@@ -138,11 +138,6 @@ class HomeDramaDto {
   }
 }
 
-/// 首页剧卡附带的用户观看进度。
-///
-/// 它与详情接口的 `watch_progress` 使用同一 snake_case 契约，但首页层不依赖
-/// 播放器 DTO，避免首页数据模型反向耦合播放器功能。没有观看记录时后端会返回
-/// `watch_episode_id=0`、第 1 集和 0 秒；字段缺失时则保留为 null 以兼容旧接口。
 class HomeWatchProgressDto {
   const HomeWatchProgressDto({
     required this.watchEpisodeId,

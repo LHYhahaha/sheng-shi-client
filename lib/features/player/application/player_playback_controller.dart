@@ -19,6 +19,7 @@ import '../domain/drama_playback_target.dart';
 import '../domain/player_content.dart';
 import '../domain/player_playback_progress.dart';
 import '../domain/player_playback_source.dart';
+import '../domain/player_preload_config.dart';
 import '../domain/player_preload_state.dart';
 import '../domain/player_subtitle.dart';
 import 'player_feed_controller.dart';
@@ -113,6 +114,14 @@ enum PlayerPlaybackErrorKind {
   sourceResolve,
   mediaFatal,
   unknown,
+}
+
+class _SessionWindowSyncResult {
+  const _SessionWindowSyncResult(this.allowedIds);
+
+  final Set<String> allowedIds;
+
+  String get logSummary => allowedIds.isEmpty ? 'none' : allowedIds.join(',');
 }
 
 class PlayerPlaybackState {
@@ -538,16 +547,18 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   final _preloadStates = <String, PlaybackPreloadState>{};
   final _preparingItemIds = <String>{};
   var _activePreloadAllowedIds = <String>{};
+  var _activeSessionWindowAllowedIds = <String>{};
   List<PlayerFeedItem>? _deferredPreloadItems;
   int? _deferredPreloadIndex;
   PlaybackProgress? _pendingResumeProgress;
   bool _pendingResumeProgressRequiresSeekAfterOpen = false;
   bool _lastResumeProgressRequiresSeekAfterOpen = false;
-  bool _lastResumeProgressWasPending = false;
   int _generation = 0;
   int _preloadGeneration = 0;
+  int _sessionWindowGeneration = 0;
   int _visibilityDetachEpoch = 0;
   bool _pauseWhenOpenCompletes = false;
+  bool _ignoreNextPlayingFalse = false;
   // Android 上 next 的真实首帧预热会短时间内同时占用 previous/current/next 三个
   // MediaCodec。部分机型会把正在播放的 current 异常切成 paused（并非一次新的
   // playItem/open）。只在这个很小的危险窗口内恢复 current，避免用户看到播几秒又
@@ -929,6 +940,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           item.episode.videoSource == _lastPlayItemRequest!.episode.videoSource;
       final timeSinceLastCall = DateTime.now().difference(_lastPlayItemTime);
       if (!forceReopen &&
+          !resumeIfCurrentSource &&
           isSameItem &&
           state.status != PlayerPlaybackStatus.error &&
           timeSinceLastCall.inMilliseconds < 500) {
@@ -1067,6 +1079,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       if (shouldResumeDetachedCurrent) {
         _pauseWhenOpenCompletes = false;
         _accessOverlayPausedItemId = null;
+        _ignoreNextPlayingFalse = true;
         _logTiming(
           'same source access overlay resume',
           itemId: item.id,
@@ -1160,21 +1173,6 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         _forYouEntryWarmReleaseTimer?.cancel();
         _forYouEntryWarmItemId = null;
       }
-      if (prepared != null &&
-          prepared.kind != PreparedPlaybackSessionKind.retained &&
-          resumeStart != null &&
-          resumeProgressWasPending) {
-        _logTiming(
-          'prepared session skipped for resume start',
-          itemId: item.id,
-          source: prepared.source.playableSource,
-          details: _timingDetails([
-            'resumeMs=${resumeStart.inMilliseconds}',
-            'kind=${prepared.kind.name}',
-          ]),
-        );
-        await prepared.dispose();
-      }
       _logTiming(
         'take window session',
         itemId: item.id,
@@ -1193,9 +1191,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           'windowItemsAfter=${_windowItemsText()}',
         ]),
       );
-      if (prepared != null &&
-          (prepared.kind == PreparedPlaybackSessionKind.retained ||
-              !(resumeStart != null && resumeProgressWasPending))) {
+      if (prepared != null) {
         final hitEvent = prepared.kind == PreparedPlaybackSessionKind.retained
             ? 'retained hit previous'
             : 'prepared hit next';
@@ -1462,6 +1458,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
 
     final currentItem = items[currentIndex];
+    final config = ref.read(playerPreloadConfigProvider);
+    final sessionWindowSynced = await _syncSessionWindowForItems(
+      items,
+      currentIndex,
+      config,
+      reason: 'stale generation/window trim',
+    );
     if (_shouldDeferPreloadUntilFirstFrame &&
         state.status == PlayerPlaybackStatus.opening &&
         state.currentItemId == currentItem.id &&
@@ -1477,13 +1480,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           'currentIndex=$currentIndex',
           'itemCount=${items.length}',
           'status=${state.status.name}',
+          'sessionAllowedIds=${sessionWindowSynced.logSummary}',
         ]),
       );
       return;
     }
 
     final skipped = <String>[];
-    final config = ref.read(playerPreloadConfigProvider);
     final isForYou = items[currentIndex].mode == PlayerFeedMode.forYou;
     final forwardPreloadCount = config.forwardHlsPreloadCountFor(isForYou);
     // For You 的网络优先级固定为 current > next。上一条的回滑体验由
@@ -1511,21 +1514,6 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         skipped: skipped,
       ),
     ];
-    final sessionForwardCandidates = _preloadCandidatesInDirection(
-      items,
-      currentIndex,
-      direction: 1,
-      count: config.effectivePreparedForwardSessionCount,
-      skipped: <String>[],
-    ).where((item) => !_usesCurrentMediaSource(item)).toList(growable: false);
-    final sessionBackwardCandidates = _preloadCandidatesInDirection(
-      items,
-      currentIndex,
-      direction: -1,
-      count: config.effectiveRetainedBackwardSessionCount,
-      skipped: <String>[],
-    ).where((item) => !_usesCurrentMediaSource(item)).toList(growable: false);
-
     // HLS preload count 控制 HTTP playlist/segment 预热，不控制 prepared session window。
     // prepared session 持有播放器和解码资源，扩大到多个 next/previous 会提高内存、
     // 音频焦点和后台释放风险，所以这里即使 HLS count 变大也只选择 HTTP 候选集合。
@@ -1537,11 +1525,6 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (state.currentItemId != null) {
       allowedIds.add(state.currentItemId!);
     }
-    final sessionAllowedIds = <String>{
-      if (state.currentItemId != null) state.currentItemId!,
-      ...sessionForwardCandidates.map((item) => item.id),
-      ...sessionBackwardCandidates.map((item) => item.id),
-    };
     final previousActivePreloadAllowedIds = _activePreloadAllowedIds.toSet();
     _logTiming(
       'preload candidates',
@@ -1551,7 +1534,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         'candidates=${candidates.map((candidate) => candidate.id).join(',')}',
         'skipped=${skipped.join(',')}',
         'allowedIds=${allowedIds.join(',')}',
-        'sessionAllowedIds=${sessionAllowedIds.join(',')}',
+        'sessionAllowedIds=${sessionWindowSynced.allowedIds.join(',')}',
         'activePreloadAllowedIds=${previousActivePreloadAllowedIds.join(',')}',
         'forwardHlsPreloadCount=$forwardPreloadCount',
         'backwardHlsPreloadCount=$backwardPreloadCount',
@@ -1565,25 +1548,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
     _preloadedItemIds.removeWhere((id) => !allowedIds.contains(id));
     _cancelPreloadsNotIn(allowedIds);
-    await _retainSessionWindowOnly(
-      sessionAllowedIds,
-      reason: 'stale generation/window trim',
-    );
 
     _syncPreloadState();
-
-    if (state.currentItemId != null &&
-        state.currentSource != null &&
-        config.effectivePreparedForwardSessionCount > 0) {
-      final nextItem = sessionForwardCandidates.isEmpty
-          ? null
-          : sessionForwardCandidates.first;
-      if (nextItem != null) {
-        // 只 prepare 第一个 forward playable item，保持 previous/current/next 窗口。
-        // 不要按 HLS preload 数量循环 prepare，否则会变成播放器实例池。
-        unawaited(_prepareNextItem(nextItem, preloadGeneration));
-      }
-    }
 
     for (final item in selectedCandidates) {
       final currentPreload = _preloadStates[item.id];
@@ -2228,11 +2194,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _pauseWhenOpenCompletes = true;
     _accessOverlayPausedItemId = null;
     _pauseWatchProgressReportTimer();
+    ++_generation;
     await _persistProgressIfNeeded();
     if (visibilityEpoch != _visibilityDetachEpoch) {
       return;
     }
-    ++_generation;
     await _session.pause();
     if (visibilityEpoch != _visibilityDetachEpoch) {
       return;
@@ -2406,6 +2372,19 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (!isPlaying && _shouldRecoverUnexpectedPause()) {
       unawaited(_recoverFromUnexpectedPause());
       return;
+    }
+    if (!isPlaying && _ignoreNextPlayingFalse) {
+      _ignoreNextPlayingFalse = false;
+      _logTiming(
+        'playingStream false ignored',
+        itemId: state.currentItemId,
+        source: state.currentSource,
+        details: 'reason=stale_overlay_pause_event',
+      );
+      return;
+    }
+    if (isPlaying) {
+      _ignoreNextPlayingFalse = false;
     }
     if (isPlaying &&
         !state.hasFirstFrame &&
@@ -3452,9 +3431,58 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     return true;
   }
 
+  Future<_SessionWindowSyncResult> _syncSessionWindowForItems(
+    List<PlayerFeedItem> items,
+    int currentIndex,
+    PlayerPreloadConfig config, {
+    required String reason,
+  }) async {
+    final sessionForwardCandidates = _preloadCandidatesInDirection(
+      items,
+      currentIndex,
+      direction: 1,
+      count: config.effectivePreparedForwardSessionCount,
+      skipped: <String>[],
+    ).where((item) => !_sharesCurrentMediaSource(item)).toList(growable: false);
+    final sessionBackwardCandidates = _preloadCandidatesInDirection(
+      items,
+      currentIndex,
+      direction: -1,
+      count: config.effectiveRetainedBackwardSessionCount,
+      skipped: <String>[],
+    ).where((item) => !_sharesCurrentMediaSource(item)).toList(growable: false);
+    final allowedIds = <String>{
+      if (state.currentItemId != null) state.currentItemId!,
+      ...sessionForwardCandidates.map((item) => item.id),
+      ...sessionBackwardCandidates.map((item) => item.id),
+    };
+
+    await _retainSessionWindowOnly(allowedIds, reason: reason);
+    final sessionWindowGeneration =
+        setEquals(_activeSessionWindowAllowedIds, allowedIds)
+        ? _sessionWindowGeneration
+        : ++_sessionWindowGeneration;
+    _activeSessionWindowAllowedIds = allowedIds;
+
+    if (state.currentItemId != null &&
+        state.currentSource != null &&
+        config.effectivePreparedForwardSessionCount > 0) {
+      final nextItem = sessionForwardCandidates.isEmpty
+          ? null
+          : sessionForwardCandidates.first;
+      if (nextItem != null) {
+        // 只 prepare 第一个 forward playable item，保持 previous/current/next 窗口。
+        // 不要按 HLS preload 数量循环 prepare，否则会变成播放器实例池。
+        unawaited(_prepareNextItem(nextItem, sessionWindowGeneration));
+      }
+    }
+
+    return _SessionWindowSyncResult(allowedIds);
+  }
+
   Future<void> _prepareNextItem(
     PlayerFeedItem item,
-    int preloadGeneration,
+    int sessionWindowGeneration,
   ) async {
     if (!ref.mounted || _isSessionDisposed) {
       return;
@@ -3474,7 +3502,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         itemId: item.id,
         source: item.episode.videoSource,
       );
-      // prepare 只暖下一个可播放 item，并通过 preloadGeneration 绑定当前候选窗口。
+      // prepare 只暖下一个可播放 item，并通过 sessionWindowGeneration 绑定当前候选窗口。
       // 用户滑走或列表刷新后，旧 prepared 必须释放，不能被后续 item 误接管。
       final prepared = await _prepareManager.prepare(
         item: item,
@@ -3482,7 +3510,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       );
       if (!ref.mounted ||
           _isSessionDisposed ||
-          preloadGeneration != _preloadGeneration) {
+          sessionWindowGeneration != _sessionWindowGeneration) {
         if (prepared != null) {
           await _prepareManager.releaseItem(
             prepared.itemId,
@@ -3720,6 +3748,18 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (candidate == null || state.currentItemId != item.id) {
       return false;
     }
+    return _isCurrentMediaSource(candidate);
+  }
+
+  bool _sharesCurrentMediaSource(PlayerFeedItem item) {
+    final candidate = item.episode.videoSource;
+    if (candidate == null) {
+      return false;
+    }
+    return _isCurrentMediaSource(candidate);
+  }
+
+  bool _isCurrentMediaSource(String candidate) {
     final currentSource = _currentPlaybackSource;
     return candidate == state.currentSource ||
         candidate == currentSource?.remoteUrl ||
@@ -3738,13 +3778,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   Future<PlaybackProgress?> _resumeProgressForItem(String itemId) async {
-    _lastResumeProgressWasPending = false;
     _lastResumeProgressRequiresSeekAfterOpen = false;
     final pending = _pendingResumeProgress;
     if (pending != null) {
       if (pending.itemId == itemId) {
         _pendingResumeProgress = null;
-        _lastResumeProgressWasPending = true;
         _lastResumeProgressRequiresSeekAfterOpen =
             _pendingResumeProgressRequiresSeekAfterOpen;
         _pendingResumeProgressRequiresSeekAfterOpen = false;
@@ -4235,6 +4273,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           DramaPlaybackTarget(
             dramaId: item.content.id,
             episodeId: item.episode.id,
+            episodeNo: item.episode.number,
             position: nextPosition,
             duration: nextDuration,
             updatedAt: DateTime.now(),
@@ -4431,6 +4470,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   Future<void> _releaseSessionWindowFor(String reason) async {
     final stopwatch = Stopwatch()..start();
     final itemIds = _prepareManager.windowItemIds;
+    _activeSessionWindowAllowedIds = <String>{};
+    _sessionWindowGeneration += 1;
     await _prepareManager.release();
     stopwatch.stop();
     for (final itemId in itemIds) {

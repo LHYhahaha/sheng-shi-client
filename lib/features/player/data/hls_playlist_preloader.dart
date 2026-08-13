@@ -403,6 +403,16 @@ class HlsPlaylistPreloader {
           diagnostics.add('segment preheat max bytes reached');
           break;
         }
+        final remainingBytesAfterSegment =
+            maxPreheatBytes - segmentBytesPreheated;
+        if (remainingBytesAfterSegment <
+            _minRemainingBytesForNextSegmentPreheat) {
+          diagnostics.add(
+            'segment preheat remaining bytes too small '
+            'remaining=$remainingBytesAfterSegment',
+          );
+          break;
+        }
       }
     }
     diagnostics.add('segment preheat bytes=$segmentBytesPreheated');
@@ -466,6 +476,7 @@ class HlsPlaylistPreloader {
           return HlsNetworkResponse(
             statusCode: response.statusCode,
             bytes: response.rawBytes,
+            contentLength: response.contentLength,
           );
         },
       );
@@ -473,7 +484,7 @@ class HlsPlaylistPreloader {
     final response = HlsPlaylistHttpResponse(
       statusCode: shared.statusCode,
       body: utf8.decode(shared.bytes, allowMalformed: true),
-      contentLength: shared.bytes.length,
+      contentLength: shared.contentLength ?? shared.bytes.length,
       bytes: shared.bytes,
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {

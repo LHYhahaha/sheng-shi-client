@@ -7,14 +7,11 @@ import 'package:gradient_borders/box_borders/gradient_box_border.dart';
 import 'package:permission_handler/permission_handler.dart' as permissions;
 
 import '../../../../app/router/route_paths.dart';
-<<<<<<< HEAD
 import '../../../../core/analytics/analytics_definition.dart';
 import '../../../../core/analytics/drama_card_exposure.dart';
 import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/analytics/analytics_service.dart';
-=======
->>>>>>> 4968f98a5543f924dd83663ae2c58f2e35c7c770
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/notification/startup_notification_permission_reporter.dart';
 import '../../../../core/auth/user_info_store.dart';

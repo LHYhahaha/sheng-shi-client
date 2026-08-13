@@ -20,6 +20,7 @@ class MyListItem {
     MediaResource? coverResource,
     this.episodeId,
     this.watchSecond,
+    this.durationSecond,
     this.dramaStatus,
   }) : _coverResource = coverResource;
 
@@ -69,6 +70,9 @@ class MyListItem {
 
   /// 观看时间。
   final int? watchSecond;
+
+  /// 当前播放条目的总时长秒数。
+  final int? durationSecond;
 
   /// 短剧在架状态。
   ///

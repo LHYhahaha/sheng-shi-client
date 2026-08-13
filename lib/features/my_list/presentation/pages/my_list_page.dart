@@ -25,6 +25,7 @@ import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../search/domain/search_rankings.dart';
 import '../../../player/application/player_entry_preload_coordinator.dart';
+import '../../application/my_list_player_entry_intent.dart';
 import '../../application/my_list_hot_plays_controller.dart';
 import '../../application/my_list_controller.dart';
 import '../../domain/my_list_item.dart';
@@ -420,9 +421,12 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     }
     controller.closeAnyOpenPlayItem();
     final isCollection = state.selectedTab == MyListTab.collection;
-    final episodeId = item.episodeId != null && item.episodeId! > 0
-        ? item.episodeId.toString()
-        : '1';
+    final userActionAt = DateTime.now();
+    final entryIntent = buildMyListPlayerEntryIntent(
+      item: item,
+      isCollection: isCollection,
+      userActionAt: userActionAt,
+    );
     unawaited(
       ref
           .read(analyticsServiceProvider)
@@ -440,15 +444,26 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     preparePlayerEntryPreload(
       context,
       dramaId: item.dramaId.toString(),
-      episodeId: episodeId,
-      trigger: isCollection ? 'my_list_collection_item' : 'play_history_item',
+      episodeId: entryIntent.episodeId,
+      episodeNo: entryIntent.episodeNo,
+      trigger: entryIntent.trigger,
+      resumeHint: entryIntent.resumeProgress == null
+          ? null
+          : PlayerEntryResumeHint(
+              episodeId: entryIntent.episodeId,
+              episodeNo: item.currentEpisode,
+              position: entryIntent.resumeProgress!.position,
+              duration: entryIntent.resumeProgress!.duration,
+            ),
     );
     await context.push(
       RoutePaths.playerLocation(
-        dramaId: item.dramaId.toString(),
-        episodeId: episodeId,
-        trigger: isCollection ? 'my_list_collection_item' : 'play_history_item',
+        dramaId: entryIntent.dramaId,
+        episodeId: entryIntent.episodeId,
+        trigger: entryIntent.trigger,
+        userActionAtMs: userActionAt.millisecondsSinceEpoch,
       ),
+      extra: entryIntent,
     );
     await controller.refreshCurrentTabInPlace();
   }
@@ -1309,9 +1324,12 @@ class _DeleteBar extends StatelessWidget {
                     width: 18,
                     height: 18,
                     fit: BoxFit.contain,
-                    color: enabled
-                        ? AppColors.textPrimary
-                        : AppColors.textPrimary.withValues(alpha: 0.42),
+                    colorFilter: ColorFilter.mode(
+                      enabled
+                          ? AppColors.textPrimary
+                          : AppColors.textPrimary.withValues(alpha: 0.42),
+                      BlendMode.srcIn,
+                    ),
                   ),
                   // Icon(
                   //   Icons.delete_outline_rounded,

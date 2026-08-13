@@ -1,3 +1,5 @@
+import '../../home/domain/home_data.dart';
+
 enum SearchSortType {
   hottest('hottest'),
   newest('newest'),
@@ -40,6 +42,7 @@ class SearchResultDrama {
     required this.isVipOnly,
     required this.status,
     required this.episodeTotal,
+    this.watchProgress,
   });
 
   final String id;
@@ -54,4 +57,5 @@ class SearchResultDrama {
   final bool isVipOnly;
   final int status;
   final int episodeTotal;
+  final HomeWatchProgress? watchProgress;
 }

@@ -21,6 +21,7 @@ import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../application/search_history_controller.dart';
+import '../application/search_player_entry_intent.dart';
 import '../application/search_rankings_controller.dart';
 import '../application/search_results_controller.dart';
 import '../../player/application/player_entry_preload_coordinator.dart';
@@ -950,7 +951,7 @@ class _SubmittedSearchResults extends ConsumerWidget {
                             .read(searchResultsControllerProvider.notifier)
                             .reportSearchResultClick(drama.id),
                       );
-                      _openDrama(context, drama.id);
+                      _openDrama(context, drama);
                     },
                   ),
                 );
@@ -1013,7 +1014,7 @@ class _SubmittedSearchResults extends ConsumerWidget {
                   position: index + 1,
                   cardScene: 'search_recommend',
                 );
-                _openDrama(context, items[index].id);
+                _openDrama(context, items[index]);
               },
             ),
           ),
@@ -1292,20 +1293,36 @@ class _NetworkRetry extends StatelessWidget {
   }
 }
 
-void _openDrama(BuildContext context, String dramaId) {
+void _openDrama(BuildContext context, SearchResultDrama drama) {
+  final tappedAt = DateTime.now();
+  final entryIntent = buildSearchPlayerEntryIntent(
+    drama: drama,
+    userActionAt: tappedAt,
+  );
+  final progress = drama.watchProgress;
+  final resumeHint = progress?.canResume == true
+      ? PlayerEntryResumeHint(
+          episodeId: progress!.episodeId,
+          episodeNo: progress.episodeNo,
+          position: Duration(seconds: progress.positionSeconds),
+          duration: Duration(seconds: progress.durationSeconds),
+        )
+      : null;
   preparePlayerEntryPreload(
     context,
-    dramaId: dramaId,
-    episodeId: '1',
-    trigger: 'search_result_tap',
+    dramaId: entryIntent.dramaId,
+    episodeId: entryIntent.episodeId,
+    trigger: entryIntent.trigger,
+    resumeHint: resumeHint,
   );
   context.push(
     RoutePaths.playerLocation(
-      dramaId: dramaId,
-      episodeId: '1',
-      trigger: 'search_result_tap',
-      userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+      dramaId: entryIntent.dramaId,
+      episodeId: entryIntent.episodeId,
+      trigger: entryIntent.trigger,
+      userActionAtMs: tappedAt.millisecondsSinceEpoch,
     ),
+    extra: entryIntent,
   );
 }
 

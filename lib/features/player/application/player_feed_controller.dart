@@ -249,7 +249,11 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
         );
         return;
       }
-      final initialIndex = _episodeIndex(loadedItems, config.episodeId);
+      final initialIndex = _episodeIndex(
+        loadedItems,
+        config.episodeId,
+        episodeNo: config.episodeNo,
+      );
 
       state = state.copyWith(
         items: List<PlayerFeedItem>.unmodifiable(loadedItems),
@@ -577,7 +581,19 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
     return parts.where((part) => part.isNotEmpty).join(' ');
   }
 
-  int _episodeIndex(List<PlayerFeedItem> items, String? episodeId) {
+  int _episodeIndex(
+    List<PlayerFeedItem> items,
+    String? episodeId, {
+    int? episodeNo,
+  }) {
+    if (episodeNo != null) {
+      final numberIndex = items.indexWhere(
+        (item) => item.episode.number == episodeNo,
+      );
+      if (numberIndex != -1) {
+        return numberIndex;
+      }
+    }
     if (episodeId == null || episodeId.isEmpty || items.isEmpty) {
       return 0;
     }

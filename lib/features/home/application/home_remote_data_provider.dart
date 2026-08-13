@@ -62,7 +62,7 @@ class HomeRemoteData {
             watchProgress: homeDrama.watchProgress == null
                 ? null
                 : DramaWatchProgress(
-                    episodeId: homeDrama.watchProgress!.episodeId,
+                    episodeId: homeDrama.watchProgress!.episodeId.toString(),
                     episodeNo: homeDrama.watchProgress!.episodeNo,
                     positionSeconds: homeDrama.watchProgress!.positionSeconds,
                     durationSeconds: homeDrama.watchProgress!.durationSeconds,

@@ -7,6 +7,7 @@ class DramaPlaybackTarget {
   const DramaPlaybackTarget({
     required this.dramaId,
     required this.episodeId,
+    this.episodeNo,
     required this.position,
     required this.duration,
     required this.updatedAt,
@@ -14,6 +15,7 @@ class DramaPlaybackTarget {
 
   final String dramaId;
   final String episodeId;
+  final int? episodeNo;
   final Duration position;
   final Duration duration;
   final DateTime updatedAt;

@@ -109,6 +109,8 @@ class PlayerPage extends ConsumerStatefulWidget {
     this.initialPlaybackTrigger,
     this.initialUserActionAt,
     this.forYouHandoff,
+    this.initialResumeProgress,
+    this.initialEpisodeNo,
     this.initialExitRecommendationsForTesting,
     this.initialExitRecommendationPopupIdForTesting,
     super.key,
@@ -122,6 +124,8 @@ class PlayerPage extends ConsumerStatefulWidget {
       initialPlaybackTrigger = 'for_you_tab',
       initialUserActionAt = null,
       forYouHandoff = null,
+      initialResumeProgress = null,
+      initialEpisodeNo = null,
       initialExitRecommendationsForTesting = null,
       initialExitRecommendationPopupIdForTesting = null;
 
@@ -132,6 +136,8 @@ class PlayerPage extends ConsumerStatefulWidget {
   final String? initialPlaybackTrigger;
   final DateTime? initialUserActionAt;
   final ForYouPlayerHandoff? forYouHandoff;
+  final PlaybackProgress? initialResumeProgress;
+  final int? initialEpisodeNo;
   final List<PopupExitRecommendation>? initialExitRecommendationsForTesting;
   final int? initialExitRecommendationPopupIdForTesting;
 
@@ -427,6 +433,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         widget.initialExitRecommendationsForTesting;
     _exitRecommendationPopupId =
         widget.initialExitRecommendationPopupIdForTesting;
+    _resumeProgress = widget.initialResumeProgress;
     _playbackController.recordPlaybackTiming(
       'player page init',
       details: [
@@ -434,8 +441,22 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         'hideShellNavigation=${widget.hideShellNavigation}',
         'dramaId=${widget.dramaId ?? 'null'}',
         'episodeId=${widget.episodeId ?? 'null'}',
+        'episodeNo=${widget.initialEpisodeNo ?? 'null'}',
+        'hasInitialResumeProgress=${widget.initialResumeProgress != null}',
       ].join(' '),
     );
+    final initialResumeProgress = widget.initialResumeProgress;
+    if (initialResumeProgress != null) {
+      _playbackController.recordPlaybackTiming(
+        'initial route resume progress',
+        itemId: initialResumeProgress.itemId,
+        details: [
+          'positionMs=${initialResumeProgress.position.inMilliseconds}',
+          'durationMs=${initialResumeProgress.duration.inMilliseconds}',
+          'canResume=${initialResumeProgress.canResume}',
+        ].join(' '),
+      );
+    }
     _playbackController.recordPlaybackUserAction(
       widget.initialPlaybackTrigger ?? 'player_route_enter',
       trigger: widget.initialPlaybackTrigger ?? 'player_route_enter',
@@ -693,6 +714,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       PlayerFeedMode.singleDrama => PlayerFeedConfig.singleDrama(
         dramaId: widget.dramaId!,
         episodeId: _initialResumeEpisodeId ?? widget.episodeId!,
+        episodeNo: widget.initialEpisodeNo,
       ),
       PlayerFeedMode.forYou => const PlayerFeedConfig.forYou(),
     };
@@ -1025,6 +1047,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       items,
       source: 'home',
       episodeId: hint.episodeId,
+      episodeNo: hint.episodeNo,
       position: hint.position,
       duration: hint.duration,
     );
@@ -1040,6 +1063,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       items,
       source: source,
       episodeId: target.episodeId,
+      episodeNo: target.episodeNo,
       position: target.position,
       duration: target.duration,
     );
@@ -1049,12 +1073,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     List<PlayerFeedItem> items, {
     required String source,
     required String episodeId,
+    int? episodeNo,
     required Duration position,
     required Duration duration,
   }) {
     if (position <= Duration.zero || duration <= Duration.zero) return null;
     final item = items.where((candidate) {
-      return candidate.episode.id == episodeId &&
+      return (candidate.episode.id == episodeId ||
+              (episodeNo != null && candidate.episode.number == episodeNo)) &&
           _feedEngine.accessPresentationFor(candidate) ==
               PlayerAccessPresentationState.playable;
     }).firstOrNull;

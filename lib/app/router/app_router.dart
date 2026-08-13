@@ -20,6 +20,7 @@ import '../../features/player/presentation/pages/ad_unlock_page.dart';
 import '../../features/player/domain/player_content.dart';
 import '../../features/player/domain/for_you_player_handoff.dart';
 import '../../features/player/application/player_entry_preload_coordinator.dart';
+import '../../features/player/domain/initial_playback_intent.dart';
 import '../../features/profile/presentation/pages/language_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/profile/presentation/pages/profile_feedback_webview_page.dart';
@@ -148,6 +149,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final forYouHandoff = state.extra is ForYouPlayerHandoff
               ? state.extra! as ForYouPlayerHandoff
               : null;
+          final initialIntent = state.extra is InitialPlaybackIntent
+              ? state.extra! as InitialPlaybackIntent
+              : null;
 
           // 所有普通播放器路由统一从这里提交用户点击预取；For You handoff 已持有
           // 当前播放器位置/session，不能重复启动普通详情/HLS 预热。
@@ -162,6 +166,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   .preparePlayerRoute(
                     dramaId: dramaId,
                     episodeId: episodeId,
+                    episodeNo: initialIntent?.episodeNo,
                     trigger: state.uri.queryParameters['trigger'],
                   );
             });
@@ -178,6 +183,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 ? null
                 : DateTime.fromMillisecondsSinceEpoch(userActionAtMs),
             forYouHandoff: forYouHandoff,
+            initialResumeProgress: initialIntent?.resumeProgress,
+            initialEpisodeNo: initialIntent?.episodeNo,
           );
         },
       ),

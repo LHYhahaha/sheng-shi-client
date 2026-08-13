@@ -25,6 +25,7 @@ class SharedPreferencesDramaPlaybackTargetRepository
       return DramaPlaybackTarget(
         dramaId: dramaId,
         episodeId: json['episodeId'] as String? ?? '',
+        episodeNo: json['episodeNo'] as int?,
         position: Duration(milliseconds: json['positionMs'] as int? ?? 0),
         duration: Duration(milliseconds: json['durationMs'] as int? ?? 0),
         updatedAt: updatedAt,
@@ -42,6 +43,7 @@ class SharedPreferencesDramaPlaybackTargetRepository
         '$_prefix${target.dramaId}',
         jsonEncode({
           'episodeId': target.episodeId,
+          if (target.episodeNo != null) 'episodeNo': target.episodeNo,
           'positionMs': target.position.inMilliseconds,
           'durationMs': target.duration.inMilliseconds,
           'updatedAtMs': target.updatedAt.millisecondsSinceEpoch,
