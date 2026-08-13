@@ -3109,9 +3109,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       _deferredPreloadIndex = null;
       return;
     }
-    if (!_preloadReadinessReached || state.isBuffering) {
+    if (!state.hasFirstFrame || state.isBuffering) {
       _logTiming(
-        'preload deferred awaiting stable playback',
+        'preload deferred awaiting first frame',
         itemId: state.currentItemId,
         source: state.currentSource,
         details: _timingDetails([

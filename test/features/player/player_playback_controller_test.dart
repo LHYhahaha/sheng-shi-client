@@ -2196,7 +2196,7 @@ void main() {
   );
 
   test(
-    'opening playback defers next prepared session until first frame is stable',
+    'opening playback starts next prepared session once first frame is visible',
     () async {
       var index = 0;
       final currentOpenCompleter = Completer<void>();
@@ -2236,6 +2236,14 @@ void main() {
       currentSession.emitWidth(1280);
       currentSession.emitPosition(const Duration(milliseconds: 300));
       await playFuture;
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+
+      expect(preparedSession.openedSources, [_secondVideoUrl]);
+      expect(
+        controller.exportTimingReport(),
+        contains('preload deferred flush'),
+      );
+
       currentSession.emitPosition(const Duration(milliseconds: 1200));
       await Future<void>.delayed(const Duration(milliseconds: 80));
 
