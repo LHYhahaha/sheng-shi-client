@@ -39,6 +39,7 @@ class PlayerContent {
     this.isFavorited,
     this.likeCountDelta = 0,
     this.episodeTotal = 0,
+    this.watchProgress,
     this.recommendationsStatus = PlayerRecommendationLoadStatus.loaded,
   });
 
@@ -127,6 +128,27 @@ class PlayerContent {
   ///
   /// 从服务端返回的总集数，用于动态生成 episode tab。
   final int episodeTotal;
+
+  /// 详情接口下发的权威续播记录；只用于普通播放器初始目标选择。
+  final PlayerWatchProgress? watchProgress;
+}
+
+class PlayerWatchProgress {
+  const PlayerWatchProgress({
+    required this.episodeId,
+    required this.episodeNo,
+    required this.position,
+    required this.duration,
+    required this.progressPercent,
+  });
+
+  final String episodeId;
+  final int episodeNo;
+  final Duration position;
+  final Duration duration;
+  final int progressPercent;
+
+  bool get hasHistory => episodeId != '0' && position > Duration.zero;
 }
 
 /// 播放页 episode 模型。

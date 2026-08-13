@@ -455,13 +455,18 @@ class HlsPlaylistPreloader {
       contentLength: shared.bytes.length,
       bytes: shared.bytes,
     );
-    if (generation != _generation) {
-      throw const HlsPlaylistPreloadCancelledException();
-    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw HlsPlaylistPrefetchException(
         'HLS request failed with HTTP ${response.statusCode}: $uri',
       );
+    }
+    // 点击接管会使 startup generation 失效，但此前已经开始的 playlist 请求无需
+    // 浪费：先把成功字节写入共享缓存，随后真实播放器可直接命中。generation 检查
+    // 保留在写缓存之后，确保取消的预热不会继续解析 playlist 或拉取任何分片。
+    _cacheStore?.write(uri.toString(), response.rawBytes);
+    _writeDisk(uri, response.rawBytes, contentType: _playlistContentType);
+    if (generation != _generation) {
+      throw const HlsPlaylistPreloadCancelledException();
     }
     return response;
   }

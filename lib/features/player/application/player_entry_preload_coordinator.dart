@@ -1,9 +1,11 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'player_startup_preload_controller.dart';
+
+export 'player_startup_preload_controller.dart' show PlayerEntryResumeHint;
 
 /// 普通播放器入口的统一预取调度。
 ///
@@ -15,6 +17,27 @@ final playerEntryPreloadCoordinatorProvider =
       PlayerEntryPreloadCoordinator.new,
     );
 
+/// 在用户点击普通播放器入口的同一事件循环内提交预热。
+///
+/// 入口 UI 不必持有 WidgetRef；统一从当前 ProviderScope 取得 coordinator。路由层
+/// 仍会做一次去重兜底，保证深链、通知等非点击入口也覆盖到。
+void preparePlayerEntryPreload(
+  BuildContext context, {
+  required String dramaId,
+  required String episodeId,
+  required String trigger,
+  PlayerEntryResumeHint? resumeHint,
+}) {
+  ProviderScope.containerOf(context, listen: false)
+      .read(playerEntryPreloadCoordinatorProvider.notifier)
+      .preparePlayerRoute(
+        dramaId: dramaId,
+        episodeId: episodeId,
+        trigger: trigger,
+        resumeHint: resumeHint,
+      );
+}
+
 class PlayerEntryPreloadState {
   const PlayerEntryPreloadState({
     this.dramaId,
@@ -22,6 +45,7 @@ class PlayerEntryPreloadState {
     this.trigger,
     this.isUserIntent = false,
     this.requestedAt,
+    this.resumeHint,
   });
 
   final String? dramaId;
@@ -29,6 +53,7 @@ class PlayerEntryPreloadState {
   final String? trigger;
   final bool isUserIntent;
   final DateTime? requestedAt;
+  final PlayerEntryResumeHint? resumeHint;
 
   bool get isFresh =>
       requestedAt != null &&
@@ -55,6 +80,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
     required String dramaId,
     required String episodeId,
     String? trigger,
+    PlayerEntryResumeHint? resumeHint,
   }) {
     _prepare(
       dramaId: dramaId,
@@ -63,6 +89,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
       // `1` is the shared default for drama cards. A concrete route episode
       // (history/push/deep link) must win over a generic resume guess.
       preferredEpisodeId: episodeId == '1' ? null : episodeId,
+      resumeHint: resumeHint,
     );
   }
 
@@ -71,11 +98,18 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
     required String trigger,
     required bool isUserIntent,
     String? preferredEpisodeId,
+    PlayerEntryResumeHint? resumeHint,
   }) {
     if (dramaId.isEmpty) return;
     final current = state;
+    // 卡片点击已携带首页的 watch_progress；随后路由层会以没有 hint 的兜底调用
+    // 一次。后者不能覆盖前者，否则会重新启动详情/playlist 预热并丢失目标集。
+    final routeFallbackCanReuseHint =
+        resumeHint == null && current.resumeHint != null;
     if (current.dramaId == dramaId &&
         current.preferredEpisodeId == preferredEpisodeId &&
+        (_sameResumeHint(current.resumeHint, resumeHint) ||
+            routeFallbackCanReuseHint) &&
         current.isFresh) {
       // 同剧的可见预取已在跑或完成；点击只提升语义优先级，不重启详情/HLS 请求。
       if (isUserIntent && !current.isUserIntent) {
@@ -85,6 +119,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
           trigger: trigger,
           isUserIntent: true,
           requestedAt: current.requestedAt,
+          resumeHint: current.resumeHint,
         );
         _log('promote existing candidate', dramaId: dramaId, trigger: trigger);
       } else {
@@ -108,6 +143,7 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
       trigger: trigger,
       isUserIntent: isUserIntent,
       requestedAt: DateTime.now(),
+      resumeHint: resumeHint,
     );
     unawaited(
       ref
@@ -115,9 +151,18 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
           .preloadFirstPlayableDramaId(
             dramaId,
             preferredEpisodeId: preferredEpisodeId,
+            resumeHint: resumeHint,
           ),
     );
   }
+
+  bool _sameResumeHint(
+    PlayerEntryResumeHint? left,
+    PlayerEntryResumeHint? right,
+  ) =>
+      left?.episodeId == right?.episodeId &&
+      left?.position == right?.position &&
+      left?.duration == right?.duration;
 
   void _log(
     String event, {

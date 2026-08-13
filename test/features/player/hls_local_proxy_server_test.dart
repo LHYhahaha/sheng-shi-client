@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:drama_client/features/player/data/hls_local_proxy_server.dart';
+import 'package:drama_client/features/player/data/hls_network_request_coordinator.dart';
 import 'package:drama_client/features/player/data/hls_traffic_gate.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -96,6 +97,26 @@ void main() {
       expect(client.totalGetCount, 0);
     },
   );
+
+  test('playlist proxy uses the streaming singleflight pathway', () async {
+    final playlistUri = Uri.parse('https://cdn.example.com/hls/media.m3u8');
+    final client = _StreamingFakeProxyHttpClient(
+      Stream<List<int>>.fromIterable([
+        utf8.encode('#EXTM3U\n#EXTINF:4.0,\nseg-1.ts\n'),
+      ]),
+    );
+    final coordinator = HlsNetworkRequestCoordinator();
+    final server = HlsLocalProxyServer(
+      client: client,
+      networkCoordinator: coordinator,
+    );
+    addTearDown(server.stop);
+
+    final proxyUrl = await server.proxyUrlFor(playlistUri.toString());
+    expect(await _readString(Uri.parse(proxyUrl)), contains('/segment?url='));
+    expect(client.openCount, 1);
+    expect(client.totalGetCount, 0);
+  });
 
   test('For You suspension blocks only new remote fetches', () async {
     final playlistUri = Uri.parse('https://cdn.example.com/hls/media.m3u8');
@@ -222,6 +243,27 @@ class _FakeProxyHttpClient implements HlsLocalProxyHttpClient {
   @override
   void releasePending() {
     releasePendingCount += 1;
+  }
+}
+
+class _StreamingFakeProxyHttpClient extends _FakeProxyHttpClient
+    implements HlsNetworkStreamingHttpClient {
+  _StreamingFakeProxyHttpClient(this._stream) : super(const {});
+
+  final Stream<List<int>> _stream;
+  var openCount = 0;
+
+  @override
+  Future<HlsNetworkStreamResponse> open(
+    Uri uri, {
+    required Duration timeout,
+  }) async {
+    openCount += 1;
+    return HlsNetworkStreamResponse(
+      statusCode: HttpStatus.ok,
+      contentType: 'application/vnd.apple.mpegurl',
+      chunks: _stream,
+    );
   }
 }
 

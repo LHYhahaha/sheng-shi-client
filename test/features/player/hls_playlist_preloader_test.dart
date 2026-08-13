@@ -363,8 +363,9 @@ void main() {
     'cancelled pending prefetch returns cancelled and ignores late success',
     () async {
       final client = _FakeHlsPlaylistHttpClient(pending: true);
+      final cacheStore = HlsLocalCacheStore();
       final manager = HlsPlayerPlaybackPreloadManager(
-        preloader: HlsPlaylistPreloader(client: client),
+        preloader: HlsPlaylistPreloader(client: client, cacheStore: cacheStore),
       );
 
       final preloadFuture = manager.preload(
@@ -382,6 +383,10 @@ void main() {
 
       expect(result.status, PlaybackPreloadStatus.cancelled);
       expect(client.releasePendingCount, 0);
+      expect(
+        cacheStore.contains('https://cdn.example.test/drama/ep1.m3u8'),
+        isTrue,
+      );
     },
   );
 

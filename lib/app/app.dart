@@ -31,6 +31,7 @@ import '../core/runtime/install_id_provider.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/bottom_tab_config/application/bottom_tab_config_controller.dart';
 import '../features/pay/application/payment_loading_controller.dart';
+import '../features/player/application/player_entry_preload_coordinator.dart';
 import '../features/popup/application/popup_entry_controller.dart';
 import '../features/popup/application/popup_analytics.dart';
 import '../features/popup/domain/popup.dart';
@@ -138,6 +139,12 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
 
     // 当前 App Link 仅支持分享短剧播放器链接；分享没有稳定配置 ID，按约定留空。
     _prepareEntrySource(type: 'share_deeplink');
+    preparePlayerEntryPreload(
+      context,
+      dramaId: dramaId,
+      episodeId: '1',
+      trigger: 'app_link',
+    );
 
     final location = RoutePaths.playerLocation(
       dramaId: dramaId,
@@ -201,6 +208,12 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     if (type == 'player' && dramaId != null && dramaId.isNotEmpty) {
       _cancelPopupForCurrentRouteExit();
       _preparePushEntrySource(notification);
+      preparePlayerEntryPreload(
+        context,
+        dramaId: dramaId,
+        episodeId: episodeId?.isNotEmpty == true ? episodeId! : '1',
+        trigger: 'fcm_notification',
+      );
       router.go(
         RoutePaths.playerLocation(
           dramaId: dramaId,
@@ -218,6 +231,12 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         dramaId.isNotEmpty) {
       _cancelPopupForCurrentRouteExit();
       _preparePushEntrySource(notification);
+      preparePlayerEntryPreload(
+        context,
+        dramaId: dramaId,
+        episodeId: '1',
+        trigger: 'fcm_notification_detail',
+      );
       router.go(
         RoutePaths.playerLocation(
           dramaId: dramaId,
@@ -566,6 +585,12 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     }
     _finishActivePopupFlow();
     _preparePopupEntrySource(popup);
+    preparePlayerEntryPreload(
+      context,
+      dramaId: '$dramaId',
+      episodeId: '1',
+      trigger: 'popup',
+    );
     router.push(
       RoutePaths.playerLocation(
         dramaId: '$dramaId',

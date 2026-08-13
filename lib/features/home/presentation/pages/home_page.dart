@@ -506,6 +506,31 @@ class _HomePageState extends ConsumerState<HomePage> {
                                       ),
                                 );
                                 final tappedAt = DateTime.now();
+                                preparePlayerEntryPreload(
+                                  context,
+                                  dramaId: item.id,
+                                  episodeId: '1',
+                                  trigger: 'home_card_tap',
+                                  resumeHint:
+                                      item.watchProgress?.canResume == true
+                                      ? PlayerEntryResumeHint(
+                                          episodeId:
+                                              item.watchProgress!.episodeId,
+                                          episodeNo:
+                                              item.watchProgress!.episodeNo,
+                                          position: Duration(
+                                            seconds: item
+                                                .watchProgress!
+                                                .positionSeconds,
+                                          ),
+                                          duration: Duration(
+                                            seconds: item
+                                                .watchProgress!
+                                                .durationSeconds,
+                                          ),
+                                        )
+                                      : null,
+                                );
                                 context.push(
                                   RoutePaths.playerLocation(
                                     dramaId: item.id,
@@ -596,6 +621,12 @@ class _HomePageState extends ConsumerState<HomePage> {
             analyticsBanner,
           );
           if (mounted) {
+            preparePlayerEntryPreload(
+              context,
+              dramaId: value,
+              episodeId: '1',
+              trigger: 'home_banner',
+            );
             context.push(
               RoutePaths.playerLocation(
                 dramaId: value,

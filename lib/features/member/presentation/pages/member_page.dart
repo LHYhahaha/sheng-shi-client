@@ -15,6 +15,7 @@ import '../../../../core/network/api_exception.dart';
 import '../../../../core/toast/app_center_toast.dart';
 import '../../../../features/auth/application/auth_controller.dart';
 import '../../../../features/entitlement/application/entitlement_controller.dart';
+import '../../../../features/player/application/player_entry_preload_coordinator.dart';
 import '../../../../features/membership/application/membership_controller.dart';
 import '../../../../features/membership/presentation/pages/membership_page.dart';
 import '../../../../features/home/presentation/widgets/vip_only_dramas_section.dart';
@@ -276,6 +277,12 @@ class _MemberPageState extends ConsumerState<MemberPage> {
                           'position': position,
                         }),
                       ),
+                );
+                preparePlayerEntryPreload(
+                  context,
+                  dramaId: drama.id,
+                  episodeId: '1',
+                  trigger: 'member_center_vip_only_drama_tap',
                 );
                 context.push(
                   RoutePaths.playerLocation(

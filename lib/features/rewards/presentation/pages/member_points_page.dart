@@ -18,6 +18,7 @@ import '../../../../core/auth/user_info_store.dart';
 import '../../../../core/toast/app_center_toast.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
+import '../../../player/application/player_entry_preload_coordinator.dart';
 import '../../../home/application/vip_only_dramas_provider.dart';
 import '../../../home/presentation/widgets/vip_only_dramas_section.dart';
 import '../../../membership/presentation/membership_route_result.dart';
@@ -293,6 +294,12 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
                           'position': position,
                         }),
                       ),
+                );
+                preparePlayerEntryPreload(
+                  context,
+                  dramaId: drama.id,
+                  episodeId: '1',
+                  trigger: 'member_points_vip_only_drama_tap',
                 );
                 context.push(
                   RoutePaths.playerLocation(
@@ -1926,6 +1933,12 @@ class _VipSeriesPanel extends ConsumerWidget {
                       'position': position,
                     }),
                   ),
+            );
+            preparePlayerEntryPreload(
+              context,
+              dramaId: drama.id,
+              episodeId: '1',
+              trigger: 'member_points_vip_only_drama_tap',
             );
             context.push(
               RoutePaths.playerLocation(

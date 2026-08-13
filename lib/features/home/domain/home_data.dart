@@ -86,6 +86,8 @@ class HomeDrama {
     required this.status,
     required this.episodeTotal,
     required this.tags,
+    this.isFavorited = false,
+    this.watchProgress,
   });
 
   final String id;
@@ -99,4 +101,27 @@ class HomeDrama {
   final int status;
   final int episodeTotal;
   final List<String> tags;
+  final bool isFavorited;
+  final HomeWatchProgress? watchProgress;
+}
+
+/// 首页剧卡随接口下发的用户观看进度。
+///
+/// 当前仅保留并向后续统一播放器入口传递；首页展示层不据此自行改变跳转集数。
+class HomeWatchProgress {
+  const HomeWatchProgress({
+    required this.episodeId,
+    required this.episodeNo,
+    required this.positionSeconds,
+    required this.progressPercent,
+    required this.durationSeconds,
+  });
+
+  final String episodeId;
+  final int episodeNo;
+  final int positionSeconds;
+  final int progressPercent;
+  final int durationSeconds;
+
+  bool get hasHistory => episodeId != '0' && positionSeconds > 0;
 }

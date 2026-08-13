@@ -42,6 +42,15 @@ class PlayerContentMapper {
       favoriteCount: dto.favoriteCount,
       isFavorited: dto.isFavorited,
       episodeTotal: dto.episodeTotal,
+      watchProgress: dto.watchProgress == null
+          ? null
+          : PlayerWatchProgress(
+              episodeId: dto.watchProgress!.episodeId.toString(),
+              episodeNo: dto.watchProgress!.episodeNo,
+              position: Duration(seconds: dto.watchProgress!.watchSecond),
+              duration: Duration(seconds: dto.watchProgress!.durationSecond),
+              progressPercent: dto.watchProgress!.progressPercent,
+            ),
       recommendationsStatus: recommendationsStatus,
     );
   }
@@ -167,6 +176,17 @@ class PlayerContentMapper {
     };
     final value = dto.viewingEntitlementType?.trim().toLowerCase();
     if (value != null && supported.contains(value)) return value;
+
+    // 兼容部分详情灰度返回的数值权益来源。埋点枚举没有独立的“运营赠送/活动”
+    // 值，两者统一归到 drama_gift。
+    switch (value) {
+      case '1':
+        return 'coin';
+      case '2':
+        return 'vip';
+      case '3' || '4':
+        return 'drama_gift';
+    }
 
     // 兼容旧接口尚未返回该字段时的保守推导。
     if (dto.isUnlocked == 1) return 'free';

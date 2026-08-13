@@ -36,11 +36,11 @@ import '../../data/player_exit_recommendation_history_repository_provider.dart';
 import '../../../auth/application/auth_controller.dart';
 import '../../../auth/domain/auth_session.dart';
 import '../../application/player_feed_controller.dart';
+import '../../application/player_entry_preload_coordinator.dart';
 import '../../application/player_feed_engine.dart';
 import '../../application/player_runtime_coordinator.dart';
 import '../../application/player_feed_engine_access_flow.dart';
 import '../../application/for_you_playback_progress_controller.dart';
-import '../../application/player_like_controller.dart';
 import '../../application/player_overlay_orchestrator.dart';
 import '../../application/player_performance_policy_provider.dart';
 import '../../application/player_playback_controller.dart';
@@ -49,7 +49,6 @@ import '../../application/player_rebuild_diagnostics.dart';
 import '../../application/player_session_registry.dart';
 import '../../application/player_ui_controller.dart';
 import '../../application/player_viewport_controller.dart';
-import '../../data/dto/watch_progress_dto.dart';
 import '../../data/playback_progress_repository_provider.dart';
 import '../../data/player_content_repository_provider.dart';
 import '../../data/player_remote_data_source_provider.dart';
@@ -136,10 +135,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   static const _autoAdvanceDuration = Duration(milliseconds: 300);
   static const _pageTransitionDuration = Duration(milliseconds: 260);
   static const _dimmedOverlayOpacity = 0.64;
-  // 普通播放器若先从 0 秒 open、再等远端续播进度回调 seek，会同时浪费起播
-  // 初始化分片和目标位置分片。实测进度接口常在 300~1100ms 返回，给一次有限
-  // 等待能让首次 open 直接使用正确 episode/position；超过该预算才走 late apply。
-  static const _remoteResumeInitialWait = Duration(milliseconds: 1200);
   static const _lockedNextEpisodeRewind = Duration(seconds: 8);
   static const _forYouNearEndRestartThreshold = Duration(seconds: 8);
 
@@ -150,7 +145,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   late final AppModalService _modalService;
   AppShellBottomNavigationVisible? _shellChrome;
   PlaybackProgress? _resumeProgress;
-  WatchProgressDto? _startupRemoteWatchProgress;
+  PlayerWatchProgress? _startupRemoteWatchProgress;
   String? _initialResumeEpisodeId;
   bool _isSeekDragging = false;
   bool _isModalOpen = false;
@@ -460,10 +455,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         elapsed: startupStopwatch.elapsed,
         details: 'feedMode=${widget.feedMode.name}',
       );
-      final remoteResumeFuture = widget.forYouHandoff == null
-          ? _loadRemoteResumeProgress()
-          : null;
-
       final uiController = ref.read(
         playerUiControllerProvider(_sessionKey).notifier,
       );
@@ -475,16 +466,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         _syncAutoImmersiveBlockers();
       }
 
-      // 姣忔杩涘叆鎾斁椤垫椂锛屽埛鏂扮偣璧炵姸鎬?
-      if (widget.feedMode == PlayerFeedMode.singleDrama &&
-          widget.dramaId != null) {
-        final likeController = ref.read(
-          playerLikeControllerProvider(widget.dramaId!).notifier,
-        );
-        unawaited(likeController.refreshLikeStatus());
-      }
+      // 收藏状态由随后加载的 `/api/home/detail.is_favorited` 同步到 like controller。
+      // 不再在进入播放器时额外请求 `/api/user/short/follow/check`。
 
-      await _loadFeedForTiming(remoteResumeFuture: remoteResumeFuture);
+      await _loadFeedForTiming();
       _playbackController.recordPlaybackTiming(
         'player startup microtask end',
         elapsed: startupStopwatch.elapsed,
@@ -694,99 +679,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     };
   }
 
-  Future<void> _loadRemoteResumeProgress() async {
-    if (widget.feedMode != PlayerFeedMode.singleDrama ||
-        widget.dramaId == null ||
-        widget.forYouHandoff != null ||
-        !ref.read(useRemotePlayerApiProvider)) {
-      _playbackController.recordPlaybackTiming(
-        'remote resume skipped',
-        details: [
-          'feedMode=${widget.feedMode.name}',
-          'hasDramaId=${widget.dramaId != null}',
-          'hasHandoff=${widget.forYouHandoff != null}',
-          'useRemote=${ref.read(useRemotePlayerApiProvider)}',
-        ].join(' '),
-      );
-      return;
-    }
-    final dramaId = int.tryParse(widget.dramaId!);
-    if (dramaId == null) {
-      _playbackController.recordPlaybackTiming(
-        'remote resume skipped',
-        details: 'reason=invalid_drama_id dramaId=${widget.dramaId}',
-      );
-      return;
-    }
-    final stopwatch = Stopwatch()..start();
-    _playbackController.recordPlaybackTiming(
-      'remote resume fetch start',
-      details: 'dramaId=$dramaId',
-    );
-    try {
-      final watchProgress = await ref
-          .read(playerRemoteWatchProgressCacheProvider)
-          .get(dramaId);
-      _playbackController.recordPlaybackTiming(
-        'remote resume fetch end',
-        elapsed: stopwatch.elapsed,
-        details: [
-          'dramaId=$dramaId',
-          'hasProgress=${watchProgress != null}',
-          if (watchProgress != null) 'episodeId=${watchProgress.episodeId}',
-          if (watchProgress != null) 'watchSecond=${watchProgress.watchSecond}',
-          if (watchProgress != null)
-            'durationSecond=${watchProgress.durationSecond}',
-        ].join(' '),
-      );
-      if (watchProgress == null || !mounted) {
-        return;
-      }
-      final remotePosition = Duration(seconds: watchProgress.watchSecond);
-      final remoteDuration = Duration(seconds: watchProgress.durationSecond);
-      final remoteCanResume =
-          remotePosition > Duration.zero &&
-          remoteDuration > Duration.zero &&
-          remotePosition < remoteDuration - const Duration(seconds: 2);
-      _startupRemoteWatchProgress = watchProgress;
-      if (remoteCanResume) {
-        _initialResumeEpisodeId = watchProgress.episodeId.toString();
-      }
-    } catch (error) {
-      _playbackController.recordPlaybackTiming(
-        'remote resume fetch failed',
-        elapsed: stopwatch.elapsed,
-        error: error,
-        details: 'dramaId=$dramaId',
-      );
-      developer.log('Failed to fetch watch progress: $error', error: error);
-    }
-  }
-
-  Future<void> _loadFeedForTiming({Future<void>? remoteResumeFuture}) async {
+  Future<void> _loadFeedForTiming() async {
     final feedProvider = playerFeedControllerProvider(_sessionKey);
     final feedController = ref.read(feedProvider.notifier);
-    var remoteResumeTimedOut = false;
-    if (remoteResumeFuture != null) {
-      final waitStopwatch = Stopwatch()..start();
-      _playbackController.recordPlaybackTiming('remote resume wait start');
-      await remoteResumeFuture.timeout(
-        _remoteResumeInitialWait,
-        onTimeout: () {
-          remoteResumeTimedOut = true;
-        },
-      );
-      _playbackController.recordPlaybackTiming(
-        remoteResumeTimedOut
-            ? 'remote resume wait timeout'
-            : 'remote resume wait end',
-        elapsed: waitStopwatch.elapsed,
-        details: 'budgetMs=${_remoteResumeInitialWait.inMilliseconds}',
-      );
-      if (!mounted) {
-        return;
-      }
-    }
     final config = _feedConfig;
     final stopwatch = Stopwatch()..start();
     _playbackController.recordPlaybackTiming(
@@ -807,10 +702,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (widget.forYouHandoff != null) {
         _applyInitialForYouHandoffProgress(feedState);
       } else {
-        await _applyStartupRemoteResumeProgress(feedState);
-        if (remoteResumeTimedOut && remoteResumeFuture != null) {
-          unawaited(_applyLateRemoteResumeProgress(remoteResumeFuture));
-        }
+        _startupRemoteWatchProgress =
+            feedState.currentItem!.content.watchProgress;
+        await _applyDetailWatchProgress(feedState);
       }
       if (!mounted) {
         return;
@@ -856,18 +750,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (widget.feedMode == PlayerFeedMode.singleDrama) {
       _syncAutoImmersiveBlockers();
     }
-  }
-
-  Future<void> _applyLateRemoteResumeProgress(Future<void> resumeFuture) async {
-    await resumeFuture;
-    if (!mounted || _startupRemoteWatchProgress == null) {
-      return;
-    }
-    _playbackController.recordPlaybackTiming('remote resume late apply start');
-    await _applyStartupRemoteResumeProgress(
-      ref.read(playerFeedControllerProvider(_sessionKey)),
-    );
-    _playbackController.recordPlaybackTiming('remote resume late apply end');
   }
 
   void _applyInitialForYouHandoffProgress(PlayerFeedState feedState) {
@@ -947,9 +829,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         position >= duration - _lockedNextEpisodeRewind;
   }
 
-  Future<void> _applyStartupRemoteResumeProgress(
-    PlayerFeedState feedState,
-  ) async {
+  Future<void> _applyDetailWatchProgress(PlayerFeedState feedState) async {
     final watchProgress = _startupRemoteWatchProgress;
     if (watchProgress == null || feedState.items.isEmpty) {
       return;
@@ -970,8 +850,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
 
     var targetIndex = remoteItemIndex;
-    final remotePosition = Duration(seconds: watchProgress.watchSecond);
-    final remoteDuration = Duration(seconds: watchProgress.durationSecond);
+    if (!watchProgress.hasHistory) {
+      _playbackController.recordPlaybackTiming(
+        'detail watch progress empty',
+        details: 'episodeNo=${watchProgress.episodeNo}',
+      );
+      return;
+    }
+    final remotePosition = watchProgress.position;
+    final remoteDuration = watchProgress.duration;
     final canResume =
         remotePosition > Duration.zero &&
         remoteDuration > Duration.zero &&
@@ -1067,10 +954,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   int _indexForRemoteWatchProgress(
     List<PlayerFeedItem> items,
-    WatchProgressDto watchProgress,
+    PlayerWatchProgress watchProgress,
   ) {
     return items.indexWhere((item) {
-      return item.episode.id == watchProgress.episodeId.toString() ||
+      return item.episode.id == watchProgress.episodeId ||
           item.episode.number == watchProgress.episodeNo;
     });
   }
@@ -2505,6 +2392,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   ) {
     _cancelExitRecommendationRequestIfPending();
     _isLeavingRoute = true;
+    preparePlayerEntryPreload(
+      context,
+      dramaId: '${recommendation.id}',
+      episodeId: '1',
+      trigger: 'exit_recommendation',
+    );
     final location = RoutePaths.playerLocation(
       dramaId: '${recommendation.id}',
       episodeId: '1',
@@ -2688,6 +2581,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         return;
       }
 
+      preparePlayerEntryPreload(
+        context,
+        dramaId: recommendation.id,
+        episodeId: '1',
+        trigger: 'recommendation',
+      );
       final location = RoutePaths.playerLocation(
         dramaId: recommendation.id,
         episodeId: '1',
@@ -2741,37 +2640,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _retryPlaybackForItem(PlayerFeedItem item) async {
-    // 閲嶈瘯鍓嶉噸鏂拌幏鍙栧巻鍙叉挱鏀捐繘搴︼紝鍥犱负 _pendingResumeProgress
-    // 鍦ㄧ涓€娆?playItem 鏃跺凡缁忚娑堣垂骞舵竻绌猴紙绗?737 琛岋級
+    // 重试沿用本次详情快照里的续播目标，不再补请求旧 progress 接口。播放失败后
+    // 分片通常已进本地缓存，立即按原目标重开比再等待一轮网络更快。
+    final detailProgress = item.content.watchProgress;
     if (widget.feedMode == PlayerFeedMode.singleDrama &&
-        widget.dramaId != null) {
-      try {
-        final dramaId = int.tryParse(widget.dramaId!);
-        if (dramaId != null) {
-          final dataSource = ref.read(playerRemoteDataSourceProvider);
-          final watchProgress = await dataSource.fetchWatchProgress(
-            dramaId: dramaId,
-          );
-          if (watchProgress != null && mounted) {
-            // 閲嶆柊鏋勫缓涓?PlayerFeedItem 涓€鑷寸殑 id 鏍煎紡锛?single:{content.id}:{episode.id}'
-            final contentId = widget.dramaId!;
-            final episodeId = watchProgress.episodeId.toString();
-            _resumeProgress = PlaybackProgress(
-              itemId: 'single:$contentId:$episodeId',
-              position: Duration(seconds: watchProgress.watchSecond),
-              duration: Duration(seconds: watchProgress.durationSecond),
-              updatedAt: DateTime.now(),
-            );
-            _playbackController.setPendingResumeProgress(_resumeProgress);
-            developer.log(
-              '_retryPlaybackForItem: 閲嶆柊璁剧疆鎭㈠杩涘害 - '
-              'position=${_resumeProgress!.position.inSeconds}s',
-            );
-          }
-        }
-      } catch (e) {
-        developer.log('_retryPlaybackForItem: 鑾峰彇鍘嗗彶杩涘害澶辫触 - $e');
-      }
+        detailProgress != null &&
+        detailProgress.hasHistory &&
+        item.episode.id == detailProgress.episodeId) {
+      _resumeProgress = PlaybackProgress(
+        itemId: item.id,
+        position: detailProgress.position,
+        duration: detailProgress.duration,
+        updatedAt: DateTime.now(),
+      );
+      _playbackController.setPendingResumeProgress(_resumeProgress);
     }
 
     final engine = _feedEngine;

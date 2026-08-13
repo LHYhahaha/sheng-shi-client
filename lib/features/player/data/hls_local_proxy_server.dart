@@ -332,7 +332,10 @@ class HlsLocalProxyServer {
           );
           return;
         }
-        response = await _fetch(remoteUri);
+        // 启动预热也使用 streamFetch 拉 playlist。这里必须走相同的流式单飞
+        // 通道，点击播放器才能加入已经在途的 playlist 请求；不能走 _fetch，
+        // 因为 _fetch 与 streamFetch 分别维护飞行表，会把同一个 m3u8 再下载一次。
+        response = await _fetchPlaylist(remoteUri);
         if (response.statusCode < 200 || response.statusCode >= 300) {
           await _sendText(
             request,
@@ -547,6 +550,28 @@ class HlsLocalProxyServer {
             contentType: response.contentType,
           ),
         );
+  }
+
+  /// playlist 很小，代理仍需等待完整内容后重写 URI；但底层请求必须可加入启动
+  /// 预热的 streamFetch。segment 则由 [_proxySegmentStream] 边到边转发。
+  Future<HlsLocalProxyResponse> _fetchPlaylist(Uri uri) {
+    final streamClient = _client;
+    if (streamClient is! HlsNetworkStreamingHttpClient) {
+      return _fetch(uri);
+    }
+    final client = streamClient as HlsNetworkStreamingHttpClient;
+    final handle = _networkCoordinator.streamFetch(
+      uri,
+      priority: HlsRequestPriority.playback,
+      open: () => client.open(uri, timeout: timeout),
+    );
+    return handle.completed.then(
+      (response) => HlsLocalProxyResponse(
+        statusCode: response.statusCode,
+        bytes: response.bytes,
+        contentType: response.contentType,
+      ),
+    );
   }
 
   Uri _localBaseUri(HttpRequest request) {

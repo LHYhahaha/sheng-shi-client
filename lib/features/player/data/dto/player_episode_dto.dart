@@ -59,10 +59,8 @@ class PlayerEpisodeDto {
       episodeSources: _parseEpisodeSources(json['episode_sources']),
       isUnlocked: JsonFieldParser.optionalInt(json, 'is_unlocked') ?? 0,
       isVipOnly: JsonFieldParser.optionalInt(json, 'is_vip_only') ?? 0,
-      viewingEntitlementType: JsonFieldParser.optionalString(
-        json,
-        'viewing_entitlement_type',
-      ),
+      // 生产详情目前为 string；兼容历史/灰度中的数字枚举，避免埋点丢失。
+      viewingEntitlementType: json['viewing_entitlement_type']?.toString(),
       adUnlock: PlayerEpisodeAdUnlockDto.fromJsonOrNull(json['ad_unlock']),
     );
   }

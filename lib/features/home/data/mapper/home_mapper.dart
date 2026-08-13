@@ -44,6 +44,16 @@ class HomeMapper {
       status: dto.status,
       episodeTotal: dto.episodeTotal,
       tags: dto.tagsName,
+      isFavorited: dto.isFavorited == 1,
+      watchProgress: dto.watchProgress == null
+          ? null
+          : HomeWatchProgress(
+              episodeId: dto.watchProgress!.watchEpisodeId.toString(),
+              episodeNo: dto.watchProgress!.watchEpisodeNo,
+              positionSeconds: dto.watchProgress!.watchSecond,
+              progressPercent: dto.watchProgress!.progressPercent,
+              durationSeconds: dto.watchProgress!.durationSecond,
+            ),
     );
   }
 }

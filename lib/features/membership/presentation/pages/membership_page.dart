@@ -21,6 +21,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../pay/application/payment_loading_controller.dart';
+import '../../../player/application/player_entry_preload_coordinator.dart';
 import '../../../home/application/vip_only_dramas_provider.dart';
 import '../../../home/presentation/widgets/vip_only_dramas_section.dart';
 import '../../application/membership_controller.dart';
@@ -461,6 +462,12 @@ class _MembershipBody extends StatelessWidget {
                             'position': position,
                           }),
                         ),
+                  );
+                  preparePlayerEntryPreload(
+                    context,
+                    dramaId: drama.id,
+                    episodeId: '1',
+                    trigger: 'membership_vip_only_drama_tap',
                   );
                   context.push(
                     RoutePaths.playerLocation(

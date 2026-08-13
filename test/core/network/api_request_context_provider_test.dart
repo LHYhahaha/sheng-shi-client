@@ -119,29 +119,23 @@ void main() {
         ),
         apiAppVersionProvider.overrideWithValue('1.0.0'),
         apiPlatformProvider.overrideWithValue('web'),
-        apiClientProvider.overrideWith((ref) {
-          final dio = Dio()..httpClientAdapter = adapter;
-          return ApiClient(
-            dio: dio,
-            requestContextReader: () => ref.read(apiRequestContextProvider),
-          );
-        }),
       ],
     );
     addTearDown(container.dispose);
 
     await container.read(installIdProvider.future);
+    // 先创建 client，再保存 token，覆盖设备登录完成后立即请求用户信息的真实时序。
+    final client = container.read(apiClientProvider)
+      ..dio.httpClientAdapter = adapter;
     await container
         .read(authTokenStoreProvider.notifier)
         .save(const AuthTokenSnapshot(accessToken: 'token-from-store'));
 
-    await container
-        .read(apiClientProvider)
-        .get<void>(
-          '/profile',
-          authPolicy: ApiAuthPolicy.required,
-          decoder: (_) {},
-        );
+    await client.get<void>(
+      '/profile',
+      authPolicy: ApiAuthPolicy.required,
+      decoder: (_) {},
+    );
 
     expect(
       adapter.lastOptions?.headers['Authorization'],

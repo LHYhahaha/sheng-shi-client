@@ -977,9 +977,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       if (startupPreload.status == PlayerStartupPreloadStatus.pending &&
           startupPreload.itemId == item.id &&
           startupPreload.sourceUrl == item.episode.videoSource) {
-        // 真实播放不能与首页的第 2 个首段预热并发抢同一条网络。已经完成的
-        // playlist/分片仍留在内存和磁盘；只取消尚未完成的 startup 请求，让当前
-        // 播放器优先回源需要的分片。
+        // startup 的 HLS 预热与本地代理的流式读取暂时还不是同一种请求类型，不能
+        // 把两者误当成可直接交接的同一条网络流。继续保留 startup 会让首段和高
+        // 续播目标段与真实播放并发抢带宽；先让真实播放优先，已完成的磁盘缓存仍可
+        // 复用。之后只有接入同一流式 singleflight 后才能安全放开这里。
         _logTiming(
           'startup preload yielded to active playback',
           itemId: item.id,

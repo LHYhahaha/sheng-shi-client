@@ -5,11 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../drama/domain/drama.dart';
 import '../data/drama_playback_target_repository_provider.dart';
-import '../data/player_content_repository_provider.dart';
 import '../data/player_feed_repository_provider.dart';
 import '../data/player_playback_source_repository_provider.dart';
 import '../data/player_preload_config_provider.dart';
-import '../data/player_remote_data_source_provider.dart';
 import '../domain/player_feed.dart';
 import '../domain/drama_playback_target.dart';
 import '../domain/player_preload_state.dart';
@@ -19,6 +17,27 @@ final playerStartupPreloadControllerProvider =
     NotifierProvider<PlayerStartupPreloadController, PlayerStartupPreloadState>(
       PlayerStartupPreloadController.new,
     );
+
+/// 列表卡片随首页接口下发的续播提示。
+///
+/// 仅用于在详情返回后跳过一次本地进度读取并优先锁定预热目标；详情中的权益、地址
+/// 与 watch_progress 仍是进入播放器后的最终准则。
+class PlayerEntryResumeHint {
+  const PlayerEntryResumeHint({
+    required this.episodeId,
+    required this.episodeNo,
+    required this.position,
+    required this.duration,
+  });
+
+  final String episodeId;
+  final int episodeNo;
+  final Duration position;
+  final Duration duration;
+
+  bool get canResume =>
+      episodeId != '0' && position > Duration.zero && duration > Duration.zero;
+}
 
 enum PlayerStartupPreloadStatus { idle, pending, success, failed, cancelled }
 
@@ -138,6 +157,7 @@ class PlayerStartupPreloadController
   Future<void> preloadFirstPlayableDramaId(
     String? dramaId, {
     String? preferredEpisodeId,
+    PlayerEntryResumeHint? resumeHint,
   }) async {
     final config = ref.read(playerPreloadConfigProvider);
     if (config.effectiveHomeStartupPreloadCount <= 0) {
@@ -151,11 +171,6 @@ class PlayerStartupPreloadController
     }
 
     final generation = ++_generation;
-    final parsedDramaId = int.tryParse(dramaId);
-    final remoteProgressFuture =
-        ref.read(useRemotePlayerApiProvider) && parsedDramaId != null
-        ? ref.read(playerRemoteWatchProgressCacheProvider).get(parsedDramaId)
-        : null;
     _record(
       'startup preload request',
       itemId: dramaId,
@@ -178,35 +193,39 @@ class PlayerStartupPreloadController
       }
       // 不能预热 locked/unavailable/null source。即使 mock 数据能给出 URL，也要把
       // 可播放边界留给授权和内容状态，避免后续接真实接口时出现越权预取。
-      final target = await ref
-          .read(dramaPlaybackTargetRepositoryProvider)
-          .getForDrama(dramaId);
+      final target = resumeHint?.canResume == true
+          ? DramaPlaybackTarget(
+              dramaId: dramaId,
+              episodeId: resumeHint!.episodeId,
+              position: resumeHint.position,
+              duration: resumeHint.duration,
+              updatedAt: DateTime.now(),
+            )
+          : await ref
+                .read(dramaPlaybackTargetRepositoryProvider)
+                .getForDrama(dramaId);
       if (!_isCurrent(generation)) {
         return;
       }
-      DramaPlaybackTarget? remoteTarget;
-      if (remoteProgressFuture != null) {
-        try {
-          final progress = await remoteProgressFuture;
-          if (!_isCurrent(generation)) return;
-          final position = Duration(seconds: progress?.watchSecond ?? 0);
-          final duration = Duration(seconds: progress?.durationSecond ?? 0);
-          if (progress != null &&
-              position > Duration.zero &&
-              duration > Duration.zero &&
-              position < duration - const Duration(seconds: 2)) {
-            remoteTarget = DramaPlaybackTarget(
+      // 详情已内联 `watch_progress`，与本次 episodes/is_unlocked/source_url 属于同一
+      // 快照。避免再并行请求旧进度接口造成多一次网络竞争和选集不一致。
+      final detailProgress = items.isEmpty
+          ? null
+          : items.first.content.watchProgress;
+      final remoteTarget =
+          detailProgress != null &&
+              detailProgress.hasHistory &&
+              detailProgress.duration > Duration.zero &&
+              detailProgress.position <
+                  detailProgress.duration - const Duration(seconds: 2)
+          ? DramaPlaybackTarget(
               dramaId: dramaId,
-              episodeId: progress.episodeId.toString(),
-              position: position,
-              duration: duration,
+              episodeId: detailProgress.episodeId,
+              position: detailProgress.position,
+              duration: detailProgress.duration,
               updatedAt: DateTime.now(),
-            );
-          }
-        } catch (_) {
-          // 服务端进度只用于选择预热目标；失败仍可退回本地续播或首个可播集。
-        }
-      }
+            )
+          : null;
       final item = _firstPlayableItem(
         items,
         preferredEpisodeId: preferredEpisodeId,
@@ -243,6 +262,8 @@ class PlayerStartupPreloadController
             ? 'route_episode'
             : remoteTarget?.episodeId == item.episode.id
             ? 'remote_resume'
+            : resumeHint?.episodeId == item.episode.id && target?.canResume == true
+            ? 'home_resume_hint'
             : target?.episodeId == item.episode.id && target?.canResume == true
             ? 'local_resume'
             : 'first_playable'} '
