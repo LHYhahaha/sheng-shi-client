@@ -201,6 +201,46 @@ void main() {
     );
   });
 
+  test('small remaining byte budget does not fetch another segment', () async {
+    const firstSegmentBytes = 2 * 1024 * 1024 - 1024;
+    final client = _FakeHlsPlaylistHttpClient(
+      responses: {
+        'https://cdn.example.test/drama/ep1.m3u8':
+            const HlsPlaylistHttpResponse(
+              statusCode: 200,
+              body:
+                  '#EXTM3U\n'
+                  '#EXTINF:4,\n'
+                  'first.ts\n'
+                  '#EXTINF:4,\n'
+                  'second.ts\n',
+            ),
+        'https://cdn.example.test/drama/first.ts': HlsPlaylistHttpResponse(
+          statusCode: 200,
+          body: 'first',
+          contentLength: firstSegmentBytes,
+        ),
+        'https://cdn.example.test/drama/second.ts':
+            const HlsPlaylistHttpResponse(statusCode: 200, body: 'second'),
+      },
+    );
+    final preloader = HlsPlaylistPreloader(
+      client: client,
+      maxPreheatBytes: 2 * 1024 * 1024,
+    );
+
+    final result = await preloader.prefetch(
+      'https://cdn.example.test/drama/ep1.m3u8',
+    );
+
+    expect(result.segmentUrls, ['https://cdn.example.test/drama/first.ts']);
+    expect(result.segmentBytesPreheated, firstSegmentBytes);
+    expect(
+      client.requestedUris.map((uri) => uri.toString()),
+      isNot(contains('https://cdn.example.test/drama/second.ts')),
+    );
+  });
+
   test('HTTP non-2xx returns preload failed', () async {
     final manager = HlsPlayerPlaybackPreloadManager(
       preloader: HlsPlaylistPreloader(

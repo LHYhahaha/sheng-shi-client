@@ -7,6 +7,8 @@ import '../domain/player_playback_source.dart';
 import '../domain/player_preload_state.dart';
 import 'hls_local_proxy_server.dart';
 
+const _minRemainingBytesForNextSegmentPreheat = 256 * 1024;
+
 /// HLS 预热结果。
 ///
 /// 这个结果用于诊断和状态记录，不用于证明视频一定可播放；播放仍要经过 media open。
@@ -232,8 +234,17 @@ class HlsPlaylistPreloader {
     // 只预热少量首段并受字节预算限制。短剧滑动场景下，用户可能马上离开当前 item，
     // 过度预取会浪费流量并影响真正播放中的 source。
     for (var index = 0; index < segmentUris.length; index += 1) {
-      if (segmentBytesPreheated >= maxPreheatBytes) {
+      final remainingBytes = maxPreheatBytes - segmentBytesPreheated;
+      if (remainingBytes <= 0) {
         diagnostics.add('segment preheat max bytes reached');
+        break;
+      }
+      if (preheatedSegments.isNotEmpty &&
+          remainingBytes < _minRemainingBytesForNextSegmentPreheat) {
+        diagnostics.add(
+          'segment preheat remaining bytes too small '
+          'remaining=$remainingBytes',
+        );
         break;
       }
       final segmentUri = segmentUris[index];

@@ -218,8 +218,11 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         unawaited(_openFcmExternalUrl(url));
         return;
       }
+<<<<<<< HEAD
       // 保留通知打开前的页面，物理返回键/返回手势应先回到来源页，
       // 而不是因 go() 替换路由后直接退出应用。
+=======
+>>>>>>> 4968f98a5543f924dd83663ae2c58f2e35c7c770
       router.push(
         RoutePaths.webviewLocation(url: url, title: notification.title),
       );
@@ -229,8 +232,11 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     debugPrint('[FCM] Ignored notification tap with unsupported data: $data');
   }
 
+<<<<<<< HEAD
   /// 通知离开首页/For You 时，关闭该位置的展示中、预加载中或请求中的弹框。
   /// 否则根路由上的 overlay 会覆盖通知的目标页面。
+=======
+>>>>>>> 4968f98a5543f924dd83663ae2c58f2e35c7c770
   void _cancelPopupForCurrentRouteExit() {
     final placement = AppShellDestinations.popupPlacementForIndex(
       ref.read(appShellCurrentTabIndexProvider),
@@ -243,6 +249,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     controller.cancelPlacementFlow(placement);
   }
 
+<<<<<<< HEAD
   void _trackPushNotificationOpen({
     required FcmNotification notification,
     required String? targetType,
@@ -269,6 +276,8 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     );
   }
 
+=======
+>>>>>>> 4968f98a5543f924dd83663ae2c58f2e35c7c770
   void _openFcmPage(GoRouter router, String? rawPage) {
     switch (rawPage?.trim().toLowerCase()) {
       case 'home':

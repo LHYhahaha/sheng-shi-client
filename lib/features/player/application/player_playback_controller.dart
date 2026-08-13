@@ -534,7 +534,6 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   PlaybackProgress? _pendingResumeProgress;
   bool _pendingResumeProgressRequiresSeekAfterOpen = false;
   bool _lastResumeProgressRequiresSeekAfterOpen = false;
-  bool _lastResumeProgressWasPending = false;
   int _generation = 0;
   int _preloadGeneration = 0;
   int _visibilityDetachEpoch = 0;
@@ -991,7 +990,6 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       await _resumeProgressForItem(item.id),
       item.episode.duration,
     );
-    final resumeProgressWasPending = _lastResumeProgressWasPending;
     final resumeProgressRequiresSeekAfterOpen =
         _lastResumeProgressRequiresSeekAfterOpen;
     final resumeStart = resumeProgress?.canResume == true
@@ -1036,18 +1034,6 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       // prepared/retained 命中时直接接管已经 open 的 session，避免同一个 item
       // 重复 open。命中窗口只覆盖相邻滑动，不承诺覆盖所有 HLS preload 候选。
       final prepared = _prepareManager.takeIfMatches(item.id);
-      if (prepared != null && resumeStart != null && resumeProgressWasPending) {
-        _logTiming(
-          'prepared session skipped for resume start',
-          itemId: item.id,
-          source: prepared.source.playableSource,
-          details: _timingDetails([
-            'resumeMs=${resumeStart.inMilliseconds}',
-            'kind=${prepared.kind.name}',
-          ]),
-        );
-        await prepared.dispose();
-      }
       _logTiming(
         'take window session',
         itemId: item.id,
@@ -1066,8 +1052,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           'windowItemsAfter=${_windowItemsText()}',
         ]),
       );
-      if (prepared != null &&
-          !(resumeStart != null && resumeProgressWasPending)) {
+      if (prepared != null) {
         final hitEvent = prepared.kind == PreparedPlaybackSessionKind.retained
             ? 'retained hit previous'
             : 'prepared hit next';
@@ -3508,13 +3493,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   Future<PlaybackProgress?> _resumeProgressForItem(String itemId) async {
-    _lastResumeProgressWasPending = false;
     _lastResumeProgressRequiresSeekAfterOpen = false;
     final pending = _pendingResumeProgress;
     if (pending != null) {
       if (pending.itemId == itemId) {
         _pendingResumeProgress = null;
-        _lastResumeProgressWasPending = true;
         _lastResumeProgressRequiresSeekAfterOpen =
             _pendingResumeProgressRequiresSeekAfterOpen;
         _pendingResumeProgressRequiresSeekAfterOpen = false;

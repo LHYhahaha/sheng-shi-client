@@ -2601,6 +2601,47 @@ void main() {
   );
 
   test(
+    'prepared item takeover applies pending resume progress without fallback open',
+    () async {
+      final currentSession = _FakePlaybackSession();
+      final preparedSession = _FakePlaybackSession();
+      final fallbackSession = _FakePlaybackSession();
+      var index = 0;
+      final sessions = [currentSession, preparedSession, fallbackSession];
+      PlayerPlaybackSession sessionFactory() => sessions[index++];
+      final container = _createPrepareContainer(sessionFactory);
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      await controller.preloadAround([_item(1), _item(2)], 0);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      controller.setPendingResumeProgress(
+        PlaybackProgress(
+          itemId: 'drama-a-ep-2',
+          position: const Duration(seconds: 35),
+          duration: const Duration(seconds: 120),
+          updatedAt: DateTime.now(),
+        ),
+      );
+
+      await controller.playItem(_item(2));
+
+      expect(preparedSession.openedSources, [_secondVideoUrl]);
+      expect(preparedSession.seekedPositions, [const Duration(seconds: 35)]);
+      expect(fallbackSession.openedSources, isEmpty);
+      expect(container.read(provider).currentItemId, 'drama-a-ep-2');
+      expect(container.read(provider).position, const Duration(seconds: 35));
+      expect(controller.exportTimingReport(), contains('prepared hit next'));
+      expect(
+        controller.exportTimingReport(),
+        isNot(contains('prepared session skipped for resume start')),
+      );
+    },
+  );
+
+  test(
     'same source different item is not opened as prepared media session',
     () async {
       final currentSession = _FakePlaybackSession();
