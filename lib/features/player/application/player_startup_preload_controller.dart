@@ -269,10 +269,7 @@ class PlayerStartupPreloadController
       final detailProgress = items.isEmpty
           ? null
           : items.first.content.watchProgress;
-      final remoteTarget =
-          detailProgress != null &&
-              detailProgress.hasHistory &&
-              detailProgress.duration > Duration.zero
+      final remoteTarget = detailProgress != null && detailProgress.hasHistory
           ? DramaPlaybackTarget(
               dramaId: dramaId,
               episodeId: detailProgress.episodeId,
@@ -550,7 +547,8 @@ class PlayerStartupPreloadController
         }
       }
     }
-    if (remoteTarget?.canResume ?? false) {
+    if (remoteTarget?.position != null &&
+        remoteTarget!.position > Duration.zero) {
       for (final item in items) {
         if (_targetMatchesItem(remoteTarget, item) &&
             !item.episode.isLocked &&
@@ -590,10 +588,12 @@ class PlayerStartupPreloadController
     if (index == -1 || index + 1 >= items.length) {
       return selectedItem;
     }
-    if (remoteTarget!.position <= Duration.zero ||
-        remoteTarget.duration <= Duration.zero ||
+    final canResume =
+        remoteTarget!.position > Duration.zero &&
+        remoteTarget.duration > Duration.zero &&
         remoteTarget.position <
-            remoteTarget.duration - const Duration(seconds: 2)) {
+            remoteTarget.duration - const Duration(seconds: 2);
+    if (canResume) {
       return selectedItem;
     }
     final nextItem = items[index + 1];

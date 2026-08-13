@@ -89,6 +89,34 @@ void main() {
     );
   });
 
+  test(
+    'startup preload follows detail progress skip-to-next without duration',
+    () async {
+      final sourceRepository = _FakePlaybackSourceRepository();
+      final container = _createContainer(
+        sourceRepository: sourceRepository,
+        feedRepository: _FakePlayerFeedRepository(
+          items: [
+            _unknownDurationFirstItem,
+            _unknownDurationProgressItem,
+            _unknownDurationNextItem,
+          ],
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(playerStartupPreloadControllerProvider.notifier)
+          .preloadFirstPlayableDramaId(_unknownDurationContent.id);
+
+      expect(sourceRepository.lastPreloadedItemId, _unknownDurationNextItem.id);
+      expect(
+        container.read(playerStartupPreloadControllerProvider).itemId,
+        _unknownDurationNextItem.id,
+      );
+    },
+  );
+
   test('startup preload honors a route episode number fallback', () async {
     final sourceRepository = _FakePlaybackSourceRepository();
     final container = _createContainer(sourceRepository: sourceRepository);
@@ -844,6 +872,67 @@ final _watchedNextItem = PlayerFeedItem(
   mode: PlayerFeedMode.singleDrama,
   content: _watchedContent,
   episode: _watchedContent.episodes[1],
+);
+
+final _unknownDurationContent = PlayerContent(
+  id: 'drama-unknown-duration',
+  title: 'Unknown Duration Drama',
+  playTitle: 'Unknown Duration Drama',
+  synopsis: 'Synopsis',
+  viewCountLabel: '1M',
+  likeCountLabel: '1K',
+  backgroundAssetPath: 'assets/images/player/player_background.png',
+  posterAssetPath: 'assets/images/player/recommend_1.png',
+  episodes: const [
+    PlayerEpisode(
+      id: 'server-episode-200',
+      number: 1,
+      isLocked: false,
+      videoUrl: _videoUrl,
+    ),
+    PlayerEpisode(
+      id: 'server-episode-201',
+      number: 11,
+      isLocked: false,
+      videoUrl: _videoUrl,
+    ),
+    PlayerEpisode(
+      id: 'server-episode-202',
+      number: 12,
+      isLocked: false,
+      videoUrl: _secondVideoUrl,
+    ),
+  ],
+  recommendations: const [],
+  episodeTotal: 3,
+  watchProgress: const PlayerWatchProgress(
+    episodeId: 'server-episode-201',
+    episodeNo: 11,
+    position: Duration(seconds: 101),
+    duration: Duration.zero,
+    progressPercent: 0,
+  ),
+);
+
+final _unknownDurationFirstItem = PlayerFeedItem(
+  id: 'unknown-duration-ep-200',
+  mode: PlayerFeedMode.singleDrama,
+  content: _unknownDurationContent,
+  episode: _unknownDurationContent.episodes[0],
+);
+
+final _unknownDurationProgressItem = PlayerFeedItem(
+  id: 'unknown-duration-ep-201',
+  mode: PlayerFeedMode.singleDrama,
+  content: _unknownDurationContent,
+  episode: _unknownDurationContent.episodes[1],
+);
+
+final _unknownDurationNextItem = PlayerFeedItem(
+  id: 'unknown-duration-ep-202',
+  mode: PlayerFeedMode.singleDrama,
+  content: _unknownDurationContent,
+  episode: _unknownDurationContent.episodes[2],
 );
 
 final _localResumeContent = PlayerContent(
