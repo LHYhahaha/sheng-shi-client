@@ -2291,6 +2291,29 @@ void main() {
     ]);
   });
 
+  test('predictive viewport preload also warms prepared session', () async {
+    var index = 0;
+    final currentSession = _FakePlaybackSession();
+    final preparedSession = _FakePlaybackSession();
+    final sessions = [currentSession, preparedSession];
+    PlayerPlaybackSession sessionFactory() => sessions[index++];
+    final container = _createPrepareContainer(sessionFactory);
+    addTearDown(container.dispose);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.preloadItemForPredictedViewport(_item(2));
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    expect(container.read(provider).preloadedItemIds, contains(_item(2).id));
+    expect(preparedSession.openedSources, [_secondVideoUrl]);
+    expect(
+      controller.exportTimingReport(),
+      contains('predictive prepare start'),
+    );
+  });
+
   test('preload pending is not counted as preloaded until success', () async {
     final session = _FakePlaybackSession();
     final preloadManager = MockPlayerPlaybackPreloadManager(

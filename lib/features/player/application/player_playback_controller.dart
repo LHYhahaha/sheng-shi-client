@@ -1687,6 +1687,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         return;
       }
       _setPreloadState(result);
+      if (result.status == PlaybackPreloadStatus.success) {
+        _preloadedItemIds.add(preferredItem.id);
+        await _preparePredictedItem(preferredItem);
+      }
     } catch (error) {
       _logTiming(
         'predictive preload error',
@@ -1711,6 +1715,34 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         ),
       );
     }
+  }
+
+  Future<void> _preparePredictedItem(PlayerFeedItem item) async {
+    final config = ref.read(playerPreloadConfigProvider);
+    if (config.effectivePreparedForwardSessionCount <= 0 ||
+        state.currentItemId == null ||
+        state.currentSource == null ||
+        _sharesCurrentMediaSource(item) ||
+        _prepareManager.windowItemIds.contains(item.id)) {
+      return;
+    }
+    final allowedIds = <String>{state.currentItemId!, item.id};
+    await _retainSessionWindowOnly(allowedIds, reason: 'predictive prepare');
+    final sessionWindowGeneration =
+        setEquals(_activeSessionWindowAllowedIds, allowedIds)
+        ? _sessionWindowGeneration
+        : ++_sessionWindowGeneration;
+    _activeSessionWindowAllowedIds = allowedIds;
+    _logTiming(
+      'predictive prepare start',
+      itemId: item.id,
+      source: item.episode.videoSource,
+      details: _timingDetails([
+        'reason=drag_threshold',
+        'windowItems=${_windowItemsText()}',
+      ]),
+    );
+    unawaited(_prepareNextItem(item, sessionWindowGeneration));
   }
 
   Future<void> blockItem(
