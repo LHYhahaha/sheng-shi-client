@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../app/router/route_paths.dart';
 import '../../../../core/analytics/analytics_definition.dart';
 import '../../../../core/analytics/drama_card_exposure.dart';
 import '../../../../core/analytics/analytics_event.dart';
@@ -1308,21 +1307,16 @@ void _openDrama(BuildContext context, SearchResultDrama drama) {
           duration: Duration(seconds: progress.durationSeconds),
         )
       : null;
-  preparePlayerEntryPreload(
-    context,
-    dramaId: entryIntent.dramaId,
-    episodeId: entryIntent.episodeId,
-    trigger: entryIntent.trigger,
-    resumeHint: resumeHint,
-  );
-  context.push(
-    RoutePaths.playerLocation(
+  unawaited(
+    openPlayerWithEntryPreload<void>(
+      context,
       dramaId: entryIntent.dramaId,
       episodeId: entryIntent.episodeId,
       trigger: entryIntent.trigger,
       userActionAtMs: tappedAt.millisecondsSinceEpoch,
+      resumeHint: resumeHint,
+      extra: entryIntent,
     ),
-    extra: entryIntent,
   );
 }
 
@@ -1699,14 +1693,9 @@ class _RankingPanel extends ConsumerWidget {
                         },
                       );
                       final tappedAt = DateTime.now();
-                      preparePlayerEntryPreload(
-                        context,
-                        dramaId: drama.id,
-                        episodeId: '1',
-                        trigger: 'search_ranking_tap',
-                      );
-                      context.push(
-                        RoutePaths.playerLocation(
+                      unawaited(
+                        openPlayerWithEntryPreload<void>(
+                          context,
                           dramaId: drama.id,
                           episodeId: '1',
                           trigger: 'search_ranking_tap',

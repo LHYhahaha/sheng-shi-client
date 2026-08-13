@@ -511,42 +511,37 @@ class _HomePageState extends ConsumerState<HomePage> {
                                   drama: item,
                                   userActionAt: tappedAt,
                                 );
-                                preparePlayerEntryPreload(
-                                  context,
-                                  dramaId: entryIntent.dramaId,
-                                  episodeId: entryIntent.episodeId,
-                                  trigger: entryIntent.trigger,
-                                  resumeHint:
-                                      item.watchProgress?.canResume == true
-                                      ? PlayerEntryResumeHint(
-                                          episodeId: item
-                                              .watchProgress!
-                                              .episodeId
-                                              .toString(),
-                                          episodeNo:
-                                              item.watchProgress!.episodeNo,
-                                          position: Duration(
-                                            seconds: item
-                                                .watchProgress!
-                                                .positionSeconds,
-                                          ),
-                                          duration: Duration(
-                                            seconds: item
-                                                .watchProgress!
-                                                .durationSeconds,
-                                          ),
-                                        )
-                                      : null,
-                                );
-                                context.push(
-                                  RoutePaths.playerLocation(
+                                unawaited(
+                                  openPlayerWithEntryPreload<void>(
+                                    context,
                                     dramaId: entryIntent.dramaId,
                                     episodeId: entryIntent.episodeId,
                                     trigger: entryIntent.trigger,
                                     userActionAtMs:
                                         tappedAt.millisecondsSinceEpoch,
+                                    resumeHint:
+                                        item.watchProgress?.canResume == true
+                                        ? PlayerEntryResumeHint(
+                                            episodeId: item
+                                                .watchProgress!
+                                                .episodeId
+                                                .toString(),
+                                            episodeNo:
+                                                item.watchProgress!.episodeNo,
+                                            position: Duration(
+                                              seconds: item
+                                                  .watchProgress!
+                                                  .positionSeconds,
+                                            ),
+                                            duration: Duration(
+                                              seconds: item
+                                                  .watchProgress!
+                                                  .durationSeconds,
+                                            ),
+                                          )
+                                        : null,
+                                    extra: entryIntent,
                                   ),
-                                  extra: entryIntent,
                                 );
                               },
                             ),
@@ -629,14 +624,9 @@ class _HomePageState extends ConsumerState<HomePage> {
             analyticsBanner,
           );
           if (mounted) {
-            preparePlayerEntryPreload(
-              context,
-              dramaId: value,
-              episodeId: '1',
-              trigger: 'home_banner',
-            );
-            context.push(
-              RoutePaths.playerLocation(
+            unawaited(
+              openPlayerWithEntryPreload<void>(
+                context,
                 dramaId: value,
                 episodeId: '1',
                 trigger: 'home_banner',

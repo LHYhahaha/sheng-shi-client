@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:drama_client/features/drama/domain/drama.dart';
+import 'package:drama_client/features/player/application/player_entry_preload_coordinator.dart';
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/application/player_startup_preload_controller.dart';
@@ -414,6 +415,72 @@ void main() {
       PlayerStartupPreloadStatus.success,
     );
   });
+
+  test(
+    'entry coordinator waits for startup preload success within entry budget',
+    () async {
+      final preloadCompleter = Completer<PlaybackPreloadState>();
+      final sourceRepository = _FakePlaybackSourceRepository(
+        preloadCompleter: preloadCompleter,
+      );
+      final container = _createContainer(sourceRepository: sourceRepository);
+      addTearDown(container.dispose);
+
+      final waitFuture = container
+          .read(playerEntryPreloadCoordinatorProvider.notifier)
+          .preparePlayerRouteAndWait(
+            dramaId: _drama.id,
+            episodeId: '1',
+            trigger: 'test_entry',
+            maxWait: const Duration(milliseconds: 200),
+          );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(sourceRepository.preloadCount, 1);
+
+      preloadCompleter.complete(_successPreloadStateFor(_item));
+      final result = await waitFuture;
+
+      expect(result.status, PlayerEntryPreloadWaitStatus.ready);
+      expect(result.itemId, _item.id);
+      expect(result.shouldNavigate, isTrue);
+      expect(
+        container.read(playerStartupPreloadControllerProvider).status,
+        PlayerStartupPreloadStatus.success,
+      );
+    },
+  );
+
+  test(
+    'entry coordinator times out without blocking player navigation',
+    () async {
+      final preloadCompleter = Completer<PlaybackPreloadState>();
+      final container = _createContainer(
+        sourceRepository: _FakePlaybackSourceRepository(
+          preloadCompleter: preloadCompleter,
+        ),
+      );
+      addTearDown(container.dispose);
+
+      final result = await container
+          .read(playerEntryPreloadCoordinatorProvider.notifier)
+          .preparePlayerRouteAndWait(
+            dramaId: _drama.id,
+            episodeId: '1',
+            trigger: 'test_entry_timeout',
+            maxWait: const Duration(milliseconds: 1),
+          );
+
+      expect(result.status, PlayerEntryPreloadWaitStatus.timeout);
+      expect(result.shouldNavigate, isTrue);
+      expect(
+        container.read(playerStartupPreloadControllerProvider).status,
+        PlayerStartupPreloadStatus.pending,
+      );
+
+      preloadCompleter.complete(_successPreloadStateFor(_item));
+    },
+  );
 }
 
 ProviderContainer _createContainer({

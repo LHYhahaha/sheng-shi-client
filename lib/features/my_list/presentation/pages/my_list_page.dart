@@ -5,9 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_svg/svg.dart';
-import 'package:go_router/go_router.dart';
 
-import '../../../../app/router/route_paths.dart';
 import '../../../../app/shell/app_shell.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
 import '../../../../core/analytics/analytics_definition.dart';
@@ -441,12 +439,13 @@ class _MyListPageState extends ConsumerState<MyListPage> {
             }),
           ),
     );
-    preparePlayerEntryPreload(
+    await openPlayerWithEntryPreload<void>(
       context,
-      dramaId: item.dramaId.toString(),
+      dramaId: entryIntent.dramaId,
       episodeId: entryIntent.episodeId,
       episodeNo: entryIntent.episodeNo,
       trigger: entryIntent.trigger,
+      userActionAtMs: userActionAt.millisecondsSinceEpoch,
       resumeHint: entryIntent.resumeProgress == null
           ? null
           : PlayerEntryResumeHint(
@@ -455,14 +454,6 @@ class _MyListPageState extends ConsumerState<MyListPage> {
               position: entryIntent.resumeProgress!.position,
               duration: entryIntent.resumeProgress!.duration,
             ),
-    );
-    await context.push(
-      RoutePaths.playerLocation(
-        dramaId: entryIntent.dramaId,
-        episodeId: entryIntent.episodeId,
-        trigger: entryIntent.trigger,
-        userActionAtMs: userActionAt.millisecondsSinceEpoch,
-      ),
       extra: entryIntent,
     );
     await controller.refreshCurrentTabInPlace();
@@ -485,19 +476,12 @@ class _MyListPageState extends ConsumerState<MyListPage> {
             }),
           ),
     );
-    preparePlayerEntryPreload(
+    await openPlayerWithEntryPreload<void>(
       context,
       dramaId: drama.id,
       episodeId: '1',
       trigger: 'my_list_hot_play_tap',
-    );
-    await context.push(
-      RoutePaths.playerLocation(
-        dramaId: drama.id,
-        episodeId: '1',
-        trigger: 'my_list_hot_play_tap',
-        userActionAtMs: DateTime.now().millisecondsSinceEpoch,
-      ),
+      userActionAtMs: DateTime.now().millisecondsSinceEpoch,
     );
     await controller.refreshCurrentTabInPlace();
   }

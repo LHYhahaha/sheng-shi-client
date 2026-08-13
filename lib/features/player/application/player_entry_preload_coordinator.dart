@@ -1,8 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../app/router/route_paths.dart';
 import 'player_startup_preload_controller.dart';
 
 export 'player_startup_preload_controller.dart' show PlayerEntryResumeHint;
@@ -38,6 +40,78 @@ void preparePlayerEntryPreload(
         trigger: trigger,
         resumeHint: resumeHint,
       );
+}
+
+Future<T?> openPlayerWithEntryPreload<T>(
+  BuildContext context, {
+  required String dramaId,
+  required String episodeId,
+  int? episodeNo,
+  required String trigger,
+  int? userActionAtMs,
+  PlayerEntryResumeHint? resumeHint,
+  Object? extra,
+  Duration maxWait = const Duration(milliseconds: 900),
+}) async {
+  final container = ProviderScope.containerOf(context, listen: false);
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
+  OverlayEntry? loadingOverlay;
+  var waitCompleted = false;
+  final waitFuture = container
+      .read(playerEntryPreloadCoordinatorProvider.notifier)
+      .preparePlayerRouteAndWait(
+        dramaId: dramaId,
+        episodeId: episodeId,
+        episodeNo: episodeNo,
+        trigger: trigger,
+        resumeHint: resumeHint,
+        maxWait: maxWait,
+      )
+      .whenComplete(() {
+        waitCompleted = true;
+      });
+  final loadingDelay = Future<void>.delayed(const Duration(milliseconds: 180));
+  await Future.any([waitFuture, loadingDelay]);
+  if (!context.mounted) {
+    return null;
+  }
+  if (!waitCompleted) {
+    loadingOverlay = OverlayEntry(
+      builder: (_) => const _PlayerEntryLoadingOverlay(),
+    );
+    overlay?.insert(loadingOverlay);
+  }
+
+  await waitFuture;
+  loadingOverlay?.remove();
+  if (!context.mounted) return null;
+  return context.push<T>(
+    RoutePaths.playerLocation(
+      dramaId: dramaId,
+      episodeId: episodeId,
+      trigger: trigger,
+      userActionAtMs: userActionAtMs,
+    ),
+    extra: extra,
+  );
+}
+
+enum PlayerEntryPreloadWaitStatus { ready, failed, timeout, cancelled }
+
+class PlayerEntryPreloadWaitResult {
+  const PlayerEntryPreloadWaitResult({
+    required this.status,
+    this.dramaId,
+    this.itemId,
+    this.sourceUrl,
+  });
+
+  final PlayerEntryPreloadWaitStatus status;
+  final String? dramaId;
+  final String? itemId;
+  final String? sourceUrl;
+
+  bool get shouldNavigate => true;
 }
 
 class PlayerEntryPreloadState {
@@ -96,6 +170,65 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
       preferredEpisodeId: episodeId == '1' ? null : episodeId,
       preferredEpisodeNo: episodeNo,
       resumeHint: resumeHint,
+    );
+  }
+
+  Future<PlayerEntryPreloadWaitResult> preparePlayerRouteAndWait({
+    required String dramaId,
+    required String episodeId,
+    int? episodeNo,
+    String? trigger,
+    PlayerEntryResumeHint? resumeHint,
+    Duration maxWait = const Duration(milliseconds: 900),
+  }) async {
+    preparePlayerRoute(
+      dramaId: dramaId,
+      episodeId: episodeId,
+      episodeNo: episodeNo,
+      trigger: trigger,
+      resumeHint: resumeHint,
+    );
+    final startedAt = DateTime.now();
+    while (DateTime.now().difference(startedAt) < maxWait) {
+      final startupState = ref.read(playerStartupPreloadControllerProvider);
+      if (startupState.dramaId == dramaId) {
+        switch (startupState.status) {
+          case PlayerStartupPreloadStatus.success:
+            return PlayerEntryPreloadWaitResult(
+              status: PlayerEntryPreloadWaitStatus.ready,
+              dramaId: startupState.dramaId,
+              itemId: startupState.itemId,
+              sourceUrl: startupState.sourceUrl,
+            );
+          case PlayerStartupPreloadStatus.failed:
+            return PlayerEntryPreloadWaitResult(
+              status: PlayerEntryPreloadWaitStatus.failed,
+              dramaId: startupState.dramaId,
+              itemId: startupState.itemId,
+              sourceUrl: startupState.sourceUrl,
+            );
+          case PlayerStartupPreloadStatus.cancelled:
+            return PlayerEntryPreloadWaitResult(
+              status: PlayerEntryPreloadWaitStatus.cancelled,
+              dramaId: startupState.dramaId,
+              itemId: startupState.itemId,
+              sourceUrl: startupState.sourceUrl,
+            );
+          case PlayerStartupPreloadStatus.idle:
+          case PlayerStartupPreloadStatus.pending:
+            break;
+        }
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+    }
+    final startupState = ref.read(playerStartupPreloadControllerProvider);
+    return PlayerEntryPreloadWaitResult(
+      status: PlayerEntryPreloadWaitStatus.timeout,
+      dramaId: startupState.dramaId == dramaId ? startupState.dramaId : dramaId,
+      itemId: startupState.dramaId == dramaId ? startupState.itemId : null,
+      sourceUrl: startupState.dramaId == dramaId
+          ? startupState.sourceUrl
+          : null,
     );
   }
 
@@ -202,6 +335,35 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
     debugPrint(
       '[player-entry-preload] coordinator=$event dramaId=$dramaId '
       'trigger=$trigger${extra == null ? '' : ' $extra'}',
+    );
+  }
+}
+
+class _PlayerEntryLoadingOverlay extends StatelessWidget {
+  const _PlayerEntryLoadingOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: ColoredBox(
+        color: const Color(0x99000000),
+        child: IgnorePointer(
+          child: Center(
+            child: Semantics(
+              label: 'Preparing video',
+              liveRegion: true,
+              child: const SizedBox(
+                width: 36,
+                height: 36,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

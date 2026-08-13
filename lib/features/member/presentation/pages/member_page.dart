@@ -278,14 +278,9 @@ class _MemberPageState extends ConsumerState<MemberPage> {
                         }),
                       ),
                 );
-                preparePlayerEntryPreload(
-                  context,
-                  dramaId: drama.id,
-                  episodeId: '1',
-                  trigger: 'member_center_vip_only_drama_tap',
-                );
-                context.push(
-                  RoutePaths.playerLocation(
+                unawaited(
+                  openPlayerWithEntryPreload<void>(
+                    context,
                     dramaId: drama.id,
                     episodeId: '1',
                     trigger: 'member_center_vip_only_drama_tap',

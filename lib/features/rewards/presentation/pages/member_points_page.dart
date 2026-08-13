@@ -295,14 +295,9 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
                         }),
                       ),
                 );
-                preparePlayerEntryPreload(
-                  context,
-                  dramaId: drama.id,
-                  episodeId: '1',
-                  trigger: 'member_points_vip_only_drama_tap',
-                );
-                context.push(
-                  RoutePaths.playerLocation(
+                unawaited(
+                  openPlayerWithEntryPreload<void>(
+                    context,
                     dramaId: drama.id,
                     episodeId: '1',
                     trigger: 'member_points_vip_only_drama_tap',
@@ -1934,14 +1929,9 @@ class _VipSeriesPanel extends ConsumerWidget {
                     }),
                   ),
             );
-            preparePlayerEntryPreload(
-              context,
-              dramaId: drama.id,
-              episodeId: '1',
-              trigger: 'member_points_vip_only_drama_tap',
-            );
-            context.push(
-              RoutePaths.playerLocation(
+            unawaited(
+              openPlayerWithEntryPreload<void>(
+                context,
                 dramaId: drama.id,
                 episodeId: '1',
                 trigger: 'member_points_vip_only_drama_tap',

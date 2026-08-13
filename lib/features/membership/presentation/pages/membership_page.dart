@@ -463,14 +463,9 @@ class _MembershipBody extends StatelessWidget {
                           }),
                         ),
                   );
-                  preparePlayerEntryPreload(
-                    context,
-                    dramaId: drama.id,
-                    episodeId: '1',
-                    trigger: 'membership_vip_only_drama_tap',
-                  );
-                  context.push(
-                    RoutePaths.playerLocation(
+                  unawaited(
+                    openPlayerWithEntryPreload<void>(
+                      context,
                       dramaId: drama.id,
                       episodeId: '1',
                       trigger: 'membership_vip_only_drama_tap',
