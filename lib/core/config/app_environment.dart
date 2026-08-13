@@ -21,11 +21,25 @@ class AppConfig {
   /// 问题与帮助 H5 地址。
   ///
   /// 语言由应用当前 locale 提供，避免 H5 与客户端语言不一致。
-  Uri helpUrlForLanguage(String languageCode) {
+  Uri helpUrlForLanguage(
+    String languageCode, {
+    String userId = '',
+    String channelId = '',
+    String merchantId = '',
+    String previousPage = '',
+  }) {
     final baseUrl = _webBaseUrl.replace(path: '/app/');
 
     return baseUrl.replace(
-      queryParameters: {'lang': languageCode},
+      queryParameters: {
+        ..._h5CommonParameters(
+          languageCode: languageCode,
+          userId: userId,
+          channelId: channelId,
+          merchantId: merchantId,
+        ),
+        'previous_page': previousPage,
+      },
       fragment: '/help',
     );
   }
@@ -43,11 +57,84 @@ class AppConfig {
   );
 
   /// 剧集分享页 H5 地址。
-  Uri shareUrl({required String dramaId, required String languageCode}) =>
-      _webBaseUrl.replace(
-        path: '/share/',
-        queryParameters: {'drama_id': dramaId, 'lang': languageCode},
-      );
+  Uri shareUrl({
+    required String dramaId,
+    required String languageCode,
+    String userId = '',
+    String channelId = '',
+    String merchantId = '',
+    String shareMethod = '',
+  }) => _webBaseUrl.replace(
+    path: '/share/',
+    queryParameters: {
+      ..._h5CommonParameters(
+        languageCode: languageCode,
+        userId: userId,
+        channelId: channelId,
+        merchantId: merchantId,
+      ),
+      'drama_id': dramaId,
+      'share_method': shareMethod,
+    },
+  );
+
+  /// 赠送会员 H5 地址。当前客户端尚无赠送入口，先保留完整参数契约。
+  Uri giftVipUrl({
+    required String languageCode,
+    String userId = '',
+    String channelId = '',
+    String merchantId = '',
+    String shareMethod = '',
+    String giftLinkId = '',
+    String grantTempVipDays = '',
+  }) => _webBaseUrl.replace(
+    path: '/gift/vip/',
+    queryParameters: {
+      ..._h5CommonParameters(
+        languageCode: languageCode,
+        userId: userId,
+        channelId: channelId,
+        merchantId: merchantId,
+      ),
+      'share_method': shareMethod,
+      'gift_link_id': giftLinkId,
+      'grant_temp_vip_days': grantTempVipDays,
+    },
+  );
+
+  /// 赠送短剧 H5 地址。当前客户端尚无赠送入口，先保留完整参数契约。
+  Uri giftDramaUrl({
+    required String languageCode,
+    String userId = '',
+    String channelId = '',
+    String merchantId = '',
+    String shareMethod = '',
+    String giftLinkId = '',
+  }) => _webBaseUrl.replace(
+    path: '/gift/drama/',
+    queryParameters: {
+      ..._h5CommonParameters(
+        languageCode: languageCode,
+        userId: userId,
+        channelId: channelId,
+        merchantId: merchantId,
+      ),
+      'share_method': shareMethod,
+      'gift_link_id': giftLinkId,
+    },
+  );
+
+  Map<String, String> _h5CommonParameters({
+    required String languageCode,
+    required String userId,
+    required String channelId,
+    required String merchantId,
+  }) => {
+    'lang': languageCode,
+    'user_id': userId,
+    'channel_id': channelId,
+    'merchant_id': merchantId,
+  };
 
   Uri get _webBaseUrl => switch (environment) {
     AppEnvironment.prod => Uri.parse('https://juan365drama.com/'),

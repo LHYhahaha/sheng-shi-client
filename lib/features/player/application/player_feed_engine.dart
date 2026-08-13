@@ -2,9 +2,6 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/analytics/analytics_definition.dart';
-import '../../../core/analytics/analytics_event.dart';
-import '../../../core/analytics/analytics_provider.dart';
 import '../../entitlement/application/entitlement_controller.dart';
 import '../../entitlement/domain/episode_access_decision.dart';
 import '../domain/player_access_presentation.dart';
@@ -440,21 +437,6 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     if (latestItem == null || !_canExecuteUserInitiatedRuntime(latestItem)) {
       return false;
     }
-    unawaited(
-      ref
-          .read(analyticsServiceProvider)
-          .track(
-            AnalyticsEvent(AnalyticsDefinitions.episodeUnlockRequest, {
-              'drama_id': latestItem.content.id,
-              'episode_id': latestItem.episode.id,
-              'unlock_type': 'coins',
-              'unlock_trigger_type': 'auto',
-              'required_coin_amount': latestItem.episode.requiredCoins,
-              'request_id':
-                  'auto_unlock_${sessionKey}_${latestItem.id}_${DateTime.now().microsecondsSinceEpoch}',
-            }),
-          ),
-    );
     return _unlockCurrentItemWithCoinApi(latestItem, autoUnlockNext: true);
   }
 

@@ -37,6 +37,11 @@ import 'package:gradient_borders/box_borders/gradient_box_border.dart';
 import 'package:permission_handler/permission_handler.dart' as permissions;
 
 void main() {
+  test('reward tabs map to their individual analytics page names', () {
+    expect(RewardTab.rewardsCoins.analyticsPageName, 'reward_coin_page');
+    expect(RewardTab.memberPoints.analyticsPageName, 'member_points_page');
+  });
+
   test('member points can be addressed as an independent rewards tab', () {
     expect(
       RoutePaths.rewardsLocation(tab: RoutePaths.memberPointsTab),
@@ -52,7 +57,13 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: RewardsPage())),
+      const ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: [AppLocalizations.delegate],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: RewardsPage(),
+        ),
+      ),
     );
 
     expect(
@@ -199,7 +210,11 @@ void main() {
             _FakeRewardCoinsRepository(status: _rewardCoinsStatus()),
           ),
         ],
-        child: const MaterialApp(home: Scaffold(body: RewardsCoinsPage())),
+        child: const MaterialApp(
+          localizationsDelegates: [AppLocalizations.delegate],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(body: RewardsCoinsPage()),
+        ),
       ),
     );
     await tester.pumpAndSettle();

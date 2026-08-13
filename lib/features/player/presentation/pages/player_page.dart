@@ -19,6 +19,8 @@ import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/analytics/analytics_popup_names.dart';
 import '../../../../core/analytics/analytics_service.dart';
+import '../../../../core/auth/user_info_store.dart';
+import '../../../../core/channel/channel_config_service.dart';
 import '../../../../core/config/app_environment.dart';
 import '../../../../core/modal/app_modal_provider.dart';
 import '../../../../core/modal/app_modal_service.dart';
@@ -3043,7 +3045,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _shareToFacebook(String dramaId, String dramaTitle) async {
-    final shareUrl = _shareUrl(dramaId);
+    final shareUrl = _shareUrl(dramaId, shareMethod: 'facebook');
     final shareMessage = _shareMessage(dramaTitle, shareUrl);
     final facebookShareUrl = Uri.https(
       'www.facebook.com',
@@ -3060,11 +3062,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
   }
 
-  Uri _shareUrl(String dramaId) {
+  Uri _shareUrl(String dramaId, {required String shareMethod}) {
     final languageCode = ref.read(appLocaleControllerProvider).languageCode;
+    final entitlement = ref.read(entitlementControllerProvider);
+    final userInfo = ref.read(userInfoStoreProvider);
+    final channel = ref.read(channelConfigServiceProvider).cachedConfig;
     return AppConfig.current.shareUrl(
       dramaId: dramaId,
       languageCode: languageCode,
+      userId: entitlement.userId ?? userInfo.userId ?? '',
+      channelId: channel?.channelFlag ?? '',
+      merchantId: channel?.merchantId ?? '',
+      shareMethod: shareMethod,
     );
   }
 
@@ -3076,7 +3085,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _copyShareLink(String dramaId, String dramaTitle) async {
-    final shareMessage = _shareMessage(dramaTitle, _shareUrl(dramaId));
+    final shareMessage = _shareMessage(
+      dramaTitle,
+      _shareUrl(dramaId, shareMethod: 'copy_link'),
+    );
     await Clipboard.setData(ClipboardData(text: shareMessage));
     if (mounted) {
       showAppCenterToast(context.l10n.shareToastCopySuccess);

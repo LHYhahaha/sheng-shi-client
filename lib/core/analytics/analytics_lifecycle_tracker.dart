@@ -89,13 +89,29 @@ class AnalyticsLifecycleTracker {
   }
 
   Future<void> onLifecycleChanged(AppLifecycleState state) async {
-    if (!_initialized) return;
+    if (!_initialized) {
+      debugPrint(
+        '[Analytics] Lifecycle ignored before app_launch is initialized: ${state.name}',
+      );
+      return;
+    }
     if (_isBackgroundState(state)) {
-      if (_backgrounded) return;
+      if (_backgrounded) {
+        debugPrint(
+          '[Analytics] Lifecycle background already recorded: ${state.name}',
+        );
+        return;
+      }
       _backgrounded = true;
       final startedAt = _foregroundStartedAt;
       _foregroundStartedAt = null;
-      if (startedAt == null) return;
+      if (startedAt == null) {
+        debugPrint(
+          '[Analytics] Lifecycle background has no foreground start time.',
+        );
+        return;
+      }
+      debugPrint('[Analytics] Reporting app_exit for lifecycle: ${state.name}');
       await _analytics.track(
         AnalyticsEvent(AnalyticsDefinitions.appExit, {
           'foreground_duration_ms': _now().difference(startedAt).inMilliseconds,
@@ -103,9 +119,14 @@ class AnalyticsLifecycleTracker {
       );
       return;
     }
-    if (state != AppLifecycleState.resumed || !_backgrounded) return;
+    if (state != AppLifecycleState.resumed || !_backgrounded) {
+      return;
+    }
     _backgrounded = false;
     _foregroundStartedAt = _now();
+    debugPrint(
+      '[Analytics] Reporting app_launch(hot) after foreground return.',
+    );
     await _analytics.track(
       const AnalyticsEvent(AnalyticsDefinitions.appLaunch, {
         'launch_type': 'hot',

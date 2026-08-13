@@ -369,7 +369,9 @@ class AuthController extends Notifier<AuthState> {
       );
       _syncNotificationPermission(session);
     } catch (error) {
-      _trackLoginFailure(provider, error);
+      if (_isThirdPartyLoginProvider(provider)) {
+        _trackLoginFailure(provider, error);
+      }
       state = state.copyWith(
         isLoading: false,
         error: error,
@@ -532,10 +534,24 @@ class AuthController extends Notifier<AuthState> {
     );
   }
 
+  bool _isThirdPartyLoginProvider(AuthProviderType provider) =>
+      provider == AuthProviderType.google ||
+      provider == AuthProviderType.facebook ||
+      provider.name == 'apple';
+
   String _loginFailureReason(Object error) {
-    if (error is TimeoutException) return 'timeout';
-    if (error is ApiException) return error.code.name;
-    return 'unknown';
+    if (error is TimeoutException) return 'network_error';
+    if (error is ApiException &&
+        (error.code == ApiErrorCode.network ||
+            error.code == ApiErrorCode.timeout)) {
+      return 'network_error';
+    }
+    if (error is OAuthException &&
+        error.reason == OAuthFailureReason.credentialMissing) {
+      return 'credential_missing';
+    }
+    if (error is OAuthException) return 'sdk_error';
+    return 'unknown_error';
   }
 
   Future<DeleteAccountResult?> deleteAccount() async {

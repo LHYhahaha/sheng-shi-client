@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/analytics/analytics_page_tracker.dart';
 import 'member_points_page.dart';
 import 'rewards_coins_page.dart';
 
@@ -15,28 +19,73 @@ enum RewardTab {
         ? RewardTab.memberPoints
         : RewardTab.rewardsCoins;
   }
+
+  String get analyticsPageName => switch (this) {
+    RewardTab.rewardsCoins => AnalyticsPageNames.rewardCoin,
+    RewardTab.memberPoints => AnalyticsPageNames.memberPoints,
+  };
 }
 
 /// 奖励中心容器页。
 ///
 /// 两个子页面保持独立，只由这里负责顶部导航与切换。外部入口可通过路由 query 直接
 /// 指定初始页面，后续接入 Rewards coins 数据时无需改动容器结构。
-class RewardsPage extends StatefulWidget {
+class RewardsPage extends ConsumerStatefulWidget {
   const RewardsPage({this.initialTab = RewardTab.rewardsCoins, super.key});
 
   final RewardTab initialTab;
 
   @override
-  State<RewardsPage> createState() => _RewardsPageState();
+  ConsumerState<RewardsPage> createState() => _RewardsPageState();
 }
 
-class _RewardsPageState extends State<RewardsPage> {
+class _RewardsPageState extends ConsumerState<RewardsPage> {
   late RewardTab _selectedTab;
+  late AnalyticsPageTracker _pageTracker;
+  bool _hasStartedAnalyticsSession = false;
 
   @override
   void initState() {
     super.initState();
     _selectedTab = widget.initialTab;
+    // dispose 阶段不能再通过 ref 获取 provider，提前保留实例以结束当前 Tab 会话。
+    _pageTracker = ref.read(analyticsPageTrackerProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _hasStartedAnalyticsSession = true;
+      unawaited(_pageTracker.push(_selectedTab.analyticsPageName));
+    });
+  }
+
+  @override
+  void didUpdateWidget(RewardsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialTab != widget.initialTab) {
+      _selectTab(widget.initialTab);
+    }
+  }
+
+  @override
+  void dispose() {
+    // RewardsPage 是一个路由容器，两个 Tab 都是同一个 route 内的独立页面会话。
+    // 路由退出时结束当前可见 Tab；tracker 会按导航栈恢复返回页的 page_view。
+    if (_hasStartedAnalyticsSession) {
+      unawaited(_pageTracker.pop(_selectedTab.analyticsPageName));
+    }
+    super.dispose();
+  }
+
+  void _selectTab(RewardTab tab) {
+    if (tab == _selectedTab) {
+      return;
+    }
+    setState(() => _selectedTab = tab);
+    if (_hasStartedAnalyticsSession) {
+      // replace 会先结束旧 Tab 的 page_leave，再开始新 Tab 的 page_view。
+      unawaited(_pageTracker.replace(tab.analyticsPageName));
+    }
   }
 
   @override
@@ -74,7 +123,7 @@ class _RewardsPageState extends State<RewardsPage> {
                     context.go(RoutePaths.profile);
                   }
                 },
-                onSelected: (tab) => setState(() => _selectedTab = tab),
+                onSelected: _selectTab,
               ),
               Expanded(
                 child: IndexedStack(
