@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 
 import 'package:app_links/app_links.dart';
 import 'package:bot_toast/bot_toast.dart';
@@ -116,6 +117,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         deviceIdentifierReporter: ref.read(
           adjustDeviceIdentifierReporterProvider,
         ),
+        onDeferredDeeplink: _handleAdjustDeferredDeeplink,
       ).initialize();
       debugPrint(
         '[StartupSdk] Adjust init request end '
@@ -129,6 +131,15 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       debugPrint('[Adjust] Startup initialization skipped: $error');
       debugPrintStack(stackTrace: stackTrace);
     }
+  }
+
+  void _handleAdjustDeferredDeeplink(Uri deeplink) {
+    // Adjust 的首启回调可能早于首帧完成；延后到下一帧，确保 GoRouter 可用。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_handleAppLink(deeplink));
+      }
+    });
   }
 
   @override

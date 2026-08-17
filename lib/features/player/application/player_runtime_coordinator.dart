@@ -471,7 +471,7 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
       return decision;
     }
     return EpisodeAccessDecision(
-      type: EpisodeAccessDecisionType.waitUnlock,
+      type: EpisodeAccessDecisionType.showRechargeDialog,
       dramaId: decision.dramaId,
       episodeId: decision.episodeId,
       itemId: decision.itemId,

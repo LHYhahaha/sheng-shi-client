@@ -21,11 +21,19 @@ import 'player_feed_engine_access_flow.dart';
 import 'player_overlay_orchestrator.dart';
 import 'player_recharge_unlock_controller.dart';
 
-bool rechargeVipOnlyForItem(
+PlayerRechargePopupType rechargePopupTypeForItem(
   PlayerFeedItem item, {
-  required bool requestedVipOnly,
-}) =>
-    requestedVipOnly || item.episode.unlockType == EpisodeUnlockType.membership;
+  required bool isSequentialUnlockEligible,
+  bool requestedVipOnly = false,
+}) {
+  if (!isSequentialUnlockEligible) {
+    return PlayerRechargePopupType.vipOnlyJump;
+  }
+  return requestedVipOnly ||
+          item.episode.unlockType == EpisodeUnlockType.membership
+      ? PlayerRechargePopupType.vipOnly
+      : PlayerRechargePopupType.withCoin;
+}
 
 /// Player 解锁/充值弹窗编排：统一走 [AppModalService]，避免 Page 直接 showModalBottomSheet。
 class PlayerUnlockModalCoordinator {
@@ -139,11 +147,16 @@ class PlayerUnlockModalCoordinator {
     bool vipOnly = false,
     bool launchedByAutoSheet = false,
   }) async {
-    final isVipOnly = rechargeVipOnlyForItem(item, requestedVipOnly: vipOnly);
+    final popupType = rechargePopupTypeForItem(
+      item,
+      isSequentialUnlockEligible: _engine.isSequentialUnlockEligible(item),
+      requestedVipOnly: vipOnly,
+    );
     await _rechargeController.open(
       itemId: item.id,
       requiredCoins: item.episode.requiredCoins,
-      vipOnly: isVipOnly,
+      vipOnly: popupType == PlayerRechargePopupType.vipOnly,
+      jumpVipOnly: popupType == PlayerRechargePopupType.vipOnlyJump,
     );
     if (!context.mounted) {
       return;
@@ -175,7 +188,7 @@ class PlayerUnlockModalCoordinator {
         'drama_id': item.content.id,
         'episode_id': item.episode.id,
         'required_coin_amount': item.episode.requiredCoins,
-        'recharge_popup_type': isVipOnly ? 'vip_only' : 'with_coin',
+        'recharge_popup_type': popupType.analyticsValue,
       },
     );
 

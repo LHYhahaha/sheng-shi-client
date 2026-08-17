@@ -251,8 +251,7 @@ class _PlayerRechargeUnlockSheetState
     final coinBalance = entitlement.coinBalance;
     final requiredCoins = state.offer?.requiredCoins ?? 0;
     final hasEnoughCoins = coinBalance >= requiredCoins;
-    final isVipOnly =
-        state.rechargePopupType == PlayerRechargePopupType.vipOnly;
+    final isVipOnly = state.rechargePopupType.isVipOnly;
     final targetItem = ref
         .watch(playerFeedControllerProvider(widget.sessionKey))
         .items
@@ -485,42 +484,46 @@ class _OfferContent extends ConsumerWidget {
     final isProcessing = state.status == PlayerRechargeUnlockStatus.processing;
     // 检查用户是否已是会员
     final isMember = ref.watch(entitlementControllerProvider).isMember;
-    final isVipOnly =
-        state.rechargePopupType == PlayerRechargePopupType.vipOnly;
+    final isVipOnly = state.rechargePopupType.isVipOnly;
     final hasNoPackages =
         (isVipOnly || offer.coinPackages.isEmpty) &&
         (isMember || offer.membershipPackages.isEmpty);
 
-    return Stack(
+    return Column(
       children: [
-        Positioned.fill(
+        _RechargeHeader(
+          offer: offer,
+          popupType: state.rechargePopupType,
+          onClose: onClose,
+        ),
+        Expanded(
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             padding: EdgeInsets.fromLTRB(
               16,
-              74,
+              0,
               16,
               28 + MediaQuery.paddingOf(context).bottom,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 如果用户有足够金币，显示"使用金币解锁"按钮
-                if (onUnlockWithCoin != null) ...[
-                  _CoinUnlockButton(
-                    onTap: onUnlockWithCoin!,
-                    coinCost: offer.requiredCoins,
-                    coinBalance: coinBalance,
-                    isProcessing: isProcessing,
-                  ),
-                  const SizedBox(height: 16),
-                  // 分隔线
-                  Divider(
-                    height: 1,
-                    color: Colors.white.withValues(alpha: 0.09),
-                  ),
-                  const SizedBox(height: 16),
-                ],
+                // // 如果用户有足够金币，显示"使用金币解锁"按钮
+                // if (onUnlockWithCoin != null) ...[
+                //   _CoinUnlockButton(
+                //     onTap: onUnlockWithCoin!,
+                //     coinCost: offer.requiredCoins,
+                //     coinBalance: coinBalance,
+                //     isProcessing: isProcessing,
+                //   ),
+                //   const SizedBox(height: 16),
+                //   // 分隔线
+                //   Divider(
+                //     height: 1,
+                //     color: Colors.white.withValues(alpha: 0.09),
+                //   ),
+                //   const SizedBox(height: 16),
+                // ],
                 _UnlockInfo(offer: offer),
                 const SizedBox(height: 19),
                 if (hasNoPackages)
@@ -597,47 +600,6 @@ class _OfferContent extends ConsumerWidget {
             ),
           ),
         ),
-        const Positioned(
-          left: 0,
-          right: 0,
-          top: 0,
-          height: 18,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF40203E), Color(0x001D1D20)],
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          left: 0,
-          right: 0,
-          top: 0,
-          child: _RechargeHeader(offer: offer, onClose: onClose),
-        ),
-        // Positioned(
-        //   left: 0,
-        //   right: 0,
-        //   bottom: 0,
-        //   height: 24,
-        //   child: IgnorePointer(
-        //     child: DecoratedBox(
-        //       decoration: BoxDecoration(
-        //         gradient: LinearGradient(
-        //           begin: Alignment.topCenter,
-        //           end: Alignment.bottomCenter,
-        //           colors: [
-        //             const Color(0x001D1D20),
-        //             const Color(0xFF1D1D20).withValues(alpha: 0.96),
-        //           ],
-        //         ),
-        //       ),
-        //     ),
-        //   ),
-        // ),
       ],
     );
   }
@@ -718,9 +680,14 @@ class _UnlockInfo extends StatelessWidget {
 }
 
 class _RechargeHeader extends ConsumerWidget {
-  const _RechargeHeader({required this.offer, required this.onClose});
+  const _RechargeHeader({
+    required this.offer,
+    required this.popupType,
+    required this.onClose,
+  });
 
   final PlayerRechargeUnlockOffer offer;
+  final PlayerRechargePopupType popupType;
   final VoidCallback onClose;
 
   @override
@@ -728,6 +695,10 @@ class _RechargeHeader extends ConsumerWidget {
     final entitlementState = ref.watch(entitlementControllerProvider);
     final totalCoinBalance =
         entitlementState.coinBalance + entitlementState.bonusBalance;
+    final isVipOnly = popupType.isVipOnly;
+    final title = popupType.isJumpUnlock
+        ? context.l10n.paywallJumpTitle
+        : context.l10n.paywallVipTitle;
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -737,41 +708,113 @@ class _RechargeHeader extends ConsumerWidget {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 15),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
         child: Column(
           children: [
-            SizedBox(
-              // height: 48,
-              child: Row(
-                children: [
-                  _InlineCoinMetric(
-                    label: '${context.l10n.unitCoin}:',
-                    value: offer.requiredCoins,
-                  ),
-                  const SizedBox(width: 34),
-                  _InlineCoinMetric(
-                    key: const ValueKey('player_recharge_unlock_balance'),
-                    label: '${context.l10n.playerBalance}:',
-                    value: totalCoinBalance,
-                  ),
-                  const Spacer(),
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onClose,
-                    child: SvgPicture.asset(
-                      "assets/images/player/close.svg",
-                      width: 40,
-                      height: 40,
+            if (isVipOnly)
+              _VipOnlyRechargeHeader(
+                title: title,
+                description: popupType.isJumpUnlock
+                    ? context.l10n.paywallJumpDescription
+                    : null,
+                onClose: onClose,
+              )
+            else ...[
+              SizedBox(
+                child: Row(
+                  children: [
+                    _InlineCoinMetric(
+                      label: '${context.l10n.unitCoin}:',
+                      value: offer.requiredCoins,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 34),
+                    _InlineCoinMetric(
+                      key: const ValueKey('player_recharge_unlock_balance'),
+                      label: '${context.l10n.playerBalance}:',
+                      value: totalCoinBalance,
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onClose,
+                      child: SvgPicture.asset(
+                        "assets/images/player/close.svg",
+                        width: 40,
+                        height: 40,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Divider(height: 1, color: Colors.white.withValues(alpha: 0.09)),
+              const SizedBox(height: 16),
+              Divider(height: 1, color: Colors.white.withValues(alpha: 0.09)),
+            ],
           ],
         ),
       ),
+    );
+  }
+}
+
+class _VipOnlyRechargeHeader extends StatelessWidget {
+  const _VipOnlyRechargeHeader({
+    required this.title,
+    required this.description,
+    required this.onClose,
+  });
+
+  final String title;
+  final String? description;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.topCenter,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 42),
+          child: Column(
+            children: [
+              Row(),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (description != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  description!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.55),
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        Positioned(
+          right: 0,
+          top: 0,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onClose,
+            child: SvgPicture.asset(
+              "assets/images/player/close.svg",
+              width: 40,
+              height: 40,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1133,7 +1176,7 @@ class _MembershipInfoArea extends StatelessWidget {
   });
 
   final PlayerRechargeMembershipPackage package;
-  final String description;
+  final String? description;
   final bool showPromo;
   final String? promoDescription;
   final String? displayPrice;
@@ -1167,17 +1210,19 @@ class _MembershipInfoArea extends StatelessWidget {
                     height: 1.5,
                   ),
                 ),
-                const SizedBox(height: 9),
-                Text(
-                  description,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: const Color(0xFF401908).withValues(alpha: 0.6),
-                    fontSize: 10,
-                    fontWeight: FontWeight.normal,
+                if (description != null) ...[
+                  const SizedBox(height: 9),
+                  Text(
+                    description!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: const Color(0xFF401908).withValues(alpha: 0.6),
+                      fontSize: 10,
+                      fontWeight: FontWeight.normal,
+                    ),
                   ),
-                ),
+                ],
                 if (promoDescription != null)
                   Text(
                     promoDescription!,
@@ -1356,7 +1401,9 @@ class _MembershipPackageCard extends ConsumerWidget {
       );
     }
 
-    final description = context.l10n.playerAutoRenewCancel;
+    final description = package.showsAutoRenewNotice
+        ? context.l10n.playerAutoRenewCancel
+        : null;
     return Semantics(
       button: true,
       selected: selected,

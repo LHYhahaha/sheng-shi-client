@@ -212,6 +212,7 @@ class HlsLocalProxyServer {
   final HlsDiskCacheStore _diskCacheStore;
   final HlsNetworkRequestCoordinator _networkCoordinator;
   final HlsTrafficGate _trafficGate;
+  final Map<String, Duration> _firstSegmentDurations = <String, Duration>{};
 
   /// 远端请求超时。
   final Duration timeout;
@@ -247,6 +248,7 @@ class HlsLocalProxyServer {
     _server = null;
     await server?.close(force: true);
     _cacheStore.clear();
+    _firstSegmentDurations.clear();
     _log('proxy server stop');
   }
 
@@ -362,6 +364,16 @@ class HlsLocalProxyServer {
       );
       return;
     }
+    final firstSegment = parseFirstHlsMediaSegment(remoteUri, response.body);
+    if (firstSegment != null) {
+      _firstSegmentDurations[firstSegment.uri.toString()] =
+          firstSegment.duration;
+      _log(
+        '[hls-first-frame] playlist=${_safeResourceName(remoteUri)} '
+        'firstSegmentDurationMs=${firstSegment.duration.inMilliseconds} '
+        'firstSegment=${_safeResourceName(firstSegment.uri)}',
+      );
+    }
     // 只重写 playlist 中的媒体 URI，不改 HLS tag。这样方便观察代理链路，
     // 也避免客户端在 spike 阶段承担完整 HLS manifest 解析职责。
     final rewritten = rewritePlaylist(
@@ -396,7 +408,7 @@ class HlsLocalProxyServer {
       await _sendBytes(request, cachedBytes);
       _log(
         'segment proxy fetch cacheTier=memory source=$remoteUri '
-        'bytes=${cachedBytes.length}',
+        'bytes=${cachedBytes.length}${_firstSegmentTimingSuffix(remoteUri)}',
       );
       return;
     }
@@ -409,7 +421,7 @@ class HlsLocalProxyServer {
       await _sendBytes(request, disk.bytes, contentType: disk.contentType);
       _log(
         'segment proxy fetch cacheTier=disk source=$remoteUri '
-        'bytes=${disk.bytes.length}',
+        'bytes=${disk.bytes.length}${_firstSegmentTimingSuffix(remoteUri)}',
       );
       return;
     }
@@ -463,7 +475,8 @@ class HlsLocalProxyServer {
     );
     _log(
       'segment proxy fetch cacheTier=remote source=$remoteUri '
-      'elapsedMs=${_elapsedMs(startedAt)} bytes=${response.bytes.length}',
+      'elapsedMs=${_elapsedMs(startedAt)} bytes=${response.bytes.length}'
+      '${_firstSegmentTimingSuffix(remoteUri)}',
     );
   }
 
@@ -522,7 +535,8 @@ class HlsLocalProxyServer {
       );
       _log(
         'segment proxy stream fetch cacheTier=remote source=$remoteUri '
-        'elapsedMs=${_elapsedMs(startedAt)} bytes=${completed.bytes.length}',
+        'elapsedMs=${_elapsedMs(startedAt)} bytes=${completed.bytes.length}'
+        '${_firstSegmentTimingSuffix(remoteUri)}',
       );
     } catch (error) {
       try {
@@ -631,6 +645,15 @@ class HlsLocalProxyServer {
     return DateTime.now().difference(startedAt).inMilliseconds;
   }
 
+  String _firstSegmentTimingSuffix(Uri uri) {
+    final duration = _firstSegmentDurations[uri.toString()];
+    if (duration == null) return '';
+    return ' firstFrameSegmentDurationMs=${duration.inMilliseconds} '
+        'firstFrameSegment=${_safeResourceName(uri)}';
+  }
+
+  String _safeResourceName(Uri uri) => uri.pathSegments.lastOrNull ?? uri.path;
+
   void _log(String message) {
     const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');
     if (shouldPrint) {
@@ -639,6 +662,42 @@ class HlsLocalProxyServer {
       );
     }
   }
+}
+
+/// 首个媒体分片的 playlist 元数据，仅用于首帧性能诊断。
+class HlsFirstMediaSegment {
+  const HlsFirstMediaSegment({required this.duration, required this.uri});
+
+  final Duration duration;
+  final Uri uri;
+}
+
+/// 从 media playlist 中取第一组 `#EXTINF` 与其后的媒体 URI。
+///
+/// master playlist 没有 `#EXTINF`，因此返回 null。
+HlsFirstMediaSegment? parseFirstHlsMediaSegment(
+  Uri playlistUri,
+  String playlistBody,
+) {
+  Duration? pendingDuration;
+  for (final rawLine in const LineSplitter().convert(playlistBody)) {
+    final line = rawLine.trim();
+    final durationMatch = RegExp(r'^#EXTINF:([0-9.]+)').firstMatch(line);
+    if (durationMatch != null) {
+      final seconds = double.tryParse(durationMatch.group(1)!);
+      pendingDuration = seconds == null
+          ? null
+          : Duration(milliseconds: (seconds * 1000).round());
+      continue;
+    }
+    if (pendingDuration != null && line.isNotEmpty && !line.startsWith('#')) {
+      return HlsFirstMediaSegment(
+        duration: pendingDuration,
+        uri: playlistUri.resolve(line),
+      );
+    }
+  }
+  return null;
 }
 
 String rewritePlaylist(

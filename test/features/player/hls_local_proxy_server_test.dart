@@ -8,6 +8,31 @@ import 'package:drama_client/features/player/data/hls_traffic_gate.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'parses the first media segment duration and resolved uri for timing logs',
+    () {
+      final info = parseFirstHlsMediaSegment(
+        Uri.parse('https://cdn.example.com/hls/media.m3u8'),
+        '#EXTM3U\n#EXTINF:2.000,\ninit/seg-000.ts\n#EXTINF:4.0,\nseg-001.ts\n',
+      );
+
+      expect(info!.duration, const Duration(seconds: 2));
+      expect(
+        info.uri,
+        Uri.parse('https://cdn.example.com/hls/init/seg-000.ts'),
+      );
+    },
+  );
+
+  test('does not report a media segment for a master playlist', () {
+    final info = parseFirstHlsMediaSegment(
+      Uri.parse('https://cdn.example.com/hls/master.m3u8'),
+      '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000\nlow.m3u8\n',
+    );
+
+    expect(info, isNull);
+  });
+
   test('playlist rewrite resolves relative segment and playlist urls', () {
     final rewritten = rewritePlaylist(
       Uri.parse('https://cdn.example.com/hls/master.m3u8'),

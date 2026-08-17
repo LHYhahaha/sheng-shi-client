@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../config/app_environment.dart';
 import 'adjust_device_identifier_reporter.dart';
+import 'adjust_deeplink_dispatcher.dart';
 
 /// NovaShort 的 Adjust 初始化边界。
 ///
@@ -16,9 +17,13 @@ class AdjustService {
     String appToken = _novaShortAppToken,
     AppEnvironment? environment,
     AdjustDeviceIdentifierReporter? deviceIdentifierReporter,
+    void Function(Uri deeplink)? onDeferredDeeplink,
   }) : _configuredAppToken = appToken,
        _environment = environment ?? AppConfig.current.environment,
-       _deviceIdentifierReporter = deviceIdentifierReporter;
+       _deviceIdentifierReporter = deviceIdentifierReporter,
+       _deferredDeeplinkDispatcher = onDeferredDeeplink == null
+           ? null
+           : AdjustDeeplinkDispatcher(onDeferredDeeplink);
 
   /// NovaShort 在 Adjust 后台登记的应用识别码。
   static const _novaShortAppToken = 'i3xfcgiqzsao';
@@ -27,6 +32,7 @@ class AdjustService {
   final String _configuredAppToken;
   final AppEnvironment _environment;
   final AdjustDeviceIdentifierReporter? _deviceIdentifierReporter;
+  final AdjustDeeplinkDispatcher? _deferredDeeplinkDispatcher;
 
   /// 初始化 Android Adjust SDK。
   ///
@@ -43,6 +49,7 @@ class AdjustService {
       }
 
       final config = AdjustConfig(_configuredAppToken, _adjustEnvironment);
+      _configureDeferredDeeplink(config);
       _configureAttributionLogging(config);
       if (kDebugMode) {
         _configureDebugLogging(config);
@@ -75,6 +82,19 @@ class AdjustService {
         'message=${session.message}, adid=${session.adid}, '
         'timestamp=${session.timestamp}.',
       );
+    };
+  }
+
+  /// 延迟深链不会再次触发系统 Scheme；由 Flutter 统一转交现有路由流程。
+  void _configureDeferredDeeplink(AdjustConfig config) {
+    config.isDeferredDeeplinkOpeningEnabled = false;
+    config.deferredDeeplinkCallback = (deeplink) {
+      debugPrint('[Adjust] Deferred deeplink: $deeplink');
+      final dispatched =
+          _deferredDeeplinkDispatcher?.dispatch(deeplink) ?? false;
+      if (!dispatched && deeplink?.trim().isNotEmpty == true) {
+        debugPrint('[Adjust] Deferred deeplink ignored: $deeplink');
+      }
     };
   }
 

@@ -84,6 +84,7 @@ class PlayerRechargeUnlockMapper {
       googlePriceLabel:
           iapInfo?.displayPrice ??
           _serverPriceLabel(dto.currencySymbol, dto.priceText),
+      memberType: dto.memberType,
       periodIso: _periodIso(dto.periodType, dto.periodValue),
       originalPriceLabel: iapInfo?.displayOriginalPrice,
       isPromotional: hasIapPromo,

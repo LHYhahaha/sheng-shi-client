@@ -158,18 +158,22 @@ class StoreVipPackageCard extends ConsumerWidget {
                                         fontSize: 18,
                                       ),
                                 ),
-                                const SizedBox(height: 9),
-                                Text(
-                                  context.l10n.playerAutoRenewCancel,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.labelSmall
-                                      ?.copyWith(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.normal,
-                                        color: _ink.withValues(alpha: 0.6),
-                                      ),
-                                ),
+                                if (package.showsAutoRenewNotice) ...[
+                                  const SizedBox(height: 9),
+                                  Text(
+                                    context.l10n.playerAutoRenewCancel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.normal,
+                                          color: _ink.withValues(alpha: 0.6),
+                                        ),
+                                  ),
+                                ],
                                 if (promoDescription != null)
                                   Text(
                                     promoDescription,

@@ -1,20 +1,36 @@
 import 'package:drama_client/features/entitlement/domain/episode_unlock_type.dart';
 import 'package:drama_client/features/player/application/player_unlock_modal_coordinator.dart';
+import 'package:drama_client/features/player/application/player_recharge_unlock_controller.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('membership episode always opens the vip-only recharge flow', () {
+  test('first membership episode opens the vip-only recharge flow', () {
     final item = _item(unlockType: EpisodeUnlockType.membership);
 
-    expect(rechargeVipOnlyForItem(item, requestedVipOnly: false), isTrue);
+    expect(
+      rechargePopupTypeForItem(item, isSequentialUnlockEligible: true),
+      PlayerRechargePopupType.vipOnly,
+    );
   });
 
-  test('coin episode keeps the requested recharge flow type', () {
+  test('jump episode opens the jump vip-only recharge flow', () {
     final item = _item(unlockType: EpisodeUnlockType.coins);
 
-    expect(rechargeVipOnlyForItem(item, requestedVipOnly: false), isFalse);
+    expect(
+      rechargePopupTypeForItem(item, isSequentialUnlockEligible: false),
+      PlayerRechargePopupType.vipOnlyJump,
+    );
+  });
+
+  test('first coin episode keeps the combined recharge flow', () {
+    final item = _item(unlockType: EpisodeUnlockType.coins);
+
+    expect(
+      rechargePopupTypeForItem(item, isSequentialUnlockEligible: true),
+      PlayerRechargePopupType.withCoin,
+    );
   });
 }
 

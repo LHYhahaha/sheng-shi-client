@@ -45,12 +45,18 @@ enum PlayerRechargeUnlockStatus {
 
 enum PlayerRechargePopupType {
   withCoin,
-  vipOnly;
+  vipOnly,
+  vipOnlyJump;
 
   String get analyticsValue => switch (this) {
     PlayerRechargePopupType.withCoin => 'with_coin',
-    PlayerRechargePopupType.vipOnly => 'vip_only',
+    PlayerRechargePopupType.vipOnly ||
+    PlayerRechargePopupType.vipOnlyJump => 'vip_only',
   };
+
+  bool get isVipOnly => this != PlayerRechargePopupType.withCoin;
+
+  bool get isJumpUnlock => this == PlayerRechargePopupType.vipOnlyJump;
 }
 
 enum PlayerRechargePaymentStage { creatingOrder, waitingPayment, verifying }
@@ -209,6 +215,7 @@ class PlayerRechargeUnlockController
     required String itemId,
     required int requiredCoins,
     bool vipOnly = false,
+    bool jumpVipOnly = false,
   }) async {
     final generation = ++_generation;
     _purchaseGeneration++;
@@ -216,6 +223,11 @@ class PlayerRechargeUnlockController
     // 检查用户是否已是会员
     final isMember = ref.read(entitlementControllerProvider).isMember;
 
+    final popupType = jumpVipOnly
+        ? PlayerRechargePopupType.vipOnlyJump
+        : vipOnly
+        ? PlayerRechargePopupType.vipOnly
+        : PlayerRechargePopupType.withCoin;
     state = PlayerRechargeUnlockState(
       status: PlayerRechargeUnlockStatus.loading,
       itemId: itemId,
@@ -224,9 +236,7 @@ class PlayerRechargeUnlockController
       selectedMembershipPackageId: null,
       paymentStage: null,
       purchaseFailureKind: null,
-      rechargePopupType: vipOnly
-          ? PlayerRechargePopupType.vipOnly
-          : PlayerRechargePopupType.withCoin,
+      rechargePopupType: popupType,
     );
 
     try {
@@ -251,9 +261,7 @@ class PlayerRechargeUnlockController
         selectedMembershipPackageId: null,
         paymentStage: null,
         purchaseFailureKind: null,
-        rechargePopupType: vipOnly
-            ? PlayerRechargePopupType.vipOnly
-            : PlayerRechargePopupType.withCoin,
+        rechargePopupType: popupType,
       );
     } catch (error) {
       if (!_isCurrent(generation)) {

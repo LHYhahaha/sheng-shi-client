@@ -1,4 +1,5 @@
 import '../../pay/domain/iap_product_info.dart';
+import '../../pay/domain/member_product_type.dart';
 
 /// 未解锁剧集的充值/会员组合弹窗数据。
 ///
@@ -91,6 +92,7 @@ class PlayerRechargeMembershipPackage {
     required this.periodLabel,
     required this.googleProductId,
     required this.googlePriceLabel,
+    this.memberType = '',
     this.periodIso,
     this.originalPriceLabel,
     this.isPromotional = false,
@@ -105,6 +107,7 @@ class PlayerRechargeMembershipPackage {
   final String periodLabel;
   final String googleProductId;
   final String googlePriceLabel;
+  final String memberType;
   final String? periodIso;
   final String? originalPriceLabel;
   final bool isPromotional;
@@ -130,6 +133,10 @@ class PlayerRechargeMembershipPackage {
   /// 包含 displayPrice（促销价或原价）、displayOriginalPrice（划线原价）、
   /// offerToken（购买时传入）等。为 null 时表示尚未查询到 IAP 信息。
   final IapProductInfo? iapInfo;
+
+  /// 仅订阅会员显示自动续费提示。
+  bool get showsAutoRenewNotice =>
+      MemberProductType.usesGoogleSubscriptionOffer(memberType);
 
   String get title => '$periodLabel VIP';
 }

@@ -1207,6 +1207,18 @@ class AppLocalizations {
   String get playerRechargeUnlockTitle =>
       _remoteText('wallet.button.top_up', en: 'Recharge to unlock', zh: '充值解锁');
 
+  String get paywallVipTitle =>
+      _remoteText('paywall.vip.title', en: 'Watch VIP Content', zh: '观看会员内容');
+
+  String get paywallJumpTitle =>
+      _remoteText('paywall.jump.title', en: 'Unlock Episode', zh: '解锁剧集');
+
+  String get paywallJumpDescription => _remoteText(
+    'paywall.jump.desc',
+    en: 'Join VIP to unlock all. Coins unlock episodes in order.',
+    zh: '开通会员解锁全集，金币仅可按顺序解锁',
+  );
+
   String get playerCoinPackages =>
       _remoteText('payment_modal.button.buy_now', en: 'Coins', zh: '金币充值');
 

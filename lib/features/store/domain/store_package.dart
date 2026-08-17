@@ -1,3 +1,5 @@
+import '../../pay/domain/member_product_type.dart';
+
 /// 商店套餐类型。
 ///
 /// coins 和 vip 的购买后权益不同，不能只按卡片样式区分。
@@ -145,6 +147,11 @@ class StorePackage {
   final int promotionExpireSeconds;
 
   bool get isCoinPackage => kind == StorePackageKind.coins;
+
+  /// 仅订阅会员显示“自动续费，可随时取消”提示。
+  bool get showsAutoRenewNotice =>
+      !isCoinPackage &&
+      MemberProductType.usesGoogleSubscriptionOffer(memberType);
 
   /// 套餐展示中的总金币数。
   ///

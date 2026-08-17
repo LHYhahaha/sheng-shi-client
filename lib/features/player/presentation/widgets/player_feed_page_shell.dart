@@ -185,8 +185,15 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
                 PlayerAccessPresentationState.lockedRecharge ||
             accessPresentation ==
                 PlayerAccessPresentationState.lockedMembership);
+    final isJumpLockedEpisode =
+        isLockedSettledPage &&
+        !item.content.isSequentialUnlockEligible(
+          item.episode,
+          isEpisodeUnlocked: entitlement.isEpisodeUnlocked,
+        );
     final lockedActionLabel =
-        accessPresentation == PlayerAccessPresentationState.lockedMembership
+        accessPresentation == PlayerAccessPresentationState.lockedMembership ||
+            isJumpLockedEpisode
         ? context.l10n.playerMemberUnlock
         : context.l10n.playerUnlockNow;
     final adUnlock = item.episode.adUnlock;
@@ -297,6 +304,7 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
           onUnlockTap: isLockedSettledPage
               ? () {
                   final unlockButtonAction = switch (accessPresentation) {
+                    _ when isJumpLockedEpisode => 'open_recharge_vip_only',
                     PlayerAccessPresentationState.lockedCoins =>
                       'open_recharge_with_coin',
                     PlayerAccessPresentationState.lockedRecharge =>
@@ -320,7 +328,8 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
                     );
                   }
                   if (accessPresentation ==
-                      PlayerAccessPresentationState.lockedMembership) {
+                          PlayerAccessPresentationState.lockedMembership ||
+                      isJumpLockedEpisode) {
                     onOpenMembership();
                     return;
                   }
