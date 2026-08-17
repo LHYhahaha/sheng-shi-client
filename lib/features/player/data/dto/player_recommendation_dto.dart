@@ -1,4 +1,5 @@
 import '../../../../core/network/json_field_parser.dart';
+import '../../../drama/data/dto/drama_watch_progress_dto.dart';
 
 /// 播放器推荐项远程 DTO。
 ///
@@ -16,6 +17,7 @@ class PlayerRecommendationDto {
     required this.isVipOnly,
     required this.status,
     required this.episodeTotal,
+    this.watchProgress,
   });
 
   final int id;
@@ -29,6 +31,7 @@ class PlayerRecommendationDto {
   final int isVipOnly;
   final int status;
   final int episodeTotal;
+  final DramaWatchProgressDto? watchProgress;
 
   factory PlayerRecommendationDto.fromJson(Map<String, Object?> json) {
     return PlayerRecommendationDto(
@@ -39,10 +42,14 @@ class PlayerRecommendationDto {
       summary: JsonFieldParser.optionalString(json, 'summary') ?? '',
       tagsName: _parseTagsName(json['tags_name']),
       playCount: JsonFieldParser.optionalInt(json, 'play_count') ?? 0,
-      trailerEpisodeNum: JsonFieldParser.optionalInt(json, 'trailer_episode_num') ?? 0,
+      trailerEpisodeNum:
+          JsonFieldParser.optionalInt(json, 'trailer_episode_num') ?? 0,
       isVipOnly: JsonFieldParser.optionalInt(json, 'is_vip_only') ?? 0,
       status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
       episodeTotal: JsonFieldParser.optionalInt(json, 'episode_total') ?? 0,
+      watchProgress: DramaWatchProgressDto.fromJsonOrNull(
+        json['watch_progress'],
+      ),
     );
   }
 

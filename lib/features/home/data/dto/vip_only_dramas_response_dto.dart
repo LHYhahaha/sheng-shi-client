@@ -1,4 +1,5 @@
 import '../../../../core/network/json_field_parser.dart';
+import '../../../drama/data/dto/drama_watch_progress_dto.dart';
 
 class VipOnlyDramasResponseDto {
   const VipOnlyDramasResponseDto({required this.limit, required this.dramas});
@@ -29,12 +30,14 @@ class VipOnlyDramaDto {
     required this.coverUrl,
     required this.title,
     required this.summary,
+    this.watchProgress,
   });
 
   final int id;
   final String coverUrl;
   final String title;
   final String summary;
+  final DramaWatchProgressDto? watchProgress;
 
   factory VipOnlyDramaDto.fromJson(Map<String, Object?> json) {
     return VipOnlyDramaDto(
@@ -42,6 +45,9 @@ class VipOnlyDramaDto {
       coverUrl: JsonFieldParser.optionalString(json, 'cover_url') ?? '',
       title: JsonFieldParser.optionalString(json, 'title') ?? '',
       summary: JsonFieldParser.optionalString(json, 'summary') ?? '',
+      watchProgress: DramaWatchProgressDto.fromJsonOrNull(
+        json['watch_progress'],
+      ),
     );
   }
 }

@@ -20,6 +20,7 @@ import '../../../../shared/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
+import '../../application/player_feed_controller.dart';
 import '../../domain/player_recharge_unlock_offer.dart';
 import '../modal/player_modal_results.dart';
 import '../modal/player_payment_method_modal_coordinator.dart';
@@ -246,11 +247,27 @@ class _PlayerRechargeUnlockSheetState
     final sheetHeight = math.min(654.0, screenHeight - 72);
 
     // 获取用户金币余额和所需金币
-    final coinBalance = ref.watch(entitlementControllerProvider).coinBalance;
+    final entitlement = ref.watch(entitlementControllerProvider);
+    final coinBalance = entitlement.coinBalance;
     final requiredCoins = state.offer?.requiredCoins ?? 0;
     final hasEnoughCoins = coinBalance >= requiredCoins;
     final isVipOnly =
         state.rechargePopupType == PlayerRechargePopupType.vipOnly;
+    final targetItem = ref
+        .watch(playerFeedControllerProvider(widget.sessionKey))
+        .items
+        .where(
+          (item) =>
+              item.content.id == widget.dramaId.toString() &&
+              item.episode.id == widget.episodeId.toString(),
+        )
+        .firstOrNull;
+    final canUnlockWithCoin =
+        targetItem != null &&
+        targetItem.content.isSequentialUnlockEligible(
+          targetItem.episode,
+          isEpisodeUnlocked: entitlement.isEpisodeUnlocked,
+        );
 
     final content = state.offer == null
         ? KeyedSubtree(
@@ -284,7 +301,8 @@ class _PlayerRechargeUnlockSheetState
                   unawaited(_onMembershipPackageTap(package));
                 }
               },
-              onUnlockWithCoin: !isVipOnly && hasEnoughCoins
+              onUnlockWithCoin:
+                  !isVipOnly && hasEnoughCoins && canUnlockWithCoin
                   ? () => _unlockWithCoin(context, ref, state)
                   : null,
             ),

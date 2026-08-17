@@ -475,6 +475,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
       dramaId: drama.id,
       episodeId: '1',
       trigger: 'my_list_hot_play_tap',
+      resumeHint: playerEntryResumeHintFor(drama.watchProgress),
     );
     await context.push(
       RoutePaths.playerLocation(

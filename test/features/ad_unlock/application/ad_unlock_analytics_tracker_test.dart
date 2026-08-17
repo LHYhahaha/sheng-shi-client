@@ -4,6 +4,17 @@ import 'package:drama_client/features/ad_unlock/application/ad_unlock_analytics_
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('maps a self-hosted ad material click to its session identifiers', () {
+    expect(
+      adMaterialClickParameters(adSessionId: 'session-1', adMaterialId: '300'),
+      {
+        'element_name': 'ad_material',
+        'ad_session_id': 'session-1',
+        'ad_material_id': '300',
+      },
+    );
+  });
+
   test(
     'reports one start and a qualified end for a visible ad session',
     () async {

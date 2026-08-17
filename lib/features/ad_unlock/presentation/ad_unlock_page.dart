@@ -7,7 +7,10 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/analytics/analytics_definition.dart';
+import '../../../core/analytics/analytics_event.dart';
 import '../../../core/analytics/analytics_provider.dart';
+import '../../../core/analytics/analytics_page_tracker.dart';
 import '../../../core/toast/app_center_toast.dart';
 import '../../../l10n/app_localizations.dart';
 import '../application/ad_effective_watch_controller.dart';
@@ -45,12 +48,14 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
   late final AdEffectiveWatchController _watch;
   late final AdUnlockSessionController _sessionController;
   late final AdUnlockAnalyticsTracker _analyticsTracker;
+  late final AnalyticsPageTracker _pageTracker;
   Player? _player;
   VideoController? _videoController;
   Timer? _ticker;
   Future<bool>? _refreshFuture;
   bool _materialLoadFailed = false;
   bool _sessionInvalid = false;
+  bool _didTrackPageView = false;
 
   @override
   void initState() {
@@ -72,6 +77,12 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
       dramaId: widget.dramaId,
       episodeId: widget.episodeId,
     );
+    _pageTracker = ref.read(analyticsPageTrackerProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _didTrackPageView = true;
+      unawaited(_pageTracker.push(AnalyticsPageNames.adView));
+    });
     if (widget.session.material.type == AdMaterialType.video) {
       final player = Player();
       _player = player;
@@ -177,6 +188,23 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
     await launchUrl(Uri.parse(value), mode: LaunchMode.externalApplication);
   }
 
+  void _onMaterialTap() {
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(
+              AnalyticsDefinitions.elementClick,
+              adMaterialClickParameters(
+                adSessionId: widget.session.sessionNo,
+                adMaterialId: widget.session.material.id.toString(),
+              ),
+            ),
+          ),
+    );
+    unawaited(_openH5());
+  }
+
   void _closeAfterUnlock() {
     final refreshFuture = _refreshFuture;
     if (_sessionController.state == AdUnlockSessionState.confirmRetry) {
@@ -234,6 +262,14 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
 
   @override
   void dispose() {
+    if (_didTrackPageView) {
+      unawaited(
+        _pageTracker.pop(
+          AnalyticsPageNames.adView,
+          returnedPage: AnalyticsPageNames.dramaPlay,
+        ),
+      );
+    }
     unawaited(
       _analyticsTracker.finish(
         watchedDuration: _watch.watchedDuration,
@@ -310,7 +346,7 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
                     Positioned.fill(
                       child: GestureDetector(
                         onTap: widget.session.h5Url?.isNotEmpty == true
-                            ? _openH5
+                            ? _onMaterialTap
                             : null,
                         child:
                             widget.session.material.type == AdMaterialType.video

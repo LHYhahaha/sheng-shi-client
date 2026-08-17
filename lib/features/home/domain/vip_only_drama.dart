@@ -1,3 +1,5 @@
+import '../../drama/domain/drama_watch_progress.dart';
+
 /// 会员专享短剧接口返回的展示模型。
 class VipOnlyDrama {
   const VipOnlyDrama({
@@ -5,12 +7,14 @@ class VipOnlyDrama {
     required this.coverUrl,
     required this.title,
     required this.summary,
+    this.watchProgress,
   });
 
   final String id;
   final String coverUrl;
   final String title;
   final String summary;
+  final DramaWatchProgress? watchProgress;
 }
 
 /// 会员专享短剧列表及服务端要求的最小展示数量。

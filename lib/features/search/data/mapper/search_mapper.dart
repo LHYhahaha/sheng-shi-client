@@ -25,6 +25,7 @@ class SearchMapper {
       trailerEpisodeNum: dto.trailerEpisodeNum,
       isVipOnly: dto.isVipOnly == 1,
       status: dto.status,
+      watchProgress: dto.watchProgress?.toDomain(),
     );
   }
 
@@ -53,6 +54,7 @@ class SearchMapper {
       isVipOnly: dto.isVipOnly == 1,
       status: dto.status,
       episodeTotal: dto.episodeTotal,
+      watchProgress: dto.watchProgress?.toDomain(),
     );
   }
 }

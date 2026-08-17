@@ -2,6 +2,18 @@ import '../../../core/analytics/analytics_definition.dart';
 import '../../../core/analytics/analytics_event.dart';
 import '../../../core/analytics/analytics_service.dart';
 
+/// 自营广告素材点击的埋点参数。
+Map<String, Object?> adMaterialClickParameters({
+  required String adSessionId,
+  required String adMaterialId,
+}) {
+  return {
+    'element_name': 'ad_material',
+    'ad_session_id': adSessionId,
+    'ad_material_id': adMaterialId,
+  };
+}
+
 /// Keeps an ad session's start/end analytics one-shot and independent from UI.
 class AdUnlockAnalyticsTracker {
   AdUnlockAnalyticsTracker({

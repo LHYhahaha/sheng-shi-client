@@ -58,6 +58,7 @@ class RemoteHomeRepository implements HomeRepository {
               coverUrl: drama.coverUrl,
               title: drama.title,
               summary: drama.summary,
+              watchProgress: drama.watchProgress?.toDomain(),
             ),
           )
           .toList(growable: false),

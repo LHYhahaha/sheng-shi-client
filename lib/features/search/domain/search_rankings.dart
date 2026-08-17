@@ -1,3 +1,5 @@
+import '../../drama/domain/drama_watch_progress.dart';
+
 /// 搜索页三个榜单的聚合数据。
 class SearchRankings {
   const SearchRankings({
@@ -32,6 +34,7 @@ class SearchRankDrama {
     required this.trailerEpisodeNum,
     required this.isVipOnly,
     required this.status,
+    this.watchProgress,
   });
 
   final String id;
@@ -44,4 +47,5 @@ class SearchRankDrama {
   final int trailerEpisodeNum;
   final bool isVipOnly;
   final int status;
+  final DramaWatchProgress? watchProgress;
 }

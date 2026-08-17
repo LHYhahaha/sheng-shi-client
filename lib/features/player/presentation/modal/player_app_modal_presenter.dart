@@ -90,6 +90,13 @@ class PlayerAppModalPresenter implements AppModalPresenter {
       debugPrint('[_presentCoinUnlock] 鏈壘鍒?item: $itemId');
       return const CoinUnlockModalResult.cancelled();
     }
+    final entitlement = container.read(entitlementControllerProvider);
+    if (!item.content.isSequentialUnlockEligible(
+      item.episode,
+      isEpisodeUnlocked: entitlement.isEpisodeUnlocked,
+    )) {
+      return const CoinUnlockModalResult.cancelled();
+    }
 
     final unlocked = await showAppModalRootBottomSheet<bool>(
       context: modalContext,

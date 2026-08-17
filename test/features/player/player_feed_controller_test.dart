@@ -1,4 +1,5 @@
 import 'package:drama_client/features/player/application/player_feed_controller.dart';
+import 'package:drama_client/features/player/data/local/player_episode_unlock_cache.dart';
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
 import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
@@ -227,6 +228,32 @@ void main() {
     expect(state.items, isNotEmpty);
     expect(state.currentItem?.episode.number, 1);
   });
+
+  test(
+    'coin unlock marks the episode cache before detail data refreshes',
+    () async {
+      PlayerEpisodeUnlockCache.clearAllCache();
+      addTearDown(PlayerEpisodeUnlockCache.clearAllCache);
+      final container = _createContainer();
+      final provider = playerFeedControllerProvider('single');
+      final controller = container.read(provider.notifier);
+
+      await controller.load(
+        const PlayerFeedConfig.singleDrama(dramaId: 'drama-a', episodeId: '1'),
+      );
+
+      controller.updateEpisodeViewingEntitlementType(
+        dramaId: 'drama-a',
+        episodeId: 'ep-1',
+        viewingEntitlementType: 'coin',
+      );
+
+      expect(
+        PlayerEpisodeUnlockCache.isEpisodeUnlocked('drama-a', 'ep-1', true),
+        isTrue,
+      );
+    },
+  );
 }
 
 ProviderContainer _createContainer([PlayerFeedRepository? repository]) {

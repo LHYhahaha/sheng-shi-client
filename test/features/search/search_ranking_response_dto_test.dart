@@ -29,4 +29,26 @@ void main() {
 
     expect(dto.dramas.single.searchCount, 88);
   });
+
+  test('retains watch progress returned with a ranking drama', () {
+    final dto = SearchRankingResponseDto.fromJson({
+      'limit': 10,
+      'dramas': [
+        {
+          'id': 1,
+          'watch_progress': {
+            'watch_episode_id': 8519,
+            'watch_episode_no': 12,
+            'watch_second': 74,
+            'progress_percent': 34,
+            'duration_second': 217,
+          },
+        },
+      ],
+    });
+
+    final progress = dto.dramas.single.watchProgress!.toDomain();
+    expect(progress.episodeId, '8519');
+    expect(progress.positionSeconds, 74);
+  });
 }

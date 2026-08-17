@@ -65,13 +65,13 @@ android {
 
     productFlavors {
 
-        create("GF") {
-            dimension = "channel"
-            applicationId = "com.novashort.shortdrama"
-            resValue("string", "channel_flag", "GF_001")
-            resValue("string", "MERCHANT_ID", "333")
-            resValue("string", "VEST_PKG_ID", "1001")
-        }
+//        create("GF") {
+//            dimension = "channel"
+//            applicationId = "com.novashort.shortdrama"
+//            resValue("string", "channel_flag", "GF_001")
+//            resValue("string", "MERCHANT_ID", "333")
+//            resValue("string", "VEST_PKG_ID", "1001")
+//        }
 
         create("haha") {
             dimension = "channel"
@@ -80,13 +80,13 @@ android {
             resValue("string", "MERCHANT_ID", "329")
             resValue("string", "VEST_PKG_ID", "1001")
         }
-        create("GF_test") {
-            dimension = "channel"
-            applicationId = "com.novashort.shortdrama"
-            resValue("string", "channel_flag", "GF_test")
-            resValue("string", "MERCHANT_ID", "pm_test")
-            resValue("string", "VEST_PKG_ID", "1001")
-        }
+//        create("GF_test") {
+//            dimension = "channel"
+//            applicationId = "com.novashort.shortdrama"
+//            resValue("string", "channel_flag", "GF_test")
+//            resValue("string", "MERCHANT_ID", "pm_test")
+//            resValue("string", "VEST_PKG_ID", "1001")
+//        }
 //
 //        create("douyin_pro") {
 //            dimension = "channel"

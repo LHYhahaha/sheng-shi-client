@@ -463,6 +463,13 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
     final updatedItems = [...state.items];
     final updatedItem = updatedItems[itemIndex].copyWith(episode: episode);
     updatedItems[itemIndex] = updatedItem;
+    if (!episode.isLocked) {
+      PlayerEpisodeUnlockCache.setUnlockStatus(
+        updatedItem.content.id,
+        episode.id,
+        true,
+      );
+    }
     state = state.copyWith(
       items: List<PlayerFeedItem>.unmodifiable(updatedItems),
     );
@@ -545,6 +552,7 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
       ),
     );
     updatedItems[itemIndex] = updatedItem;
+    PlayerEpisodeUnlockCache.setUnlockStatus(dramaId, episodeId, true);
     state = state.copyWith(
       items: List<PlayerFeedItem>.unmodifiable(updatedItems),
     );

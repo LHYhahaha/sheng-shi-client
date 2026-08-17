@@ -3,9 +3,24 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../drama/domain/drama_watch_progress.dart';
+
 import 'player_startup_preload_controller.dart';
 
 export 'player_startup_preload_controller.dart' show PlayerEntryResumeHint;
+
+/// 把各列表的统一观看进度转换为普通播放器入口提示。
+///
+/// 进度为全零时不传提示，让播放器按新剧规则从第 1 集开始。
+PlayerEntryResumeHint? playerEntryResumeHintFor(DramaWatchProgress? progress) {
+  if (progress?.canResume != true) return null;
+  return PlayerEntryResumeHint(
+    episodeId: progress!.episodeId,
+    episodeNo: progress.episodeNo,
+    position: Duration(seconds: progress.positionSeconds),
+    duration: Duration(seconds: progress.durationSeconds),
+  );
+}
 
 /// 普通播放器入口的统一预取调度。
 ///

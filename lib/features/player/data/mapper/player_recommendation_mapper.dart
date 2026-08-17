@@ -6,7 +6,8 @@ class PlayerRecommendationMapper {
   const PlayerRecommendationMapper();
 
   static const _displayTitleFallback = 'Untitled';
-  static const _fallbackCoverAssetPath = 'assets/images/player/recommend_placeholder.png';
+  static const _fallbackCoverAssetPath =
+      'assets/images/player/recommend_placeholder.png';
 
   PlayerRecommendation mapRecommendation(PlayerRecommendationDto dto) {
     return PlayerRecommendation(
@@ -14,16 +15,17 @@ class PlayerRecommendationMapper {
       title: dto.title.isNotEmpty ? dto.title : _displayTitleFallback,
       subtitle: _formatSubtitle(dto),
       // 如果是网络 URL，保持原样；否则使用 fallback
-      coverAssetPath: dto.coverUrl.isNotEmpty ? dto.coverUrl : _fallbackCoverAssetPath,
+      coverAssetPath: dto.coverUrl.isNotEmpty
+          ? dto.coverUrl
+          : _fallbackCoverAssetPath,
+      watchProgress: dto.watchProgress?.toDomain(),
     );
   }
 
   List<PlayerRecommendation> mapRecommendations(
     List<PlayerRecommendationDto> dtos,
   ) {
-    return dtos
-        .map((dto) => mapRecommendation(dto))
-        .toList(growable: false);
+    return dtos.map((dto) => mapRecommendation(dto)).toList(growable: false);
   }
 
   /// 格式化副标题：优先使用标签，其次使用简介。

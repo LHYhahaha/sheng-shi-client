@@ -1,4 +1,5 @@
 import '../../entitlement/domain/episode_unlock_type.dart';
+import '../../drama/domain/drama_watch_progress.dart';
 import 'player_subtitle.dart';
 
 /// 推荐列表加载状态。
@@ -131,6 +132,30 @@ class PlayerContent {
 
   /// 详情接口下发的权威续播记录；只用于普通播放器初始目标选择。
   final PlayerWatchProgress? watchProgress;
+
+  /// 当前剧集是否是本剧按集序最早的未解锁剧集。
+  ///
+  /// 金币和广告只能连续解锁，不能跳过前面的锁集。剧集列表的返回顺序并不作为
+  /// 业务依据，因此按 [PlayerEpisode.number] 判断。
+  bool isSequentialUnlockEligible(
+    PlayerEpisode episode, {
+    bool Function(String episodeId)? isEpisodeUnlocked,
+  }) {
+    final isUnlocked = isEpisodeUnlocked ?? (_) => false;
+    if (!episode.isLocked || isUnlocked(episode.id)) {
+      return false;
+    }
+    PlayerEpisode? firstLocked;
+    for (final candidate in episodes) {
+      if (!candidate.isLocked ||
+          isUnlocked(candidate.id) ||
+          (firstLocked != null && candidate.number >= firstLocked.number)) {
+        continue;
+      }
+      firstLocked = candidate;
+    }
+    return firstLocked?.id == episode.id;
+  }
 }
 
 class PlayerWatchProgress {
@@ -322,6 +347,7 @@ class PlayerRecommendation {
     required this.title,
     required this.subtitle,
     required this.coverAssetPath,
+    this.watchProgress,
   });
 
   /// 推荐剧 id。
@@ -337,6 +363,7 @@ class PlayerRecommendation {
 
   /// 推荐封面 asset 路径。
   final String coverAssetPath;
+  final DramaWatchProgress? watchProgress;
 }
 
 /// 播放内容仓库边界。

@@ -286,7 +286,7 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
       ref.read(playerUiControllerProvider(sessionKey).notifier);
 
   EpisodeAccessDecision evaluateAccess(PlayerFeedItem item) {
-    return ref
+    final decision = ref
         .read(entitlementControllerProvider.notifier)
         .evaluateAccess(
           dramaId: item.content.id,
@@ -296,6 +296,19 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
           price: item.episode.requiredCoins,
           isUnavailable: item.episode.isUnavailable,
         );
+    if (!_mustUnlockPreviousEpisodeFirst(item, decision)) {
+      return decision;
+    }
+    return EpisodeAccessDecision(
+      type: EpisodeAccessDecisionType.waitUnlock,
+      dramaId: decision.dramaId,
+      episodeId: decision.episodeId,
+      itemId: decision.itemId,
+      unlockType: decision.unlockType,
+      price: decision.price,
+      balance: decision.balance,
+      reason: 'sequential_unlock_required',
+    );
   }
 
   bool isLockedAutoSheetCandidate(PlayerFeedItem item) {
@@ -304,6 +317,9 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
         .accessPresenter
         .isLockedAutoSheetCandidate(item);
   }
+
+  bool isSequentialUnlockEligible(PlayerFeedItem item) =>
+      _isSequentialUnlockEligible(item);
 
   void cancelOverlayPending() => _overlay.cancelPending();
 
@@ -437,6 +453,9 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     if (latestItem == null || !_canExecuteUserInitiatedRuntime(latestItem)) {
       return false;
     }
+    if (!_isSequentialUnlockEligible(latestItem)) {
+      return false;
+    }
     return _unlockCurrentItemWithCoinApi(latestItem, autoUnlockNext: true);
   }
 
@@ -497,6 +516,14 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
       );
     }
     if (grantedCoinPackage) {
+      if (!_isSequentialUnlockEligible(currentItem)) {
+        await quiesceAfterRecharge(
+          currentItem,
+          reason: 'sequential unlock required after recharge',
+        );
+        _ui.showUnlockPaywall();
+        return const PlayerUnlockFlowResult();
+      }
       if (ref.read(entitlementControllerProvider).autoUnlockEnabled) {
         final unlocked = await _unlockCurrentItemWithCoinApi(
           currentItem,
@@ -586,6 +613,9 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     PlayerFeedItem item, {
     required bool autoUnlockNext,
   }) async {
+    if (!_isSequentialUnlockEligible(item)) {
+      return false;
+    }
     await ref
         .read(playerRechargeUnlockControllerProvider(sessionKey).notifier)
         .unlockWithCoin(
@@ -611,5 +641,23 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     final decision = evaluateAccess(unlockedItem);
     await handleAccessDecision(unlockedItem, decision, autoPresentSheet: false);
     return decision.type == EpisodeAccessDecisionType.allowPlay;
+  }
+
+  bool _mustUnlockPreviousEpisodeFirst(
+    PlayerFeedItem item,
+    EpisodeAccessDecision decision,
+  ) {
+    final requiresCoinUnlock =
+        decision.type == EpisodeAccessDecisionType.autoUnlockAndPlay ||
+        decision.type == EpisodeAccessDecisionType.showCoinUnlockDialog;
+    return requiresCoinUnlock && !_isSequentialUnlockEligible(item);
+  }
+
+  bool _isSequentialUnlockEligible(PlayerFeedItem item) {
+    final entitlement = ref.read(entitlementControllerProvider);
+    return item.content.isSequentialUnlockEligible(
+      item.episode,
+      isEpisodeUnlocked: entitlement.isEpisodeUnlocked,
+    );
   }
 }

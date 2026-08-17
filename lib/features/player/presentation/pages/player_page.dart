@@ -28,7 +28,6 @@ import '../../../../core/network/api_exception.dart';
 import '../../../../core/locale/app_locale_controller.dart';
 import '../../../../core/runtime/api_lang_provider.dart';
 import '../../../../core/toast/app_center_toast.dart';
-import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/url/external_url_launcher.dart';
 import '../../../pay/application/payment_loading_controller.dart';
@@ -58,7 +57,6 @@ import '../../data/mapper/player_content_mapper.dart';
 import '../../data/player_remote_data_source_provider.dart';
 import '../../../popup/data/popup_repository_provider.dart';
 import '../../../popup/domain/popup.dart';
-import '../../../membership/presentation/membership_route_result.dart';
 import '../../domain/player_access_presentation.dart';
 import '../../domain/for_you_player_handoff.dart';
 import '../../domain/player_performance_policy.dart';
@@ -1744,7 +1742,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                 _reportAdUnlockEntryExposure(item);
               },
               onOpenMembership: () {
-                unawaited(_openMembership());
+                unawaited(_showPendingUnlockActionSheet());
               },
               showChromeOverlays: widget.feedMode == PlayerFeedMode.forYou
                   ? true
@@ -2745,6 +2743,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         dramaId: recommendation.id,
         episodeId: '1',
         trigger: 'recommendation',
+        resumeHint: playerEntryResumeHintFor(recommendation.watchProgress),
       );
       final location = RoutePaths.playerLocation(
         dramaId: recommendation.id,
@@ -2863,7 +2862,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final dramaId = int.tryParse(item.content.id);
     if (current?.id != item.id ||
         dramaId == null ||
-        !current!.episode.isLocked) {
+        !current!.episode.isLocked ||
+        !_isSequentialUnlockEligible(current)) {
       return null;
     }
     try {
@@ -2886,6 +2886,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         .currentItem;
     if (latest?.id != item.id ||
         !latest!.episode.isLocked ||
+        !_isSequentialUnlockEligible(latest) ||
         !status.canShowPaywallAction(
           latest.episode.unlockType == EpisodeUnlockType.membership
               ? AdUnlockDramaKind.member
@@ -2938,6 +2939,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
     if (!mounted || !shouldWatchAd) return;
     await _openAdUnlock(updatedItem, actionAlreadyTracked: true);
+  }
+
+  bool _isSequentialUnlockEligible(PlayerFeedItem item) {
+    final entitlement = ref.read(entitlementControllerProvider);
+    return item.content.isSequentialUnlockEligible(
+      item.episode,
+      isEpisodeUnlocked: entitlement.isEpisodeUnlocked,
+    );
   }
 
   void _restoreUnlockPaywallAfterModalIfNeeded(PlayerFeedItem item) {
@@ -3419,55 +3428,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     } catch (_) {
       return false;
     }
-  }
-
-  Future<void> _openMembership() async {
-    if (!ref.read(entitlementControllerProvider).isMember) {
-      unawaited(
-        ref
-            .read(analyticsServiceProvider)
-            .track(
-              const AnalyticsEvent(AnalyticsDefinitions.elementClick, {
-                'element_name': 'vip_entry',
-              }),
-            ),
-      );
-    }
-    final item = ref
-        .read(playerFeedControllerProvider(_sessionKey))
-        .currentItem;
-    final result = await context.push<MembershipRouteResult>(
-      RoutePaths.membership,
-    );
-    if (!mounted || result != MembershipRouteResult.purchaseCompleted) {
-      return;
-    }
-    await _continueCurrentEpisodeAfterMembershipSuccess(item);
-  }
-
-  Future<void> _continueCurrentEpisodeAfterMembershipSuccess(
-    PlayerFeedItem? item,
-  ) async {
-    final currentItem =
-        item ?? ref.read(playerFeedControllerProvider(_sessionKey)).currentItem;
-    if (currentItem == null) {
-      return;
-    }
-    final flowResult = await _feedEngine.continueAfterRechargeSuccess(
-      item: currentItem,
-      grantedCoinPackage: false,
-      grantedMembershipPackage: true,
-    );
-    if (!mounted) {
-      return;
-    }
-    if (flowResult.didActivateMembership) {
-      ref
-          .read(appToastProvider)
-          .success(context.l10n.playerMembershipActivated);
-      return;
-    }
-    await _presentSheetIntent(context, currentItem, flowResult.sheetIntent);
   }
 }
 

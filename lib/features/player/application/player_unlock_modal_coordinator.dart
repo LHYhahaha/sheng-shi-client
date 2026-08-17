@@ -11,6 +11,7 @@ import '../../../core/modal/app_modal_source.dart';
 import '../../../core/toast/app_toast_provider.dart';
 import '../../../core/toast/app_toast_service.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../entitlement/domain/episode_unlock_type.dart';
 import '../domain/player_feed.dart';
 import '../presentation/modal/player_modal_channels.dart';
 import '../presentation/modal/player_modal_payloads.dart';
@@ -19,6 +20,12 @@ import 'player_feed_engine.dart';
 import 'player_feed_engine_access_flow.dart';
 import 'player_overlay_orchestrator.dart';
 import 'player_recharge_unlock_controller.dart';
+
+bool rechargeVipOnlyForItem(
+  PlayerFeedItem item, {
+  required bool requestedVipOnly,
+}) =>
+    requestedVipOnly || item.episode.unlockType == EpisodeUnlockType.membership;
 
 /// Player 解锁/充值弹窗编排：统一走 [AppModalService]，避免 Page 直接 showModalBottomSheet。
 class PlayerUnlockModalCoordinator {
@@ -132,10 +139,11 @@ class PlayerUnlockModalCoordinator {
     bool vipOnly = false,
     bool launchedByAutoSheet = false,
   }) async {
+    final isVipOnly = rechargeVipOnlyForItem(item, requestedVipOnly: vipOnly);
     await _rechargeController.open(
       itemId: item.id,
       requiredCoins: item.episode.requiredCoins,
-      vipOnly: vipOnly,
+      vipOnly: isVipOnly,
     );
     if (!context.mounted) {
       return;
@@ -167,7 +175,7 @@ class PlayerUnlockModalCoordinator {
         'drama_id': item.content.id,
         'episode_id': item.episode.id,
         'required_coin_amount': item.episode.requiredCoins,
-        'recharge_popup_type': vipOnly ? 'vip_only' : 'with_coin',
+        'recharge_popup_type': isVipOnly ? 'vip_only' : 'with_coin',
       },
     );
 

@@ -469,6 +469,7 @@ class _MembershipBody extends StatelessWidget {
                     dramaId: drama.id,
                     episodeId: '1',
                     trigger: 'membership_vip_only_drama_tap',
+                    resumeHint: playerEntryResumeHintFor(drama.watchProgress),
                   );
                   context.push(
                     RoutePaths.playerLocation(

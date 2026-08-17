@@ -188,7 +188,7 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
       return;
     }
     _uiController.selectEpisode(item.episode);
-    final decision = ref
+    final accessDecision = ref
         .read(entitlementControllerProvider.notifier)
         .evaluateAccess(
           dramaId: item.content.id,
@@ -198,6 +198,7 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
           price: item.episode.requiredCoins,
           isUnavailable: item.episode.isUnavailable,
         );
+    final decision = _applySequentialCoinUnlockRule(item, accessDecision);
     await _handleAccessDecision(
       item,
       decision,
@@ -409,7 +410,7 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
     PlayerFeedItem item, {
     required bool autoUnlockNext,
   }) async {
-    if (!isCurrentFeedItem(item)) {
+    if (!isCurrentFeedItem(item) || !_isSequentialUnlockEligible(item)) {
       return false;
     }
 
@@ -457,6 +458,36 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
       autoPresentSheet: false,
     );
     return true;
+  }
+
+  EpisodeAccessDecision _applySequentialCoinUnlockRule(
+    PlayerFeedItem item,
+    EpisodeAccessDecision decision,
+  ) {
+    final requiresCoinUnlock =
+        decision.type == EpisodeAccessDecisionType.autoUnlockAndPlay ||
+        decision.type == EpisodeAccessDecisionType.showCoinUnlockDialog;
+    if (!requiresCoinUnlock || _isSequentialUnlockEligible(item)) {
+      return decision;
+    }
+    return EpisodeAccessDecision(
+      type: EpisodeAccessDecisionType.waitUnlock,
+      dramaId: decision.dramaId,
+      episodeId: decision.episodeId,
+      itemId: decision.itemId,
+      unlockType: decision.unlockType,
+      price: decision.price,
+      balance: decision.balance,
+      reason: 'sequential_unlock_required',
+    );
+  }
+
+  bool _isSequentialUnlockEligible(PlayerFeedItem item) {
+    final entitlement = ref.read(entitlementControllerProvider);
+    return item.content.isSequentialUnlockEligible(
+      item.episode,
+      isEpisodeUnlocked: entitlement.isEpisodeUnlocked,
+    );
   }
 
   PlayerAccessPresentationState accessPresentationFor(PlayerFeedItem item) {

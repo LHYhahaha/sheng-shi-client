@@ -20,6 +20,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
+import '../../drama/domain/drama_watch_progress.dart';
 import '../application/search_history_controller.dart';
 import '../application/search_rankings_controller.dart';
 import '../application/search_results_controller.dart';
@@ -950,7 +951,11 @@ class _SubmittedSearchResults extends ConsumerWidget {
                             .read(searchResultsControllerProvider.notifier)
                             .reportSearchResultClick(drama.id),
                       );
-                      _openDrama(context, drama.id);
+                      _openDrama(
+                        context,
+                        drama.id,
+                        watchProgress: drama.watchProgress,
+                      );
                     },
                   ),
                 );
@@ -1013,7 +1018,11 @@ class _SubmittedSearchResults extends ConsumerWidget {
                   position: index + 1,
                   cardScene: 'search_recommend',
                 );
-                _openDrama(context, items[index].id);
+                _openDrama(
+                  context,
+                  items[index].id,
+                  watchProgress: items[index].watchProgress,
+                );
               },
             ),
           ),
@@ -1292,12 +1301,17 @@ class _NetworkRetry extends StatelessWidget {
   }
 }
 
-void _openDrama(BuildContext context, String dramaId) {
+void _openDrama(
+  BuildContext context,
+  String dramaId, {
+  DramaWatchProgress? watchProgress,
+}) {
   preparePlayerEntryPreload(
     context,
     dramaId: dramaId,
     episodeId: '1',
     trigger: 'search_result_tap',
+    resumeHint: playerEntryResumeHintFor(watchProgress),
   );
   context.push(
     RoutePaths.playerLocation(
@@ -1687,6 +1701,9 @@ class _RankingPanel extends ConsumerWidget {
                         dramaId: drama.id,
                         episodeId: '1',
                         trigger: 'search_ranking_tap',
+                        resumeHint: playerEntryResumeHintFor(
+                          drama.watchProgress,
+                        ),
                       );
                       context.push(
                         RoutePaths.playerLocation(

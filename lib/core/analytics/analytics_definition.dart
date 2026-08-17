@@ -481,7 +481,12 @@ abstract final class AnalyticsDefinitions {
         'ad_material_id': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
           requiredWhen: (params) =>
-              params['element_name'] == 'ad_unlock_button',
+              params['element_name'] == 'ad_unlock_button' ||
+              params['element_name'] == 'ad_material',
+        ),
+        'ad_session_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => params['element_name'] == 'ad_material',
         ),
       },
       // 元素字典后续会为不同 element_name 注入短剧、商品等附加字段。

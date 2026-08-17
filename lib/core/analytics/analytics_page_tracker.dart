@@ -17,6 +17,7 @@ abstract final class AnalyticsPageNames {
   static const recommend = 'recommend_page';
   static const search = 'search_page';
   static const dramaPlay = 'drama_play_page';
+  static const adView = 'ad_view_page';
   static const vipTab = 'vip_tab_page';
   static const vipCenter = 'vip_center_page';
   static const vipPurchase = 'vip_purchase_page';
