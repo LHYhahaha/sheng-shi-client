@@ -68,8 +68,10 @@ final analyticsServiceProvider = Provider<AnalyticsService>((ref) {
   // page_leave 都无法生成。AnalyticsService 必须在整个 App 生命周期保持同一实例，
   // 在事件发生时读取当前公共参数即可。
   final eventSink = ref.watch(analyticsEventSinkProvider);
+  final initialContext = ref.read(analyticsContextProvider);
   return AnalyticsService(
-    contextReader: () => ref.read(analyticsContextProvider),
+    contextReader: () =>
+        ref.mounted ? ref.read(analyticsContextProvider) : initialContext,
     eventSink: eventSink,
   );
 });

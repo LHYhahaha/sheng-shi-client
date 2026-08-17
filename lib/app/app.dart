@@ -30,6 +30,7 @@ import '../core/notification/fcm_notification.dart';
 import '../core/notification/fcm_notification_service.dart';
 import '../core/notification/startup_notification_permission_requester.dart';
 import '../core/runtime/install_id_provider.dart';
+import '../core/runtime/startup_loading_timing.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/bottom_tab_config/application/bottom_tab_config_controller.dart';
 import '../features/pay/application/payment_loading_controller.dart';
@@ -78,6 +79,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     _fcmNotificationService = widget.fcmNotificationService;
     _listenForFcmNotificationTaps();
     unawaited(_listenForFcmNotificationTapsWhenReady());
+    unawaited(_reportAppLaunchAfterFcmReady());
     // 与 DeviceId、认证并行读取渠道配置。ApiClient 仍会等待同一份配置完成后再
     // 发送请求；原生未提供配置时按约定使用空渠道头继续。
     unawaited(ref.read(channelConfigInitializerProvider.future));
@@ -91,16 +93,29 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   }
 
   Future<void> _initializeAdjust() async {
+    final stopwatch = Stopwatch()..start();
     try {
       // 先确保内部 Device-Id 已生成，匿名 Adjust 上报即可携带稳定请求头。
       await ref.read(installIdProvider.future);
+      debugPrint(
+        '[StartupSdk] Adjust device-id ready '
+        'elapsedMs=${stopwatch.elapsedMilliseconds}',
+      );
       if (!mounted) return;
       AdjustService(
         deviceIdentifierReporter: ref.read(
           adjustDeviceIdentifierReporterProvider,
         ),
       ).initialize();
+      debugPrint(
+        '[StartupSdk] Adjust init request end '
+        'elapsedMs=${stopwatch.elapsedMilliseconds}',
+      );
     } catch (error, stackTrace) {
+      debugPrint(
+        '[StartupSdk] Adjust init failed '
+        'elapsedMs=${stopwatch.elapsedMilliseconds}',
+      );
       debugPrint('[Adjust] Startup initialization skipped: $error');
       debugPrintStack(stackTrace: stackTrace);
     }
@@ -468,8 +483,10 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   Future<void> _bootstrapSessionAndI18n() async {
     try {
       debugPrint('[TokenInit] Starting token initialization...');
+      startupLoadingTiming.mark('auth start');
       await ref.read(authControllerProvider.notifier).load();
       debugPrint('[TokenInit] AuthController.load() completed');
+      startupLoadingTiming.mark('auth end');
       unawaited(
         ref.read(analyticsLifecycleTrackerProvider).onApplicationReady(),
       );
@@ -486,7 +503,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
 
     // 认证完成后即可读取动态 Tab；标题尚未拿到远程语言包时会回退到客户端原文案，
     // 语言包加载完成后的状态更新会自动刷新标题，不让 i18n 阻塞首屏。
-    unawaited(ref.read(bottomTabConfigControllerProvider.notifier).loadOnce());
+    unawaited(_loadBottomTabConfigWithStartupTiming());
 
     try {
       await ref.read(i18nInitializerProvider.future);
@@ -495,12 +512,43 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     }
   }
 
+  Future<void> _loadBottomTabConfigWithStartupTiming() async {
+    startupLoadingTiming.mark('bottom-tabs start');
+    await ref.read(bottomTabConfigControllerProvider.notifier).loadOnce();
+    startupLoadingTiming.mark('bottom-tabs end');
+  }
+
   Future<void> _reportAppLaunchSafely() async {
     try {
-      await ref.read(appActiveReporterProvider).reportAppLaunch();
+      // 第一条启动活跃上报只等首页壳，不等待 FCM；避免 FCM 最长初始化时间导致
+      // 活跃数据延迟或因用户快速退出而丢失。
+      await startupLoadingTiming.waitForEnd();
+      await ref
+          .read(appActiveReporterProvider)
+          .reportAppLaunch(includePushToken: false);
     } catch (e, stackTrace) {
       debugPrint('[AppActiveReporter] Launch report ignored: $e');
       debugPrint('[AppActiveReporter] Stack trace: $stackTrace');
+    }
+  }
+
+  Future<void> _reportAppLaunchAfterFcmReady() async {
+    final fcmInitialization = widget.fcmNotificationServiceFuture;
+    if (fcmInitialization == null) {
+      return;
+    }
+    final service = await fcmInitialization;
+    if (service == null || !mounted) {
+      return;
+    }
+
+    try {
+      // FCM 服务初始化成功意味着 token 已完成一次读取；补发一条带 token 的上报。
+      await startupLoadingTiming.waitForEnd();
+      await ref.read(appActiveReporterProvider).reportAppLaunch();
+    } catch (error, stackTrace) {
+      debugPrint('[AppActiveReporter] FCM-ready launch report ignored: $error');
+      debugPrintStack(stackTrace: stackTrace);
     }
   }
 

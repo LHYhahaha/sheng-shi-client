@@ -29,7 +29,8 @@ class AppActiveReporter {
   DateTime? _backgroundedAt;
   bool _reportInFlight = false;
 
-  Future<void> reportAppLaunch() => _report();
+  Future<void> reportAppLaunch({bool includePushToken = true}) =>
+      _report(includePushToken: includePushToken);
 
   Future<void> onLifecycleChanged(AppLifecycleState state) async {
     if (state == AppLifecycleState.paused ||
@@ -50,7 +51,7 @@ class AppActiveReporter {
     }
   }
 
-  Future<void> _report() async {
+  Future<void> _report({bool includePushToken = true}) async {
     if (_reportInFlight) {
       return;
     }
@@ -64,7 +65,7 @@ class AppActiveReporter {
     _reportInFlight = true;
     try {
       final info = await _deviceInfoReader.read();
-      final pushToken = await _pushTokenReader();
+      final pushToken = includePushToken ? await _pushTokenReader() : null;
       await _apiClient.post<void>(
         '/api/user/active/report',
         authPolicy: ApiAuthPolicy.required,

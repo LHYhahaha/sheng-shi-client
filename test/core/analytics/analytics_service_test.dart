@@ -1,10 +1,43 @@
 import 'package:drama_client/core/analytics/analytics_context.dart';
 import 'package:drama_client/core/analytics/analytics_definition.dart';
 import 'package:drama_client/core/analytics/analytics_event.dart';
+import 'package:drama_client/core/analytics/analytics_provider.dart';
 import 'package:drama_client/core/analytics/analytics_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'keeps a context snapshot after its provider container is disposed',
+    () async {
+      final sink = AnalyticsInMemoryEventSink();
+      final container = ProviderContainer(
+        overrides: [
+          analyticsContextProvider.overrideWithValue(
+            const AnalyticsContext(
+              platform: 'android',
+              appVersion: '1.0.3',
+              language: 'en',
+            ),
+          ),
+          analyticsEventSinkProvider.overrideWithValue(sink),
+        ],
+      );
+      final service = container.read(analyticsServiceProvider);
+      container.dispose();
+
+      await expectLater(
+        service.track(
+          const AnalyticsEvent(AnalyticsDefinitions.popupClose, {
+            'popup_name': 'episode_unlock',
+          }),
+        ),
+        completes,
+      );
+      expect(sink.events, hasLength(1));
+    },
+  );
+
   test('creates a snapshot without removed session fields', () async {
     final sink = _RecordingSink();
     final service = AnalyticsService(
@@ -281,6 +314,35 @@ void main() {
         }),
       ),
       returnsNormally,
+    );
+  });
+
+  test('ad unlock events accept only documented enum values', () {
+    final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.adUnlockEntryExposure, {
+          'drama_id': '100',
+          'episode_id': '200',
+          'drama_access_type': 'vip',
+          'ad_material_id': '300',
+        }),
+      ),
+      returnsNormally,
+    );
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.adViewEnd, {
+          'ad_session_id': 'session-1',
+          'ad_material_id': '300',
+          'drama_id': '100',
+          'episode_id': '200',
+          'ad_view_duration_ms': 12000,
+          'ad_view_result': 'cancelled',
+        }),
+      ),
+      throwsA(isA<AnalyticsValidationError>()),
     );
   });
 

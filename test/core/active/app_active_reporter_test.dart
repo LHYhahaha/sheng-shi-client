@@ -56,6 +56,18 @@ void main() {
     );
   });
 
+  test(
+    'can send the initial launch report without an available FCM token',
+    () async {
+      await reporter.reportAppLaunch(includePushToken: false);
+
+      expect(
+        (adapter.requests.single.data! as Map).containsKey('pushToken'),
+        isFalse,
+      );
+    },
+  );
+
   test('reports an empty channelSource when channel is unavailable', () async {
     reporter = AppActiveReporter(
       apiClient: _apiClient(adapter),

@@ -41,6 +41,7 @@ class PlayerFeedPageShell extends ConsumerStatefulWidget {
     required this.onMoreTap,
     required this.onUnlockTap,
     required this.onAdUnlockTap,
+    required this.onAdUnlockEntryVisible,
     required this.onOpenMembership,
     this.onSearchTap,
     this.onMetaTap,
@@ -71,6 +72,7 @@ class PlayerFeedPageShell extends ConsumerStatefulWidget {
   final VoidCallback onMoreTap;
   final VoidCallback onUnlockTap;
   final VoidCallback onAdUnlockTap;
+  final VoidCallback onAdUnlockEntryVisible;
   final VoidCallback onOpenMembership;
   final VoidCallback? onSearchTap;
   final VoidCallback? onMetaTap;
@@ -190,6 +192,11 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
     final adUnlock = item.episode.adUnlock;
     final canShowAdUnlock =
         isLockedSettledPage && adUnlock != null && adUnlock.isAvailable;
+    if (canShowAdUnlock && showChromeOverlays) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onAdUnlockEntryVisible();
+      });
+    }
     final shell = playbackShell;
     final canUsePlaybackSurface =
         isSettledPage &&

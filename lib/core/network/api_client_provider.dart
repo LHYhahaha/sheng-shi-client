@@ -66,6 +66,7 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   // 真正销毁后，Dio 仍可能完成已排队的拦截器，此时只回退到最后一次安全快照，避免
   // 对已销毁 Ref 调用 read。
   var requestContext = ref.read(apiRequestContextProvider);
+  final tokenStore = ref.read(authTokenStoreProvider.notifier);
   var isDisposed = false;
   ref.onDispose(() {
     isDisposed = true;
@@ -79,6 +80,10 @@ final apiClientProvider = Provider<ApiClient>((ref) {
       }
       return requestContext;
     },
+    // Repository 可能仍持有一个因 provider 刷新而脱离容器的 ApiClient。鉴权
+    // 不能依赖它缓存的 ApiRequestContext；设备登录刚写入 token 后，后续受保护
+    // 请求与首页请求必须直接读取 TokenStore 的当前快照。
+    accessTokenReader: () => tokenStore.snapshot.accessToken,
     channelHeadersReader: () async {
       final channelConfig = await channelConfigService.getChannelConfig();
       return channelConfig.hasConfig

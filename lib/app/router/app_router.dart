@@ -16,8 +16,6 @@ import '../../features/member/presentation/pages/member_page.dart';
 import '../../features/membership/presentation/pages/membership_page.dart';
 import '../../features/my_list/presentation/pages/my_list_page.dart';
 import '../../features/player/presentation/pages/player_page.dart';
-import '../../features/player/presentation/pages/ad_unlock_page.dart';
-import '../../features/player/domain/player_content.dart';
 import '../../features/player/domain/for_you_player_handoff.dart';
 import '../../features/player/application/player_entry_preload_coordinator.dart';
 import '../../features/profile/presentation/pages/language_page.dart';
@@ -127,14 +125,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ],
           ),
         ],
-      ),
-      GoRoute(
-        path: RoutePaths.adUnlock,
-        name: RouteNames.adUnlock,
-        builder: (context, state) {
-          final offer = state.extra! as PlayerAdUnlockOffer;
-          return AdUnlockPage(offer: offer);
-        },
       ),
       GoRoute(
         path: RoutePaths.player,

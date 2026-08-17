@@ -9,7 +9,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
-import '../../../../app/router/route_names.dart';
 import '../../../../app/router/player_route_observer.dart';
 import '../../../../app/shell/app_shell.dart';
 import '../../../../app/shell/app_shell_chrome.dart';
@@ -34,6 +33,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/url/external_url_launcher.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
+import '../../../entitlement/domain/episode_unlock_type.dart';
 import '../../data/player_exit_recommendation_history_repository_provider.dart';
 import '../../../auth/application/auth_controller.dart';
 import '../../../auth/domain/auth_session.dart';
@@ -54,6 +54,7 @@ import '../../application/player_viewport_controller.dart';
 import '../../data/playback_progress_repository_provider.dart';
 import '../../data/drama_playback_target_repository_provider.dart';
 import '../../data/player_content_repository_provider.dart';
+import '../../data/mapper/player_content_mapper.dart';
 import '../../data/player_remote_data_source_provider.dart';
 import '../../../popup/data/popup_repository_provider.dart';
 import '../../../popup/domain/popup.dart';
@@ -71,7 +72,11 @@ import '../widgets/player_detail_sheet.dart';
 import '../widgets/player_exit_recommendation_dialog.dart';
 import '../widgets/player_feed_page_shell.dart';
 import '../widgets/player_playback_layer.dart';
-import 'ad_unlock_page.dart';
+import '../../../ad_unlock/application/ad_unlock_session_controller.dart';
+import '../../../ad_unlock/application/ad_unlock_analytics_tracker.dart';
+import '../../../ad_unlock/data/ad_unlock_repository_provider.dart';
+import '../../../ad_unlock/domain/ad_unlock_models.dart';
+import '../../../ad_unlock/presentation/ad_unlock_page.dart';
 
 sealed class _ExitRecommendationDialogResult {
   const _ExitRecommendationDialogResult();
@@ -198,6 +203,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   String? _analyticsSubtitleLanguage;
   Timer? _analyticsPauseTimer;
   late final AnalyticsService _analyticsService;
+  late final AdUnlockEntryExposureTracker _adUnlockEntryExposureTracker;
   ModalRoute<dynamic>? _route;
   final ValueNotifier<double> _overlayOpacityNotifier = ValueNotifier<double>(
     1.0,
@@ -412,6 +418,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       playerPlaybackControllerProvider(_sessionKey).notifier,
     );
     _analyticsService = ref.read(analyticsServiceProvider);
+    _adUnlockEntryExposureTracker = AdUnlockEntryExposureTracker(
+      analytics: _analyticsService,
+    );
     _overlayOrchestrator = ref.read(
       playerOverlayOrchestratorProvider(_sessionKey).notifier,
     );
@@ -1245,6 +1254,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           accessPlayable: accessPlayable,
           isItemChange: isItemChange,
         );
+        if (accessPlayable && ref.read(useRemotePlayerApiProvider)) {
+          unawaited(
+            ref.read(adMaterialPreloaderProvider).tryEnsureCachedMaterial(),
+          );
+        }
         unawaited(
           feedEngine.onViewportSettled(
             item: settledItem,
@@ -1708,6 +1722,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               },
               onAdUnlockTap: () {
                 unawaited(_openAdUnlock(item));
+              },
+              onAdUnlockEntryVisible: () {
+                _reportAdUnlockEntryExposure(item);
               },
               onOpenMembership: () {
                 unawaited(_openMembership());
@@ -2799,6 +2816,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!mounted) {
       return;
     }
+    // Request early, but do not change the underlying paywall until the
+    // original unlock sheet has been dismissed.
+    final adUnlockStatus = _fetchAdUnlockStatus(item);
     _isModalOpen = true;
     _syncAutoImmersiveBlockers();
     try {
@@ -2814,9 +2834,69 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         _activeCoinSheetItemId = null;
         _activeRechargeSheetItemId = null;
         _restoreUnlockPaywallAfterModalIfNeeded(item);
+        unawaited(_applyAdUnlockActionAfterOriginalSheet(item, adUnlockStatus));
         _syncAutoImmersiveBlockers();
       }
     }
+  }
+
+  Future<AdUnlockStatus?> _fetchAdUnlockStatus(PlayerFeedItem item) async {
+    final current = ref
+        .read(playerFeedControllerProvider(_sessionKey))
+        .currentItem;
+    final dramaId = int.tryParse(item.content.id);
+    if (current?.id != item.id ||
+        dramaId == null ||
+        !current!.episode.isLocked) {
+      return null;
+    }
+    try {
+      return await ref
+          .read(adUnlockRepositoryProvider)
+          .fetchStatus(dramaId: dramaId, episodeNo: item.episode.number);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _applyAdUnlockActionAfterOriginalSheet(
+    PlayerFeedItem item,
+    Future<AdUnlockStatus?> statusFuture,
+  ) async {
+    final status = await statusFuture;
+    if (!mounted || status == null) return;
+    final latest = ref
+        .read(playerFeedControllerProvider(_sessionKey))
+        .currentItem;
+    if (latest?.id != item.id ||
+        !latest!.episode.isLocked ||
+        !status.canShowPaywallAction(
+          latest.episode.unlockType == EpisodeUnlockType.membership
+              ? AdUnlockDramaKind.member
+              : AdUnlockDramaKind.normal,
+        )) {
+      return;
+    }
+    final kind = latest.episode.unlockType == EpisodeUnlockType.membership
+        ? AdUnlockDramaKind.member
+        : AdUnlockDramaKind.normal;
+    final materialPrepared = await ref
+        .read(adMaterialPreloaderProvider)
+        .tryEnsureCachedMaterial();
+    if (!mounted || !materialPrepared) return;
+    ref
+        .read(playerFeedControllerProvider(_sessionKey).notifier)
+        .updateItemEpisode(
+          itemId: item.id,
+          episode: latest.episode.copyWith(
+            adUnlock: PlayerAdUnlockOffer(
+              isAvailable: true,
+              watchedToday: status.usedCount(kind),
+              dailyLimit: status.dailyLimit(kind),
+              closeAfter: const Duration(seconds: 0),
+            ),
+          ),
+        );
   }
 
   void _restoreUnlockPaywallAfterModalIfNeeded(PlayerFeedItem item) {
@@ -3156,24 +3236,63 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   Future<void> _openAdUnlock(PlayerFeedItem item) async {
     final offer = item.episode.adUnlock;
     if (offer == null || !offer.isAvailable || _isModalOpen) return;
-    final result = await context.pushNamed<AdUnlockResult>(
-      RouteNames.adUnlock,
-      extra: offer,
+    if (offer.dailyLimit > 0 && offer.watchedToday >= offer.dailyLimit) {
+      showAppCenterToast(
+        item.episode.unlockType == EpisodeUnlockType.membership
+            ? '今日广告解锁会员短剧已上限'
+            : '今日广告解锁普通短剧已上限',
+      );
+      return;
+    }
+    final dramaId = int.tryParse(item.content.id);
+    if (dramaId == null) return;
+    final materialPreloader = ref.read(adMaterialPreloaderProvider);
+    final materialPrepared = await materialPreloader.tryEnsureCachedMaterial();
+    if (!mounted) return;
+    if (!materialPrepared) {
+      showAppCenterToast('网络错误，请稍后重试');
+      return;
+    }
+    final sessionController = AdUnlockSessionController(
+      repository: ref.read(adUnlockRepositoryProvider),
     );
-    if (!mounted || result is! AdUnlockResult) return;
+    await sessionController.createSession(
+      dramaId: dramaId,
+      episodeNo: item.episode.number,
+      materialId: materialPreloader.cachedMaterial?.id,
+    );
+    if (!mounted || sessionController.session == null) return;
+    final session = materialPreloader.applyCachedMaterial(
+      sessionController.session!,
+    );
+    materialPreloader.consumeMaterial(session);
+    final result = await Navigator.of(context).push<AdUnlockRouteResult>(
+      MaterialPageRoute(
+        builder: (_) => AdUnlockPage(
+          session: session,
+          dramaId: item.content.id,
+          episodeId: item.episode.id,
+          onUnlockConfirmed: () => _refreshAdUnlockedEpisode(item),
+        ),
+      ),
+    );
+    if (!mounted || result is! AdUnlockRouteResult) return;
 
-    // TODO(ad API): 此处改为使用完成广告接口返回的 source_url / entitlement。
-    // 当前先使用页面完成结果打通 UI；真正授权仍必须由服务端回包确认。
-    final feedController = ref.read(
-      playerFeedControllerProvider(_sessionKey).notifier,
-    );
-    final unlockedItem = feedController.updateEpisodeViewingEntitlementType(
-      dramaId: item.content.id,
-      episodeId: item.episode.id,
-      viewingEntitlementType: 'ad',
-    );
-    if (unlockedItem == null) return;
+    final refreshed = await result.refreshFuture;
+    if (!mounted) return;
+    if (!refreshed) {
+      showAppCenterToast('短剧加载失败，请重试');
+      return;
+    }
+    PlayerFeedItem? unlockedItem;
     final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+    for (final candidate in feedState.items) {
+      if (candidate.id == item.id) {
+        unlockedItem = candidate;
+        break;
+      }
+    }
+    if (unlockedItem == null) return;
     await ref
         .read(playerRuntimeCoordinatorProvider(_sessionKey).notifier)
         .onViewportSettled(
@@ -3181,6 +3300,55 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           index: feedState.currentIndex,
           playbackTrigger: 'ad_unlock',
         );
+  }
+
+  void _reportAdUnlockEntryExposure(PlayerFeedItem item) {
+    final current = ref
+        .read(playerFeedControllerProvider(_sessionKey))
+        .currentItem;
+    final material = ref.read(adMaterialPreloaderProvider).cachedMaterial;
+    if (current?.id != item.id ||
+        !item.episode.isLocked ||
+        item.episode.adUnlock?.isAvailable != true ||
+        material == null) {
+      return;
+    }
+    unawaited(
+      _adUnlockEntryExposureTracker.reportIfVisible(
+        dramaId: item.content.id,
+        episodeId: item.episode.id,
+        dramaAccessType: item.episode.unlockType == EpisodeUnlockType.membership
+            ? 'vip'
+            : 'normal',
+        adMaterialId: material.id.toString(),
+      ),
+    );
+  }
+
+  Future<bool> _refreshAdUnlockedEpisode(PlayerFeedItem item) async {
+    final dramaId = int.tryParse(item.content.id);
+    if (dramaId == null) return false;
+    try {
+      final detail = await ref
+          .read(playerRemoteDataSourceProvider)
+          .fetchDramaDetail(dramaId: dramaId);
+      if (!mounted) return false;
+      final content = const PlayerContentMapper().mapContent(detail);
+      PlayerEpisode? refreshedEpisode;
+      for (final episode in content.episodes) {
+        if (episode.id == item.episode.id) {
+          refreshedEpisode = episode;
+          break;
+        }
+      }
+      if (refreshedEpisode == null) return false;
+      return ref
+              .read(playerFeedControllerProvider(_sessionKey).notifier)
+              .updateItemEpisode(itemId: item.id, episode: refreshedEpisode) !=
+          null;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _openMembership() async {

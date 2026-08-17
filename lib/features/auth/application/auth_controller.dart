@@ -171,7 +171,12 @@ class AuthController extends Notifier<AuthState> {
 
     try {
       await ref.read(installIdProvider.future);
+      final tokenReadStopwatch = Stopwatch()..start();
       await ref.read(authTokenStoreProvider.notifier).waitForHydration();
+      debugPrint(
+        '[StartupAuth] token read end '
+        'elapsedMs=${tokenReadStopwatch.elapsedMilliseconds}',
+      );
       final tokenStore = ref.read(authTokenStoreProvider);
 
       if (tokenStore.hasAccessToken &&
@@ -255,6 +260,7 @@ class AuthController extends Notifier<AuthState> {
                   clearFailedAction: true,
                 );
                 _syncNotificationPermission(session);
+                unawaited(_refreshCurrentSessionInBackground(generation));
                 return;
               } catch (e) {
                 print(
@@ -290,7 +296,7 @@ class AuthController extends Notifier<AuthState> {
         return;
       }
 
-      final session = await _syncCurrentSession(
+      final session = await _sessionFromCurrentStores(
         fallbackProvider: AuthProviderType.device,
         fallbackSession: repositorySession,
       );
@@ -307,6 +313,7 @@ class AuthController extends Notifier<AuthState> {
         clearFailedAction: true,
       );
       _syncNotificationPermission(session);
+      unawaited(_refreshCurrentSessionInBackground(generation));
     } catch (error) {
       if (!_isCurrent(generation)) {
         return;
@@ -347,7 +354,7 @@ class AuthController extends Notifier<AuthState> {
 
     try {
       await ref.read(installIdProvider.future);
-      // 调用 repository 的 login 方法，会自动获取 token 和用户信息
+      // 登录只持久化 token；完整用户信息由后台权益接口统一同步。
       final login = ref.read(authRepositoryProvider).login(provider);
       final repositorySession = switch (provider) {
         AuthProviderType.google || AuthProviderType.facebook =>
@@ -368,6 +375,7 @@ class AuthController extends Notifier<AuthState> {
         clearFailedAction: true,
       );
       _syncNotificationPermission(session);
+      unawaited(_refreshCurrentSessionInBackground(_generation));
     } catch (error) {
       if (_isThirdPartyLoginProvider(provider)) {
         _trackLoginFailure(provider, error);
@@ -640,20 +648,14 @@ class AuthController extends Notifier<AuthState> {
     }
 
     final candidate = await synchronizer.syncCurrentSession();
-    final isEntitlementVerified = await ref
-        .read(entitlementControllerProvider.notifier)
-        .load();
-    if (isEntitlementVerified) {
-      ref.read(accountBanControllerProvider.notifier).clearAfterVerification();
-    }
     return _sessionFromCurrentStores(
       fallbackProvider: fallbackProvider,
       fallbackSession: candidate,
     );
   }
 
-  /// 有效 token 的冷启动后台同步：用户资料与权益并行刷新，任一失败都保留首屏已
-  /// 恢复的本地状态。若服务端实际判定 token 失效，ApiClient 的统一会话恢复流程
+  /// 有效 token 的冷启动后台同步：权益接口刷新用户资料和权益，任一失败都保留首屏
+  /// 已恢复的本地状态。若服务端实际判定 token 失效，ApiClient 的统一会话恢复流程
   /// 会递增 generation，本方法不会覆盖其结果。
   Future<void> _refreshCurrentSessionInBackground(int generation) async {
     final repository = ref.read(authRepositoryProvider);

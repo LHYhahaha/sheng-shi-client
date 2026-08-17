@@ -16,6 +16,7 @@ import 'core/active/app_active_reporter.dart';
 import 'core/network/test_network_config.dart';
 import 'core/notification/fcm_notification_service.dart';
 import 'core/runtime/install_id_provider.dart';
+import 'core/runtime/startup_loading_timing.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -104,12 +105,29 @@ class _StartupBootstrapState extends State<_StartupBootstrap> {
     // 让抓包弹框或业务首屏先绘制完成，再初始化会占用平台线程的 SDK。
     unawaited(
       Future<void>(() async {
+        final sdkStopwatch = Stopwatch()..start();
+        debugPrint('[StartupSdk] MediaKit initialize start');
         MediaKit.ensureInitialized();
-        final service = await _initializeFcmNotifications();
-        widget.fcmServiceHandle.attach(service);
-        widget.fcmNotificationService.complete(service);
+        debugPrint(
+          '[StartupSdk] MediaKit initialize end '
+          'elapsedMs=${sdkStopwatch.elapsedMilliseconds}',
+        );
+        unawaited(_initializeFcmAfterAppShell());
       }),
     );
+  }
+
+  Future<void> _initializeFcmAfterAppShell() async {
+    await startupLoadingTiming.waitForEnd();
+    final fcmStopwatch = Stopwatch()..start();
+    debugPrint('[StartupSdk] FCM initialize start: app shell visible');
+    final service = await _initializeFcmNotifications();
+    debugPrint(
+      '[StartupSdk] FCM initialize end '
+      'elapsedMs=${fcmStopwatch.elapsedMilliseconds}',
+    );
+    widget.fcmServiceHandle.attach(service);
+    widget.fcmNotificationService.complete(service);
   }
 }
 

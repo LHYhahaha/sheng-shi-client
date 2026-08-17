@@ -255,9 +255,9 @@ class _AppBottomNavigationItem extends StatelessWidget {
         width: AppBottomNavigation._iconSize,
         height: AppBottomNavigation._iconSize,
         fit: BoxFit.contain,
-        // 动态图标未完成加载或加载失败时都立即保留原状态图标，
-        // 避免切换 Tab 时短暂展示网络图组件的灰色占位。
-        placeholder: _localIcon(color),
+        // 加载期间保持透明，避免动态图标尚未就绪时短暂展示旧的本地图标；
+        // 明确加载失败后才回退到原状态图标。
+        placeholder: const SizedBox.expand(),
         errorWidget: _localIcon(color),
       );
     }

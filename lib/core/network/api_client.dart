@@ -22,6 +22,7 @@ import 'api_request_context.dart';
 enum ApiAuthPolicy { none, required }
 
 typedef ApiRequestContextReader = ApiRequestContext Function();
+typedef ApiAccessTokenReader = String? Function();
 typedef ApiChannelHeadersReader = FutureOr<Map<String, String>> Function();
 typedef ApiBusinessErrorListener = void Function(ApiException error);
 
@@ -34,6 +35,7 @@ class ApiClient {
     Dio? dio,
     ApiRequestContext? requestContext,
     ApiRequestContextReader? requestContextReader,
+    ApiAccessTokenReader? accessTokenReader,
     ApiChannelHeadersReader? channelHeadersReader,
     ApiSessionAuthHandler? sessionAuthHandler,
     ApiBusinessErrorListener? onBusinessError,
@@ -41,6 +43,7 @@ class ApiClient {
        _requestContextReader =
            requestContextReader ??
            (() => requestContext ?? const ApiRequestContext.test()),
+       _accessTokenReader = accessTokenReader,
        _channelHeadersReader =
            channelHeadersReader ?? (() => const <String, String>{}),
        _sessionAuthHandler = sessionAuthHandler,
@@ -67,7 +70,7 @@ class ApiClient {
 
           final authPolicy = _authPolicyFromOptions(options);
           if (authPolicy == ApiAuthPolicy.required) {
-            final token = context.accessToken;
+            final token = _accessTokenReader?.call() ?? context.accessToken;
             if (token == null || token.isEmpty) {
               handler.reject(
                 DioException(
@@ -130,6 +133,7 @@ class ApiClient {
 
   final Dio _dio;
   final ApiRequestContextReader _requestContextReader;
+  final ApiAccessTokenReader? _accessTokenReader;
   final ApiChannelHeadersReader _channelHeadersReader;
   ApiSessionAuthHandler? _sessionAuthHandler;
   final ApiBusinessErrorListener? _onBusinessError;

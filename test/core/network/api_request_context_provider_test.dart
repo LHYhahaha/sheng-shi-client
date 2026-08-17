@@ -147,6 +147,43 @@ void main() {
     expect(adapter.lastOptions?.headers['App-Version'], '1.0.0');
   });
 
+  test(
+    'retained client uses the newly saved token after its provider is invalidated',
+    () async {
+      final adapter = _FakeHttpClientAdapter(
+        responseData: {'code': 0, 'message': 'success', 'data': null},
+      );
+      final container = ProviderContainer(
+        overrides: [
+          installIdProvider.overrideWith(
+            (ref) async => '55555555-5555-4555-8555-555555555555',
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(installIdProvider.future);
+      final client = container.read(apiClientProvider)
+        ..dio.httpClientAdapter = adapter;
+
+      await container
+          .read(authTokenStoreProvider.notifier)
+          .save(const AuthTokenSnapshot(accessToken: 'fresh-token'));
+      container.invalidate(apiClientProvider);
+
+      await client.get<void>(
+        '/api/user/get',
+        authPolicy: ApiAuthPolicy.required,
+        decoder: (_) {},
+      );
+
+      expect(
+        adapter.lastOptions?.headers['Authorization'],
+        'Bearer fresh-token',
+      );
+    },
+  );
+
   test('auth required request without token fails fast locally', () async {
     final adapter = _FakeHttpClientAdapter(
       responseData: {'code': 0, 'message': 'success', 'data': null},

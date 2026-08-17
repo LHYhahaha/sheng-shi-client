@@ -464,7 +464,11 @@ abstract final class AnalyticsDefinitions {
       parameters: {
         'drama_id': _requiredString,
         'episode_id': _requiredString,
-        'drama_access_type': _requiredString,
+        'drama_access_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          required: true,
+          allowedValues: {'normal', 'vip'},
+        ),
         'ad_material_id': _requiredString,
       },
     ),
@@ -473,8 +477,8 @@ abstract final class AnalyticsDefinitions {
       parameters: {
         'ad_session_id': _requiredString,
         'ad_material_id': _requiredString,
-        'drama_id': _string,
-        'episode_id': _string,
+        'drama_id': _requiredString,
+        'episode_id': _requiredString,
       },
     ),
     adViewEnd: AnalyticsEventDefinition(
@@ -482,10 +486,19 @@ abstract final class AnalyticsDefinitions {
       parameters: {
         'ad_session_id': _requiredString,
         'ad_material_id': _requiredString,
-        'drama_id': _string,
-        'episode_id': _string,
+        'drama_id': _requiredString,
+        'episode_id': _requiredString,
         'ad_view_duration_ms': _requiredNumber,
-        'ad_view_result': _requiredString,
+        'ad_view_result': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          required: true,
+          allowedValues: {
+            'qualified',
+            'early_exit',
+            'load_failed',
+            'session_invalid',
+          },
+        ),
       },
     ),
     shareAppOpen: AnalyticsEventDefinition(

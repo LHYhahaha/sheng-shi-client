@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../../core/auth/auth_token_store.dart';
 import '../../../core/auth/user_info_manager.dart';
 import '../../../core/network/api_request_context.dart';
@@ -43,6 +45,7 @@ class RemoteAuthRepository
     print('[RemoteAuthRepository] appVersion: ${_requestContext.appVersion}');
     print('[RemoteAuthRepository] lang: ${_requestContext.lang}');
 
+    final loginStopwatch = Stopwatch()..start();
     final dto = switch (provider) {
       AuthProviderType.device => await _remoteDataSource.loginDevice(
         LoginRequestDto(
@@ -56,33 +59,23 @@ class RemoteAuthRepository
       AuthProviderType.facebook => await _loginWithOAuth(provider),
     };
 
+    if (provider == AuthProviderType.device) {
+      debugPrint(
+        '[StartupAuth] device login end '
+        'elapsedMs=${loginStopwatch.elapsedMilliseconds}',
+      );
+    }
     print('[RemoteAuthRepository] login received response');
     await _saveToken(dto, provider: provider);
     print('[RemoteAuthRepository] login token saved');
 
-    // 登录接口只返回 token，需要调用用户接口获取用户信息
-    print('[RemoteAuthRepository] fetching user info...');
-    await _fetchAndSaveUserInfo();
-    print('[RemoteAuthRepository] user info saved');
-
-    // 从 UserInfoStore 中读取用户信息，构建 session
-    if (_userInfoStore != null) {
-      print('[RemoteAuthRepository] building session from user info store...');
-      // 这里需要通过 ref 来读取 userInfoStore 的状态
-      // 但由于 RemoteAuthRepository 不是 Notifier，无法直接访问
-      // 所以返回 guest session，让 AuthController 来处理
-      return const AuthSession.guest();
-    }
-
-    print(
-      '[RemoteAuthRepository] userInfoStore is null, returning guest session',
-    );
+    // 冷启动只保证 token 可用。完整用户资料随后的 /api/user/entitlements
+    // 会统一同步到 UserInfoStore；不能额外请求 /api/user/get 并阻塞首屏。
     return const AuthSession.guest();
   }
 
   @override
   Future<AuthSession> syncCurrentSession() async {
-    await _fetchAndSaveUserInfo();
     final userInfo = _userInfoStore?.snapshot;
     final provider = _providerFromToken(_tokenStore?.snapshot.provider);
     if (userInfo == null) {
@@ -115,8 +108,7 @@ class RemoteAuthRepository
   Future<DeleteAccountResult> deleteAccount() async {
     final currentToken = _tokenStore?.snapshot;
     final isGuest = currentToken?.sessionKind == AuthTokenSessionKind.guest;
-    final shouldSignOutOAuth =
-        currentToken?.hasAccessToken == true && !isGuest;
+    final shouldSignOutOAuth = currentToken?.hasAccessToken == true && !isGuest;
     final provider = _providerFromToken(currentToken?.provider);
 
     final response = await _remoteDataSource.deleteAccount(
@@ -248,32 +240,15 @@ class RemoteAuthRepository
       provider: provider.name,
     );
 
+    final tokenWriteStopwatch = Stopwatch()..start();
     await _tokenStore.save(snapshot);
-    print('[RemoteAuthRepository] _saveToken completed');
-  }
-
-  Future<void> _fetchAndSaveUserInfo() async {
-    if (_userInfoStore == null) {
-      print(
-        '[RemoteAuthRepository] _fetchAndSaveUserInfo skipped: userInfoStore is null',
+    if (provider == AuthProviderType.device) {
+      debugPrint(
+        '[StartupAuth] token write end '
+        'elapsedMs=${tokenWriteStopwatch.elapsedMilliseconds}',
       );
-      return;
     }
-
-    try {
-      final userInfoDto = await _remoteDataSource.getUserInfo();
-      print('[RemoteAuthRepository] _fetchAndSaveUserInfo received:');
-      print('[RemoteAuthRepository]   nickname: ${userInfoDto.nickname}');
-      print('[RemoteAuthRepository]   showId: ${userInfoDto.showId}');
-      print('[RemoteAuthRepository]   coin: ${userInfoDto.coin}');
-      print('[RemoteAuthRepository]   bonusCoin: ${userInfoDto.bonusCoin}');
-
-      await _userInfoStore.save(userInfoDto);
-      print('[RemoteAuthRepository] _fetchAndSaveUserInfo completed');
-    } catch (e) {
-      print('[RemoteAuthRepository] _fetchAndSaveUserInfo failed: $e');
-      rethrow;
-    }
+    print('[RemoteAuthRepository] _saveToken completed');
   }
 
   AuthProviderType _providerFromToken(String? value) {

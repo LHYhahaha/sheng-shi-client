@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:drama_client/core/auth/auth_token_store.dart';
 import 'package:drama_client/core/network/api_client.dart';
 import 'package:drama_client/core/network/api_mapping_exception.dart';
 import 'package:drama_client/core/network/api_request_context.dart';
@@ -144,6 +145,49 @@ void main() {
         adapter.lastOptions?.data,
         containsPair('googleToken', 'mock-google-id-token'),
       );
+    });
+
+    test('device login does not request user info during startup', () async {
+      final adapter = _FakeHttpClientAdapter(
+        responseData: _ok({
+          'accessToken': 'access-token-long-enough-for-startup',
+          'refreshToken': 'refresh-token-long-enough-for-startup',
+          'accessExpireAt': 1787295267,
+          'refreshExpireAt': 1789282467,
+        }),
+      );
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final repository = RemoteAuthRepository(
+        remoteDataSource: AuthRemoteDataSource(apiClient: _apiClient(adapter)),
+        requestContext: _requestContext,
+        tokenStore: container.read(authTokenStoreProvider.notifier),
+        userInfoStore: container.read(userInfoStoreProvider.notifier),
+      );
+
+      await repository.login(AuthProviderType.device);
+
+      expect(adapter.requests.map((request) => request.path), [
+        '/api/user/device/login',
+      ]);
+    });
+
+    test('session synchronization does not request user info', () async {
+      final adapter = _FakeHttpClientAdapter(
+        responseData: {'code': 0, 'message': 'success', 'data': null},
+      );
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final repository = RemoteAuthRepository(
+        remoteDataSource: AuthRemoteDataSource(apiClient: _apiClient(adapter)),
+        requestContext: _requestContext,
+        userInfoStore: container.read(userInfoStoreProvider.notifier),
+      );
+
+      final session = await repository.syncCurrentSession();
+
+      expect(session.isGuest, isTrue);
+      expect(adapter.requests, isEmpty);
     });
 
     test('refresh token uses public auth policy', () async {
@@ -321,10 +365,9 @@ ApiClient _apiClient(_FakeHttpClientAdapter adapter) {
 }
 
 class _FakeHttpClientAdapter implements HttpClientAdapter {
-  _FakeHttpClientAdapter({required this.responseData, this.statusCode = 200});
+  _FakeHttpClientAdapter({required this.responseData});
 
   final Object? responseData;
-  final int statusCode;
   final requests = <RequestOptions>[];
   RequestOptions? lastOptions;
 
@@ -338,7 +381,7 @@ class _FakeHttpClientAdapter implements HttpClientAdapter {
     requests.add(options);
     return ResponseBody.fromString(
       jsonEncode(responseData),
-      statusCode,
+      200,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
       },

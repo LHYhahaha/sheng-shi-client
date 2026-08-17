@@ -13,6 +13,7 @@ import '../../features/player/application/player_feed_controller.dart';
 import '../../features/player/application/player_playback_controller.dart';
 import '../../features/player/domain/player_feed.dart';
 import '../../features/popup/application/popup_entry_controller.dart';
+import '../../core/runtime/startup_loading_timing.dart';
 import '../../features/popup/domain/popup.dart';
 import '../../shared/widgets/navigation/app_bottom_navigation.dart';
 import 'app_shell_chrome.dart';
@@ -116,6 +117,16 @@ class _AppShellState extends ConsumerState<AppShell> {
         body: Center(child: CircularProgressIndicator()),
       );
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final elapsed = startupLoadingTiming.end();
+      if (elapsed != null) {
+        debugPrint(
+          '[StartupLoading] app-shell visible; '
+          'app-loading end elapsedMs=${elapsed.inMilliseconds}',
+        );
+      }
+    });
 
     final navigationIndex = widget.navigationShell.currentIndex;
     if (!_shellReadyEffectsStarted) {
