@@ -106,6 +106,81 @@ void main() {
     expect(accepted?.eventParams, {'popup_name': 'login_popup'});
   });
 
+  test('episode selector popup_close requires drama_id', () {
+    final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.popupClose, {
+          'popup_name': 'episode_selector_popup',
+        }),
+      ),
+      throwsA(isA<AnalyticsValidationError>()),
+    );
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.popupClose, {
+          'popup_name': 'episode_selector_popup',
+          'drama_id': '99',
+        }),
+      ),
+      returnsNormally,
+    );
+  });
+
+  test('fixed campaign popup_show requires complete campaign parameters', () {
+    final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.popupShow, {
+          'popup_name': 'fixed_campaign_popup',
+          'popup_config_id': '12',
+          'popup_target_type': 'drama',
+          'target_drama_id': '99',
+        }),
+      ),
+      throwsA(isA<AnalyticsValidationError>()),
+    );
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.popupShow, {
+          'popup_name': 'fixed_campaign_popup',
+          'popup_config_id': '12',
+          'popup_target_type': 'drama',
+          'target_drama_id': '99',
+          'drama_recommend_type': 'specified',
+        }),
+      ),
+      returnsNormally,
+    );
+  });
+
+  test('fixed campaign popup_close requires complete campaign parameters', () {
+    final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.popupClose, {
+          'popup_name': 'fixed_campaign_popup',
+        }),
+      ),
+      throwsA(isA<AnalyticsValidationError>()),
+    );
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.popupClose, {
+          'popup_name': 'fixed_campaign_popup',
+          'popup_config_id': '12',
+          'popup_target_type': 'drama',
+          'target_drama_id': '99',
+          'drama_recommend_type': 'specified',
+        }),
+      ),
+      returnsNormally,
+    );
+  });
+
   test('does not enqueue invalid events', () async {
     final sink = _RecordingSink();
     final service = AnalyticsService(
@@ -151,6 +226,23 @@ void main() {
         }),
       ),
       throwsA(isA<AnalyticsValidationError>()),
+    );
+  });
+
+  test('payment start preserves an unknown member product type', () {
+    final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.paymentStart, {
+          'payment_method_id': 'google_play',
+          'payment_method_type': 'google_play',
+          'order_id': 'order-1',
+          'product_id': '358',
+          'product_type': 'MEMBER_PRODUCT_TYPE_TRIAL',
+        }),
+      ),
+      returnsNormally,
     );
   });
 
@@ -208,6 +300,23 @@ void main() {
         }),
       ),
       throwsA(isA<AnalyticsValidationError>()),
+    );
+  });
+
+  test('vip product card preserves an unknown member product type', () {
+    final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+          'element_name': 'vip_product_card',
+          'product_id': '358',
+          'product_type': 'MEMBER_PRODUCT_TYPE_TRIAL',
+          'position': 1,
+          'payment_click_action': 'select_product',
+        }),
+      ),
+      returnsNormally,
     );
   });
 
@@ -298,6 +407,56 @@ void main() {
       ),
       throwsA(isA<AnalyticsValidationError>()),
     );
+  });
+
+  test('recharge popup requires the documented episode context', () {
+    final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.popupShow, {
+          'popup_name': 'recharge_popup',
+          'drama_id': '722',
+        }),
+      ),
+      throwsA(isA<AnalyticsValidationError>()),
+    );
+  });
+
+  test('member points exchange popup requires the documented tier fields', () {
+    final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+    const parameters = {
+      'popup_name': 'member_points_exchange_confirm_popup',
+      'exchange_tier_id': '3',
+      'required_member_points': 1200,
+      'grant_vip_days': 3,
+    };
+
+    for (final eventName in [
+      AnalyticsDefinitions.popupShow,
+      AnalyticsDefinitions.popupClose,
+    ]) {
+      expect(
+        () => validator.validate(AnalyticsEvent(eventName, parameters)),
+        returnsNormally,
+      );
+      expect(
+        () => validator.validate(
+          AnalyticsEvent(eventName, {
+            'popup_name': 'member_points_exchange_confirm_popup',
+            'required_member_points': 1200,
+            'grant_vip_days': 3,
+          }),
+        ),
+        throwsA(
+          isA<AnalyticsValidationError>().having(
+            (error) => error.parameterName,
+            'parameterName',
+            'exchange_tier_id',
+          ),
+        ),
+      );
+    }
   });
 
   test('episode unlock request accepts documented auto coin parameters', () {

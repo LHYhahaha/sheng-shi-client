@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/modal/app_modal_controller.dart';
 import '../../../core/analytics/analytics_popup_names.dart';
@@ -12,8 +11,6 @@ import '../../../core/modal/app_modal_source.dart';
 import '../../../core/toast/app_toast_provider.dart';
 import '../../../core/toast/app_toast_service.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../app/router/route_names.dart';
-import '../../membership/presentation/membership_route_result.dart';
 import '../domain/player_feed.dart';
 import '../presentation/modal/player_modal_channels.dart';
 import '../presentation/modal/player_modal_payloads.dart';
@@ -77,30 +74,10 @@ class PlayerUnlockModalCoordinator {
           launchedByAutoSheet: launchedByAutoSheet,
         );
       case PlayerOverlaySheetIntent.membership:
-        // 纯会员剧：直接跳转到会员开通页面
-        final result = await context.pushNamed<MembershipRouteResult>(
-          RouteNames.membership,
-        );
-        if (!context.mounted ||
-            result != MembershipRouteResult.purchaseCompleted) {
-          return;
-        }
-        final flowResult = await _engine.continueAfterRechargeSuccess(
-          item: item,
-          grantedCoinPackage: false,
-          grantedMembershipPackage: true,
-        );
-        if (!context.mounted) {
-          return;
-        }
-        if (flowResult.didActivateMembership) {
-          _appToast.success(context.l10n.playerMembershipActivated);
-          return;
-        }
-        await presentSheetIntent(
+        await showRechargeUnlock(
           context,
           item,
-          flowResult.sheetIntent,
+          vipOnly: true,
           launchedByAutoSheet: launchedByAutoSheet,
         );
     }
@@ -152,11 +129,13 @@ class PlayerUnlockModalCoordinator {
   Future<void> showRechargeUnlock(
     BuildContext context,
     PlayerFeedItem item, {
+    bool vipOnly = false,
     bool launchedByAutoSheet = false,
   }) async {
     await _rechargeController.open(
       itemId: item.id,
       requiredCoins: item.episode.requiredCoins,
+      vipOnly: vipOnly,
     );
     if (!context.mounted) {
       return;
@@ -184,10 +163,11 @@ class PlayerUnlockModalCoordinator {
         episodeId: episodeId,
       ),
       analyticsPopupShowParameters: {
-        'popup_name': AnalyticsPopupNames.coinRecharge,
+        'popup_name': AnalyticsPopupNames.recharge,
         'drama_id': item.content.id,
         'episode_id': item.episode.id,
         'required_coin_amount': item.episode.requiredCoins,
+        'recharge_popup_type': vipOnly ? 'vip_only' : 'with_coin',
       },
     );
 

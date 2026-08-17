@@ -288,7 +288,10 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
           unlockLabel: lockedActionLabel,
           showAdUnlockButton: canShowAdUnlock,
           adUnlockSubtitle: canShowAdUnlock
-              ? 'Watched today (${adUnlock.watchedToday}/${adUnlock.dailyLimit})'
+              ? context.l10n.adUnlockTodayProgress(
+                  watched: adUnlock.watchedToday,
+                  total: adUnlock.dailyLimit == -1 ? '∞' : adUnlock.dailyLimit,
+                )
               : null,
           onAdUnlockTap: canShowAdUnlock ? onAdUnlockTap : null,
           onUnlockTap: isLockedSettledPage

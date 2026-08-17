@@ -4,7 +4,7 @@
 abstract final class AnalyticsPopupNames {
   static const episodeSelector = 'episode_selector_popup';
   static const episodeUnlockConfirm = 'episode_unlock_confirm_popup';
-  static const coinRecharge = 'coin_recharge_popup';
+  static const recharge = 'recharge_popup';
   static const payment = 'payment_popup';
   static const fixedCampaign = 'fixed_campaign_popup';
   static const dramaExitRecommend = 'drama_exit_recommend_popup';

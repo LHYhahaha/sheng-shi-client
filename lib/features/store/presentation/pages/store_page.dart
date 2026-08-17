@@ -18,6 +18,7 @@ import '../../../../shared/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../pay/application/payment_loading_controller.dart';
+import '../../../pay/domain/member_product_type.dart';
 import '../../application/store_controller.dart';
 import '../../application/store_modal_coordinator.dart';
 import '../../domain/store_package.dart';
@@ -250,9 +251,7 @@ String _analyticsProductTypeForPackage(StorePackage package) {
   if (package.kind == StorePackageKind.coins) {
     return 'coin';
   }
-  return package.productType == 'subscription'
-      ? 'vip_subscription'
-      : 'vip_once';
+  return MemberProductType.analyticsProductTypeFor(package.memberType);
 }
 
 class _StoreHeader extends StatelessWidget {

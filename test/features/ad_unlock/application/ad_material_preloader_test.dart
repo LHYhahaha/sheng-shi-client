@@ -15,7 +15,7 @@ void main() {
     await preloader.ensureCachedMaterial();
     await preloader.ensureCachedMaterial();
 
-    expect(repository.preloadIds, [null, 1]);
+    expect(repository.preloadIds, [null]);
     expect(downloader.downloadedIds, [1]);
     expect(preloader.cachedMaterial?.id, 1);
   });

@@ -9,6 +9,7 @@ import '../analytics/analytics_service.dart';
 import '../network/api_client.dart';
 import '../network/api_client_provider.dart';
 import '../analytics/analytics_provider.dart';
+import 'startup_notification_permission_requester.dart';
 
 /// 将系统通知权限同步给当前账号；不主动触发系统授权弹窗。
 ///
@@ -23,6 +24,8 @@ class StartupNotificationPermissionReporter {
     AnalyticsService? analytics,
     Future<String?> Function(String showId)? getLastAnalyticsStatus,
     Future<void> Function(String showId, String status)? markAnalyticsStatus,
+    Future<StartupNotificationPermissionRequestResult?> Function()?
+    getStartupResult,
   }) : _apiClient = apiClient,
        _getStatus = getStatus ?? _defaultGetStatus,
        _getLastReportedEnabled =
@@ -36,7 +39,9 @@ class StartupNotificationPermissionReporter {
        _getLastAnalyticsStatus =
            getLastAnalyticsStatus ?? _defaultGetLastAnalyticsStatus,
        _markAnalyticsStatus =
-           markAnalyticsStatus ?? _defaultMarkAnalyticsStatus;
+           markAnalyticsStatus ?? _defaultMarkAnalyticsStatus,
+       _getStartupResult =
+           getStartupResult ?? getStartupNotificationPermissionRequestResult;
 
   final ApiClient _apiClient;
   final Future<permissions.PermissionStatus> Function() _getStatus;
@@ -47,6 +52,8 @@ class StartupNotificationPermissionReporter {
   final Future<String?> Function(String showId) _getLastAnalyticsStatus;
   final Future<void> Function(String showId, String status)
   _markAnalyticsStatus;
+  final Future<StartupNotificationPermissionRequestResult?> Function()
+  _getStartupResult;
 
   final Map<String, Future<void>> _accountSyncs = <String, Future<void>>{};
   final Set<String> _pendingAnalyticsStatusKeys = <String>{};
@@ -63,7 +70,7 @@ class StartupNotificationPermissionReporter {
       return;
     }
 
-    // 明确授权结果不能被同时进行的普通检查合并，否则首次拒绝可能会被忽略。
+    // 明确授权结果不能被同时进行的普通检查合并，避免丢失授权弹窗后的状态读取。
     final syncKey = '$showId:$isExplicitResult';
     final inFlight = _accountSyncs[syncKey];
     if (inFlight != null) return inFlight;
@@ -81,8 +88,7 @@ class StartupNotificationPermissionReporter {
 
   /// 用户操作系统授权弹窗后调用。
   ///
-  /// 普通 [syncForAccount] 无法区分首次的 `denied` 是尚未弹窗还是用户拒绝；
-  /// 此方法将本次读取明确标记为授权结果，使首次拒绝也能进入埋点。
+  /// 此方法将本次读取标记为系统授权弹窗后的结果。
   Future<void> recordExplicitResultForAccount(String? showId) {
     return syncForAccount(showId, isExplicitResult: true);
   }
@@ -95,9 +101,13 @@ class StartupNotificationPermissionReporter {
     if (accessToken == null || accessToken.isEmpty) return;
 
     try {
-      final permission = await _getStatus();
-      final enabled = _isGranted(permission);
+      final startupResult = await _getStartupResult();
       final previous = await _getLastReportedEnabled(showId);
+      final usesStartupResult = startupResult != null && previous == null;
+      final permission = usesStartupResult ? null : await _getStatus();
+      final enabled = !usesStartupResult
+          ? _isGranted(permission!)
+          : startupResult == StartupNotificationPermissionRequestResult.granted;
       if (previous != enabled) {
         await _reportEnablePush(enabled);
         // 只有服务端成功接收后才更新本地状态，失败时下一次触发会重试。
@@ -106,7 +116,9 @@ class StartupNotificationPermissionReporter {
 
       await _trackPermissionStatus(
         showId,
-        permission,
+        !usesStartupResult
+            ? _analyticsStatus(permission!)
+            : _analyticsStatusForStartupResult(startupResult),
         isExplicitResult: isExplicitResult,
       );
     } catch (error) {
@@ -120,13 +132,12 @@ class StartupNotificationPermissionReporter {
 
   Future<void> _trackPermissionStatus(
     String showId,
-    permissions.PermissionStatus permission, {
+    String? status, {
     required bool isExplicitResult,
   }) async {
     final analytics = _analytics;
     if (analytics == null) return;
 
-    final status = _analyticsStatus(permission);
     if (status == null) return;
 
     final pendingKey = '$showId:$status';
@@ -134,13 +145,7 @@ class StartupNotificationPermissionReporter {
 
     try {
       final previous = await _getLastAnalyticsStatus(showId);
-      final isFirstAmbiguousDenial =
-          previous == null &&
-          status == 'denied' &&
-          !isExplicitResult &&
-          !permission.isPermanentlyDenied &&
-          !permission.isRestricted;
-      if (previous == status || isFirstAmbiguousDenial) return;
+      if (previous == status) return;
 
       final payload = await analytics.track(
         AnalyticsEvent(AnalyticsDefinitions.pushPermissionResult, {
@@ -161,6 +166,17 @@ class StartupNotificationPermissionReporter {
       return 'denied';
     }
     return null;
+  }
+
+  static String _analyticsStatusForStartupResult(
+    StartupNotificationPermissionRequestResult result,
+  ) {
+    return switch (result) {
+      StartupNotificationPermissionRequestResult.granted => 'granted',
+      StartupNotificationPermissionRequestResult.denied => 'denied',
+      StartupNotificationPermissionRequestResult.notDetermined =>
+        'not_determined',
+    };
   }
 }
 

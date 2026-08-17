@@ -18,6 +18,7 @@ import '../../pay/application/iap_price_service.dart';
 import '../../pay/application/payment_loading_controller.dart';
 import '../../pay/application/payment_purchase_coordinator.dart';
 import '../../pay/domain/pay_channel.dart';
+import '../../pay/domain/member_product_type.dart';
 import '../../pay/domain/payment_method_options.dart';
 import '../../pay/provider/iap_price_service_provider.dart';
 import '../../pay/provider/iap_purchase_service_provider.dart';
@@ -407,6 +408,15 @@ class MembershipController extends Notifier<MembershipState> {
         throw Exception('Product details not found for $platformProductId');
       }
       final checkoutProduct = productDetails;
+      final analyticsProductType = MemberProductType.analyticsProductTypeFor(
+        plan.memberType,
+      );
+      final offerToken =
+          MemberProductType.usesGoogleSubscriptionOffer(plan.memberType)
+          ? GooglePlayPricingExtractor.getSelectedOffer(
+              productDetails,
+            )?.offerIdToken
+          : null;
 
       state = state.copyWith(
         purchaseStatus: MembershipPurchaseStatus.creatingOrder,
@@ -456,7 +466,7 @@ class MembershipController extends Notifier<MembershipState> {
               ),
               'order_id': paymentOrder.orderNo,
               'product_id': plan.id,
-              'product_type': 'vip_subscription',
+              'product_type': analyticsProductType,
             }),
           );
       final outcome = await ref
@@ -468,11 +478,12 @@ class MembershipController extends Notifier<MembershipState> {
             isConsumable: false,
             productType: _membershipProductType,
             packageName: _packageName,
+            offerToken: offerToken,
             onGooglePlayCheckoutStarted: () {
               ref
                   .read(adjustEventReporterProvider)
                   .reportCheckoutStart(
-                    productType: 'vip_subscription',
+                    productType: analyticsProductType,
                     productId: plan.id,
                     price: checkoutProduct.rawPrice,
                     currency: checkoutProduct.currencyCode,
@@ -690,6 +701,7 @@ class MembershipController extends Notifier<MembershipState> {
       period: plan.period,
       platformProductId: plan.platformProductId,
       payChannel: plan.payChannel,
+      memberType: plan.memberType,
       badgeLabel: plan.badgeLabel,
       originalPriceLabel: originalPriceLabel ?? plan.originalPriceLabel,
       promotionPriceLabel: promotionPriceLabel ?? plan.promotionPriceLabel,

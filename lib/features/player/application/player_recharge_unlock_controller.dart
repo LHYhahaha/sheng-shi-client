@@ -43,6 +43,16 @@ enum PlayerRechargeUnlockStatus {
   failed,
 }
 
+enum PlayerRechargePopupType {
+  withCoin,
+  vipOnly;
+
+  String get analyticsValue => switch (this) {
+    PlayerRechargePopupType.withCoin => 'with_coin',
+    PlayerRechargePopupType.vipOnly => 'vip_only',
+  };
+}
+
 enum PlayerRechargePaymentStage { creatingOrder, waitingPayment, verifying }
 
 enum PlayerRechargePurchaseFailureKind {
@@ -68,6 +78,7 @@ class PlayerRechargeUnlockState {
     this.paymentStage,
     this.purchaseFailureKind,
     this.error,
+    this.rechargePopupType = PlayerRechargePopupType.withCoin,
   });
 
   const PlayerRechargeUnlockState.initial()
@@ -80,7 +91,8 @@ class PlayerRechargeUnlockState {
       selectedPaymentMethodCode = null,
       paymentStage = null,
       purchaseFailureKind = null,
-      error = null;
+      error = null,
+      rechargePopupType = PlayerRechargePopupType.withCoin;
 
   final PlayerRechargeUnlockStatus status;
   final String? itemId;
@@ -92,6 +104,7 @@ class PlayerRechargeUnlockState {
   final PlayerRechargePaymentStage? paymentStage;
   final PlayerRechargePurchaseFailureKind? purchaseFailureKind;
   final Object? error;
+  final PlayerRechargePopupType rechargePopupType;
 
   bool get isProcessing => status == PlayerRechargeUnlockStatus.processing;
 
@@ -134,6 +147,7 @@ class PlayerRechargeUnlockState {
     PlayerRechargePaymentStage? paymentStage,
     PlayerRechargePurchaseFailureKind? purchaseFailureKind,
     Object? error,
+    PlayerRechargePopupType? rechargePopupType,
     bool clearSelection = false,
     bool clearPaymentStage = false,
     bool clearPurchaseFailure = false,
@@ -159,6 +173,7 @@ class PlayerRechargeUnlockState {
           ? null
           : purchaseFailureKind ?? this.purchaseFailureKind,
       error: clearError ? null : error ?? this.error,
+      rechargePopupType: rechargePopupType ?? this.rechargePopupType,
     );
   }
 }
@@ -193,6 +208,7 @@ class PlayerRechargeUnlockController
   Future<void> open({
     required String itemId,
     required int requiredCoins,
+    bool vipOnly = false,
   }) async {
     final generation = ++_generation;
     _purchaseGeneration++;
@@ -208,6 +224,9 @@ class PlayerRechargeUnlockController
       selectedMembershipPackageId: null,
       paymentStage: null,
       purchaseFailureKind: null,
+      rechargePopupType: vipOnly
+          ? PlayerRechargePopupType.vipOnly
+          : PlayerRechargePopupType.withCoin,
     );
 
     try {
@@ -232,6 +251,9 @@ class PlayerRechargeUnlockController
         selectedMembershipPackageId: null,
         paymentStage: null,
         purchaseFailureKind: null,
+        rechargePopupType: vipOnly
+            ? PlayerRechargePopupType.vipOnly
+            : PlayerRechargePopupType.withCoin,
       );
     } catch (error) {
       if (!_isCurrent(generation)) {

@@ -321,18 +321,16 @@ class PopupEntryController extends Notifier<PopupEntryState> {
   }
 
   Future<void> _trackPopupClose(PopupConfig popup) async {
-    final popupName = popupCloseName(popup);
-    if (popupName == null) {
-      debugPrint('[Analytics] Skip popup_close: popup name is unavailable.');
+    final parameters = popupCloseParams(popup);
+    if (parameters == null) {
+      debugPrint(
+        '[Analytics] Skip popup_close: popup analytics parameters are unavailable.',
+      );
       return;
     }
     await ref
         .read(analyticsServiceProvider)
-        .track(
-          AnalyticsEvent(AnalyticsDefinitions.popupClose, {
-            'popup_name': popupName,
-          }),
-        );
+        .track(AnalyticsEvent(AnalyticsDefinitions.popupClose, parameters));
   }
 
   Future<void> _reportPopupEvent(

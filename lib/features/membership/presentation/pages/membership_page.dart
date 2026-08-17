@@ -21,6 +21,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../pay/application/payment_loading_controller.dart';
+import '../../../pay/domain/member_product_type.dart';
 import '../../../player/application/player_entry_preload_coordinator.dart';
 import '../../../home/application/vip_only_dramas_provider.dart';
 import '../../../home/presentation/widgets/vip_only_dramas_section.dart';
@@ -488,7 +489,7 @@ class _MembershipBody extends StatelessWidget {
 }
 
 String _analyticsProductTypeForPlan(MembershipPlan plan) =>
-    plan.period == null ? 'vip_once' : 'vip_subscription';
+    MemberProductType.analyticsProductTypeFor(plan.memberType);
 
 String? _buildPromoText(MembershipPlan plan, String languageCode) {
   final promoPrice = plan.promotionPriceLabel;

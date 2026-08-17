@@ -1074,6 +1074,8 @@ class AppLocalizations {
   String get rechargeVipMember =>
       _remoteText('recharge_modal.vip.member', en: 'VIP', zh: '会员');
 
+  // ── 广告 ad ─────────────────────────────────────────────
+
   String rechargeMembershipTitle({
     String? periodIso,
     String? fallbackId,
@@ -1162,6 +1164,27 @@ class AppLocalizations {
 
   String get playerUnlockNow =>
       _remoteText('player.unlock.cta', en: 'Unlock Now', zh: '立即解锁');
+
+  String get playerUnlockWatchAd => _remoteText(
+    'player.unlock.watch_ad',
+    en: 'Watch Ads to unlock for free',
+    zh: '看广告免费解锁',
+  );
+
+  String get playerUnlockReplay =>
+      _remoteText('player.unlock.replay', en: 'Replay', zh: '重新播放');
+
+  String get playerAdLimitRegular => _remoteText(
+    'player.ad_limit.regular',
+    en: 'Regular drama ad limit reached.',
+    zh: '今日广告解锁普通短剧已上限',
+  );
+
+  String get playerAdLimitVip => _remoteText(
+    'player.ad_limit.vip',
+    en: 'VIP drama ad limit reached.',
+    zh: '今日广告解锁会员短剧已上限',
+  );
 
   String get playerMemberUnlock => _remoteText(
     'player.unlock.member_unlock',
@@ -2162,6 +2185,52 @@ class AppLocalizations {
     en: 'Network error. Please try again later.',
     zh: '网络错误，请稍后重试。',
   );
+
+  String get adUnlockSuccess =>
+      _remoteText('ad_unlock.success', en: 'Unlocked successfully', zh: '解锁成功');
+
+  String get adUnlockModalTitle => _remoteText(
+    'ad_unlock.modal.title',
+    en: 'Watch this episode free?',
+    zh: '免费观看本集？',
+  );
+
+  String get adUnlockActionWatch => _remoteText(
+    'ad_unlock.action.watch',
+    en: 'Watch Ad to unlock',
+    zh: '看广告解锁',
+  );
+
+  String adUnlockTodayProgress({required int watched, required Object total}) =>
+      _interpolate(
+        _remoteText(
+          'ad_unlock.today_progress',
+          en: 'Watched today ({watched}/{total})',
+          zh: '今日已看（{watched}/{total}）',
+        ),
+        {'watched': watched, 'total': total},
+      );
+
+  String adUnlockCloseCountdown({required int seconds}) => _interpolate(
+    _remoteText(
+      'ad_unlock.close_countdown',
+      en: 'Close in {seconds}s',
+      zh: '{seconds}秒后可关闭',
+    ),
+    {'seconds': seconds},
+  );
+
+  String adUnlockWatchCountdown({required int seconds}) => _interpolate(
+    _remoteText(
+      'ad_unlock.watch_countdown',
+      en: 'Watch {seconds}s more to unlock',
+      zh: '再观看{seconds}秒即可解锁本集',
+    ),
+    {'seconds': seconds},
+  );
+
+  String get adUnlockStatusWatching =>
+      _remoteText('ad_unlock.status.watching', en: 'Watching', zh: '观看中');
 
   // ── 占位符（开发用）─────────────────────────────────────────────
   String get memberPagePlaceholder => _remoteText(

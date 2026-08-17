@@ -39,6 +39,7 @@ class MembershipMapper {
       ),
       platformProductId: dto.channelProductId,
       payChannel: dto.payChannel,
+      memberType: dto.memberType,
       badgeLabel: null,
       originalPriceLabel: originalPriceLabel,
       promotionPriceLabel: dto.iapPriceText,

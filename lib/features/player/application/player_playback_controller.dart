@@ -2190,6 +2190,22 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _syncWatchProgressReportTimer();
   }
 
+  /// 重新挂载因不可见而卸载的 video surface，但保持用户的暂停状态。
+  Future<void> restoreSurfaceAfterVisibilityPause() async {
+    if (_isSessionDisposed ||
+        state.status != PlayerPlaybackStatus.paused ||
+        state.currentSource == null) {
+      return;
+    }
+    _visibilityDetachEpoch += 1;
+    _pauseWhenOpenCompletes = false;
+    state = state.copyWith(
+      isBuffering: false,
+      videoController: _session.videoController,
+      surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
+    );
+  }
+
   /// 被普通播放器暂时抢占时暂停 For You，不销毁当前/已 prepared 的 session。
   ///
   /// 已下载分片保留在内存/磁盘；HLS traffic gate 会阻止 For You 后续回源，返回时

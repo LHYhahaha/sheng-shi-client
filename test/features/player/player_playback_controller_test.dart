@@ -1170,6 +1170,24 @@ void main() {
     },
   );
 
+  test('restores a paused video surface without resuming playback', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.pause();
+    await controller.pauseForVisibility();
+
+    await controller.restoreSurfaceAfterVisibilityPause();
+
+    final state = container.read(provider);
+    expect(state.status, PlayerPlaybackStatus.paused);
+    expect(state.surfaceLifecycle, PlayerVideoSurfaceLifecycle.attached);
+    expect(session.playCount, 1);
+  });
+
   testWidgets('For You suspension retains its session while pausing playback', (
     tester,
   ) async {

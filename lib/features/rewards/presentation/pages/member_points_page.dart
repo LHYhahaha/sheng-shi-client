@@ -1453,6 +1453,7 @@ class _RedeemPointsPanel extends ConsumerWidget {
       context,
       memberDays: tier.memberDays,
       pointCost: tier.pointCost,
+      tierId: tier.tierId,
     );
     if (!confirmed || !context.mounted) return;
 

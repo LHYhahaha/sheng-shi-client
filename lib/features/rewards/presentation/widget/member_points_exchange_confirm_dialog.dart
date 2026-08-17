@@ -13,20 +13,23 @@ Future<bool> showMemberPointsExchangeConfirmDialog(
   BuildContext context, {
   required int memberDays,
   required int pointCost,
+  required int tierId,
 }) async {
   final analytics = ProviderScope.containerOf(
     context,
     listen: false,
   ).read(analyticsServiceProvider);
+  final popupParameters = <String, Object?>{
+    'popup_name': AnalyticsPopupNames.memberPointsExchangeConfirm,
+    'exchange_tier_id': tierId.toString(),
+    'required_member_points': pointCost,
+    'grant_vip_days': memberDays,
+  };
   // `showGeneralDialog` 创建路由即代表弹框已进入展示流程；关闭事件统一由 finally
   // 兜底，包含点击确认、关闭按钮、系统返回和点击遮罩。
   unawaited(
     analytics.track(
-      AnalyticsEvent(AnalyticsDefinitions.popupShow, {
-        'popup_name': AnalyticsPopupNames.memberPointsExchangeConfirm,
-        'member_days': memberDays,
-        'point_cost': pointCost,
-      }),
+      AnalyticsEvent(AnalyticsDefinitions.popupShow, popupParameters),
     ),
   );
   try {
@@ -61,9 +64,7 @@ Future<bool> showMemberPointsExchangeConfirmDialog(
   } finally {
     unawaited(
       analytics.track(
-        AnalyticsEvent(AnalyticsDefinitions.popupClose, {
-          'popup_name': AnalyticsPopupNames.memberPointsExchangeConfirm,
-        }),
+        AnalyticsEvent(AnalyticsDefinitions.popupClose, popupParameters),
       ),
     );
   }

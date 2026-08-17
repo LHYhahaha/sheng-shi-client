@@ -159,21 +159,163 @@ abstract final class AnalyticsDefinitions {
       name: popupShow,
       parameters: {
         'popup_name': _requiredString,
-        'popup_config_id': _string,
+        'exchange_tier_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['popup_name'] == 'member_points_exchange_confirm_popup',
+        ),
+        'required_member_points': AnalyticsParameterRule(
+          type: AnalyticsParameterType.number,
+          requiredWhen: (params) =>
+              params['popup_name'] == 'member_points_exchange_confirm_popup',
+        ),
+        'grant_vip_days': AnalyticsParameterRule(
+          type: AnalyticsParameterType.number,
+          requiredWhen: (params) =>
+              params['popup_name'] == 'member_points_exchange_confirm_popup',
+        ),
+        'popup_config_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['popup_name'] == 'fixed_campaign_popup',
+        ),
         // 仅 /api/popup 返回的运营弹框携带该字段；本地业务弹框不传。
-        'popup_target_type': _string,
+        'popup_target_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['popup_name'] == 'fixed_campaign_popup',
+          allowedValues: {'close', 'h5', 'page', 'drama'},
+        ),
         'target_drama_id': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
           requiredWhen: (params) => params['popup_target_type'] == 'drama',
+        ),
+        'drama_recommend_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => params['popup_target_type'] == 'drama',
+          allowedValues: {'specified', 'auto'},
+        ),
+        'drama_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => const {
+            'ad_unlock_popup',
+            'recharge_popup',
+          }.contains(params['popup_name']),
+        ),
+        'episode_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => const {
+            'ad_unlock_popup',
+            'recharge_popup',
+          }.contains(params['popup_name']),
+        ),
+        'drama_access_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => params['popup_name'] == 'ad_unlock_popup',
+          allowedValues: {'normal', 'vip'},
+        ),
+        'ad_material_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => params['popup_name'] == 'ad_unlock_popup',
+        ),
+        'recharge_popup_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => params['popup_name'] == 'recharge_popup',
+          allowedValues: {'with_coin', 'vip_only'},
         ),
       },
       // 弹框名称字典中，不同弹框还会携带短剧、剧集、商品等业务字段。
       allowAdditionalParameters: true,
     ),
-    // 当前口径：关闭弹窗只允许上报 popup_name。
     popupClose: AnalyticsEventDefinition(
       name: popupClose,
-      parameters: {'popup_name': _requiredString},
+      parameters: {
+        'popup_name': _requiredString,
+        'popup_config_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['popup_name'] == 'fixed_campaign_popup',
+        ),
+        'popup_target_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['popup_name'] == 'fixed_campaign_popup',
+          allowedValues: {'close', 'h5', 'page', 'drama'},
+        ),
+        'target_drama_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['popup_name'] == 'fixed_campaign_popup' &&
+              params['popup_target_type'] == 'drama',
+        ),
+        'drama_recommend_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['popup_name'] == 'fixed_campaign_popup' &&
+              params['popup_target_type'] == 'drama',
+          allowedValues: {'specified', 'auto'},
+        ),
+        'drama_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => const {
+            'episode_selector_popup',
+            'episode_unlock_confirm_popup',
+            'recharge_popup',
+            'drama_exit_recommend_popup',
+            'share_popup',
+            'ad_unlock_popup',
+          }.contains(params['popup_name']),
+        ),
+        'episode_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => const {
+            'episode_unlock_confirm_popup',
+            'recharge_popup',
+          }.contains(params['popup_name']),
+        ),
+        'required_coin_amount': AnalyticsParameterRule(
+          type: AnalyticsParameterType.number,
+          requiredWhen: (params) => const {
+            'episode_unlock_confirm_popup',
+            'recharge_popup',
+          }.contains(params['popup_name']),
+        ),
+        'product_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+        ),
+        'product_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+        ),
+        'exchange_tier_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['popup_name'] == 'member_points_exchange_confirm_popup',
+        ),
+        'required_member_points': AnalyticsParameterRule(
+          type: AnalyticsParameterType.number,
+          requiredWhen: (params) =>
+              params['popup_name'] == 'member_points_exchange_confirm_popup',
+        ),
+        'grant_vip_days': AnalyticsParameterRule(
+          type: AnalyticsParameterType.number,
+          requiredWhen: (params) =>
+              params['popup_name'] == 'member_points_exchange_confirm_popup',
+        ),
+        'drama_access_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => params['popup_name'] == 'ad_unlock_popup',
+          allowedValues: {'normal', 'vip'},
+        ),
+        'ad_material_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => params['popup_name'] == 'ad_unlock_popup',
+        ),
+        'recharge_popup_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) => params['popup_name'] == 'recharge_popup',
+          allowedValues: {'with_coin', 'vip_only'},
+        ),
+      },
     ),
     elementClick: AnalyticsEventDefinition(
       name: elementClick,
@@ -272,7 +414,8 @@ abstract final class AnalyticsDefinitions {
               params['element_name'] == 'coin_product_card',
           allowedValuesWhen: (params) => switch (params['element_name']) {
             'coin_product_card' => {'coin'},
-            'vip_product_card' => {'vip_once', 'vip_subscription'},
+            // 会员商品类型由后端定义；客户端需原样透传未识别的新枚举值。
+            'vip_product_card' => null,
             _ => null,
           },
         ),
@@ -310,12 +453,14 @@ abstract final class AnalyticsDefinitions {
           type: AnalyticsParameterType.string,
           requiredWhen: (params) =>
               params['element_name'] == 'episode_unlock_button' ||
-              params['element_name'] == 'drama_card',
+              params['element_name'] == 'drama_card' ||
+              params['element_name'] == 'ad_unlock_button',
         ),
         'episode_id': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
           requiredWhen: (params) =>
-              params['element_name'] == 'episode_unlock_button',
+              params['element_name'] == 'episode_unlock_button' ||
+              params['element_name'] == 'ad_unlock_button',
         ),
         'unlock_button_action': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
@@ -326,6 +471,17 @@ abstract final class AnalyticsDefinitions {
             'open_recharge_vip_only',
             'confirm_unlock',
           },
+        ),
+        'drama_access_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'ad_unlock_button',
+          allowedValues: {'normal', 'vip'},
+        ),
+        'ad_material_id': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'ad_unlock_button',
         ),
       },
       // 元素字典后续会为不同 element_name 注入短剧、商品等附加字段。
@@ -373,7 +529,6 @@ abstract final class AnalyticsDefinitions {
         'product_type': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
           required: true,
-          allowedValues: {'coin', 'vip_once', 'vip_subscription'},
         ),
       },
     ),

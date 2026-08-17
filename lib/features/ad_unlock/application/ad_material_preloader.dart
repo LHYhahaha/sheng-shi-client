@@ -23,6 +23,9 @@ class AdMaterialPreloader {
   String? get cachedFilePath => _cachedFilePath;
 
   Future<void> ensureCachedMaterial() {
+    if (_cachedMaterial != null && _cachedFilePath != null) {
+      return Future<void>.value();
+    }
     return _inFlight ??= _ensureCachedMaterial().whenComplete(() {
       _inFlight = null;
     });

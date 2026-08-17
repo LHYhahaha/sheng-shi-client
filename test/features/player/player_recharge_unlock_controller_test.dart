@@ -48,6 +48,21 @@ void main() {
     expect(state.offer?.membershipPackages, hasLength(1));
   });
 
+  test('marks a membership episode recharge sheet as vip only', () async {
+    final container = _container();
+    addTearDown(container.dispose);
+
+    final provider = playerRechargeUnlockControllerProvider('single-a');
+    await container
+        .read(provider.notifier)
+        .open(itemId: 'drama-a-ep-2', requiredCoins: 60, vipOnly: true);
+
+    expect(
+      container.read(provider).rechargePopupType,
+      PlayerRechargePopupType.vipOnly,
+    );
+  });
+
   test('coin package verifies payment before completing purchase', () async {
     final iap = _FakeIapPurchaseService();
     final pay = _FakePayRepository();

@@ -1,5 +1,6 @@
 import 'package:drama_client/features/ad_unlock/domain/ad_unlock_models.dart';
 import 'package:drama_client/features/ad_unlock/presentation/ad_unlock_page.dart';
+import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,12 +16,14 @@ void main() {
     },
   );
 
-  testWidgets('shows retry action after a confirmation failure', (
+  testWidgets('does not show a retry action before confirmation fails', (
     tester,
   ) async {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
+          localizationsDelegates: const [AppLocalizations.delegate],
+          supportedLocales: AppLocalizations.supportedLocales,
           home: AdUnlockPage(
             session: _session,
             dramaId: '100',
@@ -29,15 +32,15 @@ void main() {
         ),
       ),
     );
-    expect(find.text('Retry unlock'), findsNothing);
+    expect(find.text('Retry'), findsNothing);
   });
 
-  testWidgets('keeps the close action disabled while watch time remains', (
-    tester,
-  ) async {
+  testWidgets('keeps the close action above the ad material', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         child: MaterialApp(
+          localizationsDelegates: const [AppLocalizations.delegate],
+          supportedLocales: AppLocalizations.supportedLocales,
           home: AdUnlockPage(
             session: _pendingSession,
             dramaId: '100',
@@ -53,6 +56,17 @@ void main() {
       matching: find.byType(GestureDetector),
     );
     expect(tester.widget<GestureDetector>(closeGesture).onTap, isNull);
+
+    final materialGesture = find.ancestor(
+      of: find.byType(Image),
+      matching: find.byType(GestureDetector),
+    );
+    expect(
+      tester
+          .getRect(materialGesture)
+          .contains(tester.getCenter(find.text('Close in 12s'))),
+      isFalse,
+    );
   });
 }
 

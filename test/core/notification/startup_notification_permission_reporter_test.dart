@@ -3,16 +3,19 @@ import 'package:drama_client/core/analytics/analytics_context.dart';
 import 'package:drama_client/core/analytics/analytics_service.dart';
 import 'package:drama_client/core/network/api_client.dart';
 import 'package:drama_client/core/network/api_request_context.dart';
+import 'package:drama_client/core/notification/startup_notification_permission_requester.dart';
 import 'package:drama_client/core/notification/startup_notification_permission_reporter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:permission_handler/permission_handler.dart' as permissions;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../helpers/recording_http_adapter.dart';
 
 void main() {
   late RecordingHttpAdapter adapter;
 
-  setUp(() {
+  setUp(() async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
     adapter = RecordingHttpAdapter();
   });
 
@@ -107,7 +110,7 @@ void main() {
         },
         getLastReportedEnabled: (_) async => null,
         reportEnablePush: (_) async {},
-        markReportedEnabled: (_, __) async {},
+        markReportedEnabled: (_, _) async {},
       );
 
       await reporter.syncForAccount(null);
@@ -118,7 +121,7 @@ void main() {
   );
 
   test(
-    'tracks only explicit first result and later notification status changes',
+    'tracks the first detected status and later notification status changes',
     () async {
       var permission = permissions.PermissionStatus.denied;
       String? storedAnalyticsStatus;
@@ -127,7 +130,7 @@ void main() {
         apiClient: _apiClient(adapter),
         getStatus: () async => permission,
         getLastReportedEnabled: (_) async => false,
-        markReportedEnabled: (_, __) async {},
+        markReportedEnabled: (_, _) async {},
         reportEnablePush: (_) async {},
         analytics: AnalyticsService(
           contextReader: () => const AnalyticsContext(
@@ -144,16 +147,12 @@ void main() {
         },
       );
 
-      // 首次普通读取的 denied 无法判断是否弹出过系统授权框，不记录。
+      // 首次普通读取到的状态也要记录，供漏斗分析未授权用户。
       await reporter.syncForAccount('show-a');
-      expect(sink.events, isEmpty);
-
-      // 系统授权弹窗的明确拒绝记录一次。
-      await reporter.recordExplicitResultForAccount('show-a');
       expect(sink.events, hasLength(1));
       expect(sink.events.single.eventParams, {'permission_status': 'denied'});
 
-      // 相同状态的后续检查不重复记录。
+      // 相同状态的后续启动检查不重复记录。
       await reporter.syncForAccount('show-a');
       expect(sink.events, hasLength(1));
 
@@ -161,6 +160,59 @@ void main() {
       await reporter.syncForAccount('show-a');
       expect(sink.events, hasLength(2));
       expect(sink.events.last.eventParams, {'permission_status': 'granted'});
+    },
+  );
+
+  test('reports an indeterminate startup result as disabled', () async {
+    bool? reportedEnabled;
+    String? storedAnalyticsStatus;
+    final sink = AnalyticsInMemoryEventSink(logEvents: false);
+    final reporter = StartupNotificationPermissionReporter(
+      apiClient: _apiClient(adapter),
+      getStatus: () async => permissions.PermissionStatus.granted,
+      getStartupResult: () async =>
+          StartupNotificationPermissionRequestResult.notDetermined,
+      getLastReportedEnabled: (_) async => null,
+      markReportedEnabled: (_, _) async {},
+      reportEnablePush: (enabled) async => reportedEnabled = enabled,
+      analytics: AnalyticsService(
+        contextReader: () => const AnalyticsContext(
+          platform: 'android',
+          appVersion: '1.0.3',
+          language: 'en',
+          userId: 'show-a',
+        ),
+        eventSink: sink,
+      ),
+      getLastAnalyticsStatus: (_) async => storedAnalyticsStatus,
+      markAnalyticsStatus: (_, status) async => storedAnalyticsStatus = status,
+    );
+
+    await reporter.syncForAccount('show-a');
+
+    expect(reportedEnabled, isFalse);
+    expect(sink.events.single.eventParams, {
+      'permission_status': 'not_determined',
+    });
+  });
+
+  test(
+    'uses the current system state after the startup result was reported',
+    () async {
+      bool? reportedEnabled;
+      final reporter = StartupNotificationPermissionReporter(
+        apiClient: _apiClient(adapter),
+        getStatus: () async => permissions.PermissionStatus.granted,
+        getStartupResult: () async =>
+            StartupNotificationPermissionRequestResult.notDetermined,
+        getLastReportedEnabled: (_) async => false,
+        markReportedEnabled: (_, _) async {},
+        reportEnablePush: (enabled) async => reportedEnabled = enabled,
+      );
+
+      await reporter.syncForAccount('show-a');
+
+      expect(reportedEnabled, isTrue);
     },
   );
 }

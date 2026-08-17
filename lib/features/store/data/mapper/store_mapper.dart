@@ -65,8 +65,11 @@ class StoreMapper {
       bonusCoins: 0,
       platformProductId: dto.channelProductId, // 用于IAP查询和购买
       payChannel: dto.payChannel,
+      memberType: dto.memberType,
       periodIso: _periodIso(dto.periodType, dto.periodValue),
-      productType: 'subscription',
+      productType: dto.memberType == 'MEMBER_PRODUCT_TYPE_SUBSCRIPTION'
+          ? 'subscription'
+          : 'one_time',
       sortOrder: dto.sort,
       enabled: dto.status == 1,
       originalPriceLabel: null,

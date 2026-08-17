@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/toast/app_center_toast.dart';
+import '../../../l10n/app_localizations.dart';
 import '../application/ad_effective_watch_controller.dart';
 import '../application/ad_unlock_analytics_tracker.dart';
 import '../application/ad_unlock_session_controller.dart';
@@ -178,20 +179,45 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
 
   void _closeAfterUnlock() {
     final refreshFuture = _refreshFuture;
-    if (_sessionController.state != AdUnlockSessionState.confirmed ||
-        refreshFuture == null) {
+    if (_sessionController.state == AdUnlockSessionState.confirmRetry) {
+      Navigator.of(context).pop();
       return;
     }
-    Navigator.of(
-      context,
-    ).pop(AdUnlockRouteResult.confirmed(refreshFuture: refreshFuture));
+    if (_sessionController.state == AdUnlockSessionState.confirmed &&
+        refreshFuture != null) {
+      Navigator.of(
+        context,
+      ).pop(AdUnlockRouteResult.confirmed(refreshFuture: refreshFuture));
+    }
   }
 
   void _onUnlockConfirmed() {
     _refreshFuture ??=
         widget.onUnlockConfirmed?.call() ?? Future<bool>.value(true);
-    showAppCenterToast('解锁成功');
+    showAppCenterToast(context.l10n.adUnlockSuccess);
     setState(() {});
+  }
+
+  Widget _highlightedCountdown(String text, int seconds) {
+    final highlighted = seconds.toString();
+    final index = text.indexOf(highlighted);
+    final baseStyle = TextStyle(color: Colors.white.withValues(alpha: 0.5));
+    if (index < 0) {
+      return Text(text, style: baseStyle);
+    }
+    return Text.rich(
+      TextSpan(
+        style: baseStyle,
+        children: [
+          TextSpan(text: text.substring(0, index)),
+          TextSpan(
+            text: highlighted,
+            style: const TextStyle(color: Colors.white),
+          ),
+          TextSpan(text: text.substring(index + highlighted.length)),
+        ],
+      ),
+    );
   }
 
   @override
@@ -227,6 +253,7 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
   Widget build(BuildContext context) {
     final retry = _sessionController.state == AdUnlockSessionState.confirmRetry;
     final unlocked = _sessionController.state == AdUnlockSessionState.confirmed;
+    final canClose = unlocked || retry;
     final seconds = _watch.watchedSeconds;
     final required = widget.session.watchSeconds;
     return PopScope(
@@ -243,7 +270,7 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
                   child: Padding(
                     padding: const EdgeInsets.only(right: 16, bottom: 12),
                     child: GestureDetector(
-                      onTap: unlocked ? _closeAfterUnlock : null,
+                      onTap: canClose ? _closeAfterUnlock : null,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 14,
@@ -256,27 +283,21 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
                             color: Colors.white.withValues(alpha: 0.2),
                           ),
                         ),
-                        child: unlocked
+                        child: canClose
                             ? Text(
                                 'Close',
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.5),
                                 ),
                               )
-                            : Text.rich(
-                                TextSpan(
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.5),
+                            : _highlightedCountdown(
+                                context.l10n.adUnlockCloseCountdown(
+                                  seconds: (required - seconds).clamp(
+                                    0,
+                                    required,
                                   ),
-                                  children: [
-                                    const TextSpan(text: 'Close in '),
-                                    TextSpan(
-                                      text:
-                                          '${(required - seconds).clamp(0, required)}s',
-                                      style: TextStyle(color: Colors.white),
-                                    ),
-                                  ],
                                 ),
+                                (required - seconds).clamp(0, required),
                               ),
                       ),
                     ),
@@ -284,45 +305,65 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
                 ),
               ),
               Expanded(
-                child: GestureDetector(
-                  onTap: widget.session.h5Url?.isNotEmpty == true
-                      ? _openH5
-                      : null,
-                  child: widget.session.material.type == AdMaterialType.video
-                      ? Video(
-                          controller: _videoController!,
-                          controls: NoVideoControls,
-                          fit: BoxFit.contain,
-                        )
-                      : widget.session.materialFilePath == null
-                      ? Image.network(
-                          widget.session.material.fileUrl,
-                          fit: BoxFit.contain,
-                          frameBuilder: (context, child, frame, wasSync) {
-                            if (frame != null || wasSync) {
-                              _reportMaterialVisible();
-                            }
-                            return child;
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            _reportMaterialLoadFailure();
-                            return const ColoredBox(color: Color(0xFF242424));
-                          },
-                        )
-                      : Image.file(
-                          File(widget.session.materialFilePath!),
-                          fit: BoxFit.contain,
-                          frameBuilder: (context, child, frame, wasSync) {
-                            if (frame != null || wasSync) {
-                              _reportMaterialVisible();
-                            }
-                            return child;
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            _reportMaterialLoadFailure();
-                            return const ColoredBox(color: Color(0xFF242424));
-                          },
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: GestureDetector(
+                        onTap: widget.session.h5Url?.isNotEmpty == true
+                            ? _openH5
+                            : null,
+                        child:
+                            widget.session.material.type == AdMaterialType.video
+                            ? Video(
+                                controller: _videoController!,
+                                controls: NoVideoControls,
+                                fit: BoxFit.contain,
+                              )
+                            : widget.session.materialFilePath == null
+                            ? Image.network(
+                                widget.session.material.fileUrl,
+                                fit: BoxFit.contain,
+                                frameBuilder: (context, child, frame, wasSync) {
+                                  if (frame != null || wasSync) {
+                                    _reportMaterialVisible();
+                                  }
+                                  return child;
+                                },
+                                errorBuilder: (context, error, stackTrace) {
+                                  _reportMaterialLoadFailure();
+                                  return const ColoredBox(
+                                    color: Color(0xFF242424),
+                                  );
+                                },
+                              )
+                            : Image.file(
+                                File(widget.session.materialFilePath!),
+                                fit: BoxFit.contain,
+                                frameBuilder: (context, child, frame, wasSync) {
+                                  if (frame != null || wasSync) {
+                                    _reportMaterialVisible();
+                                  }
+                                  return child;
+                                },
+                                errorBuilder: (context, error, stackTrace) {
+                                  _reportMaterialLoadFailure();
+                                  return const ColoredBox(
+                                    color: Color(0xFF242424),
+                                  );
+                                },
+                              ),
+                      ),
+                    ),
+                    if (retry)
+                      Positioned.fill(
+                        child: Center(
+                          child: FilledButton(
+                            onPressed: _retry,
+                            child: Text(context.l10n.retry),
+                          ),
                         ),
+                      ),
+                  ],
                 ),
               ),
               SizedBox(
@@ -346,33 +387,20 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
                             child: retry || unlocked
                                 ? Text(
                                     retry
-                                        ? 'Unlock confirmation failed'
-                                        : 'Unlocked successfully',
+                                        ? context.l10n.networkError
+                                        : context.l10n.adUnlockSuccess,
                                     style: const TextStyle(
                                       color: Colors.white70,
                                     ),
                                   )
-                                : Text.rich(
-                                    TextSpan(
-                                      style: TextStyle(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.5,
-                                        ),
+                                : _highlightedCountdown(
+                                    context.l10n.adUnlockWatchCountdown(
+                                      seconds: (required - seconds).clamp(
+                                        0,
+                                        required,
                                       ),
-                                      children: [
-                                        const TextSpan(text: 'Watch '),
-                                        TextSpan(
-                                          text:
-                                              '${(required - seconds).clamp(0, required)}',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                        const TextSpan(
-                                          text: 's more to unlock',
-                                        ),
-                                      ],
                                     ),
+                                    (required - seconds).clamp(0, required),
                                   ),
                           ),
                           Container(
@@ -388,17 +416,14 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
-                              unlocked ? 'Unlocked' : 'Watching',
+                              unlocked
+                                  ? context.l10n.adUnlockSuccess
+                                  : context.l10n.adUnlockStatusWatching,
                               style: const TextStyle(color: Colors.white54),
                             ),
                           ),
                         ],
                       ),
-                      if (retry)
-                        FilledButton(
-                          onPressed: _retry,
-                          child: const Text('Retry unlock'),
-                        ),
                     ],
                   ),
                 ),

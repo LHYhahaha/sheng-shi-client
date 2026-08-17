@@ -805,7 +805,7 @@ class _PlayerUnlockOverlay extends StatelessWidget {
                 const SizedBox(height: 8),
                 _UnlockButton(
                   key: const ValueKey('player_ad_unlock_button'),
-                  label: 'Watch Ads to unlock for free',
+                  label: context.l10n.playerUnlockWatchAd,
                   subtitle: adUnlockSubtitle,
                   color: const Color(0xFF626262),
                   onTap: onAdUnlockTap,

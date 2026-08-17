@@ -10,10 +10,12 @@ import '../../../core/auth/session_cleanup_types.dart';
 import '../../../core/runtime/api_region_code_provider.dart';
 import '../../entitlement/application/entitlement_controller.dart';
 import '../../pay/application/iap_pending_purchase_cleaner.dart';
+import '../../pay/application/google_play_pricing_extractor.dart';
 import '../../pay/application/iap_price_service.dart';
 import '../../pay/application/payment_loading_controller.dart';
 import '../../pay/application/payment_purchase_coordinator.dart';
 import '../../pay/domain/pay_channel.dart';
+import '../../pay/domain/member_product_type.dart';
 import '../../pay/domain/payment_method_options.dart';
 import '../../pay/provider/iap_price_service_provider.dart';
 import '../../pay/provider/iap_purchase_service_provider.dart';
@@ -413,6 +415,13 @@ class StoreController extends Notifier<StoreState> {
         throw Exception('Product details not found for $platformProductId');
       }
       final checkoutProduct = productDetails;
+      final offerToken =
+          !package.isCoinPackage &&
+              MemberProductType.usesGoogleSubscriptionOffer(package.memberType)
+          ? GooglePlayPricingExtractor.getSelectedOffer(
+              productDetails,
+            )?.offerIdToken
+          : null;
 
       state = state.copyWith(
         purchaseStatus: StorePurchaseStatus.creatingOrder,
@@ -481,6 +490,7 @@ class StoreController extends Notifier<StoreState> {
             isConsumable: package.isCoinPackage,
             productType: productType,
             packageName: _packageName,
+            offerToken: offerToken,
             onGooglePlayCheckoutStarted: () {
               ref
                   .read(adjustEventReporterProvider)
@@ -548,9 +558,7 @@ class StoreController extends Notifier<StoreState> {
     if (package.isCoinPackage) {
       return 'coin';
     }
-    return package.productType == 'subscription'
-        ? 'vip_subscription'
-        : 'vip_once';
+    return MemberProductType.analyticsProductTypeFor(package.memberType);
   }
 
   void cancelPurchase() {

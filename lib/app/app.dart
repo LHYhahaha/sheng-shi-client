@@ -29,7 +29,9 @@ import '../core/network/api_client_provider.dart';
 import '../core/notification/fcm_notification.dart';
 import '../core/notification/fcm_notification_service.dart';
 import '../core/notification/startup_notification_permission_requester.dart';
+import '../core/notification/startup_notification_permission_reporter.dart';
 import '../core/runtime/install_id_provider.dart';
+import '../core/auth/user_info_store.dart';
 import '../core/runtime/startup_loading_timing.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/bottom_tab_config/application/bottom_tab_config_controller.dart';
@@ -86,10 +88,18 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     unawaited(_initializeAdjust());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        unawaited(_notificationPermissionRequester.requestIfNeeded());
+        unawaited(_requestStartupNotificationPermission());
       }
     });
     Future.microtask(_bootstrapSessionAndI18n);
+  }
+
+  Future<void> _requestStartupNotificationPermission() async {
+    await _notificationPermissionRequester.requestIfNeeded();
+    if (!mounted) return;
+    await ref
+        .read(startupNotificationPermissionReporterProvider)
+        .syncForAccount(ref.read(userInfoStoreProvider).showId);
   }
 
   Future<void> _initializeAdjust() async {

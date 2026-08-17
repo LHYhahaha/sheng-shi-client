@@ -27,14 +27,13 @@ class AppModalAnalyticsTracker {
     if (!_shownRequestIds.remove(request.requestId)) {
       return;
     }
-    final popupName = request.analyticsPopupShowParameters?['popup_name'];
-    if (popupName is! String || popupName.isEmpty) {
+    final parameters = request.analyticsPopupShowParameters;
+    final popupName = parameters?['popup_name'];
+    if (popupName is! String || popupName.isEmpty || parameters == null) {
       return;
     }
     _analytics.track(
-      AnalyticsEvent(AnalyticsDefinitions.popupClose, {
-        'popup_name': popupName,
-      }),
+      AnalyticsEvent(AnalyticsDefinitions.popupClose, parameters),
     );
   }
 }

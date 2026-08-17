@@ -10,6 +10,7 @@ class MembershipPlan {
     this.period,
     this.platformProductId,
     this.payChannel = 'PAY_CHANNEL_GOOGLE',
+    this.memberType = '',
     this.badgeLabel,
     this.originalPriceLabel,
 
@@ -71,6 +72,9 @@ class MembershipPlan {
 
   /// 服务端支付渠道，用于决定是否需要查询平台商品价格。
   final String payChannel;
+
+  /// 服务端会员商品类型，决定埋点分类和订阅 offer 的购买参数。
+  final String memberType;
 
   /// 徽标文案（对应 promotionText）。
   final String? badgeLabel;

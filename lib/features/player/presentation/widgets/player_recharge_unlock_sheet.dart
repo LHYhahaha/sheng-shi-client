@@ -123,6 +123,10 @@ class _PlayerRechargeUnlockSheetState
         .offer;
     final position =
         offer?.coinPackages.indexWhere((item) => item.id == package.id) ?? -1;
+    final rechargePopupType = ref
+        .read(playerRechargeUnlockControllerProvider(widget.sessionKey))
+        .rechargePopupType
+        .analyticsValue;
     final shouldShowCashier = await ref
         .read(
           playerRechargeUnlockControllerProvider(widget.sessionKey).notifier,
@@ -136,9 +140,7 @@ class _PlayerRechargeUnlockSheetState
               productType: 'coin',
               position: position + 1,
               shouldShowCashier: shouldShowCashier,
-              rechargePopupType: offer?.coinPackages.isNotEmpty == true
-                  ? 'with_coin'
-                  : 'vip_only',
+              rechargePopupType: rechargePopupType,
             );
           },
         );
@@ -157,6 +159,10 @@ class _PlayerRechargeUnlockSheetState
     final position =
         offer?.membershipPackages.indexWhere((item) => item.id == package.id) ??
         -1;
+    final rechargePopupType = ref
+        .read(playerRechargeUnlockControllerProvider(widget.sessionKey))
+        .rechargePopupType
+        .analyticsValue;
     final shouldShowCashier = await ref
         .read(
           playerRechargeUnlockControllerProvider(widget.sessionKey).notifier,
@@ -172,9 +178,7 @@ class _PlayerRechargeUnlockSheetState
                   : 'vip_subscription',
               position: position + 1,
               shouldShowCashier: shouldShowCashier,
-              rechargePopupType: offer?.coinPackages.isNotEmpty == true
-                  ? 'with_coin'
-                  : 'vip_only',
+              rechargePopupType: rechargePopupType,
             );
           },
         );
@@ -245,6 +249,8 @@ class _PlayerRechargeUnlockSheetState
     final coinBalance = ref.watch(entitlementControllerProvider).coinBalance;
     final requiredCoins = state.offer?.requiredCoins ?? 0;
     final hasEnoughCoins = coinBalance >= requiredCoins;
+    final isVipOnly =
+        state.rechargePopupType == PlayerRechargePopupType.vipOnly;
 
     final content = state.offer == null
         ? KeyedSubtree(
@@ -278,7 +284,7 @@ class _PlayerRechargeUnlockSheetState
                   unawaited(_onMembershipPackageTap(package));
                 }
               },
-              onUnlockWithCoin: hasEnoughCoins
+              onUnlockWithCoin: !isVipOnly && hasEnoughCoins
                   ? () => _unlockWithCoin(context, ref, state)
                   : null,
             ),
@@ -461,8 +467,10 @@ class _OfferContent extends ConsumerWidget {
     final isProcessing = state.status == PlayerRechargeUnlockStatus.processing;
     // 检查用户是否已是会员
     final isMember = ref.watch(entitlementControllerProvider).isMember;
+    final isVipOnly =
+        state.rechargePopupType == PlayerRechargePopupType.vipOnly;
     final hasNoPackages =
-        offer.coinPackages.isEmpty &&
+        (isVipOnly || offer.coinPackages.isEmpty) &&
         (isMember || offer.membershipPackages.isEmpty);
 
     return Stack(
@@ -508,41 +516,43 @@ class _OfferContent extends ConsumerWidget {
                     ),
                   )
                 else ...[
-                  SizedBox(
-                    height: 85,
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        const gap = 8.0;
-                        const visibleCardCount = 2.2;
-                        const visibleGapCount = 2;
-                        final cardWidth =
-                            (constraints.maxWidth - gap * visibleGapCount) /
-                            visibleCardCount;
+                  if (!isVipOnly) ...[
+                    SizedBox(
+                      height: 85,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          const gap = 8.0;
+                          const visibleCardCount = 2.2;
+                          const visibleGapCount = 2;
+                          final cardWidth =
+                              (constraints.maxWidth - gap * visibleGapCount) /
+                              visibleCardCount;
 
-                        return ListView.separated(
-                          clipBehavior: Clip.none,
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
-                          itemCount: offer.coinPackages.length,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(width: gap),
-                          itemBuilder: (context, index) {
-                            final package = offer.coinPackages[index];
-                            return _CoinPackageCard(
-                              sessionKey: sessionKey,
-                              package: package,
-                              selected:
-                                  state.selectedCoinPackageId == package.id,
-                              enabled: !isProcessing,
-                              width: cardWidth,
-                              onTap: () => onCoinTap(package.id),
-                            );
-                          },
-                        );
-                      },
+                          return ListView.separated(
+                            clipBehavior: Clip.none,
+                            scrollDirection: Axis.horizontal,
+                            physics: const BouncingScrollPhysics(),
+                            itemCount: offer.coinPackages.length,
+                            separatorBuilder: (context, index) =>
+                                const SizedBox(width: gap),
+                            itemBuilder: (context, index) {
+                              final package = offer.coinPackages[index];
+                              return _CoinPackageCard(
+                                sessionKey: sessionKey,
+                                package: package,
+                                selected:
+                                    state.selectedCoinPackageId == package.id,
+                                enabled: !isProcessing,
+                                width: cardWidth,
+                                onTap: () => onCoinTap(package.id),
+                              );
+                            },
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
+                    const SizedBox(height: 20),
+                  ],
                   // 如果用户不是会员，显示会员商品
                   if (!isMember)
                     for (final package in offer.membershipPackages) ...[
