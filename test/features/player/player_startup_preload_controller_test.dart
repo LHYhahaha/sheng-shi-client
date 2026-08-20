@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:drama_client/features/drama/domain/drama.dart';
 import 'package:drama_client/features/player/application/player_playback_controller.dart';
+import 'package:drama_client/features/player/application/player_entry_preload_coordinator.dart';
 import 'package:drama_client/features/player/application/player_session_controller.dart';
 import 'package:drama_client/features/player/application/player_startup_preload_controller.dart';
 import 'package:drama_client/features/player/data/player_feed_repository_provider.dart';
@@ -52,6 +53,62 @@ void main() {
     expect(
       container.read(playerStartupPreloadControllerProvider).itemId,
       _item2.id,
+    );
+  });
+
+  test(
+    'visible home candidate uses card resume hint before the user taps',
+    () async {
+      final sourceRepository = _FakePlaybackSourceRepository();
+      final container = _createContainer(sourceRepository: sourceRepository);
+      addTearDown(container.dispose);
+
+      container
+          .read(playerEntryPreloadCoordinatorProvider.notifier)
+          .prepareVisibleCandidate(
+            dramaId: _drama.id,
+            trigger: 'home_visible_candidate',
+            resumeHint: const PlayerEntryResumeHint(
+              episodeId: 'ep-2',
+              episodeNo: 2,
+              position: Duration(seconds: 25),
+              duration: Duration(seconds: 60),
+            ),
+          );
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(sourceRepository.lastPreloadedItemId, _item2.id);
+    },
+  );
+
+  test('card tap promotes the matching pending startup HLS request', () async {
+    final sourceRepository = _FakePlaybackSourceRepository(
+      preloadCompleter: Completer<PlaybackPreloadState>(),
+    );
+    final container = _createContainer(sourceRepository: sourceRepository);
+    addTearDown(container.dispose);
+    final coordinator = container.read(
+      playerEntryPreloadCoordinatorProvider.notifier,
+    );
+
+    coordinator.prepareVisibleCandidate(
+      dramaId: _drama.id,
+      trigger: 'home_visible_candidate',
+    );
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    coordinator.preparePlayerRoute(
+      dramaId: _drama.id,
+      episodeId: '1',
+      trigger: 'home_card_tap',
+    );
+
+    expect(
+      container
+          .read(playerStartupPreloadControllerProvider.notifier)
+          .exportTimingReport(),
+      contains('startup critical segment relay promoted'),
     );
   });
 

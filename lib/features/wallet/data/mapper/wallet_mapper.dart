@@ -86,6 +86,9 @@ class WalletMapper {
       }),
       dateLabel:
           '${_dateYearToDayLabel(dto.startAt)} - ${_dateYearToDayLabel(dto.expireAt)}',
+      validityLabel: dto.permanent
+          ? RemoteTexts.rewardCoinsValidityPermanent.uiText()
+          : null,
       trailingLabel: UiText.raw(dto.status.toString()),
       showCoinIcon: true,
       rewardEnabled: dto.status == 0,

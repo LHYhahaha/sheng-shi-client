@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'dart:async';
 
+import '../adjust/adjust_event_reporter_provider.dart';
 import 'analytics_definition.dart';
 import 'analytics_event.dart';
 import 'analytics_provider.dart';
@@ -52,15 +53,18 @@ class AnalyticsLifecycleTracker {
     required AnalyticsService analytics,
     required AnalyticsFirstOpenStore firstOpenStore,
     AnalyticsStartupGate? startupGate,
+    void Function()? onFirstOpen,
     DateTime Function()? now,
   }) : _analytics = analytics,
        _firstOpenStore = firstOpenStore,
        _startupGate = startupGate ?? AnalyticsStartupGate(isReady: true),
+       _onFirstOpen = onFirstOpen,
        _now = now ?? DateTime.now;
 
   final AnalyticsService _analytics;
   final AnalyticsFirstOpenStore _firstOpenStore;
   final AnalyticsStartupGate _startupGate;
+  final void Function()? _onFirstOpen;
   final DateTime Function() _now;
 
   DateTime? _foregroundStartedAt;
@@ -76,6 +80,7 @@ class AnalyticsLifecycleTracker {
         await _analytics.track(
           const AnalyticsEvent(AnalyticsDefinitions.appFirstOpen),
         );
+        _onFirstOpen?.call();
       }
       await _analytics.track(
         const AnalyticsEvent(AnalyticsDefinitions.appLaunch, {
@@ -157,5 +162,6 @@ final analyticsLifecycleTrackerProvider = Provider<AnalyticsLifecycleTracker>((
     analytics: ref.watch(analyticsServiceProvider),
     firstOpenStore: ref.watch(analyticsFirstOpenStoreProvider),
     startupGate: ref.watch(analyticsStartupGateProvider),
+    onFirstOpen: ref.watch(adjustEventReporterProvider).reportAppFirstOpen,
   );
 });

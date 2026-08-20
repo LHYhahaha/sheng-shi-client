@@ -56,14 +56,19 @@ class StoreVipPackageCard extends ConsumerWidget {
             regularPrice != null &&
             promoPeriod != null &&
             regularPeriod != null) {
-          promoDescription = IapPromoTextBuilder.build(
+          final args = IapPromoTextBuilder.templateArguments(
             promoPrice: promoPrice,
             promoPeriod: promoPeriod,
             promoCycles: promo?['promoCycles'] as int? ?? 1,
             regularPrice: regularPrice,
-            regularPeriod: regularPeriod,
-            hasFreeTrial: promo?['hasFreeTrial'] as bool? ?? false,
             languageCode: locale.languageCode,
+          );
+          promoDescription = context.l10n.vipPlanIntroPrice(
+            sale: args['sale']!,
+            price: args['price']!,
+            num: args['num']!,
+            ordinal: args['ordinal']!,
+            unit: args['unit']!,
           );
         }
       }

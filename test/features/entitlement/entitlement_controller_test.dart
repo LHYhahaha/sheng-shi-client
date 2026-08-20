@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:drama_client/features/entitlement/application/entitlement_controller.dart';
 import 'package:drama_client/features/entitlement/data/entitlement_repository_provider.dart';
 import 'package:drama_client/features/entitlement/data/mock_entitlement_repository.dart';
 import 'package:drama_client/features/entitlement/domain/entitlement_feature_config.dart';
 import 'package:drama_client/features/entitlement/domain/episode_access_decision.dart';
+import 'package:drama_client/features/entitlement/domain/entitlement_repository.dart';
+import 'package:drama_client/features/entitlement/domain/user_entitlement_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -27,6 +31,24 @@ void main() {
       expect(state.coinBalance, 0);
     },
   );
+
+  test('coalesces concurrent entitlement refreshes', () async {
+    final repository = _DelayedEntitlementRepository();
+    final container = ProviderContainer(
+      overrides: [entitlementRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(entitlementControllerProvider.notifier);
+
+    final first = controller.refreshFromServer();
+    await repository.started.future;
+    final second = controller.refreshFromServer();
+
+    expect(repository.fetchCalls, 1);
+    repository.complete();
+    await Future.wait([first, second]);
+    expect(repository.fetchCalls, 1);
+  });
 
   group('EntitlementController decision matrix', () {
     test('free episode allows guest/member/non-member', () async {
@@ -430,6 +452,27 @@ void main() {
     });
   });
 
+  test(
+    'ad unlock marks the episode as unlocked for subsequent access checks',
+    () async {
+      final container = _containerWith(
+        MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOff(),
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(entitlementControllerProvider.notifier);
+      await controller.load();
+
+      controller.updateAfterAdUnlock(episodeId: 'found-you-ep-5');
+
+      expect(
+        container
+            .read(entitlementControllerProvider)
+            .isEpisodeUnlocked('found-you-ep-5'),
+        isTrue,
+      );
+    },
+  );
+
   test('future feature switches default false except coin unlock', () {
     const config = EntitlementFeatureConfig();
 
@@ -443,6 +486,43 @@ void main() {
     expect(config.enableEntitlementDebugPanel, isFalse);
     expect(config.enableAutoUnlockPromptRemember, isFalse);
   });
+}
+
+class _DelayedEntitlementRepository implements EntitlementRepository {
+  final started = Completer<void>();
+  final _result = Completer<UserEntitlementState>();
+  int fetchCalls = 0;
+
+  void complete() => _result.complete(const UserEntitlementState.guest());
+
+  @override
+  Future<UserEntitlementState> fetchState() async {
+    fetchCalls += 1;
+    started.complete();
+    return _result.future;
+  }
+
+  @override
+  Future<UserEntitlementState> grantMockCoins({
+    required int amount,
+    required String source,
+  }) => _result.future;
+
+  @override
+  Future<UserEntitlementState> grantMockMembership({required String source}) =>
+      _result.future;
+
+  @override
+  Future<UserEntitlementState> setAutoUnlockEnabled(bool enabled) =>
+      _result.future;
+
+  @override
+  Future<UserEntitlementState> unlockEpisodeWithCoins({
+    required String dramaId,
+    required String episodeId,
+    required int price,
+    required String operationId,
+  }) => _result.future;
 }
 
 ProviderContainer _containerWith(

@@ -120,6 +120,7 @@ class PlayerPlaybackState {
     required this.videoController,
     required this.status,
     required this.hasFirstFrame,
+    this.hasRenderedFirstFrame = false,
     required this.isBuffering,
     required this.preloadedItemIds,
     required this.preloadStates,
@@ -151,6 +152,7 @@ class PlayerPlaybackState {
         videoController: videoController,
         status: PlayerPlaybackStatus.idle,
         hasFirstFrame: false,
+        hasRenderedFirstFrame: false,
         isBuffering: false,
         preloadedItemIds: const [],
         preloadStates: const [],
@@ -193,6 +195,13 @@ class PlayerPlaybackState {
   /// 首帧由播放器 width stream 推进。它和 `playing` 不是同一件事：HLS 可能先出音频或
   /// position，再出画面。UI 的加载遮罩、黑屏规避和 timing trace 都依赖这个字段。
   final bool hasFirstFrame;
+
+  /// 当前已解码的首帧是否已经实际绘制到原生 Video Surface。
+  ///
+  /// [hasFirstFrame] 由播放器的 width stream 推进，只能证明解码器可用；Android
+  /// Surface 可能在其后才提交画面。UI 必须等此字段为 true 后再撤掉 loading，
+  /// 否则会出现“loading 消失后短暂黑屏”。
+  final bool hasRenderedFirstFrame;
 
   /// 当前播放器是否处于缓冲中。
   ///
@@ -327,13 +336,14 @@ class PlayerPlaybackState {
   bool get isError => status == PlayerPlaybackStatus.error;
   bool get isReady =>
       hasFirstFrame &&
+      hasRenderedFirstFrame &&
       !isBuffering &&
       (status == PlayerPlaybackStatus.playing ||
           status == PlayerPlaybackStatus.paused);
   bool get isLoading =>
       currentSource != null &&
       !isError &&
-      (isOpening || isBuffering || !hasFirstFrame);
+      (isOpening || isBuffering || !hasFirstFrame || !hasRenderedFirstFrame);
   bool get isSeekAllowed =>
       currentSource != null &&
       duration > Duration.zero &&
@@ -361,6 +371,7 @@ class PlayerPlaybackState {
   PlayerPlaybackState copyWith({
     PlayerPlaybackStatus? status,
     bool? hasFirstFrame,
+    bool? hasRenderedFirstFrame,
     bool? isBuffering,
     List<String>? preloadedItemIds,
     List<PlaybackPreloadState>? preloadStates,
@@ -399,6 +410,9 @@ class PlayerPlaybackState {
           : videoController ?? this.videoController,
       status: status ?? this.status,
       hasFirstFrame: clearSource ? false : hasFirstFrame ?? this.hasFirstFrame,
+      hasRenderedFirstFrame: clearSource
+          ? false
+          : hasRenderedFirstFrame ?? this.hasRenderedFirstFrame,
       isBuffering: clearSource ? false : isBuffering ?? this.isBuffering,
       preloadedItemIds: preloadedItemIds ?? this.preloadedItemIds,
       preloadStates: preloadStates ?? this.preloadStates,
@@ -530,11 +544,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   final String sessionKey;
   late PlayerPlaybackSession _session;
   late final PlayerPlaybackPreloadManager _preloadManager;
+  late final PlayerPlaybackPreloadManager _predictivePreloadManager;
   late final PlayerPlaybackPrepareManager _prepareManager;
   late final PlaybackProgressRepository _progressRepository;
   late final DramaPlaybackTargetRepository _dramaPlaybackTargetRepository;
   var _subscriptions = <StreamSubscription<dynamic>>[];
   final _preloadedItemIds = <String>{};
+  final _predictivePreloadedItemIds = <String>{};
   final _preloadStates = <String, PlaybackPreloadState>{};
   final _preparingItemIds = <String>{};
   var _activePreloadAllowedIds = <String>{};
@@ -546,8 +562,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   bool _lastResumeProgressWasPending = false;
   int _generation = 0;
   int _preloadGeneration = 0;
+  int _predictivePreloadGeneration = 0;
+  String? _predictivePreloadItemId;
   int _visibilityDetachEpoch = 0;
   bool _pauseWhenOpenCompletes = false;
+  bool _isSuspendedForCompetingPlayer = false;
   // Android 上 next 的真实首帧预热会短时间内同时占用 previous/current/next 三个
   // MediaCodec。部分机型会把正在播放的 current 异常切成 paused（并非一次新的
   // playItem/open）。只在这个很小的危险窗口内恢复 current，避免用户看到播几秒又
@@ -584,6 +603,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   final _positionBeforeFirstFrameLoggedItemIds = <String>{};
   final _firstPositionLoggedItemIds = <String>{};
   final _surfaceBeforeFirstFrameLoggedItemIds = <String>{};
+  DateTime? _surfaceFirstFrameRenderWaitStartedAt;
+  String? _surfaceFirstFrameRenderWaitItemId;
+  VideoController? _surfaceFirstFrameRenderWaitController;
   DateTime? _playingBeforeFirstFrameAt;
   DateTime? _positionBeforeFirstFrameAt;
   String? _currentPlaybackItemId;
@@ -592,6 +614,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   PlaybackSource? _currentPlaybackSource;
   bool _currentPlaybackHasFirstFrame = false;
   bool _firstFrameVideoRecoveryAttempted = false;
+  String? _firstFrameAutoRetryItemId;
   Duration _currentPlaybackPosition = Duration.zero;
   Duration _currentPlaybackDuration = Duration.zero;
   Duration _currentPlaybackBufferedPosition = Duration.zero;
@@ -621,6 +644,96 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         'status=${state.status.name}',
         'positionMs=${state.position.inMilliseconds}',
       ]),
+    );
+  }
+
+  /// 不能把 width stream 当作画面已经上屏：该事件由 Video widget 在原生 Surface
+  /// 实际绘制首帧后调用，用于安全地撤掉 loading。
+  void markVideoSurfaceFirstFrameRendered({
+    required String itemId,
+    required VideoController videoController,
+    String? source,
+  }) {
+    if (!ref.mounted ||
+        state.currentItemId != itemId ||
+        state.videoController != videoController ||
+        state.currentSource == null ||
+        state.hasRenderedFirstFrame) {
+      return;
+    }
+    final now = DateTime.now();
+    final startedAt = _surfaceFirstFrameRenderWaitItemId == itemId
+        ? _surfaceFirstFrameRenderWaitStartedAt
+        : null;
+    _logTiming(
+      'video surface first frame rendered',
+      itemId: itemId,
+      source: source ?? state.currentSource,
+      details: _timingDetails([
+        if (startedAt != null)
+          'renderDelayAfterSurfaceMountedMs=${now.difference(startedAt).inMilliseconds}',
+      ]),
+    );
+    state = state.copyWith(hasRenderedFirstFrame: true);
+  }
+
+  /// 收到 width 首帧后立即等待 native Surface 的渲染确认。
+  ///
+  /// 不能放在 Video widget 的下一次 build：在真机上该 rebuild 会额外晚 300–400ms，
+  /// 造成 loading 与实际画面之间多一段不必要的空档。
+  void _waitForVideoSurfaceFirstFrameRendered() {
+    final itemId = state.currentItemId;
+    final source = state.currentSource;
+    final controller = state.videoController;
+    if (itemId == null || source == null || controller == null) {
+      return;
+    }
+    if (_surfaceFirstFrameRenderWaitItemId == itemId &&
+        identical(_surfaceFirstFrameRenderWaitController, controller)) {
+      return;
+    }
+    _surfaceFirstFrameRenderWaitItemId = itemId;
+    _surfaceFirstFrameRenderWaitController = controller;
+    _surfaceFirstFrameRenderWaitStartedAt = DateTime.now();
+    _logTiming(
+      'video surface first-frame render wait start',
+      itemId: itemId,
+      source: source,
+    );
+    final generation = _generation;
+    unawaited(
+      _awaitVideoSurfaceFirstFrameRendered(
+        generation: generation,
+        itemId: itemId,
+        source: source,
+        videoController: controller,
+      ),
+    );
+  }
+
+  Future<void> _awaitVideoSurfaceFirstFrameRendered({
+    required int generation,
+    required String itemId,
+    required String source,
+    required VideoController videoController,
+  }) async {
+    try {
+      final platformController = await videoController.platform.future;
+      await platformController.waitUntilFirstFrameRendered;
+    } catch (_) {
+      // 平台视频输出不可用时仍由原有首帧超时/错误处理兜底，不能在这里吞掉播放器错误。
+      return;
+    }
+    if (!ref.mounted ||
+        generation != _generation ||
+        state.currentItemId != itemId ||
+        !identical(state.videoController, videoController)) {
+      return;
+    }
+    markVideoSurfaceFirstFrameRendered(
+      itemId: itemId,
+      source: source,
+      videoController: videoController,
     );
   }
 
@@ -784,6 +897,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   PlayerPlaybackState build() {
     _session = ref.read(playerPlaybackSessionFactoryProvider).call();
     _preloadManager = ref.read(playerPlaybackPreloadManagerProvider);
+    _predictivePreloadManager = ref.read(
+      forYouPredictivePlaybackPreloadManagerProvider,
+    );
     _prepareManager = ref.read(playerPlaybackPrepareManagerFactoryProvider)();
     _prepareManager.timingLogger = _logTiming;
     _progressRepository = ref.read(playbackProgressRepositoryProvider);
@@ -804,6 +920,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       _forYouEntryWarmReleaseTimer?.cancel();
       _stopWatchProgressReportTimer();
       unawaited(_disposePreloads(syncState: false));
+      unawaited(_predictivePreloadManager.releasePending());
       unawaited(_releaseSessionWindowFor('provider dispose'));
       unawaited(
         _disposeSessionOnly(
@@ -920,6 +1037,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           'embedded subtitle language fallback changed',
         );
       }
+    }
+
+    // 同一条内容在一次停留中只允许自动恢复一次；切到另一条后再返回，
+    // 可以重新获得一次恢复机会。手动重试同一条不会重置该限制，避免真异常循环重开。
+    if (item == null || item.id != _firstFrameAutoRetryItemId) {
+      _firstFrameAutoRetryItemId = null;
     }
 
     // 防重复调用：相同 item 和相同语言源在 500ms 内忽略
@@ -1098,6 +1221,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _firstFrameProgressProbeTimer?.cancel();
     _firstFrameVideoRecoveryTimer?.cancel();
     _cancelFirstFrameTimeout();
+    _surfaceFirstFrameRenderWaitStartedAt = null;
+    _surfaceFirstFrameRenderWaitItemId = null;
+    _surfaceFirstFrameRenderWaitController = null;
     _pendingSubtitleLoadItem = null;
     _logTiming(
       'trace generation assigned',
@@ -1120,6 +1246,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     state = state.copyWith(
       status: PlayerPlaybackStatus.opening,
       hasFirstFrame: false,
+      hasRenderedFirstFrame: false,
       isBuffering: true,
       position: Duration.zero,
       duration: resumeStart != null && resumeProgress != null
@@ -1221,6 +1348,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
           currentSource: prepared.source.playableSource,
           hasFirstFrame: prepared.hasFirstFrame,
+          // prepared/retained session 在后台已经实际出过视频帧。接管时 width stream
+          // 通常不会再次发射；若沿用新建 session 的 false，会导致画面、音频、字幕
+          // 均正常但 loading 永不消失。
+          hasRenderedFirstFrame: prepared.hasFirstFrame,
           position: prepared.position,
           duration: _effectiveDuration(
             prepared.duration,
@@ -1656,6 +1787,104 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         );
       }
     }
+  }
+
+  /// PageView 手势预测仅预热 HLS HTTP 资源，不创建或 prepare media session。
+  ///
+  /// 真实播放器在页面 settled 后仍按 current/next/previous 三窗口策略接管；这里
+  /// 只让即将进入的页面更早命中 playlist/segment 缓存或 singleflight。
+  Future<void> preloadItemForPredictedViewport(PlayerFeedItem item) async {
+    if (_isSessionDisposed || item.mode != PlayerFeedMode.forYou) {
+      return;
+    }
+    final preferredItem = _itemUsingPreferredEmbeddedSource(
+      item,
+      updatePreference: false,
+    );
+    final sourceUrl = preferredItem.episode.videoSource;
+    if (preferredItem.episode.isLocked ||
+        preferredItem.episode.isUnavailable ||
+        sourceUrl == null ||
+        preferredItem.id == state.currentItemId ||
+        _preloadedItemIds.contains(preferredItem.id) ||
+        _predictivePreloadedItemIds.contains(preferredItem.id) ||
+        _prepareManager.windowItemIds.contains(preferredItem.id) ||
+        _predictivePreloadItemId == preferredItem.id) {
+      return;
+    }
+
+    await cancelPredictedViewportPreload(reason: 'target_replaced');
+    final generation = ++_predictivePreloadGeneration;
+    _predictivePreloadItemId = preferredItem.id;
+    _logTiming(
+      'for you predictive hls start',
+      itemId: preferredItem.id,
+      source: sourceUrl,
+      details: 'trigger=page_out_60 sessionCreated=false',
+    );
+    try {
+      final startedAt = DateTime.now();
+      final result = await ref
+          .read(forYouPredictivePlaybackSourceRepositoryProvider)
+          .preload(preferredItem);
+      if (!ref.mounted ||
+          _isSessionDisposed ||
+          generation != _predictivePreloadGeneration) {
+        return;
+      }
+      _predictivePreloadItemId = null;
+      _setPreloadState(result);
+      if (result.status == PlaybackPreloadStatus.success) {
+        _predictivePreloadedItemIds.add(preferredItem.id);
+        _preloadedItemIds.add(preferredItem.id);
+      }
+      _logTiming(
+        'for you predictive hls end',
+        itemId: preferredItem.id,
+        source: sourceUrl,
+        elapsed: DateTime.now().difference(startedAt),
+        details: 'status=${result.status.name} sessionCreated=false',
+      );
+    } catch (error) {
+      if (!ref.mounted ||
+          _isSessionDisposed ||
+          generation != _predictivePreloadGeneration) {
+        return;
+      }
+      _predictivePreloadItemId = null;
+      _setPreloadState(
+        PlaybackPreloadState(
+          itemId: preferredItem.id,
+          sourceUrl: sourceUrl,
+          status: PlaybackPreloadStatus.failed,
+          startedAt: DateTime.now(),
+          completedAt: DateTime.now(),
+          error: error,
+        ),
+      );
+      _logTiming(
+        'for you predictive hls failed',
+        itemId: preferredItem.id,
+        source: sourceUrl,
+        error: error,
+      );
+    }
+  }
+
+  /// 只停止预测尚未展开的后续请求；已经得到的分片仍由共享缓存保留。
+  Future<void> cancelPredictedViewportPreload({required String reason}) async {
+    final pendingItemId = _predictivePreloadItemId;
+    if (pendingItemId == null) {
+      return;
+    }
+    _predictivePreloadGeneration += 1;
+    _predictivePreloadItemId = null;
+    await _predictivePreloadManager.releasePending();
+    _logTiming(
+      'for you predictive hls cancelled',
+      itemId: pendingItemId,
+      details: 'reason=$reason',
+    );
   }
 
   Future<void> blockItem(
@@ -2158,6 +2387,15 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (_isSessionDisposed) {
       return;
     }
+    // 普通播放器正在前台时，通知带来的 inactive/resumed 会同时回调被
+    // IndexedStack 保留的 For You。此时绝不能因生命周期恢复而重新 play。
+    if (sessionKey == PlayerPlaybackSessionKeys.forYouTab &&
+        _isSuspendedForCompetingPlayer) {
+      _logTiming(
+        'for you visibility resume ignored while competing player is active',
+      );
+      return;
+    }
     if (sessionKey == PlayerPlaybackSessionKeys.forYouTab) {
       ref.read(hlsTrafficGateProvider).resumeForYou();
     }
@@ -2173,6 +2411,33 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         state.currentSource == null) {
       return;
     }
+
+    // Android 在外部分享页返回时可能已销毁 VideoOutput 的 Surface。若外跳前
+    // 仍在首帧 loading，旧 session 即使重新 play 也不会再向新 Surface 输出画面，
+    // 最终会出现“音频继续、页面黑屏且 loading 不消失”。此时只在自动续播路径
+    // 重开当前 item，让 media_kit 为新 Surface 建立新的 video output；已经成功
+    // 上屏过的播放仍复用 session，避免普通前后台切换产生不必要的重新请求。
+    final item = _currentOriginalItem;
+    if (!state.hasRenderedFirstFrame &&
+        item != null &&
+        item.id == state.currentItemId) {
+      _visibilityDetachEpoch += 1;
+      _pauseWhenOpenCompletes = false;
+      _accessOverlayPausedItemId = null;
+      _lastPlayItemRequest = null;
+      _logTiming(
+        'visibility resume reopen before first frame',
+        itemId: item.id,
+        source: state.currentSource,
+        details: _timingDetails([
+          'hasFirstFrame=${state.hasFirstFrame}',
+          'hasRenderedFirstFrame=${state.hasRenderedFirstFrame}',
+        ]),
+      );
+      await playItem(item, forceReopen: true);
+      return;
+    }
+
     _visibilityDetachEpoch += 1;
     _pauseWhenOpenCompletes = false;
     _accessOverlayPausedItemId = null;
@@ -2212,6 +2477,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   /// 解除冻结即可继续用现有 session 播放。
   Future<void> suspendForCompetingPlayer() async {
     if (_isSessionDisposed) return;
+    _isSuspendedForCompetingPlayer = true;
     ref.read(hlsTrafficGateProvider).suspendForYou();
     _pauseWhenOpenCompletes = true;
     _pauseWatchProgressReportTimer();
@@ -2232,6 +2498,15 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       'for you suspended for competing player',
       details: _timingDetails(['sessionRetained=true', 'networkGate=closed']),
     );
+  }
+
+  /// 普通播放器已返回或用户明确切回 For You，才解除其抢占状态。
+  Future<void> resumeAfterCompetingPlayer() async {
+    if (_isSessionDisposed) {
+      return;
+    }
+    _isSuspendedForCompetingPlayer = false;
+    await resumeAfterVisibilityPause();
   }
 
   Future<void> detachSurfaceForVisibility({bool syncState = true}) async {
@@ -2326,12 +2601,15 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
   }
 
-  void detachVideoSurfaceForTeardown() {
+  void detachVideoSurfaceForTeardown({bool syncState = true}) {
     if (!ref.mounted || state.videoController == null) {
       return;
     }
     _accessOverlayPausedItemId = null;
     _stopWatchProgressReportTimer();
+    if (!syncState) {
+      return;
+    }
     state = state.copyWith(
       status: state.status == PlayerPlaybackStatus.playing
           ? PlayerPlaybackStatus.paused
@@ -2955,6 +3233,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       isBuffering: false,
     );
     _currentPlaybackHasFirstFrame = true;
+    _waitForVideoSurfaceFirstFrameRendered();
     // 首帧仅表示已经有一张可渲染画面，不代表连续分片已经准备充分。下一条预热
     // 必须等当前视频从此处再实际推进一小段，避免在首播 buffer 中抢占网络。
     _preloadReadinessStartPosition ??= _currentPlaybackPosition;
@@ -3158,12 +3437,32 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         source: state.currentSource,
         error: error,
       );
+      if (_shouldAutoRetryFirstFrameTimeout(item)) {
+        _firstFrameAutoRetryItemId = item.id;
+        _logTiming(
+          'first-frame timeout auto retry',
+          itemId: item.id,
+          source: state.currentSource,
+          details:
+              'reason=first_frame_timeout maxAttempts=1 mode=${item.mode.name}',
+        );
+        unawaited(playItem(item, forceReopen: true));
+        return;
+      }
       _markPlaybackFailed(
         error: error,
         errorKind: PlayerPlaybackErrorKind.unknown,
         expectedGeneration: generation,
       );
     });
+  }
+
+  bool _shouldAutoRetryFirstFrameTimeout(PlayerFeedItem item) {
+    return _firstFrameAutoRetryItemId != item.id &&
+        state.currentItemId == item.id &&
+        state.currentSource != null &&
+        !state.hasFirstFrame &&
+        state.status != PlayerPlaybackStatus.paused;
   }
 
   void _cancelFirstFrameTimeout() {
@@ -3193,6 +3492,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     state = state.copyWith(
       status: PlayerPlaybackStatus.error,
       hasFirstFrame: false,
+      hasRenderedFirstFrame: false,
       isBuffering: false,
       error: error,
       errorKind: errorKind,

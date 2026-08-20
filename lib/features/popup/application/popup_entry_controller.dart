@@ -154,6 +154,34 @@ class PopupEntryController extends Notifier<PopupEntryState> {
     }
   }
 
+  /// 终止所有入口位的弹框流程。
+  ///
+  /// 弹框 Overlay 位于根 Navigator 之上，离开 Shell（深链、通知或任意外部
+  /// 跳转）时不能根据可能尚未刷新的当前 Tab 只取消其中一个入口位；否则另一个
+  /// 正在请求中的入口位回包后仍可能覆盖目标页面。
+  void cancelAllPlacementFlows() {
+    for (final placement in PopupPlacementCode.values) {
+      _cancelledPlacements.add(placement);
+    }
+    _flowPopups = const <PopupConfig>[];
+    _flowIndex = 0;
+    _flowDisplayedCount = 0;
+    _flowPlacement = null;
+    _readyPopup = null;
+    final activePopup = state.activePopup;
+    state = state.copyWith(
+      requestedPlacements: {
+        ...state.requestedPlacements,
+        ...PopupPlacementCode.values,
+      },
+      pendingPopup: null,
+      activePopup: null,
+    );
+    if (activePopup != null) {
+      _reportActivePopupClosed(activePopup);
+    }
+  }
+
   void dismissActivePopup() {
     final popup = state.activePopup;
     if (popup == null) {

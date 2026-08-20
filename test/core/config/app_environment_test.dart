@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:drama_client/core/config/app_environment.dart';
@@ -71,6 +73,20 @@ void main() {
           )
           .toString(),
       'https://drama-wave.8y4w2vxvdffmd83.xyz/share/?lang=zh&user_id=user-1&channel_id=channel-a&merchant_id=merchant-9&drama_id=1506&share_method=facebook',
+    );
+    final facebookShareUrl = devConfig.facebookShareUrl(
+      dramaId: '1506',
+      languageCode: 'zh',
+      userId: 'user-1',
+      channelId: 'channel-a',
+      merchantId: 'merchant-9',
+    );
+    expect(facebookShareUrl.path, '/share/');
+    expect(facebookShareUrl.queryParameters.keys, {'_sp'});
+    final packed = facebookShareUrl.queryParameters['_sp']!;
+    expect(
+      utf8.decode(base64Url.decode(base64Url.normalize(packed))),
+      'drama_id=1506&lang=zh&user_id=user-1&channel_id=channel-a&merchant_id=merchant-9&share_method=facebook',
     );
     expect(
       devConfig

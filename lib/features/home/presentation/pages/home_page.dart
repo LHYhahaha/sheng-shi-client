@@ -218,18 +218,34 @@ class _HomePageState extends ConsumerState<HomePage> {
       _pendingVisibleCandidates.clear();
       if (_homeVisiblePreloadDramaId == candidate.drama.id) return;
       _homeVisiblePreloadDramaId = candidate.drama.id;
-      debugPrint(
-        '[player-entry-preload] home selected candidate '
-        'dramaId=${candidate.drama.id} '
-        'visiblePercent=${(candidate.visibleFraction * 100).round()}',
-      );
+      const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');
+      if (shouldPrint) {
+        debugPrint(
+          '[player-entry-preload] candidate dramaId=${candidate.drama.id} '
+          'visiblePercent=${(candidate.visibleFraction * 100).round()}',
+        );
+      }
       ref
           .read(playerEntryPreloadCoordinatorProvider.notifier)
           .prepareVisibleCandidate(
             dramaId: candidate.drama.id,
             trigger: 'home_visible_candidate',
+            resumeHint: _entryResumeHintFor(candidate.drama),
           );
     });
+  }
+
+  PlayerEntryResumeHint? _entryResumeHintFor(Drama drama) {
+    final progress = drama.watchProgress;
+    if (progress?.canResume != true) {
+      return null;
+    }
+    return PlayerEntryResumeHint(
+      episodeId: progress!.episodeId,
+      episodeNo: progress.episodeNo,
+      position: Duration(seconds: progress.positionSeconds),
+      duration: Duration(seconds: progress.durationSeconds),
+    );
   }
 
   void _saveCurrentTabScrollOffset(HomeRemoteData remoteData) {
@@ -511,25 +527,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                   dramaId: item.id,
                                   episodeId: '1',
                                   trigger: 'home_card_tap',
-                                  resumeHint:
-                                      item.watchProgress?.canResume == true
-                                      ? PlayerEntryResumeHint(
-                                          episodeId:
-                                              item.watchProgress!.episodeId,
-                                          episodeNo:
-                                              item.watchProgress!.episodeNo,
-                                          position: Duration(
-                                            seconds: item
-                                                .watchProgress!
-                                                .positionSeconds,
-                                          ),
-                                          duration: Duration(
-                                            seconds: item
-                                                .watchProgress!
-                                                .durationSeconds,
-                                          ),
-                                        )
-                                      : null,
+                                  resumeHint: _entryResumeHintFor(item),
                                 );
                                 context.push(
                                   RoutePaths.playerLocation(
@@ -665,12 +663,8 @@ class _HomePageState extends ConsumerState<HomePage> {
       'home' => RoutePaths.home,
       'recommend_tab' => RoutePaths.forYou,
       'member_tab' => RoutePaths.member,
-      'member_open' => RoutePaths.membership,
-      'recharge' => RoutePaths.store,
-      'reward_coin' => RoutePaths.rewardsLocation(),
-      'member_point' => RoutePaths.rewardsLocation(
-        tab: RoutePaths.memberPointsTab,
-      ),
+      'favorites' => RoutePaths.myList,
+      'profile' => RoutePaths.profile,
       _ => null,
     };
     if (location == null || !mounted) return;
@@ -678,11 +672,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       ref.read(analyticsEntrySourceProvider.notifier),
       banner,
     );
-    if (pageCode == 'member_open' || pageCode == 'recharge') {
-      context.push(location);
-    } else {
-      context.go(location);
-    }
+    context.go(location);
   }
 }
 
@@ -895,6 +885,15 @@ class _HomeTitleBarState extends ConsumerState<_HomeTitleBar> {
     return true;
   }
 
+  void _openSearch() {
+    final router = GoRouter.of(context);
+    if (router.routerDelegate.currentConfiguration.uri.path ==
+        RoutePaths.search) {
+      return;
+    }
+    router.push<void>(RoutePaths.search);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isMember = ref.watch(entitlementControllerProvider).isMember;
@@ -911,7 +910,7 @@ class _HomeTitleBarState extends ConsumerState<_HomeTitleBar> {
         Expanded(
           child: GestureDetector(
             onTap: () {
-              context.push<void>(RoutePaths.search);
+              _openSearch();
             },
             child: Container(
               padding: EdgeInsets.symmetric(vertical: 7, horizontal: 12),

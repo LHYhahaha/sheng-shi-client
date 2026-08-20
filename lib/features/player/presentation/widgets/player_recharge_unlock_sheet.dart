@@ -13,6 +13,7 @@ import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/modal/app_modal_result.dart';
 import '../../../../core/toast/app_toast_provider.dart';
+import '../../../../core/utils/period_iso_parser.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
@@ -147,6 +148,8 @@ class _PlayerRechargeUnlockSheetState
         );
     if (shouldShowCashier && mounted) {
       await _presentPaymentMethod(PlayerPaymentSelection.coin(package));
+    } else {
+      _completeDirectPaymentIfSucceeded();
     }
   }
 
@@ -185,7 +188,26 @@ class _PlayerRechargeUnlockSheetState
         );
     if (shouldShowCashier && mounted) {
       await _presentPaymentMethod(PlayerPaymentSelection.membership(package));
+    } else {
+      _completeDirectPaymentIfSucceeded();
     }
+  }
+
+  /// Google 直付（含支付方式接口失败后的默认 Google 兜底）会在当前方法内
+  /// 等待到验单结束。此处显式把成功结果返回给充值弹窗，保证与订阅直付相同地
+  /// 进入播放器的充值成功收尾；该收尾会沿用既有逻辑刷新当前短剧详情。
+  void _completeDirectPaymentIfSucceeded() {
+    if (!mounted || _didHandleDirectPaymentTerminal) {
+      return;
+    }
+    final status = ref
+        .read(playerRechargeUnlockControllerProvider(widget.sessionKey))
+        .status;
+    if (status != PlayerRechargeUnlockStatus.success) {
+      return;
+    }
+    _didHandleDirectPaymentTerminal = true;
+    Navigator.of(context).pop(true);
   }
 
   void _trackRechargeProductCard({
@@ -368,7 +390,7 @@ class _LoadingOrError extends StatelessWidget {
     if (state.status == PlayerRechargeUnlockStatus.failed) {
       return Center(
         child: Text(
-          context.l10n.playerUnlockFailed,
+          context.l10n.networkError,
           style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
         ),
       );
@@ -769,15 +791,13 @@ class _VipOnlyRechargeHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.topCenter,
+    return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 42),
-          child: Column(
-            children: [
-              Row(),
-              Text(
+        Row(
+          children: [
+            SizedBox(width: 40, height: 40),
+            Expanded(
+              child: Text(
                 title,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
@@ -786,34 +806,30 @@ class _VipOnlyRechargeHeader extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              if (description != null) ...[
-                const SizedBox(height: 10),
-                Text(
-                  description!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.55),
-                    fontSize: 13,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ],
-          ),
+            ),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onClose,
+              child: SvgPicture.asset(
+                "assets/images/player/close.svg",
+                width: 40,
+                height: 40,
+              ),
+            ),
+          ],
         ),
-        Positioned(
-          right: 0,
-          top: 0,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onClose,
-            child: SvgPicture.asset(
-              "assets/images/player/close.svg",
-              width: 40,
-              height: 40,
+        if (description != null) ...[
+          const SizedBox(height: 10),
+          Text(
+            description!,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.55),
+              fontSize: 13,
+              height: 1.35,
             ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -1396,8 +1412,19 @@ class _MembershipPackageCard extends ConsumerWidget {
     String? promoDescription;
     if (iapInfo?.hasPromo == true) {
       final locale = Localizations.localeOf(context);
-      promoDescription = iapInfo!.promoDescription(
+      final args = IapPromoTextBuilder.templateArguments(
+        promoPrice: iapInfo!.promoPrice!,
+        promoPeriod: iapInfo.promoPeriod!,
+        promoCycles: iapInfo.promoCycles ?? 1,
+        regularPrice: iapInfo.regularPrice!,
         languageCode: locale.languageCode,
+      );
+      promoDescription = context.l10n.vipPlanIntroPrice(
+        sale: args['sale']!,
+        price: args['price']!,
+        num: args['num']!,
+        ordinal: args['ordinal']!,
+        unit: args['unit']!,
       );
     }
 

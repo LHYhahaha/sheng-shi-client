@@ -141,9 +141,11 @@ class MediaKitPlayerSession implements PlayerPlaybackSession {
   }
 
   @override
-  Future<void> pause() {
-    developer.log('MediaKitPlayerSession: pause');
-    return player.pause();
+  Future<void> pause() async {
+    final sessionId = identityHashCode(this);
+    developer.log('[MediaKitSession#$sessionId] pause requested');
+    await player.pause();
+    developer.log('[MediaKitSession#$sessionId] pause completed');
   }
 
   @override

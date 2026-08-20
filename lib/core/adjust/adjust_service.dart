@@ -28,11 +28,21 @@ class AdjustService {
   /// NovaShort 在 Adjust 后台登记的应用识别码。
   static const _novaShortAppToken = 'i3xfcgiqzsao';
   static bool _initializationRequested = false;
+  static final _sessionConfirmed = Completer<void>();
+  static final _eventResults = StreamController<AdjustEventResult>.broadcast();
 
   final String _configuredAppToken;
   final AppEnvironment _environment;
   final AdjustDeviceIdentifierReporter? _deviceIdentifierReporter;
   final AdjustDeeplinkDispatcher? _deferredDeeplinkDispatcher;
+
+  /// Adjust 已确认创建会话。业务事件在此之前只落本地队列，避免 SDK 尚未
+  /// 建立 session 时因进程退出而丢失。
+  bool get isSessionConfirmed => _sessionConfirmed.isCompleted;
+
+  Future<void> get sessionConfirmed => _sessionConfirmed.future;
+
+  Stream<AdjustEventResult> get eventResults => _eventResults.stream;
 
   /// 初始化 Android Adjust SDK。
   ///
@@ -49,11 +59,12 @@ class AdjustService {
       }
 
       final config = AdjustConfig(_configuredAppToken, _adjustEnvironment);
+      // 保留本地补发使用的 deduplicationId，避免原生已接收但 Flutter 尚未来得及
+      // 收到 success 回调时发生重复计数。
+      config.eventDeduplicationIdsMaxSize = 100;
       _configureDeferredDeeplink(config);
       _configureAttributionLogging(config);
-      if (kDebugMode) {
-        _configureDebugLogging(config);
-      }
+      _configureDeliveryCallbacks(config);
       Adjust.initSdk(config);
       _initializationRequested = true;
       if (kDebugMode) {
@@ -74,13 +85,42 @@ class AdjustService {
     AppEnvironment.dev || AppEnvironment.staging => AdjustEnvironment.sandbox,
   };
 
-  void _configureDebugLogging(AdjustConfig config) {
-    config.logLevel = AdjustLogLevel.verbose;
+  void _configureDeliveryCallbacks(AdjustConfig config) {
+    if (kDebugMode) config.logLevel = AdjustLogLevel.verbose;
     config.sessionSuccessCallback = (session) {
+      if (!_sessionConfirmed.isCompleted) {
+        _sessionConfirmed.complete();
+      }
+      if (kDebugMode) {
+        debugPrint(
+          '[Adjust] Session success: '
+          'message=${session.message}, adid=${session.adid}, '
+          'timestamp=${session.timestamp}.',
+        );
+      }
+    };
+    config.sessionFailureCallback = (session) {
       debugPrint(
-        '[Adjust] Session success: '
-        'message=${session.message}, adid=${session.adid}, '
-        'timestamp=${session.timestamp}.',
+        '[Adjust] Session delivery failed: message=${session.message}, '
+        'willRetry=${session.willRetry}.',
+      );
+    };
+    config.eventSuccessCallback = (event) {
+      debugPrint('[Adjust] Native event success: callbackId=${event.callbackId}.');
+      _eventResults.add(
+        AdjustEventResult.success(callbackId: event.callbackId),
+      );
+    };
+    config.eventFailureCallback = (event) {
+      debugPrint(
+        '[Adjust] Native event failure: callbackId=${event.callbackId}, '
+        'willRetry=${event.willRetry}.',
+      );
+      _eventResults.add(
+        AdjustEventResult.failure(
+          callbackId: event.callbackId,
+          willRetry: event.willRetry == true,
+        ),
       );
     };
   }
@@ -138,4 +178,25 @@ class AdjustService {
       debugPrintStack(stackTrace: stackTrace);
     }
   }
+}
+
+/// 原生 Adjust 对单个事件的最终回调。只有 success 才能安全清掉本地兜底记录。
+class AdjustEventResult {
+  const AdjustEventResult._({
+    required this.callbackId,
+    required this.isSuccess,
+    required this.willRetry,
+  });
+
+  const AdjustEventResult.success({required String? callbackId})
+    : this._(callbackId: callbackId, isSuccess: true, willRetry: false);
+
+  const AdjustEventResult.failure({
+    required String? callbackId,
+    required bool willRetry,
+  }) : this._(callbackId: callbackId, isSuccess: false, willRetry: willRetry);
+
+  final String? callbackId;
+  final bool isSuccess;
+  final bool willRetry;
 }

@@ -17,6 +17,11 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  test('preserves a server-configured language value', () {
+    final locale = AppLocaleController.localeForLanguageCode('zh-Hant');
+    expect(AppLocaleController.languageCodeFromLocale(locale), 'zh-Hant');
+  });
+
   test('saved app language is restored for next launch', () async {
     final container = ProviderContainer();
     addTearDown(container.dispose);

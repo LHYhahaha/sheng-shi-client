@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:developer';
 
 import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/material.dart';
@@ -37,6 +39,7 @@ class _ProfileFeedbackWebViewPageState
   late final AuthController _authController;
   late final bool _openedForAccountBan;
   WebViewController? _webViewController;
+  bool _hasStartedAccountBanRevalidation = false;
 
   @override
   void initState() {
@@ -80,6 +83,7 @@ class _ProfileFeedbackWebViewPageState
       // H5 自行决定返回行为；只有它发出 closeWebView 时才关闭原生页面。
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
+        log("?????????$didPop");
         if (!didPop) {
           _notifyH5OfBackRequest();
         }
@@ -99,6 +103,7 @@ class _ProfileFeedbackWebViewPageState
         title: context.l10n.profileFeedback,
         showAppBar: false,
         feedbackColor: Colors.black,
+        handlesSystemBack: false,
         javaScriptMessageHandlers: {
           'DramaWaveBridge': _handleJavaScriptMessage,
         },
@@ -118,13 +123,21 @@ class _ProfileFeedbackWebViewPageState
   Future<void> _notifyH5OfBackRequest() async {
     final controller = _webViewController;
     if (controller == null) {
+      debugPrint(
+        '[ProfileFeedbackH5] -> H5 appBack skipped: controller unavailable',
+      );
       return;
     }
 
     try {
+      debugPrint(
+        '[ProfileFeedbackH5] -> H5 event=appBack '
+        'script=window.dispatchEvent(new CustomEvent(\'appBack\'))',
+      );
       await controller.runJavaScript('''
         window.dispatchEvent(new CustomEvent('appBack'));
       ''');
+      debugPrint('[ProfileFeedbackH5] -> H5 event=appBack dispatched');
     } on Object catch (error) {
       debugPrint('[ProfileFeedbackH5] Failed to notify back request: $error');
     }
@@ -202,8 +215,14 @@ class _ProfileFeedbackWebViewPageState
 
   void _handleJavaScriptMessage(String message) {
     try {
+      debugPrint('[ProfileFeedbackH5] <- H5 raw=$message');
       final decoded = jsonDecode(message);
-      debugPrint('[ProfileFeedbackH5] $decoded');
+      debugPrint(
+        '[ProfileFeedbackH5] <- H5 '
+        'event=${decoded is Map ? decoded['event'] : '<invalid>'} '
+        'data=${decoded is Map ? decoded['data'] : '<invalid>'} '
+        'callback=${decoded is Map ? decoded['callback'] : '<invalid>'}',
+      );
       if (decoded is! Map<String, dynamic>) {
         return;
       }
@@ -255,25 +274,40 @@ class _ProfileFeedbackWebViewPageState
     }
     if (context.canPop()) {
       context.pop();
-    } else {
+    } else if (!_openedForAccountBan) {
       context.go(RoutePaths.profile);
     }
+    // 封禁反馈并非从 Me 路由进入，而是根级封禁遮罩直接 push 的页面。先完成
+    // pop，再在本轮事件循环恢复遮罩；这样下一帧不会短暂露出遮罩下的 Home。
+    if (_openedForAccountBan) {
+      Future.microtask(_startAccountBanRevalidation);
+    }
+  }
+
+  void _startAccountBanRevalidation() {
+    if (_hasStartedAccountBanRevalidation) {
+      return;
+    }
+    _hasStartedAccountBanRevalidation = true;
+    if (!_accountBanController.beginRevalidation()) {
+      return;
+    }
+    unawaited(
+      _reauthenticateAfterFeedback(
+        accountBanController: _accountBanController,
+        authController: _authController,
+      ),
+    );
   }
 
   @override
   void dispose() {
     _loadingCancel?.call();
-    if (_openedForAccountBan) {
+    if (_openedForAccountBan && !_hasStartedAccountBanRevalidation) {
       // 路由返回时当前组件正处于卸载阶段，延后恢复遮罩并重验账号，避免在
       // dispose 中更新 provider。
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!_accountBanController.beginRevalidation()) {
-          return;
-        }
-        _reauthenticateAfterFeedback(
-          accountBanController: _accountBanController,
-          authController: _authController,
-        );
+        _startAccountBanRevalidation();
       });
     }
     super.dispose();

@@ -97,6 +97,25 @@ void main() {
     expect(record.sourceOrderNo, 'checkin-20260727');
     expect(record.subtitle, 'Check-in reward');
   });
+
+  test('permanent reward coin records use the permanent validity text', () {
+    final dto = WalletRewardCoinRecordDto.fromJson({
+      'recordId': '1002',
+      'bonusCoin': '50',
+      'remainBonusCoin': '50',
+      'sourceName': 'Admin credit',
+      'sourceType': 1,
+      'sourceOrderNo': 'admin-20260727',
+      'status': 1,
+      'permanent': true,
+    });
+
+    final record = const WalletMapper().mapReward(dto);
+
+    expect(record.validityLabelText?.key, 'reward_coins.validity.permanent');
+    expect(record.validityLabelText?.fallbackEn, 'Never Expires');
+    expect(record.validityLabelText?.fallbackZh, '永久有效');
+  });
 }
 
 ApiClient _apiClient(RecordingHttpAdapter adapter) {

@@ -50,6 +50,8 @@ class MockPayRepository implements PayRepository {
       productType: productType == 1
           ? 'PRODUCT_TYPE_COIN'
           : 'PRODUCT_TYPE_MEMBER',
+      ruleId: 0,
+      ruleName: 'Mock payment rule',
       showCashier: false,
     );
   }

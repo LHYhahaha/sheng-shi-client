@@ -401,7 +401,7 @@ class _MembershipBody extends StatelessWidget {
                 final plan = selectedPlan;
                 // 只有当 hasPromo 为 true 时才显示促销文案
                 final promoText = (plan != null && plan.hasPromo)
-                    ? _buildPromoText(plan, locale.languageCode)
+                    ? _buildPromoText(context, plan, locale.languageCode)
                     : null;
                 if (promoText == null) return const SizedBox.shrink();
                 return Padding(
@@ -492,7 +492,11 @@ class _MembershipBody extends StatelessWidget {
 String _analyticsProductTypeForPlan(MembershipPlan plan) =>
     MemberProductType.analyticsProductTypeFor(plan.memberType);
 
-String? _buildPromoText(MembershipPlan plan, String languageCode) {
+String? _buildPromoText(
+  BuildContext context,
+  MembershipPlan plan,
+  String languageCode,
+) {
   final promoPrice = plan.promotionPriceLabel;
   final regularPrice = plan.regularPriceLabel;
   final promoPeriod = plan.promoPeriodIso;
@@ -504,14 +508,19 @@ String? _buildPromoText(MembershipPlan plan, String languageCode) {
     return null;
   }
 
-  return IapPromoTextBuilder.build(
+  final args = IapPromoTextBuilder.templateArguments(
     promoPrice: promoPrice,
     promoPeriod: promoPeriod,
     promoCycles: plan.promoCycles ?? 1,
     regularPrice: regularPrice,
-    regularPeriod: regularPeriod,
-    hasFreeTrial: plan.hasFreeTrial,
     languageCode: languageCode,
+  );
+  return context.l10n.vipPlanIntroPrice(
+    sale: args['sale']!,
+    price: args['price']!,
+    num: args['num']!,
+    ordinal: args['ordinal']!,
+    unit: args['unit']!,
   );
 }
 
@@ -707,7 +716,7 @@ class _AvatarDots extends StatelessWidget {
     ];
 
     return SizedBox(
-      width: 32,
+      width: 36,
       height: 16,
       child: Stack(
         children: [
@@ -790,7 +799,6 @@ class _MembershipBottomButton extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 2),
                   Text(
                     context.l10n.membershipAutoRenewCancel,
                     maxLines: 1,

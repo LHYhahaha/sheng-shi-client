@@ -28,6 +28,7 @@ class WalletRecord {
     UiText? subtitle,
     UiText? detailLabel,
     UiText? trailingSubtitle,
+    UiText? validityLabel,
     this.sourceType,
     this.sourceOrderNo,
     this.rewardSourceType,
@@ -43,7 +44,8 @@ class WalletRecord {
        trailingLabelText = trailingLabel,
        subtitleText = subtitle,
        detailLabelText = detailLabel,
-       trailingSubtitleText = trailingSubtitle;
+       trailingSubtitleText = trailingSubtitle,
+       validityLabelText = validityLabel;
 
   WalletRecord.raw({
     required this.id,
@@ -57,6 +59,7 @@ class WalletRecord {
     String? subtitle,
     String? detailLabel,
     String? trailingSubtitle,
+    String? validityLabel,
     this.sourceType,
     this.sourceOrderNo,
     this.rewardSourceType,
@@ -74,7 +77,10 @@ class WalletRecord {
        detailLabelText = detailLabel == null ? null : UiText.raw(detailLabel),
        trailingSubtitleText = trailingSubtitle == null
            ? null
-           : UiText.raw(trailingSubtitle);
+           : UiText.raw(trailingSubtitle),
+       validityLabelText = validityLabel == null
+           ? null
+           : UiText.raw(validityLabel);
 
   /// 记录 id。
   ///
@@ -128,6 +134,11 @@ class WalletRecord {
 
   String? get trailingSubtitle =>
       trailingSubtitleText?.rawValue ?? trailingSubtitleText?.fallbackEn;
+
+  /// 奖励金币有效期文案。
+  ///
+  /// 仅永久有效的 coins 记录使用；其他记录继续展示 [dateLabel] 的起止时间。
+  final UiText? validityLabelText;
 
   /// 消费来源类型。
   ///
@@ -215,6 +226,7 @@ class WalletRecord {
       subtitle: subtitleText,
       detailLabel: detailLabelText,
       trailingSubtitle: trailingSubtitleText,
+      validityLabel: validityLabelText,
       sourceType: sourceType ?? this.sourceType,
       sourceOrderNo: sourceOrderNo ?? this.sourceOrderNo,
       rewardSourceType: rewardSourceType ?? this.rewardSourceType,

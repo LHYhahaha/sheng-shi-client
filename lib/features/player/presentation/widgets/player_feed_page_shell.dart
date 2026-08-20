@@ -88,6 +88,8 @@ class PlayerFeedPageShell extends ConsumerStatefulWidget {
 }
 
 class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
+  String? _lastSeekBarMountLog;
+
   @override
   void initState() {
     super.initState();
@@ -214,6 +216,14 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
         shell.currentSource != null;
     final canHideViewportBackdrop =
         canUsePlaybackSurface && shell.hasVideoController;
+    final shouldMountSeekBar =
+        !forYouLayout &&
+        isSettledPage &&
+        accessPresentation == PlayerAccessPresentationState.playable;
+    _logSeekBarMountDecision(
+      shouldMountSeekBar: shouldMountSeekBar,
+      accessPresentation: accessPresentation,
+    );
 
     return Stack(
       children: [
@@ -238,10 +248,7 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
                 )
               : null,
           videoFit: videoFitForEpisode(item.episode),
-          seekBar:
-              !forYouLayout &&
-                  isSettledPage &&
-                  accessPresentation == PlayerAccessPresentationState.playable
+          seekBar: shouldMountSeekBar
               ? PlayerSeekBarConsumer(
                   sessionKey: sessionKey,
                   itemId: item.id,
@@ -361,5 +368,24 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
         shell != null &&
         shell.canTogglePlayback &&
         shell.currentItemId == item.id;
+  }
+
+  void _logSeekBarMountDecision({
+    required bool shouldMountSeekBar,
+    required PlayerAccessPresentationState accessPresentation,
+  }) {
+    final message = [
+      'mount=$shouldMountSeekBar',
+      'item=${item.id}',
+      'index=${widget.index}',
+      'settled=$isSettledPage',
+      'forYou=$forYouLayout',
+      'access=${accessPresentation.name}',
+    ].join(' ');
+    if (_lastSeekBarMountLog == message) {
+      return;
+    }
+    _lastSeekBarMountLog = message;
+    debugPrint('[PlayerSeekBar] page gate: $message');
   }
 }

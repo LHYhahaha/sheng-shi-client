@@ -10,6 +10,7 @@ import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/auth_controller.dart';
+import '../../application/facebook_login_config_provider.dart';
 import '../../domain/auth_session.dart';
 import '../widgets/auth_login_modal_content.dart';
 
@@ -22,6 +23,18 @@ class AuthPage extends ConsumerStatefulWidget {
 
 class _AuthPageState extends ConsumerState<AuthPage> {
   bool _returnedAfterLogin = false;
+  bool _facebookConfigRequested = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_facebookConfigRequested) {
+      return;
+    }
+    _facebookConfigRequested = true;
+    // 登录入口每次打开都必须重新读取服务端开关，不能复用上一次进入的缓存结果。
+    ref.invalidate(facebookLoginEnabledProvider);
+  }
 
   void _returnToSourceAfterLogin(BuildContext context) {
     if (_returnedAfterLogin) {
@@ -43,6 +56,13 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(authControllerProvider);
+    final isFacebookLoginEnabled = ref
+        .watch(facebookLoginEnabledProvider)
+        .when(
+          data: (enabled) => enabled,
+          loading: () => false,
+          error: (_, _) => false,
+        );
     final l10n = context.l10n;
 
     ref.listen(authControllerProvider, (previous, next) {
@@ -117,6 +137,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                           .read(authControllerProvider.notifier)
                           .login(AuthProviderType.facebook)
                     : null,
+                isFacebookLoginEnabled: isFacebookLoginEnabled,
               ),
           ],
         ),
@@ -130,11 +151,13 @@ class _LoginBody extends StatelessWidget {
     required this.pendingProvider,
     required this.onGooglePressed,
     required this.onFacebookPressed,
+    required this.isFacebookLoginEnabled,
   });
 
   final AuthProviderType? pendingProvider;
   final VoidCallback? onGooglePressed;
   final VoidCallback? onFacebookPressed;
+  final bool isFacebookLoginEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -166,16 +189,18 @@ class _LoginBody extends StatelessWidget {
             ),
           ),
           const Spacer(flex: 181),
-          _SocialLoginButton(
-            key: const ValueKey('auth_facebook_button'),
-            label: l10n.authFacebookLogin,
-            isLoading: pendingProvider == AuthProviderType.facebook,
-            onPressed: onFacebookPressed,
-            backgroundColor: const Color(0xFF5981EF),
-            foregroundColor: AppColors.textPrimary,
-            icon: const Icon(Icons.facebook_rounded, size: 26),
-          ),
-          const SizedBox(height: 12),
+          if (isFacebookLoginEnabled) ...[
+            _SocialLoginButton(
+              key: const ValueKey('auth_facebook_button'),
+              label: l10n.authFacebookLogin,
+              isLoading: pendingProvider == AuthProviderType.facebook,
+              onPressed: onFacebookPressed,
+              backgroundColor: const Color(0xFF5981EF),
+              foregroundColor: AppColors.textPrimary,
+              icon: const Icon(Icons.facebook_rounded, size: 26),
+            ),
+            const SizedBox(height: 12),
+          ],
           _SocialLoginButton(
             key: const ValueKey('auth_google_button'),
             label: l10n.authGoogleLogin,

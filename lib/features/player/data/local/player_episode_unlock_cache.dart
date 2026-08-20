@@ -13,14 +13,22 @@ class PlayerEpisodeUnlockCache {
   }
 
   /// 设置解锁状态。
-  static void setUnlockStatus(String dramaId, String episodeId, bool isUnlocked) {
+  static void setUnlockStatus(
+    String dramaId,
+    String episodeId,
+    bool isUnlocked,
+  ) {
     final key = _buildKey(dramaId, episodeId);
     _unlockStatusCache[key] = isUnlocked;
   }
 
   /// 检查剧集是否已解锁（优先使用缓存）。
   /// 如果缓存中没有，则根据 episode.isLocked 判断。
-  static bool isEpisodeUnlocked(String dramaId, String episodeId, bool isLocked) {
+  static bool isEpisodeUnlocked(
+    String dramaId,
+    String episodeId,
+    bool isLocked,
+  ) {
     final cachedStatus = getCachedUnlockStatus(dramaId, episodeId);
     if (cachedStatus != null) {
       return cachedStatus;
@@ -32,6 +40,13 @@ class PlayerEpisodeUnlockCache {
   static void clearCache(String dramaId, String episodeId) {
     final key = _buildKey(dramaId, episodeId);
     _unlockStatusCache.remove(key);
+  }
+
+  /// 详情接口返回的权益状态是权威数据。会员到期等服务端权益变化后，不能让
+  /// 同一部剧旧会话留下的“已解锁”缓存继续覆盖新的 `is_unlocked` 结果。
+  static void clearDramaCache(String dramaId) {
+    final prefix = '$dramaId:';
+    _unlockStatusCache.removeWhere((key, _) => key.startsWith(prefix));
   }
 
   /// 清除所有缓存。

@@ -248,7 +248,7 @@ void main() {
 
     expect(find.text('Continue with Device'), findsOneWidget);
     expect(find.text('Sign in with Google'), findsOneWidget);
-    expect(find.text('Sign in with Facebook'), findsOneWidget);
+    expect(find.text('Sign in with Facebook'), findsNothing);
 
     await tester.tap(find.text('Sign in with Google'));
     await tester.pump(const Duration(seconds: 1));

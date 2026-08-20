@@ -26,6 +26,12 @@ class RemoteTextSpec {
 }
 
 abstract final class RemoteTexts {
+  static const vipPlanIntroPrice = RemoteTextSpec(
+    key: 'vip.plan.intro_price',
+    fallbackEn: '{sale} for {ordinal} {unit}, then {price} per {unit}',
+    fallbackZh: '前{num}{unit}{sale}，后面每{unit}{price}',
+  );
+
   // ── 通用操作 Common actions ─────────────────────────────────────
   static const commonActionClaim = RemoteTextSpec(
     key: 'common.action.claim',
@@ -86,6 +92,12 @@ abstract final class RemoteTexts {
     key: 'wallet.record.reward_coins',
     fallbackEn: '{count} Reward Coins',
     fallbackZh: '{count} 奖励金币',
+  );
+
+  static const rewardCoinsValidityPermanent = RemoteTextSpec(
+    key: 'reward_coins.validity.permanent',
+    fallbackEn: 'Never Expires',
+    fallbackZh: '永久有效',
   );
 
   static const walletRecordTransactionCoinsBonus = RemoteTextSpec(
@@ -239,6 +251,12 @@ abstract final class RemoteTexts {
     key: 'member_center.toast.exchange_success',
     fallbackEn: 'Redeemed successfully',
     fallbackZh: '兑换成功',
+  );
+
+  static const memberCenterToastExchangeMembersOnly = RemoteTextSpec(
+    key: 'member_center.toast.exchange_members_only',
+    fallbackEn: 'Only members can redeem.',
+    fallbackZh: '仅会员可兑换',
   );
 
   static const memberCenterModalExchangeInsufficientPoints = RemoteTextSpec(

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/auth/session_cleanup_coordinator.dart';
@@ -13,6 +14,14 @@ import '../features/player/application/player_session_cleanup.dart';
 import '../features/profile/application/profile_controller.dart';
 import '../features/store/application/store_controller.dart';
 import '../features/wallet/application/wallet_controller.dart';
+
+/// 主动退出由 [AuthController.logout] 在 cleanup 后自行完成一次设备登录；不能由
+/// cleanup hook 再次触发，否则会产生并发的 device login。
+bool shouldRestoreGuestSessionAfterCleanup(SessionCleanupReason reason) {
+  return reason != SessionCleanupReason.logout &&
+      reason != SessionCleanupReason.deleteAccount &&
+      reason != SessionCleanupReason.guestSessionExpiredExit;
+}
 
 /// 在应用启动时注册各 feature 的 session cleanup hook（A7）。
 ///
@@ -71,21 +80,21 @@ final featureSessionCleanupRegistrationProvider = Provider<void>((ref) {
     (reason) async {
       membershipController.resetForSessionCleanup(reason);
     },
-    // Session cleanup 完成后，自动触发重新登录流程
-    // 这确保 token 失效后能自动恢复到游客登录状态，并获取用户信息
+    // 非主动退出的 session cleanup 完成后，自动恢复游客登录。
+    // AuthController.logout 本身会在 cleanup 返回后登录一次 device；若这里也
+    // 调用 load，会产生两条并发的 /api/user/device/login，并相互覆盖 token。
     (reason) async {
-      if (reason == SessionCleanupReason.deleteAccount ||
-          reason == SessionCleanupReason.guestSessionExpiredExit) {
+      if (!shouldRestoreGuestSessionAfterCleanup(reason)) {
         return;
       }
-      print(
+      debugPrint(
         '[FeatureSessionCleanup] Triggering re-login after cleanup for reason: $reason',
       );
       try {
         await authController.load();
-        print('[FeatureSessionCleanup] Re-login completed successfully');
+        debugPrint('[FeatureSessionCleanup] Re-login completed successfully');
       } catch (e) {
-        print('[FeatureSessionCleanup] Re-login failed: $e');
+        debugPrint('[FeatureSessionCleanup] Re-login failed: $e');
       }
     },
   ]);

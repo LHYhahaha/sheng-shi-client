@@ -3,6 +3,7 @@ package com.novashort.shortdrama
 import android.app.Activity
 import android.app.Application
 import android.provider.Settings
+import android.util.Log
 import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -26,20 +27,28 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
-            override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) = Unit
+            override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) {
+                logFacebookActivity("created", activity)
+            }
             override fun onActivityStarted(activity: Activity) = Unit
 
             override fun onActivityResumed(activity: Activity) {
-                if (activity.javaClass.name == "com.facebook.FacebookActivity") {
+                // OAuth 可能落在 FacebookActivity，也可能是 SDK 打开的
+                // CustomTabActivity。两者都属于同一次 SDK 请求，退出时都必须能关闭。
+                if (activity.javaClass.name.startsWith("com.facebook.")) {
                     facebookActivity = WeakReference(activity)
                 }
+                logFacebookActivity("resumed", activity)
             }
 
-            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivityPaused(activity: Activity) {
+                logFacebookActivity("paused", activity)
+            }
             override fun onActivityStopped(activity: Activity) = Unit
             override fun onActivitySaveInstanceState(activity: Activity, outState: android.os.Bundle) = Unit
 
             override fun onActivityDestroyed(activity: Activity) {
+                logFacebookActivity("destroyed", activity)
                 if (facebookActivity?.get() === activity) {
                     facebookActivity = null
                 }
@@ -90,14 +99,21 @@ class MainActivity : FlutterActivity() {
                         val activity = facebookActivity?.get()
                         val wasFinished = activity != null && !activity.isFinishing
                         if (wasFinished) {
-                            activity?.finish()
+                          activity?.finish()
                         }
+                        Log.i("FacebookOAuth", "finishFacebookActivity requested; finished=$wasFinished")
                         result.success(wasFinished)
                     }
                     else -> result.notImplemented()
                 }
             }
 
+    }
+
+    private fun logFacebookActivity(event: String, activity: Activity) {
+        if (activity.javaClass.name.startsWith("com.facebook.")) {
+            Log.i("FacebookOAuth", "Facebook activity $event: ${activity.javaClass.name}")
+        }
     }
 
     private fun getSystemInfo(): Map<String, String> {

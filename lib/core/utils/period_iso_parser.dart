@@ -150,6 +150,26 @@ class PeriodIsoParser {
 class IapPromoTextBuilder {
   const IapPromoTextBuilder._();
 
+  /// Variables used by the remotely configured `vip.plan.intro_price` text.
+  static Map<String, String> templateArguments({
+    required String promoPrice,
+    required String promoPeriod,
+    required int promoCycles,
+    required String regularPrice,
+    required String languageCode,
+  }) {
+    final safeCycles = promoCycles <= 0 ? 1 : promoCycles;
+    final promo = _PromoPeriod.fromIso(promoPeriod);
+    final total = promo.value * safeCycles;
+    return {
+      'sale': promoPrice,
+      'price': regularPrice,
+      'num': '$total',
+      'ordinal': promo.ordinalDuration(safeCycles),
+      'unit': promo.unitText(languageCode),
+    };
+  }
+
   static String build({
     required String promoPrice,
     required String promoPeriod,

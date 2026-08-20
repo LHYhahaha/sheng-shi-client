@@ -20,6 +20,26 @@ void main() {
     expect(controller.isComplete, isFalse);
   });
 
+  test('resumes timing only after returning from an ordinary background', () {
+    final clock = _FakeClock();
+    final controller = AdEffectiveWatchController(
+      requiredSeconds: 10,
+      now: clock.call,
+    );
+
+    controller.setMaterialVisible(true);
+    clock.elapse(const Duration(seconds: 3));
+    controller.setAppForeground(false);
+    clock.elapse(const Duration(seconds: 5));
+
+    expect(controller.watchedSeconds, 3);
+
+    controller.setAppForeground(true);
+    clock.elapse(const Duration(seconds: 4));
+
+    expect(controller.watchedSeconds, 7);
+  });
+
   test('freezes accumulated duration on reaching required seconds', () {
     final clock = _FakeClock();
     final controller = AdEffectiveWatchController(

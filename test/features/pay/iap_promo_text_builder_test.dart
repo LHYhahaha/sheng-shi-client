@@ -3,6 +3,24 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('IapPromoTextBuilder', () {
+    test('provides the variables required by the remote intro-price key', () {
+      expect(
+        IapPromoTextBuilder.templateArguments(
+          promoPrice: r'$14.99',
+          promoPeriod: 'P1W',
+          promoCycles: 2,
+          regularPrice: r'$19.99',
+          languageCode: 'en-US',
+        ),
+        {
+          'sale': r'$14.99',
+          'price': r'$19.99',
+          'num': '2',
+          'ordinal': '2nd',
+          'unit': 'week',
+        },
+      );
+    });
     test('builds the requested Chinese and English paid-promo copy', () {
       expect(
         IapPromoTextBuilder.build(

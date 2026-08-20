@@ -41,6 +41,7 @@ class PlayerContent {
     this.likeCountDelta = 0,
     this.episodeTotal = 0,
     this.watchProgress,
+    this.isDramaAvailable = true,
     this.recommendationsStatus = PlayerRecommendationLoadStatus.loaded,
   });
 
@@ -132,6 +133,12 @@ class PlayerContent {
 
   /// 详情接口下发的权威续播记录；只用于普通播放器初始目标选择。
   final PlayerWatchProgress? watchProgress;
+
+  /// 短剧整体是否上架。
+  ///
+  /// 详情接口的 `status != 1` 会使所有剧集进入既有 unavailable 播放态；保留
+  /// 此字段用于播放器在首次进入时给出“短剧已下架”的明确提示。
+  final bool isDramaAvailable;
 
   /// 当前剧集是否是本剧按集序最早的未解锁剧集。
   ///

@@ -151,7 +151,10 @@ class ApiSessionAuthHandler {
       return;
     }
 
-    await _sessionCleanup.cleanup(SessionCleanupReason.logout);
+    // 1006 是服务端会话失效，不是用户主动退出。使用 sessionExpired，令
+    // feature cleanup 在清掉三方 token 后自动设备登录并恢复游客态。主动 logout
+    // 仍使用 logout reason，由 AuthController 自己负责单次设备登录，避免重复。
+    await _sessionCleanup.cleanup(SessionCleanupReason.sessionExpired);
     await _onSessionExpired?.call();
   }
 }

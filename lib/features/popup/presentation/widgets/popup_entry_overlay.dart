@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
 
+import '../../../../app/router/app_router.dart';
+import '../../../../app/router/route_paths.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_tap_target.dart';
@@ -56,6 +58,15 @@ class _PopupEntryOverlayState extends ConsumerState<PopupEntryOverlay> {
       popupEntryControllerProvider.select((state) => state.activePopup),
     );
     if (popup == null) {
+      return const SizedBox.shrink();
+    }
+    if (!_canShowOnCurrentRoute(popup)) {
+      // 根 Overlay 不会随着目标页面销毁。若导航发生在图片预加载完成后、首次
+      // build 前，按当前实际 location 结束本轮 flow，不能覆盖目标页面。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(popupEntryControllerProvider.notifier).finishActivePopupFlow();
+      });
       return const SizedBox.shrink();
     }
 
@@ -124,6 +135,12 @@ class _PopupEntryOverlayState extends ConsumerState<PopupEntryOverlay> {
             .discardPendingPopup(popup);
         return;
       }
+      if (!_canShowOnCurrentRoute(popup)) {
+        ref
+            .read(popupEntryControllerProvider.notifier)
+            .discardPendingPopup(popup);
+        return;
+      }
       ref
           .read(popupEntryControllerProvider.notifier)
           .markPendingPopupImageReady(popup);
@@ -146,6 +163,22 @@ class _PopupEntryOverlayState extends ConsumerState<PopupEntryOverlay> {
         _preloadingPopup = null;
       }
     }
+  }
+
+  bool _canShowOnCurrentRoute(PopupConfig popup) {
+    // 根 Overlay 由 MaterialApp.builder 创建，位于 Router widget 的上层；这里
+    // 不能通过 context 查找 GoRouter，必须读取全局 router provider。
+    final currentPath = ref
+        .read(appRouterProvider)
+        .routeInformationProvider
+        .value
+        .uri
+        .path;
+    return switch (popup.placementCode) {
+      'home_enter' => currentPath == RoutePaths.home,
+      'recommend_tab_enter' => currentPath == RoutePaths.forYou,
+      _ => false,
+    };
   }
 }
 

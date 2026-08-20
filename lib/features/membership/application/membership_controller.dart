@@ -64,6 +64,7 @@ class MembershipState {
     required this.iapProductDetails,
     required this.paymentMethods,
     required this.selectedPaymentMethodCode,
+    this.paymentRuleId,
     this.error,
   });
 
@@ -80,6 +81,7 @@ class MembershipState {
       iapProductDetails = const {},
       paymentMethods = const [],
       selectedPaymentMethodCode = null,
+      paymentRuleId = null,
       error = null;
 
   final bool isLoading;
@@ -94,6 +96,7 @@ class MembershipState {
   final Map<String, ProductDetails> iapProductDetails;
   final List<PaymentMethodOption> paymentMethods;
   final String? selectedPaymentMethodCode;
+  final int? paymentRuleId;
   final Object? error;
 
   bool get hasContent => !isLoading && error == null;
@@ -128,10 +131,12 @@ class MembershipState {
     Map<String, ProductDetails>? iapProductDetails,
     List<PaymentMethodOption>? paymentMethods,
     String? selectedPaymentMethodCode,
+    int? paymentRuleId,
     Object? error,
     bool clearError = false,
     bool clearConfirmation = false,
     bool clearPurchaseFailure = false,
+    bool clearPaymentRuleId = false,
   }) {
     return MembershipState(
       isLoading: isLoading ?? this.isLoading,
@@ -151,6 +156,9 @@ class MembershipState {
       paymentMethods: paymentMethods ?? this.paymentMethods,
       selectedPaymentMethodCode:
           selectedPaymentMethodCode ?? this.selectedPaymentMethodCode,
+      paymentRuleId: clearPaymentRuleId
+          ? null
+          : paymentRuleId ?? this.paymentRuleId,
       error: clearError ? null : error ?? this.error,
     );
   }
@@ -281,7 +289,9 @@ class MembershipController extends Notifier<MembershipState> {
     }
 
     try {
+      state = state.copyWith(clearPaymentRuleId: true);
       final options = await _fetchPaymentOptions(plan);
+      state = state.copyWith(paymentRuleId: options.ruleId);
       final supportedMethods = _supportedPaymentMethods(options.options);
       if (supportedMethods.isEmpty) {
         await _startPayment(plan, _defaultPaymentChannel);
@@ -460,7 +470,7 @@ class MembershipController extends Notifier<MembershipState> {
           .read(analyticsServiceProvider)
           .track(
             AnalyticsEvent(AnalyticsDefinitions.paymentStart, {
-              'payment_method_id': paymentMethod?.methodCode ?? 'google_play',
+              'payment_method_id': state.paymentRuleId?.toString() ?? '0',
               'payment_method_type': PayChannel.analyticsPaymentMethodTypeFor(
                 paymentMethod?.payChannel ?? PayChannel.google,
               ),

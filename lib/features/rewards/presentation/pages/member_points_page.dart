@@ -1411,12 +1411,12 @@ class _RedeemPointsPanel extends ConsumerWidget {
               title: _redeemTitle(tiers[index], l10n),
               points: '${tiers[index].pointCost}',
               action: l10n.memberCenterButtonExchange,
-              disabled: !tiers[index].canExchange,
-              disabledOnTap: !tiers[index].canExchange
-                  ? () => showAppCenterToast(
-                      l10n.memberCenterModalExchangeInsufficientPoints,
-                    )
-                  : null,
+              disabled: !isMember || !tiers[index].canExchange,
+              disabledOnTap: () => showAppCenterToast(
+                !isMember
+                    ? l10n.memberCenterToastExchangeMembersOnly
+                    : l10n.memberCenterModalExchangeInsufficientPoints,
+              ),
               onTap: () => _confirmExchange(context, ref, tiers[index]),
             ),
           ],
@@ -1730,10 +1730,12 @@ class _MemberPointsActionButton extends StatelessWidget {
               borderRadius: BorderRadius.circular(4),
               splashColor: Colors.white.withValues(alpha: 0.08),
               highlightColor: Colors.white.withValues(alpha: 0.04),
-              child: Padding(
+              child: Container(
+                width: 78,
+                alignment: Alignment.center,
                 padding:
                     boxPadding ??
-                    EdgeInsetsGeometry.symmetric(horizontal: 20, vertical: 6),
+                    EdgeInsetsGeometry.symmetric(horizontal: 2, vertical: 6),
                 child: Text(
                   label,
                   textAlign: TextAlign.center,

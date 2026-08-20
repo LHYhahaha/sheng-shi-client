@@ -671,6 +671,35 @@ void main() {
   );
 
   test(
+    'cancels every placement so a stale response cannot cover a new route',
+    () async {
+      const popup = PopupConfig(
+        id: 1,
+        contentMode: 1,
+        popupImage: 'https://example.test/1.jpg',
+        frontPopupLimit: 1,
+      );
+      final repository = _DelayedPopupRepository(popups: const [popup]);
+      final container = _container(repository: repository);
+      addTearDown(container.dispose);
+
+      final controller = container.read(popupEntryControllerProvider.notifier);
+      final request = controller.requestForPlacement(
+        PopupPlacementCode.homeEnter,
+      );
+
+      controller.cancelAllPlacementFlows();
+      repository.complete();
+      await request;
+
+      final state = container.read(popupEntryControllerProvider);
+      expect(state.pendingPopup, isNull);
+      expect(state.activePopup, isNull);
+      expect(state.requestedPlacements, containsAll(PopupPlacementCode.values));
+    },
+  );
+
+  test(
     'does not start another flow for the same placement while popup is active',
     () async {
       final popup = const PopupConfig(

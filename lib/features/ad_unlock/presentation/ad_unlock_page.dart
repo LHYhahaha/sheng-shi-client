@@ -56,6 +56,7 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
   bool _materialLoadFailed = false;
   bool _sessionInvalid = false;
   bool _didTrackPageView = false;
+  bool _videoPausedForAppLifecycle = false;
 
   @override
   void initState() {
@@ -185,7 +186,17 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
     final value = widget.session.h5Url;
     if (value == null || value.isEmpty) return;
     _watch.setExternalH5Open(true);
-    await launchUrl(Uri.parse(value), mode: LaunchMode.externalApplication);
+    try {
+      final opened = await launchUrl(
+        Uri.parse(value),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened) {
+        _watch.setExternalH5Open(false);
+      }
+    } catch (_) {
+      _watch.setExternalH5Open(false);
+    }
   }
 
   void _onMaterialTap() {
@@ -253,9 +264,14 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
     _watch.setAppForeground(state == AppLifecycleState.resumed);
     if (state == AppLifecycleState.resumed) {
       _watch.setExternalH5Open(false);
+      if (_videoPausedForAppLifecycle) {
+        _videoPausedForAppLifecycle = false;
+        unawaited(_player?.play());
+      }
     }
     if (state != AppLifecycleState.resumed &&
         widget.session.material.type == AdMaterialType.video) {
+      _videoPausedForAppLifecycle = true;
       unawaited(_player?.pause());
     }
   }
@@ -321,7 +337,7 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
                         ),
                         child: canClose
                             ? Text(
-                                'Close',
+                                context.l10n.playerSubtitleOff,
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.5),
                                 ),

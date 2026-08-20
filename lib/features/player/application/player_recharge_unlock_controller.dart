@@ -81,6 +81,7 @@ class PlayerRechargeUnlockState {
     this.selectedMembershipPackageId,
     this.paymentMethods = const [],
     this.selectedPaymentMethodCode,
+    this.paymentRuleId,
     this.paymentStage,
     this.purchaseFailureKind,
     this.error,
@@ -95,6 +96,7 @@ class PlayerRechargeUnlockState {
       selectedMembershipPackageId = null,
       paymentMethods = const [],
       selectedPaymentMethodCode = null,
+      paymentRuleId = null,
       paymentStage = null,
       purchaseFailureKind = null,
       error = null,
@@ -107,6 +109,7 @@ class PlayerRechargeUnlockState {
   final String? selectedMembershipPackageId;
   final List<PaymentMethodOption> paymentMethods;
   final String? selectedPaymentMethodCode;
+  final int? paymentRuleId;
   final PlayerRechargePaymentStage? paymentStage;
   final PlayerRechargePurchaseFailureKind? purchaseFailureKind;
   final Object? error;
@@ -150,12 +153,14 @@ class PlayerRechargeUnlockState {
     String? selectedMembershipPackageId,
     List<PaymentMethodOption>? paymentMethods,
     String? selectedPaymentMethodCode,
+    int? paymentRuleId,
     PlayerRechargePaymentStage? paymentStage,
     PlayerRechargePurchaseFailureKind? purchaseFailureKind,
     Object? error,
     PlayerRechargePopupType? rechargePopupType,
     bool clearSelection = false,
     bool clearPaymentStage = false,
+    bool clearPaymentRuleId = false,
     bool clearPurchaseFailure = false,
     bool clearError = false,
   }) {
@@ -172,6 +177,9 @@ class PlayerRechargeUnlockState {
       paymentMethods: paymentMethods ?? this.paymentMethods,
       selectedPaymentMethodCode:
           selectedPaymentMethodCode ?? this.selectedPaymentMethodCode,
+      paymentRuleId: clearPaymentRuleId
+          ? null
+          : paymentRuleId ?? this.paymentRuleId,
       paymentStage: clearPaymentStage
           ? null
           : paymentStage ?? this.paymentStage,
@@ -333,6 +341,7 @@ class PlayerRechargeUnlockController
     }
 
     try {
+      state = state.copyWith(clearPaymentRuleId: true);
       final options = await ref
           .read(payRepositoryProvider)
           .getPaymentOrderOptions(
@@ -346,6 +355,7 @@ class PlayerRechargeUnlockController
                 : _membershipProductType,
             scene: isCoinPackage ? 'player_coin' : 'player_membership',
           );
+      state = state.copyWith(paymentRuleId: options.ruleId);
       final supportedMethods = _supportedPaymentMethods(options.options);
       if (supportedMethods.isEmpty) {
         onPaymentActionResolved?.call(false);
@@ -657,7 +667,7 @@ class PlayerRechargeUnlockController
           .read(analyticsServiceProvider)
           .track(
             AnalyticsEvent(AnalyticsDefinitions.paymentStart, {
-              'payment_method_id': paymentMethod?.methodCode ?? 'google_play',
+              'payment_method_id': state.paymentRuleId?.toString() ?? '0',
               'payment_method_type': PayChannel.analyticsPaymentMethodTypeFor(
                 paymentMethod?.payChannel ?? PayChannel.google,
               ),

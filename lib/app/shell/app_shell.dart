@@ -145,17 +145,26 @@ class _AppShellState extends ConsumerState<AppShell> {
       final previousPlacement = AppShellDestinations.popupPlacementForIndex(
         previousIndex,
       );
-      if (previousPlacement != null) {
-        ref
-            .read(popupEntryControllerProvider.notifier)
-            .cancelPlacementFlow(previousPlacement);
-      }
-      _syncForYouVisibilityForNavigationChange(
-        from: _lastNavigationIndex,
-        to: navigationIndex,
-      );
+      // Router 驱动的 branch 变更会使 Shell 在 build 中重建。弹框 controller
+      // 和播放器可见性均会写 provider，必须等本帧结束后再执行；否则从问题与
+      // 帮助页返回 Profile 时会触发 Riverpod 的 build 期写入断言。
       _lastNavigationIndex = navigationIndex;
-      _trackPageForIndex(navigationIndex);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            widget.navigationShell.currentIndex != navigationIndex) {
+          return;
+        }
+        if (previousPlacement != null) {
+          ref
+              .read(popupEntryControllerProvider.notifier)
+              .cancelPlacementFlow(previousPlacement);
+        }
+        _syncForYouVisibilityForNavigationChange(
+          from: previousIndex,
+          to: navigationIndex,
+        );
+        _trackPageForIndex(navigationIndex);
+      });
     }
     final showBottomNavigation = ref.watch(
       appShellBottomNavigationVisibleProvider,
@@ -239,8 +248,9 @@ class _AppShellState extends ConsumerState<AppShell> {
   /// 在首页首帧稳定后预取 For You 的推荐首屏。
   ///
   /// 此处只请求推荐接口并保留 feed 数据；不创建媒体播放器、不打开视频 URL，也不
-  /// 触发解码。因此不会与首页或正在播放的页面争抢解码器。进入 For You 时
-  /// [PlayerFeedController.load] 会复用这份状态，省去一次推荐接口等待。
+  /// 触发解码。尤其是通知或 Deep Link 冷启动直进播放器时，隐藏的 For You decoder
+  /// 会与目标播放器同时占用 MediaCodec/VideoOutput，增加原生崩溃风险。进入 For
+  /// You 时 [PlayerFeedController.load] 会复用这份状态，省去一次推荐接口等待。
   void _scheduleForYouFeedPreload() {
     if (_forYouFeedPreloadStarted ||
         ref.read(accountBanControllerProvider).isBanned) {
@@ -269,17 +279,9 @@ class _AppShellState extends ConsumerState<AppShell> {
             AppShellDestinations.forYouIndex) {
       return;
     }
-    final firstItem = ref.read(feedProvider).currentItem;
-    if (firstItem == null) {
-      return;
-    }
-    await ref
-        .read(
-          playerPlaybackControllerProvider(
-            PlayerPlaybackSessionKeys.forYouTab,
-          ).notifier,
-        )
-        .warmUpForYouEntry(firstItem);
+    // 不在首页为隐藏的 For You 页面建立真实 media_kit session。列表和 HLS 网络
+    // 预取已完成，用户真正切到推荐页时再创建 decoder，避免与通知/Deep Link 的
+    // 普通播放器或刚退出的播放器 surface 发生原生资源重叠。
   }
 
   /// Handles both bottom-navigation taps and router-driven branch changes.
@@ -315,7 +317,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         _forYouVisibilityOperation = _forYouVisibilityOperation.then((_) {
           return ref
               .read(playbackProvider.notifier)
-              .resumeAfterVisibilityPause();
+              .resumeAfterCompetingPlayer();
         });
       }
     }
@@ -323,6 +325,15 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   void _requestPopupForIndex(int index) {
     if (ref.read(accountBanControllerProvider).isBanned) {
+      return;
+    }
+    // Shell 的首帧副作用会排到当前帧结束后执行。用户可能在这之前已经从首页
+    // push 到搜索等 Shell 外页面；此时不能再启动首页入口位请求，否则根 Overlay
+    // 会在请求/图片预加载完成后覆盖新页面。
+    final currentPath = GoRouter.of(
+      context,
+    ).routerDelegate.currentConfiguration.uri.path;
+    if (currentPath != RoutePaths.home && currentPath != RoutePaths.forYou) {
       return;
     }
     final placement = AppShellDestinations.popupPlacementForIndex(index);

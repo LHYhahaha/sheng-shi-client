@@ -8,6 +8,8 @@ import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
+import 'app/presentation/widgets/novashort_splash_page.dart';
+import 'app/presentation/widgets/startup_splash_gate.dart';
 import 'bootstrap/app_modal_registry_bootstrap.dart';
 import 'bootstrap/test_network_bootstrap.dart';
 import 'core/auth/auth_token_storage_provider.dart';
@@ -63,10 +65,7 @@ class _StartupBootstrapState extends State<_StartupBootstrap> {
         if (preferences == null) {
           return const MaterialApp(
             debugShowCheckedModeBanner: false,
-            home: Scaffold(
-              backgroundColor: Colors.black,
-              body: Center(child: CircularProgressIndicator()),
-            ),
+            home: NovaShortSplashPage(),
           );
         }
 
@@ -85,11 +84,13 @@ class _StartupBootstrapState extends State<_StartupBootstrap> {
             ),
             ...appModalRegistryOverrides,
           ],
-          child: TestNetworkBootstrap(
-            onReady: _startNonCriticalSdks,
-            child: DramaClientApp(
-              fcmNotificationServiceFuture:
-                  widget.fcmNotificationService.future,
+          child: StartupSplashGate(
+            child: TestNetworkBootstrap(
+              onReady: _startNonCriticalSdks,
+              child: DramaClientApp(
+                fcmNotificationServiceFuture:
+                    widget.fcmNotificationService.future,
+              ),
             ),
           ),
         );

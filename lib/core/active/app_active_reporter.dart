@@ -28,9 +28,19 @@ class AppActiveReporter {
 
   DateTime? _backgroundedAt;
   bool _reportInFlight = false;
+  bool _pendingReport = false;
+  bool _pendingPushTokenReport = false;
 
-  Future<void> reportAppLaunch({bool includePushToken = true}) =>
-      _report(includePushToken: includePushToken);
+  /// 上报一次启动/活跃状态。
+  ///
+  /// 首次启动会优先发一条不等待 FCM 的上报；若 FCM 在这条请求结束前拿到 token，
+  /// 不能因正在请求而丢弃补报。将它合并为待执行请求，当前请求完成后再带 token
+  /// 上报一次。
+  Future<void> reportAppLaunch({bool includePushToken = true}) {
+    _pendingReport = true;
+    _pendingPushTokenReport = _pendingPushTokenReport || includePushToken;
+    return _drainReports();
+  }
 
   Future<void> onLifecycleChanged(AppLifecycleState state) async {
     if (state == AppLifecycleState.paused ||
@@ -47,14 +57,23 @@ class AppActiveReporter {
     _backgroundedAt = null;
     if (backgroundedAt != null &&
         _now().difference(backgroundedAt) > hotStartThreshold) {
-      await _report();
+      await reportAppLaunch();
     }
   }
 
-  Future<void> _report({bool includePushToken = true}) async {
+  Future<void> _drainReports() async {
     if (_reportInFlight) {
       return;
     }
+    while (_pendingReport) {
+      final includePushToken = _pendingPushTokenReport;
+      _pendingReport = false;
+      _pendingPushTokenReport = false;
+      await _reportOnce(includePushToken: includePushToken);
+    }
+  }
+
+  Future<void> _reportOnce({required bool includePushToken}) async {
     final accessToken = _apiClient.requestContext.accessToken;
     if (accessToken == null || accessToken.isEmpty) {
       debugPrint(

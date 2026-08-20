@@ -316,20 +316,23 @@ class PlayerStartupPreloadController
           ? remoteTarget
           : null;
 
-      debugPrint(
-        '[player-entry-preload] selection dramaId=$dramaId '
-        'episodeId=${item.episode.id} '
-        'reason=${preferredEpisodeId == item.episode.id
-            ? 'route_episode'
-            : localTarget?.episodeId == item.episode.id && localTarget?.canResume == true
-            ? 'local_resume'
-            : entryTarget?.episodeId == item.episode.id && entryTarget?.canResume == true
-            ? 'home_resume_hint'
-            : remoteTarget?.episodeId == item.episode.id
-            ? 'detail_resume'
-            : 'first_playable'} '
-        'positionMs=${selectedTarget?.position.inMilliseconds ?? 0}',
-      );
+      const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');
+      if (shouldPrint) {
+        debugPrint(
+          '[player-entry-preload] selection dramaId=$dramaId '
+          'episodeId=${item.episode.id} '
+          'reason=${preferredEpisodeId == item.episode.id
+              ? 'route_episode'
+              : localTarget?.episodeId == item.episode.id && localTarget?.canResume == true
+              ? 'local_resume'
+              : entryTarget?.episodeId == item.episode.id && entryTarget?.canResume == true
+              ? 'home_resume_hint'
+              : remoteTarget?.episodeId == item.episode.id
+              ? 'detail_resume'
+              : 'first_playable'} '
+          'positionMs=${selectedTarget?.position.inMilliseconds ?? 0}',
+        );
+      }
 
       final source = item.episode.videoSource;
       final startedAt = DateTime.now();
@@ -582,10 +585,13 @@ class PlayerStartupPreloadController
       error: error,
       details: details,
     );
-    debugPrint(
-      '[player-entry-preload] startup=$event itemId=${itemId ?? 'null'} '
-      'elapsedMs=${elapsed?.inMilliseconds ?? 0} '
-      '${details ?? ''}${error == null ? '' : ' error=$error'}',
-    );
+    const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');
+    if (shouldPrint) {
+      debugPrint(
+        '[player-entry-preload] startup=$event itemId=${itemId ?? 'null'} '
+        'elapsedMs=${elapsed?.inMilliseconds ?? 0} '
+        '${details ?? ''}${error == null ? '' : ' error=$error'}',
+      );
+    }
   }
 }

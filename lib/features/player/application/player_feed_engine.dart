@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../entitlement/application/entitlement_controller.dart';
 import '../../entitlement/domain/episode_access_decision.dart';
+import '../data/player_remote_data_source_provider.dart';
 import '../domain/player_access_presentation.dart';
 import '../domain/player_feed.dart';
 import '../domain/player_performance_policy.dart';
@@ -133,6 +134,32 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
 
   void initializeViewport({required int index, required String? itemId}) {
     _viewport.initialize(index: index, itemId: itemId);
+  }
+
+  /// 拖动中的预测只允许 For You 可播放项走 HLS 预热，不触发权益弹窗或 media
+  /// session prepare。真实播放仍必须等 viewport settled。
+  Future<void> preloadForPredictedViewport({
+    required List<PlayerFeedItem> items,
+    required int currentIndex,
+    required int predictedIndex,
+  }) async {
+    if (currentIndex < 0 ||
+        currentIndex >= items.length ||
+        predictedIndex < 0 ||
+        predictedIndex >= items.length) {
+      return;
+    }
+    final predictedItem = items[predictedIndex];
+    if (predictedItem.mode != PlayerFeedMode.forYou ||
+        accessPresentationFor(predictedItem) !=
+            PlayerAccessPresentationState.playable) {
+      return;
+    }
+    await _playback.preloadItemForPredictedViewport(predictedItem);
+  }
+
+  Future<void> cancelPredictedViewportPreload({required String reason}) {
+    return _playback.cancelPredictedViewportPreload(reason: reason);
   }
 
   /// 浠呭湪 viewport settled 鍚庤皟鐢紱drag 闃舵璋冪敤灏嗚蹇界暐銆?
@@ -473,6 +500,13 @@ class PlayerFeedEngine extends Notifier<PlayerFeedEngineState> {
     ref
         .read(playerRechargeUnlockControllerProvider(sessionKey).notifier)
         .close();
+    // 开通会员/充值改变了服务端返回的剧集权限与播放地址。详情缓存可能仍在
+    // 30 秒有效期内，若不失效会复用购买前的 locked/null-source 快照，表面上走了
+    // refreshCurrentDramaAtEpisode，实际却没有重新请求短剧详情接口。
+    final dramaId = int.tryParse(latestBeforeRefresh.content.id);
+    if (dramaId != null && dramaId > 0) {
+      ref.read(playerDramaDetailCacheProvider).invalidate(dramaId);
+    }
     final refreshedItem = await ref
         .read(playerFeedControllerProvider(sessionKey).notifier)
         .refreshCurrentDramaAtEpisode(

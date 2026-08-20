@@ -59,6 +59,27 @@ void main() {
     expect(episode.isAvailable, isFalse);
   });
 
+  test('taken-down drama makes every episode unavailable', () {
+    final content = contentMapper.mapContent(
+      PlayerContentDto.fromJson({
+        'id': 1,
+        'status': 2,
+        'episodes': [
+          {
+            'id': 4,
+            'episode_no': 1,
+            'status': 1,
+            'is_unlocked': 1,
+            'source_url': 'https://example.com/episode.m3u8',
+          },
+        ],
+      }),
+    );
+
+    expect(content.isDramaAvailable, isFalse);
+    expect(content.episodes.single.isUnavailable, isTrue);
+  });
+
   test('for you page dto parses paged drama response and active episode', () {
     final page = PlayerFeedPageDto.fromJson({
       'page': 2,

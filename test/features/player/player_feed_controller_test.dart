@@ -254,6 +254,29 @@ void main() {
       );
     },
   );
+
+  test('clears all cached unlock states for one drama', () {
+    PlayerEpisodeUnlockCache.clearAllCache();
+    addTearDown(PlayerEpisodeUnlockCache.clearAllCache);
+    PlayerEpisodeUnlockCache.setUnlockStatus('drama-a', 'ep-1', true);
+    PlayerEpisodeUnlockCache.setUnlockStatus('drama-a', 'ep-2', true);
+    PlayerEpisodeUnlockCache.setUnlockStatus('drama-b', 'ep-1', true);
+
+    PlayerEpisodeUnlockCache.clearDramaCache('drama-a');
+
+    expect(
+      PlayerEpisodeUnlockCache.getCachedUnlockStatus('drama-a', 'ep-1'),
+      isNull,
+    );
+    expect(
+      PlayerEpisodeUnlockCache.getCachedUnlockStatus('drama-a', 'ep-2'),
+      isNull,
+    );
+    expect(
+      PlayerEpisodeUnlockCache.getCachedUnlockStatus('drama-b', 'ep-1'),
+      isTrue,
+    );
+  });
 }
 
 ProviderContainer _createContainer([PlayerFeedRepository? repository]) {

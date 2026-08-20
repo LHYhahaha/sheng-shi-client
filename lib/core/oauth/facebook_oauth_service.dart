@@ -12,7 +12,9 @@ import 'oauth_service.dart';
 /// 封装 flutter_facebook_auth SDK，处理登录流程和错误。上层只需要调用
 /// [signInWithFacebook] 获取 access token，不需要关心 SDK 细节。
 class FacebookOAuthService implements OAuthService {
-  static const _facebookAuthorizationTimeout = Duration(seconds: 15);
+  // 未安装 Facebook App 时会跳到浏览器，用户输入密码、二次验证的时间远超
+  // 原先的 15 秒。过早超时会主动关闭 SDK Activity，导致网页已授权却无法回调。
+  static const _facebookAuthorizationTimeout = Duration(minutes: 2);
   static const _facebookCleanupTimeout = Duration(seconds: 5);
   static const _facebookRecoveryChannel = MethodChannel(
     'com.yushi.drama/facebook_auth_recovery',
@@ -41,6 +43,10 @@ class FacebookOAuthService implements OAuthService {
   @override
   Future<String?> signInWithFacebook() async {
     try {
+      debugPrint(
+        '[FacebookOAuth] Starting native authorization '
+        'platform=${defaultTargetPlatform.name}',
+      );
       // 1. 调用 Facebook 登录
       final LoginResult result = await _facebookAuth
           .login(
@@ -54,6 +60,10 @@ class FacebookOAuthService implements OAuthService {
             onTimeout: () async {
               // 超时不仅要释放 Dart Future，也要结束仍停在前台的 Android
               // FacebookActivity，否则用户看到的原生 loading 会一直存在。
+              debugPrint(
+                '[FacebookOAuth] Authorization timed out after '
+                '${_facebookAuthorizationTimeout.inSeconds}s; recovering.',
+              );
               await _finishStuckFacebookActivity();
               await _resetFacebookLoginState();
               throw TimeoutException('Facebook authorization timed out');
@@ -61,6 +71,10 @@ class FacebookOAuthService implements OAuthService {
           );
 
       // 2. 处理登录结果
+      debugPrint(
+        '[FacebookOAuth] Native authorization result: '
+        'status=${result.status.name}, hasAccessToken=${result.accessToken != null}',
+      );
       switch (result.status) {
         case LoginStatus.success:
           final accessToken = result.accessToken;
@@ -88,6 +102,9 @@ class FacebookOAuthService implements OAuthService {
           throw OAuthException('facebook', result.message ?? 'Login failed');
 
         case LoginStatus.operationInProgress:
+          // SDK 仍持有上一轮的 Activity（常见于退出授权页时）。单纯 logOut
+          // 不会关闭这个 Activity，下一次 login 会继续卡在同一个请求上。
+          await _finishStuckFacebookActivity();
           await _resetFacebookLoginState();
           throw const OAuthException(
             'facebook',
@@ -95,12 +112,16 @@ class FacebookOAuthService implements OAuthService {
           );
       }
     } catch (error) {
+      debugPrint('[FacebookOAuth] Native authorization failed: $error');
       if (error is TimeoutException) {
         rethrow;
       }
       if (error is OAuthException) {
         rethrow;
       }
+      // 平台回调异常时，也可能遗留 FacebookActivity/CustomTabActivity；先关闭它
+      // 再清 token，确保下一次授权从干净状态开始。
+      await _finishStuckFacebookActivity();
       await _resetFacebookLoginState();
       throw OAuthException('facebook', 'Unexpected error during login', error);
     }
@@ -108,7 +129,9 @@ class FacebookOAuthService implements OAuthService {
 
   Future<void> _resetFacebookLoginState() async {
     try {
+      debugPrint('[FacebookOAuth] Resetting SDK login state.');
       await _facebookAuth.logOut().timeout(_facebookCleanupTimeout);
+      debugPrint('[FacebookOAuth] SDK login state reset complete.');
     } catch (error) {
       // 清理失败不能继续阻塞登录页；外层会释放 pending 状态并允许用户重试。
       debugPrint('[FacebookOAuth] Failed to reset login state: $error');
@@ -123,6 +146,7 @@ class FacebookOAuthService implements OAuthService {
       await _facebookRecoveryChannel
           .invokeMethod<void>('finishFacebookActivity')
           .timeout(_facebookCleanupTimeout);
+      debugPrint('[FacebookOAuth] Requested Android FacebookActivity close.');
     } catch (error) {
       // 原生活动已经自行关闭或通道不可用时，仍继续释放登录状态。
       debugPrint('[FacebookOAuth] Failed to close Facebook activity: $error');
@@ -131,6 +155,10 @@ class FacebookOAuthService implements OAuthService {
 
   @override
   Future<void> signOutFacebook() async {
+    // Facebook SDK 的 logOut 只删除本地 token，不负责销毁已经停滞的授权页。
+    // 退出应用账号后必须连同授权 Activity 一并收尾，否则再次登录会命中
+    // `operationInProgress` 并在原生 loading 页停住。
+    await _finishStuckFacebookActivity();
     await _resetFacebookLoginState();
   }
 

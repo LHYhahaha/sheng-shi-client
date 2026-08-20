@@ -1170,6 +1170,31 @@ void main() {
     },
   );
 
+  test(
+    'resumeAfterVisibilityPause reopens an item that was hidden before its first frame',
+    () async {
+      final session = _FakePlaybackSession(emitWidthOnOpen: false);
+      final container = _createContainer(session);
+      final provider = playerPlaybackControllerProvider('for-you-tab');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1, mode: PlayerFeedMode.forYou));
+      await controller.pauseForVisibility();
+      await controller.resumeAfterVisibilityPause();
+
+      final state = container.read(provider);
+      expect(session.openedSources, [_videoUrl, _videoUrl]);
+      expect(state.status, PlayerPlaybackStatus.playing);
+      expect(state.hasFirstFrame, isFalse);
+      expect(state.isBuffering, isTrue);
+      expect(state.surfaceLifecycle, PlayerVideoSurfaceLifecycle.attached);
+      expect(
+        controller.exportTimingReport(),
+        contains('visibility resume reopen before first frame'),
+      );
+    },
+  );
+
   test('restores a paused video surface without resuming playback', () async {
     final session = _FakePlaybackSession();
     final container = _createContainer(session);
@@ -2056,6 +2081,30 @@ void main() {
         PlaybackPreloadStatus.success,
       );
       expect(preloadManager.preloadCount, 3);
+    },
+  );
+
+  test(
+    'For You predictive preload warms HLS without opening a media session',
+    () async {
+      final session = _FakePlaybackSession();
+      final predictivePreloadManager = MockPlayerPlaybackPreloadManager(
+        preloadDelay: Duration.zero,
+      );
+      final container = _createContainer(
+        session,
+        predictivePreloadManager: predictivePreloadManager,
+      );
+      final provider = playerPlaybackControllerProvider('for-you-tab');
+
+      await container
+          .read(provider.notifier)
+          .preloadItemForPredictedViewport(
+            _item(2, mode: PlayerFeedMode.forYou),
+          );
+
+      expect(predictivePreloadManager.preloadedItemIds, ['drama-a-ep-2']);
+      expect(session.openedSources, isEmpty);
     },
   );
 
@@ -2949,6 +2998,7 @@ void main() {
     expect(preparedSession.openedSources, [_secondVideoUrl]);
     expect(preparedSession.playCount, 1);
     expect(container.read(provider).hasFirstFrame, isTrue);
+    expect(container.read(provider).hasRenderedFirstFrame, isTrue);
     expect(controller.exportTimingReport(), contains('prepared hit next'));
     expect(controller.exportTimingReport(), contains('take window session'));
     expect(controller.exportTimingReport(), contains('prepare manager take'));
@@ -3105,30 +3155,63 @@ void main() {
     },
   );
 
-  test('first-frame timeout enters retryable error state', () async {
-    final session = _FakePlaybackSession(emitWidthOnOpen: false);
-    final container = _createContainer(
-      session,
-      sourceRepository: _CountingPlaybackSourceRepository(),
-      firstFrameTimeout: const Duration(milliseconds: 10),
-    );
-    addTearDown(container.dispose);
-    final provider = playerPlaybackControllerProvider('single:drama-a:1');
-    final controller = container.read(provider.notifier);
+  test(
+    'normal player automatically reopens once before exposing a retryable error',
+    () async {
+      final session = _FakePlaybackSession(emitWidthOnOpen: false);
+      final container = _createContainer(
+        session,
+        sourceRepository: _CountingPlaybackSourceRepository(),
+        firstFrameTimeout: const Duration(milliseconds: 10),
+      );
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
 
-    await controller.playItem(_item(1));
-    await Future<void>.delayed(const Duration(milliseconds: 30));
+      await controller.playItem(_item(1));
+      await Future<void>.delayed(const Duration(milliseconds: 30));
 
-    final state = container.read(provider);
-    expect(state.status, PlayerPlaybackStatus.error);
-    expect(state.error, isA<TimeoutException>());
-    expect(state.currentSource, _videoUrl);
-    expect(session.pauseCount, greaterThanOrEqualTo(1));
-    expect(controller.exportTimingReport(), contains('first frame timeout'));
+      final state = container.read(provider);
+      expect(session.openedSources, hasLength(2));
+      expect(state.status, PlayerPlaybackStatus.error);
+      expect(state.error, isA<TimeoutException>());
+      expect(state.currentSource, _videoUrl);
+      expect(session.pauseCount, greaterThanOrEqualTo(1));
+      expect(controller.exportTimingReport(), contains('first frame timeout'));
 
-    await controller.playItem(_item(1));
-    expect(session.openedSources, hasLength(2));
-  });
+      expect(
+        controller.exportTimingReport(),
+        contains('first-frame timeout auto retry'),
+      );
+    },
+  );
+
+  test(
+    'For You automatically reopens once before exposing a retryable error',
+    () async {
+      final session = _FakePlaybackSession(emitWidthOnOpen: false);
+      final container = _createContainer(
+        session,
+        sourceRepository: _CountingPlaybackSourceRepository(),
+        firstFrameTimeout: const Duration(milliseconds: 10),
+      );
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('for-you-tab');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1, mode: PlayerFeedMode.forYou));
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      final state = container.read(provider);
+      expect(session.openedSources, hasLength(2));
+      expect(state.currentItemId, isNotNull);
+      expect(state.status, PlayerPlaybackStatus.error);
+      expect(
+        controller.exportTimingReport(),
+        contains('first-frame timeout auto retry'),
+      );
+    },
+  );
 
   test('HTTP 400 HLS segment error is not treated as recoverable', () async {
     final session = _FakePlaybackSession();
@@ -3355,6 +3438,7 @@ ProviderContainer _createContainer(
   _FakePlaybackSession session, {
   bool addDisposeTearDown = true,
   PlayerPlaybackPreloadManager? preloadManager,
+  PlayerPlaybackPreloadManager? predictivePreloadManager,
   PlaybackProgressRepository? progressRepository,
   PlayerFeedRepository? feedRepository,
   PlayerPlaybackSourceRepository? sourceRepository,
@@ -3377,6 +3461,10 @@ ProviderContainer _createContainer(
       playerPlaybackPreloadManagerProvider.overrideWithValue(
         playbackCacheManager,
       ),
+      if (predictivePreloadManager != null)
+        forYouPredictivePlaybackPreloadManagerProvider.overrideWithValue(
+          predictivePreloadManager,
+        ),
       playerPlaybackPrepareManagerFactoryProvider.overrideWithValue(
         NoopPlayerPlaybackPrepareManager.new,
       ),

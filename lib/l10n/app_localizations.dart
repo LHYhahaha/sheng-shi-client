@@ -171,6 +171,23 @@ class AppLocalizations {
   String get appTitle =>
       _remoteText('appTitle', en: 'NovaShort', zh: 'NovaShort');
 
+  String vipPlanIntroPrice({
+    required String sale,
+    required String price,
+    required String num,
+    required String ordinal,
+    required String unit,
+  }) => resolveRemoteText(
+    RemoteTexts.vipPlanIntroPrice,
+    args: {
+      'sale': sale,
+      'price': price,
+      'num': num,
+      'ordinal': ordinal,
+      'unit': unit,
+    },
+  );
+
   String get retry => _remoteText('common.action.retry', en: 'Retry', zh: '重试');
 
   String get claim => _remoteText('common.action.claim', en: 'Claim', zh: '领取');
@@ -316,8 +333,8 @@ class AppLocalizations {
   // );
 
   String get myListDramaOffShelf => _remoteText(
-    'my_list.toast.drama_off_shelf',
-    en: 'This drama has been taken down and is temporarily unavailable.',
+    'my_list.taken.down',
+    en: 'The short drama has been taken down',
     zh: '该短剧已下架，暂时无法观看',
   );
 
@@ -379,7 +396,7 @@ class AppLocalizations {
 
   // ── 个人中心 Profile ─────────────────────────────────────────────
   String get profileLogin =>
-      _remoteText('profile.user.login', en: 'Log in >', zh: '登录');
+      _remoteText('profile.user.login', en: 'Log in', zh: '登录');
 
   String get profileCopySuccess =>
       _remoteText('profile.toast.copy_success', en: 'ID copied', zh: 'ID已复制');
@@ -1032,6 +1049,12 @@ class AppLocalizations {
     'member_center.toast.exchange_success',
     en: 'Redeemed successfully',
     zh: '兑换成功',
+  );
+
+  String get memberCenterToastExchangeMembersOnly => _remoteText(
+    'member_center.toast.exchange_members_only',
+    en: 'Only members can redeem.',
+    zh: '仅会员可兑换',
   );
 
   String get memberCenterButtonExchange =>
@@ -2321,11 +2344,7 @@ class _AppLocalizationsDelegate
   const _AppLocalizationsDelegate();
 
   @override
-  bool isSupported(Locale locale) {
-    return AppLocalizations.supportedLocales.any(
-      (supported) => supported.languageCode == locale.languageCode,
-    );
-  }
+  bool isSupported(Locale locale) => true;
 
   @override
   Future<AppLocalizations> load(Locale locale) {

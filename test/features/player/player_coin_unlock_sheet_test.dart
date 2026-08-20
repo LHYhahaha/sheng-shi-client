@@ -63,4 +63,4 @@ void main() {
   });
 }
 
-void _noop() {}
+Future<void> _noop() async {}

@@ -34,8 +34,10 @@ class PreparedPlaybackSession {
     this.duration = Duration.zero,
     this.bufferedPosition = Duration.zero,
     StreamSubscription<Duration>? positionSubscription,
+    StreamSubscription<Duration>? durationSubscription,
     StreamSubscription<int?>? widthSubscription,
   }) : _positionSubscription = positionSubscription,
+       _durationSubscription = durationSubscription,
        _widthSubscription = widthSubscription;
 
   /// prepared/retained session 对应的 item id。
@@ -80,20 +82,26 @@ class PreparedPlaybackSession {
   final Duration position;
 
   /// retained previous 的时长快照。
-  final Duration duration;
+  /// 预热 session 已解析到的媒体时长。接管时 media_kit 不保证再次发射
+  /// duration stream，因此必须随预热 session 一并保存。
+  Duration duration;
 
   /// retained previous 的缓冲位置快照。
   final Duration bufferedPosition;
   StreamSubscription<Duration>? _positionSubscription;
+  StreamSubscription<Duration>? _durationSubscription;
   StreamSubscription<int?>? _widthSubscription;
   bool _isDisposed = false;
 
   Future<void> detachFirstFrameListener() async {
     final positionSubscription = _positionSubscription;
+    final durationSubscription = _durationSubscription;
     final widthSubscription = _widthSubscription;
     _positionSubscription = null;
+    _durationSubscription = null;
     _widthSubscription = null;
     await positionSubscription?.cancel();
+    await durationSubscription?.cancel();
     await widthSubscription?.cancel();
   }
 
@@ -167,6 +175,7 @@ class PlayerPlaybackPrepareManager {
     final effectiveWarmUpTimeout = warmUpTimeout ?? this.warmUpTimeout;
     PlayerPlaybackSession? session;
     StreamSubscription<Duration>? positionSubscription;
+    StreamSubscription<Duration>? durationSubscription;
     StreamSubscription<int?>? widthSubscription;
     StreamSubscription<bool>? playingSubscription;
     StreamSubscription<bool>? bufferingSubscription;
@@ -179,6 +188,7 @@ class PlayerPlaybackPrepareManager {
       _pendingSessions[item.id] = session;
       var hasFirstFrame = false;
       var hasPlaybackAdvanced = false;
+      var duration = Duration.zero;
       final firstFrameCompleter = Completer<void>();
       PreparedPlaybackSession? prepared;
 
@@ -207,6 +217,20 @@ class PlayerPlaybackPrepareManager {
             details: 'positionMs=${position.inMilliseconds}',
           );
         }
+      });
+      durationSubscription = session.durationStream.listen((value) {
+        final normalized = value < Duration.zero ? Duration.zero : value;
+        if (normalized == duration) {
+          return;
+        }
+        duration = normalized;
+        prepared?.duration = normalized;
+        _log(
+          'prepare duration updated',
+          itemId: item.id,
+          source: source.playableSource,
+          details: 'durationMs=${normalized.inMilliseconds}',
+        );
       });
       widthSubscription = session.widthStream.listen((width) {
         if (width == null || width <= 0 || hasFirstFrame) {
@@ -273,6 +297,7 @@ class PlayerPlaybackPrepareManager {
         _pendingSessions.remove(item.id);
         _completeWarmUpCancel(item.id);
         await positionSubscription.cancel();
+        await durationSubscription.cancel();
         await widthSubscription.cancel();
         await playingSubscription.cancel();
         await bufferingSubscription.cancel();
@@ -286,10 +311,13 @@ class PlayerPlaybackPrepareManager {
         isOpened: true,
         hasFirstFrame: hasFirstFrame,
         hasPlaybackAdvanced: hasPlaybackAdvanced,
+        duration: duration,
         positionSubscription: positionSubscription,
+        durationSubscription: durationSubscription,
         widthSubscription: widthSubscription,
       );
       positionSubscription = null;
+      durationSubscription = null;
       widthSubscription = null;
       _pendingSessions.remove(item.id);
       await _put(prepared);
@@ -312,6 +340,7 @@ class PlayerPlaybackPrepareManager {
       _pendingSessions.remove(item.id);
       _completeWarmUpCancel(item.id);
       await positionSubscription?.cancel();
+      await durationSubscription?.cancel();
       await widthSubscription?.cancel();
       await playingSubscription?.cancel();
       await bufferingSubscription?.cancel();

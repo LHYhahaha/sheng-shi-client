@@ -317,15 +317,20 @@ class ApiClient {
     var hasRetriedAfterRefresh = false;
 
     while (true) {
+      RequestOptions? requestOptions;
       try {
         final response = await send();
+        requestOptions = response.requestOptions;
         return _decode(response, decoder);
       } on ApiException catch (error) {
         _reportBusinessError(error, reportAccountBan: reportAccountBan);
-        if (await _recoverFromSessionExpiredBusinessCode(error)) {
+        if (await _recoverFromSessionExpiredBusinessCode(
+          error,
+          requestOptions,
+        )) {
           rethrow;
         }
-        if (await _recoverFromSessionInvalidated(error)) {
+        if (await _recoverFromSessionInvalidated(error, requestOptions)) {
           rethrow;
         }
         if (await _recoverFromUnauthorized(
@@ -343,10 +348,16 @@ class ApiClient {
             ? error.error! as ApiException
             : ApiException.fromDio(error);
         _reportBusinessError(apiError, reportAccountBan: reportAccountBan);
-        if (await _recoverFromSessionExpiredBusinessCode(apiError)) {
+        if (await _recoverFromSessionExpiredBusinessCode(
+          apiError,
+          error.requestOptions,
+        )) {
           throw apiError;
         }
-        if (await _recoverFromSessionInvalidated(apiError)) {
+        if (await _recoverFromSessionInvalidated(
+          apiError,
+          error.requestOptions,
+        )) {
           throw apiError;
         }
         if (await _recoverFromUnauthorized(
@@ -387,23 +398,70 @@ class ApiClient {
   /// 401 时尝试 refresh；成功返回 true 以便外层重试原请求一次。
   Future<bool> _recoverFromSessionExpiredBusinessCode(
     ApiException error,
+    RequestOptions? requestOptions,
   ) async {
     if (error.businessCode != _guestSessionExpiredBusinessCode ||
         _sessionAuthHandler == null) {
+      return false;
+    }
+    if (_isStaleSessionResponse(requestOptions, error.businessCode!)) {
       return false;
     }
 
     return _sessionAuthHandler!.handleSessionExpiredBusinessCode();
   }
 
-  Future<bool> _recoverFromSessionInvalidated(ApiException error) async {
+  Future<bool> _recoverFromSessionInvalidated(
+    ApiException error,
+    RequestOptions? requestOptions,
+  ) async {
     if (error.businessCode != _sessionInvalidatedBusinessCode ||
         _sessionAuthHandler == null) {
+      return false;
+    }
+    if (_isStaleSessionResponse(requestOptions, error.businessCode!)) {
       return false;
     }
 
     await _sessionAuthHandler!.handleSessionInvalidated();
     return true;
+  }
+
+  /// 请求发出后用户可能已经切换账号。旧 token 的 1006/1007 只能让该旧请求
+  /// 失败，绝不能清掉当前新账号的 session。
+  bool _isStaleSessionResponse(
+    RequestOptions? requestOptions,
+    int businessCode,
+  ) {
+    if (requestOptions == null) {
+      return false;
+    }
+    final sentToken = _bearerToken(requestOptions.headers['Authorization']);
+    final context = _readRequestContext();
+    final currentToken = _accessTokenReader?.call() ?? context.accessToken;
+    if (sentToken == null || currentToken == null || currentToken.isEmpty) {
+      return false;
+    }
+    if (sentToken == currentToken) {
+      return false;
+    }
+    debugPrint(
+      '[ApiClient] Ignored stale session response: businessCode=$businessCode '
+      'path=${requestOptions.path}.',
+    );
+    return true;
+  }
+
+  String? _bearerToken(Object? authorization) {
+    if (authorization is! String) {
+      return null;
+    }
+    const prefix = 'Bearer ';
+    if (!authorization.startsWith(prefix)) {
+      return null;
+    }
+    final token = authorization.substring(prefix.length).trim();
+    return token.isEmpty ? null : token;
   }
 
   Future<bool> _recoverFromUnauthorized(

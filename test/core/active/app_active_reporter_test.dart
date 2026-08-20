@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:drama_client/core/active/app_active_device_info.dart';
 import 'package:drama_client/core/active/app_active_reporter.dart';
@@ -64,6 +66,38 @@ void main() {
       expect(
         (adapter.requests.single.data! as Map).containsKey('pushToken'),
         isFalse,
+      );
+    },
+  );
+
+  test(
+    'queues an FCM-ready token report while the initial report is in flight',
+    () async {
+      final deviceInfo = _DelayedDeviceInfoReader();
+      reporter = AppActiveReporter(
+        apiClient: _apiClient(adapter),
+        deviceInfoReader: deviceInfo,
+        pushTokenReader: () async => 'fcm-push-token',
+        now: () => now,
+      );
+
+      final initialReport = reporter.reportAppLaunch(includePushToken: false);
+      await deviceInfo.started.future;
+      final tokenReport = reporter.reportAppLaunch();
+
+      deviceInfo.complete();
+      await initialReport;
+      await tokenReport;
+
+      expect(adapter.requests, hasLength(2));
+      expect(adapter.requests.first.data, {
+        'channelSource': 'tiktok',
+        'region': 'US',
+        'timezone': 'America/New_York',
+      });
+      expect(
+        (adapter.requests.last.data! as Map)['pushToken'],
+        'fcm-push-token',
       );
     },
   );
@@ -145,6 +179,22 @@ class _FailingDeviceInfoReader implements AppActiveDeviceInfoReader {
   @override
   Future<AppActiveDeviceInfo> read() async {
     throw StateError('device info unavailable');
+  }
+}
+
+class _DelayedDeviceInfoReader implements AppActiveDeviceInfoReader {
+  final started = Completer<void>();
+  final _result = Completer<void>();
+
+  void complete() => _result.complete();
+
+  @override
+  Future<AppActiveDeviceInfo> read() async {
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    await _result.future;
+    return _FakeDeviceInfoReader().read();
   }
 }
 

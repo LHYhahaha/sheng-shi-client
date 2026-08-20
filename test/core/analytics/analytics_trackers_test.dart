@@ -16,9 +16,11 @@ void main() {
     () async {
       final sink = AnalyticsInMemoryEventSink();
       var now = DateTime.utc(2026, 8, 4, 0, 0);
+      var adjustFirstOpenCount = 0;
       final tracker = AnalyticsLifecycleTracker(
         analytics: _service(sink, () => now),
         firstOpenStore: _FirstOpenStore(),
+        onFirstOpen: () => adjustFirstOpenCount += 1,
         now: () => now,
       );
 
@@ -36,6 +38,7 @@ void main() {
       ]);
       expect(sink.events[2].eventParams['foreground_duration_ms'], 3000);
       expect(sink.events[3].eventParams['launch_type'], 'hot');
+      expect(adjustFirstOpenCount, 1);
     },
   );
 

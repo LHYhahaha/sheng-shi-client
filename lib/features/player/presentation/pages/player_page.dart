@@ -45,6 +45,7 @@ import '../../application/for_you_playback_progress_controller.dart';
 import '../../application/player_overlay_orchestrator.dart';
 import '../../application/player_performance_policy_provider.dart';
 import '../../application/player_playback_controller.dart';
+import '../../application/player_recharge_unlock_controller.dart';
 import '../../application/player_unlock_modal_coordinator.dart';
 import '../../application/player_rebuild_diagnostics.dart';
 import '../../application/player_session_registry.dart';
@@ -153,6 +154,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   static const _dimmedOverlayOpacity = 0.64;
   static const _lockedNextEpisodeRewind = Duration(seconds: 8);
   static const _forYouNearEndRestartThreshold = Duration(seconds: 8);
+  static const _unlockTapDebounce = Duration(milliseconds: 500);
+  static const _predictivePreloadPageThreshold = 0.60;
 
   late final PageController _pageController;
   late final String _sessionKey;
@@ -179,10 +182,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isPageScrolling = false;
   bool _isExitRecommendationHistoryLoading = true;
   bool _hasShownExitRecommendationForDrama = false;
+  bool _hasShownDramaTakenDownToast = false;
   bool _didRecordFirstBuild = false;
   bool _allowRemoteResumeEpisodeSwitch = true;
   bool _enforceInitialHandoffRewindSeek = false;
   bool _isExitRecommendationRequestInFlight = false;
+  bool _isOpeningUnlockActionSheet = false;
+  int? _lastPredictivePreloadIndex;
+  DateTime? _lastUnlockTapAt;
   DateTime? _lastForYouNoMoreToastAt;
   String? _activeCoinSheetItemId;
   String? _activeRechargeSheetItemId;
@@ -203,6 +210,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   String? _analyticsSubtitleLanguage;
   Timer? _analyticsPauseTimer;
   late final AnalyticsService _analyticsService;
+  late final ProviderContainer _providerContainer;
   late final AdUnlockEntryExposureTracker _adUnlockEntryExposureTracker;
   ModalRoute<dynamic>? _route;
   final ValueNotifier<double> _overlayOpacityNotifier = ValueNotifier<double>(
@@ -246,10 +254,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _analyticsPlayingItemId = itemId;
     _analyticsPlayingItem = item;
     _analyticsPlaybackStartedAt = DateTime.now();
-    final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
+    final playback = _providerContainer.read(
+      playerPlaybackControllerProvider(_sessionKey),
+    );
     _analyticsPlaybackProgress = playback.position;
     _analyticsSubtitleLanguage = _subtitleLanguageForAnalytics(playback);
-    ref.read(adjustEventReporterProvider).reportDramaPlayStart();
+    developer.log(
+      'Adjust drama play start requested',
+      name: 'PlayerAnalytics',
+      error: 'token=x7p5qa itemId=$itemId',
+    );
+    _providerContainer.read(adjustEventReporterProvider).reportDramaPlayStart();
     await _analyticsService.track(
       AnalyticsEvent(AnalyticsDefinitions.dramaPlayStart, {
         'drama_id': item.content.id,
@@ -294,7 +309,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   PlayerFeedItem? _feedItemForId(String itemId) {
-    final items = ref.read(playerFeedControllerProvider(_sessionKey)).items;
+    final items = _providerContainer
+        .read(playerFeedControllerProvider(_sessionKey))
+        .items;
     for (final item in items) {
       if (item.id == itemId) {
         return item;
@@ -343,7 +360,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   void _onAnalyticsPlayingChanged(bool isPlaying) {
     if (isPlaying) {
       _cancelAnalyticsPauseTimer();
-      final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
+      final playback = _providerContainer.read(
+        playerPlaybackControllerProvider(_sessionKey),
+      );
       if (_analyticsPlayingItemId == null &&
           playback.hasFirstFrame &&
           playback.currentItemId != null) {
@@ -405,7 +424,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     unawaited(
-      shouldResumePlayback
+      widget.feedMode == PlayerFeedMode.forYou
+          ? _playbackController.resumeAfterCompetingPlayer()
+          : shouldResumePlayback
           ? _resumePlaybackAfterLifecyclePause()
           : _restorePlaybackSurfaceAfterVisibilityPause(),
     );
@@ -414,9 +435,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   @override
   void initState() {
     super.initState();
+    _providerContainer = ProviderScope.containerOf(context, listen: false);
     WidgetsBinding.instance.addObserver(this);
     _pageController = PageController();
-    _pageController.addListener(_syncActiveVideoPagePosition);
+    _pageController.addListener(_handlePageControllerTick);
     _sessionKey = _createSessionKey();
     _playbackController = ref.read(
       playerPlaybackControllerProvider(_sessionKey).notifier,
@@ -527,13 +549,45 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _playbackController.recordPlaybackTiming(
       'release competing forYou decoder start',
     );
-    await ref
-        .read(
-          playerPlaybackControllerProvider(
-            PlayerPlaybackSessionKeys.forYouTab,
-          ).notifier,
-        )
-        .suspendForCompetingPlayer();
+    // 底层 media_kit 的 pause/dispose 在少数机型上可能长期不回调。For You 的
+    // 网络闸门会在 suspend 开始时立即关闭，因此普通页最多等待一小段时间，不能让
+    // 路由进入永久卡在 loading；原暂停任务仍在后台继续完成。
+    var timedOut = false;
+    try {
+      await ref
+          .read(
+            playerPlaybackControllerProvider(
+              PlayerPlaybackSessionKeys.forYouTab,
+            ).notifier,
+          )
+          .suspendForCompetingPlayer()
+          .timeout(
+            const Duration(milliseconds: 600),
+            onTimeout: () {
+              timedOut = true;
+            },
+          );
+    } catch (error, stackTrace) {
+      developer.log(
+        'release competing For You decoder failed; continue player startup',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      _playbackController.recordPlaybackTiming(
+        'release competing forYou decoder failed',
+        elapsed: stopwatch.elapsed,
+        details: 'continueStartup=true error=$error',
+      );
+      return;
+    }
+    if (timedOut) {
+      _playbackController.recordPlaybackTiming(
+        'release competing forYou decoder timeout',
+        elapsed: stopwatch.elapsed,
+        details: 'timeoutMs=600 continueStartup=true',
+      );
+      return;
+    }
     _playbackController.recordPlaybackTiming(
       'release competing forYou decoder end',
       elapsed: stopwatch.elapsed,
@@ -552,7 +606,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _cancelExitRecommendationRequestIfPending();
     _modalService.dismissForSource(AppModalSource.player);
     _overlayOrchestrator.cancelPending();
-    _playbackController.detachVideoSurfaceForTeardown();
+    // widget tree 正在卸载时不能同步写 provider；这里只停止 surface 相关的计时
+    // 和回调，实际 state 清理由后续 syncState=false 的 session dispose 完成。
+    _playbackController.detachVideoSurfaceForTeardown(syncState: false);
     unawaited(
       _playbackController.disposeSession(
         syncState: false,
@@ -563,7 +619,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
     _shellChrome?.show();
     _overlayOpacityNotifier.dispose();
-    _pageController.removeListener(_syncActiveVideoPagePosition);
+    _pageController.removeListener(_handlePageControllerTick);
     _pagePositionNotifier.dispose();
     _pageController.dispose();
     super.dispose();
@@ -598,7 +654,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
     // 璁板綍杩涘叆 inactive 鍓嶆槸鍚︽鍦ㄦ挱鏀撅紝鐢ㄤ簬鎭㈠鏃跺垽鏂槸鍚﹂渶瑕佽嚜鍔ㄦ挱鏀?
     if (state == AppLifecycleState.inactive) {
-      final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
+      final playback = _providerContainer.read(
+        playerPlaybackControllerProvider(_sessionKey),
+      );
       _wasPlayingBeforeInactive = playback.isPlaying;
       _resumePlaybackOnLifecycleResume =
           _resumePlaybackOnLifecycleResume ||
@@ -743,6 +801,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     var feedState = ref.read(feedProvider);
+    if (widget.feedMode == PlayerFeedMode.singleDrama &&
+        feedState.currentItem?.content.isDramaAvailable == false) {
+      // 短剧整体下架时仍保留当前播放器页面，由既有 unavailable overlay 展示
+      // 不可播放状态；这里只补一次明确的业务提示，避免误判为播放/网络失败。
+      if (!_hasShownDramaTakenDownToast) {
+        _hasShownDramaTakenDownToast = true;
+        showAppCenterToast(context.l10n.myListDramaOffShelf);
+      }
+    }
     if (feedState.currentItem != null) {
       if (widget.forYouHandoff != null) {
         _applyInitialForYouHandoffProgress(feedState);
@@ -811,24 +878,35 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           .setCurrentIndex(targetIndex);
       feedState = ref.read(playerFeedControllerProvider(_sessionKey));
     }
-    final targetItem = feedState.currentItem;
+    var targetItem = feedState.currentItem;
     if (targetItem == null) {
       return;
     }
-    // The handoff only owns the intent (For You completed). The normal player
-    // owns the episode timeline, so calculate its rewind from the normal feed
-    // duration instead of reusing a potentially different For You HLS length.
-    final duration = targetItem.episode.duration ?? handoff.duration;
-    // 不只处理 For You 已经播完后自动跳转的情况。用户在 For You 剩余 8 秒内
-    // 手动进入普通播放器时，若下一集待解锁，也应先回退当前集，避免刚进入就触发
-    // 自动切到锁集。
-    final shouldRewindBeforeLockedNext =
-        _shouldRewindBeforeLockedNext(item: targetItem, feedState: feedState) &&
-        (handoff.rewoundFromCompletion ||
-            _isAtOrNearEnd(handoff.position, duration));
-    final normalizedPosition = shouldRewindBeforeLockedNext
-        ? _rewindPositionBeforeEnd(duration)
-        : handoff.position;
+    // For You 只交接当前集的真实结束位置；是否需要回退 8 秒必须等普通
+    // 播放器拿到完整剧集列表和下一集权益后在这里统一决定。
+    var duration = targetItem.episode.duration ?? handoff.duration;
+    var normalizedPosition = handoff.position;
+    var shouldRewindBeforeLockedNext = false;
+    final currentIndex = feedState.currentIndex;
+    final hasNextEpisode = currentIndex + 1 < feedState.items.length;
+    if (_isAtOrNearEnd(handoff.position, duration) && hasNextEpisode) {
+      final nextItem = feedState.items[currentIndex + 1];
+      final nextIsPlayable =
+          _feedEngine.accessPresentationFor(nextItem) ==
+          PlayerAccessPresentationState.playable;
+      if (nextIsPlayable) {
+        ref
+            .read(playerFeedControllerProvider(_sessionKey).notifier)
+            .setCurrentIndex(currentIndex + 1);
+        feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+        targetItem = feedState.currentItem!;
+        duration = Duration.zero;
+        normalizedPosition = Duration.zero;
+      } else {
+        shouldRewindBeforeLockedNext = true;
+        normalizedPosition = _rewindPositionBeforeEnd(duration);
+      }
+    }
     final progress = PlaybackProgress(
       itemId: targetItem.id,
       position: normalizedPosition,
@@ -846,20 +924,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         requireSeekAfterOpen: shouldRewindBeforeLockedNext,
       );
     }
-  }
-
-  bool _shouldRewindBeforeLockedNext({
-    required PlayerFeedItem item,
-    required PlayerFeedState feedState,
-  }) {
-    final itemIndex = feedState.items.indexWhere(
-      (candidate) => candidate.id == item.id,
-    );
-    if (itemIndex == -1 || itemIndex + 1 >= feedState.items.length) {
-      return false;
-    }
-    return _feedEngine.accessPresentationFor(feedState.items[itemIndex + 1]) !=
-        PlayerAccessPresentationState.playable;
   }
 
   Duration _rewindPositionBeforeEnd(Duration duration) {
@@ -1410,7 +1474,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             (next.$3 <= Duration.zero && !next.$5)) {
           return;
         }
-        final latestFeed = ref.read(feedProvider);
+        final latestFeed = _providerContainer.read(feedProvider);
         PlayerFeedItem? playingItem;
         for (final candidate in latestFeed.items) {
           if (candidate.id == next.$1) {
@@ -1425,7 +1489,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         if (widget.feedMode != PlayerFeedMode.forYou && handoff == null) {
           return;
         }
-        ref
+        _providerContainer
             .read(forYouPlaybackProgressControllerProvider.notifier)
             .save(
               ForYouPlaybackSnapshot(
@@ -1482,7 +1546,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         ); // 6: complete
         feedEngine.markEndedHandled(next.$1!);
         if (widget.feedMode == PlayerFeedMode.forYou) {
-          final completedItem = ref.read(feedProvider).currentItem;
+          final completedItem = _providerContainer
+              .read(feedProvider)
+              .currentItem;
           if (completedItem != null) {
             unawaited(
               _openForYouItemInPlayer(completedItem, rewindFromEnd: true),
@@ -1901,6 +1967,63 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _pagePositionNotifier.value = page;
   }
 
+  void _handlePageControllerTick() {
+    _syncActiveVideoPagePosition();
+    _preloadForPredictedPageDuringScroll();
+  }
+
+  void _preloadForPredictedPageDuringScroll() {
+    if (widget.feedMode != PlayerFeedMode.forYou ||
+        !_pageController.hasClients) {
+      return;
+    }
+    final page = _pageController.page;
+    if (page == null || !page.isFinite) {
+      return;
+    }
+    final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+    final items = feedState.items;
+    if (items.isEmpty) {
+      return;
+    }
+    final viewport = ref.read(playerViewportControllerProvider(_sessionKey));
+    if (viewport.scrollPhase == PlayerViewportScrollPhase.idle) {
+      return;
+    }
+    final settledIndex = viewport.settledIndex.clamp(0, items.length - 1);
+    final delta = page - settledIndex;
+    if (delta.abs() < _predictivePreloadPageThreshold) {
+      if (_lastPredictivePreloadIndex != null) {
+        _lastPredictivePreloadIndex = null;
+        unawaited(
+          _feedEngine.cancelPredictedViewportPreload(
+            reason: 'page_returned_before_settle',
+          ),
+        );
+      }
+      return;
+    }
+    final predictedIndex = (delta > 0 ? settledIndex + 1 : settledIndex - 1)
+        .clamp(0, items.length - 1);
+    if (predictedIndex == settledIndex ||
+        predictedIndex == _lastPredictivePreloadIndex) {
+      return;
+    }
+    if (_lastPredictivePreloadIndex != null) {
+      unawaited(
+        _feedEngine.cancelPredictedViewportPreload(reason: 'direction_changed'),
+      );
+    }
+    _lastPredictivePreloadIndex = predictedIndex;
+    unawaited(
+      _feedEngine.preloadForPredictedViewport(
+        items: items,
+        currentIndex: settledIndex,
+        predictedIndex: predictedIndex,
+      ),
+    );
+  }
+
   void _schedulePageControllerAlignment({
     required int targetIndex,
     required int itemCount,
@@ -2109,30 +2232,26 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final playbackState = ref.read(
       playerPlaybackControllerProvider(_sessionKey),
     );
-    final isCurrentPlayableItem =
+    final isCurrentForYouItem =
         playbackState.currentItemId == item.id &&
-        playbackState.currentSource != null &&
-        (playbackState.status == PlayerPlaybackStatus.playing ||
-            playbackState.status == PlayerPlaybackStatus.paused);
+        playbackState.currentSource != null;
 
     _isOpeningForYouPlayer = true;
     try {
       final effectiveDuration = playbackState.duration > Duration.zero
           ? playbackState.duration
           : item.episode.duration ?? Duration.zero;
-      final shouldUseCurrentPlayback = isCurrentPlayableItem;
+      final shouldUseCurrentPlayback = isCurrentForYouItem;
       // 推荐接口返回的就是当前可播放剧集。即使用户在首帧 opening 阶段点击，
       // 也必须把这集带入详情播放器；不能退回硬编码的第 1 集，否则会错集、
       // 丢失可复用的 HLS 首段，并可能落到未解锁集。
       final targetEpisodeId = item.episode.id;
       final initialPosition = shouldUseCurrentPlayback
-          ? rewindFromEnd
-                ? Duration(
-                    milliseconds: (effectiveDuration - _lockedNextEpisodeRewind)
-                        .inMilliseconds
-                        .clamp(0, effectiveDuration.inMilliseconds),
-                  )
-                : playbackState.position
+          ? playbackState.position
+          // 播放完成回调时底层 source 可能已经释放；仍将“已完成”交给普通
+          // 播放器判断下一集，而不是在 For You 里提前回退。
+          : rewindFromEnd
+          ? effectiveDuration
           : Duration.zero;
       final handoff = ForYouPlayerHandoff(
         id: '${item.id}:${DateTime.now().microsecondsSinceEpoch}',
@@ -2140,8 +2259,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         dramaId: item.content.id,
         episodeId: targetEpisodeId,
         position: initialPosition,
-        duration: shouldUseCurrentPlayback ? effectiveDuration : Duration.zero,
-        rewoundFromCompletion: rewindFromEnd,
+        duration: (shouldUseCurrentPlayback || rewindFromEnd)
+            ? effectiveDuration
+            : Duration.zero,
       );
       ref
           .read(forYouPlaybackProgressControllerProvider.notifier)
@@ -2151,7 +2271,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               dramaId: item.content.id,
               episode: item.episode,
               position: initialPosition,
-              duration: shouldUseCurrentPlayback
+              duration: (shouldUseCurrentPlayback || rewindFromEnd)
                   ? effectiveDuration
                   : Duration.zero,
               updatedAt: DateTime.now(),
@@ -2778,6 +2898,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         !mounted) {
       return;
     }
+    if (GoRouter.of(context).routerDelegate.currentConfiguration.uri.path ==
+        RoutePaths.search) {
+      return;
+    }
     _isOpeningSearch = true;
     try {
       await _playbackController.pauseForVisibility();
@@ -2834,6 +2958,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     // Request early, but do not change the underlying paywall until the
     // original unlock sheet has been dismissed.
     final adUnlockStatus = _fetchAdUnlockStatus(item);
+    var didUnlockWithCoins = false;
     _isModalOpen = true;
     _syncAutoImmersiveBlockers();
     try {
@@ -2843,13 +2968,25 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         intent,
         launchedByAutoSheet: launchedByAutoSheet,
       );
+      // 金币解锁成功后当前集已恢复播放；不能再使用打开金币框前预取到的
+      // 广告资格弹出二次解锁确认框。
+      didUnlockWithCoins =
+          intent == PlayerOverlaySheetIntent.coinUnlock &&
+          ref
+                  .read(playerRechargeUnlockControllerProvider(_sessionKey))
+                  .status ==
+              PlayerRechargeUnlockStatus.success;
     } finally {
       if (mounted) {
         _isModalOpen = false;
         _activeCoinSheetItemId = null;
         _activeRechargeSheetItemId = null;
         _restoreUnlockPaywallAfterModalIfNeeded(item);
-        unawaited(_applyAdUnlockActionAfterOriginalSheet(item, adUnlockStatus));
+        if (!didUnlockWithCoins) {
+          unawaited(
+            _applyAdUnlockActionAfterOriginalSheet(item, adUnlockStatus),
+          );
+        }
         _syncAutoImmersiveBlockers();
       }
     }
@@ -3173,13 +3310,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _shareToFacebook(String dramaId, String dramaTitle) async {
-    final shareUrl = _shareUrl(dramaId, shareMethod: 'facebook');
+    final shareUrl = _facebookShareUrl(dramaId);
     final shareMessage = _shareMessage(dramaTitle, shareUrl);
     final facebookShareUrl = Uri.https(
       'www.facebook.com',
       '/sharer/sharer.php',
       {'u': shareUrl.toString(), 'quote': shareMessage},
     );
+    developer.log("facebook链接facebookShareUrl:${facebookShareUrl.toString()}");
+    developer.log("facebook链接shareUrl:${shareUrl.toString()}");
     final opened = await ref
         .read(externalUrlLauncherProvider)
         .open(facebookShareUrl.toString());
@@ -3202,6 +3341,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       channelId: channel?.channelFlag ?? '',
       merchantId: channel?.merchantId ?? '',
       shareMethod: shareMethod,
+    );
+  }
+
+  Uri _facebookShareUrl(String dramaId) {
+    final languageCode = ref.read(appLocaleControllerProvider).languageCode;
+    final entitlement = ref.read(entitlementControllerProvider);
+    final userInfo = ref.read(userInfoStoreProvider);
+    final channel = ref.read(channelConfigServiceProvider).cachedConfig;
+    return AppConfig.current.facebookShareUrl(
+      dramaId: dramaId,
+      languageCode: languageCode,
+      userId: entitlement.userId ?? userInfo.userId ?? '',
+      channelId: channel?.channelFlag ?? '',
+      merchantId: channel?.merchantId ?? '',
     );
   }
 
@@ -3254,31 +3407,41 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _showPendingUnlockActionSheet() async {
-    if (_isModalOpen) {
+    final now = DateTime.now();
+    if (_isModalOpen ||
+        _isOpeningUnlockActionSheet ||
+        (_lastUnlockTapAt != null &&
+            now.difference(_lastUnlockTapAt!) < _unlockTapDebounce)) {
       return;
     }
-    final currentItem = ref
-        .read(playerFeedControllerProvider(_sessionKey))
-        .currentItem;
-    if (currentItem == null) {
-      return;
+    _lastUnlockTapAt = now;
+    _isOpeningUnlockActionSheet = true;
+    try {
+      final currentItem = ref
+          .read(playerFeedControllerProvider(_sessionKey))
+          .currentItem;
+      if (currentItem == null) {
+        return;
+      }
+      final engine = _feedEngine;
+      final intent = await engine.prepareManualUnlock(currentItem);
+      if (!mounted) {
+        return;
+      }
+      if (_activeRechargeSheetItemId == currentItem.id ||
+          _activeCoinSheetItemId == currentItem.id) {
+        return;
+      }
+      if (intent == PlayerOverlaySheetIntent.coinUnlock) {
+        _activeCoinSheetItemId = currentItem.id;
+      } else if (intent == PlayerOverlaySheetIntent.rechargeUnlock ||
+          intent == PlayerOverlaySheetIntent.membership) {
+        _activeRechargeSheetItemId = currentItem.id;
+      }
+      await _presentSheetIntent(context, currentItem, intent);
+    } finally {
+      _isOpeningUnlockActionSheet = false;
     }
-    final engine = _feedEngine;
-    final intent = await engine.prepareManualUnlock(currentItem);
-    if (!mounted) {
-      return;
-    }
-    if (_activeRechargeSheetItemId == currentItem.id ||
-        _activeCoinSheetItemId == currentItem.id) {
-      return;
-    }
-    if (intent == PlayerOverlaySheetIntent.coinUnlock) {
-      _activeCoinSheetItemId = currentItem.id;
-    } else if (intent == PlayerOverlaySheetIntent.rechargeUnlock ||
-        intent == PlayerOverlaySheetIntent.membership) {
-      _activeRechargeSheetItemId = currentItem.id;
-    }
-    await _presentSheetIntent(context, currentItem, intent);
   }
 
   Future<void> _openAdUnlock(
@@ -3421,10 +3584,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         }
       }
       if (refreshedEpisode == null) return false;
-      return ref
-              .read(playerFeedControllerProvider(_sessionKey).notifier)
-              .updateItemEpisode(itemId: item.id, episode: refreshedEpisode) !=
-          null;
+      final updatedItem = ref
+          .read(playerFeedControllerProvider(_sessionKey).notifier)
+          .updateItemEpisode(itemId: item.id, episode: refreshedEpisode);
+      if (updatedItem == null) return false;
+      ref
+          .read(entitlementControllerProvider.notifier)
+          .updateAfterAdUnlock(episodeId: item.episode.id);
+      return true;
     } catch (_) {
       return false;
     }

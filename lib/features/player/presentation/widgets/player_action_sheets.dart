@@ -28,7 +28,9 @@ class PlayerShareSheet extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              SizedBox(width: 40, height: 40),
               Text(
                 context.l10n.playerShare,
                 style: const TextStyle(
@@ -38,7 +40,7 @@ class PlayerShareSheet extends StatelessWidget {
                   height: 20 / 16,
                 ),
               ),
-              const Spacer(),
+              // const Spacer(),
               _CloseButton(onTap: () => Navigator.of(context).pop()),
             ],
           ),
@@ -91,7 +93,7 @@ class PlayerShareSheet extends StatelessWidget {
   }
 }
 
-class PlayerCoinUnlockSheet extends ConsumerWidget {
+class PlayerCoinUnlockSheet extends ConsumerStatefulWidget {
   const PlayerCoinUnlockSheet({
     required this.price,
     required this.balance,
@@ -101,10 +103,32 @@ class PlayerCoinUnlockSheet extends ConsumerWidget {
 
   final int price;
   final int balance;
-  final VoidCallback onConfirm;
+  final Future<void> Function() onConfirm;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PlayerCoinUnlockSheet> createState() =>
+      _PlayerCoinUnlockSheetState();
+}
+
+class _PlayerCoinUnlockSheetState extends ConsumerState<PlayerCoinUnlockSheet> {
+  var _isSubmitting = false;
+
+  Future<void> _submit() async {
+    if (_isSubmitting) {
+      return;
+    }
+    setState(() => _isSubmitting = true);
+    try {
+      await widget.onConfirm();
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final autoUnlockEnabled = ref
         .watch(entitlementControllerProvider)
         .autoUnlockEnabled;
@@ -138,7 +162,7 @@ class PlayerCoinUnlockSheet extends ConsumerWidget {
                       ),
                     ),
                     TextSpan(
-                      text: ' $price',
+                      text: ' ${widget.price}',
                       style: TextStyle(color: Colors.white),
                     ),
                   ],
@@ -164,7 +188,7 @@ class PlayerCoinUnlockSheet extends ConsumerWidget {
                       ),
                     ),
                     TextSpan(
-                      text: ' $balance',
+                      text: ' ${widget.balance}',
                       style: TextStyle(color: Colors.white),
                     ),
                   ],
@@ -186,7 +210,7 @@ class PlayerCoinUnlockSheet extends ConsumerWidget {
               key: const ValueKey('player_coin_unlock_confirm'),
               label: context.l10n.playerPlay,
               icon: Icons.play_arrow_rounded,
-              onPressed: onConfirm,
+              onPressed: _isSubmitting ? null : () => unawaited(_submit()),
             ),
           ),
           const SizedBox(height: 24),

@@ -190,6 +190,7 @@ class PlayerPlaybackRenderSnapshot {
     required this.status,
     required this.surfaceLifecycle,
     required this.hasFirstFrame,
+    required this.hasRenderedFirstFrame,
     required this.isBuffering,
     required this.isPlaybackAdvancing,
   });
@@ -202,6 +203,7 @@ class PlayerPlaybackRenderSnapshot {
       status: state.status,
       surfaceLifecycle: state.surfaceLifecycle,
       hasFirstFrame: state.hasFirstFrame,
+      hasRenderedFirstFrame: state.hasRenderedFirstFrame,
       isBuffering: state.isBuffering,
       isPlaybackAdvancing: state.position > Duration.zero,
     );
@@ -213,6 +215,7 @@ class PlayerPlaybackRenderSnapshot {
   final PlayerPlaybackStatus status;
   final PlayerVideoSurfaceLifecycle surfaceLifecycle;
   final bool hasFirstFrame;
+  final bool hasRenderedFirstFrame;
   final bool isBuffering;
   final bool isPlaybackAdvancing;
 
@@ -229,7 +232,7 @@ class PlayerPlaybackRenderSnapshot {
   bool get isLoading =>
       currentSource != null &&
       !isError &&
-      (isOpening || isBuffering || !hasFirstFrame);
+      (isOpening || isBuffering || !hasFirstFrame || !hasRenderedFirstFrame);
 
   bool get isPlaying => status == PlayerPlaybackStatus.playing;
 
@@ -246,6 +249,7 @@ class PlayerPlaybackRenderSnapshot {
         other.status == status &&
         other.surfaceLifecycle == surfaceLifecycle &&
         other.hasFirstFrame == hasFirstFrame &&
+        other.hasRenderedFirstFrame == hasRenderedFirstFrame &&
         other.isBuffering == isBuffering &&
         other.isPlaybackAdvancing == isPlaybackAdvancing;
   }
@@ -258,6 +262,7 @@ class PlayerPlaybackRenderSnapshot {
     status,
     surfaceLifecycle,
     hasFirstFrame,
+    hasRenderedFirstFrame,
     isBuffering,
     isPlaybackAdvancing,
   );
@@ -465,7 +470,7 @@ class ActivePlaybackSurfaceOverlayState
         widget.isViewportDragging &&
         widget.policy.allowVideoSurfaceOpacityAnimationDuringDrag;
     final surfaceOpacity = showVideo
-        ? !snapshot.hasFirstFrame
+        ? !snapshot.hasRenderedFirstFrame
               ? 0.01
               : (dimDuringDrag
                     ? widget.policy.videoSurfaceDimOpacityDuringDrag
@@ -850,7 +855,7 @@ class PlayerPlaybackControlsConsumerState
 
 enum _PlaybackFeedbackIcon { play, pause }
 
-class PlayerSeekBarConsumer extends ConsumerWidget {
+class PlayerSeekBarConsumer extends ConsumerStatefulWidget {
   const PlayerSeekBarConsumer({
     super.key,
     required this.sessionKey,
@@ -873,19 +878,27 @@ class PlayerSeekBarConsumer extends ConsumerWidget {
   final VoidCallback onSeekCancel;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PlayerSeekBarConsumer> createState() =>
+      _PlayerSeekBarConsumerState();
+}
+
+class _PlayerSeekBarConsumerState extends ConsumerState<PlayerSeekBarConsumer> {
+  String? _lastVisibilityLog;
+
+  @override
+  Widget build(BuildContext context) {
     final snapshot = ref.watch(
       playerPlaybackControllerProvider(
-        sessionKey,
+        widget.sessionKey,
       ).select(PlayerSeekBarSnapshot.fromState),
     );
     final previewConfig = PlayerSeekPreviewConfig.fromPolicy(
       ref.watch(playerPerformancePolicyProvider),
     );
-    final isCurrentPlaybackItem = snapshot.currentItemId == itemId;
+    final isCurrentPlaybackItem = snapshot.currentItemId == widget.itemId;
     final effectiveDuration = snapshot.duration > Duration.zero
         ? snapshot.duration
-        : fallbackDuration ?? Duration.zero;
+        : widget.fallbackDuration ?? Duration.zero;
     final showTrackLoading = snapshot.isLoading && !snapshot.isSeeking;
     final canControlCurrentItem =
         isCurrentPlaybackItem &&
@@ -900,6 +913,12 @@ class PlayerSeekBarConsumer extends ConsumerWidget {
     final shouldShowShell =
         !snapshot.isError &&
         (isCurrentPlaybackItem || effectiveDuration > Duration.zero);
+    _logVisibility(
+      visible: shouldShowShell,
+      isCurrentPlaybackItem: isCurrentPlaybackItem,
+      effectiveDuration: effectiveDuration,
+      snapshot: snapshot,
+    );
     if (!shouldShowShell) {
       return const SizedBox.shrink();
     }
@@ -916,18 +935,43 @@ class PlayerSeekBarConsumer extends ConsumerWidget {
       previewPosition: isCurrentPlaybackItem
           ? snapshot.seekPreviewPosition
           : null,
-      thumbnailAssetPath: thumbnailAssetPath,
+      thumbnailAssetPath: widget.thumbnailAssetPath,
       previewConfig: previewConfig,
       isPassiveTrack: effectiveDuration <= Duration.zero,
       trackFadeDuration: trackFadeDuration,
       isDragging: snapshot.isSeeking,
       showTrackLoading: isCurrentPlaybackItem && showTrackLoading,
       enabled: canSeek,
-      onDragStart: canControlCurrentItem ? onSeekStart : null,
-      onDragUpdate: canControlCurrentItem ? onSeekUpdate : null,
-      onDragEnd: canControlCurrentItem ? onSeekEnd : null,
-      onDragCancel: canControlCurrentItem ? onSeekCancel : null,
+      onDragStart: canControlCurrentItem ? widget.onSeekStart : null,
+      onDragUpdate: canControlCurrentItem ? widget.onSeekUpdate : null,
+      onDragEnd: canControlCurrentItem ? widget.onSeekEnd : null,
+      onDragCancel: canControlCurrentItem ? widget.onSeekCancel : null,
     );
+  }
+
+  void _logVisibility({
+    required bool visible,
+    required bool isCurrentPlaybackItem,
+    required Duration effectiveDuration,
+    required PlayerSeekBarSnapshot snapshot,
+  }) {
+    final message = [
+      'visible=$visible',
+      'item=${widget.itemId}',
+      'playbackItem=${snapshot.currentItemId}',
+      'current=$isCurrentPlaybackItem',
+      'status=${snapshot.status.name}',
+      'source=${snapshot.currentSource != null}',
+      'durationMs=${effectiveDuration.inMilliseconds}',
+      'fallbackMs=${widget.fallbackDuration?.inMilliseconds ?? 0}',
+      'loading=${snapshot.isLoading}',
+      'error=${snapshot.isError}',
+    ].join(' ');
+    if (_lastVisibilityLog == message) {
+      return;
+    }
+    _lastVisibilityLog = message;
+    debugPrint('[PlayerSeekBar] ${visible ? 'show' : 'hide'}: $message');
   }
 }
 

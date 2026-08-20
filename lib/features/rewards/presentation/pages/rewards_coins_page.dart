@@ -553,7 +553,6 @@ class _CheckInPanel extends StatelessWidget {
             child: Container(
               width: double.infinity,
               height: 44,
-              margin: EdgeInsetsGeometry.symmetric(horizontal: 8),
               decoration: BoxDecoration(
                 color: canCheckIn ? null : _disabledButton,
                 borderRadius: BorderRadius.circular(5),
@@ -837,9 +836,11 @@ class _RewardTaskCard extends StatelessWidget {
                   onTap: task.claimed ? null : onTap,
                   borderRadius: BorderRadius.circular(4),
                   child: Center(
-                    child: Padding(
+                    child: Container(
+                      width: 78,
+                      alignment: Alignment.center,
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
+                        horizontal: 2,
                         vertical: 6,
                       ),
                       child: Text(

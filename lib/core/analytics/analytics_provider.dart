@@ -4,7 +4,6 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/user_info_store.dart';
-import '../channel/channel_config_service.dart';
 import '../../features/entitlement/application/entitlement_controller.dart';
 import '../runtime/api_lang_provider.dart';
 import '../runtime/api_platform_provider.dart';
@@ -22,7 +21,12 @@ import 'analytics_service.dart';
 final analyticsContextProvider = Provider<AnalyticsContext>((ref) {
   final userInfo = ref.watch(userInfoStoreProvider);
   final entitlement = ref.watch(entitlementControllerProvider);
-  final channel = ref.watch(channelConfigServiceProvider).cachedConfig;
+  // 渠道配置异步完成时，FutureProvider 会通知此上下文重建。AnalyticsService
+  // 每次创建新事件都会 read 当前上下文，所以只影响之后的新事件；已入队事件仍保留
+  // 创建时的参数快照。
+  final channel = ref
+      .watch(channelConfigProvider)
+      .when(data: (value) => value, loading: () => null, error: (_, _) => null);
   final page = ref.watch(analyticsPageContextProvider);
 
   return AnalyticsContext(
@@ -45,7 +49,10 @@ final analyticsUploadSinkProvider = Provider<AnalyticsBatchUploadEventSink>((
   ref,
 ) {
   final sink = AnalyticsBatchUploadEventSink(
-    apiClient: ref.watch(apiClientProvider),
+    apiClientReader: () => ref.read(apiClientProvider),
+    // 启动事件必须等认证后的用户资料或权益请求结果；由 App bootstrap
+    // 调用 enableUploads 后才允许真正请求 batch-upload。
+    uploadsEnabled: false,
   );
   unawaited(sink.initialize());
   final subscription = Connectivity().onConnectivityChanged.listen((results) {

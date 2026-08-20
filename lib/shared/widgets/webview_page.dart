@@ -6,7 +6,10 @@ import 'package:go_router/go_router.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../app/router/route_paths.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/theme/app_colors.dart';
+import '../../shared/url/external_url_launcher.dart';
+import '../../shared/widgets/app_empty_state.dart';
 
 typedef WebViewPageLifecycleCallback =
     Future<void> Function(WebViewController controller, String url);
@@ -23,6 +26,10 @@ class WebViewPage extends ConsumerStatefulWidget {
   final WebViewPageLifecycleCallback? onPageStarted;
   final WebViewPageLifecycleCallback? onPageFinished;
 
+  /// 设为 false 时，由外层页面全权处理系统返回。用于具备 H5 回退协议的页面，
+  /// 避免本组件的默认 `go('/home')` 兜底与外层 PopScope 发生竞争。
+  final bool handlesSystemBack;
+
   const WebViewPage({
     super.key,
     required this.url,
@@ -33,6 +40,7 @@ class WebViewPage extends ConsumerStatefulWidget {
     this.onPageStarted,
     this.onPageFinished,
     this.feedbackColor,
+    this.handlesSystemBack = true,
   });
 
   @override
@@ -43,7 +51,6 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
   WebViewController? _controller;
   bool _isLoading = true;
   bool _hasMainFrameError = false;
-  _WebViewFailureKind _failureKind = _WebViewFailureKind.none;
   int _controllerGeneration = 0;
 
   @override
@@ -55,7 +62,7 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
   Future<void> _initializeController() async {
     final uri = _parseH5Uri();
     if (uri == null) {
-      _markFailed(_WebViewFailureKind.invalidUrl);
+      _markFailed();
       return;
     }
 
@@ -76,7 +83,6 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
         setState(() {
           _controller = controller;
           _controllerGeneration++;
-          _failureKind = _WebViewFailureKind.none;
           _hasMainFrameError = false;
           _isLoading = true;
         });
@@ -89,13 +95,13 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
         await controller.loadRequest(uri);
       } catch (error) {
         debugPrint('[WebView] Page load failed: ${widget.url}, error=$error');
-        _markFailed(_WebViewFailureKind.pageLoad);
+        _markFailed();
       }
     } catch (error) {
       debugPrint(
         '[WebView] Initialization failed: ${widget.url}, error=$error',
       );
-      _markFailed(_WebViewFailureKind.initialization);
+      _markFailed();
       return;
     }
   }
@@ -104,7 +110,6 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
     return NavigationDelegate(
       onPageStarted: (String url) {
         debugPrint('[WebView] Page started: $url');
-        _failureKind = _WebViewFailureKind.none;
         _hasMainFrameError = false;
         _setLoading(true);
         widget.onPageStarted?.call(controller, url);
@@ -129,11 +134,27 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
           'description=${error.description}',
         );
         if (error.isForMainFrame ?? true) {
-          _markFailed(_WebViewFailureKind.pageLoad);
+          _markFailed();
         }
       },
-      onNavigationRequest: (request) {
+      onNavigationRequest: (request) async {
         debugPrint('[WebView] Navigation request: ${request.url}');
+        final uri = Uri.tryParse(request.url);
+        // H5 页面可能尝试打开宿主 App 的自定义 scheme（例如 baiduboxapp://）。
+        // 优先交由系统外部应用处理；无处理应用时保留当前 H5，不能让 WebView
+        // 自己加载并回调 main-frame error。
+        if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http')) {
+          final opened = uri != null && uri.scheme.isNotEmpty
+              ? await ref.read(externalUrlLauncherProvider).open(request.url)
+              : false;
+          debugPrint(
+            opened
+                ? '[WebView] Opened external navigation: ${request.url}'
+                : '[WebView] Blocked unsupported navigation: ${request.url}',
+          );
+          // 外部跳转已由系统处理（或系统不支持），均禁止 WebView 内部继续导航。
+          return NavigationDecision.prevent;
+        }
         return NavigationDecision.navigate;
       },
     );
@@ -148,48 +169,20 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
         : null;
   }
 
-  void _markFailed(_WebViewFailureKind failureKind) {
+  void _markFailed() {
     if (!mounted) {
       return;
     }
     setState(() {
-      _failureKind = failureKind;
       _hasMainFrameError = true;
       _isLoading = false;
     });
   }
 
   void _retry() {
-    switch (_failureKind) {
-      case _WebViewFailureKind.initialization:
-        unawaited(_initializeController());
-        return;
-      case _WebViewFailureKind.pageLoad:
-        final controller = _controller;
-        if (controller != null) {
-          setState(() {
-            _hasMainFrameError = false;
-            _isLoading = true;
-          });
-          unawaited(controller.reload());
-        }
-        return;
-      case _WebViewFailureKind.invalidUrl:
-        unawaited(_retryInvalidUrl());
-        return;
-      case _WebViewFailureKind.none:
-        return;
-    }
-  }
-
-  Future<void> _retryInvalidUrl() async {
-    setState(() {
-      _hasMainFrameError = false;
-      _isLoading = true;
-    });
-    // 无效地址不会真的发起导航；短暂加载态让点击有明确反馈，再显示失败页。
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    _markFailed(_WebViewFailureKind.invalidUrl);
+    // 所有失败均从原始 URL 重新创建并加载，包含无效 URL。无效 URL 会立即回到
+    // 空状态，不再以延时 loading 制造“正在重试”的假象。
+    unawaited(_initializeController());
   }
 
   void _setLoading(bool isLoading) {
@@ -210,6 +203,71 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
 
   @override
   Widget build(BuildContext context) {
+    final page = Scaffold(
+      backgroundColor: AppColors.black,
+      appBar: widget.showAppBar
+          ? AppBar(
+              backgroundColor: AppColors.black,
+              leading: IconButton(
+                icon: const Icon(
+                  Icons.chevron_left_rounded,
+                  color: AppColors.textPrimary,
+                  size: 28,
+                ),
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                    return;
+                  }
+                  context.go(RoutePaths.home);
+                },
+              ),
+              title: Text(
+                widget.title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: AppColors.textPrimary,
+                  // fontSize: 18,
+                  // fontWeight: FontWeight.w700,
+                ),
+              ),
+              centerTitle: true,
+            )
+          : null,
+      body:
+
+      Stack(
+        children: [
+          if (_controller != null)
+            WebViewWidget(
+              key: ValueKey('webview_$_controllerGeneration'),
+              controller: _controller!,
+            ),
+          if (_hasMainFrameError)
+            Positioned.fill(
+              child: Center(
+                child: AppEmptyState(
+                  message: context.l10n.categoryEmpty,
+                  buttonLabel: context.l10n.retry,
+                  onButtonPressed: _retry,
+                ),
+              ),
+            ),
+          if (_isLoading)
+            Positioned.fill(
+              // 在 H5 首帧完成前保持与 WebView 相同的黑色背景。
+              child: ColoredBox(
+                color: AppColors.black,
+                child: Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (!widget.handlesSystemBack) {
+      return page;
+    }
     final canPop = context.canPop();
     return PopScope(
       canPop: canPop,
@@ -218,78 +276,7 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
           context.go(RoutePaths.home);
         }
       },
-      child: Scaffold(
-        backgroundColor: AppColors.black,
-        appBar: widget.showAppBar
-            ? AppBar(
-                backgroundColor: AppColors.black,
-                leading: IconButton(
-                  icon: const Icon(
-                    Icons.chevron_left_rounded,
-                    color: AppColors.textPrimary,
-                    size: 28,
-                  ),
-                  onPressed: () {
-                    if (context.canPop()) {
-                      context.pop();
-                      return;
-                    }
-                    context.go(RoutePaths.home);
-                  },
-                ),
-                title: Text(
-                  widget.title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.textPrimary,
-                    // fontSize: 18,
-                    // fontWeight: FontWeight.w700,
-                  ),
-                ),
-                centerTitle: true,
-              )
-            : null,
-        body: Stack(
-          children: [
-            if (_controller != null)
-              WebViewWidget(
-                key: ValueKey('webview_$_controllerGeneration'),
-                controller: _controller!,
-              ),
-            if (_hasMainFrameError)
-              Positioned.fill(
-                child: ColoredBox(
-                  color: widget.feedbackColor ?? AppColors.white,
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.error_outline_rounded, size: 32),
-                        const SizedBox(height: 12),
-                        TextButton(
-                          onPressed: _retry,
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            if (_isLoading)
-              Positioned.fill(
-                // Keep the native WebView's default white first frame hidden
-                // until the H5 page has finished rendering.
-                child: ColoredBox(
-                  color: widget.feedbackColor ?? AppColors.white,
-                  child: Center(
-                    child: CircularProgressIndicator(color: AppColors.primary),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
+      child: page,
     );
   }
 }
-
-enum _WebViewFailureKind { none, initialization, pageLoad, invalidUrl }

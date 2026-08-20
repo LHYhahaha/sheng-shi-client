@@ -60,6 +60,7 @@ class StoreState {
     required this.iapProductDetails,
     required this.paymentMethods,
     required this.selectedPaymentMethodCode,
+    this.paymentRuleId,
     this.error,
   });
 
@@ -76,6 +77,7 @@ class StoreState {
       iapProductDetails = const {},
       paymentMethods = const [],
       selectedPaymentMethodCode = null,
+      paymentRuleId = null,
       error = null;
 
   final bool isLoading;
@@ -90,6 +92,7 @@ class StoreState {
   final Map<String, ProductDetails> iapProductDetails;
   final List<PaymentMethodOption> paymentMethods;
   final String? selectedPaymentMethodCode;
+  final int? paymentRuleId;
   final Object? error;
 
   List<StorePackage> get packages => [...coinPackages, ...vipPackages];
@@ -126,10 +129,12 @@ class StoreState {
     Map<String, ProductDetails>? iapProductDetails,
     List<PaymentMethodOption>? paymentMethods,
     String? selectedPaymentMethodCode,
+    int? paymentRuleId,
     Object? error,
     bool clearError = false,
     bool clearConfirmation = false,
     bool clearPurchaseFailure = false,
+    bool clearPaymentRuleId = false,
   }) {
     return StoreState(
       isLoading: isLoading ?? this.isLoading,
@@ -149,6 +154,9 @@ class StoreState {
       paymentMethods: paymentMethods ?? this.paymentMethods,
       selectedPaymentMethodCode:
           selectedPaymentMethodCode ?? this.selectedPaymentMethodCode,
+      paymentRuleId: clearPaymentRuleId
+          ? null
+          : paymentRuleId ?? this.paymentRuleId,
       error: clearError ? null : error ?? this.error,
     );
   }
@@ -285,7 +293,9 @@ class StoreController extends Notifier<StoreState> {
     }
 
     try {
+      state = state.copyWith(clearPaymentRuleId: true);
       final options = await _fetchPaymentOptions(package);
+      state = state.copyWith(paymentRuleId: options.ruleId);
       final supportedMethods = _supportedPaymentMethods(options.options);
       if (supportedMethods.isEmpty) {
         onPaymentActionResolved?.call(false);
@@ -472,7 +482,7 @@ class StoreController extends Notifier<StoreState> {
           .read(analyticsServiceProvider)
           .track(
             AnalyticsEvent(AnalyticsDefinitions.paymentStart, {
-              'payment_method_id': paymentMethod?.methodCode ?? 'google_play',
+              'payment_method_id': state.paymentRuleId?.toString() ?? '0',
               'payment_method_type': PayChannel.analyticsPaymentMethodTypeFor(
                 paymentMethod?.payChannel ?? PayChannel.google,
               ),

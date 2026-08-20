@@ -58,28 +58,43 @@ class AnalyticsInMemoryEventSink implements AnalyticsEventSink {
 /// payload，因此重试时不会改变 event_id 和 event_time。
 class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
   AnalyticsBatchUploadEventSink({
-    required ApiClient apiClient,
+    required ApiClient Function() apiClientReader,
     this.batchSize = 20,
     this.flushDelay = const Duration(seconds: 5),
+    bool uploadsEnabled = true,
   }) : assert(batchSize > 0),
-       _apiClient = apiClient;
+       _apiClientReader = apiClientReader,
+       _uploadsEnabled = uploadsEnabled;
 
-  final ApiClient _apiClient;
+  /// 上传可能在语言切换、测试网络切换之后才由重试计时器触发，因此不能
+  /// 固定创建时的 ApiClient；发送前读取当前实例以带上最新请求上下文。
+  final ApiClient Function() _apiClientReader;
   final int batchSize;
   final Duration flushDelay;
   final List<AnalyticsPayload> _pending = <AnalyticsPayload>[];
   Future<void>? _uploading;
   Future<void>? _initializing;
   Timer? _flushTimer;
+  bool _uploadsEnabled;
 
   static const _pendingStorageKey = 'analytics.pending_events.v1';
 
   static const _trackSignSecret =
       '17dce3b10ae0a0b0a337fa266b11cd0ac6f2f3f8847f08cb7a3cdb9783aba3ac';
 
-  /// 恢复上次未成功发送的事件，并在应用启动时立即尝试补发。
+  /// 恢复上次未成功发送的事件。
+  ///
+  /// App 启动阶段可先恢复队列、等待用户公共参数就绪，再通过
+  /// [enableUploads] 开始发送，避免首批请求缺少 userId。
   Future<void> initialize() {
-    return _initializing ??= _restorePending().then((_) => _flushPending());
+    return _initializing ??= _restorePending();
+  }
+
+  /// 开启上传并立即发送已恢复或已入队的事件。
+  Future<void> enableUploads() async {
+    _uploadsEnabled = true;
+    await initialize();
+    await _flushPending();
   }
 
   @override
@@ -95,6 +110,9 @@ class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
     }
     _pending.add(payload);
     await _persistPending();
+    if (!_uploadsEnabled) {
+      return;
+    }
     if (_pending.length >= batchSize) {
       await _flushPending();
       return;
@@ -105,6 +123,7 @@ class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
   /// 供切后台、网络恢复等时机立即补发。
   Future<void> flush() async {
     await initialize();
+    if (!_uploadsEnabled) return;
     await _flushPending();
   }
 
@@ -144,7 +163,7 @@ class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
         utf8.encode(_trackSignSecret),
       ).convert(utf8.encode('$timestamp\n$bodySha256')).toString();
       try {
-        await _apiClient.post<Map<String, Object?>>(
+        await _apiClientReader().post<Map<String, Object?>>(
           '/api/analytics/event/batch-upload',
           data: rawBody,
           options: Options(

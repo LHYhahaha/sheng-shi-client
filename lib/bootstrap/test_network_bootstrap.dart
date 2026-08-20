@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/test_network_config.dart';
 import '../core/network/test_network_config_dialog.dart';
 import '../core/runtime/startup_loading_timing.dart';
+import '../app/presentation/widgets/novashort_splash_page.dart';
 
 /// 测试网络启动闸门。
 ///
@@ -49,10 +50,7 @@ class _TestNetworkBootstrapState extends ConsumerState<TestNetworkBootstrap> {
     return MaterialApp(
       navigatorKey: _navigatorKey,
       debugShowCheckedModeBanner: false,
-      home: const Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(child: CircularProgressIndicator()),
-      ),
+      home: const NovaShortSplashPage(),
     );
   }
 

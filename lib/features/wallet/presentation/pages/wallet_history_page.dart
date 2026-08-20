@@ -591,7 +591,9 @@ class _CoinRewardRecordRow extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                record.dateLabel,
+                record.validityLabelText == null
+                    ? record.dateLabel
+                    : context.l10n.walletText(record.validityLabelText!),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(

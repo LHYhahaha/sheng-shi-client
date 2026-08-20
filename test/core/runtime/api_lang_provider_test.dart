@@ -11,9 +11,14 @@ void main() {
       expect(apiLangFromLocale(const Locale('zh')), 'zh');
     });
 
-    test('unsupported language falls back to en', () {
-      expect(apiLangFromLocale(const Locale('es')), 'en');
-      expect(apiLangFromLocale(const Locale('fr')), 'en');
+    test('preserves server-configured language variants', () {
+      expect(apiLangFromLocale(const Locale('es')), 'es');
+      expect(
+        apiLangFromLocale(
+          Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'),
+        ),
+        'zh-Hant',
+      );
     });
   });
 
@@ -31,6 +36,6 @@ void main() {
     container
         .read(appLocaleControllerProvider.notifier)
         .select(const Locale('es'));
-    expect(container.read(apiLangProvider), 'en');
+    expect(container.read(apiLangProvider), 'es');
   });
 }

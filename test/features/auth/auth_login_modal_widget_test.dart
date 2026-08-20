@@ -1,5 +1,6 @@
 import 'package:drama_client/core/runtime/install_id_provider.dart';
 import 'package:drama_client/features/auth/data/auth_repository_provider.dart';
+import 'package:drama_client/features/auth/application/facebook_login_config_provider.dart';
 import 'package:drama_client/features/auth/domain/auth_repository.dart';
 import 'package:drama_client/features/auth/domain/auth_session.dart';
 import 'package:drama_client/features/auth/domain/delete_account_result.dart';
@@ -17,9 +18,7 @@ import 'package:go_router/go_router.dart';
 void main() {
   testWidgets('profile login page back keeps guest session', (tester) async {
     await tester.pumpWidget(
-      _buildRoutedAuthTestApp(
-        authRepository: _GuestAuthRepository(),
-      ),
+      _buildRoutedAuthTestApp(authRepository: _GuestAuthRepository()),
     );
     await tester.pump();
 
@@ -40,9 +39,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      _buildRoutedAuthTestApp(
-        authRepository: _GuestAuthRepository(),
-      ),
+      _buildRoutedAuthTestApp(authRepository: _GuestAuthRepository()),
     );
     await tester.pump();
 
@@ -75,6 +72,7 @@ Widget _buildRoutedAuthTestApp({required AuthRepository authRepository}) {
   return ProviderScope(
     overrides: [
       authRepositoryProvider.overrideWithValue(authRepository),
+      facebookLoginEnabledProvider.overrideWith((ref) async => true),
       installIdProvider.overrideWith((ref) async => 'test-install-id'),
       entitlementRepositoryProvider.overrideWithValue(
         MockEntitlementRepository.guest(),
@@ -123,9 +121,6 @@ class _GuestAuthRepository implements AuthRepository {
   @override
   Future<DeleteAccountResult> deleteAccount() async {
     _session = const AuthSession.guest();
-    return DeleteAccountResult(
-      session: _session,
-      shouldExitApp: true,
-    );
+    return DeleteAccountResult(session: _session, shouldExitApp: true);
   }
 }

@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../features/bottom_tab_config/application/bottom_tab_config_controller.dart';
 import '../../../features/bottom_tab_config/application/dynamic_tab_analytics.dart';
 import '../../../features/bottom_tab_config/data/dto/bottom_tab_response_dto.dart';
-import '../../widgets/app_cached_network_image.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../theme/app_colors.dart';
 
@@ -249,16 +252,13 @@ class _AppBottomNavigationItem extends StatelessWidget {
 
   Widget _icon(Color color) {
     final url = selected ? selectedIconUrl : normalIconUrl;
-    if (url != null) {
-      return AppCachedNetworkImage(
+    if (url != null && url.trim().isNotEmpty) {
+      return _RemoteBottomTabIcon(
         imageUrl: url,
+        preloadImageUrls: [normalIconUrl, selectedIconUrl],
         width: AppBottomNavigation._iconSize,
         height: AppBottomNavigation._iconSize,
-        fit: BoxFit.contain,
-        // 加载期间保持透明，避免动态图标尚未就绪时短暂展示旧的本地图标；
-        // 明确加载失败后才回退到原状态图标。
-        placeholder: const SizedBox.expand(),
-        errorWidget: _localIcon(color),
+        fallback: _localIcon(color),
       );
     }
     return _localIcon(color);
@@ -274,6 +274,139 @@ class _AppBottomNavigationItem extends StatelessWidget {
       errorBuilder: (context, error, stackTrace) =>
           Icon(fallbackIcon, size: AppBottomNavigation._iconSize, color: color),
     );
+  }
+}
+
+/// 动态底部 Tab 图标先下载到与 [CachedNetworkImage] 相同的默认磁盘缓存，再根据
+/// 实际字节判断格式。SVG 必须先解析成功，位图必须先完成 Flutter 解码，避免把
+/// “看起来像 SVG/PNG 的 URL”直接展示成空白图标。
+class _RemoteBottomTabIcon extends StatefulWidget {
+  const _RemoteBottomTabIcon({
+    required this.imageUrl,
+    required this.preloadImageUrls,
+    required this.width,
+    required this.height,
+    required this.fallback,
+  });
+
+  final String imageUrl;
+  final List<String?> preloadImageUrls;
+  final double width;
+  final double height;
+  final Widget fallback;
+
+  @override
+  State<_RemoteBottomTabIcon> createState() => _RemoteBottomTabIconState();
+}
+
+class _RemoteBottomTabIconState extends State<_RemoteBottomTabIcon> {
+  final Map<String, _RemoteIconAsset> _assets = {};
+  final Set<String> _failedUrls = {};
+  final Map<String, int> _loadGenerations = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _preloadAll();
+  }
+
+  @override
+  void didUpdateWidget(covariant _RemoteBottomTabIcon oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _preloadAll();
+  }
+
+  void _preloadAll() {
+    for (final url in widget.preloadImageUrls) {
+      final normalizedUrl = url?.trim();
+      if (normalizedUrl == null || normalizedUrl.isEmpty) {
+        continue;
+      }
+      _preload(normalizedUrl);
+    }
+  }
+
+  Future<void> _preload(String imageUrl) async {
+    if (_assets.containsKey(imageUrl) || _failedUrls.contains(imageUrl)) {
+      return;
+    }
+    final generation = (_loadGenerations[imageUrl] ?? 0) + 1;
+    _loadGenerations[imageUrl] = generation;
+    try {
+      final file = await DefaultCacheManager().getSingleFile(imageUrl);
+      final bytes = await file.readAsBytes();
+      final kind = _RemoteIconAsset.detectKind(bytes);
+      if (kind == _RemoteIconKind.svg) {
+        if (!mounted || generation != _loadGenerations[imageUrl]) return;
+        final picture = await vg.loadPicture(SvgBytesLoader(bytes), context);
+        picture.picture.dispose();
+      } else {
+        final codec = await ui.instantiateImageCodec(bytes);
+        codec.dispose();
+      }
+      if (!mounted || generation != _loadGenerations[imageUrl]) return;
+      setState(() {
+        _assets[imageUrl] = _RemoteIconAsset(kind: kind, bytes: bytes);
+      });
+    } catch (error) {
+      debugPrint('[BottomTabIcon] preload failed: url=$imageUrl error=$error');
+      if (!mounted || generation != _loadGenerations[imageUrl]) return;
+      setState(() => _failedUrls.add(imageUrl));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final asset = _assets[widget.imageUrl];
+    if (asset == null) {
+      // 配置了远程图标时，验证完成前不显示本地图标，避免本地/远程图在切换时
+      // 互相闪动；仅当该远程资源明确加载失败才触发兜底。
+      return _failedUrls.contains(widget.imageUrl)
+          ? widget.fallback
+          : const SizedBox.shrink();
+    }
+    return switch (asset.kind) {
+      _RemoteIconKind.svg => SvgPicture.memory(
+        asset.bytes,
+        width: widget.width,
+        height: widget.height,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          debugPrint('[BottomTabIcon] SVG render failed: $error');
+          return widget.fallback;
+        },
+      ),
+      _RemoteIconKind.raster => Image.memory(
+        asset.bytes,
+        width: widget.width,
+        height: widget.height,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.low,
+        errorBuilder: (context, error, stackTrace) {
+          debugPrint('[BottomTabIcon] raster render failed: $error');
+          return widget.fallback;
+        },
+      ),
+    };
+  }
+}
+
+enum _RemoteIconKind { svg, raster }
+
+class _RemoteIconAsset {
+  const _RemoteIconAsset({required this.kind, required this.bytes});
+
+  final _RemoteIconKind kind;
+  final Uint8List bytes;
+
+  /// 不依赖 URL 后缀；CDN 即使不给 `.svg` 扩展名也能正常识别。
+  static _RemoteIconKind detectKind(Uint8List bytes) {
+    final probe = String.fromCharCodes(bytes.take(1024)).trimLeft();
+    return probe.startsWith('<svg') ||
+            probe.startsWith('<?xml') ||
+            probe.contains('<svg ')
+        ? _RemoteIconKind.svg
+        : _RemoteIconKind.raster;
   }
 }
 

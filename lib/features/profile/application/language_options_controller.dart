@@ -8,13 +8,12 @@ const fallbackLanguageOptions = <LanguageOption>[
   LanguageOption(label: '中文', code: 'zh'),
 ];
 
-final languageOptionsProvider = FutureProvider<List<LanguageOption>>((
-  ref,
-) async {
-  final repository = ref.watch(languageOptionsRepositoryProvider);
-  final options = await repository.fetchGlobalLanguages();
-  if (options.isEmpty) {
-    return fallbackLanguageOptions;
-  }
-  return options;
-});
+final languageOptionsProvider =
+    FutureProvider.autoDispose<List<LanguageOption>>((ref) async {
+      final repository = ref.watch(languageOptionsRepositoryProvider);
+      final options = await repository.fetchGlobalLanguages();
+      if (options.isEmpty) {
+        return fallbackLanguageOptions;
+      }
+      return options;
+    });

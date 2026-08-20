@@ -9,6 +9,8 @@ class PaymentMethodOptions {
     required this.payScene,
     required this.productId,
     required this.productType,
+    required this.ruleId,
+    required this.ruleName,
     required this.showCashier,
   });
 
@@ -20,6 +22,8 @@ class PaymentMethodOptions {
   final String payScene;
   final int productId;
   final String productType;
+  final int ruleId;
+  final String ruleName;
   final bool showCashier;
 }
 

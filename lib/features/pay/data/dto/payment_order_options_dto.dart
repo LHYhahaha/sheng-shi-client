@@ -13,6 +13,8 @@ class PaymentOrderOptionsDto {
     required this.payScene,
     required this.productId,
     required this.productType,
+    required this.ruleId,
+    required this.ruleName,
     required this.showCashier,
   });
 
@@ -24,6 +26,8 @@ class PaymentOrderOptionsDto {
   final String payScene;
   final int productId;
   final String productType;
+  final int ruleId;
+  final String ruleName;
   final bool showCashier;
 
   factory PaymentOrderOptionsDto.fromJson(Object? json) {
@@ -64,6 +68,12 @@ class PaymentOrderOptionsDto {
         'productType',
         dtoName: dtoName,
       ),
+      ruleId: JsonFieldParser.requireInt(map, 'ruleId', dtoName: dtoName),
+      ruleName: JsonFieldParser.requireString(
+        map,
+        'ruleName',
+        dtoName: dtoName,
+      ),
       showCashier: JsonFieldParser.requireBool(
         map,
         'showCashier',
@@ -81,6 +91,8 @@ class PaymentOrderOptionsDto {
     payScene: payScene,
     productId: productId,
     productType: productType,
+    ruleId: ruleId,
+    ruleName: ruleName,
     showCashier: showCashier,
   );
 }

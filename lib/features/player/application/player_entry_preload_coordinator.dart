@@ -83,8 +83,14 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
   void prepareVisibleCandidate({
     required String dramaId,
     required String trigger,
+    PlayerEntryResumeHint? resumeHint,
   }) {
-    _prepare(dramaId: dramaId, trigger: trigger, isUserIntent: false);
+    _prepare(
+      dramaId: dramaId,
+      trigger: trigger,
+      isUserIntent: false,
+      resumeHint: resumeHint,
+    );
   }
 
   /// 普通播放器路由创建时调用，覆盖所有非 For You 入口。
@@ -106,6 +112,25 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
       preferredEpisodeId: episodeId == '1' ? null : episodeId,
       resumeHint: resumeHint,
     );
+    _promotePendingForUserIntent(dramaId);
+  }
+
+  /// 点击已命中的可见候选时，立即把剩余关键分片提升为播放优先级。路由仍然
+  /// 立即跳转；这里只改变在途 HLS 后续请求，避免等待 PlayerPage 建立后才接管。
+  void _promotePendingForUserIntent(String dramaId) {
+    final pending = ref.read(playerStartupPreloadControllerProvider);
+    if (pending.status != PlayerStartupPreloadStatus.pending ||
+        pending.dramaId != dramaId ||
+        pending.itemId == null ||
+        pending.sourceUrl == null) {
+      return;
+    }
+    ref
+        .read(playerStartupPreloadControllerProvider.notifier)
+        .promotePendingForActivePlayback(
+          itemId: pending.itemId!,
+          sourceUrl: pending.sourceUrl!,
+        );
   }
 
   void _prepare({
@@ -203,6 +228,8 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
     required String trigger,
     String? extra,
   }) {
+    const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');
+    if (!shouldPrint) return;
     debugPrint(
       '[player-entry-preload] coordinator=$event dramaId=$dramaId '
       'trigger=$trigger${extra == null ? '' : ' $extra'}',

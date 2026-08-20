@@ -16,6 +16,21 @@ class PlayerAccessPresenter {
     );
   }
 
+  /// 撤销当前会话内的临时放行。
+  ///
+  /// 会员过期、权益刷新或解锁失败后，不能保留旧的 allowPlay 决策；否则播放已经
+  /// 被暂停，UI 仍会把锁集渲染为 playable，从而不显示解锁入口。
+  PlayerAccessPresenter withoutPlayableItem(String itemId) {
+    if (!_entitlementPlayableItemIds.contains(itemId)) {
+      return this;
+    }
+    return PlayerAccessPresenter(
+      entitlementPlayableItemIds: {
+        ..._entitlementPlayableItemIds.where((id) => id != itemId),
+      },
+    );
+  }
+
   bool isEntitlementPlayable(PlayerFeedItem item) {
     return !item.episode.isLocked ||
         _entitlementPlayableItemIds.contains(item.id);

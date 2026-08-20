@@ -2,6 +2,21 @@ import 'package:drama_client/core/adjust/adjust_event_reporter.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('reports app_first_open with the required Adjust token', () async {
+    final client = _RecordingEventClient();
+    final reporter = AdjustEventReporter(
+      eventClient: client,
+      homeFirstViewStore: _FirstViewStore(),
+    );
+
+    reporter.reportAppFirstOpen();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(client.events, [
+      const _RecordedEvent(AdjustEventTokens.appFirstOpen, {}),
+    ]);
+  });
+
   test('reports checkout_start with the required product parameters', () async {
     final client = _RecordingEventClient();
     final reporter = AdjustEventReporter(
@@ -41,10 +56,28 @@ void main() {
       const _RecordedEvent(AdjustEventTokens.homeFirstView, {}),
     ]);
   });
+
+  test('requests pending Adjust event recovery at startup', () async {
+    final client = _RecordingEventClient();
+    final reporter = AdjustEventReporter(
+      eventClient: client,
+      homeFirstViewStore: _FirstViewStore(),
+    );
+
+    await reporter.recoverPendingEvents();
+
+    expect(client.recoveryRequested, isTrue);
+  });
 }
 
 class _RecordingEventClient implements AdjustEventClient {
   final events = <_RecordedEvent>[];
+  var recoveryRequested = false;
+
+  @override
+  Future<void> recoverPendingEvents() async {
+    recoveryRequested = true;
+  }
 
   @override
   void track(String eventToken, {Map<String, String> parameters = const {}}) {

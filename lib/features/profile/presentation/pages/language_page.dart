@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/active/app_active_reporter.dart';
 import '../../../../core/i18n/i18n.dart';
 import '../../../../core/locale/app_locale_controller.dart';
 import '../../application/language_options_controller.dart';
@@ -23,7 +26,8 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
 
   String _getEffectiveLanguageCode() {
     final currentLocale = ref.read(appLocaleControllerProvider);
-    return _tempSelectedLanguageCode ?? currentLocale.languageCode;
+    return _tempSelectedLanguageCode ??
+        AppLocaleController.languageCodeFromLocale(currentLocale);
   }
 
   void _onLanguageSelected(String languageCode) {
@@ -40,8 +44,11 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
       return;
     }
 
-    final languageCode = _tempSelectedLanguageCode;
-    if (languageCode != null) {
+    final selectedLanguageCode = _tempSelectedLanguageCode;
+    if (selectedLanguageCode != null) {
+      final languageCode = AppLocaleController.canonicalLanguageCode(
+        selectedLanguageCode,
+      );
       setState(() {
         _isSwitching = true;
       });
@@ -51,7 +58,12 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
         await ref
             .read(i18nControllerProvider.notifier)
             .switchLanguage(languageCode);
-        await localeController.selectAndSave(Locale(languageCode));
+        await localeController.selectAndSave(
+          AppLocaleController.localeForLanguageCode(languageCode),
+        );
+        // 切换完成后以新的 Accept-Language 请求活跃上报；上报器会自行读取
+        // 当前 FCM token，已拿到时自动携带 pushToken，且失败不阻塞返回页面。
+        unawaited(ref.read(appActiveReporterProvider).reportAppLaunch());
       } finally {
         if (mounted) {
           setState(() {

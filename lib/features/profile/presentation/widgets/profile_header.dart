@@ -35,7 +35,7 @@ class ProfileHeader extends StatelessWidget {
     final l10n = context.l10n;
     final resolvedDisplayName =
         displayName ??
-        (state.isLoggedIn ? (state.nickname ?? '--') : l10n.profileLogin);
+        (state.isLoggedIn ? (state.nickname ?? '--') : "Log in");
 
     void handleTap() {
       if (onGuestTap != null) {
@@ -68,16 +68,26 @@ class ProfileHeader extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    resolvedDisplayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: AppColors.textPrimary,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      height: 1.3,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        resolvedDisplayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: AppColors.textPrimary,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          height: 1.3,
+                        ),
+                      ),
+                      SizedBox(width: 4),
+                      Image.asset(
+                        "assets/images/profile/log_icon.png",
+                        height: 20,
+                        width: 20,
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 1),
                   GestureDetector(

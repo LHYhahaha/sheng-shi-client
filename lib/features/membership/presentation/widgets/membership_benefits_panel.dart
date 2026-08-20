@@ -75,96 +75,76 @@ class MembershipBenefitsPanel extends StatelessWidget {
             MembershipLayout.benefitsPanelTop +
             bottomInset,
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(40),
-              ),
-              child: Image.asset(
-                'assets/images/membership/membership_benefits_panel_bg.png',
-                fit: BoxFit.fill,
-                alignment: Alignment.topCenter,
-                errorBuilder: (context, error, stackTrace) {
-                  return DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          const Color(0xFF1A1816),
-                          MembershipLayout.background,
-                        ],
-                      ),
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(40),
-                      ),
-                    ),
-                  );
-                },
+          Container(
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage(
+                  "assets/images/membership/vip_bac_border.png",
+                ),
               ),
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  MembershipLayout.horizontalPadding,
-                  MembershipLayout.benefitsTitlePaddingTop,
-                  MembershipLayout.horizontalPadding,
-                  0,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            padding: EdgeInsets.fromLTRB(
+              MembershipLayout.horizontalPadding,
+              MembershipLayout.benefitsTitlePaddingTop,
+              MembershipLayout.horizontalPadding,
+              0,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const _BenefitTitleLine(reverse: true),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text(
-                            l10n.membershipBenefits,
-                            style: textTheme.bodyMedium?.copyWith(
-                              color: _gold,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              height: 1.5,
-                            ),
-                          ),
+                    const _BenefitTitleLine(reverse: true),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        l10n.membershipBenefits,
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: _gold,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          height: 1.5,
                         ),
-                        const _BenefitTitleLine(),
-                      ],
+                      ),
                     ),
-                    const SizedBox(height: 28),
-                    for (var index = 0; index < benefits.length; index++) ...[
-                      _BenefitRow(benefit: benefits[index]),
-                      if (index < benefits.length - 1)
-                        const SizedBox(height: MembershipLayout.benefitsRowGap),
-                    ],
+                    const _BenefitTitleLine(),
                   ],
                 ),
-              ),
-              if (betweenBenefitsAndTips case final Widget content) Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(height: 20),
-                  Divider(height: 1,color: Colors.white.withValues(alpha: 0.12),),
-                  content,
+                const SizedBox(height: 28),
+                for (var index = 0; index < benefits.length; index++) ...[
+                  _BenefitRow(benefit: benefits[index]),
+                  if (index < benefits.length - 1)
+                    const SizedBox(
+                      height: MembershipLayout.benefitsRowGap,
+                    ),
                 ],
-              ),
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  MembershipLayout.horizontalPadding,
-                  16,
-                  MembershipLayout.horizontalPadding,
-                  28 + bottomInset,
+              ],
+            ),
+          ),
+          if (betweenBenefitsAndTips case final Widget content)
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(height: 20),
+                Divider(
+                  height: 1,
+                  color: Colors.white.withValues(alpha: 0.12),
                 ),
-                child: _MembershipTips(tips: tips),
-              ),
-            ],
+                content,
+              ],
+            ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              MembershipLayout.horizontalPadding,
+              16,
+              MembershipLayout.horizontalPadding,
+              28 + bottomInset,
+            ),
+            child: _MembershipTips(tips: tips),
           ),
         ],
       ),

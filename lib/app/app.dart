@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer';
 
 import 'package:app_links/app_links.dart';
 import 'package:bot_toast/bot_toast.dart';
@@ -13,6 +12,7 @@ import '../bootstrap/feature_session_cleanup.dart';
 import '../bootstrap/i18n_bootstrap.dart';
 import '../core/active/app_active_reporter.dart';
 import '../core/adjust/adjust_device_identifier_reporter_provider.dart';
+import '../core/adjust/adjust_event_reporter_provider.dart';
 import '../core/adjust/adjust_service.dart';
 import '../core/account/account_ban_controller.dart';
 import '../core/account/account_banned_overlay.dart';
@@ -31,11 +31,12 @@ import '../core/notification/fcm_notification.dart';
 import '../core/notification/fcm_notification_service.dart';
 import '../core/notification/startup_notification_permission_requester.dart';
 import '../core/notification/startup_notification_permission_reporter.dart';
+import '../core/auth/auth_token_store.dart';
 import '../core/runtime/install_id_provider.dart';
-import '../core/auth/user_info_store.dart';
 import '../core/runtime/startup_loading_timing.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/bottom_tab_config/application/bottom_tab_config_controller.dart';
+import '../features/entitlement/application/entitlement_controller.dart';
 import '../features/pay/application/payment_loading_controller.dart';
 import '../features/player/application/player_entry_preload_coordinator.dart';
 import '../features/popup/application/popup_entry_controller.dart';
@@ -70,13 +71,20 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   StreamSubscription<Uri>? _appLinkSubscription;
   StreamSubscription<FcmNotification>? _fcmNotificationTapSubscription;
   FcmNotificationService? _fcmNotificationService;
+  GoRouter? _router;
+  final Completer<void> _startupAuthenticationReady = Completer<void>();
   final _notificationPermissionRequester =
       StartupNotificationPermissionRequester();
+  int _externalPlayerOpenGeneration = 0;
+  bool _isWaitingForExternalPlayerAuthentication = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    final router = ref.read(appRouterProvider);
+    _router = router;
+    router.routerDelegate.addListener(_handleRootRouteChanged);
     _setPreferredOrientations();
     _listenForAppLinks();
     _fcmNotificationService = widget.fcmNotificationService;
@@ -119,6 +127,9 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         ),
         onDeferredDeeplink: _handleAdjustDeferredDeeplink,
       ).initialize();
+      // 曾在 SDK 会话确认前触发的事件会保留在本地；本次启动也要注册
+      // session-success 后的补发，不能只依赖重新进入播放器。
+      unawaited(ref.read(adjustEventReporterProvider).recoverPendingEvents());
       debugPrint(
         '[StartupSdk] Adjust init request end '
         'elapsedMs=${stopwatch.elapsedMilliseconds}',
@@ -146,8 +157,18 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   void dispose() {
     _appLinkSubscription?.cancel();
     _fcmNotificationTapSubscription?.cancel();
+    _router?.routerDelegate.removeListener(_handleRootRouteChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _handleRootRouteChanged() {
+    final path = _router?.routerDelegate.currentConfiguration.uri.path;
+    // 首页和推荐页的入口弹框由 AppShell 按 Tab 管理。任何 Shell 外页面都不能
+    // 保留根 Overlay；这也覆盖了页面内 push，而不仅是通知和 Deep Link。
+    if (path != RoutePaths.home && path != RoutePaths.forYou) {
+      _cancelAllPopupFlowsForRouteExit();
+    }
   }
 
   void _listenForAppLinks() {
@@ -174,6 +195,10 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       debugPrint('[AppLink] Missing drama_id: $uri');
       return;
     }
+
+    // App Link 可以在首页弹框尚未预加载完成时直接把 App 带到播放器。根 Overlay
+    // 不随路由销毁，必须先取消所有入口位，防止请求回包后覆盖播放器页面。
+    _cancelAllPopupFlowsForRouteExit();
 
     // 当前仅有短剧分享通过 player 深链接回流 App。埋点以成功解析为准，不把
     // 无效 scheme、host 或 drama_id 缺失的外部 Intent 计为分享来源打开。
@@ -203,20 +228,65 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       }
     }
 
+    await _openExternalPlayerWhenAuthenticationReady(
+      dramaId: dramaId,
+      episodeId: '1',
+      trigger: 'app_link',
+    );
+  }
+
+  /// 冷启动外部入口可能在设备登录完成前到达。播放器详情和 source 都要求可用
+  /// token，不能让首次请求把“鉴权尚未就绪”写成播放失败态。
+  Future<bool> _waitForExternalPlayerAuthentication() async {
+    final requestGeneration = ++_externalPlayerOpenGeneration;
+    if (ref.read(authTokenStoreProvider).hasAccessToken) {
+      if (mounted && _isWaitingForExternalPlayerAuthentication) {
+        setState(() => _isWaitingForExternalPlayerAuthentication = false);
+      }
+      return true;
+    }
+    if (mounted) {
+      setState(() => _isWaitingForExternalPlayerAuthentication = true);
+    }
+    await _startupAuthenticationReady.future;
+    if (!mounted || requestGeneration != _externalPlayerOpenGeneration) {
+      return false;
+    }
+    final hasAccessToken = ref.read(authTokenStoreProvider).hasAccessToken;
+    if (!hasAccessToken) {
+      debugPrint(
+        '[ExternalPlayerEntry] Authentication completed without a token; '
+        'player route was not opened.',
+      );
+    }
+    if (mounted) {
+      setState(() => _isWaitingForExternalPlayerAuthentication = false);
+    }
+    return hasAccessToken;
+  }
+
+  Future<void> _openExternalPlayerWhenAuthenticationReady({
+    required String dramaId,
+    required String episodeId,
+    required String trigger,
+  }) async {
+    if (!await _waitForExternalPlayerAuthentication()) {
+      return;
+    }
+    if (!mounted) return;
     preparePlayerEntryPreload(
       context,
       dramaId: dramaId,
-      episodeId: '1',
-      trigger: 'app_link',
+      episodeId: episodeId,
+      trigger: trigger,
     );
-
     final location = RoutePaths.playerLocation(
       dramaId: dramaId,
-      episodeId: '1',
-      trigger: 'app_link',
+      episodeId: episodeId,
+      trigger: trigger,
       userActionAtMs: DateTime.now().millisecondsSinceEpoch,
     );
-    debugPrint('[AppLink] Opening drama $dramaId');
+    debugPrint('[ExternalPlayerEntry] Opening drama $dramaId trigger=$trigger');
     ref.read(appRouterProvider).go(location);
   }
 
@@ -272,18 +342,11 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     if (type == 'player' && dramaId != null && dramaId.isNotEmpty) {
       _cancelPopupForCurrentRouteExit();
       _preparePushEntrySource(notification);
-      preparePlayerEntryPreload(
-        context,
-        dramaId: dramaId,
-        episodeId: episodeId?.isNotEmpty == true ? episodeId! : '1',
-        trigger: 'fcm_notification',
-      );
-      router.go(
-        RoutePaths.playerLocation(
+      unawaited(
+        _openExternalPlayerWhenAuthenticationReady(
           dramaId: dramaId,
           episodeId: episodeId?.isNotEmpty == true ? episodeId! : '1',
           trigger: 'fcm_notification',
-          userActionAtMs: DateTime.now().millisecondsSinceEpoch,
         ),
       );
       return;
@@ -295,18 +358,11 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         dramaId.isNotEmpty) {
       _cancelPopupForCurrentRouteExit();
       _preparePushEntrySource(notification);
-      preparePlayerEntryPreload(
-        context,
-        dramaId: dramaId,
-        episodeId: '1',
-        trigger: 'fcm_notification_detail',
-      );
-      router.go(
-        RoutePaths.playerLocation(
+      unawaited(
+        _openExternalPlayerWhenAuthenticationReady(
           dramaId: dramaId,
           episodeId: '1',
           trigger: 'fcm_notification_detail',
-          userActionAtMs: DateTime.now().millisecondsSinceEpoch,
         ),
       );
       return;
@@ -348,15 +404,11 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   /// 通知离开首页/For You 时，关闭该位置的展示中、预加载中或请求中的弹框。
   /// 否则根路由上的 overlay 会覆盖通知的目标页面。
   void _cancelPopupForCurrentRouteExit() {
-    final placement = AppShellDestinations.popupPlacementForIndex(
-      ref.read(appShellCurrentTabIndexProvider),
-    );
-    final controller = ref.read(popupEntryControllerProvider.notifier);
-    if (placement == null) {
-      controller.finishActivePopupFlow();
-      return;
-    }
-    controller.cancelPlacementFlow(placement);
+    _cancelAllPopupFlowsForRouteExit();
+  }
+
+  void _cancelAllPopupFlowsForRouteExit() {
+    ref.read(popupEntryControllerProvider.notifier).cancelAllPlacementFlows();
   }
 
   void _trackPushNotificationOpen({
@@ -508,18 +560,18 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       await ref.read(authControllerProvider.notifier).load();
       debugPrint('[TokenInit] AuthController.load() completed');
       startupLoadingTiming.mark('auth end');
-      unawaited(
-        ref.read(analyticsLifecycleTrackerProvider).onApplicationReady(),
-      );
+      unawaited(_initializeStartupAnalytics());
       unawaited(_reportAppLaunchSafely());
       unawaited(_requestStartupPopupSafely());
     } catch (e, stackTrace) {
       debugPrint('[TokenInit] Token initialization failed: $e');
       debugPrint('[TokenInit] Stack trace: $stackTrace');
-      // 鉴权失败仍要释放首个 page_view；公共参数会按当前可用信息上报。
-      unawaited(
-        ref.read(analyticsLifecycleTrackerProvider).onApplicationReady(),
-      );
+      // 鉴权失败也要释放首个 page_view；此时直接按当前可用公共参数上报。
+      unawaited(_initializeStartupAnalytics());
+    }
+
+    if (!_startupAuthenticationReady.isCompleted) {
+      _startupAuthenticationReady.complete();
     }
 
     // 认证完成后即可读取动态 Tab；标题尚未拿到远程语言包时会回退到客户端原文案，
@@ -537,6 +589,33 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     startupLoadingTiming.mark('bottom-tabs start');
     await ref.read(bottomTabConfigControllerProvider.notifier).loadOnce();
     startupLoadingTiming.mark('bottom-tabs end');
+  }
+
+  /// 启动埋点的 userId 就绪策略：
+  ///
+  /// 1. 已有有效 token 且本地已恢复 userId，立即上报；
+  /// 2. 有 token 但没有 userId，等待权益接口回写用户资料；
+  /// 3. 权益接口失败或没有 token，不再阻塞启动埋点。
+  ///
+  /// 用户资料后续更新时，AnalyticsService 会在每个新事件创建时重新读取
+  /// analyticsContextProvider，因此后续事件的公共参数会自动带上新的 userId。
+  Future<void> _initializeStartupAnalytics() async {
+    final token = ref.read(authTokenStoreProvider);
+    if (token.hasAccessToken) {
+      await ref.read(userInfoStoreProvider.notifier).waitForHydration();
+      final userId = ref.read(userInfoStoreProvider).userId;
+      if (userId == null || userId.isEmpty) {
+        // AuthController.load 已并行发起同一刷新；这里等待自身的结果即可。
+        // EntitlementController 会将请求失败转换为 false，故不会卡住启动埋点。
+        await ref
+            .read(entitlementControllerProvider.notifier)
+            .refreshFromServer();
+      }
+    }
+
+    if (!mounted) return;
+    await ref.read(analyticsUploadSinkProvider).enableUploads();
+    await ref.read(analyticsLifecycleTrackerProvider).onApplicationReady();
   }
 
   Future<void> _reportAppLaunchSafely() async {
@@ -795,6 +874,8 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
                   ),
                 if (isPaymentLoading && !isBanned)
                   AppBlockingLoadingOverlay(label: paymentLoadingLabel),
+                if (_isWaitingForExternalPlayerAuthentication && !isBanned)
+                  AppBlockingLoadingOverlay(label: context.l10n.loading),
               ],
             ),
           ),

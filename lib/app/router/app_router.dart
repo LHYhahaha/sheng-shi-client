@@ -18,6 +18,7 @@ import '../../features/my_list/presentation/pages/my_list_page.dart';
 import '../../features/player/presentation/pages/player_page.dart';
 import '../../features/player/domain/for_you_player_handoff.dart';
 import '../../features/player/application/player_entry_preload_coordinator.dart';
+import '../../features/popup/application/popup_entry_controller.dart';
 import '../../features/profile/presentation/pages/language_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/profile/presentation/pages/profile_feedback_webview_page.dart';
@@ -35,6 +36,53 @@ import 'route_names.dart';
 import 'route_paths.dart';
 import 'player_route_observer.dart';
 
+/// Root Navigator 上的入口弹框保护。
+///
+/// 首页弹框 Overlay 位于 root Navigator 之上；仅靠 GoRouter 的 location 在某些
+/// push 时会滞后一帧。NavigatorObserver 的 didPush 则与路由入栈同步，能在搜索、
+/// 播放器等页面出现前终止首页/推荐页弹框流程。
+class _PopupEntryRouteObserver extends NavigatorObserver {
+  _PopupEntryRouteObserver(this.ref);
+
+  final Ref ref;
+  bool _cancelScheduled = false;
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _cancelForNonEntryRoute(route);
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    if (newRoute != null) {
+      _cancelForNonEntryRoute(newRoute);
+    }
+  }
+
+  void _cancelForNonEntryRoute(Route<dynamic> route) {
+    final routeName = route.settings.name;
+    // StatefulShellRoute 作为首页容器入栈时没有 name，不能把它当作离开首页；
+    // 否则会在启动阶段提前消费 home_enter，导致 /api/popup 不再发起请求。
+    if (routeName == null) {
+      return;
+    }
+    if (routeName == RouteNames.home || routeName == RouteNames.forYou) {
+      return;
+    }
+    // NavigatorObserver 在 Navigator 的 build/restore 阶段同步回调。不能在这里
+    // 修改 Riverpod provider，延迟到本帧结束后再取消；此时新路由已入栈，且弹框
+    // 图片预加载/展示流程仍会被终止。
+    if (_cancelScheduled) {
+      return;
+    }
+    _cancelScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cancelScheduled = false;
+      ref.read(popupEntryControllerProvider.notifier).cancelAllPlacementFlows();
+    });
+  }
+}
+
 /// 应用路由表。
 ///
 /// 页面跳转统一通过 RoutePaths/RouteNames，避免散落字符串。播放器路由尤其敏感：
@@ -48,6 +96,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       BotToastNavigatorObserver(),
       playerRouteObserver,
       ref.watch(analyticsNavigatorObserverProvider),
+      _PopupEntryRouteObserver(ref),
     ],
     routes: [
       // 底部五个主 tab 使用 indexedStack 保持页面状态。
@@ -121,6 +170,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   defaultTitle: context.l10n.navProfile,
                   child: const ProfilePage(),
                 ),
+                routes: [
+                  // 问题与帮助从 Me 进入，必须归属 Profile branch。若作为 Shell
+                  // 外的顶级路由，Android 返回手势后 StatefulShell 会按默认分支
+                  // 重建，从而让底层错误切到 Home。
+                  GoRoute(
+                    path: 'feedback',
+                    name: RouteNames.profileFeedback,
+                    parentNavigatorKey: appRootNavigatorKey,
+                    builder: (context, state) =>
+                        const ProfileFeedbackWebViewPage(),
+                  ),
+                ],
               ),
             ],
           ),
@@ -229,11 +290,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             title: state.uri.queryParameters['title'] ?? '',
           );
         },
-      ),
-      GoRoute(
-        path: RoutePaths.profileFeedback,
-        name: RouteNames.profileFeedback,
-        builder: (context, state) => const ProfileFeedbackWebViewPage(),
       ),
       GoRoute(
         path: RoutePaths.language,

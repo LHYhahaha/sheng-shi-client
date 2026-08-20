@@ -39,6 +39,7 @@ void main() {
       expect(container.read(entitlementControllerProvider).isMember, isFalse);
     },
   );
+
 }
 
 class _SignedInAuthRepository implements AuthRepository {
@@ -66,9 +67,6 @@ class _SignedInAuthRepository implements AuthRepository {
   @override
   Future<DeleteAccountResult> deleteAccount() async {
     _session = const AuthSession.guest();
-    return DeleteAccountResult(
-      session: _session,
-      shouldExitApp: true,
-    );
+    return DeleteAccountResult(session: _session, shouldExitApp: true);
   }
 }

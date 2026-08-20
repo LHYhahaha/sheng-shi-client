@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../entitlement/application/entitlement_controller.dart';
 import '../../entitlement/domain/episode_access_decision.dart';
+import '../data/local/player_episode_unlock_cache.dart';
 import '../domain/player_access_presentation.dart';
 import '../domain/player_feed.dart';
 import 'player_access_presenter.dart';
@@ -63,6 +64,7 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
   PlayerRuntimeCoordinator(this.sessionKey);
 
   final String sessionKey;
+  bool _hasRefreshedEntitlementForInitialLockedItem = false;
 
   @override
   PlayerRuntimeCoordinatorState build() =>
@@ -130,6 +132,27 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
             ),
           ); // 5: switchEpisode
         }
+      }
+    }
+
+    // 路由传入的 episodeId 可能会被详情续播记录覆盖，必须以实际落位的锁集为准
+    // 刷新权益。首次 PageView 对齐会产生重复 settled 回调，不能依赖
+    // previousItemId == null，否则第二个回调可能在刷新完成前使用过期的会员态。
+    if (item.episode.isLocked &&
+        !_hasRefreshedEntitlementForInitialLockedItem) {
+      await ref.read(entitlementControllerProvider.notifier).load();
+      _hasRefreshedEntitlementForInitialLockedItem = true;
+      // 当前集锁定时，详情接口的 episodes 已是最新的服务端权益快照。清除
+      // 该剧旧会话的本地“已解锁”缓存，让选集弹框后续各集直接按这份详情的
+      // is_unlocked 展示，避免会员过期后只当前集显示锁。
+      PlayerEpisodeUnlockCache.clearDramaCache(item.content.id);
+      final latestViewport = ref.read(
+        playerViewportControllerProvider(sessionKey),
+      );
+      if (latestViewport.scrollPhase != PlayerViewportScrollPhase.idle ||
+          latestViewport.settledItemId != item.id ||
+          latestViewport.settledIndex != index) {
+        return;
       }
     }
 
@@ -225,6 +248,11 @@ class PlayerRuntimeCoordinator extends Notifier<PlayerRuntimeCoordinatorState> {
     required bool autoPresentSheet,
   }) async {
     final presenter = state.accessPresenter;
+    if (decision.type != EpisodeAccessDecisionType.allowPlay) {
+      state = state.copyWith(
+        accessPresenter: presenter.withoutPlayableItem(item.id),
+      );
+    }
     switch (decision.type) {
       case EpisodeAccessDecisionType.allowPlay:
         if (!isCurrentFeedItem(item)) {

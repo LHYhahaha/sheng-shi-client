@@ -44,6 +44,34 @@ final playerPlaybackPreloadManagerProvider =
       );
     });
 
+/// For You 手势预测专用的 HLS 预热器。
+///
+/// 它与 settled 后的相邻预热分离：用户反向滑动时只会取消预测的后续请求，不能
+/// 误伤当前播放或下一条已确认的预热。缓存与全局 singleflight 仍然共享。
+final forYouPredictiveHlsPlaylistPreloaderProvider =
+    Provider<HlsPlaylistPreloader>((ref) {
+      final config = ref.watch(playerPreloadConfigProvider);
+      final preloader = HlsPlaylistPreloader(
+        timeout: config.effectivePreloadTimeout,
+        maxPreheatBytes: config.effectiveMaxPreloadBytes,
+        cacheStore: ref.watch(hlsLocalCacheStoreProvider),
+        diskCacheStore: ref.watch(hlsDiskCacheStoreProvider),
+        networkCoordinator: ref.watch(hlsNetworkRequestCoordinatorProvider),
+      );
+      ref.onDispose(preloader.releasePending);
+      return preloader;
+    });
+
+/// 仅用于 PageView 手势超过预测阈值后的 HLS 网络预热。
+///
+/// 此 manager 不关联 [PlayerPlaybackPrepareManager]，因此不会创建 media session。
+final forYouPredictivePlaybackPreloadManagerProvider =
+    Provider<PlayerPlaybackPreloadManager>((ref) {
+      return HlsPlayerPlaybackPreloadManager(
+        preloader: ref.watch(forYouPredictiveHlsPlaylistPreloaderProvider),
+      );
+    });
+
 /// local HLS proxy 的配置入口。
 ///
 /// 当前已解锁 source_url 统一返回 HLS m3u8，因此默认经由本地代理消费 App 私有
@@ -149,6 +177,29 @@ final playerPlaybackSourceRepositoryProvider =
       }
       return MockPlayerPlaybackSourceRepository(
         preloadManager: ref.watch(playerPlaybackPreloadManagerProvider),
+        proxyResolver: ref.watch(hlsProxyPlaybackSourceResolverProvider),
+      );
+    });
+
+/// For You 预测预热使用独立 repository，以隔离取消语义；实际 source、缓存与鉴权
+/// 规则仍和真实播放完全一致。
+final forYouPredictivePlaybackSourceRepositoryProvider =
+    Provider<PlayerPlaybackSourceRepository>((ref) {
+      if (ref.watch(useRemotePlayerApiProvider)) {
+        return RemotePlayerPlaybackSourceRepository(
+          remoteDataSource: PlaybackSourceRemoteDataSource(
+            apiClient: ref.watch(apiClientProvider),
+          ),
+          preloadManager: ref.watch(
+            forYouPredictivePlaybackPreloadManagerProvider,
+          ),
+          proxyResolver: ref.watch(hlsProxyPlaybackSourceResolverProvider),
+        );
+      }
+      return MockPlayerPlaybackSourceRepository(
+        preloadManager: ref.watch(
+          forYouPredictivePlaybackPreloadManagerProvider,
+        ),
         proxyResolver: ref.watch(hlsProxyPlaybackSourceResolverProvider),
       );
     });

@@ -52,7 +52,9 @@ final authControllerProvider = NotifierProvider<AuthController, AuthState>(
 
 /// 三方授权或登录请求没有回调时，避免登录页一直保持 loading。
 final thirdPartyLoginTimeoutProvider = Provider<Duration>(
-  (ref) => const Duration(minutes: 1),
+  // 比 SDK 内部授权超时略长，确保 SDK 可先关闭原生授权页、清理状态并把失败结果
+  // 返回给 UI，而不会被外层抢先中断。
+  (ref) => const Duration(minutes: 2, seconds: 10),
 );
 
 /// 全局登录态。
@@ -352,6 +354,10 @@ class AuthController extends Notifier<AuthState> {
       clearFailedAction: true,
     );
 
+    if (_isThirdPartyLoginProvider(provider)) {
+      debugPrint('[AuthController] Starting ${provider.name} login.');
+    }
+
     try {
       await ref.read(installIdProvider.future);
       // 登录只持久化 token；完整用户信息由后台权益接口统一同步。
@@ -374,9 +380,18 @@ class AuthController extends Notifier<AuthState> {
         clearError: true,
         clearFailedAction: true,
       );
+      if (_isThirdPartyLoginProvider(provider)) {
+        debugPrint('[AuthController] ${provider.name} login completed.');
+      }
       _syncNotificationPermission(session);
       unawaited(_refreshCurrentSessionInBackground(_generation));
     } catch (error) {
+      if (_isThirdPartyLoginProvider(provider)) {
+        debugPrint(
+          '[AuthController] ${provider.name} login failed; '
+          'releasing retry state: $error',
+        );
+      }
       if (_isThirdPartyLoginProvider(provider)) {
         _trackLoginFailure(provider, error);
       }
@@ -515,6 +530,10 @@ class AuthController extends Notifier<AuthState> {
         clearFailedAction: true,
       );
       _syncNotificationPermission(session);
+      // 手动退出后同样已经拿到新的 device/guest token。资料与权益在 cleanup
+      // 中被清空，必须复用启动/会话失效后的后台刷新，补回游客 showId 等展示资料。
+      // 不 await，不能让退出页面等待 /api/user/entitlements。
+      unawaited(_refreshCurrentSessionInBackground(_generation));
     } catch (error) {
       state = state.copyWith(
         isLoading: false,

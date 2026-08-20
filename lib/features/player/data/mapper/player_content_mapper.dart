@@ -17,6 +17,7 @@ class PlayerContentMapper {
     PlayerRecommendationLoadStatus recommendationsStatus =
         PlayerRecommendationLoadStatus.loaded,
   }) {
+    final isDramaAvailable = dto.status == 1;
     return PlayerContent(
       id: dto.id.toString(),
       title: dto.title.isNotEmpty ? dto.title : _displayTitleFallback,
@@ -32,8 +33,10 @@ class PlayerContentMapper {
       coverUrl: dto.coverUrl.isNotEmpty ? dto.coverUrl : null,
       episodes: dto.episodes
           .map(
-            (episode) =>
-                mapEpisode(episode, pricePerEpisode: dto.pricePerEpisode),
+            (episode) => mapEpisode(
+              episode,
+              pricePerEpisode: dto.pricePerEpisode,
+            ).copyWith(isAvailable: isDramaAvailable && episode.status == 1),
           )
           .toList(growable: false),
       recommendations: recommendations,
@@ -51,6 +54,7 @@ class PlayerContentMapper {
               duration: Duration(seconds: dto.watchProgress!.durationSecond),
               progressPercent: dto.watchProgress!.progressPercent,
             ),
+      isDramaAvailable: isDramaAvailable,
       recommendationsStatus: recommendationsStatus,
     );
   }

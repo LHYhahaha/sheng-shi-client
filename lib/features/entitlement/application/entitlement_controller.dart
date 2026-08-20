@@ -32,6 +32,8 @@ final entitlementControllerProvider =
 /// 这里负责“能不能播”和“mock 权益动作”的状态机，但不管理 media session、不打开
 /// 路由、不展示弹窗。这样播放器可以保持唯一播放状态来源，entitlement 只提供业务决策。
 class EntitlementController extends Notifier<UserEntitlementState> {
+  Future<bool>? _loadInFlight;
+
   @override
   UserEntitlementState build() => const UserEntitlementState.guest();
 
@@ -53,6 +55,25 @@ class EntitlementController extends Notifier<UserEntitlementState> {
   }
 
   Future<bool> _load({required bool resetToGuestOnFailure}) async {
+    // 启动认证后台刷新与启动埋点的 userId 等待可能同时发生；它们必须共用一次
+    // /api/user/entitlements 请求，避免重复请求及两次状态回写竞争。
+    final inFlight = _loadInFlight;
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    final request = _performLoad(resetToGuestOnFailure: resetToGuestOnFailure);
+    _loadInFlight = request;
+    try {
+      return await request;
+    } finally {
+      if (identical(_loadInFlight, request)) {
+        _loadInFlight = null;
+      }
+    }
+  }
+
+  Future<bool> _performLoad({required bool resetToGuestOnFailure}) async {
     try {
       state = await ref.read(entitlementRepositoryProvider).fetchState();
       return true;
@@ -252,6 +273,20 @@ class EntitlementController extends Notifier<UserEntitlementState> {
     debugPrint(
       '[Entitlement] 金币解锁成功，已更新状态: episodeId=$episodeId, '
       'coinBalance=$coinBalance, bonusBalance=$bonusBalance',
+    );
+  }
+
+  /// 广告解锁确认成功后，立即同步本次播放会话的已解锁剧集。
+  ///
+  /// 详情接口的刷新可能晚于下一集的解锁资格判断；先更新内存权益可保证下一集
+  /// 作为新的首个未解锁集重新请求广告资格，而不是被误判为跳集。
+  void updateAfterAdUnlock({required String episodeId}) {
+    final updatedUnlockedIds = Set<String>.from(state.unlockedEpisodeIds)
+      ..add(episodeId);
+    state = state.copyWith(
+      unlockedEpisodeIds: updatedUnlockedIds,
+      clearPendingUnlock: true,
+      clearLastUnlockError: true,
     );
   }
 

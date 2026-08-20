@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:drama_client/core/analytics/analytics_context.dart';
 import 'package:drama_client/core/analytics/analytics_definition.dart';
 import 'package:drama_client/core/analytics/analytics_event.dart';
 import 'package:drama_client/core/analytics/analytics_provider.dart';
 import 'package:drama_client/core/analytics/analytics_service.dart';
+import 'package:drama_client/core/channel/channel_config_service.dart';
+import 'package:drama_client/core/network/api_client_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -76,6 +80,43 @@ void main() {
     expect(commonParams.containsKey('app_session_id'), isFalse);
     expect(payload.toJson().containsKey('event_id'), isFalse);
   });
+
+  test(
+    'new events use channel information that arrives after startup',
+    () async {
+      final channelReady = Completer<ChannelConfig>();
+      final sink = AnalyticsInMemoryEventSink();
+      final container = ProviderContainer(
+        overrides: [
+          channelConfigProvider.overrideWith((ref) => channelReady.future),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      // 模拟启动时渠道尚未从原生层返回。
+      expect(container.read(analyticsContextProvider).channelId, isNull);
+
+      channelReady.complete(
+        const ChannelConfig(channelFlag: 'tiktok', merchantId: 'merchant-1'),
+      );
+      await container.read(channelConfigProvider.future);
+      await Future<void>.delayed(Duration.zero);
+
+      final service = AnalyticsService(
+        contextReader: () => container.read(analyticsContextProvider),
+        eventSink: sink,
+      );
+      await service.track(
+        const AnalyticsEvent(AnalyticsDefinitions.popupClose, {
+          'popup_name': 'episode_unlock',
+        }),
+      );
+
+      final common = sink.events.single.commonParams.toJson();
+      expect(common['channel_id'], 'tiktok');
+      expect(common['merchant_id'], 'merchant-1');
+    },
+  );
 
   test('popup_close only accepts popup_name', () async {
     final errors = <AnalyticsValidationError>[];

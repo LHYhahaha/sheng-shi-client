@@ -34,7 +34,23 @@
 				<string>novashort</string>
 			</array>
 		</dict>
+		<!-- Facebook SDK 在 App 未安装 Facebook 时，会由网页授权通过该 Scheme
+		     回到 App；必须与 Facebook App ID 完全一致。 -->
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fb3996208420512909</string>
+			</array>
+		</dict>
 	</array>
+	<key>FacebookAppID</key>
+	<string>3996208420512909</string>
+	<key>FacebookClientToken</key>
+	<string>dd40b592a1356c44679eb9ddb7075bd5</string>
+	<key>FacebookDisplayName</key>
+	<string>NovaShort</string>
 	<key>FlutterDeepLinkingEnabled</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>

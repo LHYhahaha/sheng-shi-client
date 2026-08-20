@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// 应用运行环境。
 ///
 /// 环境只影响 baseUrl 等基础配置，不应在业务代码里用环境分支绕过状态机或权限判断。
@@ -67,16 +69,39 @@ class AppConfig {
   }) => _webBaseUrl.replace(
     path: '/share/',
     queryParameters: {
+      'drama_id': dramaId,
       ..._h5CommonParameters(
         languageCode: languageCode,
         userId: userId,
         channelId: channelId,
         merchantId: merchantId,
       ),
-      'drama_id': dramaId,
       'share_method': shareMethod,
     },
   );
+
+  /// Facebook 分享页使用单一的 `_sp` 参数承载原有分享字段；复制链接仍使用
+  /// [shareUrl] 的可读查询参数格式，不受此方法影响。
+  Uri facebookShareUrl({
+    required String dramaId,
+    required String languageCode,
+    String userId = '',
+    String channelId = '',
+    String merchantId = '',
+  }) {
+    final packed = _packShareQuery({
+      'drama_id': dramaId,
+      'lang': languageCode,
+      'user_id': userId,
+      'channel_id': channelId,
+      'merchant_id': merchantId,
+      'share_method': 'facebook',
+    });
+    return _webBaseUrl.replace(
+      path: '/share/',
+      queryParameters: {'_sp': packed},
+    );
+  }
 
   /// 赠送会员 H5 地址。当前客户端尚无赠送入口，先保留完整参数契约。
   Uri giftVipUrl({
@@ -135,6 +160,14 @@ class AppConfig {
     'channel_id': channelId,
     'merchant_id': merchantId,
   };
+
+  String _packShareQuery(Map<String, String> parameters) {
+    final query = parameters.entries
+        .where((entry) => entry.value.isNotEmpty)
+        .map((entry) => '${entry.key}=${entry.value}')
+        .join('&');
+    return base64Url.encode(utf8.encode(query)).replaceAll('=', '');
+  }
 
   Uri get _webBaseUrl => switch (environment) {
     AppEnvironment.prod => Uri.parse('https://juan365drama.com/'),
