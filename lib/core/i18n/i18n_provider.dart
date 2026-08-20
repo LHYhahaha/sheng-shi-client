@@ -114,7 +114,13 @@ class I18nController extends Notifier<I18nState> {
   }
 
   Future<void> switchLanguage(String languageCode) async {
-    state = state.copyWith(isLoading: true, error: null);
+    // 立即标记目标语言，避免旧语言包的后台刷新在下载期间仍将自己视为当前语言，
+    // 并在新包生效后覆写远程文案。
+    state = state.copyWith(
+      languageCode: languageCode,
+      isLoading: true,
+      error: null,
+    );
     try {
       final service = await ref.read(i18nServiceProvider.future);
       final package = await service.switchLanguage(languageCode);

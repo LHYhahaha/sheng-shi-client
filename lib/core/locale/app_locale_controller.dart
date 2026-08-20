@@ -13,26 +13,38 @@ class AppLocaleController extends Notifier<Locale> {
 
   @override
   Locale build() {
+    debugPrint(
+      '[AppLocale] build: initial=${languageCodeFromLocale(localeForLanguageCode(defaultLanguageCode))}',
+    );
     unawaited(_restoreSavedLocale());
     return localeForLanguageCode(defaultLanguageCode);
   }
 
   void select(Locale locale) {
     final languageCode = languageCodeFromLocale(locale);
+    debugPrint('[AppLocale] select: languageCode=$languageCode');
     state = localeForLanguageCode(languageCode);
     unawaited(_saveAndLoadLanguage(languageCode));
   }
 
   Future<void> selectAndSave(Locale locale) async {
     final languageCode = languageCodeFromLocale(locale);
+    debugPrint('[AppLocale] selectAndSave: languageCode=$languageCode');
     state = localeForLanguageCode(languageCode);
     await _saveAndLoadLanguage(languageCode);
   }
 
   Future<void> _restoreSavedLocale() async {
     final languageCode = await readSavedLanguageCode();
-    if (languageCode != languageCodeFromLocale(state)) {
+    final currentLanguageCode = languageCodeFromLocale(state);
+    debugPrint(
+      '[AppLocale] restore: saved=$languageCode, current=$currentLanguageCode',
+    );
+    if (languageCode != currentLanguageCode) {
+      debugPrint('[AppLocale] restore: applying saved=$languageCode');
       state = localeForLanguageCode(languageCode);
+    } else {
+      debugPrint('[AppLocale] restore: no state change');
     }
   }
 
@@ -40,7 +52,9 @@ class AppLocaleController extends Notifier<Locale> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(preferenceKey, languageCode);
+      debugPrint('[AppLocale] save: languageCode=$languageCode');
     } catch (_) {
+      debugPrint('[AppLocale] save: failed for languageCode=$languageCode');
       // Keep the in-memory locale even if local persistence is unavailable.
     }
   }

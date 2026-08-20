@@ -14,6 +14,8 @@ import 'remote_texts.dart';
 class AppLocalizations {
   const AppLocalizations(this.locale);
 
+  /// 离线可用的内置 Locale。运行时可用语言由
+  /// [runtimeSupportedLocalesProvider] 根据服务端下发 code 扩展。
   static const supportedLocales = [Locale('en'), Locale('zh')];
 
   static const LocalizationsDelegate<AppLocalizations> delegate =

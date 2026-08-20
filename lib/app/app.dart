@@ -24,6 +24,7 @@ import '../core/analytics/analytics_page_context.dart';
 import '../core/analytics/analytics_page_tracker.dart';
 import '../core/analytics/analytics_provider.dart';
 import '../core/i18n/i18n.dart';
+import '../core/locale/runtime_supported_locales_provider.dart';
 import '../core/locale/app_locale_controller.dart';
 import '../core/modal/app_modal_host.dart';
 import '../core/network/api_client_provider.dart';
@@ -827,6 +828,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     ref.watch(channelConfigInitializerProvider);
     final router = ref.watch(appRouterProvider);
     final locale = ref.watch(appLocaleControllerProvider);
+    final supportedLocales = ref.watch(runtimeSupportedLocalesProvider);
     ref.watch(
       i18nControllerProvider.select(
         (state) => (state.languageCode, state.package?.version),
@@ -842,7 +844,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
       locale: locale,
-      supportedLocales: AppLocalizations.supportedLocales,
+      supportedLocales: supportedLocales,
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,

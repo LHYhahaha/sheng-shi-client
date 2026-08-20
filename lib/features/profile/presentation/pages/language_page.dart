@@ -12,6 +12,8 @@ import '../../application/language_options_controller.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_blocking_loading_overlay.dart';
+import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_retry_button.dart';
 
 class LanguagePage extends ConsumerStatefulWidget {
   const LanguagePage({super.key});
@@ -24,6 +26,15 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
   String? _tempSelectedLanguageCode;
   bool _isSwitching = false;
 
+  @override
+  void initState() {
+    super.initState();
+    final locale = ref.read(appLocaleControllerProvider);
+    debugPrint(
+      '[LanguagePage] open: locale=$locale, languageCode=${AppLocaleController.languageCodeFromLocale(locale)}',
+    );
+  }
+
   String _getEffectiveLanguageCode() {
     final currentLocale = ref.read(appLocaleControllerProvider);
     return _tempSelectedLanguageCode ??
@@ -34,6 +45,7 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
     if (_isSwitching) {
       return;
     }
+    debugPrint('[LanguagePage] select: optionCode=$languageCode');
     setState(() {
       _tempSelectedLanguageCode = languageCode;
     });
@@ -49,6 +61,10 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
       final languageCode = AppLocaleController.canonicalLanguageCode(
         selectedLanguageCode,
       );
+      final currentLocale = ref.read(appLocaleControllerProvider);
+      debugPrint(
+        '[LanguagePage] done: selected=$selectedLanguageCode, canonical=$languageCode, current=${AppLocaleController.languageCodeFromLocale(currentLocale)}',
+      );
       setState(() {
         _isSwitching = true;
       });
@@ -60,6 +76,10 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
             .switchLanguage(languageCode);
         await localeController.selectAndSave(
           AppLocaleController.localeForLanguageCode(languageCode),
+        );
+        final savedLocale = ref.read(appLocaleControllerProvider);
+        debugPrint(
+          '[LanguagePage] done: saved=${AppLocaleController.languageCodeFromLocale(savedLocale)}',
         );
         // 切换完成后以新的 Accept-Language 请求活跃上报；上报器会自行读取
         // 当前 FCM token，已拿到时自动携带 pushToken，且失败不阻塞返回页面。
@@ -96,15 +116,13 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
   Widget build(BuildContext context) {
     final selectedLanguageCode = _getEffectiveLanguageCode();
     final currentLocale = ref.watch(appLocaleControllerProvider);
-    final languageOptions = ref
-        .watch(languageOptionsProvider)
-        .maybeWhen(
-          data: (options) => options,
-          orElse: () => fallbackLanguageOptions,
-        );
+    final currentLanguageCode = AppLocaleController.languageCodeFromLocale(
+      currentLocale,
+    );
+    final languageOptions = ref.watch(languageOptionsProvider);
     final showDoneButton =
         _tempSelectedLanguageCode != null &&
-        _tempSelectedLanguageCode != currentLocale.languageCode;
+        _tempSelectedLanguageCode != currentLanguageCode;
 
     return PopScope(
       canPop: !_isSwitching,
@@ -125,12 +143,43 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
                       onDone: _onDone,
                       showDoneButton: showDoneButton,
                     ),
-                    for (final option in languageOptions)
-                      _LanguageOption(
-                        label: option.label,
-                        selected: selectedLanguageCode == option.code,
-                        onTap: () => _onLanguageSelected(option.code),
+                    Expanded(
+                      child: languageOptions.when(
+                        loading: () => const Center(
+                          child: SizedBox.square(
+                            dimension: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                        error: (_, _) => _LanguageOptionsError(
+                          onRetry: () =>
+                              ref.invalidate(languageOptionsProvider),
+                        ),
+                        data: (options) {
+                          if (options.isEmpty) {
+                            return Center(
+                              child: AppEmptyState(
+                                message: context.l10n.noData,
+                              ),
+                            );
+                          }
+                          return ListView(
+                            padding: EdgeInsets.zero,
+                            children: [
+                              for (final option in options)
+                                _LanguageOption(
+                                  label: option.label,
+                                  selected: selectedLanguageCode == option.code,
+                                  onTap: () => _onLanguageSelected(option.code),
+                                ),
+                            ],
+                          );
+                        },
                       ),
+                    ),
                   ],
                 ),
               ),
@@ -139,6 +188,31 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
               AppBlockingLoadingOverlay(label: context.l10n.loading),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _LanguageOptionsError extends StatelessWidget {
+  const _LanguageOptionsError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            context.l10n.networkError,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
+        ],
       ),
     );
   }

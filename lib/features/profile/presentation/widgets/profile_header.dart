@@ -35,7 +35,7 @@ class ProfileHeader extends StatelessWidget {
     final l10n = context.l10n;
     final resolvedDisplayName =
         displayName ??
-        (state.isLoggedIn ? (state.nickname ?? '--') : "Log in");
+        (state.isLoggedIn ? (state.nickname ?? '--') : l10n.profileLogin);
 
     void handleTap() {
       if (onGuestTap != null) {
