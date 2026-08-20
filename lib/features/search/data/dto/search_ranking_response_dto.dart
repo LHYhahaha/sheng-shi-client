@@ -35,6 +35,7 @@ class SearchRankDramaDto {
     required this.summary,
     required this.tagsName,
     required this.searchCount,
+    required this.hotValue,
     required this.trailerEpisodeNum,
     required this.isVipOnly,
     required this.status,
@@ -48,6 +49,7 @@ class SearchRankDramaDto {
   final String summary;
   final List<String> tagsName;
   final int searchCount;
+  final int hotValue;
   final int trailerEpisodeNum;
   final int isVipOnly;
   final int status;
@@ -65,6 +67,7 @@ class SearchRankDramaDto {
           JsonFieldParser.optionalInt(json, 'search_count') ??
           JsonFieldParser.optionalInt(json, 'play_count') ??
           0,
+      hotValue: JsonFieldParser.optionalInt(json, 'hot_value') ?? 0,
       trailerEpisodeNum:
           JsonFieldParser.optionalInt(json, 'trailer_episode_num') ?? 0,
       isVipOnly: JsonFieldParser.optionalInt(json, 'is_vip_only') ?? 0,

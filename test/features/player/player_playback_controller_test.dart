@@ -473,14 +473,14 @@ void main() {
       session.emitPosition(const Duration(seconds: 35));
       await Future<void>.delayed(Duration.zero);
 
-      await controller.selectSubtitleLanguage('Español');
+      await controller.selectSubtitleLanguage('es');
 
       expect(session.openedSources, [
         'https://cdn.test/en.m3u8',
         'https://cdn.test/es.m3u8',
       ]);
       expect(session.openStartPositions.last, const Duration(seconds: 35));
-      expect(container.read(provider).currentSubtitleLanguage, 'Español');
+      expect(container.read(provider).currentSubtitleLanguage, 'es');
     },
   );
 
@@ -515,7 +515,7 @@ void main() {
       await controller.playItem(item);
       await controller.pause();
 
-      await controller.selectSubtitleLanguage('中文');
+      await controller.selectSubtitleLanguage('zh');
 
       expect(session.openedSources, [
         'https://cdn.test/en.m3u8',
@@ -523,7 +523,7 @@ void main() {
       ]);
       expect(session.openPlayFlags, [true, true]);
       expect(container.read(provider).status, PlayerPlaybackStatus.playing);
-      expect(container.read(provider).currentSubtitleLanguage, '中文');
+      expect(container.read(provider).currentSubtitleLanguage, 'zh');
     },
   );
 
@@ -631,7 +631,7 @@ void main() {
         'fr-4',
         'fr-5',
       ]);
-      expect(container.read(provider).currentSubtitleLanguage, 'Français');
+      expect(container.read(provider).currentSubtitleLanguage, 'fr');
     },
   );
 
@@ -669,7 +669,7 @@ void main() {
           ),
         ]),
       );
-      await controller.selectSubtitleLanguage('Español');
+      await controller.selectSubtitleLanguage('es');
       await controller.playItem(
         episode(2, const [
           PlayerEpisodeSource(
@@ -688,7 +688,49 @@ void main() {
       );
 
       expect(session.openedSources, ['en-1', 'es-1', 'zh-2']);
-      expect(container.read(provider).currentSubtitleLanguage, 'Mandarin');
+      expect(container.read(provider).currentSubtitleLanguage, 'zh');
+    },
+  );
+
+  test(
+    'subtitle fallback distinguishes traditional from simplified Chinese',
+    () async {
+      final session = _FakePlaybackSession();
+      final container = _createContainer(
+        session,
+        sourceRepository: _CountingPlaybackSourceRepository(),
+      );
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+      container
+          .read(appLocaleControllerProvider.notifier)
+          .select(
+            const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'),
+          );
+
+      await controller.playItem(
+        _item(
+          1,
+          episodeSources: const [
+            PlayerEpisodeSource(
+              id: 'zh',
+              language: '简体中文',
+              languageCode: 'zh',
+              url: 'zh-source',
+            ),
+            PlayerEpisodeSource(
+              id: 'zh-hant',
+              language: '繁體中文',
+              languageCode: 'zh-Hant',
+              url: 'zh-hant-source',
+            ),
+          ],
+        ),
+      );
+
+      expect(session.openedSources, ['zh-hant-source']);
+      expect(container.read(provider).currentSubtitleLanguage, 'zh-Hant');
     },
   );
 

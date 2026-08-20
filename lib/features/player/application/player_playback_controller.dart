@@ -9,6 +9,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/locale/app_locale_controller.dart';
+import '../../../core/runtime/api_lang_provider.dart';
 import '../data/playback_progress_repository_provider.dart';
 import '../data/drama_playback_target_repository_provider.dart';
 import '../data/player_playback_source_repository_provider.dart';
@@ -1271,7 +1272,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       isSubtitleSelectionResolved: item.episode.episodeSources.isNotEmpty,
       currentSubtitleLanguage: item.episode.episodeSources.isEmpty
           ? null
-          : _languageForEpisodeSource(item.episode),
+          : _subtitleLanguageCodeForEpisodeSource(item.episode),
       videoController: _session.videoController,
       surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
     );
@@ -4125,7 +4126,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       final source = _selectEpisodeSourceForCurrentLanguage(episodeSources);
       _preferredSubtitleLanguage = _episodeSourceMatchCode(source);
       final external = _findSubtitleForEpisodeSource(subtitles, source);
-      state = state.copyWith(currentSubtitleLanguage: source.language);
+      state = state.copyWith(
+        currentSubtitleLanguage: _episodeSourceMatchCode(source),
+      );
       if (external == null) {
         state = state.copyWith(
           clearSubtitle: true,
@@ -4159,7 +4162,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _preferredSubtitleLanguage = _subtitleMatchCode(selected);
     // 字幕文件会在首帧后异步加载；在此提前记录已预选语言，供 UI 和埋点在
     // 实际播放开始时读取，不能把“加载中”误判成用户关闭字幕。
-    state = state.copyWith(currentSubtitleLanguage: selected.language);
+    state = state.copyWith(
+      currentSubtitleLanguage: _subtitleMatchCode(selected),
+    );
     if (!state.hasFirstFrame) {
       _pendingSubtitleLoadItem = item;
       _logTiming(
@@ -4247,7 +4252,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     state = state.copyWith(
       currentSubtitleUrl: subtitle.url,
       currentSubtitleLanguage: updateCurrentSubtitleLanguage
-          ? subtitle.language
+          ? _subtitleMatchCode(subtitle)
           : null,
       currentSubtitlePosition: subtitle.position,
       isSubtitleSelectionResolved: true,
@@ -4283,7 +4288,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     final position = state.position;
     _preferredSubtitleLanguage = _episodeSourceMatchCode(source);
     _externalSubtitlesClosed = false;
-    state = state.copyWith(currentSubtitleLanguage: source.language);
+    state = state.copyWith(
+      currentSubtitleLanguage: _episodeSourceMatchCode(source),
+    );
     await _disposePreloads();
     await _releaseSessionWindowFor('embedded subtitle language changed');
     if (position > Duration.zero) {
@@ -4403,12 +4410,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   String _appSubtitleLanguageCode() {
-    return ref.read(appLocaleControllerProvider).languageCode.toLowerCase();
+    return apiLangFromLocale(ref.read(appLocaleControllerProvider));
   }
 
-  String? _languageForEpisodeSource(PlayerEpisode episode) {
+  String? _subtitleLanguageCodeForEpisodeSource(PlayerEpisode episode) {
     for (final source in episode.episodeSources) {
-      if (source.url == episode.videoUrl) return source.language;
+      if (source.url == episode.videoUrl) {
+        return _episodeSourceMatchCode(source);
+      }
     }
     return null;
   }

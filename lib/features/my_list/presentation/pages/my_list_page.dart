@@ -201,7 +201,6 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     return Scaffold(
       backgroundColor: AppColors.black,
       body: SafeArea(
-        bottom: false,
         child: Stack(
           children: [
             SlidableAutoCloseBehavior(

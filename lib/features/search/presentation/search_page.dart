@@ -208,7 +208,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         behavior: HitTestBehavior.opaque,
         onTap: () => FocusScope.of(context).unfocus(),
         child: SafeArea(
-          bottom: false,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Column(
@@ -1786,7 +1785,7 @@ class _RankingDramaTile extends StatelessWidget {
                       const SizedBox(width: 3),
                       Text(
                         formatCompactCount(
-                          drama.searchCount,
+                          drama.hotValue,
                           lowercaseSuffix: false,
                         ),
                         style: const TextStyle(

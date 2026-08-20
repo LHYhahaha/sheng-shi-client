@@ -22,6 +22,7 @@ class SearchMapper {
       summary: dto.summary,
       tags: dto.tagsName,
       searchCount: dto.searchCount,
+      hotValue: dto.hotValue,
       trailerEpisodeNum: dto.trailerEpisodeNum,
       isVipOnly: dto.isVipOnly == 1,
       status: dto.status,

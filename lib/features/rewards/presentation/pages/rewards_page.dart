@@ -111,7 +111,6 @@ class _RewardsPageState extends ConsumerState<RewardsPage> {
                 ),
         ),
         child: SafeArea(
-          bottom: false,
           child: Column(
             children: [
               _RewardsNavigation(

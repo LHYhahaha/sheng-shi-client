@@ -32,7 +32,6 @@ class _AccountPageState extends ConsumerState<AccountPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0014),
       body: SafeArea(
-        bottom: false,
         child: Column(
           children: [
             _AccountHeader(title: context.l10n.authAccountTitle),

@@ -16,7 +16,6 @@ class LegalPlaceholderPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.black,
       body: SafeArea(
-        bottom: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           child: Column(

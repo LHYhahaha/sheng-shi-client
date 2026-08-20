@@ -162,7 +162,6 @@ class _AccountCancellationPageState
     return Scaffold(
       backgroundColor: const Color(0xFF0A0014),
       body: SafeArea(
-        bottom: false,
         child: Stack(
           children: [
             Column(

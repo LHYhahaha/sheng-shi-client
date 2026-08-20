@@ -122,7 +122,6 @@ class _WalletHistoryPageState extends ConsumerState<WalletHistoryPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0014),
       body: SafeArea(
-        bottom: false,
         child: Column(
           children: [
             _HistoryHeader(

@@ -374,7 +374,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     return Scaffold(
       backgroundColor: AppColors.black,
       body: SafeArea(
-        bottom: false,
         child: RefreshIndicator(
           onRefresh: () async {
             final tab = selectedRemoteTab;

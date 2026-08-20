@@ -100,7 +100,6 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     return Scaffold(
       backgroundColor: const Color(0xFF090012),
       body: SafeArea(
-        bottom: false,
         child: Stack(
           children: [
             Positioned(

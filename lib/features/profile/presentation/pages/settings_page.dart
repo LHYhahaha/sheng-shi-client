@@ -54,7 +54,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       body: Stack(
         children: [
           SafeArea(
-            bottom: false,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -102,7 +101,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         style: const TextStyle(
                           color: Color(0XFFFF007A),
                           fontSize: 14,
-                          fontWeight: FontWeight.bold
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),

@@ -114,7 +114,6 @@ class _MemberTabPageState extends ConsumerState<MemberTabPage> {
         ),
       ),
       child: SafeArea(
-        bottom: false,
         child: MemberPointsPage(isActive: true, useParentBackground: true),
       ),
     );
@@ -209,7 +208,6 @@ class _MemberPageState extends ConsumerState<MemberPage> {
     return Scaffold(
       backgroundColor: _memberBackground,
       body: SafeArea(
-        bottom: false,
         child: ListView(
           padding: EdgeInsets.fromLTRB(
             0,

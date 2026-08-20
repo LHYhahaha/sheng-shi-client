@@ -1562,47 +1562,48 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
     return Scaffold(
       backgroundColor: Colors.black,
-      extendBody: true,
-      body: PopScope(
-        canPop:
-            widget.feedMode == PlayerFeedMode.forYou &&
-            !widget.hideShellNavigation &&
-            !isPaymentLoading &&
-            !showsPaywall,
-        onPopInvokedWithResult: (didPop, result) {
-          if (didPop) {
-            return;
-          }
-          if (showsPaywall) {
-            uiController.hidePaywall();
-            return;
-          }
-          if (widget.hideShellNavigation) {
-            _exitForYouFeed();
-            return;
-          }
-          if (widget.feedMode == PlayerFeedMode.singleDrama) {
-            unawaited(_goBackFromPlayer());
-          }
-        },
-        child: _buildBody(
-          isLoading: feedSnapshot.$1,
-          error: feedSnapshot.$2,
-          items: feedSnapshot.$3,
-          currentIndex: feedSnapshot.$4,
-          feedController: feedController,
-          viewportState: viewportState,
-          playbackShell: playbackShell,
-          subtitles: subtitleState.subtitles,
-          episodeSources: subtitleState.episodeSources,
-          currentSubtitleLanguage: subtitleState.currentLanguage,
-          isSubtitleSelectionResolved: subtitleState.isSelectionResolved,
-          playbackController: playbackController,
-          feedEngine: feedEngine,
-          performancePolicy: performancePolicy,
-          showsChromeOverlays: showsChromeOverlays,
-          chromeOverlayFadeDuration: chromeOverlayFadeDuration,
-          uiController: uiController,
+      body: SafeArea(
+        child: PopScope(
+          canPop:
+              widget.feedMode == PlayerFeedMode.forYou &&
+              !widget.hideShellNavigation &&
+              !isPaymentLoading &&
+              !showsPaywall,
+          onPopInvokedWithResult: (didPop, result) {
+            if (didPop) {
+              return;
+            }
+            if (showsPaywall) {
+              uiController.hidePaywall();
+              return;
+            }
+            if (widget.hideShellNavigation) {
+              _exitForYouFeed();
+              return;
+            }
+            if (widget.feedMode == PlayerFeedMode.singleDrama) {
+              unawaited(_goBackFromPlayer());
+            }
+          },
+          child: _buildBody(
+            isLoading: feedSnapshot.$1,
+            error: feedSnapshot.$2,
+            items: feedSnapshot.$3,
+            currentIndex: feedSnapshot.$4,
+            feedController: feedController,
+            viewportState: viewportState,
+            playbackShell: playbackShell,
+            subtitles: subtitleState.subtitles,
+            episodeSources: subtitleState.episodeSources,
+            currentSubtitleLanguage: subtitleState.currentLanguage,
+            isSubtitleSelectionResolved: subtitleState.isSelectionResolved,
+            playbackController: playbackController,
+            feedEngine: feedEngine,
+            performancePolicy: performancePolicy,
+            showsChromeOverlays: showsChromeOverlays,
+            chromeOverlayFadeDuration: chromeOverlayFadeDuration,
+            uiController: uiController,
+          ),
         ),
       ),
     );
@@ -3330,7 +3331,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Uri _shareUrl(String dramaId, {required String shareMethod}) {
-    final languageCode = ref.read(appLocaleControllerProvider).languageCode;
+    final languageCode = apiLangFromLocale(
+      ref.read(appLocaleControllerProvider),
+    );
     final entitlement = ref.read(entitlementControllerProvider);
     final userInfo = ref.read(userInfoStoreProvider);
     final channel = ref.read(channelConfigServiceProvider).cachedConfig;
@@ -3345,7 +3348,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Uri _facebookShareUrl(String dramaId) {
-    final languageCode = ref.read(appLocaleControllerProvider).languageCode;
+    final languageCode = apiLangFromLocale(
+      ref.read(appLocaleControllerProvider),
+    );
     final entitlement = ref.read(entitlementControllerProvider);
     final userInfo = ref.read(userInfoStoreProvider);
     final channel = ref.read(channelConfigServiceProvider).cachedConfig;

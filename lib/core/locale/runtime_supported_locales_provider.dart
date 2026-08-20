@@ -25,6 +25,9 @@ class RuntimeSupportedLocalesController extends Notifier<List<Locale>> {
 
   Future<void> _registerSavedLocale() async {
     final languageCode = await AppLocaleController.readSavedLanguageCode();
+    if (!ref.mounted) {
+      return;
+    }
     registerLanguageCodes([languageCode]);
   }
 

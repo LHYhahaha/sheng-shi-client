@@ -26,15 +26,6 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
   String? _tempSelectedLanguageCode;
   bool _isSwitching = false;
 
-  @override
-  void initState() {
-    super.initState();
-    final locale = ref.read(appLocaleControllerProvider);
-    debugPrint(
-      '[LanguagePage] open: locale=$locale, languageCode=${AppLocaleController.languageCodeFromLocale(locale)}',
-    );
-  }
-
   String _getEffectiveLanguageCode() {
     final currentLocale = ref.read(appLocaleControllerProvider);
     return _tempSelectedLanguageCode ??
@@ -45,7 +36,6 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
     if (_isSwitching) {
       return;
     }
-    debugPrint('[LanguagePage] select: optionCode=$languageCode');
     setState(() {
       _tempSelectedLanguageCode = languageCode;
     });
@@ -61,10 +51,6 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
       final languageCode = AppLocaleController.canonicalLanguageCode(
         selectedLanguageCode,
       );
-      final currentLocale = ref.read(appLocaleControllerProvider);
-      debugPrint(
-        '[LanguagePage] done: selected=$selectedLanguageCode, canonical=$languageCode, current=${AppLocaleController.languageCodeFromLocale(currentLocale)}',
-      );
       setState(() {
         _isSwitching = true;
       });
@@ -76,10 +62,6 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
             .switchLanguage(languageCode);
         await localeController.selectAndSave(
           AppLocaleController.localeForLanguageCode(languageCode),
-        );
-        final savedLocale = ref.read(appLocaleControllerProvider);
-        debugPrint(
-          '[LanguagePage] done: saved=${AppLocaleController.languageCodeFromLocale(savedLocale)}',
         );
         // 切换完成后以新的 Accept-Language 请求活跃上报；上报器会自行读取
         // 当前 FCM token，已拿到时自动携带 pushToken，且失败不阻塞返回页面。
@@ -133,7 +115,6 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
             AbsorbPointer(
               absorbing: _isSwitching,
               child: SafeArea(
-                bottom: false,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [

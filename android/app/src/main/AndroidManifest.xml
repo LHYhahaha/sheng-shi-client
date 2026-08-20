@@ -28,6 +28,17 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
+
+            <!-- App Links: 品牌化域名 -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="juan365drama.go.link" />
+            </intent-filter>
+
             <!-- app_links 负责将自定义 Scheme 分发给 Dart。 -->
             <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
             <intent-filter>

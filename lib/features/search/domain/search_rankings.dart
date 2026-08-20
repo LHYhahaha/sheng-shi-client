@@ -31,6 +31,7 @@ class SearchRankDrama {
     required this.summary,
     required this.tags,
     required this.searchCount,
+    required this.hotValue,
     required this.trailerEpisodeNum,
     required this.isVipOnly,
     required this.status,
@@ -44,6 +45,7 @@ class SearchRankDrama {
   final String summary;
   final List<String> tags;
   final int searchCount;
+  final int hotValue;
   final int trailerEpisodeNum;
   final bool isVipOnly;
   final int status;

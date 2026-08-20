@@ -102,20 +102,20 @@ android {
 //            resValue("string", "MERCHANT_ID", "332")
 //            resValue("string", "VEST_PKG_ID", "1001")
 //        }
-//        create("tiktok_dev") {
-//            dimension = "channel"
-//            applicationId = "com.novashort.shortdrama"
-//            resValue("string", "channel_flag", "tiktok")
-//            resValue("string", "MERCHANT_ID", "319")
-//            resValue("string", "VEST_PKG_ID", "1001")
-//        }
-//        create("kuaishou_dev") {
-//            dimension = "channel"
-//            applicationId = "com.novashort.shortdrama"
-//            resValue("string", "channel_flag", "kuaishou")
-//            resValue("string", "MERCHANT_ID", "320")
-//            resValue("string", "VEST_PKG_ID", "1002")
-//        }
+        create("tiktok_dev") {
+            dimension = "channel"
+            applicationId = "com.novashort.shortdrama"
+            resValue("string", "channel_flag", "tiktok")
+            resValue("string", "MERCHANT_ID", "319")
+            resValue("string", "VEST_PKG_ID", "1001")
+        }
+        create("kuaishou_dev") {
+            dimension = "channel"
+            applicationId = "com.novashort.shortdrama"
+            resValue("string", "channel_flag", "kuaishou")
+            resValue("string", "MERCHANT_ID", "320")
+            resValue("string", "VEST_PKG_ID", "1002")
+        }
     }
 }
 

@@ -1261,7 +1261,6 @@ class PlayerTopBarContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      bottom: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
           PlayerTopBarMetrics.horizontal,
@@ -1444,11 +1443,21 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
     if (_showsClosedOption) (label: 'Closed', value: _closedSubtitleValue),
     if (widget.episodeSources.isEmpty)
       ...widget.subtitles.map(
-        (subtitle) => (label: subtitle.language, value: subtitle.language),
+        (subtitle) => (
+          label: subtitle.language,
+          value: subtitle.languageCode.isNotEmpty
+              ? subtitle.languageCode
+              : subtitle.language,
+        ),
       )
     else
       ...widget.episodeSources.map(
-        (source) => (label: source.language, value: source.language),
+        (source) => (
+          label: source.language,
+          value: source.languageCode.isNotEmpty
+              ? source.languageCode
+              : source.language,
+        ),
       ),
   ];
 
@@ -1554,7 +1563,14 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
     if (_showsClosedOption && widget.currentSubtitleLanguage == null) {
       return 'Subtitle: Closed';
     }
-    return widget.currentSubtitleLanguage ?? '';
+    final current = widget.currentSubtitleLanguage;
+    if (current == null) return '';
+    for (final option in _menuOptions) {
+      if (_isSameLanguageCode(option.value, current)) {
+        return option.label;
+      }
+    }
+    return current;
   }
 
   bool _isSelected(String value) {
@@ -1562,9 +1578,11 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
       return _showsClosedOption && widget.currentSubtitleLanguage == null;
     }
     final current = widget.currentSubtitleLanguage;
-    return current != null &&
-        current.trim().toLowerCase() == value.trim().toLowerCase();
+    return current != null && _isSameLanguageCode(current, value);
   }
+
+  bool _isSameLanguageCode(String first, String second) =>
+      first.trim().toLowerCase() == second.trim().toLowerCase();
 
   bool get _showsClosedOption =>
       widget.subtitles.isNotEmpty && widget.episodeSources.isEmpty;

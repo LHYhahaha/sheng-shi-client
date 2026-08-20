@@ -1121,9 +1121,9 @@ class AppLocalizations {
       return fallbackTitle ?? fallbackId ?? rechargeVipMember;
     }
     if (locale.languageCode == 'zh') {
-      return '$period$rechargeVipMember';
+      return period;
     }
-    return '$period $rechargeVipMember';
+    return period;
   }
 
   String get rechargeBenefitDailyPoints => _remoteText(
