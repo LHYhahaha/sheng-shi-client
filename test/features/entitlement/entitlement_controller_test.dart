@@ -138,6 +138,31 @@ void main() {
     });
 
     test(
+      'ad-unlocked membership episode allows a non-member to play',
+      () async {
+        final container = _containerWith(
+          MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOff(),
+        );
+        addTearDown(container.dispose);
+        final controller = container.read(
+          entitlementControllerProvider.notifier,
+        );
+        await controller.load();
+
+        controller.updateAfterAdUnlock(episodeId: 'heart-thief-ep-1');
+        final decision = controller.evaluateAccessFromFixture(
+          mockEntitlementEpisodeFixture('heart-thief-ep-1'),
+        );
+
+        expect(decision.type, EpisodeAccessDecisionType.allowPlay);
+        expect(
+          container.read(entitlementControllerProvider).pendingUnlock,
+          isNull,
+        );
+      },
+    );
+
+    test(
       'coin episode already unlocked allows play and does not deduct',
       () async {
         final container = _containerWith(

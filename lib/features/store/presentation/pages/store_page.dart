@@ -378,7 +378,9 @@ class _StoreBody extends StatelessWidget {
             height: 180,
             alignment: Alignment.center,
             child: AppEmptyState(
-              message: context.l10n.noData,
+              message: state.isGoogleBillingUnavailable
+                  ? context.l10n.paymentGoogleUnavailable
+                  : context.l10n.noData,
               imageSize: 72,
               spacing: 4,
             ),

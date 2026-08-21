@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -152,11 +154,15 @@ class PlayerUnlockModalCoordinator {
       isSequentialUnlockEligible: _engine.isSequentialUnlockEligible(item),
       requestedVipOnly: vipOnly,
     );
-    await _rechargeController.open(
-      itemId: item.id,
-      requiredCoins: item.episode.requiredCoins,
-      vipOnly: popupType == PlayerRechargePopupType.vipOnly,
-      jumpVipOnly: popupType == PlayerRechargePopupType.vipOnlyJump,
+    // 弹框必须先展示：Billing/商品目录读取发生在弹框商品区域内，不能让无
+    // GMS 或原生回调慢的设备在弹框出现前卡住，也不能占住 Unlock 的 modal 锁。
+    unawaited(
+      _rechargeController.open(
+        itemId: item.id,
+        requiredCoins: item.episode.requiredCoins,
+        vipOnly: popupType == PlayerRechargePopupType.vipOnly,
+        jumpVipOnly: popupType == PlayerRechargePopupType.vipOnlyJump,
+      ),
     );
     if (!context.mounted) {
       return;

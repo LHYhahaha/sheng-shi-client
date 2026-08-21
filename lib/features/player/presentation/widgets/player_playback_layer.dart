@@ -1435,6 +1435,9 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
   static const _closedSubtitleValue = '__closed__';
   static const _menuHorizontalPadding = 20.0;
   static const _selectedIndicatorWidth = 24.0;
+  static const _menuOptionHeight = 20.0;
+  static const _menuOptionGap = 20.0;
+  static const _maxVisibleMenuOptions = 3.8;
   static const _menuTextStyle = TextStyle(color: Colors.white, fontSize: 14);
 
   List<({String label, String value})> get _menuOptions => [
@@ -1494,23 +1497,32 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
                   color: Colors.black.withValues(alpha: 0.65),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (
-                      var index = 0;
-                      index < _menuOptions.length;
-                      index++
-                    ) ...[
-                      if (index > 0) const SizedBox(height: 20),
-                      _SubtitleMenuOption(
-                        label: _menuOptions[index].label,
-                        selected: _isSelected(_menuOptions[index].value),
-                        onTap: () =>
-                            _selectMenuOption(_menuOptions[index].value),
-                      ),
-                    ],
-                  ],
+                child: SizedBox(
+                  height: _menuHeightFor(_menuOptions.length),
+                  child: SingleChildScrollView(
+                    key: const ValueKey('player_subtitle_menu_scroll'),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (
+                          var index = 0;
+                          index < _menuOptions.length;
+                          index++
+                        ) ...[
+                          if (index > 0) const SizedBox(height: _menuOptionGap),
+                          SizedBox(
+                            height: _menuOptionHeight,
+                            child: _SubtitleMenuOption(
+                              label: _menuOptions[index].label,
+                              selected: _isSelected(_menuOptions[index].value),
+                              onTap: () =>
+                                  _selectMenuOption(_menuOptions[index].value),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1557,6 +1569,13 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
     return widestText.ceilToDouble() +
         _menuHorizontalPadding * 2 +
         _selectedIndicatorWidth;
+  }
+
+  double _menuHeightFor(int optionCount) {
+    final visibleCount = math.min(optionCount, _maxVisibleMenuOptions);
+    if (visibleCount == 0) return 0;
+    return visibleCount * _menuOptionHeight +
+        (visibleCount - 1) * _menuOptionGap;
   }
 
   String _currentSubtitleLabel() {

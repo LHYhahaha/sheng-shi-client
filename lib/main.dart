@@ -15,20 +15,35 @@ import 'bootstrap/test_network_bootstrap.dart';
 import 'core/auth/auth_token_storage_provider.dart';
 import 'core/auth/flutter_secure_auth_token_storage.dart';
 import 'core/active/app_active_reporter.dart';
+import 'core/config/app_environment.dart';
 import 'core/network/test_network_config.dart';
 import 'core/notification/fcm_notification_service.dart';
 import 'core/runtime/install_id_provider.dart';
 import 'core/runtime/startup_loading_timing.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  final fcmServiceHandle = _FcmNotificationServiceHandle();
-  final fcmNotificationService = Completer<FcmNotificationService?>();
+  runZoned(
+    () {
+      WidgetsFlutterBinding.ensureInitialized();
+      if (AppConfig.current.isProduction) {
+        debugPrint = (_, {int? wrapWidth}) {};
+      }
+      final fcmServiceHandle = _FcmNotificationServiceHandle();
+      final fcmNotificationService = Completer<FcmNotificationService?>();
 
-  runApp(
-    _StartupBootstrap(
-      fcmServiceHandle: fcmServiceHandle,
-      fcmNotificationService: fcmNotificationService,
+      runApp(
+        _StartupBootstrap(
+          fcmServiceHandle: fcmServiceHandle,
+          fcmNotificationService: fcmNotificationService,
+        ),
+      );
+    },
+    zoneSpecification: ZoneSpecification(
+      print: (self, parent, zone, line) {
+        if (!AppConfig.current.isProduction) {
+          parent.print(zone, line);
+        }
+      },
     ),
   );
 }

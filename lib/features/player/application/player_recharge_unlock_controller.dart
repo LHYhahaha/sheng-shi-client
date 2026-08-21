@@ -210,6 +210,7 @@ class PlayerRechargeUnlockController
   final String sessionKey;
   int _generation = 0;
   int _purchaseGeneration = 0;
+  _PlayerRechargeOpenRequest? _lastOpenRequest;
 
   @override
   PlayerRechargeUnlockState build() {
@@ -225,6 +226,12 @@ class PlayerRechargeUnlockController
     bool vipOnly = false,
     bool jumpVipOnly = false,
   }) async {
+    _lastOpenRequest = _PlayerRechargeOpenRequest(
+      itemId: itemId,
+      requiredCoins: requiredCoins,
+      vipOnly: vipOnly,
+      jumpVipOnly: jumpVipOnly,
+    );
     final generation = ++_generation;
     _purchaseGeneration++;
 
@@ -281,6 +288,20 @@ class PlayerRechargeUnlockController
         error: error,
       );
     }
+  }
+
+  /// 重新读取当前弹框对应的支付目录；用于真实的网络错误重试。
+  Future<void> retryOpen() {
+    final request = _lastOpenRequest;
+    if (request == null) {
+      return Future<void>.value();
+    }
+    return open(
+      itemId: request.itemId,
+      requiredCoins: request.requiredCoins,
+      vipOnly: request.vipOnly,
+      jumpVipOnly: request.jumpVipOnly,
+    );
   }
 
   Future<void> selectCoinPackage(
@@ -478,6 +499,8 @@ class PlayerRechargeUnlockController
   }
 
   void close() {
+    // 关闭弹框后使仍在进行的商品目录请求失效，避免它完成后回写到下一次打开。
+    ++_generation;
     _purchaseGeneration++;
     // 仅在实际支付过程中关闭时才表示“取消支付”。直接关闭充值抽屉并未
     // 创建订单，若也标记为 cancelled，页面会错误地提示“已取消支付”。
@@ -964,4 +987,18 @@ class PlayerRechargeUnlockController
       : PayChannel.google;
 
   int get _clientOsType => defaultTargetPlatform == TargetPlatform.iOS ? 1 : 2;
+}
+
+class _PlayerRechargeOpenRequest {
+  const _PlayerRechargeOpenRequest({
+    required this.itemId,
+    required this.requiredCoins,
+    required this.vipOnly,
+    required this.jumpVipOnly,
+  });
+
+  final String itemId;
+  final int requiredCoins;
+  final bool vipOnly;
+  final bool jumpVipOnly;
 }

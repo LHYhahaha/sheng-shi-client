@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -9,6 +8,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/locale/app_locale_controller.dart';
+import '../../../core/logging/app_log.dart' as developer;
 import '../../../core/runtime/api_lang_provider.dart';
 import '../data/playback_progress_repository_provider.dart';
 import '../data/drama_playback_target_repository_provider.dart';
@@ -567,6 +567,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   String? _predictivePreloadItemId;
   int _visibilityDetachEpoch = 0;
   bool _pauseWhenOpenCompletes = false;
+  bool _isPlaybackVisible = true;
   bool _isSuspendedForCompetingPlayer = false;
   // Android 上 next 的真实首帧预热会短时间内同时占用 previous/current/next 三个
   // MediaCodec。部分机型会把正在播放的 current 异常切成 paused（并非一次新的
@@ -1244,6 +1245,18 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     final resumeStart = resumeProgress?.canResume == true
         ? resumeProgress!.position
         : null;
+    // Loading can begin just before the page is hidden. Do not let a delayed
+    // request put the controller back into opening (or open media) after the
+    // visibility gate has already been closed.
+    if (!_isCurrent(generation) || !_isPlaybackVisible) {
+      if (ref.mounted && !_isPlaybackVisible) {
+        state = state.copyWith(
+          status: PlayerPlaybackStatus.paused,
+          isBuffering: false,
+        );
+      }
+      return;
+    }
     state = state.copyWith(
       status: PlayerPlaybackStatus.opening,
       hasFirstFrame: false,
@@ -1378,7 +1391,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         // 加载字幕
         _loadSubtitlesForItem(item);
 
-        if (_pauseWhenOpenCompletes) {
+        if (!_isPlaybackVisible || _pauseWhenOpenCompletes) {
           await _session.pause();
           state = state.copyWith(
             status: PlayerPlaybackStatus.paused,
@@ -1435,6 +1448,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         return;
       }
       if (!_isCurrent(generation)) {
+        if (!_isPlaybackVisible) {
+          state = state.copyWith(
+            status: PlayerPlaybackStatus.paused,
+            isBuffering: false,
+          );
+        }
         return;
       }
       _currentPlaybackSource = playbackSource;
@@ -1457,7 +1476,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       );
       await _session.open(
         playbackSource.playableSource,
-        play: true,
+        play: _isPlaybackVisible && !_pauseWhenOpenCompletes,
         start: resumeStart,
         httpHeaders: playbackSource.httpHeaders,
       );
@@ -1472,9 +1491,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         return;
       }
       if (!_isCurrent(generation)) {
-        if (_pauseWhenOpenCompletes &&
-            state.currentSource == playbackSource.playableSource) {
+        if (!_isPlaybackVisible || _pauseWhenOpenCompletes) {
           await _session.pause();
+          if (ref.mounted && !_isPlaybackVisible) {
+            state = state.copyWith(
+              status: PlayerPlaybackStatus.paused,
+              isBuffering: false,
+            );
+          }
         }
         return;
       }
@@ -1531,6 +1555,20 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
       // 不阻塞 media open，但 loading 必须等真实首帧/尺寸事件后再消失。
 
+      // 页面已经切走时，source resolve/open 仍可能刚好完成。此时绝不能再
+      // 调用 play，否则 For You 会在隐藏 tab 中漏出音频。
+      if (!_isPlaybackVisible || _pauseWhenOpenCompletes) {
+        await _session.pause();
+        if (ref.mounted && _isCurrent(generation)) {
+          state = state.copyWith(
+            status: PlayerPlaybackStatus.paused,
+            isBuffering: !_currentPlaybackHasFirstFrame,
+            hasFirstFrame: _currentPlaybackHasFirstFrame,
+          );
+        }
+        return;
+      }
+
       // 确保开始播放
       await _session.play();
       if (!ref.mounted || !_isCurrent(generation)) {
@@ -1540,7 +1578,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       // 字幕文件下载不参与首帧路径，避免失败重试和首段加载抢资源。
       _loadSubtitlesForItem(item);
 
-      if (_pauseWhenOpenCompletes) {
+      if (!_isPlaybackVisible || _pauseWhenOpenCompletes) {
         await _session.pause();
         state = state.copyWith(
           status: PlayerPlaybackStatus.paused,
@@ -2318,6 +2356,20 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     return detachSurfaceForVisibility(syncState: syncState);
   }
 
+  /// Synchronously close the playback gate before asynchronous visibility
+  /// cleanup starts. A source resolve/open that finishes after this point must
+  /// remain paused even if its earlier request cleared the pause flag.
+  void markHiddenForVisibility() {
+    if (_isSessionDisposed) {
+      return;
+    }
+    ++_visibilityDetachEpoch;
+    _isPlaybackVisible = false;
+    _pauseWhenOpenCompletes = true;
+    _accessOverlayPausedItemId = null;
+    ++_generation;
+  }
+
   /// 页面播放器之间交接时的轻量暂停。
   ///
   /// 与 [pauseForVisibility] 不同，这里不等待 prepared window、HLS preload 和本地
@@ -2397,6 +2449,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       );
       return;
     }
+    _isPlaybackVisible = true;
     if (sessionKey == PlayerPlaybackSessionKeys.forYouTab) {
       ref.read(hlsTrafficGateProvider).resumeForYou();
     }
@@ -2464,6 +2517,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
     _visibilityDetachEpoch += 1;
+    // 路由返回后即使维持用户原有的暂停状态，页面也已经重新可见。若不恢复
+    // 此开关，随后因广告解锁触发的 playItem 会被当作后台播放而直接忽略。
+    _isPlaybackVisible = true;
     _pauseWhenOpenCompletes = false;
     state = state.copyWith(
       isBuffering: false,
@@ -2514,12 +2570,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (_isSessionDisposed) {
       return;
     }
-    final visibilityEpoch = ++_visibilityDetachEpoch;
+    markHiddenForVisibility();
+    final visibilityEpoch = _visibilityDetachEpoch;
     // 页面隐藏、切 tab、进后台都走这里。generation 先失效旧 open，避免异步 open
     // 完成后又自动 play；随后释放 session window 和 HTTP preload，防止隐藏页面继续
     // 占用音频/网络资源。
-    _pauseWhenOpenCompletes = true;
-    _accessOverlayPausedItemId = null;
     _pauseWatchProgressReportTimer();
     await _persistProgressIfNeeded();
     if (visibilityEpoch != _visibilityDetachEpoch) {
@@ -2543,8 +2598,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
     state = state.copyWith(
       status:
-          state.currentSource == null ||
-              state.status == PlayerPlaybackStatus.blocked ||
+          state.status == PlayerPlaybackStatus.blocked ||
               state.status == PlayerPlaybackStatus.waitUnlock ||
               state.status == PlayerPlaybackStatus.unavailable ||
               state.status == PlayerPlaybackStatus.error ||
@@ -2658,6 +2712,32 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
   }
 
+  /// Rebuild the native session after account/session cleanup while retaining
+  /// this provider instance. For You is kept alive by StatefulShell, so simply
+  /// disposing its native player leaves the long-lived controller permanently
+  /// unable to accept later [playItem] calls.
+  Future<void> resetForSessionCleanup() async {
+    await disposeSession(syncState: false);
+    await _cancelSessionStreams();
+    _isSessionDisposed = false;
+    _session = ref.read(playerPlaybackSessionFactoryProvider).call();
+    _attachSessionStreams(_session);
+    _currentOriginalItem = null;
+    _visibilitySuspendedItem = null;
+    _currentPlaybackItemId = null;
+    _currentPlaybackSource = null;
+    _clearCurrentPlaybackSnapshot();
+    _lastPlayItemRequest = null;
+    _pauseWhenOpenCompletes = false;
+    _isSuspendedForCompetingPlayer = false;
+    if (ref.mounted) {
+      state = PlayerPlaybackState.initial(
+        videoController: _session.videoController,
+      );
+    }
+    _logTiming('create current session', details: 'reason=session cleanup');
+  }
+
   Future<void> releaseSessionWindow() {
     return _releaseSessionWindowFor('memory pressure');
   }
@@ -2688,7 +2768,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (!ref.mounted) {
       return;
     }
-    if (_pauseWhenOpenCompletes && isPlaying) {
+    if ((!_isPlaybackVisible || _pauseWhenOpenCompletes) && isPlaying) {
+      unawaited(_session.pause());
       return;
     }
     if (state.currentSource == null ||

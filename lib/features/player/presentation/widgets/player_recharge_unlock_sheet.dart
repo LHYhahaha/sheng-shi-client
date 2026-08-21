@@ -19,6 +19,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
 import '../../../../shared/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
 import '../../application/player_feed_controller.dart';
@@ -293,7 +294,10 @@ class _PlayerRechargeUnlockSheetState
     final content = state.offer == null
         ? KeyedSubtree(
             key: const ValueKey('player_recharge_loading_sheet'),
-            child: _LoadingOrError(state: state),
+            child: _LoadingOrError(
+              state: state,
+              onRetry: () => unawaited(ref.read(provider.notifier).retryOpen()),
+            ),
           )
         : KeyedSubtree(
             key: const ValueKey('player_recharge_offer_sheet'),
@@ -381,17 +385,28 @@ class _PlayerRechargeUnlockSheetState
 }
 
 class _LoadingOrError extends StatelessWidget {
-  const _LoadingOrError({required this.state});
+  const _LoadingOrError({required this.state, required this.onRetry});
 
   final PlayerRechargeUnlockState state;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
     if (state.status == PlayerRechargeUnlockStatus.failed) {
       return Center(
-        child: Text(
-          context.l10n.networkError,
-          style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              context.l10n.networkError,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 12),
+            AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
+          ],
         ),
       );
     }
@@ -553,7 +568,9 @@ class _OfferContent extends ConsumerWidget {
                     height: 180,
                     alignment: Alignment.center,
                     child: AppEmptyState(
-                      message: context.l10n.noData,
+                      message: offer.isGoogleBillingUnavailable
+                          ? context.l10n.paymentGoogleUnavailable
+                          : context.l10n.noData,
                       imageSize: 72,
                       spacing: 4,
                     ),

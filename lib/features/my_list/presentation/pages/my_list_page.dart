@@ -1,4 +1,3 @@
-import 'dart:developer' as developer;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -15,6 +14,7 @@ import '../../../../core/analytics/drama_card_exposure.dart';
 import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/analytics/analytics_service.dart';
+import '../../../../core/logging/app_log.dart' as developer;
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../core/utils/text_over_ellipsis.dart';
 import '../../../../l10n/app_localizations.dart';

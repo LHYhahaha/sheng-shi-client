@@ -49,11 +49,18 @@ class PlayerRechargeUnlockRepositoryImpl
 
     // 3. 查询 IAP 价格（含促销信息）
     final iapDetails = <String, IapProductInfo>{};
+    var isGoogleBillingUnavailable = false;
     if (channelProductIds.isNotEmpty) {
-      final result = await iapPriceService.queryProductsWithPromo(
-        productIds: channelProductIds,
-      );
-      iapDetails.addAll(result);
+      final billingAvailable = await iapPriceService
+          .isGooglePlayBillingAvailable();
+      if (!billingAvailable) {
+        isGoogleBillingUnavailable = true;
+      } else {
+        final result = await iapPriceService.queryProductsWithPromo(
+          productIds: channelProductIds,
+        );
+        iapDetails.addAll(result);
+      }
     }
 
     // 4. 映射为 Player 专用模型（IapProductInfo 已一次性组装好促销价、原价、offerToken）
@@ -62,6 +69,7 @@ class PlayerRechargeUnlockRepositoryImpl
       iapDetails,
       requiredCoins,
       isMember: isMember,
+      isGoogleBillingUnavailable: isGoogleBillingUnavailable,
     );
   }
 

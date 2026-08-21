@@ -1,7 +1,7 @@
-import 'dart:developer' as developer;
-
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+
+import '../../../core/logging/app_log.dart' as developer;
 
 /// 播放器 session 抽象。
 ///

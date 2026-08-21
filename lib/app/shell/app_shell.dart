@@ -94,7 +94,6 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  bool _resumeForYouOnReturn = false;
   Future<void> _forYouVisibilityOperation = Future<void>.value();
   late int _lastNavigationIndex;
   bool _shellReadyEffectsStarted = false;
@@ -301,9 +300,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     );
     if (from == AppShellDestinations.forYouIndex &&
         to != AppShellDestinations.forYouIndex) {
-      final playback = ref.read(playbackProvider);
-      _resumeForYouOnReturn =
-          playback.currentSource != null || playback.isOpening;
+      // 先同步关闭播放闸门，再排队做耗时的 session/preload 清理。否则 loading
+      // 中的 open 在清理完成前返回时，可能会在已隐藏的 For You 里开始播放。
+      ref.read(playbackProvider.notifier).markHiddenForVisibility();
       _forYouVisibilityOperation = _forYouVisibilityOperation.then((_) {
         return ref.read(playbackProvider.notifier).pauseForVisibility();
       });
@@ -311,15 +310,12 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
     if (from != AppShellDestinations.forYouIndex &&
         to == AppShellDestinations.forYouIndex) {
-      final shouldResume = _resumeForYouOnReturn;
-      _resumeForYouOnReturn = false;
-      if (shouldResume) {
-        _forYouVisibilityOperation = _forYouVisibilityOperation.then((_) {
-          return ref
-              .read(playbackProvider.notifier)
-              .resumeAfterCompetingPlayer();
-        });
-      }
+      // 离开时可能还没有 currentSource（视频正处于 source resolve/open 前）。
+      // 即使没有可恢复的媒体，也必须重新打开可见性闸门；否则回到 For You 后的
+      // playItem 会被永久当作隐藏播放而保持 paused，表现为黑屏。
+      _forYouVisibilityOperation = _forYouVisibilityOperation.then((_) {
+        return ref.read(playbackProvider.notifier).resumeAfterCompetingPlayer();
+      });
     }
   }
 

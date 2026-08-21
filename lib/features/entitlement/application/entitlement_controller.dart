@@ -321,6 +321,19 @@ class EntitlementController extends Notifier<UserEntitlementState> {
       );
     }
 
+    // 单集已解锁（包括广告解锁的会员集）必须优先放行。否则广告解锁虽已
+    // 写入 unlockedEpisodeIds，会员集仍会在下面被错误地判为 goMembership。
+    if (state.isEpisodeUnlocked(episodeId)) {
+      return _decision(
+        type: EpisodeAccessDecisionType.allowPlay,
+        dramaId: dramaId,
+        episodeId: episodeId,
+        itemId: itemId,
+        unlockType: unlockType,
+        price: price,
+      );
+    }
+
     // 会员是全局放行权益：只要内容可用，会员剧集和金币剧集都可以直接播。
     // 这条规则必须放在金币余额/自动解锁之前，避免会员账号被误扣金币或弹充值。
     if (state.isMember) {

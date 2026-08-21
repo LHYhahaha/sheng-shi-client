@@ -13,6 +13,7 @@ class PlayerRechargeUnlockOffer {
     required this.membershipPackages,
     required this.benefits,
     required this.tips,
+    this.isGoogleBillingUnavailable = false,
   });
 
   /// 当前剧集解锁需要的金币数。
@@ -32,6 +33,10 @@ class PlayerRechargeUnlockOffer {
   ///
   /// 每行最多展示两个，由 UI 层按列表顺序排版。
   final List<PlayerRechargeBenefit> benefits;
+
+  /// 当前设备明确不支持 Google Play Billing；用于在没有 Other 套餐时提供
+  /// 可理解的空态，而不是误报为网络故障。
+  final bool isGoogleBillingUnavailable;
 
   /// 解锁/充值说明文案。
   ///

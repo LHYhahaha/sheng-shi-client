@@ -64,6 +64,7 @@ class MembershipState {
     required this.iapProductDetails,
     required this.paymentMethods,
     required this.selectedPaymentMethodCode,
+    required this.isGoogleBillingUnavailable,
     this.paymentRuleId,
     this.error,
   });
@@ -81,6 +82,7 @@ class MembershipState {
       iapProductDetails = const {},
       paymentMethods = const [],
       selectedPaymentMethodCode = null,
+      isGoogleBillingUnavailable = false,
       paymentRuleId = null,
       error = null;
 
@@ -96,6 +98,7 @@ class MembershipState {
   final Map<String, ProductDetails> iapProductDetails;
   final List<PaymentMethodOption> paymentMethods;
   final String? selectedPaymentMethodCode;
+  final bool isGoogleBillingUnavailable;
   final int? paymentRuleId;
   final Object? error;
 
@@ -131,6 +134,7 @@ class MembershipState {
     Map<String, ProductDetails>? iapProductDetails,
     List<PaymentMethodOption>? paymentMethods,
     String? selectedPaymentMethodCode,
+    bool? isGoogleBillingUnavailable,
     int? paymentRuleId,
     Object? error,
     bool clearError = false,
@@ -156,6 +160,8 @@ class MembershipState {
       paymentMethods: paymentMethods ?? this.paymentMethods,
       selectedPaymentMethodCode:
           selectedPaymentMethodCode ?? this.selectedPaymentMethodCode,
+      isGoogleBillingUnavailable:
+          isGoogleBillingUnavailable ?? this.isGoogleBillingUnavailable,
       paymentRuleId: clearPaymentRuleId
           ? null
           : paymentRuleId ?? this.paymentRuleId,
@@ -198,12 +204,12 @@ class MembershipController extends Notifier<MembershipState> {
         return;
       }
 
-      final iapDetails = await _queryIapProducts(data.plans);
+      final iapResult = await _queryIapProducts(data.plans);
       if (!_isCurrent(generation)) {
         return;
       }
 
-      final plans = _mergeIapPricing(data.plans, iapDetails);
+      final plans = _mergeIapPricing(data.plans, iapResult.details);
 
       state = state.copyWith(
         isLoading: false,
@@ -212,7 +218,8 @@ class MembershipController extends Notifier<MembershipState> {
         heroSubtitle: data.heroSubtitle,
         plans: List<MembershipPlan>.unmodifiable(plans),
         selectedPlanId: plans.isEmpty ? null : plans.first.id,
-        iapProductDetails: iapDetails,
+        iapProductDetails: iapResult.details,
+        isGoogleBillingUnavailable: iapResult.isGoogleBillingUnavailable,
         clearError: true,
       );
     } catch (error, stackTrace) {
@@ -228,6 +235,11 @@ class MembershipController extends Notifier<MembershipState> {
 
   Future<void> refreshSilently() async {
     if (state.isLoading) {
+      // Member tab is kept alive by StatefulShell. After logout its state is
+      // reset to the initial loading state, but the page's initState will not
+      // run again. Treat this refresh as the initial load instead of leaving
+      // the tab permanently on its loading indicator.
+      await load();
       return;
     }
 
@@ -241,12 +253,12 @@ class MembershipController extends Notifier<MembershipState> {
         return;
       }
 
-      final iapDetails = await _queryIapProducts(data.plans);
+      final iapResult = await _queryIapProducts(data.plans);
       if (!_isCurrent(generation)) {
         return;
       }
 
-      final plans = _mergeIapPricing(data.plans, iapDetails);
+      final plans = _mergeIapPricing(data.plans, iapResult.details);
       final selectedPlanId = state.selectedPlanId;
       final nextSelectedPlanId = plans.any((plan) => plan.id == selectedPlanId)
           ? selectedPlanId
@@ -261,7 +273,8 @@ class MembershipController extends Notifier<MembershipState> {
         heroSubtitle: data.heroSubtitle,
         plans: List<MembershipPlan>.unmodifiable(plans),
         selectedPlanId: nextSelectedPlanId,
-        iapProductDetails: iapDetails,
+        iapProductDetails: iapResult.details,
+        isGoogleBillingUnavailable: iapResult.isGoogleBillingUnavailable,
         clearError: true,
       );
     } catch (error, stackTrace) {
@@ -582,7 +595,7 @@ class MembershipController extends Notifier<MembershipState> {
     );
   }
 
-  Future<Map<String, ProductDetails>> _queryIapProducts(
+  Future<_MembershipIapLoadResult> _queryIapProducts(
     List<MembershipPlan> plans,
   ) async {
     final productIds = <String>{};
@@ -596,11 +609,15 @@ class MembershipController extends Notifier<MembershipState> {
       }
     }
     if (productIds.isEmpty) {
-      return const {};
+      return const _MembershipIapLoadResult();
     }
-    return ref
-        .read(iapPriceServiceProvider)
-        .queryProducts(productIds: productIds);
+    final service = ref.read(iapPriceServiceProvider);
+    if (!await service.isGooglePlayBillingAvailable()) {
+      return const _MembershipIapLoadResult(isGoogleBillingUnavailable: true);
+    }
+    return _MembershipIapLoadResult(
+      details: await service.queryProducts(productIds: productIds),
+    );
   }
 
   List<MembershipPlan> _mergeIapPricing(
@@ -826,4 +843,14 @@ class MembershipController extends Notifier<MembershipState> {
       : PayChannel.google;
 
   int get _clientOsType => defaultTargetPlatform == TargetPlatform.iOS ? 1 : 2;
+}
+
+class _MembershipIapLoadResult {
+  const _MembershipIapLoadResult({
+    this.details = const {},
+    this.isGoogleBillingUnavailable = false,
+  });
+
+  final Map<String, ProductDetails> details;
+  final bool isGoogleBillingUnavailable;
 }

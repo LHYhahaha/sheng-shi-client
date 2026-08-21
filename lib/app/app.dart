@@ -742,8 +742,8 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       unawaited(_openPopupExternalUrl(url));
       return;
     }
-    // 内嵌 H5 的来源需在 H5 安全上下文中单独传递；当前不污染后续 App page_view。
-    router.push(RoutePaths.webviewLocation(url: url, title: popup.name));
+    // `/api/popup` 的配置名只用于弹框/埋点；内嵌 H5 不展示该名称作为页面标题。
+    router.push(RoutePaths.webviewLocation(url: url));
   }
 
   Future<void> _openPopupExternalUrl(String url) async {

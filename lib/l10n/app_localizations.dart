@@ -2223,6 +2223,12 @@ class AppLocalizations {
     zh: '网络错误，请稍后重试。',
   );
 
+  String get paymentGoogleUnavailable => _remoteText(
+    'payment.google_unavailable',
+    en: "Google services unavailable. Can't load products.",
+    zh: 'Google服务不可用，商品加载失败',
+  );
+
   String get adUnlockSuccess =>
       _remoteText('ad_unlock.success', en: 'Unlocked successfully', zh: '解锁成功');
 

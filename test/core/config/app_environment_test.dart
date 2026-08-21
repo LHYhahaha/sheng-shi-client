@@ -20,6 +20,15 @@ void main() {
     );
   });
 
+  test('only production config suppresses application logs', () {
+    expect(AppConfig.forEnvironment(AppEnvironment.dev).isProduction, isFalse);
+    expect(
+      AppConfig.forEnvironment(AppEnvironment.staging).isProduction,
+      isFalse,
+    );
+    expect(AppConfig.forEnvironment(AppEnvironment.prod).isProduction, isTrue);
+  });
+
   test('api base url override is explicit and environment scoped', () {
     final config = AppConfig.forEnvironment(
       AppEnvironment.staging,

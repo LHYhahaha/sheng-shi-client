@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:developer';
 
 import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/material.dart';
@@ -17,6 +16,7 @@ import '../../../../core/auth/user_info_store.dart';
 import '../../../../core/channel/channel_config_service.dart';
 import '../../../../features/auth/application/auth_controller.dart';
 import '../../../../core/config/app_environment.dart';
+import '../../../../core/logging/app_log.dart';
 import '../../../../core/network/api_client_provider.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';

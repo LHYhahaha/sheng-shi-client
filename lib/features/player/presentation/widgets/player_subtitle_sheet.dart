@@ -1,8 +1,7 @@
-import 'dart:developer' as developer;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/logging/app_log.dart' as developer;
 import '../../application/player_playback_controller.dart';
 
 /// 字幕选择器底部面板。

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/svg.dart';
 
+import '../../../../core/toast/app_center_toast.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
@@ -82,11 +83,13 @@ class ProfileHeader extends StatelessWidget {
                         ),
                       ),
                       SizedBox(width: 4),
-                      Image.asset(
-                        "assets/images/profile/log_icon.png",
-                        height: 20,
-                        width: 20,
-                      ),
+                      state.isLoggedIn
+                          ? SizedBox()
+                          : Image.asset(
+                              "assets/images/profile/log_icon.png",
+                              height: 20,
+                              width: 20,
+                            ),
                     ],
                   ),
                   const SizedBox(height: 1),
@@ -96,12 +99,7 @@ class ProfileHeader extends StatelessWidget {
                             final showId = state.showId;
                             if (showId != null) {
                               Clipboard.setData(ClipboardData(text: showId));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(l10n.profileCopySuccess),
-                                  duration: const Duration(seconds: 2),
-                                ),
-                              );
+                              showAppCenterToast(l10n.profileCopySuccess);
                             }
                           }
                         : null,

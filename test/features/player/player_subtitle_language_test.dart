@@ -266,6 +266,57 @@ void main() {
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
   });
 
+  testWidgets('subtitle menu shows at most three options before scrolling', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const [AppLocalizations.delegate],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: PlayerTopBar(
+            episodeNumber: 1,
+            playbackRate: 1,
+            overlayOpacity: 1,
+            onBackTap: () {},
+            onSpeedTap: () {},
+            showChromeOverlays: true,
+            subtitles: const [],
+            episodeSources: const [
+              PlayerEpisodeSource(id: '1', language: 'English', url: 'one'),
+              PlayerEpisodeSource(id: '2', language: 'Spanish', url: 'two'),
+              PlayerEpisodeSource(id: '3', language: 'French', url: 'three'),
+              PlayerEpisodeSource(id: '4', language: 'German', url: 'four'),
+            ],
+            currentSubtitleLanguage: 'English',
+            onSubtitleSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('player_subtitle_button')));
+    await tester.pumpAndSettle();
+
+    final scrollable = tester.widget<SingleChildScrollView>(
+      find.byKey(const ValueKey('player_subtitle_menu_scroll')),
+    );
+    expect(scrollable, isNotNull);
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('player_subtitle_menu_scroll')))
+          .height,
+      100,
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('player_subtitle_menu_scroll')),
+      const Offset(0, -80),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(find.text('German')).dy, lessThan(200));
+  });
+
   testWidgets('subtitle menu closes when immersive chrome is entered', (
     tester,
   ) async {

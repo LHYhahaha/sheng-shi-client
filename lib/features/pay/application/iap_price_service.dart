@@ -8,13 +8,39 @@ import '../../../core/utils/period_iso_parser.dart';
 import '../domain/iap_product_info.dart';
 import 'google_play_pricing_extractor.dart';
 
+/// Google Play 商品目录暂时无法读取。
+///
+/// `isAvailable == false` 是明确的设备/商店不可用，会正常返回空目录；只有
+/// 超时、平台异常和商品查询错误才抛出本异常，让界面展示真实的网络错误与重试。
+class IapCatalogQueryException implements Exception {
+  const IapCatalogQueryException(this.cause);
+
+  final Object cause;
+
+  @override
+  String toString() => 'IapCatalogQueryException: $cause';
+}
+
 /// IAP 价格查询服务（公共）
 ///
 /// 负责查询 Google Play / App Store 的商品价格和促销信息。
 /// Store 页面和 Membership 页面都可以使用这个服务。
 class IapPriceService {
+  static const _availabilityTimeout = Duration(seconds: 3);
+  static const _productQueryTimeout = Duration(seconds: 5);
+
   final _iap = InAppPurchase.instance;
   final _productDetailsCache = <String, ProductDetails>{};
+
+  /// 仅当 Billing 明确返回不可用时返回 false；超时和平台异常交给调用方展示
+  /// 网络错误并提供重试，不能误判成设备不支持。
+  Future<bool> isGooglePlayBillingAvailable() async {
+    try {
+      return await _iap.isAvailable().timeout(_availabilityTimeout);
+    } catch (error) {
+      throw IapCatalogQueryException(error);
+    }
+  }
 
   /// 查询商品信息
   ///
@@ -26,11 +52,21 @@ class IapPriceService {
     try {
       debugPrint('[IapPrice] 开始查询商品: $productIds');
 
-      final response = await _iap.queryProductDetails(productIds);
+      // 明确不可用时不再调用 Google Play 商品查询。这样无 GMS/Play Store 的
+      // 设备会直接走 Other 支付渠道或空态，而不是卡在原生 Billing 回调上。
+      final available = await isGooglePlayBillingAvailable();
+      if (!available) {
+        debugPrint('[IapPrice] Billing unavailable; Google products skipped.');
+        return const {};
+      }
+
+      final response = await _iap
+          .queryProductDetails(productIds)
+          .timeout(_productQueryTimeout);
 
       if (response.error != null) {
         debugPrint('[IapPrice] 查询商品失败: ${response.error}');
-        return {};
+        throw IapCatalogQueryException(response.error!);
       }
 
       final result = <String, ProductDetails>{};
@@ -99,7 +135,10 @@ class IapPriceService {
       return result;
     } catch (e, st) {
       debugPrint('[IapPrice] 查询商品异常: $e\n$st');
-      return {};
+      if (e is IapCatalogQueryException) {
+        rethrow;
+      }
+      throw IapCatalogQueryException(e);
     }
   }
 

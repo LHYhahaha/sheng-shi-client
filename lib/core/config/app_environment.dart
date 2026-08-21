@@ -15,6 +15,10 @@ class AppConfig {
   /// 当前环境。
   final AppEnvironment environment;
 
+  /// 生产环境不输出客户端开发日志，避免在正式包日志中暴露请求或会话信息。
+  bool get isProduction => environment == AppEnvironment.prod;
+  // bool get isProduction => false;
+
   /// API base URL。
   ///
   /// 仅网络层使用，业务页面不要根据 URL 判断环境或行为。

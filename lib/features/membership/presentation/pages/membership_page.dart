@@ -391,6 +391,7 @@ class _MembershipBody extends StatelessWidget {
             _MembershipPlanCardsRow(
               plans: state.plans,
               selectedPlanId: state.selectedPlanId,
+              isGoogleBillingUnavailable: state.isGoogleBillingUnavailable,
               onPlanTap: onPlanTap,
             ),
             // 促销文案（根据语言动态组装）
@@ -528,11 +529,13 @@ class _MembershipPlanCardsRow extends StatelessWidget {
   const _MembershipPlanCardsRow({
     required this.plans,
     required this.selectedPlanId,
+    required this.isGoogleBillingUnavailable,
     required this.onPlanTap,
   });
 
   final List<MembershipPlan> plans;
   final String? selectedPlanId;
+  final bool isGoogleBillingUnavailable;
   final void Function(String planId) onPlanTap;
 
   @override
@@ -556,7 +559,9 @@ class _MembershipPlanCardsRow extends StatelessWidget {
             height: cardHeight,
             child: Center(
               child: AppEmptyState(
-                message: context.l10n.noData,
+                message: isGoogleBillingUnavailable
+                    ? context.l10n.paymentGoogleUnavailable
+                    : context.l10n.noData,
                 imageSize: 72,
                 spacing: 4,
               ),

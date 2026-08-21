@@ -9,6 +9,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
+import '../config/app_environment.dart';
 import 'fcm_notification.dart';
 
 const _androidNotificationChannel = AndroidNotificationChannel(
@@ -24,17 +25,26 @@ Future<void> fcmBackgroundMessageHandler(RemoteMessage message) async {
   try {
     await Firebase.initializeApp();
     final notification = FcmNotification.fromRemoteMessage(message);
+    if (AppConfig.current.isProduction) {
+      return;
+    }
     _logRemoteMessage('Background message received', message);
     debugPrint(
       '[FCM] Background display model: ${jsonEncode(notification.toPayload())}',
     );
   } catch (error, stackTrace) {
+    if (AppConfig.current.isProduction) {
+      return;
+    }
     debugPrint('[FCM] Background initialization failed: $error');
     debugPrintStack(stackTrace: stackTrace);
   }
 }
 
 void _logRemoteMessage(String event, RemoteMessage message) {
+  if (AppConfig.current.isProduction) {
+    return;
+  }
   try {
     debugPrint(
       '[FCM] $event full payload: ${jsonEncode(message.toMap())}',

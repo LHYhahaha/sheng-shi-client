@@ -19,6 +19,7 @@ class PlayerRechargeUnlockMapper {
     Map<String, IapProductInfo> iapDetails,
     int requiredCoins, {
     bool isMember = false,
+    bool isGoogleBillingUnavailable = false,
   }) {
     final coinProducts = dto.coinProducts as List<dynamic>;
     final memberProducts = dto.memberProducts as List<dynamic>;
@@ -39,6 +40,7 @@ class PlayerRechargeUnlockMapper {
       benefits: _defaultBenefits(),
       tips:
           'Coins are used to unlock paid episodes.\nVIP membership unlocks eligible dramas during the active period.',
+      isGoogleBillingUnavailable: isGoogleBillingUnavailable,
     );
   }
 

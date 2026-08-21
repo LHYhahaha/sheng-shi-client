@@ -60,6 +60,7 @@ class StoreState {
     required this.iapProductDetails,
     required this.paymentMethods,
     required this.selectedPaymentMethodCode,
+    required this.isGoogleBillingUnavailable,
     this.paymentRuleId,
     this.error,
   });
@@ -77,6 +78,7 @@ class StoreState {
       iapProductDetails = const {},
       paymentMethods = const [],
       selectedPaymentMethodCode = null,
+      isGoogleBillingUnavailable = false,
       paymentRuleId = null,
       error = null;
 
@@ -92,6 +94,7 @@ class StoreState {
   final Map<String, ProductDetails> iapProductDetails;
   final List<PaymentMethodOption> paymentMethods;
   final String? selectedPaymentMethodCode;
+  final bool isGoogleBillingUnavailable;
   final int? paymentRuleId;
   final Object? error;
 
@@ -129,6 +132,7 @@ class StoreState {
     Map<String, ProductDetails>? iapProductDetails,
     List<PaymentMethodOption>? paymentMethods,
     String? selectedPaymentMethodCode,
+    bool? isGoogleBillingUnavailable,
     int? paymentRuleId,
     Object? error,
     bool clearError = false,
@@ -154,6 +158,8 @@ class StoreState {
       paymentMethods: paymentMethods ?? this.paymentMethods,
       selectedPaymentMethodCode:
           selectedPaymentMethodCode ?? this.selectedPaymentMethodCode,
+      isGoogleBillingUnavailable:
+          isGoogleBillingUnavailable ?? this.isGoogleBillingUnavailable,
       paymentRuleId: clearPaymentRuleId
           ? null
           : paymentRuleId ?? this.paymentRuleId,
@@ -221,10 +227,16 @@ class StoreController extends Notifier<StoreState> {
       }
 
       var iapDetails = <String, ProductDetails>{};
+      var isGoogleBillingUnavailable = false;
       if (channelProductIds.isNotEmpty) {
-        iapDetails = await ref
-            .read(iapPriceServiceProvider)
-            .queryProducts(productIds: channelProductIds);
+        final service = ref.read(iapPriceServiceProvider);
+        if (!await service.isGooglePlayBillingAvailable()) {
+          isGoogleBillingUnavailable = true;
+        } else {
+          iapDetails = await service.queryProducts(
+            productIds: channelProductIds,
+          );
+        }
       }
 
       if (!_isCurrent(generation)) {
@@ -258,6 +270,7 @@ class StoreController extends Notifier<StoreState> {
         tips: data.tips,
         selectedPackageId: selectedId,
         iapProductDetails: iapDetails,
+        isGoogleBillingUnavailable: isGoogleBillingUnavailable,
         clearError: true,
       );
     } catch (error, stackTrace) {

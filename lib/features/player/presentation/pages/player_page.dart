@@ -1,4 +1,3 @@
-import 'dart:developer' as developer;
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -21,6 +20,7 @@ import '../../../../core/analytics/analytics_service.dart';
 import '../../../../core/auth/user_info_store.dart';
 import '../../../../core/channel/channel_config_service.dart';
 import '../../../../core/config/app_environment.dart';
+import '../../../../core/logging/app_log.dart' as developer;
 import '../../../../core/modal/app_modal_provider.dart';
 import '../../../../core/modal/app_modal_service.dart';
 import '../../../../core/modal/app_modal_source.dart';
@@ -174,6 +174,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isOpeningSearch = false;
   bool _isOpeningForYouPlayer = false;
   bool _isReloadingForYouAfterLanguageChange = false;
+  bool _isReloadingForYouAfterSessionRecovery = false;
   bool _hasPendingForYouLanguageReload = false;
   bool _isRefreshingForYouFeed = false;
   bool _isLeavingRoute = false;
@@ -203,6 +204,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _resumePlaybackOnLifecycleResume = false;
   bool _resumePlaybackOnRouteReturn = false;
   bool _isCoveredByAnotherRoute = false;
+  String? _pendingAdUnlockedItemId;
   String? _analyticsPlayingItemId;
   PlayerFeedItem? _analyticsPlayingItem;
   DateTime? _analyticsPlaybackStartedAt;
@@ -423,13 +425,41 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         _isLeavingRoute) {
       return;
     }
-    unawaited(
-      widget.feedMode == PlayerFeedMode.forYou
-          ? _playbackController.resumeAfterCompetingPlayer()
-          : shouldResumePlayback
-          ? _resumePlaybackAfterLifecyclePause()
-          : _restorePlaybackSurfaceAfterVisibilityPause(),
-    );
+    unawaited(_restoreAfterCoveredRoutePops(shouldResumePlayback));
+  }
+
+  Future<void> _restoreAfterCoveredRoutePops(bool shouldResumePlayback) async {
+    if (widget.feedMode == PlayerFeedMode.forYou) {
+      await _playbackController.resumeAfterCompetingPlayer();
+    } else if (shouldResumePlayback) {
+      await _resumePlaybackAfterLifecyclePause();
+    } else {
+      await _restorePlaybackSurfaceAfterVisibilityPause();
+    }
+    await _playPendingAdUnlockedEpisode();
+  }
+
+  Future<void> _playPendingAdUnlockedEpisode() async {
+    final itemId = _pendingAdUnlockedItemId;
+    if (itemId == null ||
+        !mounted ||
+        _isCoveredByAnotherRoute ||
+        _previousLifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+    final item = feedState.currentItem;
+    if (item?.id != itemId) {
+      return;
+    }
+    _pendingAdUnlockedItemId = null;
+    await ref
+        .read(playerRuntimeCoordinatorProvider(_sessionKey).notifier)
+        .onViewportSettled(
+          item: item!,
+          index: feedState.currentIndex,
+          playbackTrigger: 'ad_unlock',
+        );
   }
 
   @override
@@ -715,7 +745,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         return;
       }
       ref.invalidate(playerViewportControllerProvider(_sessionKey));
-      await _loadFeedForTiming();
+      await _loadFeedForTiming(forceRefresh: true, preserveVisibleItems: true);
       // The user may leave For You while the feed request is in flight.  The
       // reload can have started playback before that navigation is observed by
       // the shell, so make the hidden state authoritative one more time.
@@ -728,6 +758,33 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
   }
 
+  /// For You survives logout in the shell's indexed stack. Its feed is reset
+  /// during session cleanup and is reloaded only when the user selects this tab.
+  Future<void> _reloadForYouAfterSessionRecovery() async {
+    if (_isReloadingForYouAfterSessionRecovery ||
+        widget.feedMode != PlayerFeedMode.forYou) {
+      return;
+    }
+    final feed = ref.read(playerFeedControllerProvider(_sessionKey));
+    if (feed.config != null || feed.isLoading == false) {
+      return;
+    }
+    _isReloadingForYouAfterSessionRecovery = true;
+    try {
+      final uiController = ref.read(
+        playerUiControllerProvider(_sessionKey).notifier,
+      );
+      uiController.startSession('1');
+      uiController.configureAutoImmersiveSession(enabled: false);
+      await _loadFeedForTiming();
+      if (!_isPlaybackViewVisible) {
+        await _playbackController.pauseForVisibility();
+      }
+    } finally {
+      _isReloadingForYouAfterSessionRecovery = false;
+    }
+  }
+
   void _reloadPendingForYouLanguageChangeOnReturn() {
     if (!_hasPendingForYouLanguageReload ||
         widget.feedMode != PlayerFeedMode.forYou ||
@@ -736,6 +793,41 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
     _hasPendingForYouLanguageReload = false;
     unawaited(_reloadForYouAfterLanguageChange());
+  }
+
+  Future<void> _handleForYouTabSelected() async {
+    if (widget.feedMode != PlayerFeedMode.forYou || !_isPlaybackViewVisible) {
+      return;
+    }
+    _reloadPendingForYouLanguageChangeOnReturn();
+    // The tab selection is the explicit resume point after logout/login. This
+    // opens the visibility gate before re-settling the replacement feed.
+    await _playbackController.resumeAfterCompetingPlayer();
+    await _reloadForYouAfterSessionRecovery();
+    await _restoreRecoveredForYouPlaybackOnReturn();
+  }
+
+  /// Session recovery may finish while this indexed-stack page is hidden. The
+  /// shell only resumes a player that was active when the user left For You;
+  /// after logout there is intentionally no active source yet. Re-settle the
+  /// recovered item on tab entry so the normal settled-only playback path can
+  /// open it, or resume the source that was opened while hidden.
+  Future<void> _restoreRecoveredForYouPlaybackOnReturn() async {
+    if (widget.feedMode != PlayerFeedMode.forYou || !_isPlaybackViewVisible) {
+      return;
+    }
+    final feed = ref.read(playerFeedControllerProvider(_sessionKey));
+    final item = feed.currentItem;
+    if (item == null) {
+      return;
+    }
+    final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
+    if (playback.currentSource != null) {
+      await _playbackController.resumeAfterCompetingPlayer();
+      return;
+    }
+    ref.invalidate(playerViewportControllerProvider(_sessionKey));
+    _feedEngine.initializeViewport(index: feed.currentIndex, itemId: item.id);
   }
 
   bool _shouldResumePlaybackWhenForYouReturns(PlayerPlaybackState playback) {
@@ -782,7 +874,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     };
   }
 
-  Future<void> _loadFeedForTiming() async {
+  Future<void> _loadFeedForTiming({
+    bool forceRefresh = false,
+    bool preserveVisibleItems = false,
+  }) async {
     final feedProvider = playerFeedControllerProvider(_sessionKey);
     final feedController = ref.read(feedProvider.notifier);
     final config = _feedConfig;
@@ -795,7 +890,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         'episodeId=${config.episodeId ?? 'null'}',
       ].join(' '),
     );
-    await feedController.load(config);
+    await feedController.load(
+      config,
+      forceRefresh: forceRefresh,
+      preserveVisibleItems: preserveVisibleItems,
+    );
     stopwatch.stop();
     if (!mounted) {
       return;
@@ -1269,7 +1368,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     // keeps the feed current without allowing background audio.
     ref.listen(appShellCurrentTabIndexProvider, (previous, next) {
       if (next == AppShellDestinations.forYouIndex) {
-        _reloadPendingForYouLanguageChangeOnReturn();
+        unawaited(_handleForYouTabSelected());
       }
     });
 
@@ -3522,26 +3621,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       ),
     );
     if (!mounted || result is! AdUnlockRouteResult) return;
-
-    final refreshed = await result.refreshFuture;
-    if (!mounted) return;
-    if (!refreshed) return;
-    PlayerFeedItem? unlockedItem;
-    final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
-    for (final candidate in feedState.items) {
-      if (candidate.id == item.id) {
-        unlockedItem = candidate;
-        break;
-      }
-    }
-    if (unlockedItem == null) return;
-    await ref
-        .read(playerRuntimeCoordinatorProvider(_sessionKey).notifier)
-        .onViewportSettled(
-          item: unlockedItem,
-          index: feedState.currentIndex,
-          playbackTrigger: 'ad_unlock',
-        );
+    await result.refreshFuture;
+    await _playPendingAdUnlockedEpisode();
   }
 
   String _adUnlockDramaAccessType(PlayerFeedItem item) =>
@@ -3596,6 +3677,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       ref
           .read(entitlementControllerProvider.notifier)
           .updateAfterAdUnlock(episodeId: item.episode.id);
+      // 广告确认与路由关闭存在竞态：详情可能在关闭前或关闭后才返回。
+      // 记录待播放项，并在两种时机都尝试消费，避免只刷新 UI 却遗漏播放指令。
+      _pendingAdUnlockedItemId = updatedItem.id;
+      if (!_isCoveredByAnotherRoute) {
+        unawaited(_playPendingAdUnlockedEpisode());
+      }
       return true;
     } catch (_) {
       return false;

@@ -316,7 +316,7 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
           child: Column(
             children: [
               SizedBox(
-                height: 112,
+                height: 80,
                 child: Align(
                   alignment: Alignment.bottomRight,
                   child: Padding(
@@ -324,33 +324,39 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
                     child: GestureDetector(
                       onTap: canClose ? _closeAfterUnlock : null,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 1,
-                        ),
+                        padding: canClose
+                            ? EdgeInsets.all(2)
+                            : EdgeInsets.symmetric(horizontal: 14, vertical: 1),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(12),
+                          shape: canClose
+                              ? BoxShape.circle
+                              : BoxShape.rectangle,
+                          color: Colors.white.withValues(alpha: 0.08),
+                          borderRadius: canClose
+                              ? null
+                              : BorderRadius.circular(12),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.2),
+                            color: Colors.white.withValues(alpha: 0.12),
                           ),
                         ),
                         child: canClose
-                            ? Text(
-                                context.l10n.playerSubtitleOff,
+                            ? Icon(Icons.close,size: 18,)
+                            : Text(
+                                "${(required - seconds).clamp(0, required)}s",
                                 style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.5),
+                                  fontSize: 12,
+                                  color: Colors.white,
                                 ),
-                              )
-                            : _highlightedCountdown(
-                                context.l10n.adUnlockCloseCountdown(
-                                  seconds: (required - seconds).clamp(
-                                    0,
-                                    required,
-                                  ),
-                                ),
-                                (required - seconds).clamp(0, required),
                               ),
+                        //         _highlightedCountdown(
+                        //     context.l10n.adUnlockCloseCountdown(
+                        //     seconds: (required - seconds).clamp(
+                        //       0,
+                        //       required,
+                        //     ),
+                        //   ),
+                        //   (required - seconds).clamp(0, required),
+                        // ),
                       ),
                     ),
                   ),
@@ -419,7 +425,7 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
                 ),
               ),
               SizedBox(
-                height: 98,
+                height: 65,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
                   child: Column(
@@ -431,50 +437,6 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
                         color: const Color(0xFFFF007A),
                         backgroundColor: const Color(0x4DFFFFFF),
                         borderRadius: BorderRadius.circular(4),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: retry || unlocked
-                                ? Text(
-                                    retry
-                                        ? context.l10n.networkError
-                                        : context.l10n.adUnlockSuccess,
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                    ),
-                                  )
-                                : _highlightedCountdown(
-                                    context.l10n.adUnlockWatchCountdown(
-                                      seconds: (required - seconds).clamp(
-                                        0,
-                                        required,
-                                      ),
-                                    ),
-                                    (required - seconds).clamp(0, required),
-                                  ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.14),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.2),
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              unlocked
-                                  ? context.l10n.adUnlockSuccess
-                                  : context.l10n.adUnlockStatusWatching,
-                              style: const TextStyle(color: Colors.white54),
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),

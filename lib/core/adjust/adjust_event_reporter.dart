@@ -36,6 +36,7 @@ class AdjustSdkEventClient implements AdjustEventClient {
   final AdjustService _service;
   final AdjustPendingEventStore _pendingEventStore;
   bool _isFlushing = false;
+  bool _flushRequestedWhileBusy = false;
 
   @override
   void track(String eventToken, {Map<String, String> parameters = const {}}) {
@@ -46,7 +47,10 @@ class AdjustSdkEventClient implements AdjustEventClient {
       );
       return;
     }
-    debugPrint('[Adjust] Event requested: token=$eventToken.');
+    debugPrint(
+      '[Adjust] Event requested: token=$eventToken '
+      'parameters=$parameters.',
+    );
     _service.initialize();
     unawaited(_enqueueAndFlush(eventToken, parameters));
   }
@@ -61,8 +65,11 @@ class AdjustSdkEventClient implements AdjustEventClient {
         parameters: parameters,
       );
       await _pendingEventStore.enqueue(pending);
-      debugPrint('[Adjust] Event queued: token=$eventToken id=${pending.id}.');
-      await _flushWhenSessionConfirmed();
+      debugPrint(
+        '[Adjust] Event persisted locally: token=$eventToken id=${pending.id} '
+        'parameters=${pending.parameters}.',
+      );
+      await _flushPendingEvents();
     } catch (error, stackTrace) {
       debugPrint('[Adjust] Pending event enqueue failed: $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -72,54 +79,69 @@ class AdjustSdkEventClient implements AdjustEventClient {
   @override
   Future<void> recoverPendingEvents() async {
     if (defaultTargetPlatform != TargetPlatform.android) return;
+    debugPrint('[Adjust] Pending event recovery requested at startup.');
     _service.initialize();
-    await _flushWhenSessionConfirmed();
-  }
-
-  Future<void> _flushWhenSessionConfirmed() async {
-    if (!_service.isSessionConfirmed) {
-      debugPrint('[Adjust] Event dispatch waiting for session confirmation.');
-      unawaited(_service.sessionConfirmed.then((_) => _flushPendingEvents()));
-      return;
-    }
     await _flushPendingEvents();
   }
 
   Future<void> _flushPendingEvents() async {
-    if (_isFlushing) return;
-    _isFlushing = true;
-    try {
-      final pendingEvents = await _pendingEventStore.readAll();
-      if (pendingEvents.isNotEmpty) {
-        debugPrint(
-          '[Adjust] Dispatching pending events: count=${pendingEvents.length}.',
-        );
-      }
-      for (final pending in pendingEvents) {
-        final event = AdjustEvent(pending.eventToken)
-          ..callbackId = pending.id
-          // 同一个本地事件在进程重启前可能被再次派发；交由 SDK 去重。
-          ..deduplicationId = pending.id;
-        pending.parameters.forEach(event.addCallbackParameter);
-        Adjust.trackEvent(event);
-        debugPrint(
-          '[Adjust] Event dispatched: token=${pending.eventToken} '
-          'id=${pending.id}.',
-        );
-      }
-    } catch (error, stackTrace) {
-      debugPrint('[Adjust] Pending event flush failed: $error');
-      debugPrintStack(stackTrace: stackTrace);
-    } finally {
-      _isFlushing = false;
+    if (_isFlushing) {
+      _flushRequestedWhileBusy = true;
+      debugPrint(
+        '[Adjust] Pending event dispatch already in progress; '
+        'another pass will run afterwards.',
+      );
+      return;
     }
+    do {
+      _isFlushing = true;
+      _flushRequestedWhileBusy = false;
+      try {
+        final pendingEvents = await _pendingEventStore.readAll();
+        debugPrint(
+          '[Adjust] Pending event dispatch started: '
+          'count=${pendingEvents.length}, '
+          'sessionConfirmed=${_service.isSessionConfirmed}.',
+        );
+        if (pendingEvents.isEmpty) {
+          debugPrint('[Adjust] No locally pending events to dispatch.');
+          continue;
+        }
+        for (final pending in pendingEvents) {
+          final event = AdjustEvent(pending.eventToken)
+            ..callbackId = pending.id
+            // 同一个本地事件在进程重启前可能被再次派发；交由 SDK 去重。
+            ..deduplicationId = pending.id;
+          pending.parameters.forEach(event.addCallbackParameter);
+          debugPrint(
+            '[Adjust] Calling native Adjust.trackEvent: '
+            'token=${pending.eventToken} id=${pending.id} '
+            'parameters=${pending.parameters}.',
+          );
+          Adjust.trackEvent(event);
+          debugPrint(
+            '[Adjust] Native Adjust.trackEvent returned: '
+            'token=${pending.eventToken} id=${pending.id}; '
+            'waiting for native success/failure callback.',
+          );
+        }
+      } catch (error, stackTrace) {
+        debugPrint('[Adjust] Pending event flush failed: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      } finally {
+        _isFlushing = false;
+      }
+    } while (_flushRequestedWhileBusy);
   }
 
   void _handleEventResult(AdjustEventResult result) {
     final callbackId = result.callbackId;
     if (callbackId == null || callbackId.isEmpty) return;
     if (result.isSuccess) {
-      debugPrint('[Adjust] Event delivery succeeded: id=$callbackId.');
+      debugPrint(
+        '[Adjust] Event delivery succeeded: id=$callbackId; '
+        'removing local fallback.',
+      );
       unawaited(_pendingEventStore.remove(callbackId));
       return;
     }

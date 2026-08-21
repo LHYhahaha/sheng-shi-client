@@ -73,7 +73,7 @@ Future<void> _cleanupPlayerSession({
       playerPlaybackControllerProvider(sessionKey).notifier,
     );
     await playback.detachSurfaceForVisibility(syncState: false);
-    await playback.disposeSession(syncState: false);
+    await playback.resetForSessionCleanup();
   } catch (_) {}
 
   try {

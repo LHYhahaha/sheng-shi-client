@@ -36,8 +36,8 @@ class AdjustService {
   final AdjustDeviceIdentifierReporter? _deviceIdentifierReporter;
   final AdjustDeeplinkDispatcher? _deferredDeeplinkDispatcher;
 
-  /// Adjust 已确认创建会话。业务事件在此之前只落本地队列，避免 SDK 尚未
-  /// 建立 session 时因进程退出而丢失。
+  /// Adjust 已回调会话请求成功。这个回调仅用于诊断，不能作为事件派发前置条件：
+  /// 已存在的原生 session 在一次新的 Flutter 进程中不一定会再次产生该回调。
   bool get isSessionConfirmed => _sessionConfirmed.isCompleted;
 
   Future<void> get sessionConfirmed => _sessionConfirmed.future;
@@ -50,7 +50,15 @@ class AdjustService {
   /// Token 为空时安全跳过初始化，避免发送到错误的 Adjust App。
   void initialize() {
     try {
-      if (_initializationRequested) return;
+      if (_initializationRequested) {
+        if (kDebugMode) {
+          debugPrint(
+            '[Adjust] SDK initialization already requested; '
+            'sessionConfirmed=$isSessionConfirmed.',
+          );
+        }
+        return;
+      }
       if (defaultTargetPlatform != TargetPlatform.android) return;
 
       if (_configuredAppToken.trim().isEmpty) {
@@ -70,7 +78,8 @@ class AdjustService {
       if (kDebugMode) {
         debugPrint(
           '[Adjust] SDK initialization requested: '
-          'environment=${_adjustEnvironment.name}.',
+          'environment=${_adjustEnvironment.name}, '
+          'sessionConfirmed=$isSessionConfirmed.',
         );
       }
       unawaited(_readAndReportDeviceIdentifiers());
@@ -93,7 +102,7 @@ class AdjustService {
       }
       if (kDebugMode) {
         debugPrint(
-          '[Adjust] Session success: '
+          '[Adjust] Session delivery succeeded: '
           'message=${session.message}, adid=${session.adid}, '
           'timestamp=${session.timestamp}.',
         );
@@ -106,7 +115,9 @@ class AdjustService {
       );
     };
     config.eventSuccessCallback = (event) {
-      debugPrint('[Adjust] Native event success: callbackId=${event.callbackId}.');
+      debugPrint(
+        '[Adjust] Native event success: callbackId=${event.callbackId}.',
+      );
       _eventResults.add(
         AdjustEventResult.success(callbackId: event.callbackId),
       );
