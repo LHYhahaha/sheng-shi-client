@@ -34,22 +34,29 @@ void main() {
     final dataSource = WalletRemoteDataSource(apiClient: _apiClient(adapter));
 
     await dataSource.listTransactions(pageToken: '2');
-    await dataSource.listConsumptionRecords(status: 'spent', pageToken: '2');
+    await dataSource.listSpentConsumptionRecords(pageToken: '2');
+    await dataSource.listExpiredConsumptionRecords(pageToken: '2');
     await dataSource.listRewardCoins(pageToken: '2');
 
     expect(adapter.requests.map((request) => request.method), [
       'GET',
       'GET',
       'GET',
+      'GET',
     ]);
     expect(adapter.requests.map((request) => request.path), [
       '/api/payment/recharge/records',
-      '/api/payment/coin/consume-records',
+      '/api/payment/consume-records',
+      '/api/payment/expired-records',
       '/api/payment/bonus-coin/records',
     ]);
-    for (final request in adapter.requests) {
+    for (final request in adapter.requests.take(1)) {
       expect(request.queryParameters['page.page'], 2);
       expect(request.queryParameters['page.pageSize'], 20);
+    }
+    for (final request in adapter.requests.skip(1).take(2)) {
+      expect(request.queryParameters['page'], 2);
+      expect(request.queryParameters['pageSize'], 20);
     }
   });
 

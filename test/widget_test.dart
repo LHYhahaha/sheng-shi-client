@@ -1481,8 +1481,14 @@ class _EmptyWalletRepository implements WalletRepository {
   }
 
   @override
-  Future<WalletRecordPage> fetchConsumptionRecords({
-    required String status,
+  Future<WalletRecordPage> fetchSpentConsumptionRecords({
+    String? pageToken,
+  }) async {
+    return const WalletRecordPage(items: [], nextPageToken: null);
+  }
+
+  @override
+  Future<WalletRecordPage> fetchExpiredConsumptionRecords({
     String? pageToken,
   }) async {
     return const WalletRecordPage(items: [], nextPageToken: null);

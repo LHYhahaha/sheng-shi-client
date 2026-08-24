@@ -153,6 +153,62 @@ class AppConfig {
     },
   );
 
+  /// Facebook 赠送会员链接沿用普通分享的 `_sp` 打包格式；复制链接继续使用
+  /// [giftVipUrl] 的可读查询参数格式。
+  Uri facebookGiftVipUrl({
+    required String languageCode,
+    String userId = '',
+    String channelId = '',
+    String merchantId = '',
+    String giftLinkId = '',
+    String grantTempVipDays = '',
+  }) => _facebookGiftUrl(
+    path: '/gift/vip/',
+    languageCode: languageCode,
+    userId: userId,
+    channelId: channelId,
+    merchantId: merchantId,
+    giftLinkId: giftLinkId,
+    grantTempVipDays: grantTempVipDays,
+  );
+
+  /// Facebook 赠送短剧链接沿用普通分享的 `_sp` 打包格式。
+  Uri facebookGiftDramaUrl({
+    required String languageCode,
+    String userId = '',
+    String channelId = '',
+    String merchantId = '',
+    String giftLinkId = '',
+  }) => _facebookGiftUrl(
+    path: '/gift/drama/',
+    languageCode: languageCode,
+    userId: userId,
+    channelId: channelId,
+    merchantId: merchantId,
+    giftLinkId: giftLinkId,
+  );
+
+  Uri _facebookGiftUrl({
+    required String path,
+    required String languageCode,
+    required String userId,
+    required String channelId,
+    required String merchantId,
+    required String giftLinkId,
+    String grantTempVipDays = '',
+  }) {
+    final packed = _packShareQuery({
+      'lang': languageCode,
+      'user_id': userId,
+      'channel_id': channelId,
+      'merchant_id': merchantId,
+      'share_method': 'facebook',
+      'gift_link_id': giftLinkId,
+      'grant_temp_vip_days': grantTempVipDays,
+    });
+    return _webBaseUrl.replace(path: path, queryParameters: {'_sp': packed});
+  }
+
   Map<String, String> _h5CommonParameters({
     required String languageCode,
     required String userId,

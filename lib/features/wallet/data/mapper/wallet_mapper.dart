@@ -4,8 +4,10 @@ import '../../../../shared/media/media_resource.dart';
 import '../../domain/wallet_record.dart';
 import '../dto/wallet_consumption_record_dto.dart';
 import '../dto/wallet_dto.dart';
+import '../dto/wallet_expired_consumption_record_dto.dart';
 import '../dto/wallet_reward_coin_record_dto.dart';
 import '../dto/wallet_transaction_record_dto.dart';
+import '../dto/wallet_spent_consumption_record_dto.dart';
 
 /// Wallet remote DTO to domain mapper.
 ///
@@ -74,6 +76,41 @@ class WalletMapper {
       consumptionStatus: dto.status.toLowerCase() == 'expired'
           ? WalletConsumptionStatus.expired
           : WalletConsumptionStatus.spent,
+    );
+  }
+
+  WalletRecord mapSpentConsumption(WalletSpentConsumptionRecordDto dto) {
+    final isAd = dto.type == 3;
+    return WalletRecord(
+      id: dto.recordId,
+      type: WalletRecordType.consumption,
+      title: RemoteTexts.consumptionHistoryEpisodeIndex.uiText({
+        'index': dto.episodeNo,
+      }),
+      subtitle: UiText.raw(dto.shortTitle),
+      dateLabel: _dateLabel(dto.consumedAt),
+      trailingLabel: isAd
+          ? RemoteTexts.walletRecordSourceAd.uiText()
+          : UiText.raw('-${dto.amount}'),
+      trailingSubtitle: isAd
+          ? null
+          : RemoteTexts.consumptionHistoryCoins.uiText(),
+      sourceType: isAd ? 'ad' : 'coins',
+      posterResource: _poster(dto.cover),
+      consumptionStatus: WalletConsumptionStatus.spent,
+    );
+  }
+
+  WalletRecord mapExpiredConsumption(WalletExpiredConsumptionRecordDto dto) {
+    return WalletRecord(
+      id: dto.recordId,
+      type: WalletRecordType.consumption,
+      title: UiText.raw(dto.title),
+      subtitle: UiText.raw(dto.sourceName),
+      dateLabel: _dateLabel(dto.expireAt),
+      trailingLabel: UiText.raw(dto.expireCoin),
+      trailingSubtitle: RemoteTexts.consumptionHistoryCoins.uiText(),
+      consumptionStatus: WalletConsumptionStatus.expired,
     );
   }
 

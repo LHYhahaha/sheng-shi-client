@@ -26,13 +26,17 @@ class WalletState {
     required this.autoUnlockTouched,
     required this.consumptionFilter,
     required this.transactionRecords,
-    required this.consumptionRecords,
+    required this.spentConsumptionRecords,
+    required this.expiredConsumptionRecords,
     required this.coinRecords,
     this.transactionNextPageToken,
-    this.consumptionNextPageToken,
+    this.spentConsumptionNextPageToken,
+    this.expiredConsumptionNextPageToken,
     this.coinNextPageToken,
+    this.isHistoryLoading = false,
     this.isHistoryLoadingMore = false,
     this.historyLoadMoreError,
+    this.historyError,
     this.error,
   });
 
@@ -44,13 +48,17 @@ class WalletState {
       autoUnlockTouched = false,
       consumptionFilter = WalletConsumptionStatus.spent,
       transactionRecords = const [],
-      consumptionRecords = const [],
+      spentConsumptionRecords = const [],
+      expiredConsumptionRecords = const [],
       coinRecords = const [],
       transactionNextPageToken = null,
-      consumptionNextPageToken = null,
+      spentConsumptionNextPageToken = null,
+      expiredConsumptionNextPageToken = null,
       coinNextPageToken = null,
+      isHistoryLoading = false,
       isHistoryLoadingMore = false,
       historyLoadMoreError = null,
+      historyError = null,
       error = null;
 
   /// 钱包页是否正在加载余额和流水。
@@ -98,7 +106,13 @@ class WalletState {
   ///
   /// 代表解锁、扣费、过期等消费侧记录。它可以按 spent/expired 筛选，但不应与充值
   /// 交易记录混排。
-  final List<WalletRecord> consumptionRecords;
+  final List<WalletRecord> spentConsumptionRecords;
+  final List<WalletRecord> expiredConsumptionRecords;
+
+  List<WalletRecord> get consumptionRecords =>
+      consumptionFilter == WalletConsumptionStatus.spent
+      ? spentConsumptionRecords
+      : expiredConsumptionRecords;
 
   /// 金币任务/奖励记录。
   ///
@@ -106,10 +120,13 @@ class WalletState {
   final List<WalletRecord> coinRecords;
 
   final String? transactionNextPageToken;
-  final String? consumptionNextPageToken;
+  final String? spentConsumptionNextPageToken;
+  final String? expiredConsumptionNextPageToken;
   final String? coinNextPageToken;
+  final bool isHistoryLoading;
   final bool isHistoryLoadingMore;
   final Object? historyLoadMoreError;
+  final Object? historyError;
 
   /// 钱包数据加载错误。
   ///
@@ -129,15 +146,19 @@ class WalletState {
   String? nextPageTokenFor(WalletRecordType type) {
     return switch (type) {
       WalletRecordType.transaction => transactionNextPageToken,
-      WalletRecordType.consumption => consumptionNextPageToken,
+      WalletRecordType.consumption =>
+        consumptionFilter == WalletConsumptionStatus.spent
+            ? spentConsumptionNextPageToken
+            : expiredConsumptionNextPageToken,
       WalletRecordType.coins => coinNextPageToken,
     };
   }
 
   bool canLoadMore(WalletRecordType type) {
     return !isLoading &&
+        !isHistoryLoading &&
         !isHistoryLoadingMore &&
-        error == null &&
+        historyError == null &&
         historyLoadMoreError == null &&
         nextPageTokenFor(type) != null;
   }
@@ -150,17 +171,23 @@ class WalletState {
     bool? autoUnlockTouched,
     WalletConsumptionStatus? consumptionFilter,
     List<WalletRecord>? transactionRecords,
-    List<WalletRecord>? consumptionRecords,
+    List<WalletRecord>? spentConsumptionRecords,
+    List<WalletRecord>? expiredConsumptionRecords,
     List<WalletRecord>? coinRecords,
     String? transactionNextPageToken,
-    String? consumptionNextPageToken,
+    String? spentConsumptionNextPageToken,
+    String? expiredConsumptionNextPageToken,
     String? coinNextPageToken,
     bool clearTransactionNextPageToken = false,
-    bool clearConsumptionNextPageToken = false,
+    bool clearSpentConsumptionNextPageToken = false,
+    bool clearExpiredConsumptionNextPageToken = false,
     bool clearCoinNextPageToken = false,
+    bool? isHistoryLoading,
     bool? isHistoryLoadingMore,
     Object? historyLoadMoreError,
     bool clearHistoryLoadMoreError = false,
+    Object? historyError,
+    bool clearHistoryError = false,
     Object? error,
     bool clearError = false,
   }) {
@@ -173,22 +200,32 @@ class WalletState {
       autoUnlockTouched: autoUnlockTouched ?? this.autoUnlockTouched,
       consumptionFilter: consumptionFilter ?? this.consumptionFilter,
       transactionRecords: transactionRecords ?? this.transactionRecords,
-      consumptionRecords: consumptionRecords ?? this.consumptionRecords,
+      spentConsumptionRecords:
+          spentConsumptionRecords ?? this.spentConsumptionRecords,
+      expiredConsumptionRecords:
+          expiredConsumptionRecords ?? this.expiredConsumptionRecords,
       coinRecords: coinRecords ?? this.coinRecords,
       transactionNextPageToken: clearTransactionNextPageToken
           ? null
           : transactionNextPageToken ?? this.transactionNextPageToken,
-      consumptionNextPageToken: clearConsumptionNextPageToken
+      spentConsumptionNextPageToken: clearSpentConsumptionNextPageToken
           ? null
-          : consumptionNextPageToken ?? this.consumptionNextPageToken,
+          : spentConsumptionNextPageToken ?? this.spentConsumptionNextPageToken,
+      expiredConsumptionNextPageToken: clearExpiredConsumptionNextPageToken
+          ? null
+          : expiredConsumptionNextPageToken ??
+                this.expiredConsumptionNextPageToken,
       coinNextPageToken: clearCoinNextPageToken
           ? null
           : coinNextPageToken ?? this.coinNextPageToken,
-      isHistoryLoadingMore:
-          isHistoryLoadingMore ?? this.isHistoryLoadingMore,
+      isHistoryLoading: isHistoryLoading ?? this.isHistoryLoading,
+      isHistoryLoadingMore: isHistoryLoadingMore ?? this.isHistoryLoadingMore,
       historyLoadMoreError: clearHistoryLoadMoreError
           ? null
           : historyLoadMoreError ?? this.historyLoadMoreError,
+      historyError: clearHistoryError
+          ? null
+          : historyError ?? this.historyError,
       error: clearError ? null : error ?? this.error,
     );
   }
@@ -231,10 +268,9 @@ class WalletController extends Notifier<WalletState> {
       }
 
       // 同步钱包数据到权益系统
-      ref.read(entitlementControllerProvider.notifier).syncCoinBalance(
-        coinBalance: data.coins,
-        bonusBalance: data.bonus,
-      );
+      ref
+          .read(entitlementControllerProvider.notifier)
+          .syncCoinBalance(coinBalance: data.coins, bonusBalance: data.bonus);
 
       final entitlementState = ref.read(entitlementControllerProvider);
       state = state.copyWith(
@@ -247,7 +283,7 @@ class WalletController extends Notifier<WalletState> {
         transactionRecords: List<WalletRecord>.unmodifiable(
           data.transactionRecords,
         ),
-        consumptionRecords: List<WalletRecord>.unmodifiable(
+        spentConsumptionRecords: List<WalletRecord>.unmodifiable(
           data.consumptionRecords,
         ),
         coinRecords: List<WalletRecord>.unmodifiable(data.coinRecords),
@@ -304,9 +340,9 @@ class WalletController extends Notifier<WalletState> {
     final generation = ++_generation;
     _isHistoryLoadMoreInFlight = false;
     state = state.copyWith(
-      isLoading: true,
+      isHistoryLoading: true,
       isHistoryLoadingMore: false,
-      clearError: true,
+      clearHistoryError: true,
       clearHistoryLoadMoreError: true,
       clearTransactionNextPageToken: true,
     );
@@ -320,11 +356,11 @@ class WalletController extends Notifier<WalletState> {
       }
 
       state = state.copyWith(
-        isLoading: false,
+        isHistoryLoading: false,
         transactionRecords: List<WalletRecord>.unmodifiable(page.items),
         transactionNextPageToken: page.nextPageToken,
         clearTransactionNextPageToken: page.nextPageToken == null,
-        clearError: true,
+        clearHistoryError: true,
         clearHistoryLoadMoreError: true,
       );
     } catch (error) {
@@ -332,47 +368,61 @@ class WalletController extends Notifier<WalletState> {
         return;
       }
 
-      state = state.copyWith(isLoading: false, error: error);
+      state = state.copyWith(isHistoryLoading: false, historyError: error);
     }
   }
 
   /// 加载消费记录。
-  Future<void> loadConsumptionRecords({
-    required String status,
-    String? pageToken,
-  }) async {
+  Future<void> loadConsumptionRecords(WalletConsumptionStatus status) async {
     final generation = ++_generation;
     _isHistoryLoadMoreInFlight = false;
     state = state.copyWith(
-      isLoading: true,
+      isHistoryLoading: true,
       isHistoryLoadingMore: false,
-      clearError: true,
+      clearHistoryError: true,
       clearHistoryLoadMoreError: true,
-      clearConsumptionNextPageToken: true,
+      clearSpentConsumptionNextPageToken:
+          status == WalletConsumptionStatus.spent,
+      clearExpiredConsumptionNextPageToken:
+          status == WalletConsumptionStatus.expired,
     );
 
     try {
-      final page = await ref
-          .read(walletRepositoryProvider)
-          .fetchConsumptionRecords(status: status, pageToken: pageToken);
+      final repository = ref.read(walletRepositoryProvider);
+      final page = status == WalletConsumptionStatus.spent
+          ? await repository.fetchSpentConsumptionRecords()
+          : await repository.fetchExpiredConsumptionRecords();
       if (!_isCurrent(generation)) {
         return;
       }
 
-      state = state.copyWith(
-        isLoading: false,
-        consumptionRecords: List<WalletRecord>.unmodifiable(page.items),
-        consumptionNextPageToken: page.nextPageToken,
-        clearConsumptionNextPageToken: page.nextPageToken == null,
-        clearError: true,
-        clearHistoryLoadMoreError: true,
-      );
+      state = status == WalletConsumptionStatus.spent
+          ? state.copyWith(
+              isHistoryLoading: false,
+              spentConsumptionRecords: List<WalletRecord>.unmodifiable(
+                page.items,
+              ),
+              spentConsumptionNextPageToken: page.nextPageToken,
+              clearSpentConsumptionNextPageToken: page.nextPageToken == null,
+              clearHistoryError: true,
+              clearHistoryLoadMoreError: true,
+            )
+          : state.copyWith(
+              isHistoryLoading: false,
+              expiredConsumptionRecords: List<WalletRecord>.unmodifiable(
+                page.items,
+              ),
+              expiredConsumptionNextPageToken: page.nextPageToken,
+              clearExpiredConsumptionNextPageToken: page.nextPageToken == null,
+              clearHistoryError: true,
+              clearHistoryLoadMoreError: true,
+            );
     } catch (error) {
       if (!_isCurrent(generation)) {
         return;
       }
 
-      state = state.copyWith(isLoading: false, error: error);
+      state = state.copyWith(isHistoryLoading: false, historyError: error);
     }
   }
 
@@ -381,9 +431,9 @@ class WalletController extends Notifier<WalletState> {
     final generation = ++_generation;
     _isHistoryLoadMoreInFlight = false;
     state = state.copyWith(
-      isLoading: true,
+      isHistoryLoading: true,
       isHistoryLoadingMore: false,
-      clearError: true,
+      clearHistoryError: true,
       clearHistoryLoadMoreError: true,
       clearCoinNextPageToken: true,
     );
@@ -397,11 +447,11 @@ class WalletController extends Notifier<WalletState> {
       }
 
       state = state.copyWith(
-        isLoading: false,
+        isHistoryLoading: false,
         coinRecords: List<WalletRecord>.unmodifiable(page.items),
         coinNextPageToken: page.nextPageToken,
         clearCoinNextPageToken: page.nextPageToken == null,
-        clearError: true,
+        clearHistoryError: true,
         clearHistoryLoadMoreError: true,
       );
     } catch (error) {
@@ -409,7 +459,7 @@ class WalletController extends Notifier<WalletState> {
         return;
       }
 
-      state = state.copyWith(isLoading: false, error: error);
+      state = state.copyWith(isHistoryLoading: false, historyError: error);
     }
   }
 
@@ -421,9 +471,9 @@ class WalletController extends Notifier<WalletState> {
       return;
     }
     if (retry) {
-      if (state.isLoading ||
+      if (state.isHistoryLoading ||
           state.isHistoryLoadingMore ||
-          state.error != null ||
+          state.historyError != null ||
           state.nextPageTokenFor(type) == null) {
         return;
       }
@@ -446,18 +496,47 @@ class WalletController extends Notifier<WalletState> {
     try {
       final repository = ref.read(walletRepositoryProvider);
       final page = switch (type) {
-        WalletRecordType.transaction => await repository
-            .fetchTransactionRecords(pageToken: pageToken),
-        WalletRecordType.consumption => await repository
-            .fetchConsumptionRecords(
-              status: state.consumptionFilter.name,
-              pageToken: pageToken,
-            ),
+        WalletRecordType.transaction =>
+          await repository.fetchTransactionRecords(pageToken: pageToken),
+        WalletRecordType.consumption =>
+          state.consumptionFilter == WalletConsumptionStatus.spent
+              ? await repository.fetchSpentConsumptionRecords(
+                  pageToken: pageToken,
+                )
+              : await repository.fetchExpiredConsumptionRecords(
+                  pageToken: pageToken,
+                ),
         WalletRecordType.coins => await repository.fetchRewardCoins(
           pageToken: pageToken,
         ),
       };
       if (!_isCurrent(generation)) {
+        return;
+      }
+
+      if (type == WalletRecordType.consumption) {
+        state = state.consumptionFilter == WalletConsumptionStatus.spent
+            ? state.copyWith(
+                spentConsumptionRecords: List<WalletRecord>.unmodifiable([
+                  ...state.spentConsumptionRecords,
+                  ...page.items,
+                ]),
+                spentConsumptionNextPageToken: page.nextPageToken,
+                clearSpentConsumptionNextPageToken: page.nextPageToken == null,
+                isHistoryLoadingMore: false,
+                clearHistoryLoadMoreError: true,
+              )
+            : state.copyWith(
+                expiredConsumptionRecords: List<WalletRecord>.unmodifiable([
+                  ...state.expiredConsumptionRecords,
+                  ...page.items,
+                ]),
+                expiredConsumptionNextPageToken: page.nextPageToken,
+                clearExpiredConsumptionNextPageToken:
+                    page.nextPageToken == null,
+                isHistoryLoadingMore: false,
+                clearHistoryLoadMoreError: true,
+              );
         return;
       }
 
@@ -472,16 +551,7 @@ class WalletController extends Notifier<WalletState> {
           isHistoryLoadingMore: false,
           clearHistoryLoadMoreError: true,
         ),
-        WalletRecordType.consumption => state.copyWith(
-          consumptionRecords: List<WalletRecord>.unmodifiable([
-            ...state.consumptionRecords,
-            ...page.items,
-          ]),
-          consumptionNextPageToken: page.nextPageToken,
-          clearConsumptionNextPageToken: page.nextPageToken == null,
-          isHistoryLoadingMore: false,
-          clearHistoryLoadMoreError: true,
-        ),
+        WalletRecordType.consumption => state,
         WalletRecordType.coins => state.copyWith(
           coinRecords: List<WalletRecord>.unmodifiable([
             ...state.coinRecords,

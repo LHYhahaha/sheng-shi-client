@@ -44,7 +44,7 @@ class MockWalletRepository implements WalletRepository {
           showCoinIcon: true,
         ),
       ],
-      consumptionRecords:  [
+      consumptionRecords: [
         WalletRecord.raw(
           id: 'unlock_ep_12',
           type: WalletRecordType.consumption,
@@ -78,7 +78,7 @@ class MockWalletRepository implements WalletRepository {
           consumptionStatus: WalletConsumptionStatus.expired,
         ),
       ],
-      coinRecords:  [
+      coinRecords: [
         WalletRecord.raw(
           id: 'daily_bonus',
           type: WalletRecordType.coins,
@@ -111,9 +111,7 @@ class MockWalletRepository implements WalletRepository {
   }
 
   @override
-  Future<WalletRecordPage> fetchTransactionRecords({
-    String? pageToken,
-  }) async {
+  Future<WalletRecordPage> fetchTransactionRecords({String? pageToken}) async {
     await Future<void>.delayed(const Duration(milliseconds: 80));
 
     const mockDtos = [
@@ -162,8 +160,7 @@ class MockWalletRepository implements WalletRepository {
   }
 
   @override
-  Future<WalletRecordPage> fetchConsumptionRecords({
-    required String status,
+  Future<WalletRecordPage> fetchSpentConsumptionRecords({
     String? pageToken,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 80));
@@ -208,7 +205,34 @@ class MockWalletRepository implements WalletRepository {
     ];
 
     return WalletRecordPage(
-      items: mockDtos.map(_mapper.mapConsumption).toList(growable: false),
+      items: mockDtos
+          .where((dto) => dto.status == 'spent')
+          .map(_mapper.mapConsumption)
+          .toList(growable: false),
+      nextPageToken: null,
+    );
+  }
+
+  @override
+  Future<WalletRecordPage> fetchExpiredConsumptionRecords({
+    String? pageToken,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    const mockDto = WalletConsumptionRecordDto(
+      id: 'unlock_ep_14',
+      dramaId: 'drama_1',
+      episodeId: 'ep_10',
+      episodeNumber: 10,
+      title: 'Pulang Malam Mengejutkan',
+      amountCoins: 20,
+      sourceType: 'coins',
+      status: 'expired',
+      createdAt: null,
+      coverUrl: null,
+    );
+    return WalletRecordPage(
+      items: [_mapper.mapConsumption(mockDto)],
       nextPageToken: null,
     );
   }

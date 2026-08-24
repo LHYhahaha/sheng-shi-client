@@ -93,6 +93,141 @@ class PlayerShareSheet extends StatelessWidget {
   }
 }
 
+/// 赠送会员/短剧使用的分享弹框。分享目标与播放页保持一致，并额外支持资格提示态。
+class GiftShareSheet extends StatelessWidget {
+  const GiftShareSheet({
+    required this.quotaLabel,
+    required this.isEligible,
+    required this.onFacebookTap,
+    required this.onCopyLinkTap,
+    this.unavailableDescription,
+    super.key,
+  });
+
+  final String quotaLabel;
+  final bool isEligible;
+  final VoidCallback onFacebookTap;
+  final VoidCallback onCopyLinkTap;
+  final String? unavailableDescription;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CompactPlayerSheet(
+      height: isEligible ? 260 : 286,
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const SizedBox(width: 40, height: 40),
+              Text(
+                context.l10n.shareTitle,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              _CloseButton(onTap: () => Navigator.of(context).pop()),
+            ],
+          ),
+          if (isEligible) ...[
+            const SizedBox(height: 16),
+            _GiftQuotaBanner(label: quotaLabel),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _ShareTarget(
+                  color: const Color(0xFF1877F2),
+                  icon: Icons.facebook_rounded,
+                  label: context.l10n.playerFacebook,
+                  onTap: onFacebookTap,
+                ),
+                const SizedBox(width: 18),
+                _ShareTarget(
+                  color: const Color(0xFFAAA8BD),
+                  icon: Icons.link_rounded,
+                  label: context.l10n.shareActionCopyLink,
+                  onTap: onCopyLinkTap,
+                  iconColor: const Color(0xFF1A171E),
+                ),
+              ],
+            ),
+          ] else ...[
+            const SizedBox(height: 18),
+            Image.asset(
+              'assets/images/membership/share_gift.png',
+              width: 82,
+              height: 82,
+              filterQuality: FilterQuality.low,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              context.l10n.giftShareUnavailableTitle,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                unavailableDescription ?? '',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.48),
+                  height: 1.35,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _GiftQuotaBanner extends StatelessWidget {
+  const _GiftQuotaBanner({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF302E33),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        children: [
+          Image.asset(
+            'assets/images/membership/member_member_gift.png',
+            width: 24,
+            height: 24,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.white.withValues(alpha: 0.82),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class PlayerCoinUnlockSheet extends ConsumerStatefulWidget {
   const PlayerCoinUnlockSheet({
     required this.price,

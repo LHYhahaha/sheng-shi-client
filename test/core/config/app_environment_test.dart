@@ -81,7 +81,7 @@ void main() {
             shareMethod: 'facebook',
           )
           .toString(),
-      'https://drama-wave.8y4w2vxvdffmd83.xyz/share/?lang=zh&user_id=user-1&channel_id=channel-a&merchant_id=merchant-9&drama_id=1506&share_method=facebook',
+      'https://drama-wave.8y4w2vxvdffmd83.xyz/share/?drama_id=1506&lang=zh&user_id=user-1&channel_id=channel-a&merchant_id=merchant-9&share_method=facebook',
     );
     final facebookShareUrl = devConfig.facebookShareUrl(
       dramaId: '1506',
@@ -123,6 +123,39 @@ void main() {
           )
           .toString(),
       'https://drama-wave.8y4w2vxvdffmd83.xyz/gift/drama/?lang=en&user_id=user-1&channel_id=channel-a&merchant_id=merchant-9&share_method=facebook&gift_link_id=gift-2',
+    );
+    final facebookGiftVipUrl = devConfig.facebookGiftVipUrl(
+      languageCode: 'en',
+      userId: 'user-1',
+      channelId: 'channel-a',
+      merchantId: 'merchant-9',
+      giftLinkId: 'gift-1',
+      grantTempVipDays: '3',
+    );
+    expect(facebookGiftVipUrl.path, '/gift/vip/');
+    expect(
+      utf8.decode(
+        base64Url.decode(
+          base64Url.normalize(facebookGiftVipUrl.queryParameters['_sp']!),
+        ),
+      ),
+      'lang=en&user_id=user-1&channel_id=channel-a&merchant_id=merchant-9&share_method=facebook&gift_link_id=gift-1&grant_temp_vip_days=3',
+    );
+    final facebookGiftDramaUrl = devConfig.facebookGiftDramaUrl(
+      languageCode: 'en',
+      userId: 'user-1',
+      channelId: 'channel-a',
+      merchantId: 'merchant-9',
+      giftLinkId: 'gift-2',
+    );
+    expect(facebookGiftDramaUrl.path, '/gift/drama/');
+    expect(
+      utf8.decode(
+        base64Url.decode(
+          base64Url.normalize(facebookGiftDramaUrl.queryParameters['_sp']!),
+        ),
+      ),
+      'lang=en&user_id=user-1&channel_id=channel-a&merchant_id=merchant-9&share_method=facebook&gift_link_id=gift-2',
     );
     expect(
       AppConfig.forEnvironment(

@@ -24,9 +24,7 @@ class RemoteWalletRepository implements WalletRepository {
   }
 
   @override
-  Future<WalletRecordPage> fetchTransactionRecords({
-    String? pageToken,
-  }) async {
+  Future<WalletRecordPage> fetchTransactionRecords({String? pageToken}) async {
     final pageDto = await _remoteDataSource.listTransactions(
       pageToken: pageToken,
     );
@@ -37,24 +35,37 @@ class RemoteWalletRepository implements WalletRepository {
   }
 
   @override
-  Future<WalletRecordPage> fetchConsumptionRecords({
-    required String status,
+  Future<WalletRecordPage> fetchSpentConsumptionRecords({
     String? pageToken,
   }) async {
-    final pageDto = await _remoteDataSource.listConsumptionRecords(
-      status: status,
+    final pageDto = await _remoteDataSource.listSpentConsumptionRecords(
       pageToken: pageToken,
     );
     return WalletRecordPage(
-      items: pageDto.items.map(_mapper.mapConsumption).toList(growable: false),
+      items: pageDto.items
+          .map(_mapper.mapSpentConsumption)
+          .toList(growable: false),
       nextPageToken: pageDto.nextPageToken,
     );
   }
 
   @override
-  Future<WalletRecordPage> fetchRewardCoins({
+  Future<WalletRecordPage> fetchExpiredConsumptionRecords({
     String? pageToken,
   }) async {
+    final pageDto = await _remoteDataSource.listExpiredConsumptionRecords(
+      pageToken: pageToken,
+    );
+    return WalletRecordPage(
+      items: pageDto.items
+          .map(_mapper.mapExpiredConsumption)
+          .toList(growable: false),
+      nextPageToken: pageDto.nextPageToken,
+    );
+  }
+
+  @override
+  Future<WalletRecordPage> fetchRewardCoins({String? pageToken}) async {
     final pageDto = await _remoteDataSource.listRewardCoins(
       pageToken: pageToken,
     );

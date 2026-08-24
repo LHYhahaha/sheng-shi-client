@@ -10,16 +10,11 @@ class WalletRecordPage {
 abstract interface class WalletRepository {
   Future<WalletData> fetchWallet();
 
-  Future<WalletRecordPage> fetchTransactionRecords({
-    String? pageToken,
-  });
+  Future<WalletRecordPage> fetchTransactionRecords({String? pageToken});
 
-  Future<WalletRecordPage> fetchConsumptionRecords({
-    required String status,
-    String? pageToken,
-  });
+  Future<WalletRecordPage> fetchSpentConsumptionRecords({String? pageToken});
 
-  Future<WalletRecordPage> fetchRewardCoins({
-    String? pageToken,
-  });
+  Future<WalletRecordPage> fetchExpiredConsumptionRecords({String? pageToken});
+
+  Future<WalletRecordPage> fetchRewardCoins({String? pageToken});
 }

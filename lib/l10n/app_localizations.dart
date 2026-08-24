@@ -1017,6 +1017,35 @@ class AppLocalizations {
     zh: '1080p画质',
   );
 
+  String get benefitGiftDrama => _remoteText(
+    'vip.benefit.gift_drama',
+    en: 'Gift dramas to friends',
+    zh: '赠送好友影片',
+  );
+
+  String get benefitGiftMember => _remoteText(
+    'vip.benefit.gift_member',
+    en: 'Gift a membership to a friend',
+    zh: '赠送好友会员',
+  );
+
+  String benefitGiftWeekly(int count) => _interpolate(
+    _remoteText('vip.gift.weekly', en: '{count} per week', zh: '每周{count}次'),
+    {'count': count},
+  );
+
+  String get giftShareUnavailableTitle => _remoteText(
+    'vip.gift.unavailable.title',
+    en: 'Currently, it cannot be given away.',
+    zh: '暂时无法赠送。',
+  );
+
+  String get giftShareUnavailableDescription => _remoteText(
+    'vip.gift.unavailable.description',
+    en: 'Your gift quota for this week has been used up.',
+    zh: '您本周的赠送次数已用完。',
+  );
+
   String get benefitNoAds =>
       _remoteText('membership_page.benefit.no_ads', en: 'Ad-free', zh: '免广告');
 

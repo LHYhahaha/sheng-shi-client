@@ -1,9 +1,10 @@
 import '../../../../core/network/api_client.dart';
-import '../dto/wallet_consumption_record_dto.dart';
+import '../dto/wallet_expired_consumption_record_dto.dart';
 import '../dto/wallet_dto.dart';
 import '../dto/wallet_page_dto.dart';
 import '../dto/wallet_reward_coin_record_dto.dart';
 import '../dto/wallet_setting_dto.dart';
+import '../dto/wallet_spent_consumption_record_dto.dart';
 import '../dto/wallet_transaction_record_dto.dart';
 
 /// 钱包远程数据源骨架。
@@ -35,16 +36,29 @@ class WalletRemoteDataSource {
     );
   }
 
-  Future<WalletPageDto<WalletConsumptionRecordDto>> listConsumptionRecords({
-    required String status,
-    String? pageToken,
-  }) {
-    return _apiClient.get<WalletPageDto<WalletConsumptionRecordDto>>(
-      '/api/payment/coin/consume-records',
-      queryParameters: _pageData(pageToken),
+  Future<WalletPageDto<WalletSpentConsumptionRecordDto>>
+  listSpentConsumptionRecords({String? pageToken}) {
+    return _apiClient.get<WalletPageDto<WalletSpentConsumptionRecordDto>>(
+      '/api/payment/consume-records',
+      queryParameters: _standardPageData(pageToken),
       authPolicy: ApiAuthPolicy.required,
-      decoder: (data) =>
-          WalletPageDto.fromJson(data, WalletConsumptionRecordDto.fromJson),
+      decoder: (data) => WalletPageDto.fromJson(
+        data,
+        WalletSpentConsumptionRecordDto.fromJson,
+      ),
+    );
+  }
+
+  Future<WalletPageDto<WalletExpiredConsumptionRecordDto>>
+  listExpiredConsumptionRecords({String? pageToken}) {
+    return _apiClient.get<WalletPageDto<WalletExpiredConsumptionRecordDto>>(
+      '/api/payment/expired-records',
+      queryParameters: _standardPageData(pageToken),
+      authPolicy: ApiAuthPolicy.required,
+      decoder: (data) => WalletPageDto.fromJson(
+        data,
+        WalletExpiredConsumptionRecordDto.fromJson,
+      ),
     );
   }
 
@@ -62,7 +76,12 @@ class WalletRemoteDataSource {
 
   Map<String, Object?> _pageData(String? pageToken) {
     final page = int.tryParse(pageToken ?? '') ?? 1;
-    return {'page.page': page ?? 1, 'page.pageSize': 20};
+    return {'page.page': page, 'page.pageSize': 20};
+  }
+
+  Map<String, Object?> _standardPageData(String? pageToken) {
+    final page = int.tryParse(pageToken ?? '') ?? 1;
+    return {'page': page, 'pageSize': 20};
   }
 
   Future<WalletRewardCoinRecordDto> claimRewardCoin({required String id}) {

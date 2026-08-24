@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
@@ -11,11 +12,16 @@ import '../../../../core/analytics/drama_card_exposure.dart';
 import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/auth/user_info_store.dart';
+import '../../../../core/channel/channel_config_service.dart';
+import '../../../../core/config/app_environment.dart';
+import '../../../../core/locale/app_locale_controller.dart';
 import '../../../../core/network/api_exception.dart';
+import '../../../../core/runtime/api_lang_provider.dart';
 import '../../../../core/toast/app_center_toast.dart';
 import '../../../../features/auth/application/auth_controller.dart';
 import '../../../../features/entitlement/application/entitlement_controller.dart';
 import '../../../../features/player/application/player_entry_preload_coordinator.dart';
+import '../../../../features/player/presentation/widgets/player_action_sheets.dart';
 import '../../../../features/membership/application/membership_controller.dart';
 import '../../../../features/membership/presentation/pages/membership_page.dart';
 import '../../../../features/home/presentation/widgets/vip_only_dramas_section.dart';
@@ -29,6 +35,7 @@ import '../../../../features/rewards/presentation/pages/member_points_page.dart'
 import '../../../../features/rewards/presentation/widget/member_points_exchange_confirm_dialog.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/media/media_resource.dart';
+import '../../../../shared/url/external_url_launcher.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 
 const _memberBackground = Color(0xFF090010);
@@ -130,6 +137,12 @@ class MemberPage extends ConsumerStatefulWidget {
 class _MemberPageState extends ConsumerState<MemberPage> {
   final _dramaExposureSession = Object();
   bool _vipDramasRefreshRequested = false;
+
+  // TODO: Replace with the gift eligibility API response. These fields must be
+  // supplied by the server before a real gift link is shared.
+  static const _giftLinkId = '';
+  static const _grantTempVipDays = '1';
+  static const _giftEligible = true;
 
   @override
   void initState() {
@@ -254,7 +267,9 @@ class _MemberPageState extends ConsumerState<MemberPage> {
                     ],
                   ],
                   const SizedBox(height: 24),
-                  const _PrivilegesSection(),
+                  _PrivilegesSection(
+                    onGiftMemberTap: _showGiftMemberShareSheet,
+                  ),
                 ],
               ),
             ),
@@ -306,6 +321,81 @@ class _MemberPageState extends ConsumerState<MemberPage> {
     final month = local.month.toString().padLeft(2, '0');
     final day = local.day.toString().padLeft(2, '0');
     return '${local.year}.$month.$day';
+  }
+
+  Future<void> _showGiftMemberShareSheet() {
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.7),
+      isDismissible: true,
+      enableDrag: true,
+      builder: (context) => GiftShareSheet(
+        quotaLabel: context.l10n.benefitGiftWeekly(1),
+        isEligible: _giftEligible,
+        unavailableDescription: context.l10n.giftShareUnavailableDescription,
+        onFacebookTap: _shareGiftMemberToFacebook,
+        onCopyLinkTap: _copyGiftMemberLink,
+      ),
+    );
+  }
+
+  Uri _giftMemberUrl({required String shareMethod, required bool facebook}) {
+    final languageCode = apiLangFromLocale(
+      ref.read(appLocaleControllerProvider),
+    );
+    final entitlement = ref.read(entitlementControllerProvider);
+    final userInfo = ref.read(userInfoStoreProvider);
+    final channel = ref.read(channelConfigServiceProvider).cachedConfig;
+    final common = (
+      languageCode: languageCode,
+      userId: entitlement.userId ?? userInfo.userId ?? '',
+      channelId: channel?.channelFlag ?? '',
+      merchantId: channel?.merchantId ?? '',
+    );
+    return facebook
+        ? AppConfig.current.facebookGiftVipUrl(
+            languageCode: common.languageCode,
+            userId: common.userId,
+            channelId: common.channelId,
+            merchantId: common.merchantId,
+            giftLinkId: _giftLinkId,
+            grantTempVipDays: _grantTempVipDays,
+          )
+        : AppConfig.current.giftVipUrl(
+            languageCode: common.languageCode,
+            userId: common.userId,
+            channelId: common.channelId,
+            merchantId: common.merchantId,
+            shareMethod: shareMethod,
+            giftLinkId: _giftLinkId,
+            grantTempVipDays: _grantTempVipDays,
+          );
+  }
+
+  Future<void> _shareGiftMemberToFacebook() async {
+    final shareUrl = _giftMemberUrl(shareMethod: 'facebook', facebook: true);
+    final message = context.l10n.shareMessage(
+      dramaTitle: context.l10n.benefitGiftMember,
+      shareUrl: shareUrl.toString(),
+    );
+    final facebookUrl = Uri.https('www.facebook.com', '/sharer/sharer.php', {
+      'u': shareUrl.toString(),
+      'quote': message,
+    });
+    await ref.read(externalUrlLauncherProvider).open(facebookUrl.toString());
+  }
+
+  Future<void> _copyGiftMemberLink() async {
+    final shareUrl = _giftMemberUrl(shareMethod: 'copy_link', facebook: false);
+    final message = context.l10n.shareMessage(
+      dramaTitle: context.l10n.benefitGiftMember,
+      shareUrl: shareUrl.toString(),
+    );
+    await Clipboard.setData(ClipboardData(text: message));
+    if (mounted) {
+      showAppCenterToast(context.l10n.shareToastCopySuccess);
+    }
   }
 }
 
@@ -669,7 +759,12 @@ class _DailyRewardCard extends StatelessWidget {
 }
 
 class _PrivilegesSection extends StatelessWidget {
-  const _PrivilegesSection();
+  const _PrivilegesSection({required this.onGiftMemberTap});
+
+  // TODO: Replace with the shared weekly gift quota returned by the member API.
+  static const _giftWeeklyCount = 1;
+
+  final VoidCallback onGiftMemberTap;
 
   @override
   Widget build(BuildContext context) {
@@ -705,6 +800,25 @@ class _PrivilegesSection extends StatelessWidget {
         _PrivilegeItem(
           icon: 'assets/images/membership/member_hd.png',
           title: context.l10n.benefitHd,
+        ),
+        const SizedBox(height: 20),
+        _PrivilegeItem(
+          icon: 'assets/images/membership/member_drama_gift.png',
+          title: context.l10n.benefitGiftDrama,
+          subtitle: context.l10n.benefitGiftWeekly(_giftWeeklyCount),
+        ),
+        const SizedBox(height: 20),
+        _PrivilegeItem(
+          icon: 'assets/images/membership/member_member_gift.png',
+          title: context.l10n.benefitGiftMember,
+          subtitle: context.l10n.benefitGiftWeekly(_giftWeeklyCount),
+          showChevron: true,
+          onTap: onGiftMemberTap,
+        ),
+        const SizedBox(height: 20),
+        _PrivilegeItem(
+          icon: 'assets/images/membership/member_ad.png',
+          title: context.l10n.benefitNoAds,
         ),
       ],
     );

@@ -95,7 +95,7 @@ class _WalletHistoryPageState extends ConsumerState<WalletHistoryPage> {
       case WalletRecordType.transaction:
         controller.loadTransactionRecords();
       case WalletRecordType.consumption:
-        controller.loadConsumptionRecords(status: 'spent');
+        controller.loadConsumptionRecords(WalletConsumptionStatus.spent);
       case WalletRecordType.coins:
         controller.loadRewardCoins();
     }
@@ -106,7 +106,7 @@ class _WalletHistoryPageState extends ConsumerState<WalletHistoryPage> {
     final state = ref.watch(walletControllerProvider);
     final controller = ref.read(walletControllerProvider.notifier);
     ref.listen(
-      walletControllerProvider.select((state) => state.isLoading),
+      walletControllerProvider.select((state) => state.isHistoryLoading),
       _handleInitialLoadingStateChanged,
     );
     ref.listen(
@@ -134,6 +134,20 @@ class _WalletHistoryPageState extends ConsumerState<WalletHistoryPage> {
                 }
               },
             ),
+            if (widget.type == WalletRecordType.consumption)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: _ConsumptionSegmentedControl(
+                  value: state.consumptionFilter,
+                  onChanged: (value) {
+                    if (value == state.consumptionFilter) {
+                      return;
+                    }
+                    controller.setConsumptionFilter(value);
+                    controller.loadConsumptionRecords(value);
+                  },
+                ),
+              ),
             Expanded(
               child: _HistoryBody(
                 state: state,
@@ -211,7 +225,7 @@ class _HistoryBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (state.isLoading) {
+    if (state.isHistoryLoading) {
       return Column(
         children: [
           SizedBox(height: 240),
@@ -226,7 +240,7 @@ class _HistoryBody extends StatelessWidget {
       );
     }
 
-    if (state.error != null) {
+    if (state.historyError != null) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -265,9 +279,11 @@ class _HistoryBody extends StatelessWidget {
         else ...[
           for (var index = 0; index < records.length; index++) ...[
             switch (type) {
-              WalletRecordType.consumption => _ConsumptionRecordRow(
-                record: records[index],
-              ),
+              WalletRecordType.consumption =>
+                records[index].consumptionStatus ==
+                        WalletConsumptionStatus.expired
+                    ? _ExpiredConsumptionRecordRow(record: records[index])
+                    : _ConsumptionRecordRow(record: records[index]),
               WalletRecordType.coins => _CoinRewardRecordRow(
                 record: records[index],
                 onClaim: () => onClaimReward(records[index].id),
@@ -546,6 +562,72 @@ class _ConsumptionRecordRow extends StatelessWidget {
                 ),
               ),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ExpiredConsumptionRecordRow extends StatelessWidget {
+  const _ExpiredConsumptionRecordRow({required this.record});
+
+  final WalletRecord record;
+
+  @override
+  Widget build(BuildContext context) {
+    final secondaryStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
+      color: Colors.white.withValues(alpha: 0.5),
+      height: 1.5,
+      fontWeight: FontWeight.normal,
+    );
+
+    return Row(
+      children: [
+        Image.asset('assets/images/profile/coin.png', width: 26, height: 26),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.l10n.walletText(record.titleText),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  height: 1.5,
+                ),
+              ),
+              if (record.subtitleText != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  context.l10n.walletText(record.subtitleText!),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: secondaryStyle,
+                ),
+              ],
+              const SizedBox(height: 4),
+              Text(
+                record.dateLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: secondaryStyle,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Text(
+          context.l10n.walletText(record.trailingLabelText),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+            height: 1.5,
+          ),
         ),
       ],
     );
