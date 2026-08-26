@@ -21,6 +21,7 @@ void main() {
             accessToken: 'must-not-be-sent',
           ),
         ),
+        pendingStore: _MemoryPendingStore(),
       );
 
       await reporter.report(adjustAdid: 'adjust-adid', gpsAdid: ' ');
@@ -35,9 +36,46 @@ void main() {
       );
     },
   );
+
+  test('keeps a failed report and retries it on recovery', () async {
+    final pendingStore = _MemoryPendingStore();
+    final failingAdapter = _RecordingHttpClientAdapter(statusCode: 500);
+    final failingReporter = AdjustDeviceIdentifierReporter(
+      apiClient: ApiClient(
+        dio: Dio()..httpClientAdapter = failingAdapter,
+        requestContext: const ApiRequestContext.test(deviceId: 'device-id'),
+      ),
+      pendingStore: pendingStore,
+    );
+
+    expect(
+      await failingReporter.report(adjustAdid: 'adjust-adid', gpsAdid: 'gps'),
+      isFalse,
+    );
+    expect((await pendingStore.read())?.adjustAdid, 'adjust-adid');
+
+    final succeedingAdapter = _RecordingHttpClientAdapter();
+    final succeedingReporter = AdjustDeviceIdentifierReporter(
+      apiClient: ApiClient(
+        dio: Dio()..httpClientAdapter = succeedingAdapter,
+        requestContext: const ApiRequestContext.test(deviceId: 'device-id'),
+      ),
+      pendingStore: pendingStore,
+    );
+
+    expect(await succeedingReporter.recoverPending(), isTrue);
+    expect(succeedingAdapter.lastOptions?.data, {
+      'adjustAdid': 'adjust-adid',
+      'gpsAdid': 'gps',
+    });
+    expect(await pendingStore.read(), isNull);
+  });
 }
 
 class _RecordingHttpClientAdapter implements HttpClientAdapter {
+  _RecordingHttpClientAdapter({this.statusCode = 200});
+
+  final int statusCode;
   RequestOptions? lastOptions;
 
   @override
@@ -49,7 +87,7 @@ class _RecordingHttpClientAdapter implements HttpClientAdapter {
     lastOptions = options;
     return ResponseBody.fromString(
       jsonEncode({'code': 0, 'message': 'success', 'data': null}),
-      200,
+      statusCode,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
       },
@@ -58,4 +96,19 @@ class _RecordingHttpClientAdapter implements HttpClientAdapter {
 
   @override
   void close({bool force = false}) {}
+}
+
+class _MemoryPendingStore implements AdjustDeviceIdentifierPendingStore {
+  AdjustDeviceIdentifiers? value;
+
+  @override
+  Future<void> clear() async => value = null;
+
+  @override
+  Future<AdjustDeviceIdentifiers?> read() async => value;
+
+  @override
+  Future<void> write(AdjustDeviceIdentifiers identifiers) async {
+    value = identifiers;
+  }
 }

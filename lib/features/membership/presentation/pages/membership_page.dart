@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,11 +14,11 @@ import '../../../../core/modal/app_modal_provider.dart';
 import '../../../../core/modal/app_modal_service.dart';
 import '../../../../core/modal/app_modal_source.dart';
 import '../../../../core/toast/app_toast_provider.dart';
-import '../../../../core/utils/period_iso_parser.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
+import '../../../../shared/widgets/app_secondary_page_header.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../../pay/domain/member_product_type.dart';
 import '../../../player/application/player_entry_preload_coordinator.dart';
@@ -33,6 +32,24 @@ import '../membership_route_result.dart';
 import '../modal/membership_modal_results.dart';
 import '../widgets/membership_benefits_panel.dart';
 import '../widgets/membership_plan_card.dart';
+
+const _membershipPrimaryTitleGradient = LinearGradient(
+  colors: [Color(0xFFFDF5D8), Color(0xFFF2C588)],
+);
+
+TextStyle _membershipPrimaryTitleStyle(BuildContext context) =>
+    Theme.of(context).textTheme.headlineSmall?.copyWith(
+      color: Colors.white,
+      fontSize: 26,
+      fontWeight: FontWeight.w800,
+      height: 1.2,
+    ) ??
+    const TextStyle(
+      color: Colors.white,
+      fontSize: 26,
+      fontWeight: FontWeight.w800,
+      height: 1.2,
+    );
 
 class MembershipPage extends ConsumerStatefulWidget {
   const MembershipPage({
@@ -50,7 +67,9 @@ class MembershipPage extends ConsumerStatefulWidget {
 
 class _MembershipPageState extends ConsumerState<MembershipPage> {
   final _dramaExposureSession = Object();
+  late final ScrollController _scrollController;
   bool _modalOpen = false;
+  bool _showStickyHeader = false;
   late final AppModalService _modalService;
   late final bool _returnToProfile;
   bool _vipDramasRefreshRequested = false;
@@ -58,6 +77,7 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController()..addListener(_handleScroll);
     _modalService = ref.read(appModalServiceProvider);
     final membershipController = ref.read(
       membershipControllerProvider.notifier,
@@ -84,9 +104,24 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
 
   @override
   void dispose() {
+    _scrollController
+      ..removeListener(_handleScroll)
+      ..dispose();
     DramaCardExposure.releasePageSession(_dramaExposureSession);
     _modalService.dismissForSource(AppModalSource.membership);
     super.dispose();
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    final shouldShow =
+        _scrollController.offset >=
+        MembershipLayout.heroTitleTop - MediaQuery.paddingOf(context).top;
+    if (_showStickyHeader != shouldShow) {
+      setState(() => _showStickyHeader = shouldShow);
+    }
   }
 
   @override
@@ -198,34 +233,29 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
       backgroundColor: MembershipLayout.background,
       body: Stack(
         children: [
-          _MembershipHeroBackground(topInset: topInset),
           _MembershipBody(
             state: state,
             controller: controller,
+            scrollController: _scrollController,
+            title: context.l10n.membershipTitle,
+            subtitle: context.l10n.membershipUpgraded,
+            topInset: topInset,
             useFloatingPurchaseButton: useFloatingPurchaseButton,
             dramaExposureSession: _dramaExposureSession,
             analytics: ref.read(analyticsServiceProvider),
             onPlanTap: _selectPlan,
           ),
-          if (state.hasContent)
-            _MembershipHeroContent(
+          if (state.hasContent && _showStickyHeader)
+            _MembershipStickyHeader(
               title: context.l10n.membershipTitle,
-              subtitle: context.l10n.membershipUpgraded,
+              topInset: topInset,
+              hasBackButton: widget.showBackButton,
             ),
           if (widget.showBackButton)
             Positioned(
               top: topInset,
               left: 0,
-              child: SizedBox(
-                width: MembershipLayout.navButtonSize,
-                height: MembershipLayout.navButtonSize,
-                child: IconButton(
-                  onPressed: () => _goBack(),
-                  icon: const Icon(Icons.chevron_left_rounded, size: 30),
-                  color: AppColors.textPrimary,
-                  padding: EdgeInsets.zero,
-                ),
-              ),
+              child: AppSecondaryPageBackButton(onPressed: _goBack),
             ),
           // 底部悬浮购买按钮
           if (state.hasContent)
@@ -324,6 +354,10 @@ class _MembershipBody extends StatelessWidget {
   const _MembershipBody({
     required this.state,
     required this.controller,
+    required this.scrollController,
+    required this.title,
+    required this.subtitle,
+    required this.topInset,
     required this.useFloatingPurchaseButton,
     required this.dramaExposureSession,
     required this.analytics,
@@ -332,6 +366,10 @@ class _MembershipBody extends StatelessWidget {
 
   final MembershipState state;
   final MembershipController controller;
+  final ScrollController scrollController;
+  final String title;
+  final String subtitle;
+  final double topInset;
   final bool useFloatingPurchaseButton;
   final Object dramaExposureSession;
   final AnalyticsService analytics;
@@ -340,151 +378,120 @@ class _MembershipBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (state.isLoading) {
-      return Positioned(
-        left: 0,
-        right: 0,
-        top: MembershipLayout.scrollContentTop,
-        bottom: 0,
-        child: const Center(
-          child: SizedBox.square(
-            dimension: 22,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: AppColors.primary,
-            ),
+      return const Center(
+        child: SizedBox.square(
+          dimension: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AppColors.primary,
           ),
         ),
       );
     }
 
     if (state.error != null) {
-      return Positioned(
-        left: 0,
-        right: 0,
-        top: MembershipLayout.scrollContentTop,
-        bottom: 0,
-        child: Center(
-          child: AppRetryButton(
-            onPressed: controller.retry,
-            label: context.l10n.retry,
-          ),
+      return Center(
+        child: AppRetryButton(
+          onPressed: controller.retry,
+          label: context.l10n.retry,
         ),
       );
     }
 
-    final selectedPlan = state.selectedPlan;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
-    return Positioned(
-      key: const Key('membership_scroll_body'),
-      left: 0,
-      right: 0,
-      top: MembershipLayout.scrollContentTop,
-      bottom: state.hasContent && !useFloatingPurchaseButton
-          ? MembershipLayout.bottomButtonAreaHeight
-          : 30,
-      child: ClipRect(
-        child: ListView(
-          padding: EdgeInsets.only(bottom: bottomInset + 24),
-          physics: const ClampingScrollPhysics(),
-          children: [
-            _MembershipPlanCardsRow(
-              plans: state.plans,
-              selectedPlanId: state.selectedPlanId,
-              isGoogleBillingUnavailable: state.isGoogleBillingUnavailable,
-              onPlanTap: onPlanTap,
+    return ClipRect(
+      child: ListView(
+        key: const Key('membership_scroll_body'),
+        controller: scrollController,
+        padding: EdgeInsets.only(
+          bottom:
+              bottomInset +
+              (state.hasContent && !useFloatingPurchaseButton
+                  ? MembershipLayout.bottomButtonAreaHeight
+                  : 30),
+        ),
+        physics: const ClampingScrollPhysics(),
+        children: [
+          SizedBox(
+            height: MembershipLayout.planCardsTop,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                _MembershipHeroBackground(topInset: topInset),
+                _MembershipHeroContent(title: title, subtitle: subtitle),
+              ],
             ),
-            // 促销文案（根据语言动态组装）
-            const SizedBox(height: 8),
-            Builder(
-              builder: (context) {
-                final locale = Localizations.localeOf(context);
-                final plan = selectedPlan;
-                // 只有当 hasPromo 为 true 时才显示促销文案
-                final promoText = (plan != null && plan.hasPromo)
-                    ? _buildPromoText(context, plan, locale.languageCode)
-                    : null;
-                if (promoText == null) return const SizedBox.shrink();
-                return Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: MembershipLayout.horizontalPadding,
-                  ),
-                  child: Text(
-                    promoText,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF767676).withValues(alpha: 0.9),
-                      fontSize: 12,
-                      height: 1.5,
-                    ),
+          ),
+          _MembershipPlanCardsColumn(
+            plans: state.plans,
+            selectedPlanId: state.selectedPlanId,
+            isGoogleBillingUnavailable: state.isGoogleBillingUnavailable,
+            onPlanTap: onPlanTap,
+          ),
+          const SizedBox(height: 16),
+          // Padding(
+          //   padding: const EdgeInsets.symmetric(
+          //     horizontal: MembershipLayout.horizontalPadding,
+          //   ),
+          //   child: Center(
+          //     child: Text(
+          //       selectedPlan?.description ?? '',
+          //       maxLines: 1,
+          //       overflow: TextOverflow.ellipsis,
+          //       textAlign: TextAlign.center,
+          //       style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          //         color: const Color(0xFF767676),
+          //         fontSize: 12,
+          //         height: 1.5,
+          //       ),
+          //     ),
+          //   ),
+          // ),
+          SizedBox(
+            height:
+                MembershipLayout.benefitsPanelTop -
+                MembershipLayout.planDescriptionTop -
+                18,
+          ),
+          MembershipBenefitsPanel(
+            betweenBenefitsAndTips: VipOnlyDramasSection(
+              exposurePageSession: dramaExposureSession,
+              exposureAnalytics: analytics,
+              listPadding: const EdgeInsets.symmetric(
+                horizontal: MembershipLayout.horizontalPadding,
+              ),
+              onDramaTap: (drama, position) {
+                unawaited(
+                  ProviderScope.containerOf(context)
+                      .read(analyticsServiceProvider)
+                      .track(
+                        AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                          'element_name': 'drama_card',
+                          'drama_id': drama.id,
+                          'position': position,
+                        }),
+                      ),
+                );
+                preparePlayerEntryPreload(
+                  context,
+                  dramaId: drama.id,
+                  episodeId: '1',
+                  trigger: 'membership_vip_only_drama_tap',
+                  resumeHint: playerEntryResumeHintFor(drama.watchProgress),
+                );
+                context.push(
+                  RoutePaths.playerLocation(
+                    dramaId: drama.id,
+                    episodeId: '1',
+                    trigger: 'membership_vip_only_drama_tap',
+                    userActionAtMs: DateTime.now().millisecondsSinceEpoch,
                   ),
                 );
               },
             ),
-            const SizedBox(height: 12),
-            // Padding(
-            //   padding: const EdgeInsets.symmetric(
-            //     horizontal: MembershipLayout.horizontalPadding,
-            //   ),
-            //   child: Center(
-            //     child: Text(
-            //       selectedPlan?.description ?? '',
-            //       maxLines: 1,
-            //       overflow: TextOverflow.ellipsis,
-            //       textAlign: TextAlign.center,
-            //       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            //         color: const Color(0xFF767676),
-            //         fontSize: 12,
-            //         height: 1.5,
-            //       ),
-            //     ),
-            //   ),
-            // ),
-            SizedBox(
-              height:
-                  MembershipLayout.benefitsPanelTop -
-                  MembershipLayout.planDescriptionTop -
-                  18,
-            ),
-            MembershipBenefitsPanel(
-              betweenBenefitsAndTips: VipOnlyDramasSection(
-                exposurePageSession: dramaExposureSession,
-                exposureAnalytics: analytics,
-                listPadding: const EdgeInsets.symmetric(
-                  horizontal: MembershipLayout.horizontalPadding,
-                ),
-                onDramaTap: (drama, position) {
-                  unawaited(
-                    ProviderScope.containerOf(context)
-                        .read(analyticsServiceProvider)
-                        .track(
-                          AnalyticsEvent(AnalyticsDefinitions.elementClick, {
-                            'element_name': 'drama_card',
-                            'drama_id': drama.id,
-                            'position': position,
-                          }),
-                        ),
-                  );
-                  preparePlayerEntryPreload(
-                    context,
-                    dramaId: drama.id,
-                    episodeId: '1',
-                    trigger: 'membership_vip_only_drama_tap',
-                    resumeHint: playerEntryResumeHintFor(drama.watchProgress),
-                  );
-                  context.push(
-                    RoutePaths.playerLocation(
-                      dramaId: drama.id,
-                      episodeId: '1',
-                      trigger: 'membership_vip_only_drama_tap',
-                      userActionAtMs: DateTime.now().millisecondsSinceEpoch,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -493,40 +500,8 @@ class _MembershipBody extends StatelessWidget {
 String _analyticsProductTypeForPlan(MembershipPlan plan) =>
     MemberProductType.analyticsProductTypeFor(plan.memberType);
 
-String? _buildPromoText(
-  BuildContext context,
-  MembershipPlan plan,
-  String languageCode,
-) {
-  final promoPrice = plan.promotionPriceLabel;
-  final regularPrice = plan.regularPriceLabel;
-  final promoPeriod = plan.promoPeriodIso;
-  final regularPeriod = plan.regularPeriodIso;
-  if (promoPrice == null ||
-      regularPrice == null ||
-      promoPeriod == null ||
-      regularPeriod == null) {
-    return null;
-  }
-
-  final args = IapPromoTextBuilder.templateArguments(
-    promoPrice: promoPrice,
-    promoPeriod: promoPeriod,
-    promoCycles: plan.promoCycles ?? 1,
-    regularPrice: regularPrice,
-    languageCode: languageCode,
-  );
-  return context.l10n.vipPlanIntroPrice(
-    sale: args['sale']!,
-    price: args['price']!,
-    num: args['num']!,
-    ordinal: args['ordinal']!,
-    unit: args['unit']!,
-  );
-}
-
-class _MembershipPlanCardsRow extends StatelessWidget {
-  const _MembershipPlanCardsRow({
+class _MembershipPlanCardsColumn extends StatelessWidget {
+  const _MembershipPlanCardsColumn({
     required this.plans,
     required this.selectedPlanId,
     required this.isGoogleBillingUnavailable,
@@ -542,21 +517,9 @@ class _MembershipPlanCardsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        const visibleCardCount = 3;
-        const visibleGapCount = 3;
-        final contentWidth =
-            constraints.maxWidth - MembershipLayout.horizontalPadding * 2;
-        final cardWidth =
-            (contentWidth - MembershipLayout.planCardGap * visibleGapCount) /
-            visibleCardCount;
-        final cardHeight =
-            cardWidth *
-            MembershipLayout.planCardHeight /
-            MembershipLayout.planCardWidth;
-
         if (plans.isEmpty) {
           return SizedBox(
-            height: cardHeight,
+            height: 120,
             child: Center(
               child: AppEmptyState(
                 message: isGoogleBillingUnavailable
@@ -569,30 +532,24 @@ class _MembershipPlanCardsRow extends StatelessWidget {
           );
         }
 
-        return SizedBox(
-          height: cardHeight,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
-            padding: const EdgeInsets.symmetric(
-              horizontal: MembershipLayout.horizontalPadding,
-            ),
-            child: Row(
-              children: [
-                for (var index = 0; index < plans.length; index++) ...[
-                  if (index > 0)
-                    const SizedBox(width: MembershipLayout.planCardGap),
-                  MembershipPlanCard(
-                    key: MembershipPlanCard.planKey(plans[index].id),
-                    plan: plans[index],
-                    selected: selectedPlanId == plans[index].id,
-                    width: cardWidth,
-                    height: cardHeight,
-                    onTap: () => onPlanTap(plans[index].id),
-                  ),
-                ],
+        return Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: MembershipLayout.horizontalPadding,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var index = 0; index < plans.length; index++) ...[
+                if (index > 0)
+                  const SizedBox(height: MembershipLayout.verticalPlanCardGap),
+                MembershipPlanCard(
+                  key: MembershipPlanCard.planKey(plans[index].id),
+                  plan: plans[index],
+                  selected: selectedPlanId == plans[index].id,
+                  onTap: () => onPlanTap(plans[index].id),
+                ),
               ],
-            ),
+            ],
           ),
         );
       },
@@ -617,20 +574,13 @@ class _MembershipHeroContent extends StatelessWidget {
           child: IgnorePointer(
             child: ShaderMask(
               shaderCallback: (rect) {
-                return const LinearGradient(
-                  colors: [Color(0xFFFDF5D8), Color(0xFFF2C588)],
-                ).createShader(rect);
+                return _membershipPrimaryTitleGradient.createShader(rect);
               },
               child: Text(
                 title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  height: 1.2,
-                ),
+                style: _membershipPrimaryTitleStyle(context),
               ),
             ),
           ),
@@ -666,6 +616,85 @@ class _MembershipHeroContent extends StatelessWidget {
   }
 }
 
+class _MembershipStickyHeader extends StatelessWidget {
+  const _MembershipStickyHeader({
+    required this.title,
+    required this.topInset,
+    required this.hasBackButton,
+  });
+
+  final String title;
+  final double topInset;
+  final bool hasBackButton;
+
+  @override
+  Widget build(BuildContext context) {
+    final contentHeight = hasBackButton
+        ? MembershipLayout.navButtonSize
+        : MembershipLayout.primaryStickyHeaderContentHeight;
+    final titleStyle = hasBackButton
+        ? Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          )
+        : _membershipPrimaryTitleStyle(context);
+    return Positioned(
+      left: 0,
+      right: 0,
+      top: 0,
+      height: topInset + contentHeight,
+      child: ColoredBox(
+        color: Colors.black,
+        child: Padding(
+          padding: EdgeInsets.only(top: topInset),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              if (!hasBackButton)
+                const Positioned(
+                  left: MembershipLayout.horizontalPadding,
+                  child: SizedBox(width: MembershipLayout.navButtonSize),
+                ),
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: hasBackButton
+                      ? MembershipLayout.navButtonSize
+                      : MembershipLayout.horizontalPadding,
+                ),
+                child: Align(
+                  alignment: hasBackButton
+                      ? Alignment.center
+                      : Alignment.centerLeft,
+                  child: hasBackButton
+                      ? Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: titleStyle,
+                        )
+                      : ShaderMask(
+                          shaderCallback: (rect) =>
+                              _membershipPrimaryTitleGradient.createShader(
+                                rect,
+                              ),
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: titleStyle,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _MembershipHeroBackground extends StatelessWidget {
   const _MembershipHeroBackground({required this.topInset});
 
@@ -684,7 +713,7 @@ class _MembershipHeroBackground extends StatelessWidget {
           children: [
             Image.asset(
               'assets/images/membership/membership_hero_bg.png',
-              fit: BoxFit.cover,
+              fit: BoxFit.fitWidth,
               alignment: Alignment.topCenter,
             ),
             DecoratedBox(
@@ -770,11 +799,11 @@ class _MembershipBottomButton extends StatelessWidget {
           child: GestureDetector(
             onTap: enabled ? onPurchase : null,
             child: Container(
-              width: 192,
-              height: 56,
+              width: 247,
+              height: 57,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: BorderRadius.circular(40),
                 color: enabled ? null : const Color(0xFF4A4A4A),
                 gradient: enabled
                     ? const LinearGradient(
@@ -801,7 +830,7 @@ class _MembershipBottomButton extends StatelessWidget {
                           ? const Color(0xFF230D06)
                           : Colors.white.withValues(alpha: 0.45),
                       fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight(590),
                     ),
                   ),
                   Text(
@@ -811,7 +840,7 @@ class _MembershipBottomButton extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: const Color(0xFF230D06).withValues(alpha: 0.3),
                       fontSize: 11,
-                      height: 1,
+                      height: 1.3,
                     ),
                   ),
                 ],
@@ -845,15 +874,6 @@ class _MembershipBottomButton extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Text(
-              context.l10n.membershipAutoRenewCancel,
-              style: TextStyle(
-                color: Color(0XFFE6CFA6).withValues(alpha: 0.5),
-                fontSize: 12,
-                fontWeight: FontWeight.normal,
-              ),
-            ),
-            SizedBox(height: 20),
             GestureDetector(
               onTap: enabled ? onPurchase : null,
               child: Container(
@@ -885,27 +905,35 @@ class _MembershipBottomButton extends StatelessWidget {
               ),
             ),
             SizedBox(height: 10),
-            RichText(
-              text: TextSpan(
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFFFFFFFF).withValues(alpha: 0.5),
-                ),
-                children: [
-                  TextSpan(
-                    text: context.l10n.appCommonLegalPrivacyPolicy,
-                    recognizer: TapGestureRecognizer()
-                      ..onTap = () => context.push(RoutePaths.privacyPolicy),
-                  ),
-                  TextSpan(text: '    ·    '),
-                  TextSpan(
-                    text: context.l10n.appCommonLegalTermsOfUse,
-                    recognizer: TapGestureRecognizer()
-                      ..onTap = () => context.push(RoutePaths.userAgreement),
-                  ),
-                ],
+            Text(
+              context.l10n.membershipAutoRenewCancel,
+              style: TextStyle(
+                color: Color(0XFFFFFFFF).withValues(alpha: 0.4),
+                fontSize: 12,
+                fontWeight: FontWeight.normal,
               ),
             ),
+            // RichText(
+            //   text: TextSpan(
+            //     style: TextStyle(
+            //       fontSize: 11,
+            //       color: Color(0xFFFFFFFF).withValues(alpha: 0.5),
+            //     ),
+            //     children: [
+            //       TextSpan(
+            //         text: context.l10n.appCommonLegalPrivacyPolicy,
+            //         recognizer: TapGestureRecognizer()
+            //           ..onTap = () => context.push(RoutePaths.privacyPolicy),
+            //       ),
+            //       TextSpan(text: '    ·    '),
+            //       TextSpan(
+            //         text: context.l10n.appCommonLegalTermsOfUse,
+            //         recognizer: TapGestureRecognizer()
+            //           ..onTap = () => context.push(RoutePaths.userAgreement),
+            //       ),
+            //     ],
+            //   ),
+            // ),
           ],
         ),
       ),

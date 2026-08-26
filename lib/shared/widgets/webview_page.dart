@@ -10,6 +10,7 @@ import '../../l10n/app_localizations.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/url/external_url_launcher.dart';
 import '../../shared/widgets/app_empty_state.dart';
+import '../../shared/widgets/app_secondary_page_header.dart';
 
 typedef WebViewPageLifecycleCallback =
     Future<void> Function(WebViewController controller, String url);
@@ -208,34 +209,37 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
       appBar: widget.showAppBar
           ? AppBar(
               backgroundColor: AppColors.black,
-              leading: IconButton(
-                icon: const Icon(
-                  Icons.chevron_left_rounded,
-                  color: AppColors.textPrimary,
-                  size: 28,
+              toolbarHeight: AppSecondaryPageHeader.height,
+              leadingWidth:
+                  AppSecondaryPageHeader.backButtonSize +
+                  AppSecondaryPageHeader.horizontalInset * 2,
+              leading: Padding(
+                padding: const EdgeInsets.only(
+                  left: AppSecondaryPageHeader.horizontalInset,
                 ),
-                onPressed: () {
-                  if (context.canPop()) {
-                    context.pop();
-                    return;
-                  }
-                  context.go(RoutePaths.home);
-                },
+                child: AppSecondaryPageBackButton(
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                      return;
+                    }
+                    context.go(RoutePaths.home);
+                  },
+                ),
               ),
               title: Text(
                 widget.title,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: AppColors.textPrimary,
-                  // fontSize: 18,
-                  // fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  height: 1.5,
                 ),
               ),
               centerTitle: true,
             )
           : null,
-      body:
-
-      Stack(
+      body: Stack(
         children: [
           if (_controller != null)
             WebViewWidget(

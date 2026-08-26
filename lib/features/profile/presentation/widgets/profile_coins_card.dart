@@ -47,12 +47,22 @@ class ProfileCoinsCard extends StatelessWidget {
                 key: const ValueKey('profile_wallet_entry'),
                 behavior: HitTestBehavior.opaque,
                 onTap: coins.walletEnabled ? onWalletTap : null,
-                child: Text(
-                  l10n.profileWallet,
-                  style: textTheme.labelMedium?.copyWith(
-                    color: AppColors.textPrimary.withValues(alpha: 0.5),
-                    fontWeight: FontWeight.normal,
-                  ),
+                child: Row(
+                  children: [
+                    Text(
+                      l10n.profileWallet,
+                      style: textTheme.labelMedium?.copyWith(
+                        color: AppColors.textPrimary.withValues(alpha: 0.5),
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                    SizedBox(width: 3),
+                    Image.asset(
+                      "assets/images/profile/log_icon.png",
+                      height: 15,
+                      width: 15,
+                    )
+                  ],
                 ),
               ),
             ],

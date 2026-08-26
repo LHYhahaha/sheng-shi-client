@@ -28,6 +28,8 @@ class AdjustService {
   /// NovaShort 在 Adjust 后台登记的应用识别码。
   static const _novaShortAppToken = 'i3xfcgiqzsao';
   static bool _initializationRequested = false;
+  static bool _deviceIdentifierSyncInProgress = false;
+  static bool _deviceIdentifiersReportedInProcess = false;
   static final _sessionConfirmed = Completer<void>();
   static final _eventResults = StreamController<AdjustEventResult>.broadcast();
 
@@ -51,6 +53,9 @@ class AdjustService {
   void initialize() {
     try {
       if (_initializationRequested) {
+        // 事件可能先于 App 启动流程触发 SDK 初始化。此处仍要让带 reporter 的
+        // 实例完成设备标识同步，不能因 SDK 已初始化而漏掉内部绑定接口。
+        unawaited(refreshDeviceIdentifiers());
         if (kDebugMode) {
           debugPrint(
             '[Adjust] SDK initialization already requested; '
@@ -82,10 +87,34 @@ class AdjustService {
           'sessionConfirmed=$isSessionConfirmed.',
         );
       }
-      unawaited(_readAndReportDeviceIdentifiers());
+      unawaited(refreshDeviceIdentifiers());
     } catch (error, stackTrace) {
       debugPrint('[Adjust] Initialization failed: $error');
       debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  /// 在启动、SDK session 成功或应用回前台时尝试完成设备标识绑定。
+  ///
+  /// 失败的标识由 reporter 持久化，成功前可安全重复调用（服务端需保持幂等）。
+  Future<void> refreshDeviceIdentifiers() async {
+    if (defaultTargetPlatform != TargetPlatform.android ||
+        _deviceIdentifierReporter == null ||
+        _deviceIdentifierSyncInProgress ||
+        _deviceIdentifiersReportedInProcess) {
+      return;
+    }
+    _deviceIdentifierSyncInProgress = true;
+    try {
+      final recovered = await _deviceIdentifierReporter.recoverPending();
+      if (recovered) {
+        _deviceIdentifiersReportedInProcess = true;
+        return;
+      }
+      final reported = await _readAndReportDeviceIdentifiers();
+      if (reported) _deviceIdentifiersReportedInProcess = true;
+    } finally {
+      _deviceIdentifierSyncInProgress = false;
     }
   }
 
@@ -106,6 +135,10 @@ class AdjustService {
           'message=${session.message}, adid=${session.adid}, '
           'timestamp=${session.timestamp}.',
         );
+      }
+      final adid = session.adid;
+      if (adid != null && adid.trim().isNotEmpty) {
+        unawaited(_reportDeviceIdentifiers(adid));
       }
     };
     config.sessionFailureCallback = (session) {
@@ -165,9 +198,20 @@ class AdjustService {
     };
   }
 
-  Future<void> _readAndReportDeviceIdentifiers() async {
+  Future<bool> _readAndReportDeviceIdentifiers() async {
     try {
       final adid = await Adjust.getAdidWithTimeout(5000);
+      if (adid == null || adid.trim().isEmpty) return false;
+      return _reportDeviceIdentifiers(adid);
+    } catch (error, stackTrace) {
+      debugPrint('[Adjust] Failed to read device identifiers: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      return false;
+    }
+  }
+
+  Future<bool> _reportDeviceIdentifiers(String adjustAdid) async {
+    try {
       final googleAdId = await Adjust.getGoogleAdId().timeout(
         const Duration(seconds: 5),
         onTimeout: () => null,
@@ -175,18 +219,20 @@ class AdjustService {
       if (kDebugMode) {
         debugPrint(
           '[Adjust] Device identifiers: '
-          'adjust_adid=${adid ?? '<unavailable>'}, '
+          'adjust_adid=$adjustAdid, '
           'gps_adid=${googleAdId ?? '<unavailable>'}.',
         );
       }
-      if (adid == null || adid.trim().isEmpty) return;
-      await _deviceIdentifierReporter?.report(
-        adjustAdid: adid,
+      final reported = await _deviceIdentifierReporter?.report(
+        adjustAdid: adjustAdid,
         gpsAdid: googleAdId,
       );
+      if (reported == true) _deviceIdentifiersReportedInProcess = true;
+      return reported ?? false;
     } catch (error, stackTrace) {
       debugPrint('[Adjust] Failed to read device identifiers: $error');
       debugPrintStack(stackTrace: stackTrace);
+      return false;
     }
   }
 }

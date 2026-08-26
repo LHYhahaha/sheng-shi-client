@@ -19,6 +19,25 @@ void main() {
     expect(state.items.map((item) => item.dramaId), [1]);
   });
 
+  test(
+    'silent refresh preserves state when the server data is unchanged',
+    () async {
+      final repository = _FakeMyListRepository();
+      final container = _createContainer(repository);
+      final controller = container.read(myListControllerProvider.notifier);
+
+      await controller.load();
+      final before = container.read(myListControllerProvider);
+
+      await controller.refreshSilently();
+
+      expect(
+        identical(container.read(myListControllerProvider), before),
+        isTrue,
+      );
+    },
+  );
+
   test('switches tabs and reloads play items', () async {
     final repository = _FakeMyListRepository();
     final container = _createContainer(repository);
@@ -164,49 +183,55 @@ void main() {
     expect(state.isLoadingMore, isFalse);
   });
 
-  test('does not load next page from controller after deleting one item', () async {
-    final repository = _FakeMyListRepository(
-      collectionPages: const [
-        MyListPage(items: [_collectionItem], nextPageToken: '2'),
-        MyListPage(items: [_collectionItemB], nextPageToken: null),
-      ],
-    );
-    final container = _createContainer(repository);
-    final controller = container.read(myListControllerProvider.notifier);
+  test(
+    'does not load next page from controller after deleting one item',
+    () async {
+      final repository = _FakeMyListRepository(
+        collectionPages: const [
+          MyListPage(items: [_collectionItem], nextPageToken: '2'),
+          MyListPage(items: [_collectionItemB], nextPageToken: null),
+        ],
+      );
+      final container = _createContainer(repository);
+      final controller = container.read(myListControllerProvider.notifier);
 
-    await controller.load();
-    await controller.deleteItem(1);
-    final state = container.read(myListControllerProvider);
+      await controller.load();
+      await controller.deleteItem(1);
+      final state = container.read(myListControllerProvider);
 
-    expect(state.items, isEmpty);
-    expect(state.nextPageToken, '2');
-    expect(repository.fetchPageTokens, [null]);
-  });
+      expect(state.items, isEmpty);
+      expect(state.nextPageToken, '2');
+      expect(repository.fetchPageTokens, [null]);
+    },
+  );
 
-  test('does not load next page from controller after deleting selected items', () async {
-    final repository = _FakeMyListRepository(
-      collectionPages: const [
-        MyListPage(
-          items: [_collectionItem, _collectionItemB],
-          nextPageToken: '2',
-        ),
-        MyListPage(items: [_collectionItemC], nextPageToken: null),
-      ],
-    );
-    final container = _createContainer(repository);
-    final controller = container.read(myListControllerProvider.notifier);
+  test(
+    'does not load next page from controller after deleting selected items',
+    () async {
+      final repository = _FakeMyListRepository(
+        collectionPages: const [
+          MyListPage(
+            items: [_collectionItem, _collectionItemB],
+            nextPageToken: '2',
+          ),
+          MyListPage(items: [_collectionItemC], nextPageToken: null),
+        ],
+      );
+      final container = _createContainer(repository);
+      final controller = container.read(myListControllerProvider.notifier);
 
-    await controller.load();
-    controller.enterCollectionEdit();
-    controller.toggleSelection(1);
-    controller.toggleSelection(2);
-    await controller.deleteSelected();
-    final state = container.read(myListControllerProvider);
+      await controller.load();
+      controller.enterCollectionEdit();
+      controller.toggleSelection(1);
+      controller.toggleSelection(2);
+      await controller.deleteSelected();
+      final state = container.read(myListControllerProvider);
 
-    expect(state.items, isEmpty);
-    expect(state.nextPageToken, '2');
-    expect(repository.fetchPageTokens, [null]);
-  });
+      expect(state.items, isEmpty);
+      expect(state.nextPageToken, '2');
+      expect(repository.fetchPageTokens, [null]);
+    },
+  );
 
   test('refreshes current tab in place without full-page loading', () async {
     final pages = [
@@ -234,7 +259,10 @@ void main() {
 
   test('refreshing after delete reads the shifted first page', () async {
     final pages = [
-      MyListPage(items: [_collectionItem, _collectionItemB], nextPageToken: '2'),
+      MyListPage(
+        items: [_collectionItem, _collectionItemB],
+        nextPageToken: '2',
+      ),
       MyListPage(items: [_collectionItemC], nextPageToken: null),
     ];
     final repository = _FakeMyListRepository(collectionPages: pages);
@@ -297,12 +325,14 @@ class _FakeMyListRepository implements MyListRepository {
     fetchPageTokens.add(pageToken);
     final pageIndex = (int.tryParse(pageToken ?? '1') ?? 1) - 1;
     return switch (tab) {
-      MyListTab.collection => collectionPages != null
-          ? collectionPages![pageIndex]
-          : MyListPage(items: collectionItems, nextPageToken: null),
-      MyListTab.play => playPages != null
-          ? playPages![pageIndex]
-          : MyListPage(items: playItems, nextPageToken: null),
+      MyListTab.collection =>
+        collectionPages != null
+            ? collectionPages![pageIndex]
+            : MyListPage(items: collectionItems, nextPageToken: null),
+      MyListTab.play =>
+        playPages != null
+            ? playPages![pageIndex]
+            : MyListPage(items: playItems, nextPageToken: null),
     };
   }
 

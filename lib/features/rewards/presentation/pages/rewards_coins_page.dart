@@ -302,7 +302,7 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage>
         showAppCenterToast(context.l10n.networkError);
         return;
       }
-      showRewardCoinsClaimSuccessToast(result!.rewardAmount);
+      showRewardCoinsClaimSuccessToast(context, result!.rewardAmount);
     } catch (_) {
       if (context.mounted) showAppCenterToast(context.l10n.networkError);
     }

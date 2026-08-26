@@ -220,6 +220,16 @@ class MyListController extends Notifier<MyListState> {
 
   Future<void> retry() => load();
 
+  /// 用于保活 tab 重新激活时的后台刷新：已有内容保持可见，首次加载或错误态仍
+  /// 使用完整 loading 流程。
+  Future<void> refreshSilently() async {
+    if (state.isLoading || state.error != null) {
+      await load();
+      return;
+    }
+    await refreshCurrentTabInPlace();
+  }
+
   Future<void> refreshCurrentTabInPlace() async {
     if (state.isLoading || state.isLoadingMore || state.error != null) {
       return;
@@ -246,8 +256,17 @@ class MyListController extends Notifier<MyListState> {
         return;
       }
 
+      final nextItems = _mergeLibrarySync(refreshedItems, tab: tab);
+      final didChange =
+          !_sameItems(state.items, nextItems) ||
+          state.nextPageToken != nextPageToken ||
+          state.loadMoreError != null;
+      if (!didChange) {
+        return;
+      }
+
       state = state.copyWith(
-        items: _mergeLibrarySync(refreshedItems, tab: tab),
+        items: nextItems,
         nextPageToken: nextPageToken,
         clearNextPageToken: nextPageToken == null,
         clearLoadMoreError: true,
@@ -261,6 +280,32 @@ class MyListController extends Notifier<MyListState> {
     } finally {
       _isLoadMoreRequestInFlight = false;
     }
+  }
+
+  bool _sameItems(List<MyListItem> previous, List<MyListItem> next) {
+    if (identical(previous, next)) return true;
+    if (previous.length != next.length) return false;
+    for (var index = 0; index < previous.length; index++) {
+      final a = previous[index];
+      final b = next[index];
+      final aCover = a.coverResource;
+      final bCover = b.coverResource;
+      if (a.dramaId != b.dramaId ||
+          a.title != b.title ||
+          a.introduction != b.introduction ||
+          a.coverAssetPath != b.coverAssetPath ||
+          aCover.type != bCover.type ||
+          aCover.value != bCover.value ||
+          aCover.aspectRatio != bCover.aspectRatio ||
+          a.currentEpisode != b.currentEpisode ||
+          a.episodeCount != b.episodeCount ||
+          a.episodeId != b.episodeId ||
+          a.watchSecond != b.watchSecond ||
+          a.dramaStatus != b.dramaStatus) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<void> loadMore({bool retry = false}) async {

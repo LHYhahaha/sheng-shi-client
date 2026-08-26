@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_spacing.dart';
+import 'app_secondary_page_header.dart';
 
 /// 通用简单页面骨架。
 ///
@@ -29,7 +30,29 @@ class AppPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(title),
+        toolbarHeight: AppSecondaryPageHeader.height,
+        leadingWidth:
+            AppSecondaryPageHeader.backButtonSize +
+            AppSecondaryPageHeader.horizontalInset * 2,
+        leading: Padding(
+          padding: const EdgeInsets.only(
+            left: AppSecondaryPageHeader.horizontalInset,
+          ),
+          child: AppSecondaryPageBackButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+        ),
+        centerTitle: true,
+        title: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            height: 1.5,
+          ),
+        ),
         actions: [
           if (trailing != null)
             Padding(

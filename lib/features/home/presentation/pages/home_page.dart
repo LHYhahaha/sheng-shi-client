@@ -28,7 +28,6 @@ import '../../../../features/player/application/player_entry_preload_coordinator
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/media/media_resource.dart';
 import '../../../../shared/theme/app_colors.dart';
-import '../../../../shared/theme/app_radii.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
@@ -344,9 +343,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     final homeDataState = ref.watch(homeDataControllerProvider);
     final bannerState = ref.watch(homeBannerConfigControllerProvider);
 
-    // 监听 mock 数据
-
-    // 决定使用哪个数据源：优先使用远程数据，降级到 mock 数据
     final categories = remoteData?.categories ?? const <DramaCategory>[];
     final selectedIndex = categories.isNotEmpty
         ? math.min(_remoteDataSelectedIndex, categories.length - 1)
@@ -413,7 +409,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                   onTabChanged: (index) {
                     // 远程数据：直接更新选中索引
                     _selectTab(index);
-                    // mock 数据：使用原有逻辑
                   },
                 ),
               ),
@@ -456,7 +451,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 )
               else
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(13, 2, 12, 24),
+                  padding: const EdgeInsets.fromLTRB(16, 2, 16, 24),
                   sliver: SliverLayoutBuilder(
                     builder: (context, constraints) {
                       if (constraints.crossAxisExtent <= 0) {
@@ -465,82 +460,172 @@ class _HomePageState extends ConsumerState<HomePage> {
                         );
                       }
 
-                      const crossAxisCount = 2;
                       const crossAxisSpacing = 8.0;
-                      final tileWidth =
-                          (constraints.crossAxisExtent -
-                              crossAxisSpacing * (crossAxisCount - 1)) /
-                          crossAxisCount;
-                      final coverCacheWidth = math.max(
-                        1,
-                        (tileWidth * MediaQuery.devicePixelRatioOf(context))
-                            .round(),
-                      );
+                      const featuredDramaCount = 9;
+                      const featuredCoverAspectRatio = 109 / 147;
 
-                      return SliverMasonryGrid.count(
-                        crossAxisCount: crossAxisCount,
-                        mainAxisSpacing: 8,
-                        crossAxisSpacing: crossAxisSpacing,
-                        childCount: items.length,
-                        itemBuilder: (context, index) {
-                          final item = items[index];
+                      int coverCacheWidthFor(int crossAxisCount) {
+                        final tileWidth =
+                            (constraints.crossAxisExtent -
+                                crossAxisSpacing * (crossAxisCount - 1)) /
+                            crossAxisCount;
+                        return math.max(
+                          1,
+                          (tileWidth * MediaQuery.devicePixelRatioOf(context))
+                              .round(),
+                        );
+                      }
 
-                          return DramaCardExposure(
-                            pageSession: _dramaExposureSession,
-                            analytics: ref.read(analyticsServiceProvider),
-                            dramaId: item.id,
-                            position: index + 1,
-                            categoryId: selectedRemoteTab?.id.toString() ?? '',
-                            child: _HomeDramaCard(
-                              key: ValueKey('home_drama_card_${item.id}'),
-                              data: item,
-                              coverCacheWidth: coverCacheWidth,
-                              onStableVisible: (visibleFraction) =>
-                                  _preloadStableVisibleDrama(
-                                    item,
-                                    visibleFraction,
-                                  ),
-                              visibilityRevision: _cardVisibilityRevision,
-                              onTap: () {
-                                unawaited(
-                                  ref
-                                      .read(analyticsServiceProvider)
-                                      .track(
-                                        AnalyticsEvent(
-                                          AnalyticsDefinitions.elementClick,
-                                          {
-                                            'element_name': 'drama_card',
-                                            'drama_id': item.id,
-                                            'position': index + 1,
-                                            'category_id':
-                                                selectedRemoteTab?.id
-                                                    .toString() ??
-                                                '',
-                                          },
-                                        ),
+                      Widget buildDramaCard({
+                        required int itemIndex,
+                        required int coverCacheWidth,
+                        required bool compact,
+                      }) {
+                        final item = items[itemIndex];
+
+                        return DramaCardExposure(
+                          pageSession: _dramaExposureSession,
+                          analytics: ref.read(analyticsServiceProvider),
+                          dramaId: item.id,
+                          position: itemIndex + 1,
+                          categoryId: selectedRemoteTab?.id.toString() ?? '',
+                          child: _HomeDramaCard(
+                            key: ValueKey('home_drama_card_${item.id}'),
+                            data: item,
+                            coverCacheWidth: coverCacheWidth,
+                            compact: compact,
+                            onStableVisible: (visibleFraction) =>
+                                _preloadStableVisibleDrama(
+                                  item,
+                                  visibleFraction,
+                                ),
+                            visibilityRevision: _cardVisibilityRevision,
+                            onTap: () {
+                              unawaited(
+                                ref
+                                    .read(analyticsServiceProvider)
+                                    .track(
+                                      AnalyticsEvent(
+                                        AnalyticsDefinitions.elementClick,
+                                        {
+                                          'element_name': 'drama_card',
+                                          'drama_id': item.id,
+                                          'position': itemIndex + 1,
+                                          'category_id':
+                                              selectedRemoteTab?.id
+                                                  .toString() ??
+                                              '',
+                                        },
                                       ),
-                                );
-                                final tappedAt = DateTime.now();
-                                preparePlayerEntryPreload(
-                                  context,
+                                    ),
+                              );
+                              final tappedAt = DateTime.now();
+                              preparePlayerEntryPreload(
+                                context,
+                                dramaId: item.id,
+                                episodeId: '1',
+                                trigger: 'home_card_tap',
+                                resumeHint: _entryResumeHintFor(item),
+                              );
+                              context.push(
+                                RoutePaths.playerLocation(
                                   dramaId: item.id,
                                   episodeId: '1',
                                   trigger: 'home_card_tap',
-                                  resumeHint: _entryResumeHintFor(item),
-                                );
-                                context.push(
-                                  RoutePaths.playerLocation(
-                                    dramaId: item.id,
-                                    episodeId: '1',
-                                    trigger: 'home_card_tap',
-                                    userActionAtMs:
-                                        tappedAt.millisecondsSinceEpoch,
-                                  ),
-                                );
-                              },
+                                  userActionAtMs:
+                                      tappedAt.millisecondsSinceEpoch,
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      }
+
+                      SliverMasonryGrid buildDramaGrid({
+                        required int startIndex,
+                        required int childCount,
+                        required int crossAxisCount,
+                      }) {
+                        final coverCacheWidth = coverCacheWidthFor(
+                          crossAxisCount,
+                        );
+
+                        return SliverMasonryGrid.count(
+                          crossAxisCount: crossAxisCount,
+                          mainAxisSpacing: 8,
+                          crossAxisSpacing: crossAxisSpacing,
+                          childCount: childCount,
+                          itemBuilder: (context, index) {
+                            return buildDramaCard(
+                              itemIndex: startIndex + index,
+                              coverCacheWidth: coverCacheWidth,
+                              compact: false,
+                            );
+                          },
+                        );
+                      }
+
+                      SliverGrid buildFeaturedDramaGrid({
+                        required int childCount,
+                        required bool hasTagRow,
+                      }) {
+                        final tileWidth =
+                            (constraints.crossAxisExtent -
+                                crossAxisSpacing * 2) /
+                            3;
+                        final coverCacheWidth = coverCacheWidthFor(3);
+
+                        return SliverGrid(
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 3,
+                                mainAxisSpacing: 8,
+                                crossAxisSpacing: crossAxisSpacing,
+                                mainAxisExtent:
+                                    tileWidth / featuredCoverAspectRatio +
+                                    (hasTagRow
+                                        ? _HomeDramaCard
+                                              .compactTextHeightWithTag
+                                        : _HomeDramaCard
+                                              .compactTextHeightWithoutTag),
+                              ),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) => buildDramaCard(
+                              itemIndex: index,
+                              coverCacheWidth: coverCacheWidth,
+                              compact: true,
                             ),
-                          );
-                        },
+                            childCount: childCount,
+                          ),
+                        );
+                      }
+
+                      final firstSectionCount = math.min(
+                        featuredDramaCount,
+                        items.length,
+                      );
+                      final remainingCount = items.length - firstSectionCount;
+                      final featuredCardsHaveNoTags = items
+                          .take(firstSectionCount)
+                          .every((item) => item.tags.isEmpty);
+
+                      return SliverMainAxisGroup(
+                        slivers: [
+                          buildFeaturedDramaGrid(
+                            childCount: firstSectionCount,
+                            hasTagRow: !featuredCardsHaveNoTags,
+                          ),
+                          if (remainingCount > 0) ...[
+                            const SliverToBoxAdapter(
+                              child: SizedBox(height: 8),
+                            ),
+                            buildDramaGrid(
+                              startIndex: firstSectionCount,
+                              childCount: remainingCount,
+                              crossAxisCount: 2,
+                            ),
+                          ],
+                        ],
                       );
                     },
                   ),
@@ -763,7 +848,7 @@ class _HomeRemoteBannerCarouselState extends State<_HomeRemoteBannerCarousel> {
   Widget build(BuildContext context) => Container(
     key: const Key('home_remote_banner_carousel'),
     height: 200,
-    margin: const EdgeInsets.only(bottom: 10, left: 14, right: 14),
+    margin: const EdgeInsets.only(bottom: 10, left: 16, right: 16),
     child: ClipRRect(
       borderRadius: BorderRadius.circular(6),
       child: Swiper(
@@ -912,14 +997,14 @@ class _HomeTitleBarState extends ConsumerState<_HomeTitleBar> {
               _openSearch();
             },
             child: Container(
-              padding: EdgeInsets.symmetric(vertical: 7, horizontal: 12),
+              padding: EdgeInsets.symmetric(vertical: 7, horizontal: 13),
               decoration: BoxDecoration(
                 color: Color(0XFF3A3A3A).withValues(alpha: 0.6),
                 border: Border.all(
                   width: 0.5,
                   color: Color(0XFF949494).withValues(alpha: 0.3),
                 ),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(7),
               ),
               child: Row(
                 children: [
@@ -1036,10 +1121,10 @@ class _HomeFixedHeaderDelegate extends SliverPersistentHeaderDelegate {
   final ValueChanged<int> onTabChanged;
 
   @override
-  double get minExtent => 108;
+  double get minExtent => 100;
 
   @override
-  double get maxExtent => 108;
+  double get maxExtent => 100;
 
   @override
   Widget build(
@@ -1061,32 +1146,32 @@ class _HomeFixedHeaderDelegate extends SliverPersistentHeaderDelegate {
                 ]
               : null,
         ),
-        child: Column(
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(17, 18, 17, 2),
-              child: _HomeTitleBar(),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(0, 13, 0, 0),
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: tabs.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(width: 31),
-                  itemBuilder: (context, index) {
-                    return _HomeCategoryTab(
-                      label: tabs[index].title,
-                      selected: index == selectedTab,
-                      onTap: () => onTabChanged(index),
-                    );
-                  },
+        child: Padding(
+          padding: const EdgeInsets.only(left: 16, right: 16, top: 17),
+          child: Column(
+            children: [
+              _HomeTitleBar(),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 9),
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: EdgeInsets.zero,
+                    itemCount: tabs.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(width: 20),
+                    itemBuilder: (context, index) {
+                      return _HomeCategoryTab(
+                        label: tabs[index].title,
+                        selected: index == selectedTab,
+                        onTap: () => onTabChanged(index),
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1119,7 +1204,7 @@ class _HomeCategoryTab extends StatelessWidget {
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
           color: selected ? AppColors.textPrimary : AppColors.textSecondary,
           fontSize: 15,
-          fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
           height: 1.5,
         ),
       ),
@@ -1131,6 +1216,7 @@ class _HomeDramaCard extends StatefulWidget {
   const _HomeDramaCard({
     required this.data,
     required this.coverCacheWidth,
+    required this.compact,
     required this.onTap,
     required this.onStableVisible,
     required this.visibilityRevision,
@@ -1139,9 +1225,17 @@ class _HomeDramaCard extends StatefulWidget {
 
   final Drama data;
   final int coverCacheWidth;
+  final bool compact;
   final VoidCallback onTap;
   final ValueChanged<double> onStableVisible;
   final ValueListenable<int> visibilityRevision;
+
+  /// 375pt 设计基准下，三列封面为 109 × 147。
+  static const coverAspectRatio = 109 / 147;
+
+  /// 九宫格标题区域：无标签时不为标签行保留高度。
+  static const compactTextHeightWithoutTag = 48.0;
+  static const compactTextHeightWithTag = 72.0;
 
   @override
   State<_HomeDramaCard> createState() => _HomeDramaCardState();
@@ -1208,8 +1302,8 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
     final visibleTags = widget.data.tags;
 
     return Material(
-      color: Color(0XFF1C1821),
-      borderRadius: BorderRadius.circular(AppRadii.sm),
+      color: widget.compact ? Colors.transparent : Color(0XFF1C1821),
+      borderRadius: BorderRadius.circular(4),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: widget.onTap,
@@ -1217,43 +1311,51 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AspectRatio(
-              aspectRatio: widget.data.coverAspectRatio,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _HomeCoverImage(
-                    resource: widget.data.coverResource,
-                    cacheWidth: widget.coverCacheWidth,
-                  ),
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.transparent,
-                          Color(0x66000000),
-                        ],
+              aspectRatio: _HomeDramaCard.coverAspectRatio,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(widget.compact ? 8 : 0),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _HomeCoverImage(
+                      resource: widget.data.coverResource,
+                      cacheWidth: widget.coverCacheWidth,
+                    ),
+                    const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.transparent,
+                            Color(0x66000000),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  if (widget.data.isExclusive)
-                    const Positioned(
-                      top: 0,
-                      right: 0,
-                      child: _ExclusiveBadge(),
+                    if (widget.data.isExclusive)
+                      const Positioned(
+                        top: 0,
+                        right: 0,
+                        child: _ExclusiveBadge(),
+                      ),
+                    Positioned(
+                      right: 9,
+                      bottom: 10,
+                      child: _ViewCount(label: widget.data.viewCountLabel),
                     ),
-                  Positioned(
-                    right: 9,
-                    bottom: 10,
-                    child: _ViewCount(label: widget.data.viewCountLabel),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 16),
+              padding: EdgeInsets.fromLTRB(
+                widget.compact ? 0 : 10,
+                8,
+                10,
+                widget.compact ? 8 : 14,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -1270,11 +1372,19 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
                     ),
                   ),
                   if (visibleTags.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 16,
-                      child: _HomeTagsRow(tags: visibleTags),
-                    ),
+                    const SizedBox(height: 6),
+                    if (widget.compact)
+                      Text(
+                        visibleTags.first,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _HomeTag.compactTextStyle(context),
+                      )
+                    else
+                      SizedBox(
+                        height: 16,
+                        child: _HomeTagsRow(tags: visibleTags),
+                      ),
                   ],
                 ],
               ),
@@ -1393,6 +1503,15 @@ class _HomeTag extends StatelessWidget {
     return Theme.of(context).textTheme.labelSmall?.copyWith(
       color: const Color(0xFFE3E3E3).withValues(alpha: 0.6),
       fontSize: 9,
+      height: 1.3,
+    );
+  }
+
+  static TextStyle? compactTextStyle(BuildContext context) {
+    return Theme.of(context).textTheme.bodyMedium?.copyWith(
+      color: const Color(0xFFE3E3E3).withValues(alpha: 0.5),
+      fontSize: 12,
+      fontWeight: FontWeight.w400,
       height: 1.3,
     );
   }

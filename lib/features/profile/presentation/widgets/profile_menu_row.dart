@@ -76,10 +76,10 @@ class ProfileMenuRow extends StatelessWidget {
               padding: subtitle != null
                   ? const EdgeInsets.only(top: 8.0)
                   : EdgeInsets.zero,
-              child: Icon(
-                Icons.chevron_right_rounded,
-                color: Color(0XFF818181).withValues(alpha: 0.7),
-                size: 20,
+              child: Image.asset(
+                "assets/images/common/white_right.png",
+                height: 20,
+                width: 20,
               ),
             ),
           ],

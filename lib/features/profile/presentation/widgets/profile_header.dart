@@ -116,7 +116,7 @@ class ProfileHeader extends StatelessWidget {
                                     alpha: 0.8,
                                   ),
                                   fontSize: 12,
-                                  fontWeight: FontWeight.w300,
+                                  fontWeight: FontWeight.w400,
                                   height: 1.3,
                                 ),
                           ),

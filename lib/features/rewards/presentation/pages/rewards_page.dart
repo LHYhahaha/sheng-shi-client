@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../core/analytics/analytics_page_tracker.dart';
+import '../../../../shared/widgets/app_secondary_page_header.dart';
 import 'member_points_page.dart';
 import 'rewards_coins_page.dart';
 
@@ -168,11 +169,9 @@ class _RewardsNavigation extends StatelessWidget {
         children: [
           Align(
             alignment: Alignment.centerLeft,
-            child: IconButton(
+            child: AppSecondaryPageBackButton(
               key: const Key('rewards_back_button'),
               onPressed: onBack,
-              icon: const Icon(Icons.chevron_left_rounded, size: 30),
-              color: Colors.white,
             ),
           ),
           Center(

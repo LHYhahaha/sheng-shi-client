@@ -14,12 +14,26 @@ import '../../domain/player_performance_policy.dart';
 import '../../domain/player_seek_preview_config.dart';
 
 abstract final class _PlayerLayoutMetrics {
-  static const forYouActionRailBottom = 104.0;
-  static const singleActionRailBottom = 161.0;
-  static const forYouWatchNowBottom = 24.0;
-  static const singleBottomFrameHeight = 24.0;
-  static const singleMetaBottom = 38.0;
-  static const singleSeekBarBottom = 17.0;
+  static const actionRailIconRight = 24.0;
+  static const actionRailTouchTargetWidth = 58.0;
+  static const actionRailIconWidth = 28.0;
+
+  // 操作按钮的图标在 58px 触控区域内居中，换算为图标可视边缘距屏幕 20px。
+  static const actionRailRight =
+      actionRailIconRight -
+      (actionRailTouchTargetWidth - actionRailIconWidth) / 2;
+
+  // 搜索按钮有 8px 的命中区内边距，外层定位为 8 才能让可见图标距屏幕 16。
+  static const searchButtonRight = 8.0;
+  static const forYouActionRailBottom = 126.0;
+  // PlayerSeekBar 的可见轨道在其触控区域内预留 6px 底部空间。
+  static const forYouSeekBarBottom = -6.0;
+  static const forYouWatchNowBottom = 12.0;
+  // 与 Android Shell 底部导航的内容区高度一致。
+  static const singleBottomFrameHeight = 64.0;
+  static const singleMetaBottom = singleBottomFrameHeight + 14;
+  static const singleSeekBarBottom = singleBottomFrameHeight - 5;
+  static const singleActionRailBottom = singleBottomFrameHeight + 72;
 }
 
 class PlayerChrome extends StatefulWidget {
@@ -35,7 +49,6 @@ class PlayerChrome extends StatefulWidget {
     required this.onMoreTap,
     required this.onUnlockTap,
     this.onMetaTap,
-    this.onSearchTap = _noop,
     this.onLikeTap = _noop,
     this.showUnlockButton = false,
     this.unlockLabel,
@@ -82,7 +95,6 @@ class PlayerChrome extends StatefulWidget {
   final VoidCallback onShareTap;
   final VoidCallback onMoreTap;
   final VoidCallback? onMetaTap;
-  final VoidCallback onSearchTap;
   final VoidCallback onUnlockTap;
   final VoidCallback onLikeTap;
   final bool showUnlockButton;
@@ -163,8 +175,6 @@ class _PlayerChromeState extends State<PlayerChrome> {
   VoidCallback get onMoreTap => widget.onMoreTap;
 
   VoidCallback? get onMetaTap => widget.onMetaTap;
-
-  VoidCallback get onSearchTap => widget.onSearchTap;
 
   VoidCallback get onUnlockTap => widget.onUnlockTap;
 
@@ -262,11 +272,6 @@ class _PlayerChromeState extends State<PlayerChrome> {
             bottomFrameHeight: bottomFrameHeight,
             forYouLayout: forYouLayout,
           ),
-        if (forYouLayout && showChromeOverlays)
-          _PlayerSearchButton(
-            top: mediaQuery.padding.top + 8,
-            onTap: onSearchTap,
-          ),
         if (isPlaying || showCenterPlayButton)
           Positioned(
             left: 0,
@@ -279,15 +284,15 @@ class _PlayerChromeState extends State<PlayerChrome> {
               onTap: _handleVideoTap,
             ),
           ),
-        // if (!forYouLayout) ...[
-        //   Positioned(
-        //     left: 0,
-        //     right: 0,
-        //     bottom: 0,
-        //     height: bottomFrameHeight,
-        //     child: const ColoredBox(color: Color(0xFF141414)),
-        //   ),
-        // ],
+        if (!forYouLayout) ...[
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: bottomFrameHeight,
+            child: const ColoredBox(color: AppColors.black),
+          ),
+        ],
         if (showUnlockButton && !forYouLayout)
           _PlayerUnlockOverlay(
             label: unlockLabel ?? context.l10n.playerUnlockNow,
@@ -333,37 +338,39 @@ class _PlayerChromeState extends State<PlayerChrome> {
             chromeOverlayFadeDuration: chromeOverlayFadeDuration,
             onTap: forYouLayout ? () {} : onMetaTap,
           ),
-          if (!forYouLayout) ...[
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: bottomInset + _PlayerLayoutMetrics.singleSeekBarBottom,
-              child: RepaintBoundary(
-                key: const ValueKey('player_seekbar_repaint_boundary'),
-                child:
-                    seekBar ??
-                    (canSeek || duration > Duration.zero || showTrackLoading
-                        ? PlayerSeekBar(
-                            position: position,
-                            duration: duration,
-                            bufferedPosition: bufferedPosition,
-                            previewPosition: seekPreviewPosition,
-                            thumbnailAssetPath: content.posterAssetPath,
-                            previewConfig: PlayerSeekPreviewConfig.fromPolicy(
-                              PlayerPerformancePolicy.stable,
-                            ),
-                            isDragging: isSeeking,
-                            showTrackLoading: showTrackLoading,
-                            enabled: canSeek,
-                            onDragStart: onSeekStart,
-                            onDragUpdate: onSeekUpdate,
-                            onDragEnd: onSeekEnd,
-                            onDragCancel: onSeekCancel,
-                          )
-                        : const SizedBox.shrink()),
-              ),
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom:
+                bottomInset +
+                (forYouLayout
+                    ? _PlayerLayoutMetrics.forYouSeekBarBottom
+                    : _PlayerLayoutMetrics.singleSeekBarBottom),
+            child: RepaintBoundary(
+              key: const ValueKey('player_seekbar_repaint_boundary'),
+              child:
+                  seekBar ??
+                  (canSeek || duration > Duration.zero || showTrackLoading
+                      ? PlayerSeekBar(
+                          position: position,
+                          duration: duration,
+                          bufferedPosition: bufferedPosition,
+                          previewPosition: seekPreviewPosition,
+                          thumbnailAssetPath: content.posterAssetPath,
+                          previewConfig: PlayerSeekPreviewConfig.fromPolicy(
+                            PlayerPerformancePolicy.stable,
+                          ),
+                          isDragging: isSeeking,
+                          showTrackLoading: showTrackLoading,
+                          enabled: canSeek,
+                          onDragStart: onSeekStart,
+                          onDragUpdate: onSeekUpdate,
+                          onDragEnd: onSeekEnd,
+                          onDragCancel: onSeekCancel,
+                        )
+                      : const SizedBox.shrink()),
             ),
-          ],
+          ),
         ],
       ],
     );
@@ -525,7 +532,7 @@ class _PlayerActionRailLayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      right: 17,
+      right: _PlayerLayoutMetrics.actionRailRight,
       bottom:
           bottomInset +
           (forYouLayout
@@ -910,60 +917,6 @@ class _PauseFeedbackIcon extends StatelessWidget {
   }
 }
 
-class PlayerActionRail extends StatelessWidget {
-  const PlayerActionRail({
-    required this.likeCountLabel,
-    required this.onEpisodesTap,
-    required this.onShareTap,
-    required this.onMoreTap,
-    required this.onLikeTap,
-    required this.isLiked,
-    required this.isLikeLoading,
-    super.key,
-  });
-
-  final String likeCountLabel;
-  final VoidCallback onEpisodesTap;
-  final VoidCallback onShareTap;
-  final VoidCallback onMoreTap;
-  final VoidCallback onLikeTap;
-  final bool isLiked;
-  final bool isLikeLoading;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _LikeActionItem(
-          label: likeCountLabel,
-          isLiked: isLiked,
-          isLoading: isLikeLoading,
-          onTap: onLikeTap,
-        ),
-        const SizedBox(height: 18),
-        _ActionItem(
-          icon: Icons.layers_rounded,
-          label: context.l10n.playerEpisodes,
-          onTap: onEpisodesTap,
-        ),
-        const SizedBox(height: 18),
-        _ActionItem(
-          icon: Icons.reply_rounded,
-          label: context.l10n.playerShare,
-          onTap: onShareTap,
-          flipIcon: true,
-        ),
-        const SizedBox(height: 18),
-        _ActionItem(
-          icon: Icons.more_horiz_rounded,
-          label: context.l10n.playerMore,
-          onTap: onMoreTap,
-        ),
-      ],
-    );
-  }
-}
-
 /// 处理点赞数缓存的 action rail 内容。
 class _PlayerActionRailContent extends ConsumerWidget {
   const _PlayerActionRailContent({
@@ -1035,8 +988,12 @@ class _PlayerActionRailContent extends ConsumerWidget {
   }
 }
 
-class _PlayerSearchButton extends StatelessWidget {
-  const _PlayerSearchButton({required this.top, required this.onTap});
+class PlayerForYouSearchButton extends StatelessWidget {
+  const PlayerForYouSearchButton({
+    required this.top,
+    required this.onTap,
+    super.key,
+  });
 
   final double top;
   final VoidCallback onTap;
@@ -1045,7 +1002,7 @@ class _PlayerSearchButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Positioned(
       top: top,
-      right: 16,
+      right: _PlayerLayoutMetrics.searchButtonRight,
       child: GestureDetector(
         key: const ValueKey('player_for_you_search_button'),
         behavior: HitTestBehavior.opaque,
@@ -1133,26 +1090,28 @@ class PlayerBottomMeta extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight(510),
                     height: 20 / 16,
                   ),
                 ),
               ),
-              Text(
-                showChevron ? ' >' : "",
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w400,
-                  height: 20 / 16,
+              if (showChevron)
+                Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: Image.asset(
+                    'assets/images/common/grey_right_icon.png',
+                    width: 20,
+                    height: 20,
+                    cacheWidth: (20 * MediaQuery.devicePixelRatioOf(context))
+                        .round(),
+                    fit: BoxFit.contain,
+                    filterQuality: FilterQuality.low,
+                  ),
                 ),
-              ),
             ],
           ),
           if (showTags && content.tags.isNotEmpty) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             SizedBox(height: 16, child: _PlayerTagsRow(tags: content.tags)),
           ],
           const SizedBox(height: 8),

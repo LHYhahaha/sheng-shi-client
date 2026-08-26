@@ -1280,14 +1280,14 @@ class PlayerTopBarContent extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 onTap: onBackTap,
                 child: Center(
-                  child: Icon(
-                    Icons.chevron_left,
-                    color: Colors.white,
-                    size: PlayerTopBarMetrics.backIconSize,
+                  child: Image.asset(
+                    "assets/images/common/white_left.png",
+                    width: 24,
+                    height: 24,
                   ),
                 ),
               ),
-              // const SizedBox(width: 4),
+              const SizedBox(width: 2),
               Text(
                 key: const ValueKey('player_episode_label'),
                 context.l10n.myListEpisode(
@@ -1295,6 +1295,7 @@ class PlayerTopBarContent extends StatelessWidget {
                 ),
                 style: const TextStyle(
                   color: Colors.white,
+                  fontWeight: FontWeight(510),
                   fontSize: 14,
                   height: 18 / 14,
                 ),

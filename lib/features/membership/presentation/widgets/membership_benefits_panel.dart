@@ -1,5 +1,8 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../app/router/route_paths.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../membership_layout.dart';
 import '../../domain/membership_plan.dart';
@@ -106,7 +109,7 @@ class MembershipBenefitsPanel extends StatelessWidget {
                         style: textTheme.bodyMedium?.copyWith(
                           color: _gold,
                           fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight(510),
                           height: 1.5,
                         ),
                       ),
@@ -114,7 +117,7 @@ class MembershipBenefitsPanel extends StatelessWidget {
                     const _BenefitTitleLine(),
                   ],
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 24),
                 for (var index = 0; index < benefits.length; index++) ...[
                   _BenefitRow(benefit: benefits[index]),
                   if (index < benefits.length - 1)
@@ -265,7 +268,30 @@ class _MembershipTips extends StatelessWidget {
       children: [
         Text(context.l10n.membershipTips, style: style),
         const SizedBox(height: 6),
-        Text(tips.subscriptionNote, style: style),
+        // Text(tips.subscriptionNote, style: style),
+        RichText(
+          text: TextSpan(
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.5,
+              color: Color(0xFFFFFFFF),
+              fontWeight: FontWeight.normal,
+            ),
+            children: [
+              TextSpan(
+                text: context.l10n.appCommonLegalPrivacyPolicy,
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () => context.push(RoutePaths.privacyPolicy),
+              ),
+              const TextSpan(text: '    ·    '),
+              TextSpan(
+                text: context.l10n.appCommonLegalTermsOfUse,
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () => context.push(RoutePaths.userAgreement),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 6),
         for (var index = 0; index < tips.items.length; index++)
           Padding(

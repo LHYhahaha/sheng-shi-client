@@ -21,6 +21,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
+import '../../../../shared/widgets/app_compact_drama_grid.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../search/domain/search_rankings.dart';
@@ -141,13 +142,13 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     final hotPlaysState = ref.watch(myListHotPlaysControllerProvider);
     final controller = ref.read(myListControllerProvider.notifier);
 
-    // 仅在底部导航激活 My List 时请求，避免页面首次创建时与 tab
-    // 切换监听同时发起重复请求。
+    // My List tab 由 StatefulShell 保活。重新激活时保留旧内容并后台刷新；
+    // 只有首次进入或上一次加载失败才展示完整 loading。
     ref.listen(appShellCurrentTabIndexProvider, (previous, current) {
       if (current == AppShellDestinations.myListIndex && previous != current) {
         _didTriggerLoadMoreNearEnd = false;
-        developer.log('MyList tab activated, reloading data');
-        controller.load();
+        developer.log('MyList tab activated, refreshing data silently');
+        controller.refreshSilently();
         ref.read(myListHotPlaysControllerProvider.notifier).load();
       }
     });
@@ -503,8 +504,10 @@ class _HotPlaysSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasTagRow = dramas.any((drama) => drama.tags.isNotEmpty);
+
     return Padding(
-      padding: const EdgeInsets.only(top: 20, right: 14),
+      padding: const EdgeInsets.only(top: 20, right: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -517,16 +520,9 @@ class _HotPlaysSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
+          AppCompactDramaGrid(
             itemCount: dramas.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 9,
-              mainAxisSpacing: 14,
-              childAspectRatio: 0.55,
-            ),
+            hasTagRow: hasTagRow,
             itemBuilder: (context, index) {
               final drama = dramas[index];
               return DramaCardExposure(
@@ -535,9 +531,11 @@ class _HotPlaysSection extends StatelessWidget {
                 dramaId: drama.id,
                 position: index + 1,
                 cardScene: 'favorite_recommend',
-                child: _HotPlayCard(
-                  drama: drama,
-                  ranking: index + 1,
+                child: AppCompactDramaCard(
+                  coverUrl: drama.coverUrl,
+                  title: drama.title,
+                  tags: drama.tags,
+                  topLeftOverlay: _HotPlayRankBadge(ranking: index + 1),
                   onTap: () => onTap(drama, index + 1),
                 ),
               );
@@ -549,82 +547,29 @@ class _HotPlaysSection extends StatelessWidget {
   }
 }
 
-class _HotPlayCard extends StatelessWidget {
-  const _HotPlayCard({
-    required this.drama,
-    required this.ranking,
-    required this.onTap,
-  });
+class _HotPlayRankBadge extends StatelessWidget {
+  const _HotPlayRankBadge({required this.ranking});
 
-  final SearchRankDrama drama;
   final int ranking;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AspectRatio(
-            aspectRatio: 0.84,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppRadii.xs),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  AppCachedNetworkImage(
-                    imageUrl: drama.coverUrl,
-                    fit: BoxFit.cover,
-                  ),
-                  Align(
-                    alignment: Alignment.topLeft,
-                    child: Container(
-                      width: 24,
-                      height: 14,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: _rankingColor(ranking),
-                        borderRadius: const BorderRadius.only(
-                          bottomRight: Radius.circular(4),
-                        ),
-                      ),
-                      child: Text(
-                        '$ranking',
-                        style: const TextStyle(
-                          height: 1,
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 7),
-          Text(
-            drama.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 12,
-              height: 1.3,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            drama.tags.isEmpty ? '' : drama.tags.first,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
-          ),
-        ],
+    return Container(
+      width: 24,
+      height: 14,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: _rankingColor(ranking),
+        borderRadius: const BorderRadius.only(bottomRight: Radius.circular(4)),
+      ),
+      child: Text(
+        '$ranking',
+        style: const TextStyle(
+          height: 1,
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
