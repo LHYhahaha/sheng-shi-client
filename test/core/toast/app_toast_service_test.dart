@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('appToast success/error/info render top banner', (tester) async {
+  testWidgets('appToast success/error/info render center toast', (
+    tester,
+  ) async {
     late AppToastService toast;
     final botToastBuilder = BotToastInit();
 
@@ -31,21 +33,21 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
 
-    expect(find.byKey(const ValueKey('app_toast_success')), findsOneWidget);
+    expect(find.byKey(const ValueKey('app_center_toast')), findsOneWidget);
     expect(find.text('Unlock successful'), findsOneWidget);
 
     toast.error('Purchase failed');
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
 
-    expect(find.byKey(const ValueKey('app_toast_error')), findsOneWidget);
+    expect(find.byKey(const ValueKey('app_center_toast')), findsOneWidget);
     expect(find.text('Purchase failed'), findsOneWidget);
 
     toast.info('Membership activated');
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
 
-    expect(find.byKey(const ValueKey('app_toast_info')), findsOneWidget);
+    expect(find.byKey(const ValueKey('app_center_toast')), findsOneWidget);
     expect(find.text('Membership activated'), findsOneWidget);
   });
 }

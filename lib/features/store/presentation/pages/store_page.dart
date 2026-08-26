@@ -17,6 +17,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
+import '../../../../shared/widgets/app_secondary_page_header.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../../pay/domain/member_product_type.dart';
 import '../../application/store_controller.dart';
@@ -269,57 +270,7 @@ class _StoreHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 56,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        child: Row(
-          children: [
-            IconButton(
-              onPressed: onBack,
-              icon: const Icon(Icons.chevron_left_rounded, size: 28),
-              color: AppColors.textPrimary,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-            ),
-            Expanded(
-              child: Text(
-                title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w600,
-                  height: 1.5,
-                ),
-              ),
-            ),
-            SizedBox(width: 58),
-            // SizedBox(
-            //   width: 58,
-            //   child: TextButton(
-            //     onPressed: onRestore,
-            //     style: TextButton.styleFrom(
-            //       padding: EdgeInsets.zero,
-            //       foregroundColor: const Color(0x99F2F2F2),
-            //       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            //       minimumSize: const Size(58, 40),
-            //     ),
-            //     child: Text(
-            //       restoreLabel,
-            //       textAlign: TextAlign.right,
-            //       maxLines: 1,
-            //       overflow: TextOverflow.ellipsis,
-            //       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            //         color: const Color(0x99F2F2F2),
-            //         height: 1.5,
-            //       ),
-            //     ),
-            //   ),
-            // ),
-          ],
-        ),
-      ),
-    );
+    return AppSecondaryPageHeader(title: title, onBack: onBack);
   }
 }
 

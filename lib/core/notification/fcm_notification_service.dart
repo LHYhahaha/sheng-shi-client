@@ -75,11 +75,15 @@ class FcmNotificationService {
   Future<void>? _initialization;
   final _notificationTapController =
       StreamController<FcmNotification>.broadcast();
+  final _tokenRefreshController = StreamController<String>.broadcast();
   FcmNotification? _initialNotificationTap;
 
   /// 应用已启动时，用户点击系统或本地通知的事件流。
   Stream<FcmNotification> get onNotificationTap =>
       _notificationTapController.stream;
+
+  /// 每次启动和 token 更新时通知上层补发后端绑定。
+  Stream<String> get onTokenRefresh => _tokenRefreshController.stream;
 
   /// 消费由通知冷启动应用时的首个通知事件。
   FcmNotification? takeInitialNotificationTap() {
@@ -93,12 +97,31 @@ class FcmNotificationService {
   }
 
   Future<void> _initialize() async {
-    await _initializeLocalNotifications();
-    await _handleLocalNotificationLaunch();
+    // 通知展示能力异常不能阻断 Token 获取和后端同步。
+    await _runNonFatal(
+      'local notification initialization',
+      _initializeLocalNotifications,
+    );
+    await _runNonFatal(
+      'local notification launch handling',
+      _handleLocalNotificationLaunch,
+    );
     await _printCurrentToken();
     _listenForTokenRefresh();
     _listenForMessages();
-    await _handleInitialMessage();
+    await _runNonFatal('initial message handling', _handleInitialMessage);
+  }
+
+  Future<void> _runNonFatal(
+    String operation,
+    Future<void> Function() action,
+  ) async {
+    try {
+      await action();
+    } catch (error, stackTrace) {
+      debugPrint('[FCM] $operation failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   Future<void> _initializeLocalNotifications() async {
@@ -164,7 +187,10 @@ class FcmNotificationService {
 
   void _listenForTokenRefresh() {
     _tokenRefreshSubscription ??= _messaging.onTokenRefresh.listen(
-      (token) => debugPrint('[FCM] Token refreshed: $token'),
+      (token) {
+        debugPrint('[FCM] Token refreshed: $token');
+        if (token.isNotEmpty) _tokenRefreshController.add(token);
+      },
       onError: (Object error, StackTrace stackTrace) {
         debugPrint('[FCM] Token refresh failed: $error');
         debugPrintStack(stackTrace: stackTrace);

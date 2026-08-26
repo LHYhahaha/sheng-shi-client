@@ -79,7 +79,9 @@ void main() {
       );
     });
 
-    testWidgets('plan cards are centered on wide screens', (tester) async {
+    testWidgets('plan cards keep the shared horizontal inset on wide screens', (
+      tester,
+    ) async {
       for (final width in [430.0, 480.0]) {
         await tester.binding.setSurfaceSize(Size(width, 900));
         addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -88,12 +90,14 @@ void main() {
         await tester.pump(const Duration(seconds: 1));
         await tester.pumpAndSettle();
 
-        final expectedLeft = (width - MembershipLayout.planCardGroupWidth) / 2;
-        expect(_weeklyCardLeft(tester), closeTo(expectedLeft, 1));
+        expect(
+          _weeklyCardLeft(tester),
+          closeTo(MembershipLayout.horizontalPadding, 1),
+        );
       }
     });
 
-    testWidgets('plan cards stay centered after loading and selection', (
+    testWidgets('plan cards keep their inset after loading and selection', (
       tester,
     ) async {
       const width = 430.0;
@@ -104,19 +108,27 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      final expectedLeft = (width - MembershipLayout.planCardGroupWidth) / 2;
-      expect(_weeklyCardLeft(tester), closeTo(expectedLeft, 1));
+      expect(
+        _weeklyCardLeft(tester),
+        closeTo(MembershipLayout.horizontalPadding, 1),
+      );
 
       await tester.tap(find.byKey(MembershipPlanCard.planKey('monthly_vip')));
       await tester.pumpAndSettle();
-      expect(_weeklyCardLeft(tester), closeTo(expectedLeft, 1));
+      expect(
+        _weeklyCardLeft(tester),
+        closeTo(MembershipLayout.horizontalPadding, 1),
+      );
 
       await tester.tap(find.byKey(const ValueKey('app_payment_close')));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(MembershipPlanCard.planKey('yearly_vip')));
       await tester.pumpAndSettle();
-      expect(_weeklyCardLeft(tester), closeTo(expectedLeft, 1));
+      expect(
+        _weeklyCardLeft(tester),
+        closeTo(MembershipLayout.horizontalPadding, 1),
+      );
     });
 
     testWidgets('weekly is selected by default', (tester) async {
@@ -127,9 +139,8 @@ void main() {
       expect(_planBorderColor(tester, 'weekly_vip'), const Color(0xFFD6BE94));
       expect(
         _planBorderColor(tester, 'monthly_vip'),
-        Colors.white.withValues(alpha: 0.24),
+        Colors.white.withValues(alpha: 0.18),
       );
-      expect(_planDailyBarColor(tester, 'weekly_vip'), const Color(0xFFFADEB7));
     });
 
     testWidgets('tapping monthly selects it and opens confirmation', (
@@ -144,13 +155,9 @@ void main() {
 
       expect(
         _planBorderColor(tester, 'weekly_vip'),
-        Colors.white.withValues(alpha: 0.24),
+        Colors.white.withValues(alpha: 0.18),
       );
       expect(_planBorderColor(tester, 'monthly_vip'), const Color(0xFFD6BE94));
-      expect(
-        _planDailyBarColor(tester, 'monthly_vip'),
-        const Color(0xFFFADEB7),
-      );
       expect(find.text('Payment method'), findsOneWidget);
       expect(find.text('Google Pay'), findsOneWidget);
     });
@@ -269,16 +276,6 @@ Color _planBorderColor(WidgetTester tester, String planId) {
     ),
   );
   return (card.decoration! as BoxDecoration).border!.top.color;
-}
-
-Color _planDailyBarColor(WidgetTester tester, String planId) {
-  final bar = tester.widget<ColoredBox>(
-    find.descendant(
-      of: find.byKey(MembershipPlanCard.planKey(planId)),
-      matching: find.byType(ColoredBox),
-    ),
-  );
-  return bar.color;
 }
 
 Widget _buildMembershipPage({

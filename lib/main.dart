@@ -157,11 +157,11 @@ Future<FcmNotificationService?> _initializeFcmNotifications() async {
      * Android 会自动读取 android/app/google-services.json，
      * 所以这里不需要 firebase_options.dart。
      */
-    await Firebase.initializeApp().timeout(const Duration(seconds: 5));
+    await Firebase.initializeApp();
     FirebaseMessaging.onBackgroundMessage(fcmBackgroundMessageHandler);
 
     final service = FcmNotificationService();
-    await service.initialize().timeout(const Duration(seconds: 8));
+    await service.initialize();
     return service;
   } catch (error, stackTrace) {
     debugPrint(

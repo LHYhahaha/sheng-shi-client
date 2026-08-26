@@ -43,7 +43,6 @@ class PlayerFeedPageShell extends ConsumerStatefulWidget {
     required this.onAdUnlockTap,
     required this.onAdUnlockEntryVisible,
     required this.onOpenMembership,
-    this.onSearchTap,
     this.onMetaTap,
     this.showChromeOverlays = true,
     this.chromeOverlayFadeDuration = Duration.zero,
@@ -74,7 +73,6 @@ class PlayerFeedPageShell extends ConsumerStatefulWidget {
   final VoidCallback onAdUnlockTap;
   final VoidCallback onAdUnlockEntryVisible;
   final VoidCallback onOpenMembership;
-  final VoidCallback? onSearchTap;
   final VoidCallback? onMetaTap;
   final bool showChromeOverlays;
   final Duration chromeOverlayFadeDuration;
@@ -149,7 +147,6 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
   VoidCallback get onUnlockTap => widget.onUnlockTap;
   VoidCallback get onAdUnlockTap => widget.onAdUnlockTap;
   VoidCallback get onOpenMembership => widget.onOpenMembership;
-  VoidCallback? get onSearchTap => widget.onSearchTap;
   VoidCallback? get onMetaTap => widget.onMetaTap;
   bool get showChromeOverlays => widget.showChromeOverlays;
   Duration get chromeOverlayFadeDuration => widget.chromeOverlayFadeDuration;
@@ -217,7 +214,6 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
     final canHideViewportBackdrop =
         canUsePlaybackSurface && shell.hasVideoController;
     final shouldMountSeekBar =
-        !forYouLayout &&
         isSettledPage &&
         accessPresentation == PlayerAccessPresentationState.playable;
     _logSeekBarMountDecision(
@@ -297,7 +293,6 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
                       .toggleLike();
                 }
               : () {},
-          onSearchTap: onSearchTap ?? () {},
           showUnlockButton: isLockedSettledPage,
           unlockLabel: lockedActionLabel,
           showAdUnlockButton: canShowAdUnlock,

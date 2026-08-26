@@ -12,8 +12,6 @@ class MembershipPlanCard extends ConsumerStatefulWidget {
     required this.plan,
     required this.selected,
     required this.onTap,
-    this.width = MembershipLayout.planCardWidth,
-    this.height = MembershipLayout.planCardHeight,
     super.key,
   });
 
@@ -22,8 +20,6 @@ class MembershipPlanCard extends ConsumerStatefulWidget {
   final MembershipPlan plan;
   final bool selected;
   final VoidCallback onTap;
-  final double width;
-  final double height;
 
   @override
   ConsumerState<MembershipPlanCard> createState() => _MembershipPlanCardState();
@@ -89,147 +85,135 @@ class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
     final textTheme = Theme.of(context).textTheme;
     final plan = widget.plan;
     final selected = widget.selected;
-    final languageCode = Localizations.localeOf(context).languageCode;
+    final promotionText = _promotionText(context, plan);
     final title = context.l10n.membershipPlanTitle(
       periodIso: plan.period ?? plan.regularPeriodIso,
       fallbackId: plan.id,
       fallbackTitle: plan.title,
     );
 
-    return SizedBox(
-      width: widget.width,
-      height: widget.height,
-      child: FittedBox(
-        fit: BoxFit.contain,
-        child: Semantics(
-          button: true,
-          selected: selected,
-          child: GestureDetector(
-            onTap: widget.onTap,
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOut,
-              width: MembershipLayout.planCardWidth,
-              height: MembershipLayout.planCardHeight,
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
           decoration: BoxDecoration(
             color: const Color(0xFF1B1B1C),
-            image: DecorationImage(
-              image: AssetImage("assets/images/membership/vip_product_bac.png"),
-            ),
             borderRadius: BorderRadius.circular(
               MembershipLayout.planCardRadius,
             ),
-            border: Border.all(color: selected ? _gold : Colors.transparent),
+            border: Border.all(
+              width: 1,
+              color: selected ? _gold : Colors.white.withValues(alpha: 0.12),
+            ),
           ),
           clipBehavior: Clip.antiAlias,
           child: Stack(
-            clipBehavior: Clip.none,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(8, 24, 8, 25),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 20,
+                ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(),
-                    // 标题
                     Text(
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
                       style: textTheme.bodyMedium?.copyWith(
                         color: Colors.white,
                         fontSize: 14,
-                        height: 1.2,
+                        fontWeight: FontWeight.w400,
+                        height: 21 / 14,
                       ),
                     ),
-                    const SizedBox(height: 15),
-
-                    // 原价（划掉）—— 有促销时显示续费原价
-                    if (plan.hasPromo && plan.regularPriceLabel != null)
-                      Text(
-                        plan.regularPriceLabel!,
-                        style: textTheme.labelMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.5),
-                          fontSize: 12,
-                          fontWeight: FontWeight.normal,
-                          decoration: TextDecoration.lineThrough,
-                          decorationColor: Colors.white.withValues(alpha: 0.5),
-                          height: 1.2,
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _PlanPriceText(
+                          priceLabel: plan.priceLabel,
+                          color: Colors.white,
                         ),
-                      )
-                    else if (plan.originalPriceLabel != null)
-                      Text(
-                        plan.originalPriceLabel!,
-                        style: textTheme.labelMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.5),
-                          fontSize: 12,
-                          decoration: TextDecoration.lineThrough,
-                          decorationColor: Colors.white.withValues(alpha: 0.5),
-                          height: 1.2,
-                          fontWeight: FontWeight.normal,
-                        ),
-                      )
-                    else
-                      const SizedBox(height: 14),
-
-                    const SizedBox(height: 6),
-
-                    // 主价格（促销价 或 原价）
-                    _PlanPriceText(
-                      priceLabel: plan.priceLabel,
-                      color: selected ? _goldText : Colors.white,
+                        if (_originalPrice(plan) case final originalPrice?) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            originalPrice,
+                            style: textTheme.labelMedium?.copyWith(
+                              color: Colors.white.withValues(alpha: 0.5),
+                              fontSize: 12,
+                              height: 1.3,
+                              decoration: TextDecoration.lineThrough,
+                              decorationColor: Colors.white.withValues(
+                                alpha: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-
-                    const Spacer(),
-
-                    // 底部留白，促销文案已移至卡片外部
+                    if (promotionText != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        promotionText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.3),
+                          fontSize: 12,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
-
-              // 底部日均价栏
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: 25,
-                child: ColoredBox(
-                  color: selected
-                      ? _goldText
-                      : Colors.white.withValues(alpha: 0.08),
-                  child: Center(
-                    child: Text(
-                      "${plan.dailyPriceLabel}/${context.l10n.membershipDay}",
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.labelSmall?.copyWith(
-                        color: selected
-                            ? const Color(0xFF5A280A)
-                            : Colors.white.withValues(alpha: 0.7),
-                        fontSize: 10,
-                        height: 1.2,
-                        fontWeight: FontWeight.normal,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // 右上角倒计时标签（有促销 + 倒计时未结束时展示）
               if (plan.hasPromo && _countdownSeconds > 0)
                 Positioned(
-                  top: -1,
-                  right: -1,
+                  top: 0,
+                  right: 0,
                   child: _CountdownTag(seconds: _countdownSeconds),
                 ),
             ],
           ),
-            ),
-          ),
         ),
       ),
     );
+  }
+
+  String? _originalPrice(MembershipPlan plan) =>
+      plan.hasPromo ? plan.regularPriceLabel : plan.originalPriceLabel;
+
+  String? _promotionText(BuildContext context, MembershipPlan plan) {
+    if (plan.hasPromo &&
+        plan.promotionPriceLabel != null &&
+        plan.regularPriceLabel != null &&
+        plan.promoPeriodIso != null &&
+        plan.regularPeriodIso != null) {
+      final args = IapPromoTextBuilder.templateArguments(
+        promoPrice: plan.promotionPriceLabel!,
+        promoPeriod: plan.promoPeriodIso!,
+        promoCycles: plan.promoCycles ?? 1,
+        regularPrice: plan.regularPriceLabel!,
+        languageCode: Localizations.localeOf(context).languageCode,
+      );
+      return context.l10n.vipPlanIntroPrice(
+        sale: args['sale']!,
+        price: args['price']!,
+        num: args['num']!,
+        ordinal: args['ordinal']!,
+        unit: args['unit']!,
+      );
+    }
+
+    return null;
   }
 }
 
@@ -244,36 +228,19 @@ class _PlanPriceText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final hasDollarPrefix = priceLabel.startsWith(r'$');
-    final price = hasDollarPrefix ? priceLabel.substring(1) : priceLabel;
 
     return FittedBox(
       fit: BoxFit.scaleDown,
-      child: RichText(
+      child: Text(
+        priceLabel,
         maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.center,
-        text: TextSpan(
-          children: [
-            if (hasDollarPrefix)
-              TextSpan(
-                text: r'$',
-                style: textTheme.bodyMedium?.copyWith(
-                  color: color,
-                  fontSize: 14,
-                  fontWeight: FontWeight.normal,
-                  height: 1.2,
-                ),
-              ),
-            TextSpan(
-              text: price,
-              style: textTheme.headlineSmall?.copyWith(
-                color: color,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                height: 1.1,
-              ),
-            ),
-          ],
+        style: textTheme.headlineSmall?.copyWith(
+          color: color,
+          fontSize: 18,
+          fontWeight: FontWeight(510),
+          height: 1.3,
         ),
       ),
     );
@@ -329,4 +296,3 @@ class _CountdownTag extends StatelessWidget {
 // ── 颜色常量 ────────────────────────
 
 const _gold = Color(0xFFD6BE94);
-const _goldText = Color(0xFFFADEB7);

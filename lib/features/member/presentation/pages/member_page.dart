@@ -18,6 +18,7 @@ import '../../../../core/locale/app_locale_controller.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/runtime/api_lang_provider.dart';
 import '../../../../core/toast/app_center_toast.dart';
+import '../../../../shared/widgets/app_secondary_page_header.dart';
 import '../../../../features/auth/application/auth_controller.dart';
 import '../../../../features/entitlement/application/entitlement_controller.dart';
 import '../../../../features/player/application/player_entry_preload_coordinator.dart';
@@ -411,7 +412,7 @@ class _MemberNavBar extends StatelessWidget {
         children: [
           Align(
             alignment: Alignment.centerLeft,
-            child: IconButton(
+            child: AppSecondaryPageBackButton(
               key: const Key('member_back_button'),
               onPressed: () {
                 if (context.canPop()) {
@@ -420,10 +421,6 @@ class _MemberNavBar extends StatelessWidget {
                   context.go(RoutePaths.home);
                 }
               },
-              icon: const Icon(Icons.chevron_left_rounded, size: 28),
-              color: Colors.white,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints.tightFor(width: 30, height: 30),
             ),
           ),
           Text(

@@ -6,6 +6,7 @@ import '../../../../app/router/route_paths.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
+import '../../../../shared/widgets/app_secondary_page_header.dart';
 import '../../../../shared/widgets/custom_switch.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/wallet_controller.dart';
@@ -73,35 +74,7 @@ class _WalletHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 56,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        child: Row(
-          children: [
-            IconButton(
-              onPressed: onBack,
-              icon: const Icon(Icons.chevron_left_rounded, size: 30),
-              color: AppColors.textPrimary,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-            ),
-            Expanded(
-              child: Text(
-                title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w600,
-                  height: 1.5,
-                ),
-              ),
-            ),
-            const SizedBox(width: 40),
-          ],
-        ),
-      ),
-    );
+    return AppSecondaryPageHeader(title: title, onBack: onBack);
   }
 }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 
 import 'package:app_links/app_links.dart';
 import 'package:bot_toast/bot_toast.dart';
@@ -71,6 +72,8 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     with WidgetsBindingObserver {
   StreamSubscription<Uri>? _appLinkSubscription;
   StreamSubscription<FcmNotification>? _fcmNotificationTapSubscription;
+  StreamSubscription<String>? _fcmTokenRefreshSubscription;
+  ProviderSubscription<AuthTokenSnapshot>? _authTokenSubscription;
   FcmNotificationService? _fcmNotificationService;
   GoRouter? _router;
   final Completer<void> _startupAuthenticationReady = Completer<void>();
@@ -88,8 +91,21 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     router.routerDelegate.addListener(_handleRootRouteChanged);
     _setPreferredOrientations();
     _listenForAppLinks();
+    _authTokenSubscription = ref.listenManual<AuthTokenSnapshot>(
+      authTokenStoreProvider,
+      (previous, next) {
+        // 首启认证由 _reportAppLaunchAfterFcmReady 统一处理；这里只补偿启动后
+        // 用户登录或游客 session 恢复，避免 FCM token 因初始无 session 而滞留。
+        if (_startupAuthenticationReady.isCompleted &&
+            !(previous?.hasAccessToken ?? false) &&
+            next.hasAccessToken) {
+          unawaited(_reportAppLaunchAfterFcmReady());
+        }
+      },
+    );
     _fcmNotificationService = widget.fcmNotificationService;
     _listenForFcmNotificationTaps();
+    _listenForFcmTokenRefresh();
     unawaited(_listenForFcmNotificationTapsWhenReady());
     unawaited(_reportAppLaunchAfterFcmReady());
     // 与 DeviceId、认证并行读取渠道配置。ApiClient 仍会等待同一份配置完成后再
@@ -158,6 +174,8 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   void dispose() {
     _appLinkSubscription?.cancel();
     _fcmNotificationTapSubscription?.cancel();
+    _fcmTokenRefreshSubscription?.cancel();
+    _authTokenSubscription?.close();
     _router?.routerDelegate.removeListener(_handleRootRouteChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -183,6 +201,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   }
 
   Future<void> _handleAppLink(Uri uri) async {
+    log("深链接数据：${uri.toString()}");
     if (ref.read(accountBanControllerProvider).isBanned) {
       return;
     }
@@ -303,6 +322,15 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     }
   }
 
+  void _listenForFcmTokenRefresh() {
+    final service = _fcmNotificationService;
+    if (service == null) return;
+    _fcmTokenRefreshSubscription?.cancel();
+    _fcmTokenRefreshSubscription = service.onTokenRefresh.listen((_) {
+      unawaited(_reportAppLaunchAfterFcmReady());
+    });
+  }
+
   Future<void> _listenForFcmNotificationTapsWhenReady() async {
     final service = await widget.fcmNotificationServiceFuture;
     if (!mounted ||
@@ -312,6 +340,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     }
     _fcmNotificationService = service;
     _listenForFcmNotificationTaps();
+    _listenForFcmTokenRefresh();
   }
 
   void _handleFcmNotificationTap(FcmNotification notification) {
@@ -522,6 +551,16 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         .read(analyticsLifecycleTrackerProvider)
         .onLifecycleChanged(state);
     unawaited(analyticsLifecycleUpdate);
+    if (state == AppLifecycleState.resumed) {
+      // 首次启动时 ADID 尚未生成或接口失败时，在回前台补偿绑定。
+      unawaited(
+        AdjustService(
+          deviceIdentifierReporter: ref.read(
+            adjustDeviceIdentifierReporterProvider,
+          ),
+        ).refreshDeviceIdentifiers(),
+      );
+    }
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached ||
         state == AppLifecycleState.hidden) {
@@ -645,6 +684,8 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
 
     try {
       // FCM 服务初始化成功意味着 token 已完成一次读取；补发一条带 token 的上报。
+      await _startupAuthenticationReady.future;
+      if (!mounted) return;
       await startupLoadingTiming.waitForEnd();
       await ref.read(appActiveReporterProvider).reportAppLaunch();
     } catch (error, stackTrace) {

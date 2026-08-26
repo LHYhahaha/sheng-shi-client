@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_secondary_page_header.dart';
 import '../../application/member_point_details_controller.dart';
 import '../../domain/member_point_details.dart';
 
@@ -158,34 +159,10 @@ class _MemberPointDetailsTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.maybeOf(context);
 
-    return SizedBox(
-      height: 50,
-      width: MediaQuery.sizeOf(context).width,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned(
-            left: 4,
-            child: IconButton(
-              key: const Key('member_point_details_back'),
-              onPressed: () => context.pop(),
-              icon: const Icon(
-                Icons.chevron_left_rounded,
-                color: Colors.white,
-                size: 28,
-              ),
-            ),
-          ),
-          Text(
-            l10n.memberPointsDetailTitle,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ],
-      ),
+    return AppSecondaryPageHeader(
+      title: l10n.memberPointsDetailTitle,
+      backButtonKey: const Key('member_point_details_back'),
+      onBack: () => context.pop(),
     );
   }
 }

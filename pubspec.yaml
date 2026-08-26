@@ -89,3 +89,12 @@ flutter:
     - assets/images/splash/
     - assets/navigation/
     - assets/sf-pro-display/
+  fonts:
+    - family: SFProDisplay
+      fonts:
+        - asset: assets/sf-pro-display/SFPRODISPLAYREGULAR.OTF
+          weight: 400
+        - asset: assets/sf-pro-display/SFPRODISPLAYMEDIUM.OTF
+          weight: 500
+        - asset: assets/sf-pro-display/SFPRODISPLAYBOLD.OTF
+          weight: 700

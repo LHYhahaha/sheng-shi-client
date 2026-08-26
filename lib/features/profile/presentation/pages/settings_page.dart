@@ -7,6 +7,7 @@ import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_blocking_loading_overlay.dart';
+import '../../../../shared/widgets/app_secondary_page_header.dart';
 import '../../../auth/application/auth_controller.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -123,44 +124,16 @@ class _SettingsHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 56,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned(
-            left: 6,
-            child: IconButton(
-              key: const ValueKey('settings_back_button'),
-              onPressed: () {
-                if (context.canPop()) {
-                  context.pop();
-                } else {
-                  context.go(RoutePaths.profile);
-                }
-              },
-              padding: EdgeInsets.zero,
-              splashColor: Colors.transparent,
-              highlightColor: Colors.transparent,
-              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-              icon: const Icon(
-                Icons.chevron_left_rounded,
-                color: AppColors.textPrimary,
-                size: 28,
-              ),
-            ),
-          ),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: AppColors.textPrimary,
-              fontSize: 16,
-              // fontWeight: FontWeight.w700,
-              height: 22 / 18,
-            ),
-          ),
-        ],
-      ),
+    return AppSecondaryPageHeader(
+      title: title,
+      backButtonKey: const ValueKey('settings_back_button'),
+      onBack: () {
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go(RoutePaths.profile);
+        }
+      },
     );
   }
 }

@@ -19,6 +19,7 @@ abstract final class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
+      fontFamily: 'SFProDisplay',
       scaffoldBackgroundColor: AppColors.black,
       colorScheme: colorScheme,
       appBarTheme: const AppBarTheme(

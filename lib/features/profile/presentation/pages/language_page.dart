@@ -14,6 +14,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_blocking_loading_overlay.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
+import '../../../../shared/widgets/app_secondary_page_header.dart';
 
 class LanguagePage extends ConsumerStatefulWidget {
   const LanguagePage({super.key});
@@ -214,59 +215,29 @@ class _LanguageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 56,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned(
-            left: 6,
-            child: IconButton(
-              onPressed: onBack,
-              padding: EdgeInsets.zero,
-              splashColor: Colors.transparent,
-              highlightColor: Colors.transparent,
-              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-              icon: const Icon(
-                Icons.chevron_left_rounded,
-                color: AppColors.textPrimary,
-                size: 28,
+    return AppSecondaryPageHeader(
+      title: title,
+      onBack: onBack,
+      trailing: showDoneButton
+          ? TextButton(
+              onPressed: onDone,
+              style: ButtonStyle(
+                padding: WidgetStateProperty.all(EdgeInsets.zero),
+                overlayColor: WidgetStateProperty.all(Colors.transparent),
+                minimumSize: WidgetStateProperty.all(const Size(40, 40)),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-            ),
-          ),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: AppColors.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              height: 1.5,
-            ),
-          ),
-          if (showDoneButton)
-            Positioned(
-              right: 6,
-              child: TextButton(
-                onPressed: onDone,
-                style: ButtonStyle(
-                  padding: WidgetStateProperty.all(EdgeInsets.zero),
-                  overlayColor: WidgetStateProperty.all(Colors.transparent),
-                  minimumSize: WidgetStateProperty.all(const Size(40, 40)),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: Text(
-                  context.l10n.languagePageButton,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: AppColors.primary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    height: 1.5,
-                  ),
+              child: Text(
+                context.l10n.languagePageButton,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: AppColors.primary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  height: 1.5,
                 ),
               ),
-            ),
-        ],
-      ),
+            )
+          : null,
     );
   }
 }

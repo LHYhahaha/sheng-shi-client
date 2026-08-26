@@ -70,6 +70,7 @@ import '../widgets/player_action_sheets.dart';
 import '../widgets/player_detail_sheet.dart';
 import '../widgets/player_exit_recommendation_dialog.dart';
 import '../widgets/player_feed_page_shell.dart';
+import '../widgets/player_chrome.dart';
 import '../widgets/player_playback_layer.dart';
 import '../../../ad_unlock/application/ad_unlock_session_controller.dart';
 import '../../../ad_unlock/application/ad_unlock_analytics_tracker.dart';
@@ -100,6 +101,16 @@ class _InitialResumeCandidate {
 
   final String source;
   final PlayerWatchProgress progress;
+}
+
+class _AdUnlockStatusCacheEntry {
+  const _AdUnlockStatusCacheEntry({
+    required this.status,
+    required this.fetchedAt,
+  });
+
+  final AdUnlockStatus status;
+  final DateTime fetchedAt;
 }
 
 /// 鎾斁鍣?UI 瀹夸富锛氱旱鍚?[PageView] + 椤跺眰鍗曚緥 Video surface + sheet銆?
@@ -156,6 +167,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   static const _forYouNearEndRestartThreshold = Duration(seconds: 8);
   static const _unlockTapDebounce = Duration(milliseconds: 500);
   static const _predictivePreloadPageThreshold = 0.60;
+  static const _adUnlockStatusCacheTtl = Duration(seconds: 30);
 
   late final PageController _pageController;
   late final String _sessionKey;
@@ -205,6 +217,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _resumePlaybackOnRouteReturn = false;
   bool _isCoveredByAnotherRoute = false;
   String? _pendingAdUnlockedItemId;
+  final Map<String, _AdUnlockStatusCacheEntry> _adUnlockStatusCache =
+      <String, _AdUnlockStatusCacheEntry>{};
+  final Map<String, Future<AdUnlockStatus?>> _adUnlockStatusInFlight =
+      <String, Future<AdUnlockStatus?>>{};
+  final Map<String, DateTime> _adUnlockUnavailableUntil = <String, DateTime>{};
+  bool _isAdMaterialUnavailable = false;
+  String? _adMaterialUnavailableMessage;
   String? _analyticsPlayingItemId;
   PlayerFeedItem? _analyticsPlayingItem;
   DateTime? _analyticsPlaybackStartedAt;
@@ -1432,11 +1451,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           accessPlayable: accessPlayable,
           isItemChange: isItemChange,
         );
-        if (accessPlayable && ref.read(useRemotePlayerApiProvider)) {
-          unawaited(
-            ref.read(adMaterialPreloaderProvider).tryEnsureCachedMaterial(),
-          );
-        }
+        _prepareAdUnlockForSettledItem(settledItem);
         unawaited(
           feedEngine.onViewportSettled(
             item: settledItem,
@@ -1662,6 +1677,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
+        left: false,
+        right: false,
         child: PopScope(
           canPop:
               widget.feedMode == PlayerFeedMode.forYou &&
@@ -1875,9 +1892,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               onWatchNowTap: () {
                 unawaited(_openForYouItemInPlayer(item, rewindFromEnd: false));
               },
-              onSearchTap: widget.feedMode == PlayerFeedMode.forYou
-                  ? () => unawaited(_openSearch())
-                  : null,
               onEpisodesTap: () {
                 _showDetailSheet(
                   item.content,
@@ -1952,6 +1966,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         widget.feedMode == PlayerFeedMode.forYou
             ? RefreshIndicator(onRefresh: refreshFeed, child: pageView)
             : pageView,
+        if (widget.feedMode == PlayerFeedMode.forYou)
+          PlayerForYouSearchButton(
+            top: 8,
+            onTap: () => unawaited(_openSearch()),
+          ),
         if (widget.feedMode == PlayerFeedMode.singleDrama &&
             settledItem != null)
           AnimatedOpacity(
@@ -3093,23 +3112,130 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<AdUnlockStatus?> _fetchAdUnlockStatus(PlayerFeedItem item) async {
+    return _preloadAdUnlockStatus(item);
+  }
+
+  String _adUnlockCacheKey(PlayerFeedItem item) =>
+      '${item.content.id}:${item.episode.id}';
+
+  bool _isAdUnlockCandidate(PlayerFeedItem item) {
+    return int.tryParse(item.content.id) != null &&
+        item.episode.isLocked &&
+        _isSequentialUnlockEligible(item);
+  }
+
+  bool _isAdUnlockTemporarilyUnavailable(PlayerFeedItem item) {
+    final unavailableUntil = _adUnlockUnavailableUntil[_adUnlockCacheKey(item)];
+    return unavailableUntil != null &&
+        DateTime.now().isBefore(unavailableUntil);
+  }
+
+  Future<AdUnlockStatus?> _preloadAdUnlockStatus(PlayerFeedItem item) {
+    if (!_isAdUnlockCandidate(item) ||
+        _isAdUnlockTemporarilyUnavailable(item)) {
+      return Future<AdUnlockStatus?>.value(null);
+    }
+    final key = _adUnlockCacheKey(item);
+    final now = DateTime.now();
+    final cached = _adUnlockStatusCache[key];
+    if (cached != null &&
+        now.difference(cached.fetchedAt) < _adUnlockStatusCacheTtl) {
+      return Future<AdUnlockStatus?>.value(cached.status);
+    }
+    final inFlight = _adUnlockStatusInFlight[key];
+    if (inFlight != null) return inFlight;
+
+    final dramaId = int.tryParse(item.content.id);
+    if (dramaId == null) return Future<AdUnlockStatus?>.value(null);
+    final request = () async {
+      try {
+        final status = await ref
+            .read(adUnlockRepositoryProvider)
+            .fetchStatus(dramaId: dramaId, episodeNo: item.episode.number);
+        _adUnlockStatusCache[key] = _AdUnlockStatusCacheEntry(
+          status: status,
+          fetchedAt: DateTime.now(),
+        );
+        return status;
+      } catch (_) {
+        return null;
+      } finally {
+        _adUnlockStatusInFlight.remove(key);
+      }
+    }();
+    _adUnlockStatusInFlight[key] = request;
+    return request;
+  }
+
+  Future<bool> _preloadAdMaterial({bool retryIfUnavailable = false}) async {
+    if (_isAdMaterialUnavailable && !retryIfUnavailable) {
+      return false;
+    }
+    try {
+      await ref.read(adMaterialPreloaderProvider).ensureCachedMaterial();
+      _isAdMaterialUnavailable = false;
+      _adMaterialUnavailableMessage = null;
+      return true;
+    } on ApiException catch (error) {
+      if (error.businessCode == 2501) {
+        _isAdMaterialUnavailable = true;
+        _adMaterialUnavailableMessage = error.message;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _prepareAdUnlockForSettledItem(PlayerFeedItem item) {
+    if (!ref.read(useRemotePlayerApiProvider)) return;
+    // 素材和剧集资格彼此独立：素材可在任何播放页后台预热，资格只预取当前
+    // 顺序可解锁的锁定集，避免为普通集额外请求状态接口。
+    unawaited(_preloadAdMaterial());
+    if (_isAdUnlockCandidate(item)) {
+      unawaited(_preloadAdUnlockStatus(item));
+    }
+  }
+
+  bool _canPresentAdUnlockFor(PlayerFeedItem item) {
     final current = ref
         .read(playerFeedControllerProvider(_sessionKey))
         .currentItem;
-    final dramaId = int.tryParse(item.content.id);
-    if (current?.id != item.id ||
-        dramaId == null ||
-        !current!.episode.isLocked ||
-        !_isSequentialUnlockEligible(current)) {
-      return null;
-    }
-    try {
-      return await ref
-          .read(adUnlockRepositoryProvider)
-          .fetchStatus(dramaId: dramaId, episodeNo: item.episode.number);
-    } catch (_) {
-      return null;
-    }
+    return mounted &&
+        !_isDisposing &&
+        !_isLeavingRoute &&
+        !_isCoveredByAnotherRoute &&
+        !_isModalOpen &&
+        !_isPageScrolling &&
+        _activeCoinSheetItemId == null &&
+        _activeRechargeSheetItemId == null &&
+        current?.id == item.id &&
+        current != null &&
+        current.episode.id == item.episode.id &&
+        current.episode.isLocked &&
+        _isSequentialUnlockEligible(current) &&
+        !_isAdUnlockTemporarilyUnavailable(current);
+  }
+
+  void _markAdUnlockUnavailable(PlayerFeedItem item) {
+    final key = _adUnlockCacheKey(item);
+    _adUnlockUnavailableUntil[key] = DateTime.now().add(
+      _adUnlockStatusCacheTtl,
+    );
+    _adUnlockStatusCache.remove(key);
+    ref
+        .read(playerFeedControllerProvider(_sessionKey).notifier)
+        .updateItemEpisode(
+          itemId: item.id,
+          episode: item.episode.copyWith(
+            adUnlock: const PlayerAdUnlockOffer(
+              isAvailable: false,
+              watchedToday: 0,
+              dailyLimit: 0,
+              closeAfter: Duration.zero,
+            ),
+          ),
+        );
   }
 
   Future<void> _applyAdUnlockActionAfterOriginalSheet(
@@ -3117,7 +3243,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     Future<AdUnlockStatus?> statusFuture,
   ) async {
     final status = await statusFuture;
-    if (!mounted || status == null) return;
+    if (status == null || !_canPresentAdUnlockFor(item)) return;
     final latest = ref
         .read(playerFeedControllerProvider(_sessionKey))
         .currentItem;
@@ -3134,9 +3260,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final kind = latest.episode.unlockType == EpisodeUnlockType.membership
         ? AdUnlockDramaKind.member
         : AdUnlockDramaKind.normal;
+    // 状态接口已确认当前集可展示广告解锁时，即使先前后台素材预热返回过
+    // 2501，也应重新尝试一次，不能用素材失败覆盖最新资格状态。
+    final materialPrepared = await _preloadAdMaterial(retryIfUnavailable: true);
+    if (!materialPrepared || !_canPresentAdUnlockFor(item)) return;
     final materialPreloader = ref.read(adMaterialPreloaderProvider);
-    final materialPrepared = await materialPreloader.tryEnsureCachedMaterial();
-    if (!mounted || !materialPrepared) return;
     final material = materialPreloader.cachedMaterial;
     if (material == null) return;
     final updatedItem = ref
@@ -3564,13 +3692,19 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
     final dramaId = int.tryParse(item.content.id);
     if (dramaId == null) return;
-    final materialPreloader = ref.read(adMaterialPreloaderProvider);
-    final materialPrepared = await materialPreloader.tryEnsureCachedMaterial();
-    if (!mounted) return;
+    // 用户主动点击时也允许重试素材，后台配置可能已在本次会话内恢复。
+    final materialPrepared = await _preloadAdMaterial(retryIfUnavailable: true);
+    if (!mounted || !_canPresentAdUnlockFor(item)) return;
     if (!materialPrepared) {
+      if (_isAdMaterialUnavailable) {
+        _markAdUnlockUnavailable(item);
+        showAppCenterToast(_adMaterialUnavailableMessage ?? '广告解锁未开启');
+        return;
+      }
       showAppCenterToast('网络错误，请稍后重试');
       return;
     }
+    final materialPreloader = ref.read(adMaterialPreloaderProvider);
     final material = materialPreloader.cachedMaterial;
     if (material == null) {
       showAppCenterToast('网络错误，请稍后重试');
@@ -3601,8 +3735,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       episodeNo: item.episode.number,
       materialId: material.id,
     );
-    if (!mounted) return;
+    if (!mounted || !_canPresentAdUnlockFor(item)) return;
     if (sessionController.session == null) {
+      final error = sessionController.error;
+      if (error is ApiException && error.businessCode == 2501) {
+        _markAdUnlockUnavailable(item);
+        showAppCenterToast(error.message);
+        return;
+      }
       showAppCenterToast(context.l10n.networkError);
       return;
     }

@@ -9,6 +9,7 @@ import '../../../../core/oauth/oauth_service.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_secondary_page_header.dart';
 import '../../application/auth_controller.dart';
 import '../../application/facebook_login_config_provider.dart';
 import '../../domain/auth_session.dart';
@@ -105,7 +106,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
             Positioned(
               top: 8,
               left: 2,
-              child: IconButton(
+              child: AppSecondaryPageBackButton(
                 key: const ValueKey('auth_back_button'),
                 onPressed: () {
                   if (context.canPop()) {
@@ -114,13 +115,6 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                   }
                   context.go(RoutePaths.profile);
                 },
-                icon: const Icon(Icons.chevron_left_rounded, size: 28),
-                color: AppColors.textPrimary,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints.tightFor(
-                  width: 44,
-                  height: 44,
-                ),
               ),
             ),
             if (!state.isLoggedIn && !_returnedAfterLogin)

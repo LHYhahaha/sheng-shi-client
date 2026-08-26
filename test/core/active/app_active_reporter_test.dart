@@ -14,14 +14,17 @@ void main() {
   late RecordingHttpAdapter adapter;
   late DateTime now;
   late AppActiveReporter reporter;
+  late _MemoryPendingPushTokenStore pendingPushTokenStore;
 
   setUp(() {
     adapter = RecordingHttpAdapter();
     now = DateTime.utc(2026, 7, 6, 10);
+    pendingPushTokenStore = _MemoryPendingPushTokenStore();
     reporter = AppActiveReporter(
       apiClient: _apiClient(adapter),
       deviceInfoReader: _FakeDeviceInfoReader(),
       pushTokenReader: () async => 'fcm-push-token',
+      pendingPushTokenStore: pendingPushTokenStore,
       now: () => now,
     );
   });
@@ -47,6 +50,7 @@ void main() {
       apiClient: _apiClient(adapter),
       deviceInfoReader: _FakeDeviceInfoReader(),
       pushTokenReader: () async => null,
+      pendingPushTokenStore: pendingPushTokenStore,
       now: () => now,
     );
 
@@ -78,6 +82,7 @@ void main() {
         apiClient: _apiClient(adapter),
         deviceInfoReader: deviceInfo,
         pushTokenReader: () async => 'fcm-push-token',
+        pendingPushTokenStore: pendingPushTokenStore,
         now: () => now,
       );
 
@@ -107,6 +112,7 @@ void main() {
       apiClient: _apiClient(adapter),
       deviceInfoReader: _FakeDeviceInfoReader(channelSource: ''),
       now: () => now,
+      pendingPushTokenStore: pendingPushTokenStore,
     );
 
     await reporter.reportAppLaunch();
@@ -119,6 +125,7 @@ void main() {
       apiClient: _apiClient(adapter, accessToken: null),
       deviceInfoReader: _FakeDeviceInfoReader(),
       now: () => now,
+      pendingPushTokenStore: pendingPushTokenStore,
     );
 
     await reporter.reportAppLaunch();
@@ -131,6 +138,7 @@ void main() {
       apiClient: _apiClient(adapter),
       deviceInfoReader: _FailingDeviceInfoReader(),
       now: () => now,
+      pendingPushTokenStore: pendingPushTokenStore,
     );
 
     await expectLater(reporter.reportAppLaunch(), completes);
@@ -147,6 +155,36 @@ void main() {
     expect(adapter.requests, hasLength(1));
   });
 
+  test(
+    'persists a token before session readiness and sends it later',
+    () async {
+      reporter = AppActiveReporter(
+        apiClient: _apiClient(adapter, accessToken: null),
+        deviceInfoReader: _FakeDeviceInfoReader(),
+        pushTokenReader: () async => 'fcm-push-token',
+        pendingPushTokenStore: pendingPushTokenStore,
+        now: () => now,
+      );
+
+      await reporter.reportAppLaunch();
+      expect(pendingPushTokenStore.value, 'fcm-push-token');
+
+      reporter = AppActiveReporter(
+        apiClient: _apiClient(adapter),
+        deviceInfoReader: _FakeDeviceInfoReader(),
+        pendingPushTokenStore: pendingPushTokenStore,
+        now: () => now,
+      );
+      await reporter.reportAppLaunch(includePushToken: false);
+
+      expect(
+        (adapter.requests.single.data! as Map)['pushToken'],
+        'fcm-push-token',
+      );
+      expect(pendingPushTokenStore.value, isNull);
+    },
+  );
+
   test('reports again only after more than 30 minutes in background', () async {
     await reporter.onLifecycleChanged(AppLifecycleState.paused);
     now = now.add(const Duration(minutes: 30));
@@ -158,6 +196,19 @@ void main() {
     await reporter.onLifecycleChanged(AppLifecycleState.resumed);
     expect(adapter.requests, hasLength(1));
   });
+}
+
+class _MemoryPendingPushTokenStore implements PendingPushTokenStore {
+  String? value;
+
+  @override
+  Future<void> clear() async => value = null;
+
+  @override
+  Future<String?> read() async => value;
+
+  @override
+  Future<void> write(String token) async => value = token;
 }
 
 class _FakeDeviceInfoReader implements AppActiveDeviceInfoReader {

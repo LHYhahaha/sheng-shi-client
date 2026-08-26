@@ -561,7 +561,7 @@ class _SearchBarState extends State<_SearchBar> {
     final fallbackHint = context.l10n.searchHint;
     final recommendation = _recommendedKeyword;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 12, 8, 20),
+      padding: const EdgeInsets.fromLTRB(0, 12, 8, 20),
       child: Row(
         children: [
           GestureDetector(
@@ -572,7 +572,11 @@ class _SearchBarState extends State<_SearchBar> {
               height: 30,
               margin: EdgeInsets.only(right: 3),
               alignment: Alignment.center,
-              child: Icon(Icons.chevron_left, color: Colors.white, size: 28),
+              child: Image.asset(
+                'assets/images/common/come_back.png',
+                width: 20,
+                height: 20,
+              ),
             ),
           ),
           Expanded(
@@ -613,8 +617,8 @@ class _SearchBarState extends State<_SearchBar> {
                         ),
                       ),
                       suffixIconConstraints: const BoxConstraints(
-                        minWidth: 36,
-                        minHeight: 36,
+                        minWidth: 24,
+                        minHeight: 24,
                       ),
                       suffixIcon: ValueListenableBuilder<TextEditingValue>(
                         valueListenable: widget.controller,
@@ -848,7 +852,9 @@ class _ResultSortTabs extends StatelessWidget {
                         ? const Color(0xFFFF007A)
                         : const Color(0xFF858585),
                     fontSize: 15,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: selected == type
+                        ? FontWeight.w700
+                        : FontWeight.w400,
                   ),
                 ),
               ),
