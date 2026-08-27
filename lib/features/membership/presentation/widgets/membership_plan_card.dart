@@ -98,23 +98,23 @@ class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
       child: GestureDetector(
         onTap: widget.onTap,
         behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          decoration: BoxDecoration(
-            color: const Color(0xFF1B1B1C),
-            borderRadius: BorderRadius.circular(
-              MembershipLayout.planCardRadius,
-            ),
-            border: Border.all(
-              width: 1,
-              color: selected ? _gold : Colors.white.withValues(alpha: 0.12),
-            ),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Stack(
-            children: [
-              Padding(
+        child: Stack(
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              decoration: BoxDecoration(
+                color: const Color(0xFF1B1B1C),
+                borderRadius: BorderRadius.circular(
+                  MembershipLayout.planCardRadius,
+                ),
+                border: Border.all(
+                  width: 1,
+                  color: selected ? _gold : Colors.white.withValues(alpha: 0.12),
+                ),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
                   vertical: 20,
@@ -123,6 +123,7 @@ class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    Row(),
                     Text(
                       title,
                       maxLines: 1,
@@ -175,14 +176,14 @@ class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
                   ],
                 ),
               ),
-              if (plan.hasPromo && _countdownSeconds > 0)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: _CountdownTag(seconds: _countdownSeconds),
-                ),
-            ],
-          ),
+            ),
+            if (plan.hasPromo && _countdownSeconds > 0)
+              Positioned(
+                top: 0,
+                right: 0,
+                child: _CountdownTag(seconds: _countdownSeconds),
+              ),
+          ],
         ),
       ),
     );
@@ -259,15 +260,17 @@ class _CountdownTag extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     return Container(
       height: 19,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10,vertical: 2),
       decoration: BoxDecoration(
         image: DecorationImage(
-          fit: BoxFit.fill,
+          fit: BoxFit.cover,
           image: AssetImage(
             "assets/images/membership/membership_time_down_bac.png",
           ),
         ),
-        borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(8)),
+        borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(10),
+        topRight: Radius.circular(10)
+        ),
       ),
       child: Center(
         child: Text(

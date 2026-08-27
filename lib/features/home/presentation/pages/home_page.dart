@@ -1313,7 +1313,7 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
             AspectRatio(
               aspectRatio: _HomeDramaCard.coverAspectRatio,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(widget.compact ? 8 : 0),
+                borderRadius: BorderRadius.circular(widget.compact ? 4 : 0),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -1477,7 +1477,7 @@ class _ViewCount extends StatelessWidget {
           fit: BoxFit.contain,
           filterQuality: FilterQuality.low,
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 2),
         Text(
           label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(

@@ -1675,7 +1675,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Color(0xFF141414),
       body: SafeArea(
         left: false,
         right: false,
@@ -1744,6 +1744,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     required Duration chromeOverlayFadeDuration,
     required PlayerUiController uiController,
   }) {
+    final showsPageChrome = showsChromeOverlays && !_isSeekDragging;
+
     Future<void> refreshFeed() {
       return widget.feedMode == PlayerFeedMode.forYou
           ? _refreshForYouFeed()
@@ -1804,6 +1806,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final accessForSettled = settledItem == null
         ? null
         : feedEngine.accessPresentationFor(settledItem);
+    final showsUnlockButton =
+        widget.feedMode == PlayerFeedMode.singleDrama &&
+        (accessForSettled == PlayerAccessPresentationState.lockedCoins ||
+            accessForSettled == PlayerAccessPresentationState.lockedRecharge ||
+            accessForSettled == PlayerAccessPresentationState.lockedMembership);
+    final showsTopPageChrome = showsPageChrome && !showsUnlockButton;
     final canShowActiveVideoOverlay =
         settledItem != null &&
         accessForSettled == PlayerAccessPresentationState.playable;
@@ -1966,7 +1974,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         widget.feedMode == PlayerFeedMode.forYou
             ? RefreshIndicator(onRefresh: refreshFeed, child: pageView)
             : pageView,
-        if (widget.feedMode == PlayerFeedMode.forYou)
+        if (widget.feedMode == PlayerFeedMode.forYou && !_isSeekDragging)
           PlayerForYouSearchButton(
             top: 8,
             onTap: () => unawaited(_openSearch()),
@@ -1975,16 +1983,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             settledItem != null)
           AnimatedOpacity(
             key: const ValueKey('player_top_bar_chrome_visibility'),
-            opacity: showsChromeOverlays ? 1 : 0,
+            opacity: showsTopPageChrome ? 1 : 0,
             duration: chromeOverlayFadeDuration,
             curve: Curves.easeOut,
             child: IgnorePointer(
-              ignoring: !showsChromeOverlays,
+              ignoring: !showsTopPageChrome,
               child: PlayerTopBar(
                 episodeNumber: settledItem.episode.number,
                 playbackRate: playbackShell.playbackRate,
                 overlayOpacity: 1,
-                showChromeOverlays: showsChromeOverlays,
+                showChromeOverlays: showsTopPageChrome,
                 overlayOpacityListenable:
                     performancePolicy.allowPressChromeDimming
                     ? _overlayOpacityNotifier

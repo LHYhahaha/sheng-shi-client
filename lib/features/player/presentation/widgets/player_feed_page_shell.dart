@@ -216,6 +216,11 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
     final shouldMountSeekBar =
         isSettledPage &&
         accessPresentation == PlayerAccessPresentationState.playable;
+    final isSeeking = ref.watch(
+      playerPlaybackControllerProvider(
+        sessionKey,
+      ).select((state) => state.isSeeking && state.currentItemId == item.id),
+    );
     _logSeekBarMountDecision(
       shouldMountSeekBar: shouldMountSeekBar,
       accessPresentation: accessPresentation,
@@ -232,6 +237,7 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
           showViewportBackdrop: !canHideViewportBackdrop,
           showChromeOverlays: showChromeOverlays,
           chromeOverlayFadeDuration: chromeOverlayFadeDuration,
+          isSeeking: isSeeking,
           playbackLayer: canUsePlaybackSurface
               ? PlayerPlaybackControlsConsumer(
                   sessionKey: sessionKey,

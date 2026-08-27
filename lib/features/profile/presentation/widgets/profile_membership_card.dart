@@ -51,7 +51,7 @@ class ProfileMembershipCard extends StatelessWidget {
               behavior: HitTestBehavior.opaque,
               onTap: membership.entryEnabled ? onTap : null,
               child: Container(
-                margin: EdgeInsets.only(bottom: 6.2),
+                margin: EdgeInsets.only(bottom: 6),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 18,
@@ -90,10 +90,10 @@ class ProfileMembershipCard extends StatelessWidget {
                                 fontSize: 18,
                                 fontWeight: FontWeight.w900,
                                 fontStyle: FontStyle.italic,
-                                height: 1.12,
+                                height: 1.4,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            // const SizedBox(height: 4),
                             Text(
                               subtitle,
                               maxLines: 1,
@@ -102,7 +102,7 @@ class ProfileMembershipCard extends StatelessWidget {
                                 color: const Color(
                                   0xFF421C07,
                                 ).withValues(alpha: 0.5),
-                                fontSize: 14,
+                                fontSize: 12,
                                 height: 1.3,
                                 fontWeight: FontWeight(400),
                               ),
@@ -219,7 +219,7 @@ class _BenefitItem extends StatelessWidget {
               color: const Color(0xFF743A13),
               fontWeight: FontWeight(400),
               fontSize: 11,
-              height: 1.2,
+              height: 1.5,
             ),
           ),
         ],

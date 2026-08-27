@@ -23,7 +23,7 @@ class PlayerShareSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _CompactPlayerSheet(
-      height: 180,
+      height: 200,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -44,49 +44,88 @@ class PlayerShareSheet extends StatelessWidget {
               _CloseButton(onTap: () => Navigator.of(context).pop()),
             ],
           ),
-          const SizedBox(height: 22),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            child: Row(
-              children: [
-                _ShareTarget(
-                  color: const Color(0xFF1877F2),
-                  icon: Icons.facebook_rounded,
-                  label: context.l10n.playerFacebook,
-                  onTap: onFacebookTap,
-                  iconColor: Colors.white,
-                ),
-                _ShareTarget(
-                  color: const Color(0xFF6B6570),
-                  icon: Icons.link_rounded,
-                  label: context.l10n.shareActionCopyLink,
-                  onTap: onCopyLinkTap,
-                ),
-                // _ShareTarget(
-                //   color: const Color(0xFF25D366),
-                //   icon: Icons.phone_rounded,
-                //   label: context.l10n.playerWhatsApp,
-                // ),
-                // _ShareTarget(
-                //   color: const Color(0xFF6F65FF),
-                //   icon: Icons.chat_bubble_rounded,
-                //   label: context.l10n.playerMessenger,
-                // ),
-                // _ShareTarget(
-                //   color: const Color(0xFFE1306C),
-                //   icon: Icons.camera_alt_rounded,
-                //   label: context.l10n.playerInstagram,
-                // ),
-                // _ShareTarget(
-                //   color: const Color(0xFFFFFC00),
-                //   icon: Icons.bolt_rounded,
-                //   label: context.l10n.playerSnapchat,
-                //   iconColor: Colors.black,
-                // ),
-              ],
-            ),
+          const SizedBox(height: 30),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _ShareTarget(
+                color: const Color(0xFF1877F2),
+                imageUrl: "share_facebook",
+                label: context.l10n.playerFacebook,
+                onTap: onFacebookTap,
+                iconColor: Colors.white,
+              ),
+              _ShareTarget(
+                color: const Color(0xFF6B6570),
+                imageUrl: "share_copy",
+                label: context.l10n.shareActionCopyLink,
+                onTap: onCopyLinkTap,
+              ),
+              // _ShareTarget(
+              //   color: const Color(0xFF25D366),
+              //   icon: Icons.phone_rounded,
+              //   label: context.l10n.playerWhatsApp,
+              // ),
+              // _ShareTarget(
+              //   color: const Color(0xFF6F65FF),
+              //   icon: Icons.chat_bubble_rounded,
+              //   label: context.l10n.playerMessenger,
+              // ),
+              // _ShareTarget(
+              //   color: const Color(0xFFE1306C),
+              //   icon: Icons.camera_alt_rounded,
+              //   label: context.l10n.playerInstagram,
+              // ),
+              // _ShareTarget(
+              //   color: const Color(0xFFFFFC00),
+              //   icon: Icons.bolt_rounded,
+              //   label: context.l10n.playerSnapchat,
+              //   iconColor: Colors.black,
+              // ),
+            ],
           ),
+          // SingleChildScrollView(
+          //   scrollDirection: Axis.horizontal,
+          //   physics: const BouncingScrollPhysics(),
+          //   child: Row(
+          //     children: [
+          //       _ShareTarget(
+          //         color: const Color(0xFF1877F2),
+          //         icon: Icons.facebook_rounded,
+          //         label: context.l10n.playerFacebook,
+          //         onTap: onFacebookTap,
+          //         iconColor: Colors.white,
+          //       ),
+          //       _ShareTarget(
+          //         color: const Color(0xFF6B6570),
+          //         icon: Icons.link_rounded,
+          //         label: context.l10n.shareActionCopyLink,
+          //         onTap: onCopyLinkTap,
+          //       ),
+          //       // _ShareTarget(
+          //       //   color: const Color(0xFF25D366),
+          //       //   icon: Icons.phone_rounded,
+          //       //   label: context.l10n.playerWhatsApp,
+          //       // ),
+          //       // _ShareTarget(
+          //       //   color: const Color(0xFF6F65FF),
+          //       //   icon: Icons.chat_bubble_rounded,
+          //       //   label: context.l10n.playerMessenger,
+          //       // ),
+          //       // _ShareTarget(
+          //       //   color: const Color(0xFFE1306C),
+          //       //   icon: Icons.camera_alt_rounded,
+          //       //   label: context.l10n.playerInstagram,
+          //       // ),
+          //       // _ShareTarget(
+          //       //   color: const Color(0xFFFFFC00),
+          //       //   icon: Icons.bolt_rounded,
+          //       //   label: context.l10n.playerSnapchat,
+          //       //   iconColor: Colors.black,
+          //       // ),
+          //     ],
+          //   ),
+          // ),
         ],
       ),
     );
@@ -458,14 +497,14 @@ class _CompactPlayerSheet extends StatelessWidget {
 class _ShareTarget extends StatelessWidget {
   const _ShareTarget({
     required this.color,
-    required this.icon,
+    required this.imageUrl,
     required this.label,
     required this.onTap,
     this.iconColor = Colors.white,
   });
 
   final Color color;
-  final IconData icon;
+  final String imageUrl;
   final String label;
   final VoidCallback onTap;
   final Color iconColor;
@@ -482,13 +521,12 @@ class _ShareTarget extends StatelessWidget {
         width: 64,
         child: Column(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              child: Icon(icon, color: iconColor, size: 25),
+            Image.asset(
+              "assets/images/player/$imageUrl.png",
+              width: 56,
+              height: 56,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               label,
               textAlign: TextAlign.center,
@@ -496,9 +534,9 @@ class _ShareTarget extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: FontWeight.w500,
-                height: 12 / 10,
+                height: 16 / 12,
               ),
             ),
           ],
