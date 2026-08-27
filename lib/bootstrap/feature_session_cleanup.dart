@@ -8,6 +8,7 @@ import '../core/modal/app_modal_provider.dart';
 import '../core/user_library/user_library_sync_controller.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/entitlement/application/entitlement_controller.dart';
+import '../features/gift/application/gift_drama_link_cache.dart';
 import '../features/membership/application/membership_controller.dart';
 import '../features/my_list/application/my_list_controller.dart';
 import '../features/player/application/player_session_cleanup.dart';
@@ -55,6 +56,9 @@ final featureSessionCleanupRegistrationProvider = Provider<void>((ref) {
     },
     (reason) async {
       entitlementController.resetForSessionCleanup(reason);
+    },
+    (_) async {
+      ref.read(giftDramaLinkCacheProvider).clear();
     },
     (reason) async {
       walletController.resetForSessionCleanup(reason);

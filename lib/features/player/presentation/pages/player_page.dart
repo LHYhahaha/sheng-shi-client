@@ -32,7 +32,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/url/external_url_launcher.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
-import '../../../gift/data/gift_remote_data_source_provider.dart';
+import '../../../gift/application/gift_drama_link_cache.dart';
 import '../../../gift/domain/gift_link_data.dart';
 import '../../../entitlement/domain/episode_unlock_type.dart';
 import '../../data/player_exit_recommendation_history_repository_provider.dart';
@@ -183,6 +183,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   String? _initialResumeEpisodeId;
   bool _isSeekDragging = false;
   bool _isModalOpen = false;
+  bool _isShareSheetOpening = false;
   bool _isAutoAdvancing = false;
   bool _isOpeningRecommendation = false;
   bool _isOpeningSearch = false;
@@ -542,6 +543,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       _shellChrome = ref.read(appShellBottomNavigationVisibleProvider.notifier);
     }
     unawaited(_loadExitRecommendationHistoryState());
+    // 分享入口在未播放、播放失败时同样可见；进入已知短剧播放页即后台刷新，
+    // 不 await，避免把赠剧资格请求放到首帧关键路径上。
+    Future<void>.microtask(() {
+      if (mounted) {
+        _refreshDramaGiftLinkOnPlayerEntry(widget.dramaId);
+      }
+    });
     Future<void>.microtask(() async {
       final startupStopwatch = Stopwatch()..start();
       _playbackController.recordPlaybackTiming(
@@ -1394,6 +1402,27 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     });
 
     ref.listen(
+      entitlementControllerProvider.select(
+        (state) => (
+          userId: state.userId,
+          isMember: state.isMember,
+          membershipExpiresAt: state.membershipExpiresAt,
+        ),
+      ),
+      (previous, next) {
+        if (previous == null || previous == next) return;
+        // 支付、续费、到期或账号切换后都不能继续使用旧 shareCode/次数。
+        // 已打开的弹框保留快照，避免在弹框内替换内容造成闪动；下次打开读取新值。
+        ref.read(giftDramaLinkCacheProvider).clear();
+        if (!next.isMember) return;
+        final currentItem = ref.read(feedProvider).currentItem;
+        if (currentItem != null) {
+          _refreshDramaGiftLink(currentItem.content.id);
+        }
+      },
+    );
+
+    ref.listen(
       viewportProvider.select(PlayerViewportSettledSnapshot.fromState),
       (previous, next) {
         if (_shouldIgnoreRouteListener) {
@@ -1454,6 +1483,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           isItemChange: isItemChange,
         );
         _prepareAdUnlockForSettledItem(settledItem);
+        _prefetchDramaGiftLink(settledItem.content.id);
         unawaited(
           feedEngine.onViewportSettled(
             item: settledItem,
@@ -3466,95 +3496,173 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     });
   }
 
-  Future<void> _showShareSheet(String dramaId, String dramaTitle) {
-    _isModalOpen = true;
-    _syncAutoImmersiveBlockers();
-    final analytics = ref.read(analyticsServiceProvider);
-    final popupParameters = <String, Object?>{
-      'popup_name': AnalyticsPopupNames.share,
-      'drama_id': dramaId,
-    };
-    unawaited(
-      analytics.track(
-        AnalyticsEvent(AnalyticsDefinitions.elementClick, {
-          'element_name': 'share_entry',
-          'drama_id': dramaId,
-        }),
-      ),
-    );
-    unawaited(
-      analytics.track(
-        AnalyticsEvent(AnalyticsDefinitions.popupShow, popupParameters),
-      ),
-    );
-    final giftFuture = ref.read(entitlementControllerProvider).isMember
-        ? ref
-              .read(giftRemoteDataSourceProvider)
-              .getDramaGiftLink(dramaId: int.tryParse(dramaId) ?? 0)
-        : null;
-    return showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.7),
-      isDismissible: true,
-      enableDrag: true,
-      builder: (context) => giftFuture == null
-          ? PlayerShareSheet(
-              onFacebookTap: () {
-                unawaited(_trackShareChannelClick(dramaId, 'facebook'));
-                unawaited(_reportDramaShareAction(dramaId, 'facebook'));
-                unawaited(_shareToFacebook(dramaId, dramaTitle));
-              },
-              onCopyLinkTap: () {
-                unawaited(_trackShareChannelClick(dramaId, 'copy_link'));
-                unawaited(_reportDramaShareAction(dramaId, 'copy_link'));
-                unawaited(_copyShareLink(dramaId, dramaTitle));
-              },
-            )
-          : FutureBuilder<GiftLinkData>(
-              future: giftFuture,
+  Future<void> _showShareSheet(String dramaId, String dramaTitle) async {
+    if (_isShareSheetOpening || _isModalOpen) return;
+    _isShareSheetOpening = true;
+    try {
+      final analytics = ref.read(analyticsServiceProvider);
+      final popupParameters = <String, Object?>{
+        'popup_name': AnalyticsPopupNames.share,
+        'drama_id': dramaId,
+      };
+      unawaited(
+        analytics.track(
+          AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+            'element_name': 'share_entry',
+            'drama_id': dramaId,
+          }),
+        ),
+      );
+      GiftLinkData? gift;
+      Future<GiftLinkData>? giftRequestInFlight;
+      if (ref.read(entitlementControllerProvider).isMember) {
+        final parsedDramaId = int.tryParse(dramaId);
+        if (parsedDramaId != null && parsedDramaId > 0) {
+          final cache = ref.read(giftDramaLinkCacheProvider);
+          giftRequestInFlight = cache.inFlightFor(parsedDramaId);
+          if (giftRequestInFlight == null) {
+            try {
+              gift = await cache.get(parsedDramaId);
+            } catch (_) {
+              // 资格接口失败时仍允许使用普通分享。
+            }
+          }
+        }
+      }
+      if (!mounted || _isLeavingRoute) return;
+
+      _isModalOpen = true;
+      _syncAutoImmersiveBlockers();
+      unawaited(
+        analytics.track(
+          AnalyticsEvent(AnalyticsDefinitions.popupShow, popupParameters),
+        ),
+      );
+      await showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black.withValues(alpha: 0.7),
+        isDismissible: true,
+        enableDrag: true,
+        builder: (context) {
+          final pendingRequest = giftRequestInFlight;
+          if (pendingRequest != null) {
+            return FutureBuilder<GiftLinkData>(
+              future: pendingRequest,
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
                   return const PlayerShareLoadingSheet();
                 }
-                final gift = snapshot.data;
-                if (gift == null || !gift.visible) {
-                  return PlayerShareSheet(
-                    onFacebookTap: () =>
-                        unawaited(_shareToFacebook(dramaId, dramaTitle)),
-                    onCopyLinkTap: () =>
-                        unawaited(_copyShareLink(dramaId, dramaTitle)),
-                  );
-                }
-                return PlayerGiftShareSheet(
-                  quotaLabel:
-                      'Free viewing for friends (${gift.usedCount}/${gift.totalCount})',
-                  isGiftAvailable: gift.available,
-                  unavailableDescription: gift.reGrantAt.isEmpty
-                      ? context.l10n.giftShareUnavailableDescription
-                      : '${context.l10n.giftShareUnavailableDescription} ${gift.reGrantAt}',
-                  onShareFacebookTap: () =>
-                      unawaited(_shareToFacebook(dramaId, dramaTitle)),
-                  onShareCopyLinkTap: () =>
-                      unawaited(_copyShareLink(dramaId, dramaTitle)),
-                  onGiftFacebookTap: () =>
-                      unawaited(_shareGiftDramaToFacebook(dramaTitle, gift)),
-                  onGiftCopyLinkTap: () =>
-                      unawaited(_copyGiftDramaLink(dramaTitle, gift)),
+                return _buildShareSheet(
+                  context,
+                  dramaId: dramaId,
+                  dramaTitle: dramaTitle,
+                  gift: snapshot.data,
                 );
               },
-            ),
-    ).whenComplete(() {
-      unawaited(
-        analytics.track(
-          AnalyticsEvent(AnalyticsDefinitions.popupClose, popupParameters),
-        ),
+            );
+          }
+          return _buildShareSheet(
+            context,
+            dramaId: dramaId,
+            dramaTitle: dramaTitle,
+            gift: gift,
+          );
+        },
+      ).whenComplete(() {
+        unawaited(
+          analytics.track(
+            AnalyticsEvent(AnalyticsDefinitions.popupClose, popupParameters),
+          ),
+        );
+        _isModalOpen = false;
+        if (mounted) {
+          _syncAutoImmersiveBlockers();
+        }
+      });
+    } finally {
+      _isShareSheetOpening = false;
+    }
+  }
+
+  Widget _buildShareSheet(
+    BuildContext context, {
+    required String dramaId,
+    required String dramaTitle,
+    required GiftLinkData? gift,
+  }) {
+    if (gift == null || !gift.visible) {
+      return PlayerShareSheet(
+        onFacebookTap: () {
+          unawaited(_trackShareChannelClick(dramaId, 'facebook'));
+          unawaited(_reportDramaShareAction(dramaId, 'facebook'));
+          unawaited(_shareToFacebook(dramaId, dramaTitle));
+        },
+        onCopyLinkTap: () {
+          unawaited(_trackShareChannelClick(dramaId, 'copy_link'));
+          unawaited(_reportDramaShareAction(dramaId, 'copy_link'));
+          unawaited(_copyShareLink(dramaId, dramaTitle));
+        },
       );
-      _isModalOpen = false;
-      if (mounted) {
-        _syncAutoImmersiveBlockers();
-      }
-    });
+    }
+    return PlayerGiftShareSheet(
+      quotaLabel:
+          'Free viewing for friends (${gift.usedCount}/${gift.totalCount})',
+      isGiftAvailable: gift.available,
+      unavailableDescription: gift.reGrantAt.isEmpty
+          ? context.l10n.giftShareUnavailableDescription
+          : '${context.l10n.giftShareUnavailableDescription} ${gift.reGrantAt}',
+      onShareFacebookTap: () =>
+          unawaited(_shareToFacebook(dramaId, dramaTitle)),
+      onShareCopyLinkTap: () => unawaited(_copyShareLink(dramaId, dramaTitle)),
+      onGiftFacebookTap: () {
+        unawaited(_shareGiftDramaToFacebook(dramaTitle, gift));
+        _invalidateAndRefreshDramaGiftLink(dramaId);
+      },
+      onGiftCopyLinkTap: () {
+        unawaited(_copyGiftDramaLink(dramaTitle, gift));
+        _invalidateAndRefreshDramaGiftLink(dramaId);
+      },
+    );
+  }
+
+  void _prefetchDramaGiftLink(String dramaId) {
+    if (!ref.read(entitlementControllerProvider).isMember) return;
+    final parsedDramaId = int.tryParse(dramaId);
+    if (parsedDramaId == null || parsedDramaId <= 0) return;
+    ref.read(giftDramaLinkCacheProvider).prefetch(parsedDramaId);
+  }
+
+  void _refreshDramaGiftLinkOnPlayerEntry(String? dramaId) {
+    if (dramaId == null || dramaId.isEmpty) return;
+    _refreshDramaGiftLink(dramaId);
+  }
+
+  void _refreshDramaGiftLink(String dramaId) {
+    if (!ref.read(entitlementControllerProvider).isMember) return;
+    final parsedDramaId = int.tryParse(dramaId);
+    if (parsedDramaId == null || parsedDramaId <= 0) return;
+    unawaited(
+      ref
+          .read(giftDramaLinkCacheProvider)
+          .refresh(parsedDramaId)
+          .then<void>(
+            (_) {},
+            // 后台刷新失败不影响播放器及普通分享降级逻辑。
+            onError: (_, _) {},
+          ),
+    );
+  }
+
+  void _invalidateAndRefreshDramaGiftLink(String dramaId) {
+    final parsedDramaId = int.tryParse(dramaId);
+    if (parsedDramaId == null || parsedDramaId <= 0) return;
+    final cache = ref.read(giftDramaLinkCacheProvider);
+    cache.invalidate(parsedDramaId);
+    // 本次已使用的弹框保持不变；下次打开会直接读取后台刷新的最新资格。
+    unawaited(
+      cache.refresh(parsedDramaId).then<void>((_) {}, onError: (_, _) {}),
+    );
   }
 
   Future<void> _trackShareChannelClick(String dramaId, String shareMethod) =>

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_peg_top_loader.dart';
+
 class AppBlockingLoadingOverlay extends StatelessWidget {
   const AppBlockingLoadingOverlay({this.label, super.key});
 
@@ -20,16 +22,9 @@ class AppBlockingLoadingOverlay extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const SizedBox(
-                    width: 36,
-                    height: 36,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 3,
-                      color: Colors.white,
-                    ),
-                  ),
+                  const AppPegTopLoader(),
                   if (label != null && label!.isNotEmpty) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 20),
                     Text(
                       label!,
                       textAlign: TextAlign.center,

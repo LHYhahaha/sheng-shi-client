@@ -46,7 +46,7 @@ class PlayerShareSheet extends StatelessWidget {
           ),
           const SizedBox(height: 22),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _ShareTarget(
                 color: const Color(0xFF1877F2),
@@ -846,7 +846,7 @@ class _ShareTarget extends StatelessWidget {
             width: 56,
             height: 56,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             label,
             textAlign: TextAlign.center,
