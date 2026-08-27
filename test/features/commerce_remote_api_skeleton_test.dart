@@ -210,7 +210,7 @@ void main() {
       // expect(data.plans.single.offerId, 'intro-offer');
       // expect(data.plans.single.productType, 'subscription');
       expect(data.plans.single.badgeLabel, 'Limited offer');
-      expect(data.benefits.single.icon, MembershipBenefitIcon.download);
+      expect(data.benefits.single.imageUrl, MembershipBenefitIcon.download);
     });
 
     test('membership status uses required auth', () async {

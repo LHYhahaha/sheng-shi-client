@@ -105,11 +105,11 @@ void main() {
             channelId: 'channel-a',
             merchantId: 'merchant-9',
             shareMethod: 'copy_link',
-            giftLinkId: 'gift-1',
-            grantTempVipDays: '3',
+            shareCode: 'gift-1',
+            benefitDays: '3',
           )
           .toString(),
-      'https://drama-wave.8y4w2vxvdffmd83.xyz/gift/vip/?lang=en&user_id=user-1&channel_id=channel-a&merchant_id=merchant-9&share_method=copy_link&gift_link_id=gift-1&grant_temp_vip_days=3',
+      'https://drama-wave.8y4w2vxvdffmd83.xyz/gift/vip/?lang=en&user_id=user-1&channel_id=channel-a&merchant_id=merchant-9&share_method=copy_link&shareCode=gift-1&benefitDays=3',
     );
     expect(
       devConfig
@@ -119,18 +119,19 @@ void main() {
             channelId: 'channel-a',
             merchantId: 'merchant-9',
             shareMethod: 'facebook',
-            giftLinkId: 'gift-2',
+            shareCode: 'gift-2',
+            benefitDays: '7',
           )
           .toString(),
-      'https://drama-wave.8y4w2vxvdffmd83.xyz/gift/drama/?lang=en&user_id=user-1&channel_id=channel-a&merchant_id=merchant-9&share_method=facebook&gift_link_id=gift-2',
+      'https://drama-wave.8y4w2vxvdffmd83.xyz/gift/drama/?lang=en&user_id=user-1&channel_id=channel-a&merchant_id=merchant-9&share_method=facebook&shareCode=gift-2&benefitDays=7',
     );
     final facebookGiftVipUrl = devConfig.facebookGiftVipUrl(
       languageCode: 'en',
       userId: 'user-1',
       channelId: 'channel-a',
       merchantId: 'merchant-9',
-      giftLinkId: 'gift-1',
-      grantTempVipDays: '3',
+      shareCode: 'gift-1',
+      benefitDays: '3',
     );
     expect(facebookGiftVipUrl.path, '/gift/vip/');
     expect(
@@ -139,14 +140,15 @@ void main() {
           base64Url.normalize(facebookGiftVipUrl.queryParameters['_sp']!),
         ),
       ),
-      'lang=en&user_id=user-1&channel_id=channel-a&merchant_id=merchant-9&share_method=facebook&gift_link_id=gift-1&grant_temp_vip_days=3',
+      'lang=en&user_id=user-1&channel_id=channel-a&merchant_id=merchant-9&share_method=facebook&shareCode=gift-1&benefitDays=3',
     );
     final facebookGiftDramaUrl = devConfig.facebookGiftDramaUrl(
       languageCode: 'en',
       userId: 'user-1',
       channelId: 'channel-a',
       merchantId: 'merchant-9',
-      giftLinkId: 'gift-2',
+      shareCode: 'gift-2',
+      benefitDays: '7',
     );
     expect(facebookGiftDramaUrl.path, '/gift/drama/');
     expect(
@@ -155,7 +157,7 @@ void main() {
           base64Url.normalize(facebookGiftDramaUrl.queryParameters['_sp']!),
         ),
       ),
-      'lang=en&user_id=user-1&channel_id=channel-a&merchant_id=merchant-9&share_method=facebook&gift_link_id=gift-2',
+      'lang=en&user_id=user-1&channel_id=channel-a&merchant_id=merchant-9&share_method=facebook&shareCode=gift-2&benefitDays=7',
     );
     expect(
       AppConfig.forEnvironment(

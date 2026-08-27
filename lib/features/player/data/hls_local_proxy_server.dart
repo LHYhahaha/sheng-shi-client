@@ -364,6 +364,7 @@ class HlsLocalProxyServer {
       );
       return;
     }
+    _logPlaylistEncryption(remoteUri, response.body);
     final firstSegment = parseFirstHlsMediaSegment(remoteUri, response.body);
     if (firstSegment != null) {
       _firstSegmentDurations[firstSegment.uri.toString()] =
@@ -653,6 +654,31 @@ class HlsLocalProxyServer {
   }
 
   String _safeResourceName(Uri uri) => uri.pathSegments.lastOrNull ?? uri.path;
+
+  /// 只记录加密方法，绝不记录 EXT-X-KEY 中的 URI（可能包含临时签名）。
+  void _logPlaylistEncryption(Uri playlistUri, String playlistBody) {
+    final methods = const LineSplitter()
+        .convert(playlistBody)
+        .map((line) => line.trim())
+        .where(
+          (line) =>
+              line.startsWith('#EXT-X-KEY:') ||
+              line.startsWith('#EXT-X-SESSION-KEY:'),
+        )
+        .map(
+          (line) => RegExp(
+            r'METHOD=([^,]+)',
+            caseSensitive: false,
+          ).firstMatch(line)?.group(1),
+        )
+        .whereType<String>()
+        .toSet();
+    final encryption = methods.isEmpty ? 'none' : methods.join(',');
+    _log(
+      '[HlsEncryption] playlist=${_safeResourceName(playlistUri)} '
+      'encryption=$encryption',
+    );
+  }
 
   void _log(String message) {
     const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');

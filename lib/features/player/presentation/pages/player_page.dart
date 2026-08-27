@@ -32,6 +32,8 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/url/external_url_launcher.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
+import '../../../gift/data/gift_remote_data_source_provider.dart';
+import '../../../gift/domain/gift_link_data.dart';
 import '../../../entitlement/domain/episode_unlock_type.dart';
 import '../../data/player_exit_recommendation_history_repository_provider.dart';
 import '../../../auth/application/auth_controller.dart';
@@ -3477,24 +3479,63 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         AnalyticsEvent(AnalyticsDefinitions.popupShow, popupParameters),
       ),
     );
+    final giftFuture = ref.read(entitlementControllerProvider).isMember
+        ? ref
+              .read(giftRemoteDataSourceProvider)
+              .getDramaGiftLink(dramaId: int.tryParse(dramaId) ?? 0)
+        : null;
     return showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: 0.7),
       isDismissible: true,
       enableDrag: true,
-      builder: (context) => PlayerShareSheet(
-        onFacebookTap: () {
-          unawaited(_trackShareChannelClick(dramaId, 'facebook'));
-          unawaited(_reportDramaShareAction(dramaId, 'facebook'));
-          unawaited(_shareToFacebook(dramaId, dramaTitle));
-        },
-        onCopyLinkTap: () {
-          unawaited(_trackShareChannelClick(dramaId, 'copy_link'));
-          unawaited(_reportDramaShareAction(dramaId, 'copy_link'));
-          unawaited(_copyShareLink(dramaId, dramaTitle));
-        },
-      ),
+      builder: (context) => giftFuture == null
+          ? PlayerShareSheet(
+              onFacebookTap: () {
+                unawaited(_trackShareChannelClick(dramaId, 'facebook'));
+                unawaited(_reportDramaShareAction(dramaId, 'facebook'));
+                unawaited(_shareToFacebook(dramaId, dramaTitle));
+              },
+              onCopyLinkTap: () {
+                unawaited(_trackShareChannelClick(dramaId, 'copy_link'));
+                unawaited(_reportDramaShareAction(dramaId, 'copy_link'));
+                unawaited(_copyShareLink(dramaId, dramaTitle));
+              },
+            )
+          : FutureBuilder<GiftLinkData>(
+              future: giftFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const PlayerShareLoadingSheet();
+                }
+                final gift = snapshot.data;
+                if (gift == null || !gift.visible) {
+                  return PlayerShareSheet(
+                    onFacebookTap: () =>
+                        unawaited(_shareToFacebook(dramaId, dramaTitle)),
+                    onCopyLinkTap: () =>
+                        unawaited(_copyShareLink(dramaId, dramaTitle)),
+                  );
+                }
+                return PlayerGiftShareSheet(
+                  quotaLabel:
+                      'Free viewing for friends (${gift.usedCount}/${gift.totalCount})',
+                  isGiftAvailable: gift.available,
+                  unavailableDescription: gift.reGrantAt.isEmpty
+                      ? context.l10n.giftShareUnavailableDescription
+                      : '${context.l10n.giftShareUnavailableDescription} ${gift.reGrantAt}',
+                  onShareFacebookTap: () =>
+                      unawaited(_shareToFacebook(dramaId, dramaTitle)),
+                  onShareCopyLinkTap: () =>
+                      unawaited(_copyShareLink(dramaId, dramaTitle)),
+                  onGiftFacebookTap: () =>
+                      unawaited(_shareGiftDramaToFacebook(dramaTitle, gift)),
+                  onGiftCopyLinkTap: () =>
+                      unawaited(_copyGiftDramaLink(dramaTitle, gift)),
+                );
+              },
+            ),
     ).whenComplete(() {
       unawaited(
         analytics.track(
@@ -3588,6 +3629,68 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       channelId: channel?.channelFlag ?? '',
       merchantId: channel?.merchantId ?? '',
     );
+  }
+
+  Uri _giftDramaUrl(
+    GiftLinkData gift, {
+    required String shareMethod,
+    required bool facebook,
+  }) {
+    final languageCode = apiLangFromLocale(
+      ref.read(appLocaleControllerProvider),
+    );
+    final entitlement = ref.read(entitlementControllerProvider);
+    final userInfo = ref.read(userInfoStoreProvider);
+    final channel = ref.read(channelConfigServiceProvider).cachedConfig;
+    return facebook
+        ? AppConfig.current.facebookGiftDramaUrl(
+            languageCode: languageCode,
+            userId: entitlement.userId ?? userInfo.userId ?? '',
+            channelId: channel?.channelFlag ?? '',
+            merchantId: channel?.merchantId ?? '',
+            shareCode: gift.shareCode,
+            benefitDays: '${gift.benefitDays}',
+          )
+        : AppConfig.current.giftDramaUrl(
+            languageCode: languageCode,
+            userId: entitlement.userId ?? userInfo.userId ?? '',
+            channelId: channel?.channelFlag ?? '',
+            merchantId: channel?.merchantId ?? '',
+            shareMethod: shareMethod,
+            shareCode: gift.shareCode,
+            benefitDays: '${gift.benefitDays}',
+          );
+  }
+
+  Future<void> _shareGiftDramaToFacebook(
+    String dramaTitle,
+    GiftLinkData gift,
+  ) async {
+    final shareUrl = _giftDramaUrl(
+      gift,
+      shareMethod: 'facebook',
+      facebook: true,
+    );
+    final message = _shareMessage(dramaTitle, shareUrl);
+    final facebookUrl = Uri.https('www.facebook.com', '/sharer/sharer.php', {
+      'u': shareUrl.toString(),
+      'quote': message,
+    });
+    developer.log('Gift drama Facebook: $facebookUrl', name: 'PlayerShare');
+    await ref.read(externalUrlLauncherProvider).open(facebookUrl.toString());
+  }
+
+  Future<void> _copyGiftDramaLink(String dramaTitle, GiftLinkData gift) async {
+    final shareUrl = _giftDramaUrl(
+      gift,
+      shareMethod: 'copy_link',
+      facebook: false,
+    );
+    developer.log('Gift drama copy: $shareUrl', name: 'PlayerShare');
+    await Clipboard.setData(
+      ClipboardData(text: _shareMessage(dramaTitle, shareUrl)),
+    );
+    if (mounted) showAppCenterToast(context.l10n.shareToastCopySuccess);
   }
 
   String _shareMessage(String dramaTitle, Uri shareUrl) {

@@ -40,7 +40,7 @@ class WalletRemoteDataSource {
   listSpentConsumptionRecords({String? pageToken}) {
     return _apiClient.get<WalletPageDto<WalletSpentConsumptionRecordDto>>(
       '/api/payment/consume-records',
-      queryParameters: _standardPageData(pageToken),
+      queryParameters: _pageData(pageToken),
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) => WalletPageDto.fromJson(
         data,
@@ -53,7 +53,7 @@ class WalletRemoteDataSource {
   listExpiredConsumptionRecords({String? pageToken}) {
     return _apiClient.get<WalletPageDto<WalletExpiredConsumptionRecordDto>>(
       '/api/payment/expired-records',
-      queryParameters: _standardPageData(pageToken),
+      queryParameters: _pageData(pageToken),
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) => WalletPageDto.fromJson(
         data,

@@ -242,7 +242,7 @@ class _HistoryBody extends StatelessWidget {
       controller: scrollController,
       padding: EdgeInsets.fromLTRB(
         16,
-        12,
+        8,
         16,
         MediaQuery.paddingOf(context).bottom + 32,
       ),
@@ -402,7 +402,8 @@ class _SegmentButton extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: AppColors.textPrimary,
-              height: 1.3,
+              fontSize: 14,
+              height: 18/14,
             ),
           ),
         ),
@@ -423,8 +424,8 @@ class _ConsumptionRecordRow extends StatelessWidget {
       final url = record.posterResource!.value;
       return AppCachedNetworkImage(
         imageUrl: url,
-        width: 53,
-        height: 73,
+        width: 61,
+        height: 83,
         fit: BoxFit.cover,
       );
     }
@@ -432,8 +433,8 @@ class _ConsumptionRecordRow extends StatelessWidget {
     // 否则使用本地图片或默认图片
     return Image.asset(
       record.posterAssetPath ?? 'assets/images/my_list/cover_1.png',
-      width: 53,
-      height: 73,
+      width: 61,
+      height: 83,
       fit: BoxFit.cover,
       errorBuilder: (context, error, stackTrace) {
         return _buildErrorPlaceholder();
@@ -474,8 +475,9 @@ class _ConsumptionRecordRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight(510),
                   height: 1.5,
+                  fontSize: 14
                 ),
               ),
               const SizedBox(height: 4),
@@ -488,6 +490,7 @@ class _ConsumptionRecordRow extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: Colors.white.withValues(alpha: 0.5),
                   height: 1.5,
+                  fontSize: 12,
                   fontWeight: FontWeight.normal,
                 ),
               ),
@@ -499,6 +502,7 @@ class _ConsumptionRecordRow extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: Colors.white.withValues(alpha: 0.5),
                   height: 1.5,
+                  fontSize: 12,
                   fontWeight: FontWeight.normal,
                 ),
               ),
@@ -516,7 +520,7 @@ class _ConsumptionRecordRow extends StatelessWidget {
               textAlign: TextAlign.right,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: AppColors.textPrimary,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight(510),
                 height: 1.5,
               ),
             ),

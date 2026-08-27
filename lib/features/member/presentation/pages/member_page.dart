@@ -21,6 +21,8 @@ import '../../../../core/toast/app_center_toast.dart';
 import '../../../../shared/widgets/app_secondary_page_header.dart';
 import '../../../../features/auth/application/auth_controller.dart';
 import '../../../../features/entitlement/application/entitlement_controller.dart';
+import '../../../../features/gift/data/gift_remote_data_source_provider.dart';
+import '../../../../features/gift/domain/gift_link_data.dart';
 import '../../../../features/player/application/player_entry_preload_coordinator.dart';
 import '../../../../features/player/presentation/widgets/player_action_sheets.dart';
 import '../../../../features/membership/application/membership_controller.dart';
@@ -138,12 +140,6 @@ class MemberPage extends ConsumerStatefulWidget {
 class _MemberPageState extends ConsumerState<MemberPage> {
   final _dramaExposureSession = Object();
   bool _vipDramasRefreshRequested = false;
-
-  // TODO: Replace with the gift eligibility API response. These fields must be
-  // supplied by the server before a real gift link is shared.
-  static const _giftLinkId = '';
-  static const _grantTempVipDays = '1';
-  static const _giftEligible = true;
 
   @override
   void initState() {
@@ -324,7 +320,9 @@ class _MemberPageState extends ConsumerState<MemberPage> {
     return '${local.year}.$month.$day';
   }
 
-  Future<void> _showGiftMemberShareSheet() {
+  Future<void> _showGiftMemberShareSheet() async {
+    final gift = await ref.read(giftRemoteDataSourceProvider).getVipGiftLink();
+    if (!mounted) return;
     return showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -332,16 +330,23 @@ class _MemberPageState extends ConsumerState<MemberPage> {
       isDismissible: true,
       enableDrag: true,
       builder: (context) => GiftShareSheet(
-        quotaLabel: context.l10n.benefitGiftWeekly(1),
-        isEligible: _giftEligible,
-        unavailableDescription: context.l10n.giftShareUnavailableDescription,
-        onFacebookTap: _shareGiftMemberToFacebook,
-        onCopyLinkTap: _copyGiftMemberLink,
+        quotaLabel:
+            '${context.l10n.benefitGiftMember} (${gift.usedCount}/${gift.totalCount})',
+        isEligible: gift.available,
+        unavailableDescription: gift.reGrantAt.isEmpty
+            ? context.l10n.giftShareUnavailableDescription
+            : '${context.l10n.giftShareUnavailableDescription} ${gift.reGrantAt}',
+        onFacebookTap: () => _shareGiftMemberToFacebook(gift),
+        onCopyLinkTap: () => _copyGiftMemberLink(gift),
       ),
     );
   }
 
-  Uri _giftMemberUrl({required String shareMethod, required bool facebook}) {
+  Uri _giftMemberUrl(
+    GiftLinkData gift, {
+    required String shareMethod,
+    required bool facebook,
+  }) {
     final languageCode = apiLangFromLocale(
       ref.read(appLocaleControllerProvider),
     );
@@ -360,8 +365,8 @@ class _MemberPageState extends ConsumerState<MemberPage> {
             userId: common.userId,
             channelId: common.channelId,
             merchantId: common.merchantId,
-            giftLinkId: _giftLinkId,
-            grantTempVipDays: _grantTempVipDays,
+            shareCode: gift.shareCode,
+            benefitDays: '${gift.benefitDays}',
           )
         : AppConfig.current.giftVipUrl(
             languageCode: common.languageCode,
@@ -369,13 +374,17 @@ class _MemberPageState extends ConsumerState<MemberPage> {
             channelId: common.channelId,
             merchantId: common.merchantId,
             shareMethod: shareMethod,
-            giftLinkId: _giftLinkId,
-            grantTempVipDays: _grantTempVipDays,
+            shareCode: gift.shareCode,
+            benefitDays: '${gift.benefitDays}',
           );
   }
 
-  Future<void> _shareGiftMemberToFacebook() async {
-    final shareUrl = _giftMemberUrl(shareMethod: 'facebook', facebook: true);
+  Future<void> _shareGiftMemberToFacebook(GiftLinkData gift) async {
+    final shareUrl = _giftMemberUrl(
+      gift,
+      shareMethod: 'facebook',
+      facebook: true,
+    );
     final message = context.l10n.shareMessage(
       dramaTitle: context.l10n.benefitGiftMember,
       shareUrl: shareUrl.toString(),
@@ -384,15 +393,21 @@ class _MemberPageState extends ConsumerState<MemberPage> {
       'u': shareUrl.toString(),
       'quote': message,
     });
+    debugPrint('[GiftShare] VIP Facebook: $facebookUrl');
     await ref.read(externalUrlLauncherProvider).open(facebookUrl.toString());
   }
 
-  Future<void> _copyGiftMemberLink() async {
-    final shareUrl = _giftMemberUrl(shareMethod: 'copy_link', facebook: false);
+  Future<void> _copyGiftMemberLink(GiftLinkData gift) async {
+    final shareUrl = _giftMemberUrl(
+      gift,
+      shareMethod: 'copy_link',
+      facebook: false,
+    );
     final message = context.l10n.shareMessage(
       dramaTitle: context.l10n.benefitGiftMember,
       shareUrl: shareUrl.toString(),
     );
+    debugPrint('[GiftShare] VIP copy: $shareUrl');
     await Clipboard.setData(ClipboardData(text: message));
     if (mounted) {
       showAppCenterToast(context.l10n.shareToastCopySuccess);

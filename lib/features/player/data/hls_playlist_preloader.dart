@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import '../domain/player_feed.dart';
@@ -285,6 +286,7 @@ class HlsPlaylistPreloader {
     var contentLength = response.byteLength;
 
     if (isMasterPlaylist) {
+      _logMasterPlaylistVariants(uri, response.body);
       final variantUri = _selectVariantUri(uri, response.body);
       if (variantUri != null) {
         final mediaStartedAt = DateTime.now();
@@ -482,6 +484,46 @@ class HlsPlaylistPreloader {
   }
 
   Uri? _selectVariantUri(Uri masterUri, String playlistBody) {
+    final variants = _parseVariants(masterUri, playlistBody);
+    if (variants.isEmpty) {
+      return null;
+    }
+    variants.sort((left, right) {
+      final leftBandwidth = left.bandwidth ?? 1 << 62;
+      final rightBandwidth = right.bandwidth ?? 1 << 62;
+      return leftBandwidth.compareTo(rightBandwidth);
+    });
+    return variants.first.uri;
+  }
+
+  /// 输出 master playlist 的真实清晰度，供接入手动清晰度选择前核验 CDN 配置。
+  ///
+  /// 仅记录路径和 HLS 元数据，不记录 query 中可能存在的签名参数。
+  void _logMasterPlaylistVariants(Uri masterUri, String playlistBody) {
+    final variants = _parseVariants(masterUri, playlistBody);
+    if (variants.isEmpty) {
+      developer.log(
+        'master=${_safePlaylistUri(masterUri)} variants=none',
+        name: 'HlsQuality',
+      );
+      return;
+    }
+    final details = variants
+        .map(
+          (variant) =>
+              'resolution=${variant.resolution ?? 'unknown'} '
+              'bandwidth=${variant.bandwidth ?? 'unknown'} '
+              'playlist=${_safePlaylistUri(variant.uri)}',
+        )
+        .join('; ');
+    developer.log(
+      'master=${_safePlaylistUri(masterUri)} variants=${variants.length}: '
+      '$details',
+      name: 'HlsQuality',
+    );
+  }
+
+  List<_HlsVariant> _parseVariants(Uri masterUri, String playlistBody) {
     final lines = const LineSplitter()
         .convert(playlistBody)
         .map((line) => line.trim())
@@ -502,20 +544,16 @@ class HlsPlaylistPreloader {
           break;
         }
         variants.add(
-          _HlsVariant(uri: masterUri.resolve(uriLine), bandwidth: bandwidth),
+          _HlsVariant(
+            uri: masterUri.resolve(uriLine),
+            bandwidth: bandwidth,
+            resolution: _parseResolution(line),
+          ),
         );
         break;
       }
     }
-    if (variants.isEmpty) {
-      return null;
-    }
-    variants.sort((left, right) {
-      final leftBandwidth = left.bandwidth ?? 1 << 62;
-      final rightBandwidth = right.bandwidth ?? 1 << 62;
-      return leftBandwidth.compareTo(rightBandwidth);
-    });
-    return variants.first.uri;
+    return variants;
   }
 
   int? _parseBandwidth(String streamInfLine) {
@@ -525,6 +563,16 @@ class HlsPlaylistPreloader {
     }
     return int.tryParse(match.group(1)!);
   }
+
+  String? _parseResolution(String streamInfLine) {
+    final match = RegExp(
+      r'RESOLUTION=(\d+x\d+)',
+      caseSensitive: false,
+    ).firstMatch(streamInfLine);
+    return match?.group(1);
+  }
+
+  String _safePlaylistUri(Uri uri) => uri.replace(query: '').toString();
 
   List<Uri> _parseSegmentUris(Uri mediaPlaylistUri, String playlistBody) {
     return const LineSplitter()
@@ -618,10 +666,15 @@ class HlsPlaylistPreloader {
 }
 
 class _HlsVariant {
-  const _HlsVariant({required this.uri, required this.bandwidth});
+  const _HlsVariant({
+    required this.uri,
+    required this.bandwidth,
+    required this.resolution,
+  });
 
   final Uri uri;
   final int? bandwidth;
+  final String? resolution;
 }
 
 class HlsPlayerPlaybackPreloadManager implements PlayerPlaybackPreloadManager {

@@ -1313,7 +1313,7 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
             AspectRatio(
               aspectRatio: _HomeDramaCard.coverAspectRatio,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(widget.compact ? 8 : 0),
+                borderRadius: BorderRadius.circular(widget.compact ? 4 : 0),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [

@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 /// 应用运行环境。
 ///
 /// 环境只影响 baseUrl 等基础配置，不应在业务代码里用环境分支绕过状态机或权限判断。
@@ -114,8 +116,8 @@ class AppConfig {
     String channelId = '',
     String merchantId = '',
     String shareMethod = '',
-    String giftLinkId = '',
-    String grantTempVipDays = '',
+    String shareCode = '',
+    String benefitDays = '',
   }) => _webBaseUrl.replace(
     path: '/gift/vip/',
     queryParameters: {
@@ -126,8 +128,8 @@ class AppConfig {
         merchantId: merchantId,
       ),
       'share_method': shareMethod,
-      'gift_link_id': giftLinkId,
-      'grant_temp_vip_days': grantTempVipDays,
+      'shareCode': shareCode,
+      'benefitDays': benefitDays,
     },
   );
 
@@ -138,7 +140,8 @@ class AppConfig {
     String channelId = '',
     String merchantId = '',
     String shareMethod = '',
-    String giftLinkId = '',
+    String shareCode = '',
+    String benefitDays = '',
   }) => _webBaseUrl.replace(
     path: '/gift/drama/',
     queryParameters: {
@@ -149,7 +152,8 @@ class AppConfig {
         merchantId: merchantId,
       ),
       'share_method': shareMethod,
-      'gift_link_id': giftLinkId,
+      'shareCode': shareCode,
+      'benefitDays': benefitDays,
     },
   );
 
@@ -160,16 +164,16 @@ class AppConfig {
     String userId = '',
     String channelId = '',
     String merchantId = '',
-    String giftLinkId = '',
-    String grantTempVipDays = '',
+    String shareCode = '',
+    String benefitDays = '',
   }) => _facebookGiftUrl(
     path: '/gift/vip/',
     languageCode: languageCode,
     userId: userId,
     channelId: channelId,
     merchantId: merchantId,
-    giftLinkId: giftLinkId,
-    grantTempVipDays: grantTempVipDays,
+    shareCode: shareCode,
+    benefitDays: benefitDays,
   );
 
   /// Facebook 赠送短剧链接沿用普通分享的 `_sp` 打包格式。
@@ -178,14 +182,16 @@ class AppConfig {
     String userId = '',
     String channelId = '',
     String merchantId = '',
-    String giftLinkId = '',
+    String shareCode = '',
+    String benefitDays = '',
   }) => _facebookGiftUrl(
     path: '/gift/drama/',
     languageCode: languageCode,
     userId: userId,
     channelId: channelId,
     merchantId: merchantId,
-    giftLinkId: giftLinkId,
+    shareCode: shareCode,
+    benefitDays: benefitDays,
   );
 
   Uri _facebookGiftUrl({
@@ -194,8 +200,8 @@ class AppConfig {
     required String userId,
     required String channelId,
     required String merchantId,
-    required String giftLinkId,
-    String grantTempVipDays = '',
+    required String shareCode,
+    required String benefitDays,
   }) {
     final packed = _packShareQuery({
       'lang': languageCode,
@@ -203,8 +209,8 @@ class AppConfig {
       'channel_id': channelId,
       'merchant_id': merchantId,
       'share_method': 'facebook',
-      'gift_link_id': giftLinkId,
-      'grant_temp_vip_days': grantTempVipDays,
+      'shareCode': shareCode,
+      'benefitDays': benefitDays,
     });
     return _webBaseUrl.replace(path: path, queryParameters: {'_sp': packed});
   }
@@ -226,6 +232,7 @@ class AppConfig {
         .where((entry) => entry.value.isNotEmpty)
         .map((entry) => '${entry.key}=${entry.value}')
         .join('&');
+    debugPrint('[Share] _sp payload before encoding: $query');
     return base64Url.encode(utf8.encode(query)).replaceAll('=', '');
   }
 
