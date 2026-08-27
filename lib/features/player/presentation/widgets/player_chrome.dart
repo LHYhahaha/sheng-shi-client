@@ -26,9 +26,11 @@ abstract final class _PlayerLayoutMetrics {
   // 搜索按钮有 8px 的命中区内边距，外层定位为 8 才能让可见图标距屏幕 16。
   static const searchButtonRight = 8.0;
   static const forYouActionRailBottom = 126.0;
+
   // PlayerSeekBar 的可见轨道在其触控区域内预留 6px 底部空间。
   static const forYouSeekBarBottom = -6.0;
   static const forYouWatchNowBottom = 12.0;
+
   // 与 Android Shell 底部导航的内容区高度一致。
   static const singleBottomFrameHeight = 64.0;
   static const singleMetaBottom = singleBottomFrameHeight + 14;
@@ -243,6 +245,8 @@ class _PlayerChromeState extends State<PlayerChrome> {
 
   @override
   Widget build(BuildContext context) {
+    // 拖动进度条时仅保留 seek bar 与预览提示，其他 chrome 暂时隐藏。
+    final showNonSeekChrome = showChromeOverlays && !isSeeking;
     final mediaQuery = MediaQuery.of(context);
     final bottomInset = mediaQuery.padding.bottom;
     final bottomFrameHeight = PlayerChrome.videoViewportBottomInset(
@@ -256,7 +260,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
       fit: StackFit.expand,
       children: [
         if (showViewportBackdrop)
-          const Positioned.fill(child: ColoredBox(color: AppColors.black)),
+          const Positioned.fill(child: ColoredBox(color: Color(0xFF141414))),
         _PlayerPosterLayer(
           content: content,
           bottomFrameHeight: bottomFrameHeight,
@@ -267,7 +271,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
           playbackError: playbackError,
           onRetry: onRetry,
         ),
-        if (showChromeOverlays)
+        if (showNonSeekChrome)
           _PlayerGradientLayer(
             bottomFrameHeight: bottomFrameHeight,
             forYouLayout: forYouLayout,
@@ -290,7 +294,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
             right: 0,
             bottom: 0,
             height: bottomFrameHeight,
-            child: const ColoredBox(color: AppColors.black),
+            child: const ColoredBox(color: Color(0XFF141414)),
           ),
         ],
         if (showUnlockButton && !forYouLayout)
@@ -306,7 +310,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
           _CenterPlayButton(onTap: onTogglePlay),
         if (_showPauseFeedback) const _PauseFeedbackIcon(),
         // 沉浸模式下所有 UI（操作栏、元信息、进度条）一起隐藏，显示时一起显示
-        if (showChromeOverlays) ...[
+        if (showNonSeekChrome) ...[
           _PlayerActionRailLayer(
             bottomInset: bottomInset,
             forYouLayout: forYouLayout,
@@ -324,20 +328,24 @@ class _PlayerChromeState extends State<PlayerChrome> {
             showChromeOverlays: showChromeOverlays,
             chromeOverlayFadeDuration: chromeOverlayFadeDuration,
           ),
-          _PlayerMetaLayer(
-            content: content,
-            episodeNumber: episodeNumber,
-            bottom: forYouLayout
-                ? forYouWatchNowBottom
-                : bottomInset + _PlayerLayoutMetrics.singleMetaBottom,
-            forYouLayout: forYouLayout,
-            onWatchNowTap: onWatchNowTap,
-            overlayOpacity: overlayOpacity,
-            overlayOpacityListenable: overlayOpacityListenable,
-            showChromeOverlays: showChromeOverlays,
-            chromeOverlayFadeDuration: chromeOverlayFadeDuration,
-            onTap: forYouLayout ? () {} : onMetaTap,
-          ),
+          if (!(showUnlockButton && !forYouLayout))
+            _PlayerMetaLayer(
+              content: content,
+              episodeNumber: episodeNumber,
+              bottom: forYouLayout
+                  ? forYouWatchNowBottom
+                  : bottomInset + _PlayerLayoutMetrics.singleMetaBottom,
+              forYouLayout: forYouLayout,
+              onWatchNowTap: onWatchNowTap,
+              overlayOpacity: overlayOpacity,
+              overlayOpacityListenable: overlayOpacityListenable,
+              showChromeOverlays: showChromeOverlays,
+              chromeOverlayFadeDuration: chromeOverlayFadeDuration,
+              onTap: forYouLayout ? () {} : onMetaTap,
+            ),
+        ],
+        // 非沉浸模式下，拖动时仍保留进度条与预览提示。
+        if (showChromeOverlays)
           Positioned(
             left: 16,
             right: 16,
@@ -371,7 +379,6 @@ class _PlayerChromeState extends State<PlayerChrome> {
                       : const SizedBox.shrink()),
             ),
           ),
-        ],
       ],
     );
   }
@@ -435,7 +442,7 @@ class _PlayerPosterLayer extends StatelessWidget {
             if (showViewportBackdrop)
               const RepaintBoundary(
                 key: ValueKey('player_poster_repaint_boundary'),
-                child: ColoredBox(color: AppColors.black),
+                child: ColoredBox(color: Color(0xFF141414)),
               ),
             ?playbackLayer,
             if (showLoading)
@@ -1453,7 +1460,8 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
   @override
   Widget build(BuildContext context) {
     final progress = _ratio(widget.previewPosition ?? widget.position);
-    final buffered = _ratio(widget.bufferedPosition);
+    // 暂不展示缓冲进度，保留计算逻辑以便后续恢复。
+    // final buffered = _ratio(widget.bufferedPosition);
     final config = widget.previewConfig;
     final showThumbnail =
         widget.isDragging &&
@@ -1462,7 +1470,7 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
         widget.thumbnailAssetPath.isNotEmpty;
     final showTimeBubble =
         widget.isDragging && config.allowTimeBubble && !showThumbnail;
-    final barHeight = widget.isDragging ? 4.0 : 2.0;
+    final barHeight = widget.isDragging ? 8.0 : 2.0;
     final trackOpacity = widget.isPassiveTrack ? 0.42 : 1.0;
     final stackHeight = showThumbnail
         ? 112.0
@@ -1479,7 +1487,8 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
           (width - thumbnailWidth).clamp(0.0, width),
         );
         const timeBubbleWidth = 108.0;
-        final timeBubbleLeft = (progress * width - timeBubbleWidth / 2).clamp(
+        // 拖动时的进度提示固定居中，不随手指位置横向移动。
+        final timeBubbleLeft = ((width - timeBubbleWidth) / 2).clamp(
           0.0,
           (width - timeBubbleWidth).clamp(0.0, width),
         );
@@ -1545,28 +1554,33 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
                     duration: widget.trackFadeDuration,
                     curve: Curves.easeOut,
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(
+                        widget.isDragging ? 0 : 12,
+                      ),
                       child: SizedBox(
                         height: barHeight,
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
                             ColoredBox(
-                              color: Colors.white.withValues(alpha: 0.25),
+                              color: Colors.white.withValues(alpha: 0.3),
                             ),
-                            if (!widget.isPassiveTrack)
-                              FractionallySizedBox(
-                                alignment: Alignment.centerLeft,
-                                widthFactor: buffered,
-                                child: ColoredBox(
-                                  color: Colors.white.withValues(alpha: 0.3),
-                                ),
-                              ),
+                            // 暂不展示缓冲进度，保留实现以便后续恢复。
+                            // if (!widget.isPassiveTrack)
+                            //   FractionallySizedBox(
+                            //     alignment: Alignment.centerLeft,
+                            //     widthFactor: buffered,
+                            //     child: ColoredBox(
+                            //       color: Colors.white.withValues(alpha: 0.3),
+                            //     ),
+                            //   ),
                             FractionallySizedBox(
                               alignment: Alignment.centerLeft,
                               widthFactor: widget.isPassiveTrack ? 0 : progress,
                               child: ColoredBox(
-                                color: Colors.white.withValues(alpha: 0.5),
+                                color: widget.isDragging
+                                    ? Colors.white
+                                    : Colors.white.withValues(alpha: 0.5),
                               ),
                             ),
                             if (widget.showTrackLoading && !widget.isDragging)

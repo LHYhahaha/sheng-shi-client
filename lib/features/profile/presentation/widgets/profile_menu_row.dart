@@ -52,7 +52,7 @@ class ProfileMenuRow extends StatelessWidget {
                   Text(
                     title,
                     style: TextStyle(
-                      color: Color(0XFFB5B2B8),
+                      color: Colors.white.withValues(alpha: 0.9),
                       fontWeight: FontWeight(400),
                       fontSize: 14,
                       height: 1.5,
@@ -78,6 +78,7 @@ class ProfileMenuRow extends StatelessWidget {
                   : EdgeInsets.zero,
               child: Image.asset(
                 "assets/images/common/white_right.png",
+                color: Colors.white.withValues(alpha: 0.4),
                 height: 20,
                 width: 20,
               ),

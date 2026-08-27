@@ -1477,7 +1477,7 @@ class _ViewCount extends StatelessWidget {
           fit: BoxFit.contain,
           filterQuality: FilterQuality.low,
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 2),
         Text(
           label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(

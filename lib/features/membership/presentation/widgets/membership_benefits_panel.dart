@@ -84,6 +84,7 @@ class MembershipBenefitsPanel extends StatelessWidget {
           Container(
             decoration: BoxDecoration(
               image: DecorationImage(
+                fit: BoxFit.fill,
                 image: AssetImage(
                   "assets/images/membership/vip_bac_border.png",
                 ),
@@ -93,7 +94,7 @@ class MembershipBenefitsPanel extends StatelessWidget {
               MembershipLayout.horizontalPadding,
               MembershipLayout.benefitsTitlePaddingTop,
               MembershipLayout.horizontalPadding,
-              0,
+              20,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -121,9 +122,7 @@ class MembershipBenefitsPanel extends StatelessWidget {
                 for (var index = 0; index < benefits.length; index++) ...[
                   _BenefitRow(benefit: benefits[index]),
                   if (index < benefits.length - 1)
-                    const SizedBox(
-                      height: MembershipLayout.benefitsRowGap,
-                    ),
+                    const SizedBox(height: MembershipLayout.benefitsRowGap),
                 ],
               ],
             ),
@@ -132,11 +131,8 @@ class MembershipBenefitsPanel extends StatelessWidget {
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(height: 20),
-                Divider(
-                  height: 1,
-                  color: Colors.white.withValues(alpha: 0.12),
-                ),
+                // SizedBox(height: 20),
+                Divider(height: 1, color: Colors.white.withValues(alpha: 0.12)),
                 content,
               ],
             ),
