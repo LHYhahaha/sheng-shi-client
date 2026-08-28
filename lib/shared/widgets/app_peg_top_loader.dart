@@ -4,14 +4,14 @@ import 'package:flutter/material.dart';
 
 /// Three staggered instances of the supplied polygon image falling into view.
 ///
-/// The image is deliberately used without a color filter, preserving its
-/// original pink gradient. Provide an SVG instead if runtime theme colors are
-/// required later.
+/// The image is used without a color filter, preserving its original pink
+/// gradient. Use an SVG asset instead if runtime theme colors are required.
 class AppPegTopLoader extends StatefulWidget {
   const AppPegTopLoader({
-    this.size = 36,
+    this.size = 25,
     this.duration = const Duration(milliseconds: 1000),
     this.isAnimating = true,
+    this.noBackground = false,
     this.semanticLabel = 'Loading',
     super.key,
   }) : assert(size > 0);
@@ -20,6 +20,7 @@ class AppPegTopLoader extends StatefulWidget {
   final Duration duration;
   final bool isAnimating;
   final String semanticLabel;
+  final bool noBackground;
 
   @override
   State<AppPegTopLoader> createState() => _AppPegTopLoaderState();
@@ -41,9 +42,12 @@ class _AppPegTopLoaderState extends State<AppPegTopLoader>
   @override
   void didUpdateWidget(covariant AppPegTopLoader oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.duration != widget.duration)
+    if (oldWidget.duration != widget.duration) {
       _controller.duration = widget.duration;
-    if (oldWidget.isAnimating != widget.isAnimating) _syncAnimation();
+    }
+    if (oldWidget.isAnimating != widget.isAnimating) {
+      _syncAnimation();
+    }
   }
 
   void _syncAnimation() {
@@ -62,8 +66,8 @@ class _AppPegTopLoaderState extends State<AppPegTopLoader>
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      label: widget.semanticLabel,
+    final loader = Semantics(
+      // label: widget.semanticLabel,
       liveRegion: true,
       child: ExcludeSemantics(
         child: RepaintBoundary(
@@ -88,7 +92,43 @@ class _AppPegTopLoaderState extends State<AppPegTopLoader>
         ),
       ),
     );
+    return widget.noBackground
+        ? loader
+        : AppPegTopLoaderBackground(
+            // The falling polygons travel beyond their nominal square. Reserve
+            // that full path in a square surface that encloses every frame.
+            padding: EdgeInsets.fromLTRB(
+              widget.size * 1.5,
+              widget.size * 2,
+              widget.size * 1.5,
+              widget.size,
+            ),
+            child: loader,
+          );
   }
+}
+
+/// Reusable rounded dark surface for the peg loading animation.
+class AppPegTopLoaderBackground extends StatelessWidget {
+  const AppPegTopLoaderBackground({
+    required this.child,
+    this.padding = EdgeInsets.zero,
+    this.color =  const Color(0xE60A0014),
+    this.borderRadius = const BorderRadius.all(Radius.circular(12)),
+    super.key,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final Color color;
+  final BorderRadiusGeometry borderRadius;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: padding,
+    decoration: BoxDecoration(color: color, borderRadius: borderRadius),
+    child: child,
+  );
 }
 
 class _FallingPolygon extends StatelessWidget {

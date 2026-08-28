@@ -10,6 +10,7 @@ import '../../l10n/app_localizations.dart';
 import '../../shared/theme/app_colors.dart';
 import '../../shared/url/external_url_launcher.dart';
 import '../../shared/widgets/app_empty_state.dart';
+import 'app_peg_top_loader.dart';
 import '../../shared/widgets/app_secondary_page_header.dart';
 
 typedef WebViewPageLifecycleCallback =
@@ -261,9 +262,7 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
               // 在 H5 首帧完成前保持与 WebView 相同的黑色背景。
               child: ColoredBox(
                 color: AppColors.black,
-                child: Center(
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                ),
+                child: Center(child: AppPegTopLoader()),
               ),
             ),
         ],

@@ -27,15 +27,7 @@ class AuthActionButton extends StatelessWidget {
       width: double.infinity,
       child: FilledButton.icon(
         onPressed: isLoading ? null : onPressed,
-        icon: isLoading
-            ? SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: foregroundColor,
-                ),
-              )
-            : assetIconPath == null
+        icon: assetIconPath == null
             ? Icon(icon, size: 22)
             : Image.asset(assetIconPath!, width: 22, height: 22),
         label: Text(label),

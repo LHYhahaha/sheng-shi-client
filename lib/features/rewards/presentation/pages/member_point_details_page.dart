@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_load_more_indicator.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/widgets/app_secondary_page_header.dart';
 import '../../application/member_point_details_controller.dart';
 import '../../domain/member_point_details.dart';
@@ -105,16 +107,7 @@ class _MemberPointDetailsPageState
 
   Widget _buildBody(MemberPointDetailsState state) {
     if (state.isLoading && state.items.isEmpty) {
-      return const Center(
-        child: SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: Color(0xFFB000FF),
-          ),
-        ),
-      );
+      return const Center(child: AppPegTopLoader());
     }
 
     if (state.items.isEmpty) {
@@ -130,18 +123,8 @@ class _MemberPointDetailsPageState
       padding: const EdgeInsets.fromLTRB(16, 23, 16, 24),
       itemBuilder: (context, index) {
         if (index == state.items.length) {
-          return const Padding(
+          return const AppLoadMoreIndicator(
             padding: EdgeInsets.symmetric(vertical: 18),
-            child: Center(
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Color(0xFFB000FF),
-                ),
-              ),
-            ),
           );
         }
         return _MemberPointDetailItem(record: state.items[index]);

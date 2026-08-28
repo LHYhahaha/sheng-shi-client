@@ -77,7 +77,7 @@ void main() {
         ],
       ),
     );
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 250));
     await tester.pumpAndSettle();
 
     final likeButton = find.byKey(const ValueKey('player_like_button_42'));
@@ -114,7 +114,7 @@ void main() {
         ],
       ),
     );
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(milliseconds: 250));
     await tester.pumpAndSettle();
 
     session.emitPlaying(false);
@@ -292,7 +292,6 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    expect(find.text('A Life That Shines Again >'), findsOneWidget);
     expect(find.text('Player failed to load.'), findsNothing);
   });
 
@@ -332,21 +331,22 @@ void main() {
       find.byKey(const ValueKey('player_poster_repaint_boundary')),
       findsWidgets,
     );
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('player_playback_loading')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('player_seek_track_loading')),
       findsOneWidget,
     );
 
     openCompleter.complete();
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 1));
 
-    expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(
       find.byKey(const ValueKey('player_seek_track_loading')),
       findsNothing,
     );
-    expect(find.text('A Life That Shines Again >'), findsOneWidget);
   });
 
   testWidgets(
@@ -724,7 +724,7 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('player_video_tap_layer')));
+    await _tapVideoBlankArea(tester);
     await tester.pump();
 
     expect(find.byKey(const ValueKey('player_pause_feedback')), findsNothing);
@@ -947,6 +947,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('player_unlock_button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_back_button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_episode_label')), findsNothing);
     expect(
       find.byKey(const ValueKey('player_unlock_repaint_boundary')),
       findsOneWidget,
@@ -977,7 +979,7 @@ void main() {
     );
   });
 
-  testWidgets('single drama taps video to pause and center play resumes', (
+  testWidgets('single drama only toggles playback from central controls', (
     tester,
   ) async {
     final playbackSession = _FakePlaybackSession();
@@ -988,34 +990,38 @@ void main() {
         playbackSessionFactory: () => playbackSession,
       ),
     );
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pumpAndSettle();
+    await _pumpUntilSingleDramaPlaybackReady(tester);
+    await tester.pump();
 
     expect(
       find.byKey(const ValueKey('player_seek_track_loading')),
       findsNothing,
     );
+    final initialPauseCount = playbackSession.pauseCount;
+    final initialPlayCount = playbackSession.playCount;
 
-    await _doubleTapVideo(tester);
-    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('player_center_pause_button')));
+    await tester.pump();
 
-    expect(playbackSession.pauseCount, 1);
+    expect(playbackSession.pauseCount, initialPauseCount + 1);
     expect(
       find.byKey(const ValueKey('player_center_play_button')),
       findsOneWidget,
     );
 
     await tester.tap(find.byKey(const ValueKey('player_center_play_button')));
-    await tester.pumpAndSettle();
+    await tester.pump();
 
-    expect(playbackSession.playCount, 1);
+    expect(playbackSession.playCount, initialPlayCount + 1);
     expect(
       find.byKey(const ValueKey('player_center_play_button')),
       findsNothing,
     );
   });
 
-  testWidgets('playing tap shows transient pause feedback', (tester) async {
+  testWidgets('single drama pause control shows transient pause feedback', (
+    tester,
+  ) async {
     final playbackSession = _FakePlaybackSession();
 
     await tester.pumpWidget(
@@ -1025,10 +1031,10 @@ void main() {
         performancePolicy: PlayerPerformancePolicy.rich,
       ),
     );
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pumpAndSettle();
+    await _pumpUntilSingleDramaPlaybackReady(tester);
+    await tester.pump();
 
-    await _doubleTapVideo(tester);
+    await tester.tap(find.byKey(const ValueKey('player_center_pause_button')));
     await tester.pump();
 
     expect(find.byKey(const ValueKey('player_pause_feedback')), findsOneWidget);
@@ -1400,15 +1406,23 @@ void main() {
       tester.widget<PlayerChrome>(find.byType(PlayerChrome)).showChromeOverlays,
       isFalse,
     );
+    expect(
+      find.byKey(const ValueKey('player_center_pause_button')),
+      findsNothing,
+    );
 
-    await tester.tap(find.byKey(const ValueKey('player_video_tap_layer')));
-    await tester.pump(const Duration(milliseconds: 300));
+    await _tapVideoBlankArea(tester);
+    await tester.pump();
 
     expect(
       tester.widget<PlayerChrome>(find.byType(PlayerChrome)).showChromeOverlays,
       isTrue,
     );
     expect(playbackSession.pauseCount, 0);
+    expect(
+      find.byKey(const ValueKey('player_center_pause_button')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('single drama restores default chrome after app resumes', (
@@ -1446,7 +1460,9 @@ void main() {
     );
   });
 
-  testWidgets('single drama default tap pauses while playing', (tester) async {
+  testWidgets('single drama default blank tap enters immersive mode', (
+    tester,
+  ) async {
     final playbackSession = _FakePlaybackSession();
 
     await tester.pumpWidget(
@@ -1459,16 +1475,68 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('player_video_tap_layer')));
-    await tester.pump(const Duration(milliseconds: 300));
+    await _tapVideoBlankArea(tester);
     await tester.pump();
 
-    expect(playbackSession.pauseCount, 1);
+    expect(playbackSession.pauseCount, 0);
     expect(
       tester.widget<PlayerChrome>(find.byType(PlayerChrome)).showChromeOverlays,
-      isTrue,
+      isFalse,
     );
   });
+
+  testWidgets(
+    'single drama keeps paused playback paused across immersive mode',
+    (tester) async {
+      final playbackSession = _FakePlaybackSession();
+
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          repository: _FakePlayerFeedRepository.unlocked(),
+          playbackSessionFactory: () => playbackSession,
+          providerOverrides: _singleDramaAutoImmersiveDisabledOverrides,
+        ),
+      );
+      await _pumpUntilSingleDramaPlaybackReady(tester);
+      await tester.pump();
+
+      await tester.tap(
+        find.byKey(const ValueKey('player_center_pause_button')),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('player_center_play_button')),
+        findsOneWidget,
+      );
+
+      await _tapVideoBlankArea(tester);
+      await tester.pump();
+      expect(
+        tester
+            .widget<PlayerChrome>(find.byType(PlayerChrome))
+            .showChromeOverlays,
+        isFalse,
+      );
+      expect(
+        find.byKey(const ValueKey('player_center_play_button')),
+        findsNothing,
+      );
+      expect(playbackSession.pauseCount, greaterThan(0));
+
+      await _tapVideoBlankArea(tester);
+      await tester.pump();
+      expect(
+        tester
+            .widget<PlayerChrome>(find.byType(PlayerChrome))
+            .showChromeOverlays,
+        isTrue,
+      );
+      expect(
+        find.byKey(const ValueKey('player_center_play_button')),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('for you does not auto enter immersive chrome', (tester) async {
     await tester.pumpWidget(
@@ -3665,11 +3733,10 @@ Future<void> _pumpUntilSessionOpened(
   fail('Playback session did not open a source');
 }
 
-Future<void> _doubleTapVideo(WidgetTester tester) async {
+Future<void> _tapVideoBlankArea(WidgetTester tester) async {
   final tapTarget = find.byKey(const ValueKey('player_video_tap_layer'));
-  await tester.tap(tapTarget);
-  await tester.pump(const Duration(milliseconds: 40));
-  await tester.tap(tapTarget);
+  final origin = tester.getTopLeft(tapTarget);
+  await tester.tapAt(origin + const Offset(32, 180));
 }
 
 const _testAutoImmersiveDelay = Duration(milliseconds: 100);

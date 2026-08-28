@@ -244,6 +244,7 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
                   itemId: item.id,
                   onTogglePlay: onTogglePlay,
                   onRetry: onRetry,
+                  showChromeOverlays: showChromeOverlays,
                   useSingleDramaChromeTap: useSingleDramaChromeTap,
                   onExitImmersiveChrome: onExitImmersiveChrome,
                   onSingleDramaUserInteraction: onSingleDramaUserInteraction,

@@ -19,6 +19,8 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_load_more_indicator.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../drama/domain/drama_watch_progress.dart';
 import '../application/search_history_controller.dart';
@@ -264,12 +266,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   ),
                   Expanded(
                     child: state.isInitialLoading
-                        ? const Center(
-                            child: SizedBox.square(
-                              dimension: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
+                        ? const _SearchLoadingIndicator()
                         : state.hasPageError
                         ? _SearchErrorState(
                             onRetry: () => ref
@@ -761,7 +758,7 @@ class _SuggestionResults extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (state.isLoading) {
-      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+      return const _SearchLoadingIndicator();
     }
     if (state.error != null) {
       return Center(
@@ -806,10 +803,7 @@ class _SuggestionResults extends ConsumerWidget {
             );
           }
           if (state.isLoadingMore) {
-            return const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            );
+            return const AppLoadMoreIndicator();
           }
           if (state.loadMoreError != null) {
             return _NetworkRetry(onRetry: onLoadMore, compact: true);
@@ -886,7 +880,7 @@ class _SubmittedSearchResults extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (state.isLoading) {
-      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+      return const _SearchLoadingIndicator();
     }
     if (state.error != null) {
       return _NetworkRetry(onRetry: onRetry);
@@ -1074,10 +1068,7 @@ class _SearchResultsFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (state.isLoadingMore) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-      );
+      return const AppLoadMoreIndicator();
     }
     if (state.loadMoreError != null) {
       return _NetworkRetry(onRetry: onLoadMore, compact: true);
@@ -1658,12 +1649,7 @@ class _RankingPanel extends ConsumerWidget {
         ),
       ),
       child: state.isLoading && state.data == null
-          ? const Center(
-              child: SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
+          ? const _SearchLoadingIndicator()
           : state.error != null
           ? _SearchErrorState(onRetry: onRetry)
           : state.isEmpty
@@ -1846,6 +1832,14 @@ class _RankBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SearchLoadingIndicator extends StatelessWidget {
+  const _SearchLoadingIndicator();
+
+  @override
+  Widget build(BuildContext context) =>
+      const Center(child: AppPegTopLoader(size: 28, noBackground: true));
 }
 
 class _SearchErrorState extends StatelessWidget {

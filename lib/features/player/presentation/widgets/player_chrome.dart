@@ -7,6 +7,7 @@ import 'package:flutter_svg/svg.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../application/player_like_count_provider.dart';
 import '../../domain/player_content.dart';
@@ -693,20 +694,8 @@ class _PlaybackLoadingOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.36),
-          shape: BoxShape.circle,
-        ),
-        padding: const EdgeInsets.all(10),
-        child: const CircularProgressIndicator(
-          strokeWidth: 2,
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-        ),
-      ),
+    return const Center(
+      child: AppPegTopLoader(key: ValueKey('player_playback_loading')),
     );
   }
 }
@@ -1847,16 +1836,7 @@ class _LikeActionItem extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (isLoading)
-                SizedBox(
-                  width: 30,
-                  height: 30,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Colors.white.withValues(alpha: 0.7),
-                    ),
-                  ),
-                )
+                const AppPegTopLoader(size: 15,noBackground: true)
               else
                 Image.asset(
                   isLiked

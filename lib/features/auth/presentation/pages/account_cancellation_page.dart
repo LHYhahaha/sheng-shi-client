@@ -661,26 +661,17 @@ class _CancellationBottomBar extends StatelessWidget {
                 ),
                 padding: EdgeInsets.zero,
               ),
-              child: isSubmitting
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text(
-                      buttonLabel,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        height: 20 / 16,
-                        color: canSubmit
-                            ? Colors.white
-                            : Colors.white.withValues(alpha: 0.6),
-                      ),
-                    ),
+              child: Text(
+                buttonLabel,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  height: 20 / 16,
+                  color: canSubmit
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.6),
+                ),
+              ),
             ),
           ),
         ],

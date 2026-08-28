@@ -141,8 +141,7 @@ class AppPaymentMethodSheet extends StatelessWidget {
                       ),
                     ),
                     child: _PaymentButtonContent(
-                      isProcessing: isProcessing,
-                      label: isProcessing || isComplete
+                      label: isComplete
                           ? statusLabel
                           : context.l10n.storeBuyNow,
                     ),
@@ -254,53 +253,21 @@ class _PaymentRadio extends StatelessWidget {
 }
 
 class _PaymentButtonContent extends StatelessWidget {
-  const _PaymentButtonContent({
-    required this.isProcessing,
-    required this.label,
-  });
+  const _PaymentButtonContent({required this.label});
 
-  final bool isProcessing;
   final String label;
 
   @override
   Widget build(BuildContext context) {
-    if (!isProcessing) {
-      return Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          height: 1.25,
-        ),
-      );
-    }
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const SizedBox.square(
-          dimension: 17,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Flexible(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              height: 1.25,
-            ),
-          ),
-        ),
-      ],
+    return Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        height: 1.25,
+      ),
     );
   }
 }

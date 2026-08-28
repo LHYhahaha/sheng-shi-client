@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:easy_refresh/easy_refresh.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,6 +31,8 @@ import '../../../../shared/media/media_resource.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_load_more_indicator.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../../shared/url/external_url_launcher.dart';
 import '../../application/home_data_controller.dart';
@@ -177,26 +180,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     _cardVisibilityDebounce = Timer(const Duration(milliseconds: 120), () {
       if (mounted) _cardVisibilityRevision.value += 1;
     });
-    final remoteData = ref.read(homeRemoteDataProvider);
-
-    // Remote home data keeps pagination per tab.
-    if (remoteData != null) {
-      if (!_scrollController.hasClients) {
-        return;
-      }
-
-      final tab = remoteData.getTabForCategoryIndex(_remoteDataSelectedIndex);
-      final homeDataState = ref.read(homeDataControllerProvider);
-      if (tab == null || !tab.hasMoreDramas || homeDataState.isLoadingMore) {
-        return;
-      }
-
-      final position = _scrollController.position;
-      if (position.extentAfter < 500) {
-        ref.read(homeDataControllerProvider.notifier).loadMoreTab(tab.id);
-      }
-      return;
-    }
   }
 
   void _preloadStableVisibleDrama(Drama drama, double visibleFraction) {
@@ -336,6 +319,57 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
+  Future<void> _refreshHome(int? selectedTabId) async {
+    if (selectedTabId == null) {
+      await ref.read(homeDataControllerProvider.notifier).retry();
+      return;
+    }
+
+    await ref.read(homeDataControllerProvider.notifier).refreshHomeData();
+    if (!mounted) {
+      return;
+    }
+
+    final refreshedRemoteData = ref.read(homeRemoteDataProvider);
+    final nextIndex =
+        refreshedRemoteData?.tabs.indexWhere(
+          (tab) => tab.id == selectedTabId,
+        ) ??
+        -1;
+    if (nextIndex != -1 && nextIndex != _remoteDataSelectedIndex) {
+      setState(() {
+        _remoteDataSelectedIndex = nextIndex;
+      });
+    }
+  }
+
+  Future<IndicatorResult> _loadMoreHome(int? selectedTabId) async {
+    if (selectedTabId == null) return IndicatorResult.noMore;
+
+    final currentData = ref.read(homeRemoteDataProvider);
+    final currentTab = currentData?.tabs
+        .where((tab) => tab.id == selectedTabId)
+        .firstOrNull;
+    if (currentTab == null || !currentTab.hasMoreDramas) {
+      return IndicatorResult.noMore;
+    }
+
+    await ref
+        .read(homeDataControllerProvider.notifier)
+        .loadMoreTab(selectedTabId);
+    final state = ref.read(homeDataControllerProvider);
+    if (state.loadMoreError != null) return IndicatorResult.fail;
+
+    final refreshedTab = ref
+        .read(homeRemoteDataProvider)
+        ?.tabs
+        .where((tab) => tab.id == selectedTabId)
+        .firstOrNull;
+    return refreshedTab?.hasMoreDramas == true
+        ? IndicatorResult.success
+        : IndicatorResult.noMore;
+  }
+
   @override
   Widget build(BuildContext context) {
     // 监听远程数据
@@ -370,36 +404,24 @@ class _HomePageState extends ConsumerState<HomePage> {
     return Scaffold(
       backgroundColor: AppColors.black,
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async {
-            final tab = selectedRemoteTab;
-            if (tab == null) {
-              await ref.read(homeDataControllerProvider.notifier).retry();
-            } else {
-              final selectedTabId = tab.id;
-              await ref
-                  .read(homeDataControllerProvider.notifier)
-                  .refreshHomeData();
-              if (!mounted) {
-                return;
-              }
-
-              final refreshedRemoteData = ref.read(homeRemoteDataProvider);
-              final nextIndex =
-                  refreshedRemoteData?.tabs.indexWhere(
-                    (tab) => tab.id == selectedTabId,
-                  ) ??
-                  -1;
-              if (nextIndex != -1 && nextIndex != _remoteDataSelectedIndex) {
-                setState(() {
-                  _remoteDataSelectedIndex = nextIndex;
-                });
-              }
-            }
-          },
-          child: CustomScrollView(
+        child: EasyRefresh.builder(
+          header: const BuilderHeader(
+            triggerOffset: 62,
+            clamping: false,
+            position: IndicatorPosition.locator,
+            builder: _buildHomeRefreshHeader,
+          ),
+          footer: const BuilderFooter(
+            triggerOffset: 62,
+            clamping: false,
+            position: IndicatorPosition.locator,
+            builder: _buildHomeLoadFooter,
+          ),
+          onRefresh: () => _refreshHome(selectedRemoteTab?.id),
+          onLoad: () => _loadMoreHome(selectedRemoteTab?.id),
+          childBuilder: (context, physics) => CustomScrollView(
             controller: _scrollController,
-            physics: const AlwaysScrollableScrollPhysics(),
+            physics: physics,
             slivers: [
               SliverPersistentHeader(
                 pinned: true,
@@ -412,6 +434,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   },
                 ),
               ),
+              const HeaderLocator.sliver(),
               if (bannerState.visibleBanners.isNotEmpty)
                 SliverToBoxAdapter(
                   child: _HomeRemoteBannerCarousel(
@@ -426,12 +449,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               if (isLoading)
                 SliverFillRemaining(
                   hasScrollBody: false,
-                  child: Center(
-                    child: SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
+                  child: Center(child: AppPegTopLoader()),
                 )
               else if (error != null)
                 SliverFillRemaining(
@@ -630,6 +648,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                     },
                   ),
                 ),
+              const FooterLocator.sliver(),
               SliverToBoxAdapter(
                 child: _HomeFeedFooter(
                   isLoading: homeDataState.isLoadingMore,
@@ -757,6 +776,57 @@ class _HomePageState extends ConsumerState<HomePage> {
       banner,
     );
     context.go(location);
+  }
+}
+
+Widget _buildHomeRefreshHeader(BuildContext context, IndicatorState state) =>
+    _HomeEasyRefreshIndicator(state: state, showLoadingText: true);
+
+Widget _buildHomeLoadFooter(BuildContext context, IndicatorState state) =>
+    _HomeEasyRefreshIndicator(state: state);
+
+class _HomeEasyRefreshIndicator extends StatelessWidget {
+  const _HomeEasyRefreshIndicator({
+    required this.state,
+    this.showLoadingText = false,
+  });
+
+  final IndicatorState state;
+  final bool showLoadingText;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = (state.offset / state.actualTriggerOffset).clamp(0.0, 1.0);
+    final isActive = state.mode != IndicatorMode.inactive;
+    return SizedBox(
+      height: 62,
+      child: Center(
+        child: Opacity(
+          opacity: progress,
+          child: Transform.scale(
+            scale: .72 + .28 * progress,
+            child: showLoadingText
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppPegTopLoader(size: 10, isAnimating: isActive),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Loading...',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  )
+                : AppLoadMoreIndicator(
+                    padding: EdgeInsets.zero,
+                    isAnimating: isActive,
+                  ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1651,10 +1721,7 @@ class _HomeFeedFooter extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
         child: Center(
           child: isLoading
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const SizedBox.shrink()
               : error != null
               ? AppRetryButton(onPressed: onRetry, label: context.l10n.retry)
               : Text(

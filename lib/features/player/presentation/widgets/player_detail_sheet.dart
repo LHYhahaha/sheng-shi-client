@@ -7,6 +7,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/widgets/app_round_icon_button.dart';
 import '../../../../shared/widgets/app_sheet_handle.dart';
 import '../../data/local/player_episode_unlock_cache.dart';
@@ -489,10 +490,7 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
                 return const Center(
                   child: Padding(
                     padding: EdgeInsets.symmetric(vertical: 32),
-                    child: SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
+                    child: AppPegTopLoader(),
                   ),
                 );
               }
