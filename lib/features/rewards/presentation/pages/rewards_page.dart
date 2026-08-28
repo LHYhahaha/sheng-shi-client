@@ -263,8 +263,8 @@ class _RewardTabButton extends StatelessWidget {
               else
                 Text(
                   label,
-                  style: const TextStyle(
-                    color: Color(0xFF746779),
+                  style:  TextStyle(
+                    color: Color(0xFFFFFFFF).withValues(alpha: 0.4),
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                   ),

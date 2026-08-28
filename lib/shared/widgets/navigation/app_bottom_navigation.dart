@@ -27,6 +27,7 @@ class AppBottomNavigation extends ConsumerWidget {
   static const _contentWidth = 354.0;
   static const _itemWidth = 64.0;
   static const _iconSize = 24.0;
+  static const _memberIndex = 2;
 
   static const _items = [
     _BottomNavigationItem(
@@ -85,6 +86,12 @@ class AppBottomNavigation extends ConsumerWidget {
         .map((item) => _tabFor(ref, item))
         .whereType<BottomTabDto>()
         .toList(growable: false);
+    final isDefaultMemberTab =
+        _tabFor(ref, _items[_memberIndex]) == null;
+    final backgroundColor =
+        currentIndex == _memberIndex && isDefaultMemberTab
+        ? const Color(0xFF0F0F10)
+        : const Color(0xFF0A0014);
 
     // Shell 仅在底部导航实际可见时创建本组件；post-frame 后代表动态 Tab 已进入
     // 当前底部导航的可见区域。生命周期去重由 tracker 负责。
@@ -100,7 +107,7 @@ class AppBottomNavigation extends ConsumerWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF0A0014),
+        color: backgroundColor,
         border: const Border(
           top: BorderSide(color: Color(0x14FFFFFF), width: 1),
         ),

@@ -27,6 +27,7 @@ class AdjustService {
 
   /// NovaShort 在 Adjust 后台登记的应用识别码。
   static const _novaShortAppToken = 'i3xfcgiqzsao';
+  static const _metaAppId = '3996208420512909';
   static bool _initializationRequested = false;
   static bool _deviceIdentifierSyncInProgress = false;
   static bool _deviceIdentifiersReportedInProcess = false;
@@ -72,6 +73,8 @@ class AdjustService {
       }
 
       final config = AdjustConfig(_configuredAppToken, _adjustEnvironment);
+      // Meta Install Referrer plugin 会在 Android 首次安装归因时读取此 App ID。
+      config.fbAppId = _metaAppId;
       // 保留本地补发使用的 deduplicationId，避免原生已接收但 Flutter 尚未来得及
       // 收到 success 回调时发生重复计数。
       config.eventDeduplicationIdsMaxSize = 100;

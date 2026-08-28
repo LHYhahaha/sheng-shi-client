@@ -13,6 +13,7 @@ import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/notification/startup_notification_permission_reporter.dart';
 import '../../../../core/auth/user_info_store.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../application/reward_coins_controller.dart';
 import '../../domain/reward_coins_check_in_status.dart';
@@ -395,7 +396,7 @@ class _RewardsSectionLoading extends StatelessWidget {
   Widget build(BuildContext context) {
     return const SizedBox(
       height: 96,
-      child: Center(child: CircularProgressIndicator()),
+      child: Center(child: AppPegTopLoader(size: 20, noBackground: true)),
     );
   }
 }

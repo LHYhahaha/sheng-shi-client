@@ -9,6 +9,8 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_load_more_indicator.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../../shared/widgets/app_secondary_page_header.dart';
 import '../../application/wallet_controller.dart';
@@ -185,18 +187,7 @@ class _HistoryBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (state.isLoading) {
-      return Column(
-        children: [
-          SizedBox(height: 240),
-          SizedBox.square(
-            dimension: 22,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: AppColors.primary,
-            ),
-          ),
-        ],
-      );
+      return Column(children: [SizedBox(height: 240), AppPegTopLoader()]);
     }
 
     if (state.error != null) {
@@ -285,13 +276,10 @@ class _HistoryLoadMoreFooter extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
         child: Center(
           child: isLoading
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const AppLoadMoreIndicator(padding: EdgeInsets.zero)
               : error != null
               ? AppRetryButton(onPressed: onRetry, label: context.l10n.retry)
               : Text(

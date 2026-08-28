@@ -23,6 +23,8 @@ import '../../../../shared/theme/app_radii.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_compact_drama_grid.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_load_more_indicator.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../search/domain/search_rankings.dart';
 import '../../../player/application/player_entry_preload_coordinator.dart';
@@ -276,15 +278,7 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     MyListController controller,
   ) {
     if (state.isLoading) {
-      return const Center(
-        child: SizedBox.square(
-          dimension: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: AppColors.primary,
-          ),
-        ),
-      );
+      return const Center(child: AppPegTopLoader());
     }
 
     if (state.error != null) {
@@ -603,10 +597,7 @@ class _MyListLoadMoreFooter extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
         child: Center(
           child: isLoading
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const AppLoadMoreIndicator(padding: EdgeInsets.zero)
               : error != null
               ? AppRetryButton(onPressed: onRetry, label: context.l10n.retry)
               : Text(

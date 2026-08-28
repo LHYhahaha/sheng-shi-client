@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/modal/app_modal_result.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../application/auth_controller.dart';
 import '../widgets/auth_login_modal_content.dart';
 import 'auth_modal_payloads.dart';
@@ -114,12 +115,8 @@ class _AuthLoginModalSheetState extends ConsumerState<AuthLoginModalSheet> {
                 if (state.isLoading && !state.isLoggedIn) ...[
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 32),
-                    child: SizedBox.square(
-                      dimension: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.primary,
-                      ),
+                    child: Center(
+                      child: AppPegTopLoader(size: 24, noBackground: true),
                     ),
                   ),
                 ] else

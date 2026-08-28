@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/router/route_paths.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../../shared/widgets/app_secondary_page_header.dart';
 import '../../../../shared/widgets/custom_switch.dart';
@@ -100,15 +101,7 @@ class _WalletBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (state.isLoading) {
-      return const Center(
-        child: SizedBox.square(
-          dimension: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: AppColors.primary,
-          ),
-        ),
-      );
+      return const Center(child: AppPegTopLoader());
     }
 
     if (state.error != null) {

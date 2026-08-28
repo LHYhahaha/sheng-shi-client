@@ -9,10 +9,10 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../application/player_performance_policy_provider.dart';
 import '../../application/player_playback_controller.dart';
-import '../../application/player_ui_controller.dart';
 import '../../domain/player_seek_preview_config.dart';
 import '../../domain/player_performance_policy.dart';
 import '../../application/player_rebuild_diagnostics.dart';
@@ -658,6 +658,7 @@ class PlayerPlaybackControlsConsumer extends ConsumerStatefulWidget {
     required this.itemId,
     required this.onTogglePlay,
     required this.onRetry,
+    this.showChromeOverlays = true,
     this.useSingleDramaChromeTap = false,
     this.onExitImmersiveChrome,
     this.onSingleDramaUserInteraction,
@@ -667,8 +668,9 @@ class PlayerPlaybackControlsConsumer extends ConsumerStatefulWidget {
   final String itemId;
   final void Function({required bool pauseRequested}) onTogglePlay;
   final VoidCallback onRetry;
+  final bool showChromeOverlays;
 
-  /// 单剧：沉浸态单击仅恢复 default chrome；default 态单击切换播放/暂停。
+  /// 单剧：点击视频空白区域切换沉浸模式；播放控制仅由中央图标触发。
   final bool useSingleDramaChromeTap;
   final VoidCallback? onExitImmersiveChrome;
   final VoidCallback? onSingleDramaUserInteraction;
@@ -683,13 +685,10 @@ class PlayerPlaybackControlsConsumerState
   bool _showPauseFeedback = false;
   bool _showPlayFeedback = false;
   Timer? _feedbackTimer;
-  Timer? _pendingSingleTap;
-  DateTime? _lastTapAt;
 
   @override
   void dispose() {
     _feedbackTimer?.cancel();
-    _pendingSingleTap?.cancel();
     super.dispose();
   }
 
@@ -721,6 +720,14 @@ class PlayerPlaybackControlsConsumerState
         canTogglePlayback &&
         snapshot.status == PlayerPlaybackStatus.paused &&
         snapshot.hasFirstFrame &&
+        !snapshot.isBuffering &&
+        (!widget.useSingleDramaChromeTap || widget.showChromeOverlays);
+    final showCenterPauseButton =
+        widget.useSingleDramaChromeTap &&
+        widget.showChromeOverlays &&
+        canTogglePlayback &&
+        snapshot.isPlaying &&
+        snapshot.hasFirstFrame &&
         !snapshot.isBuffering;
 
     return Stack(
@@ -739,6 +746,7 @@ class PlayerPlaybackControlsConsumerState
         // 字幕在视频画面之上，但需低于播放/暂停反馈图标和中间播放按钮。
         PlayerSubtitleOverlay(sessionKey: widget.sessionKey),
         if (showCenterPlayButton) CenterPlayButton(onTap: _playWithFeedback),
+        if (showCenterPauseButton) CenterPauseButton(onTap: _pauseWithFeedback),
         if (_showPlayFeedback) const PlayFeedbackIcon(),
         if (_showPauseFeedback) const PauseFeedbackIcon(),
       ],
@@ -754,61 +762,7 @@ class PlayerPlaybackControlsConsumerState
   }
 
   void _handleSingleDramaVideoTap() {
-    final snapshot = ref.read(
-      playerPlaybackControllerProvider(
-        widget.sessionKey,
-      ).select(PlayerPlaybackRenderSnapshot.fromState),
-    );
-    if (!snapshot.canTogglePlayback) {
-      return;
-    }
-
-    final now = DateTime.now();
-    if (_lastTapAt != null &&
-        now.difference(_lastTapAt!) < const Duration(milliseconds: 320)) {
-      _pendingSingleTap?.cancel();
-      _pendingSingleTap = null;
-      _lastTapAt = null;
-      if (snapshot.isPlaying) {
-        _togglePlayWithFeedback();
-        widget.onSingleDramaUserInteraction?.call();
-      }
-      return;
-    }
-
-    _lastTapAt = now;
-    _pendingSingleTap?.cancel();
-    _pendingSingleTap = Timer(const Duration(milliseconds: 280), () {
-      _pendingSingleTap = null;
-      if (!mounted) {
-        return;
-      }
-      final latest = ref.read(
-        playerPlaybackControllerProvider(
-          widget.sessionKey,
-        ).select(PlayerPlaybackRenderSnapshot.fromState),
-      );
-      if (!latest.canTogglePlayback) {
-        return;
-      }
-      if (latest.isPlaying) {
-        final showsChromeOverlays = ref.read(
-          playerUiControllerProvider(
-            widget.sessionKey,
-          ).select((state) => state.showsChromeOverlays),
-        );
-        if (!showsChromeOverlays) {
-          _showTransientFeedback(_PlaybackFeedbackIcon.play);
-          widget.onExitImmersiveChrome?.call();
-          return;
-        }
-        _togglePlayWithFeedback();
-        widget.onSingleDramaUserInteraction?.call();
-        return;
-      }
-      _playWithFeedback();
-      widget.onSingleDramaUserInteraction?.call();
-    });
+    widget.onExitImmersiveChrome?.call();
   }
 
   void _togglePlayWithFeedback() {
@@ -828,6 +782,11 @@ class PlayerPlaybackControlsConsumerState
   void _playWithFeedback() {
     _showTransientFeedback(_PlaybackFeedbackIcon.play);
     widget.onTogglePlay(pauseRequested: false);
+  }
+
+  void _pauseWithFeedback() {
+    _showTransientFeedback(_PlaybackFeedbackIcon.pause);
+    widget.onTogglePlay(pauseRequested: true);
   }
 
   void _showTransientFeedback(_PlaybackFeedbackIcon icon) {
@@ -980,20 +939,8 @@ class PlaybackLoadingOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.36),
-          shape: BoxShape.circle,
-        ),
-        padding: const EdgeInsets.all(10),
-        child: const CircularProgressIndicator(
-          strokeWidth: 2,
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-        ),
-      ),
+    return const Center(
+      child: AppPegTopLoader(key: ValueKey('player_playback_loading')),
     );
   }
 }
@@ -1058,6 +1005,28 @@ class CenterPlayButton extends StatelessWidget {
             border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
           ),
           child: SvgPicture.asset('assets/images/player/pause.svg'),
+        ),
+      ),
+    );
+  }
+}
+
+class CenterPauseButton extends StatelessWidget {
+  const CenterPauseButton({super.key, required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: GestureDetector(
+        key: const ValueKey('player_center_pause_button'),
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SvgPicture.asset(
+          'assets/images/player/play.svg',
+          width: 70,
+          height: 70,
         ),
       ),
     );
@@ -1148,6 +1117,7 @@ class PlayerTopBar extends StatelessWidget {
     required this.currentSubtitleLanguage,
     this.isSubtitleSelectionResolved = true,
     this.showSubtitleEntry = true,
+    this.showBackOnly = false,
     required this.onSubtitleSelected,
     required this.showChromeOverlays,
   });
@@ -1165,6 +1135,9 @@ class PlayerTopBar extends StatelessWidget {
 
   /// 页面滑动或切集尚未落位时，延后展示字幕入口，避免显示上一集的状态。
   final bool showSubtitleEntry;
+
+  /// 付费解锁页只保留返回入口，隐藏集数和语言等其余顶部信息。
+  final bool showBackOnly;
   final ValueChanged<String?> onSubtitleSelected;
 
   /// 是否处于非沉浸模式；进入沉浸模式时用于关闭展开的字幕菜单。
@@ -1197,6 +1170,7 @@ class PlayerTopBar extends StatelessWidget {
             currentSubtitleLanguage: currentSubtitleLanguage,
             isSubtitleSelectionResolved: isSubtitleSelectionResolved,
             showSubtitleEntry: showSubtitleEntry,
+            showBackOnly: showBackOnly,
             onSubtitleSelected: onSubtitleSelected,
             showChromeOverlays: showChromeOverlays,
           ),
@@ -1220,6 +1194,7 @@ class PlayerTopBar extends StatelessWidget {
           currentSubtitleLanguage: currentSubtitleLanguage,
           isSubtitleSelectionResolved: isSubtitleSelectionResolved,
           showSubtitleEntry: showSubtitleEntry,
+          showBackOnly: showBackOnly,
           onSubtitleSelected: onSubtitleSelected,
           showChromeOverlays: showChromeOverlays,
         ),
@@ -1240,6 +1215,7 @@ class PlayerTopBarContent extends StatelessWidget {
     required this.currentSubtitleLanguage,
     required this.isSubtitleSelectionResolved,
     required this.showSubtitleEntry,
+    required this.showBackOnly,
     required this.onSubtitleSelected,
     required this.showChromeOverlays,
   });
@@ -1253,6 +1229,7 @@ class PlayerTopBarContent extends StatelessWidget {
   final String? currentSubtitleLanguage;
   final bool isSubtitleSelectionResolved;
   final bool showSubtitleEntry;
+  final bool showBackOnly;
   final ValueChanged<String?> onSubtitleSelected;
 
   /// 是否处于非沉浸模式；进入沉浸模式时用于关闭展开的字幕菜单。
@@ -1287,21 +1264,24 @@ class PlayerTopBarContent extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 2),
-              Text(
-                key: const ValueKey('player_episode_label'),
-                context.l10n.myListEpisode(
-                  episodeNumber.toString().padLeft(2, '0'),
+              if (!showBackOnly) ...[
+                const SizedBox(width: 2),
+                Text(
+                  key: const ValueKey('player_episode_label'),
+                  context.l10n.myListEpisode(
+                    episodeNumber.toString().padLeft(2, '0'),
+                  ),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight(510),
+                    fontSize: 14,
+                    height: 18 / 14,
+                  ),
                 ),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight(510),
-                  fontSize: 14,
-                  height: 18 / 14,
-                ),
-              ),
+              ],
               const Spacer(),
-              if (showSubtitleEntry &&
+              if (!showBackOnly &&
+                  showSubtitleEntry &&
                   isSubtitleSelectionResolved &&
                   (episodeSources.isNotEmpty
                       ? episodeSources.length > 1

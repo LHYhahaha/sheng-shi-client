@@ -15,6 +15,7 @@ import '../../features/player/domain/player_feed.dart';
 import '../../features/popup/application/popup_entry_controller.dart';
 import '../../core/runtime/startup_loading_timing.dart';
 import '../../features/popup/domain/popup.dart';
+import '../../shared/widgets/app_peg_top_loader.dart';
 import '../../shared/widgets/navigation/app_bottom_navigation.dart';
 import 'app_shell_chrome.dart';
 
@@ -113,7 +114,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     if (!bottomTabConfig.hasLoaded) {
       return const Scaffold(
         backgroundColor: Color(0xFF0A0014),
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(child: AppPegTopLoader()),
       );
     }
 

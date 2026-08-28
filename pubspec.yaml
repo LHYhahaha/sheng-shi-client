@@ -57,6 +57,7 @@ dependencies:
   readmore: ^3.0.0
   gradient_borders: ^1.0.4
   flutter_local_notifications: ^22.2.0
+  easy_refresh: ^3.5.1
 
 dev_dependencies:
   flutter_test:

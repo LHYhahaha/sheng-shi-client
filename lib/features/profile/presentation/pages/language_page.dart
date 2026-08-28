@@ -13,6 +13,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_blocking_loading_overlay.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../../shared/widgets/app_secondary_page_header.dart';
 
@@ -127,15 +128,7 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
                     ),
                     Expanded(
                       child: languageOptions.when(
-                        loading: () => const Center(
-                          child: SizedBox.square(
-                            dimension: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ),
+                        loading: () => const Center(child: AppPegTopLoader()),
                         error: (_, _) => _LanguageOptionsError(
                           onRetry: () =>
                               ref.invalidate(languageOptionsProvider),

@@ -19,6 +19,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
 import '../../../../shared/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../application/player_recharge_unlock_controller.dart';
@@ -410,15 +411,7 @@ class _LoadingOrError extends StatelessWidget {
         ),
       );
     }
-    return const Center(
-      child: SizedBox.square(
-        dimension: 22,
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          color: AppColors.primary,
-        ),
-      ),
-    );
+    return const Center(child: AppPegTopLoader());
   }
 }
 
@@ -671,34 +664,26 @@ class _CoinUnlockButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
         alignment: Alignment.center,
-        child: isProcessing
-            ? const SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.black,
-                ),
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Image.asset(
-                    'assets/images/profile/coin.png',
-                    width: 24,
-                    height: 24,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '$coinCost ${context.l10n.unitCoin} '
-                    '${context.l10n.playerUnlockNow}',
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              'assets/images/profile/coin.png',
+              width: 24,
+              height: 24,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '$coinCost ${context.l10n.unitCoin} '
+              '${context.l10n.playerUnlockNow}',
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
               ),
+            ),
+          ],
+        ),
       ),
     );
   }

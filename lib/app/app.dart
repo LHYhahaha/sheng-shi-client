@@ -76,6 +76,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   ProviderSubscription<AuthTokenSnapshot>? _authTokenSubscription;
   FcmNotificationService? _fcmNotificationService;
   GoRouter? _router;
+  bool _popupFlowCancellationScheduled = false;
   final Completer<void> _startupAuthenticationReady = Completer<void>();
   final _notificationPermissionRequester =
       StartupNotificationPermissionRequester();
@@ -186,8 +187,25 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     // 首页和推荐页的入口弹框由 AppShell 按 Tab 管理。任何 Shell 外页面都不能
     // 保留根 Overlay；这也覆盖了页面内 push，而不仅是通知和 Deep Link。
     if (path != RoutePaths.home && path != RoutePaths.forYou) {
-      _cancelAllPopupFlowsForRouteExit();
+      _schedulePopupFlowCancellationForRouteExit();
     }
+  }
+
+  void _schedulePopupFlowCancellationForRouteExit() {
+    if (_popupFlowCancellationScheduled) return;
+    _popupFlowCancellationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _popupFlowCancellationScheduled = false;
+      if (!mounted) return;
+
+      // GoRouter 会在构建阶段通知路由变化；延后到本帧结束再更新 Riverpod，
+      // 避免在 widget tree building 时修改 provider。再次读取路径，防止同一帧
+      // 内已经返回首页/推荐页时误取消其入口弹框。
+      final path = _router?.routerDelegate.currentConfiguration.uri.path;
+      if (path != RoutePaths.home && path != RoutePaths.forYou) {
+        _cancelAllPopupFlowsForRouteExit();
+      }
+    });
   }
 
   void _listenForAppLinks() {

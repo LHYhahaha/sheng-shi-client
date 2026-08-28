@@ -17,6 +17,7 @@ import '../../../../core/notification/startup_notification_permission_reporter.d
 import '../../../../core/auth/user_info_store.dart';
 import '../../../../core/toast/app_center_toast.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../../player/application/player_entry_preload_coordinator.dart';
 import '../../../home/application/vip_only_dramas_provider.dart';
@@ -619,15 +620,7 @@ class _MemberDailyRewardsLoading extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(0, 9, 0, 0),
       padding: const EdgeInsets.fromLTRB(17, 24, 17, 16),
       decoration: _dailyRewardsContentDecoration(),
-      child: Center(
-        child: SizedBox.square(
-          dimension: 18,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: _titleColor.withValues(alpha: 0.9),
-          ),
-        ),
-      ),
+      child: Center(child: AppPegTopLoader(size: 28, noBackground: true)),
     );
   }
 }

@@ -29,6 +29,7 @@ import '../../../../core/locale/app_locale_controller.dart';
 import '../../../../core/runtime/api_lang_provider.dart';
 import '../../../../core/toast/app_center_toast.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/url/external_url_launcher.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
@@ -1753,12 +1754,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
 
     if (isLoading && items.isEmpty) {
-      return const Center(
-        child: SizedBox.square(
-          dimension: 22,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      );
+      return const Center(child: AppPegTopLoader());
     }
 
     if (error != null && items.isEmpty) {
@@ -1811,7 +1807,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         (accessForSettled == PlayerAccessPresentationState.lockedCoins ||
             accessForSettled == PlayerAccessPresentationState.lockedRecharge ||
             accessForSettled == PlayerAccessPresentationState.lockedMembership);
+    // 解锁页隐藏顶部信息，但返回入口必须始终可用。
     final showsTopPageChrome = showsPageChrome && !showsUnlockButton;
+    final showsTopBar = showsTopPageChrome || showsUnlockButton;
     final canShowActiveVideoOverlay =
         settledItem != null &&
         accessForSettled == PlayerAccessPresentationState.playable;
@@ -1941,7 +1939,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               onExitImmersiveChrome:
                   widget.feedMode == PlayerFeedMode.singleDrama
                   ? () {
-                      uiController.onImmersiveVideoTap();
+                      uiController.toggleChromeDisplayMode();
                     }
                   : null,
               onSingleDramaUserInteraction:
@@ -1983,16 +1981,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             settledItem != null)
           AnimatedOpacity(
             key: const ValueKey('player_top_bar_chrome_visibility'),
-            opacity: showsTopPageChrome ? 1 : 0,
+            opacity: showsTopBar ? 1 : 0,
             duration: chromeOverlayFadeDuration,
             curve: Curves.easeOut,
             child: IgnorePointer(
-              ignoring: !showsTopPageChrome,
+              ignoring: !showsTopBar,
               child: PlayerTopBar(
                 episodeNumber: settledItem.episode.number,
                 playbackRate: playbackShell.playbackRate,
                 overlayOpacity: 1,
                 showChromeOverlays: showsTopPageChrome,
+                showBackOnly: showsUnlockButton,
                 overlayOpacityListenable:
                     performancePolicy.allowPressChromeDimming
                     ? _overlayOpacityNotifier

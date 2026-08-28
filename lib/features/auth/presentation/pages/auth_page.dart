@@ -240,15 +240,7 @@ class _SocialLoginButton extends StatelessWidget {
       child: FilledButton.icon(
         key: key,
         onPressed: isLoading ? null : onPressed,
-        icon: isLoading
-            ? SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: foregroundColor,
-                ),
-              )
-            : icon,
+        icon: icon,
         label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
         style: FilledButton.styleFrom(
           padding: EdgeInsets.symmetric(vertical: 10),
