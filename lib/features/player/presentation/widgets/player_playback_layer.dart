@@ -527,7 +527,7 @@ class ActivePlaybackSurfaceOverlayState
         ? const BorderRadius.vertical(bottom: Radius.circular(10))
         : const BorderRadius.vertical(bottom: Radius.circular(16));
     final opacityChild = ClipRRect(
-      borderRadius: surfaceBorderRadius,
+      // borderRadius: surfaceBorderRadius,
       child: buildOpacityChild(videoChild),
     );
 

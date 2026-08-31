@@ -2,24 +2,29 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations.dart';
+
 /// Three staggered instances of the supplied polygon image falling into view.
 ///
 /// The image is used without a color filter, preserving its original pink
 /// gradient. Use an SVG asset instead if runtime theme colors are required.
 class AppPegTopLoader extends StatefulWidget {
   const AppPegTopLoader({
-    this.size = 25,
+    this.size = 20,
     this.duration = const Duration(milliseconds: 1000),
     this.isAnimating = true,
     this.noBackground = false,
-    this.semanticLabel = 'Loading',
+    this.semanticLabel,
     super.key,
   }) : assert(size > 0);
 
   final double size;
   final Duration duration;
   final bool isAnimating;
-  final String semanticLabel;
+
+  /// Optional override for assistive technologies. Defaults to the localized
+  /// common loading label from [AppLocalizations].
+  final String? semanticLabel;
   final bool noBackground;
 
   @override
@@ -67,7 +72,7 @@ class _AppPegTopLoaderState extends State<AppPegTopLoader>
   @override
   Widget build(BuildContext context) {
     final loader = Semantics(
-      // label: widget.semanticLabel,
+      label: widget.semanticLabel ?? AppLocalizations.maybeOf(context).loading,
       liveRegion: true,
       child: ExcludeSemantics(
         child: RepaintBoundary(
@@ -113,7 +118,7 @@ class AppPegTopLoaderBackground extends StatelessWidget {
   const AppPegTopLoaderBackground({
     required this.child,
     this.padding = EdgeInsets.zero,
-    this.color =  const Color(0xE60A0014),
+    this.color = const Color(0xE60A0014),
     this.borderRadius = const BorderRadius.all(Radius.circular(12)),
     super.key,
   });

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -20,6 +19,7 @@ import '../../../../core/logging/app_log.dart';
 import '../../../../core/network/api_client_provider.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/widgets/app_blocking_loading_overlay.dart';
 import '../../../../shared/widgets/webview_page.dart';
 
 /// 问题与帮助 H5 页面及其 JSBridge 通信协议。
@@ -33,7 +33,7 @@ class ProfileFeedbackWebViewPage extends ConsumerStatefulWidget {
 
 class _ProfileFeedbackWebViewPageState
     extends ConsumerState<ProfileFeedbackWebViewPage> {
-  CancelFunc? _loadingCancel;
+  bool _isH5Loading = false;
   final ImagePicker _imagePicker = ImagePicker();
   late final AccountBanController _accountBanController;
   late final AuthController _authController;
@@ -88,34 +88,40 @@ class _ProfileFeedbackWebViewPageState
           _notifyH5OfBackRequest();
         }
       },
-      child: WebViewPage(
-        url:
-            // "http://192.168.1.55:5173/app/#/help",
-            AppConfig.current
-                .helpUrlForLanguage(
-                  context.l10n.locale.languageCode,
-                  userId: userInfo.userId ?? '',
-                  channelId: channel?.channelFlag ?? '',
-                  merchantId: channel?.merchantId ?? '',
-                  previousPage: previousPage,
-                )
-                .toString(),
-        title: context.l10n.profileFeedback,
-        showAppBar: false,
-        feedbackColor: Colors.black,
-        handlesSystemBack: false,
-        javaScriptMessageHandlers: {
-          'DramaWaveBridge': _handleJavaScriptMessage,
-        },
-        // 在加载 URL 前完成 Android 文件选择器配置，避免延迟 JSBridge 注入。
-        onControllerCreated: (controller) async {
-          _webViewController = controller;
-          await _configureImageFileSelector(controller);
-        },
-        onPageStarted: (controller, _) =>
-            _injectJavaScriptBridge(controller, bridgeData),
-        onPageFinished: (controller, _) =>
-            _injectJavaScriptBridge(controller, bridgeData),
+      child: Stack(
+        children: [
+          WebViewPage(
+            url:
+                // "http://192.168.1.55:5173/app/#/help",
+                AppConfig.current
+                    .helpUrlForLanguage(
+                      context.l10n.locale.languageCode,
+                      userId: userInfo.userId ?? '',
+                      channelId: channel?.channelFlag ?? '',
+                      merchantId: channel?.merchantId ?? '',
+                      previousPage: previousPage,
+                    )
+                    .toString(),
+            title: context.l10n.profileFeedback,
+            showAppBar: false,
+            feedbackColor: Colors.black,
+            handlesSystemBack: false,
+            javaScriptMessageHandlers: {
+              'DramaWaveBridge': _handleJavaScriptMessage,
+            },
+            // 在加载 URL 前完成 Android 文件选择器配置，避免延迟 JSBridge 注入。
+            onControllerCreated: (controller) async {
+              _webViewController = controller;
+              await _configureImageFileSelector(controller);
+            },
+            onPageStarted: (controller, _) =>
+                _injectJavaScriptBridge(controller, bridgeData),
+            onPageFinished: (controller, _) =>
+                _injectJavaScriptBridge(controller, bridgeData),
+          ),
+          if (_isH5Loading)
+            AppBlockingLoadingOverlay(label: context.l10n.loading),
+        ],
       ),
     );
   }
@@ -229,14 +235,9 @@ class _ProfileFeedbackWebViewPageState
 
       switch (decoded['event']) {
         case 'showLoading':
-          _loadingCancel ??= BotToast.showLoading(
-            allowClick: false,
-            clickClose: false,
-            crossPage: false,
-          );
+          _setH5Loading(true);
         case 'hideLoading':
-          _loadingCancel?.call();
-          _loadingCancel = null;
+          _setH5Loading(false);
         case 'showSuccessToast':
           _showH5Toast(decoded, isSuccess: true);
         case 'showFailToast':
@@ -247,6 +248,13 @@ class _ProfileFeedbackWebViewPageState
     } on FormatException {
       debugPrint('[ProfileFeedbackH5] $message');
     }
+  }
+
+  void _setH5Loading(bool isLoading) {
+    if (!mounted || _isH5Loading == isLoading) {
+      return;
+    }
+    setState(() => _isH5Loading = isLoading);
   }
 
   void _showH5Toast(Map<String, dynamic> event, {required bool isSuccess}) {
@@ -302,7 +310,6 @@ class _ProfileFeedbackWebViewPageState
 
   @override
   void dispose() {
-    _loadingCancel?.call();
     if (_openedForAccountBan && !_hasStartedAccountBanRevalidation) {
       // 路由返回时当前组件正处于卸载阶段，延后恢复遮罩并重验账号，避免在
       // dispose 中更新 provider。

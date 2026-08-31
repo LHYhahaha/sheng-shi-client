@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:easy_refresh/easy_refresh.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -180,6 +181,16 @@ class _HomePageState extends ConsumerState<HomePage> {
     _cardVisibilityDebounce = Timer(const Duration(milliseconds: 120), () {
       if (mounted) _cardVisibilityRevision.value += 1;
     });
+
+    // 分页只由真实的滚动位置和业务状态决定，不依赖 footer 手势状态。
+    // 这样新一页插入列表时，即使用户仍在快速上滑，也能继续请求下一页。
+    if (!_scrollController.hasClients ||
+        _scrollController.position.userScrollDirection !=
+            ScrollDirection.reverse ||
+        _scrollController.position.extentAfter > 240) {
+      return;
+    }
+    unawaited(_loadMoreForCurrentTab());
   }
 
   void _preloadStableVisibleDrama(Drama drama, double visibleFraction) {
@@ -343,31 +354,31 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
-  Future<IndicatorResult> _loadMoreHome(int? selectedTabId) async {
-    if (selectedTabId == null) return IndicatorResult.noMore;
-
-    final currentData = ref.read(homeRemoteDataProvider);
-    final currentTab = currentData?.tabs
-        .where((tab) => tab.id == selectedTabId)
-        .firstOrNull;
-    if (currentTab == null || !currentTab.hasMoreDramas) {
-      return IndicatorResult.noMore;
+  Future<void> _loadMoreForCurrentTab() async {
+    final selectedRemoteTab = ref
+        .read(homeRemoteDataProvider)
+        ?.getTabForCategoryIndex(_remoteDataSelectedIndex);
+    if (selectedRemoteTab == null || !selectedRemoteTab.hasMoreDramas) {
+      return;
+    }
+    if (ref.read(homeDataControllerProvider).isLoadingMore) {
+      return;
     }
 
     await ref
         .read(homeDataControllerProvider.notifier)
-        .loadMoreTab(selectedTabId);
-    final state = ref.read(homeDataControllerProvider);
-    if (state.loadMoreError != null) return IndicatorResult.fail;
+        .loadMoreTab(selectedRemoteTab.id);
+  }
 
-    final refreshedTab = ref
-        .read(homeRemoteDataProvider)
-        ?.tabs
-        .where((tab) => tab.id == selectedTabId)
+  Future<void> _retryLoadMore(int tabId) async {
+    final currentData = ref.read(homeRemoteDataProvider);
+    final currentTab = currentData?.tabs
+        .where((tab) => tab.id == tabId)
         .firstOrNull;
-    return refreshedTab?.hasMoreDramas == true
-        ? IndicatorResult.success
-        : IndicatorResult.noMore;
+    if (currentTab == null || !currentTab.hasMoreDramas) {
+      return;
+    }
+    await ref.read(homeDataControllerProvider.notifier).loadMoreTab(tabId);
   }
 
   @override
@@ -411,14 +422,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             position: IndicatorPosition.locator,
             builder: _buildHomeRefreshHeader,
           ),
-          footer: const BuilderFooter(
-            triggerOffset: 62,
-            clamping: false,
-            position: IndicatorPosition.locator,
-            builder: _buildHomeLoadFooter,
-          ),
           onRefresh: () => _refreshHome(selectedRemoteTab?.id),
-          onLoad: () => _loadMoreHome(selectedRemoteTab?.id),
           childBuilder: (context, physics) => CustomScrollView(
             controller: _scrollController,
             physics: physics,
@@ -618,6 +622,16 @@ class _HomePageState extends ConsumerState<HomePage> {
                         );
                       }
 
+                      // 仅首个分类保留前九个的三列九宫格；其他分类全部使用
+                      // 两列剧卡，避免切换分类后仍出现首屏特化布局。
+                      if (selectedIndex != 0) {
+                        return buildDramaGrid(
+                          startIndex: 0,
+                          childCount: items.length,
+                          crossAxisCount: 2,
+                        );
+                      }
+
                       final firstSectionCount = math.min(
                         featuredDramaCount,
                         items.length,
@@ -648,7 +662,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                     },
                   ),
                 ),
-              const FooterLocator.sliver(),
               SliverToBoxAdapter(
                 child: _HomeFeedFooter(
                   isLoading: homeDataState.isLoadingMore,
@@ -657,9 +670,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   onRetry: () {
                     final tab = selectedRemoteTab;
                     if (tab != null) {
-                      ref
-                          .read(homeDataControllerProvider.notifier)
-                          .loadMoreTab(tab.id);
+                      unawaited(_retryLoadMore(tab.id));
                     }
                   },
                 ),
@@ -782,9 +793,6 @@ class _HomePageState extends ConsumerState<HomePage> {
 Widget _buildHomeRefreshHeader(BuildContext context, IndicatorState state) =>
     _HomeEasyRefreshIndicator(state: state, showLoadingText: true);
 
-Widget _buildHomeLoadFooter(BuildContext context, IndicatorState state) =>
-    _HomeEasyRefreshIndicator(state: state);
-
 class _HomeEasyRefreshIndicator extends StatelessWidget {
   const _HomeEasyRefreshIndicator({
     required this.state,
@@ -796,10 +804,25 @@ class _HomeEasyRefreshIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isVisible =
+        state.offset > 0 &&
+        switch (state.mode) {
+          IndicatorMode.drag ||
+          IndicatorMode.armed ||
+          IndicatorMode.ready ||
+          IndicatorMode.processing => true,
+          _ => false,
+        };
+    if (!isVisible) {
+      return const SizedBox.shrink();
+    }
+
     final progress = (state.offset / state.actualTriggerOffset).clamp(0.0, 1.0);
-    final isActive = state.mode != IndicatorMode.inactive;
+    final isActive =
+        state.mode == IndicatorMode.ready ||
+        state.mode == IndicatorMode.processing;
     return SizedBox(
-      height: 62,
+      height: math.min(state.offset, state.actualTriggerOffset),
       child: Center(
         child: Opacity(
           opacity: progress,
@@ -812,7 +835,7 @@ class _HomeEasyRefreshIndicator extends StatelessWidget {
                       AppPegTopLoader(size: 10, isAnimating: isActive),
                       const SizedBox(width: 8),
                       Text(
-                        'Loading...',
+                        context.l10n.loading,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AppColors.textSecondary,
                         ),
@@ -1411,8 +1434,8 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
                         child: _ExclusiveBadge(),
                       ),
                     Positioned(
-                      right: 9,
-                      bottom: 10,
+                      right: 4,
+                      bottom: 4,
                       child: _ViewCount(label: widget.data.viewCountLabel),
                     ),
                   ],
@@ -1554,7 +1577,7 @@ class _ViewCount extends StatelessWidget {
             color: AppColors.textOnCard,
             fontWeight: FontWeight.normal,
             fontSize: 9,
-            height: 1,
+            height: 1.2,
           ),
         ),
       ],
@@ -1715,13 +1738,17 @@ class _HomeFeedFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!isLoading && error == null && hasMore) {
+      return const SizedBox.shrink();
+    }
+
     return SafeArea(
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
         child: Center(
           child: isLoading
-              ? const SizedBox.shrink()
+              ? const AppLoadMoreIndicator(padding: EdgeInsets.zero)
               : error != null
               ? AppRetryButton(onPressed: onRetry, label: context.l10n.retry)
               : Text(
