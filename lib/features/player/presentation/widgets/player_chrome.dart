@@ -33,7 +33,7 @@ abstract final class _PlayerLayoutMetrics {
   static const forYouWatchNowBottom = 12.0;
 
   // 与 Android Shell 底部导航的内容区高度一致。
-  static const singleBottomFrameHeight = 64.0;
+  static const singleBottomFrameHeight = 59.0;
   static const singleMetaBottom = singleBottomFrameHeight + 14;
   static const singleSeekBarBottom = singleBottomFrameHeight - 5;
   static const singleActionRailBottom = singleBottomFrameHeight + 72;
@@ -261,7 +261,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
       fit: StackFit.expand,
       children: [
         if (showViewportBackdrop)
-          const Positioned.fill(child: ColoredBox(color: Color(0xFF141414))),
+          const Positioned.fill(child: ColoredBox(color: Colors.black)),
         _PlayerPosterLayer(
           content: content,
           bottomFrameHeight: bottomFrameHeight,
@@ -295,7 +295,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
             right: 0,
             bottom: 0,
             height: bottomFrameHeight,
-            child: const ColoredBox(color: Color(0XFF141414)),
+            child: const ColoredBox(color: Colors.black),
           ),
         ],
         if (showUnlockButton && !forYouLayout)
@@ -433,25 +433,20 @@ class _PlayerPosterLayer extends StatelessWidget {
       top: 0,
       right: 0,
       bottom: bottomFrameHeight,
-      child: ClipRRect(
-        borderRadius: forYouLayout
-            ? const BorderRadius.vertical(bottom: Radius.circular(10))
-            : const BorderRadius.vertical(bottom: Radius.circular(16)),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (showViewportBackdrop)
-              const RepaintBoundary(
-                key: ValueKey('player_poster_repaint_boundary'),
-                child: ColoredBox(color: Color(0xFF141414)),
-              ),
-            ?playbackLayer,
-            if (showLoading)
-              const RepaintBoundary(child: _PlaybackLoadingOverlay()),
-            if (playbackError)
-              RepaintBoundary(child: _PlaybackRetryOverlay(onRetry: onRetry)),
-          ],
-        ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (showViewportBackdrop)
+            const RepaintBoundary(
+              key: ValueKey('player_poster_repaint_boundary'),
+              child: ColoredBox(color: Colors.black),
+            ),
+          ?playbackLayer,
+          if (showLoading)
+            const RepaintBoundary(child: _PlaybackLoadingOverlay()),
+          if (playbackError)
+            RepaintBoundary(child: _PlaybackRetryOverlay(onRetry: onRetry)),
+        ],
       ),
     );
   }
@@ -476,23 +471,18 @@ class _PlayerGradientLayer extends StatelessWidget {
       child: IgnorePointer(
         child: RepaintBoundary(
           key: const ValueKey('player_gradient_repaint_boundary'),
-          child: ClipRRect(
-            borderRadius: forYouLayout
-                ? const BorderRadius.vertical(bottom: Radius.circular(10))
-                : const BorderRadius.vertical(bottom: Radius.circular(16)),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: forYouLayout ? 0.28 : 0.78),
-                    Colors.transparent,
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: forYouLayout ? 0.58 : 0.72),
-                  ],
-                  stops: const [0, 0.2, 0.68, 1],
-                ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: forYouLayout ? 0.28 : 0.78),
+                  Colors.transparent,
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: forYouLayout ? 0.58 : 0.72),
+                ],
+                stops: const [0, 0.2, 0.68, 1],
               ),
             ),
           ),
@@ -1446,6 +1436,9 @@ class PlayerSeekBar extends StatefulWidget {
 }
 
 class _PlayerSeekBarState extends State<PlayerSeekBar> {
+  // 保持 2px 的非拖动轨道视觉，但为点击和开始拖动保留更大的垂直热区。
+  static const _idleTouchTargetHeight = 36.0;
+
   @override
   Widget build(BuildContext context) {
     final progress = _ratio(widget.previewPosition ?? widget.position);
@@ -1465,7 +1458,7 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
         ? 112.0
         : showTimeBubble
         ? 40.0
-        : 20.0;
+        : _idleTouchTargetHeight;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1836,7 +1829,7 @@ class _LikeActionItem extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (isLoading)
-                const AppPegTopLoader(size: 15,noBackground: true)
+                const AppPegTopLoader(size: 15, noBackground: true)
               else
                 Image.asset(
                   isLiked

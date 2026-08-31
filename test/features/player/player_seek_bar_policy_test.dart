@@ -107,4 +107,25 @@ void main() {
     expect(find.byKey(const ValueKey('player_seek_time_bubble')), findsNothing);
     expect(find.byKey(const ValueKey('player_seek_bar')), findsOneWidget);
   });
+
+  testWidgets('静止时保留 2px 轨道但扩大点击热区', (tester) async {
+    await pumpSeekBar(
+      tester,
+      isDragging: false,
+      previewConfig: PlayerSeekPreviewConfig.fromPolicy(
+        PlayerPerformancePolicy.stable,
+      ),
+    );
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('player_seek_bar'))).height,
+      36,
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('player_seek_track_shell')))
+          .height,
+      2,
+    );
+  });
 }

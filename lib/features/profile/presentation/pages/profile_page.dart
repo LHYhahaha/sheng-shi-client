@@ -17,6 +17,7 @@ import '../../../entitlement/application/entitlement_controller.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/media/media_resource.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../application/profile_controller.dart';
 import '../widgets/profile_coins_card.dart';
 import '../widgets/profile_header.dart';
@@ -36,6 +37,9 @@ class ProfilePage extends ConsumerStatefulWidget {
 }
 
 class _ProfilePageState extends ConsumerState<ProfilePage> {
+  Timer? _loadingPreviewTimer;
+  bool _isLoadingPreviewVisible = false;
+
   @override
   void initState() {
     super.initState();
@@ -46,6 +50,22 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     Future.microtask(
       () => ref.read(entitlementControllerProvider.notifier).load(),
     );
+  }
+
+  void _showLoadingPreview() {
+    _loadingPreviewTimer?.cancel();
+    setState(() => _isLoadingPreviewVisible = true);
+    _loadingPreviewTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() => _isLoadingPreviewVisible = false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _loadingPreviewTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -105,79 +125,85 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     return Scaffold(
       backgroundColor: AppColors.black,
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 28, 16, 24),
+        child: Stack(
           children: [
-            ProfileHeader(
-              state: state,
-              onLoginTap: () {
-                if (authState.session.isGuest) {
-                  context.push(RoutePaths.auth);
-                }
-              },
-              onAccountTap: () => context.push(RoutePaths.account),
-              onGuestTap: onHeaderTap,
-            ),
-            const SizedBox(height: 21),
-            ProfileMembershipCard(
-              membership: state.membership,
-              onTap: () {
-                if (!state.membership.isActive) {
-                  unawaited(
-                    ref
-                        .read(analyticsServiceProvider)
-                        .track(
-                          const AnalyticsEvent(
-                            AnalyticsDefinitions.elementClick,
-                            {'element_name': 'vip_entry'},
-                          ),
-                        ),
-                  );
-                }
-                context.push(
-                  state.membership.isActive
-                      ? RoutePaths.myMember
-                      : RoutePaths.membershipLocation(returnToProfile: true),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            ProfileCoinsCard(
-              coins: state.coins,
-              onTopUpTap: () => context.push(RoutePaths.store),
-              onWalletTap: () => context.push(RoutePaths.wallet),
-            ),
-            const SizedBox(height: 12),
-            // ProfileMenuRow(
-            //   title: l10n.profileHistory,
-            //   iconAssetPath: 'assets/images/profile/history.png',
-            //   onTap: () {},
-            // ),
-            ProfileMenuRow(
-              title: l10n.profileLanguage,
-              enabled: state.canOpenLanguage,
-              onTap: () => context.push(RoutePaths.language),
-            ),
-            ProfileMenuRow(
-              title: l10n.profileReward,
-              iconAssetPath: 'assets/images/profile/reward.png',
-              onTap: () => context.push(RoutePaths.rewardsLocation()),
-            ),
-            ProfileMenuRow(
-              title: l10n.profileSettings,
-              iconAssetPath: 'assets/images/profile/setting.png',
-              onTap: () => context.push(RoutePaths.settings),
-            ),
-            if (TestNetworkTools.enabled)
-              ProfileMenuRow(
-                title: '测试网络配置 / 清理代理',
-                onTap: () => showTestNetworkConfigDialog(context, ref),
-              ),
+            ListView(
+              padding: const EdgeInsets.fromLTRB(16, 28, 16, 24),
+              children: [
+                ProfileHeader(
+                  state: state,
+                  onLoginTap: () {
+                    if (authState.session.isGuest) {
+                      context.push(RoutePaths.auth);
+                    }
+                  },
+                  onAccountTap: () => context.push(RoutePaths.account),
+                  onGuestTap: onHeaderTap,
+                ),
+                const SizedBox(height: 21),
+                ProfileMembershipCard(
+                  membership: state.membership,
+                  onTap: () {
+                    if (!state.membership.isActive) {
+                      unawaited(
+                        ref
+                            .read(analyticsServiceProvider)
+                            .track(
+                              const AnalyticsEvent(
+                                AnalyticsDefinitions.elementClick,
+                                {'element_name': 'vip_entry'},
+                              ),
+                            ),
+                      );
+                    }
+                    context.push(
+                      state.membership.isActive
+                          ? RoutePaths.myMember
+                          : RoutePaths.membershipLocation(
+                              returnToProfile: true,
+                            ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                ProfileCoinsCard(
+                  coins: state.coins,
+                  onTopUpTap: () => context.push(RoutePaths.store),
+                  onWalletTap: () => context.push(RoutePaths.wallet),
+                ),
+                const SizedBox(height: 12),
+                // ProfileMenuRow(
+                //   title: l10n.profileHistory,
+                //   iconAssetPath: 'assets/images/profile/history.png',
+                //   onTap: () {},
+                // ),
+                ProfileMenuRow(
+                  title: l10n.profileLanguage,
+                  enabled: state.canOpenLanguage,
+                  onTap: () => context.push(RoutePaths.language),
+                ),
+                ProfileMenuRow(
+                  title: l10n.profileReward,
+                  iconAssetPath: 'assets/images/profile/reward.png',
+                  onTap: () => context.push(RoutePaths.rewardsLocation()),
+                ),
+                ProfileMenuRow(
+                  title: l10n.profileSettings,
+                  iconAssetPath: 'assets/images/profile/setting.png',
+                  onTap: () => context.push(RoutePaths.settings),
+                ),
+                if (TestNetworkTools.enabled)
+                  ProfileMenuRow(
+                    title: '测试网络配置 / 清理代理',
+                    onTap: () => showTestNetworkConfigDialog(context, ref),
+                  ),
 
-            ProfileMenuRow(
-              title: l10n.profileFeedback,
-              iconAssetPath: 'assets/images/profile/feedback.png',
-              onTap: () => context.push(RoutePaths.profileFeedback),
+                ProfileMenuRow(
+                  title: l10n.profileFeedback,
+                  iconAssetPath: 'assets/images/profile/feedback.png',
+                  onTap: () => context.push(RoutePaths.profileFeedback),
+                ),
+              ],
             ),
           ],
         ),

@@ -11,7 +11,6 @@ import '../../../features/bottom_tab_config/application/bottom_tab_config_contro
 import '../../../features/bottom_tab_config/application/dynamic_tab_analytics.dart';
 import '../../../features/bottom_tab_config/data/dto/bottom_tab_response_dto.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../theme/app_colors.dart';
 
 /// 应用底部主导航。
 ///
@@ -27,7 +26,9 @@ class AppBottomNavigation extends ConsumerWidget {
   static const _contentWidth = 354.0;
   static const _itemWidth = 64.0;
   static const _iconSize = 24.0;
-  static const _memberIndex = 2;
+  static const _standardBackgroundColor = Color(0x33000000);
+  static const _standardInactiveColor = Color(0x52FFFFFF);
+  static const _specialInactiveColor = Color(0xFF807F7F);
 
   static const _items = [
     _BottomNavigationItem(
@@ -35,6 +36,7 @@ class AppBottomNavigation extends ConsumerWidget {
       slot: 'home',
       selectedAssetPath: 'assets/navigation/home_selected.png',
       unselectedAssetPath: 'assets/navigation/home_unselected.png',
+      specialUnselectedAssetPath: 'assets/navigation/home_special.png',
       fallbackIcon: Icons.home_rounded,
     ),
     _BottomNavigationItem(
@@ -42,13 +44,15 @@ class AppBottomNavigation extends ConsumerWidget {
       slot: 'recommend_tab',
       selectedAssetPath: 'assets/navigation/for_you_selected.png',
       unselectedAssetPath: 'assets/navigation/for_you_unselected.png',
+      specialUnselectedAssetPath: 'assets/navigation/for_you_special.png',
       fallbackIcon: Icons.play_circle_fill_rounded,
     ),
     _BottomNavigationItem(
       label: _BottomNavigationLabel.member,
       slot: 'member_tab',
-      selectedAssetPath: 'assets/navigation/huiyuan__selected.png',
-      unselectedAssetPath: 'assets/navigation/huiyuan_unselected.png',
+      selectedAssetPath: 'assets/navigation/member_selected.png',
+      unselectedAssetPath: 'assets/navigation/member_unselected.png',
+      specialUnselectedAssetPath: 'assets/navigation/member_special.png',
       fallbackIcon: Icons.card_membership_rounded,
     ),
     _BottomNavigationItem(
@@ -56,6 +60,7 @@ class AppBottomNavigation extends ConsumerWidget {
       slot: 'favorites',
       selectedAssetPath: 'assets/navigation/my_list_selected.png',
       unselectedAssetPath: 'assets/navigation/my_list_unselected.png',
+      specialUnselectedAssetPath: 'assets/navigation/my_list_special.png',
       fallbackIcon: Icons.explore_rounded,
     ),
     _BottomNavigationItem(
@@ -63,6 +68,7 @@ class AppBottomNavigation extends ConsumerWidget {
       slot: 'profile',
       selectedAssetPath: 'assets/navigation/profile_selected.png',
       unselectedAssetPath: 'assets/navigation/profile_unselected.png',
+      specialUnselectedAssetPath: 'assets/navigation/profile_special.png',
       fallbackIcon: Icons.person_rounded,
     ),
   ];
@@ -82,16 +88,14 @@ class AppBottomNavigation extends ConsumerWidget {
     final isIos = platform == TargetPlatform.iOS;
     final contentHeight = isIos ? 84.0 : 64.0;
     final bottomInset = isIos ? 0.0 : mediaQuery.viewPadding.bottom;
+    final selectedItem = _items[currentIndex];
+    final isSpecialSlot = currentIndex == 1 || currentIndex == 2;
+    final isDefaultSpecialPage = _tabFor(ref, selectedItem) == null;
+    final usesSpecialPalette = isSpecialSlot && isDefaultSpecialPage;
     final dynamicTabs = _items
         .map((item) => _tabFor(ref, item))
         .whereType<BottomTabDto>()
         .toList(growable: false);
-    final isDefaultMemberTab =
-        _tabFor(ref, _items[_memberIndex]) == null;
-    final backgroundColor =
-        currentIndex == _memberIndex && isDefaultMemberTab
-        ? const Color(0xFF0F0F10)
-        : const Color(0xFF0A0014);
 
     // Shell 仅在底部导航实际可见时创建本组件；post-frame 后代表动态 Tab 已进入
     // 当前底部导航的可见区域。生命周期去重由 tracker 负责。
@@ -107,7 +111,7 @@ class AppBottomNavigation extends ConsumerWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: backgroundColor,
+        color: usesSpecialPalette ? Colors.black : _standardBackgroundColor,
         border: const Border(
           top: BorderSide(color: Color(0x14FFFFFF), width: 1),
         ),
@@ -132,10 +136,14 @@ class AppBottomNavigation extends ConsumerWidget {
                         label: _labelFor(context, ref, item.$2),
                         selectedAssetPath: item.$2.selectedAssetPath,
                         unselectedAssetPath: item.$2.unselectedAssetPath,
+                        specialUnselectedAssetPath:
+                            item.$2.specialUnselectedAssetPath,
                         normalIconUrl: _tabFor(ref, item.$2)?.normalIconUrl,
                         selectedIconUrl: _tabFor(ref, item.$2)?.selectedIconUrl,
                         fallbackIcon: item.$2.fallbackIcon,
                         selected: item.$1 == currentIndex,
+                        specialUnselected:
+                            usesSpecialPalette && item.$1 != currentIndex,
                         height: contentHeight,
                         onTap: () => onDestinationSelected(item.$1),
                       ),
@@ -195,10 +203,12 @@ class _AppBottomNavigationItem extends StatelessWidget {
     required this.label,
     required this.selectedAssetPath,
     required this.unselectedAssetPath,
+    required this.specialUnselectedAssetPath,
     required this.normalIconUrl,
     required this.selectedIconUrl,
     required this.fallbackIcon,
     required this.selected,
+    required this.specialUnselected,
     required this.height,
     required this.onTap,
     super.key,
@@ -207,16 +217,22 @@ class _AppBottomNavigationItem extends StatelessWidget {
   final String label;
   final String selectedAssetPath;
   final String unselectedAssetPath;
+  final String specialUnselectedAssetPath;
   final String? normalIconUrl;
   final String? selectedIconUrl;
   final IconData fallbackIcon;
   final bool selected;
+  final bool specialUnselected;
   final double height;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? Colors.white : AppColors.navigationInactive;
+    final color = selected
+        ? Colors.white
+        : specialUnselected
+        ? AppBottomNavigation._specialInactiveColor
+        : AppBottomNavigation._standardInactiveColor;
 
     return SizedBox(
       width: AppBottomNavigation._itemWidth,
@@ -258,7 +274,11 @@ class _AppBottomNavigationItem extends StatelessWidget {
   }
 
   Widget _icon(Color color) {
-    final url = selected ? selectedIconUrl : normalIconUrl;
+    final url = selected
+        ? selectedIconUrl
+        : specialUnselected
+        ? null
+        : normalIconUrl;
     if (url != null && url.trim().isNotEmpty) {
       return _RemoteBottomTabIcon(
         imageUrl: url,
@@ -272,8 +292,13 @@ class _AppBottomNavigationItem extends StatelessWidget {
   }
 
   Widget _localIcon(Color color) {
+    final assetPath = selected
+        ? selectedAssetPath
+        : specialUnselected
+        ? specialUnselectedAssetPath
+        : unselectedAssetPath;
     return Image.asset(
-      selected ? selectedAssetPath : unselectedAssetPath,
+      assetPath,
       width: AppBottomNavigation._iconSize,
       height: AppBottomNavigation._iconSize,
       fit: BoxFit.contain,
@@ -423,6 +448,7 @@ class _BottomNavigationItem {
     required this.slot,
     required this.selectedAssetPath,
     required this.unselectedAssetPath,
+    required this.specialUnselectedAssetPath,
     required this.fallbackIcon,
   });
 
@@ -430,6 +456,7 @@ class _BottomNavigationItem {
   final String slot;
   final String selectedAssetPath;
   final String unselectedAssetPath;
+  final String specialUnselectedAssetPath;
   final IconData fallbackIcon;
 }
 

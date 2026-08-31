@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:drama_client/core/utils/compact_count_formatter.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
@@ -31,7 +33,14 @@ class _PlayerExitRecommendationDialogState
   static const _initialPage = 5000;
   static const _coverWidth = 234.0;
   static const _coverHeight = 349.0;
-  static const _horizontalPadding = 12.0;
+  static const _horizontalPadding = 16.0;
+  static const _dialogHeightFactor = 0.75;
+  static const _topPadding = 28.0;
+  static const _bottomPadding = 24.0;
+  static const _headerHeight = 28.0;
+  static const _headerToCoverGap = 28.0;
+  static const _detailsSectionHeight = 121.0;
+  static const _buttonHeight = 40.0;
 
   late final PageController _pageController;
   late int _selectedPage;
@@ -63,7 +72,26 @@ class _PlayerExitRecommendationDialogState
     if (_items.isEmpty) {
       return const SizedBox.shrink();
     }
-    final bottomPadding = MediaQuery.paddingOf(context).bottom;
+    final screenSize = MediaQuery.sizeOf(context);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final dialogHeight = screenSize.height * _dialogHeightFactor;
+    final coverHeight = math
+        .max(
+          0.0,
+          math.min(
+            _coverHeight,
+            dialogHeight -
+                _topPadding -
+                _bottomPadding -
+                bottomInset -
+                _headerHeight -
+                _headerToCoverGap -
+                _detailsSectionHeight -
+                _buttonHeight,
+          ),
+        )
+        .toDouble();
+    final coverWidth = coverHeight * _coverWidth / _coverHeight;
     final item = _selectedItem;
 
     return Material(
@@ -73,118 +101,125 @@ class _PlayerExitRecommendationDialogState
         child: Container(
           key: const ValueKey('player_exit_recommendation_dialog'),
           width: double.infinity,
-          padding: EdgeInsets.only(top: 28, bottom: 32 + bottomPadding),
+          height: dialogHeight,
+          padding: EdgeInsets.only(
+            top: _topPadding,
+            bottom: _bottomPadding + bottomInset,
+          ),
           decoration: const BoxDecoration(
             color: Color(0xFF141414),
             borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
           ),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  context.l10n.popupDramaExitTitle,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    height: 20 / 15,
-                  ),
+          child: Column(
+            children: [
+              Text(
+                context.l10n.popupDramaExitTitle,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  height: 1.3,
                 ),
-                const SizedBox(height: 22),
-                SizedBox(
-                  width: MediaQuery.sizeOf(context).width,
-                  height: _coverHeight,
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: _ExitRecommendationCarouselCards(
-                          controller: _pageController,
-                          selectedPage: _selectedPage,
-                          items: _items,
-                        ),
+              ),
+              const SizedBox(height: _headerToCoverGap),
+              const Spacer(),
+              SizedBox(
+                width: screenSize.width,
+                height: coverHeight,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: _ExitRecommendationCarouselCards(
+                        controller: _pageController,
+                        selectedPage: _selectedPage,
+                        items: _items,
+                        coverWidth: coverWidth,
+                        coverHeight: coverHeight,
                       ),
-                      Positioned.fill(
-                        child: PageView.builder(
-                          key: const ValueKey(
-                            'player_exit_recommendation_carousel',
-                          ),
-                          controller: _pageController,
-                          physics: const PageScrollPhysics(
-                            parent: ClampingScrollPhysics(),
-                          ),
-                          onPageChanged: (page) {
-                            setState(() {
-                              _selectedPage = page;
-                            });
-                          },
-                          itemBuilder: (context, index) {
-                            final recommendation =
-                                _items[index % _items.length];
-                            return Center(
-                              child: Semantics(
-                                button: true,
-                                label: 'Play ${recommendation.title}',
-                                child: GestureDetector(
-                                  key: index == _selectedPage
-                                      ? const ValueKey(
-                                          'player_exit_recommendation_cover_tap_target',
-                                        )
-                                      : ValueKey(
-                                          'player_exit_recommendation_cover_tap_target_$index',
-                                        ),
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () =>
-                                      (widget.onCardTap ?? widget.onPlay)(
-                                        recommendation,
+                    ),
+                    Positioned.fill(
+                      child: PageView.builder(
+                        key: const ValueKey(
+                          'player_exit_recommendation_carousel',
+                        ),
+                        controller: _pageController,
+                        physics: const PageScrollPhysics(
+                          parent: ClampingScrollPhysics(),
+                        ),
+                        onPageChanged: (page) {
+                          setState(() {
+                            _selectedPage = page;
+                          });
+                        },
+                        itemBuilder: (context, index) {
+                          final recommendation = _items[index % _items.length];
+                          return Center(
+                            child: Semantics(
+                              button: true,
+                              label: 'Play ${recommendation.title}',
+                              child: GestureDetector(
+                                key: index == _selectedPage
+                                    ? const ValueKey(
+                                        'player_exit_recommendation_cover_tap_target',
+                                      )
+                                    : ValueKey(
+                                        'player_exit_recommendation_cover_tap_target_$index',
                                       ),
-                                  child: const SizedBox(
-                                    width: _coverWidth,
-                                    height: _coverHeight,
-                                  ),
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () =>
+                                    (widget.onCardTap ?? widget.onPlay)(
+                                      recommendation,
+                                    ),
+                                child: SizedBox(
+                                  width: coverWidth,
+                                  height: coverHeight,
                                 ),
                               ),
-                            );
-                          },
-                        ),
+                            ),
+                          );
+                        },
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: _horizontalPadding,
-                  ),
-                  child: Text(
-                    item.title,
-                    key: ValueKey(
-                      'player_exit_recommendation_title_${item.id}',
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight(510),
-                      height: 20 / 14,
+                  ],
+                ),
+              ),
+              SizedBox(
+                height: _detailsSectionHeight,
+                child: Center(
+                  child: SizedBox(
+                    width: coverWidth,
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 16),
+                        Text(
+                          item.title,
+                          key: ValueKey(
+                            'player_exit_recommendation_title_${item.id}',
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight(510),
+                            height: 1.3,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _RecommendationTags(item: item),
+                        const Spacer(),
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: _horizontalPadding,
-                  ),
-                  child: _RecommendationTags(item: item),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: _horizontalPadding,
                 ),
-                const SizedBox(height: 28),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: _horizontalPadding,
-                  ),
+                child: SizedBox(
+                  height: _buttonHeight,
                   child: Row(
                     children: [
                       Expanded(
@@ -192,13 +227,13 @@ class _PlayerExitRecommendationDialogState
                           key: const ValueKey(
                             'player_exit_recommendation_exit_button',
                           ),
-                          backgroundColor: const Color(0xFF4A4A4A),
+                          backgroundColor: const Color(0xFF414141),
                           iconAssetPath: 'assets/images/player/exit.svg',
                           label: context.l10n.popupDramaExitActionExit,
                           onTap: widget.onExit,
                         ),
                       ),
-                      const SizedBox(width: 13),
+                      const SizedBox(width: 15),
                       Expanded(
                         child: _ExitRecommendationButton(
                           key: const ValueKey(
@@ -213,8 +248,8 @@ class _PlayerExitRecommendationDialogState
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -227,53 +262,65 @@ class _ExitRecommendationCarouselCards extends StatelessWidget {
     required this.controller,
     required this.selectedPage,
     required this.items,
+    required this.coverWidth,
+    required this.coverHeight,
   });
-
-  static const _sideOffset = 238.0;
 
   final PageController controller;
   final int selectedPage;
   final List<PopupExitRecommendation> items;
+  final double coverWidth;
+  final double coverHeight;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRect(
-      child: AnimatedBuilder(
-        animation: controller,
-        builder: (context, child) {
-          final currentPage = controller.hasClients
-              ? controller.page ?? selectedPage.toDouble()
-              : selectedPage.toDouble();
-          final anchorPage = currentPage.floor();
-          final visiblePages =
-              <int>[
-                for (var page = anchorPage - 2; page <= anchorPage + 3; page++)
-                  page,
-              ]..sort((a, b) {
-                final bDistance = (currentPage - b).abs();
-                final aDistance = (currentPage - a).abs();
-                return bDistance.compareTo(aDistance);
-              });
+    return ColoredBox(
+      color: const Color(0xFF141414),
+      child: ClipRect(
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (context, child) {
+            final currentPage = controller.hasClients
+                ? controller.page ?? selectedPage.toDouble()
+                : selectedPage.toDouble();
+            final anchorPage = currentPage.floor();
+            final visiblePages =
+                <int>[
+                  for (
+                    var page = anchorPage - 2;
+                    page <= anchorPage + 3;
+                    page++
+                  )
+                    page,
+                ]..sort((a, b) {
+                  final bDistance = (currentPage - b).abs();
+                  final aDistance = (currentPage - a).abs();
+                  return bDistance.compareTo(aDistance);
+                });
 
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final centerX = constraints.maxWidth / 2;
-              return Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  for (final page in visiblePages)
-                    _PositionedCarouselCover(
-                      recommendation:
-                          items[_positiveModulo(page, items.length)],
-                      centerX: centerX + (page - currentPage) * _sideOffset,
-                      distance: (currentPage - page).abs(),
-                    ),
-                  const _CarouselViewportShadowOverlay(),
-                ],
-              );
-            },
-          );
-        },
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final centerX = constraints.maxWidth / 2;
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    for (final page in visiblePages)
+                      _PositionedCarouselCover(
+                        recommendation:
+                            items[_positiveModulo(page, items.length)],
+                        centerX:
+                            centerX + (page - currentPage) * (coverWidth + 4),
+                        distance: (currentPage - page).abs(),
+                        coverWidth: coverWidth,
+                        coverHeight: coverHeight,
+                      ),
+                    const _CarouselViewportShadowOverlay(),
+                  ],
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -289,24 +336,32 @@ class _PositionedCarouselCover extends StatelessWidget {
     required this.recommendation,
     required this.centerX,
     required this.distance,
+    required this.coverWidth,
+    required this.coverHeight,
   });
 
   final PopupExitRecommendation recommendation;
   final double centerX;
   final double distance;
+  final double coverWidth;
+  final double coverHeight;
 
   @override
   Widget build(BuildContext context) {
     final scale = (1 - distance * 0.28).clamp(0.82, 1.0);
 
     return Positioned(
-      left: centerX - _PlayerExitRecommendationDialogState._coverWidth / 2,
+      left: centerX - coverWidth / 2,
       top: 0,
-      width: _PlayerExitRecommendationDialogState._coverWidth,
-      height: _PlayerExitRecommendationDialogState._coverHeight,
+      width: coverWidth,
+      height: coverHeight,
       child: Transform.scale(
         scale: scale,
-        child: _RecommendationCover(recommendation: recommendation),
+        child: _RecommendationCover(
+          recommendation: recommendation,
+          width: coverWidth,
+          height: coverHeight,
+        ),
       ),
     );
   }
@@ -325,12 +380,12 @@ class _CarouselViewportShadowOverlay extends StatelessWidget {
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
               colors: [
-                Colors.black.withValues(alpha: 0.74),
-                Colors.black.withValues(alpha: 0.28),
+                const Color(0xFF141414).withValues(alpha: 0.74),
+                const Color(0xFF141414).withValues(alpha: 0.28),
                 Colors.black.withValues(alpha: 0),
                 Colors.black.withValues(alpha: 0),
-                Colors.black.withValues(alpha: 0.28),
-                Colors.black.withValues(alpha: 0.74),
+                const Color(0xFF141414).withValues(alpha: 0.28),
+                const Color(0xFF141414).withValues(alpha: 0.74),
               ],
               stops: const [0.0, 0.07, 0.18, 0.82, 0.93, 1.0],
             ),
@@ -342,9 +397,15 @@ class _CarouselViewportShadowOverlay extends StatelessWidget {
 }
 
 class _RecommendationCover extends StatelessWidget {
-  const _RecommendationCover({required this.recommendation});
+  const _RecommendationCover({
+    required this.recommendation,
+    required this.width,
+    required this.height,
+  });
 
   final PopupExitRecommendation recommendation;
+  final double width;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -354,8 +415,8 @@ class _RecommendationCover extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           child: AppCachedNetworkImage(
             imageUrl: recommendation.coverUrl,
-            width: _PlayerExitRecommendationDialogState._coverWidth,
-            height: _PlayerExitRecommendationDialogState._coverHeight,
+            width: width,
+            height: height,
             fit: BoxFit.cover,
             alignment: Alignment.topCenter,
           ),
@@ -373,7 +434,11 @@ class _RecommendationCover extends StatelessWidget {
               SizedBox(width: 2),
               Text(
                 formatCompactCount(recommendation.playCount),
-                style: TextStyle(fontSize: 9, color: Color(0XFFE0E0E0)),
+                style: TextStyle(
+                  fontSize: 9,
+                  color: Color(0XFFE0E0E0),
+                  fontWeight: FontWeight(510),
+                ),
               ),
             ],
           ),
@@ -504,14 +569,14 @@ class _ExitRecommendationButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 37,
-      child: Material(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(5),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(5),
-          onTap: onTap,
+    return Material(
+      color: backgroundColor,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Container(
+          padding: EdgeInsets.symmetric(vertical: 12),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
