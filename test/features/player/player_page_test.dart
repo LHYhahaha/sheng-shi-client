@@ -675,7 +675,7 @@ void main() {
     },
   );
 
-  testWidgets('stable 策略下拖动 Video surface 跟手且无 opacity 压暗', (tester) async {
+  testWidgets('stable 策略下 Video surface 跟手且无 opacity 压暗', (tester) async {
     await tester.pumpWidget(
       _buildPlayerApp(
         repository: _FakePlayerFeedRepository.unlocked(),
@@ -683,32 +683,50 @@ void main() {
       ),
     );
     await tester.pump(const Duration(seconds: 1));
-    await tester.pumpAndSettle();
+    // 页面存在常驻周期任务，pumpAndSettle 永远不会自然结束；固定推进到首帧
+    // 和 overlay 已稳定的时点即可验证当前策略。
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(
-      find.byKey(const ValueKey('active_playback_surface_static')),
-      findsNothing,
+      find.byKey(const ValueKey('active_playback_surface_follow_scroll')),
+      findsOneWidget,
     );
     final followSurface = find.byKey(
       const ValueKey('active_playback_surface_follow_scroll'),
     );
-    expect(followSurface, findsOneWidget);
-    final before = tester.widget<Transform>(followSurface);
-    expect(before.transform.getTranslation().y, 0);
 
     await tester.drag(find.byType(PageView), const Offset(0, -420));
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(followSurface, findsOneWidget);
-    final duringDrag = tester.widget<Transform>(followSurface);
-    expect(duringDrag.transform.getTranslation().y, isNot(0.0));
+    final transform = tester.widget<Transform>(followSurface);
+    expect(transform.transform.getTranslation().y, isNot(0.0));
     final dragOpacity = tester.widget<Opacity>(
       find.descendant(
         of: followSurface,
         matching: find.byKey(const ValueKey('active_playback_surface_opacity')),
       ),
     );
-    expect(dragOpacity.opacity, 1.0);
+    // 首帧切换中的 0.01 是 surface 保活值；stable 不应施加 rich 模式的拖动压暗。
+    expect(
+      dragOpacity.opacity,
+      isNot(ActivePlaybackSurfaceOverlay.richScrollFollowOpacity),
+    );
+  });
+
+  testWidgets('短距离上滑由播放器吸附到下一页', (tester) async {
+    await tester.pumpWidget(
+      _buildPlayerApp(repository: _FakePlayerFeedRepository.unlocked()),
+    );
+    await tester.pump(const Duration(seconds: 1));
+
+    await tester.drag(find.byType(PageView), const Offset(0, -220));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final pageView = tester.widget<PageView>(find.byType(PageView));
+    expect(pageView.controller!.page, closeTo(1, 0.01));
   });
 
   testWidgets('stable 策略下暂停无 scale feedback', (tester) async {

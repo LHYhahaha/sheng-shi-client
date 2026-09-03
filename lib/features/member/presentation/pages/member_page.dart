@@ -25,6 +25,7 @@ import '../../../../features/gift/data/gift_remote_data_source_provider.dart';
 import '../../../../features/gift/domain/gift_link_data.dart';
 import '../../../../features/player/application/player_entry_preload_coordinator.dart';
 import '../../../../features/player/presentation/widgets/player_action_sheets.dart';
+import '../../../../features/pay/application/payment_loading_controller.dart';
 import '../../../../features/membership/application/membership_controller.dart';
 import '../../../../features/membership/presentation/pages/membership_page.dart';
 import '../../../../features/home/presentation/widgets/vip_only_dramas_section.dart';
@@ -140,6 +141,7 @@ class MemberPage extends ConsumerStatefulWidget {
 class _MemberPageState extends ConsumerState<MemberPage> {
   final _dramaExposureSession = Object();
   bool _vipDramasRefreshRequested = false;
+  bool _isGiftMemberLinkLoading = false;
 
   @override
   void initState() {
@@ -321,7 +323,24 @@ class _MemberPageState extends ConsumerState<MemberPage> {
   }
 
   Future<void> _showGiftMemberShareSheet() async {
-    final gift = await ref.read(giftRemoteDataSourceProvider).getVipGiftLink();
+    if (_isGiftMemberLinkLoading) return;
+
+    _isGiftMemberLinkLoading = true;
+    final loading = ref.read(paymentLoadingControllerProvider.notifier);
+    loading.show(label: PaymentLoadingLabel.loading);
+    late final GiftLinkData gift;
+    try {
+      gift = await ref.read(giftRemoteDataSourceProvider).getVipGiftLink();
+    } catch (_) {
+      if (mounted) {
+        showAppCenterToast(context.l10n.networkError);
+      }
+      return;
+    } finally {
+      loading.hide();
+      _isGiftMemberLinkLoading = false;
+    }
+
     if (!mounted) return;
     return showModalBottomSheet<void>(
       context: context,
@@ -330,12 +349,15 @@ class _MemberPageState extends ConsumerState<MemberPage> {
       isDismissible: true,
       enableDrag: true,
       builder: (context) => GiftShareSheet(
-        quotaLabel:
-            '${context.l10n.benefitGiftMember} (${gift.usedCount}/${gift.totalCount})',
+        quotaLabel: context.l10n.memberGiftShareSummary(
+          days: gift.benefitDays,
+          used: gift.usedCount,
+          total: gift.totalCount,
+        ),
         isEligible: gift.available,
-        unavailableDescription: gift.reGrantAt.isEmpty
-            ? context.l10n.giftShareUnavailableDescription
-            : '${context.l10n.giftShareUnavailableDescription} ${gift.reGrantAt}',
+        unavailableDescription: context.l10n.giftShareUnavailableLimit(
+          date: context.l10n.formatGiftReGrantDate(gift.reGrantAt),
+        ),
         onFacebookTap: () => _shareGiftMemberToFacebook(gift),
         onCopyLinkTap: () => _copyGiftMemberLink(gift),
       ),

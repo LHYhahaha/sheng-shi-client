@@ -56,7 +56,8 @@ class PlayerPerformancePolicy {
   /// 拖动 PageView 时，是否让顶层真实 Video surface 跟随手指位移。
   ///
   /// 影响：仅 UI 合成。需 [allowVideoSurfaceVisibleDuringDrag] 为 true 才有意义；
-  /// 开启可提升跟手感；stable 常仅保留画面、不跟手。
+  /// 开启可提升跟手感。普通设备也应保留它，避免固定的原生 surface
+  /// 遮住正在滚动的页面，使用户误以为页面无法拖动。
   final bool allowVideoSurfaceFollowDuringDrag;
 
   /// 拖动过程中，是否对真实 Video surface 做 opacity 动画/压暗。
@@ -170,6 +171,8 @@ class PlayerPerformancePolicy {
   static const stable = PlayerPerformancePolicy(
     mode: PlayerPerformanceMode.stable,
     allowVideoSurfaceVisibleDuringDrag: true,
+    // 保留 surface 跟手，确保上下滑有直接的视觉反馈。stable 仍关闭拖动压暗、
+    // 落位渐隐和按压动效；只有 ultraStable 才牺牲跟手来换取最低合成成本。
     allowVideoSurfaceFollowDuringDrag: true,
     allowVideoSurfaceOpacityAnimationDuringDrag: false,
     allowVideoSurfaceOpacityAnimationOnSettle: false,

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../app/presentation/widgets/novashort_splash_page.dart';
 import '../core/network/test_network_config.dart';
 import '../core/network/test_network_config_dialog.dart';
 import '../core/runtime/startup_loading_timing.dart';
-import '../app/presentation/widgets/novashort_splash_page.dart';
+import '../l10n/app_localizations.dart';
 
 /// 测试网络启动闸门。
 ///
@@ -50,6 +52,13 @@ class _TestNetworkBootstrapState extends ConsumerState<TestNetworkBootstrap> {
     return MaterialApp(
       navigatorKey: _navigatorKey,
       debugShowCheckedModeBanner: false,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
       home: const NovaShortSplashPage(),
     );
   }

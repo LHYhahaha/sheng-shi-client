@@ -12,18 +12,20 @@ import '../../../../shared/widgets/custom_switch.dart';
 
 class PlayerShareSheet extends StatelessWidget {
   const PlayerShareSheet({
+    required this.shareHint,
     required this.onFacebookTap,
     required this.onCopyLinkTap,
     super.key,
   });
 
+  final String shareHint;
   final VoidCallback onFacebookTap;
   final VoidCallback onCopyLinkTap;
 
   @override
   Widget build(BuildContext context) {
     return _CompactPlayerSheet(
-      height: 249,
+      height: 300,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -44,7 +46,9 @@ class PlayerShareSheet extends StatelessWidget {
               _CloseButton(onTap: () => Navigator.of(context).pop()),
             ],
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 16),
+          _ShareHintBanner(label: shareHint),
+          const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -250,6 +254,7 @@ class GiftShareSheet extends StatelessWidget {
 class PlayerGiftShareSheet extends StatefulWidget {
   const PlayerGiftShareSheet({
     required this.quotaLabel,
+    required this.shareHint,
     required this.isGiftAvailable,
     required this.unavailableDescription,
     required this.onShareFacebookTap,
@@ -260,6 +265,7 @@ class PlayerGiftShareSheet extends StatefulWidget {
   });
 
   final String quotaLabel;
+  final String shareHint;
   final bool isGiftAvailable;
   final String unavailableDescription;
   final VoidCallback onShareFacebookTap;
@@ -303,7 +309,7 @@ class _PlayerGiftShareSheetState extends State<PlayerGiftShareSheet> {
                         onTap: () => setState(() => _giftSelected = false),
                       ),
                       _PlayerShareTab(
-                        label: 'Gift a Drama',
+                        label: context.l10n.dramaGiftTabGift,
                         selected: giftSelected,
                         onTap: () => setState(() => _giftSelected = true),
                       ),
@@ -315,7 +321,9 @@ class _PlayerGiftShareSheetState extends State<PlayerGiftShareSheet> {
             ],
           ),
           if (!giftSelected) ...[
-            const SizedBox(height: 22),
+            const SizedBox(height: 16),
+            _ShareHintBanner(label: widget.shareHint),
+            const SizedBox(height: 24),
             _GiftShareTargets(
               onFacebookTap: widget.onShareFacebookTap,
               onCopyLinkTap: widget.onShareCopyLinkTap,
@@ -434,6 +442,46 @@ class _GiftQuotaBanner extends StatelessWidget {
             height: 20,
           ),
           const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.white.withValues(alpha: 0.9),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShareHintBanner extends StatelessWidget {
+  const _ShareHintBanner({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('player_share_hint'),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2C2C2E),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        children: [
+          Image.asset(
+            'assets/images/profile/coin.png',
+            width: 20,
+            height: 20,
+            filterQuality: FilterQuality.low,
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               label,

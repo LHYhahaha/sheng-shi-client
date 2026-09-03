@@ -93,6 +93,20 @@ class PlayerEntryPreloadCoordinator extends Notifier<PlayerEntryPreloadState> {
     );
   }
 
+  /// 列表重新滚动时释放仅为“当前可见卡片”发起的预热。
+  ///
+  /// 用户点击进入播放器后的预热具有更高优先级，绝不能在这里取消。
+  Future<void> cancelVisibleCandidate({
+    String reason = 'visible_candidate_left_viewport',
+  }) async {
+    if (!state.isUserIntent && state.dramaId != null) {
+      state = const PlayerEntryPreloadState();
+      await ref
+          .read(playerStartupPreloadControllerProvider.notifier)
+          .cancel(reason: reason);
+    }
+  }
+
   /// 普通播放器路由创建时调用，覆盖所有非 For You 入口。
   ///
   /// 此时不等待网络：路由立即展示 PlayerPage，同时复用本次启动的详情请求；若任务

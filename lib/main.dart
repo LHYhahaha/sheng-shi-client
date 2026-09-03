@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
 import 'app/presentation/widgets/novashort_splash_page.dart';
-import 'app/presentation/widgets/startup_splash_gate.dart';
 import 'bootstrap/app_modal_registry_bootstrap.dart';
 import 'bootstrap/test_network_bootstrap.dart';
 import 'core/auth/auth_token_storage_provider.dart';
@@ -20,6 +20,7 @@ import 'core/network/test_network_config.dart';
 import 'core/notification/fcm_notification_service.dart';
 import 'core/runtime/install_id_provider.dart';
 import 'core/runtime/startup_loading_timing.dart';
+import 'l10n/app_localizations.dart';
 
 Future<void> main() async {
   runZoned(
@@ -80,6 +81,13 @@ class _StartupBootstrapState extends State<_StartupBootstrap> {
         if (preferences == null) {
           return const MaterialApp(
             debugShowCheckedModeBanner: false,
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
             home: NovaShortSplashPage(),
           );
         }
@@ -99,13 +107,11 @@ class _StartupBootstrapState extends State<_StartupBootstrap> {
             ),
             ...appModalRegistryOverrides,
           ],
-          child: StartupSplashGate(
-            child: TestNetworkBootstrap(
-              onReady: _startNonCriticalSdks,
-              child: DramaClientApp(
-                fcmNotificationServiceFuture:
-                    widget.fcmNotificationService.future,
-              ),
+          child: TestNetworkBootstrap(
+            onReady: _startNonCriticalSdks,
+            child: DramaClientApp(
+              fcmNotificationServiceFuture:
+                  widget.fcmNotificationService.future,
             ),
           ),
         );

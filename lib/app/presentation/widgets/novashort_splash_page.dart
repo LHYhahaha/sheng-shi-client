@@ -1,3 +1,4 @@
+import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -18,7 +19,7 @@ class NovaShortSplashPage extends StatelessWidget {
         systemNavigationBarIconBrightness: Brightness.light,
         systemNavigationBarContrastEnforced: false,
       ),
-      child: const Directionality(
+      child:  Directionality(
         textDirection: TextDirection.ltr,
         child: Scaffold(
           backgroundColor: AppColors.black,
@@ -32,18 +33,18 @@ class NovaShortSplashPage extends StatelessWidget {
                     image: AssetImage(
                       'assets/images/splash/novashort_logo.png',
                     ),
-                    width: 74,
-                    height: 74,
+                    width: 90,
+                    height: 90,
                   ),
-                  SizedBox(height: 20),
+                  SizedBox(height: 12),
                   Text(
-                    'NovaShort',
+                    context.l10n.appTitle,
                     style: TextStyle(
                       color: AppColors.white,
-                      fontSize: 20,
+                      fontSize: 42,
                       fontWeight: FontWeight.w700,
                       letterSpacing: -1.2,
-                      height: 1,
+                      height: 1.5,
                     ),
                   ),
                 ],

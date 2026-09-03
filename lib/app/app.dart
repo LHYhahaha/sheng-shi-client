@@ -29,6 +29,7 @@ import '../core/locale/runtime_supported_locales_provider.dart';
 import '../core/locale/app_locale_controller.dart';
 import '../core/modal/app_modal_host.dart';
 import '../core/network/api_client_provider.dart';
+import '../core/network/api_exception.dart';
 import '../core/notification/fcm_notification.dart';
 import '../core/notification/fcm_notification_service.dart';
 import '../core/notification/startup_notification_permission_requester.dart';
@@ -36,11 +37,16 @@ import '../core/notification/startup_notification_permission_reporter.dart';
 import '../core/auth/auth_token_store.dart';
 import '../core/runtime/install_id_provider.dart';
 import '../core/runtime/startup_loading_timing.dart';
+import '../core/toast/app_center_toast.dart';
 import '../features/auth/application/auth_controller.dart';
 import '../features/bottom_tab_config/application/bottom_tab_config_controller.dart';
 import '../features/entitlement/application/entitlement_controller.dart';
+import '../features/gift/application/gift_deep_link.dart';
+import '../features/gift/data/gift_remote_data_source_provider.dart';
+import '../features/gift/domain/gift_claim_data.dart';
 import '../features/pay/application/payment_loading_controller.dart';
 import '../features/player/application/player_entry_preload_coordinator.dart';
+import '../features/player/application/share_drama_reward_coordinator.dart';
 import '../features/popup/application/popup_entry_controller.dart';
 import '../features/popup/application/popup_analytics.dart';
 import '../features/popup/domain/popup.dart';
@@ -48,6 +54,7 @@ import '../features/popup/presentation/widgets/popup_entry_overlay.dart';
 import '../l10n/app_localizations.dart';
 import '../shared/url/external_url_launcher.dart';
 import '../shared/widgets/app_blocking_loading_overlay.dart';
+import 'presentation/widgets/startup_splash_gate.dart';
 import 'router/app_router.dart';
 import 'router/route_paths.dart';
 import 'shell/app_shell.dart';
@@ -228,6 +235,12 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
       return;
     }
 
+    final gift = GiftDeepLink.tryParse(uri);
+    if (gift != null) {
+      await _handleGiftAppLink(gift);
+      return;
+    }
+
     final dramaId = uri.queryParameters['drama_id']?.trim();
     if (dramaId == null || dramaId.isEmpty) {
       debugPrint('[AppLink] Missing drama_id: $uri');
@@ -273,6 +286,100 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     );
   }
 
+  Future<void> _handleGiftAppLink(GiftDeepLink gift) async {
+    // 领取接口要求有效 token。冷启动或 session 恢复期间先等待认证完成，不能因
+    // 深链接只到达一次而错过后续领取。
+    if (!await _waitForExternalPlayerAuthentication()) {
+      return;
+    }
+    if (!mounted) return;
+
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.shareAppOpen, {
+              'landing_type': gift.type == GiftDeepLinkType.drama
+                  ? 'drama_gift'
+                  : 'temp_vip_gift',
+            }),
+          ),
+    );
+
+    if (gift.type == GiftDeepLinkType.drama && gift.dramaId != null) {
+      _cancelAllPopupFlowsForRouteExit();
+      _prepareEntrySource(type: 'share_deeplink');
+      await _openExternalPlayerWhenAuthenticationReady(
+        dramaId: gift.dramaId!,
+        episodeId: '1',
+        trigger: 'drama_gift_deeplink',
+        giftShareCode: gift.shareCode,
+        deferPlayerPreload: true,
+      );
+      return;
+    }
+
+    final GiftClaimData claim;
+    try {
+      claim = await ref
+          .read(giftRemoteDataSourceProvider)
+          .claimGift(shareCode: gift.shareCode);
+    } on ApiException catch (error) {
+      if (mounted) {
+        showAppCenterToast(
+          context.l10n.giftClaimFailureForReason(
+            error.businessCode == 3206 ? 8 : -1,
+          ),
+        );
+      }
+      debugPrint(
+        '[GiftDeepLink] Gift claim failed: '
+        'code=${error.code.name}, businessCode=${error.businessCode}',
+      );
+      return;
+    } catch (error, stackTrace) {
+      debugPrint('[GiftDeepLink] Gift claim failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      return;
+    }
+    if (!mounted) return;
+
+    if (!claim.isSuccess) {
+      showAppCenterToast(
+        context.l10n.giftClaimFailureForReason(claim.reasonCode),
+      );
+      return;
+    }
+
+    if (claim.isTemporaryVip) {
+      showAppCenterToast(
+        context.l10n.memberGiftClaimed(days: claim.benefitDays),
+      );
+      await ref
+          .read(entitlementControllerProvider.notifier)
+          .refreshFromServer();
+      return;
+    }
+
+    showAppCenterToast(
+      context.l10n.giftClaimSuccess(benefitDays: claim.benefitDays),
+    );
+
+    if (!claim.isDrama || claim.dramaId.isEmpty || claim.dramaId == '0') return;
+
+    await _openClaimedGiftDrama(claim.dramaId);
+  }
+
+  Future<void> _openClaimedGiftDrama(String dramaId) async {
+    _cancelAllPopupFlowsForRouteExit();
+    _prepareEntrySource(type: 'share_deeplink');
+    await _openExternalPlayerWhenAuthenticationReady(
+      dramaId: dramaId,
+      episodeId: '1',
+      trigger: 'drama_gift_deeplink',
+    );
+  }
+
   /// 冷启动外部入口可能在设备登录完成前到达。播放器详情和 source 都要求可用
   /// token，不能让首次请求把“鉴权尚未就绪”写成播放失败态。
   Future<bool> _waitForExternalPlayerAuthentication() async {
@@ -307,22 +414,27 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     required String dramaId,
     required String episodeId,
     required String trigger,
+    String? giftShareCode,
+    bool deferPlayerPreload = false,
   }) async {
     if (!await _waitForExternalPlayerAuthentication()) {
       return;
     }
     if (!mounted) return;
-    preparePlayerEntryPreload(
-      context,
-      dramaId: dramaId,
-      episodeId: episodeId,
-      trigger: trigger,
-    );
+    if (!deferPlayerPreload) {
+      preparePlayerEntryPreload(
+        context,
+        dramaId: dramaId,
+        episodeId: episodeId,
+        trigger: trigger,
+      );
+    }
     final location = RoutePaths.playerLocation(
       dramaId: dramaId,
       episodeId: episodeId,
       trigger: trigger,
       userActionAtMs: DateTime.now().millisecondsSinceEpoch,
+      giftShareCode: giftShareCode,
     );
     debugPrint('[ExternalPlayerEntry] Opening drama $dramaId trigger=$trigger');
     ref.read(appRouterProvider).go(location);
@@ -569,6 +681,12 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         .read(analyticsLifecycleTrackerProvider)
         .onLifecycleChanged(state);
     unawaited(analyticsLifecycleUpdate);
+    final shareRewardChannel = ref
+        .read(shareDramaRewardCoordinatorProvider)
+        .onLifecycleChanged(state);
+    if (shareRewardChannel == ShareDramaRewardChannel.facebook) {
+      showAppCenterToast(context.l10n.shareRewardArrivalHint);
+    }
     if (state == AppLifecycleState.resumed) {
       // 首次启动时 ADID 尚未生成或接口失败时，在回前台补偿绑定。
       unawaited(
@@ -920,24 +1038,26 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
             paymentLoading.label == PaymentLoadingLabel.loading
             ? context.l10n.loading
             : context.l10n.storePurchaseProcessing;
-        return AccountBannedOverlay(
-          child: PopScope(
-            canPop:
-                !isPaymentLoading &&
-                (!isBanned || accountBan.isViewingFeedback),
-            child: Stack(
-              children: [
-                AppModalHost(child: wrapped),
-                if (!isBanned)
-                  PopupEntryOverlay(
-                    onImageTap: (popup) => _handlePopupImageTap(router, popup),
-                    onPlayTap: (popup) => _handlePopupPlayTap(router, popup),
-                  ),
-                if (isPaymentLoading && !isBanned)
-                  AppBlockingLoadingOverlay(label: paymentLoadingLabel),
-                if (_isWaitingForExternalPlayerAuthentication && !isBanned)
-                  AppBlockingLoadingOverlay(label: context.l10n.loading),
-              ],
+        return StartupSplashGate(
+          child: AccountBannedOverlay(
+            child: PopScope(
+              canPop:
+                  !isPaymentLoading &&
+                  (!isBanned || accountBan.isViewingFeedback),
+              child: Stack(
+                children: [
+                  AppModalHost(child: wrapped),
+                  if (!isBanned)
+                    PopupEntryOverlay(
+                      onImageTap: (popup) => _handlePopupImageTap(router, popup),
+                      onPlayTap: (popup) => _handlePopupPlayTap(router, popup),
+                    ),
+                  if (isPaymentLoading && !isBanned)
+                    AppBlockingLoadingOverlay(label: paymentLoadingLabel),
+                  if (_isWaitingForExternalPlayerAuthentication && !isBanned)
+                    AppBlockingLoadingOverlay(label: context.l10n.loading),
+                ],
+              ),
             ),
           ),
         );

@@ -1035,15 +1035,54 @@ class AppLocalizations {
   );
 
   String get giftShareUnavailableTitle => _remoteText(
-    'vip.gift.unavailable.title',
-    en: 'Currently, it cannot be given away.',
-    zh: '暂时无法赠送。',
+    'gift.unavailable.title',
+    en: "Can't Gift Right Now",
+    zh: '当前不能赠送',
   );
 
-  String get giftShareUnavailableDescription => _remoteText(
-    'vip.gift.unavailable.description',
-    en: 'Your gift quota for this week has been used up.',
-    zh: '您本周的赠送次数已用完。',
+  String giftShareUnavailableLimit({required String date}) => _interpolate(
+    _remoteText(
+      'gift.unavailable.limit',
+      en: "You've used this week's gift quota. You can gift again on {date}.",
+      zh: '你本周的赠送额度已用完，{date}可以再次赠送',
+    ),
+    {'date': date},
+  );
+
+  String formatGiftReGrantDate(String raw) {
+    final normalized = raw.trim().replaceAll('/', '-');
+    final date = DateTime.tryParse(normalized);
+    if (date == null) return raw.trim();
+    if (locale.languageCode == 'zh') {
+      return '${date.year}年${date.month}月${date.day}日';
+    }
+    return '${date.month}/${date.day}/${date.year}';
+  }
+
+  String get dramaGiftTabGift =>
+      _remoteText('drama_gift.tab.gift', en: 'Gift a Drama', zh: '赠送影片');
+
+  String dramaGiftShareSummary({required int used, required int total}) =>
+      _interpolate(
+        _remoteText(
+          'drama_gift.share.summary',
+          en: 'Free viewing for friends ({used}/{total})',
+          zh: '好友可免费观看此剧（{used}/{total}）',
+        ),
+        {'used': used, 'total': total},
+      );
+
+  String memberGiftShareSummary({
+    required int days,
+    required int used,
+    required int total,
+  }) => _interpolate(
+    _remoteText(
+      'member_gift.share.summary',
+      en: 'Give a friend a {days}-day membership ({used}/{total})',
+      zh: '赠送好友{days}天会员（{used}/{total}）',
+    ),
+    {'days': days, 'used': used, 'total': total},
   );
 
   String get benefitNoAds =>
@@ -1754,6 +1793,30 @@ class AppLocalizations {
   String get shareToastCopySuccess =>
       _remoteText('share.toast.copy_success', en: 'Copied', zh: '复制成功');
 
+  String shareFirstRewardHint({required int coins}) => _remoteText(
+    'share_modal.first_reward',
+    en: 'Get {coins} coins on your first share!',
+    zh: '首次分享可得 {coins} 金币！',
+  ).replaceAll('{coins}', coins.toString());
+
+  String get shareDailyRewardHint => _remoteText(
+    'share_modal.hint',
+    en: 'Share with friends and earn coins daily.',
+    zh: '分享给好友，每天都能赚金币。',
+  );
+
+  String get shareToastFailed => _remoteText(
+    'share.toast.failed',
+    en: 'Share failed. Try again.',
+    zh: '分享失败，可稍后重试',
+  );
+
+  String get shareRewardArrivalHint => _remoteText(
+    'share.toast.reward_arrival',
+    en: 'Reward coins will arrive within 2 minutes.',
+    zh: '奖励金币将在两分钟内到账。',
+  );
+
   String shareMessage({required String dramaTitle, required String shareUrl}) {
     return _remoteText(
           'share.message',
@@ -2250,6 +2313,42 @@ class AppLocalizations {
     'app.common.error.network_retry',
     en: 'Network error. Please try again later.',
     zh: '网络错误，请稍后重试。',
+  );
+
+  String giftClaimSuccess({required int benefitDays}) => _interpolate(
+    _remoteText(
+      'vip.gift.claim.success',
+      en: 'Unlocked successfully. Valid for {benefitDays} days.',
+      zh: '解锁成功，{benefitDays}日有效',
+    ),
+    {'benefitDays': benefitDays},
+  );
+
+  String memberGiftClaimed({required int days}) => _interpolate(
+    _remoteText(
+      'member_gift.claimed',
+      en: '{days}-Day Premium Unlocked',
+      zh: '已解锁{days}天会员',
+    ),
+    {'days': days},
+  );
+
+  String get giftClaimFull =>
+      _remoteText('gift.claim.full', en: 'No spots left.', zh: '领取名额已满');
+
+  String get giftClaimExpired =>
+      _remoteText('gift.claim.expired', en: 'Link expired.', zh: '链接已失效');
+
+  String giftClaimFailureForReason(int reasonCode) => switch (reasonCode) {
+    8 => memberGiftIneligible,
+    10 => giftClaimFull,
+    _ => giftClaimExpired,
+  };
+
+  String get memberGiftIneligible => _remoteText(
+    'member_gift.ineligible',
+    en: "Members can't claim.",
+    zh: '会员身份不可领取',
   );
 
   String get paymentGoogleUnavailable => _remoteText(

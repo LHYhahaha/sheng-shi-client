@@ -367,6 +367,7 @@ class ActivePlaybackSurfaceOverlay extends ConsumerStatefulWidget {
     required this.itemId,
     required this.currentIndex,
     required this.pagePositionListenable,
+    required this.pageViewportHeight,
     required this.canShowVideo,
     required this.policy,
     required this.isViewportDragging,
@@ -381,6 +382,9 @@ class ActivePlaybackSurfaceOverlay extends ConsumerStatefulWidget {
   final String? itemId;
   final int currentIndex;
   final ValueListenable<double> pagePositionListenable;
+
+  /// 与 PageView 相同约束下的真实整页高度，不能使用含 SafeArea 的屏幕高度。
+  final double pageViewportHeight;
   final bool canShowVideo;
   final PlayerPerformancePolicy policy;
   final bool isViewportDragging;
@@ -523,13 +527,9 @@ class ActivePlaybackSurfaceOverlayState
       );
     }
 
-    final surfaceBorderRadius = widget.forYouLayout
-        ? const BorderRadius.vertical(bottom: Radius.circular(10))
-        : const BorderRadius.vertical(bottom: Radius.circular(16));
-    final opacityChild = ClipRRect(
-      // borderRadius: surfaceBorderRadius,
-      child: buildOpacityChild(videoChild),
-    );
+    // 当前没有对 video surface 应用圆角；保留默认零圆角 ClipRRect 只会让每帧
+    // 多一道裁剪，尤其在原生 surface 跟 PageView 合成时会放大 GPU 压力。
+    final opacityChild = buildOpacityChild(videoChild);
 
     if (!widget.policy.allowVideoSurfaceFollowDuringDrag) {
       return Positioned(
@@ -551,7 +551,7 @@ class ActivePlaybackSurfaceOverlayState
         child: ValueListenableBuilder<double>(
           valueListenable: widget.pagePositionListenable,
           builder: (context, page, child) {
-            final viewportHeight = MediaQuery.sizeOf(context).height;
+            final viewportHeight = widget.pageViewportHeight;
             final translateY = (widget.currentIndex - page) * viewportHeight;
             _recordOverlayTranslated(
               page: page,
@@ -683,7 +683,6 @@ class PlayerPlaybackControlsConsumer extends ConsumerStatefulWidget {
 class PlayerPlaybackControlsConsumerState
     extends ConsumerState<PlayerPlaybackControlsConsumer> {
   bool _showPauseFeedback = false;
-  bool _showPlayFeedback = false;
   Timer? _feedbackTimer;
 
   @override
@@ -747,7 +746,6 @@ class PlayerPlaybackControlsConsumerState
         PlayerSubtitleOverlay(sessionKey: widget.sessionKey),
         if (showCenterPlayButton) CenterPlayButton(onTap: _playWithFeedback),
         if (showCenterPauseButton) CenterPauseButton(onTap: _pauseWithFeedback),
-        if (_showPlayFeedback) const PlayFeedbackIcon(),
         if (_showPauseFeedback) const PauseFeedbackIcon(),
       ],
     );
@@ -773,14 +771,13 @@ class PlayerPlaybackControlsConsumerState
     );
     if (snapshot.isPlaying) {
       _showTransientFeedback(_PlaybackFeedbackIcon.pause);
-    } else if (snapshot.status == PlayerPlaybackStatus.paused) {
-      _showTransientFeedback(_PlaybackFeedbackIcon.play);
     }
     widget.onTogglePlay(pauseRequested: snapshot.isPlaying);
   }
 
   void _playWithFeedback() {
-    _showTransientFeedback(_PlaybackFeedbackIcon.play);
+    // 暂停态已展示常驻播放按钮；恢复播放时不再叠加反馈图标，
+    // 避免状态切换前与常驻按钮的黑色背景重叠。
     widget.onTogglePlay(pauseRequested: false);
   }
 
@@ -798,13 +795,11 @@ class PlayerPlaybackControlsConsumerState
     }
     _feedbackTimer?.cancel();
     setState(() {
-      _showPlayFeedback = icon == _PlaybackFeedbackIcon.play;
       _showPauseFeedback = icon == _PlaybackFeedbackIcon.pause;
     });
     _feedbackTimer = Timer(const Duration(milliseconds: 420), () {
       if (mounted) {
         setState(() {
-          _showPlayFeedback = false;
           _showPauseFeedback = false;
         });
       }
@@ -812,7 +807,7 @@ class PlayerPlaybackControlsConsumerState
   }
 }
 
-enum _PlaybackFeedbackIcon { play, pause }
+enum _PlaybackFeedbackIcon { pause }
 
 class PlayerSeekBarConsumer extends ConsumerStatefulWidget {
   const PlayerSeekBarConsumer({
@@ -825,6 +820,7 @@ class PlayerSeekBarConsumer extends ConsumerStatefulWidget {
     required this.onSeekUpdate,
     required this.onSeekEnd,
     required this.onSeekCancel,
+    this.idleTouchTargetHeight = 36,
   });
 
   final String sessionKey;
@@ -835,6 +831,7 @@ class PlayerSeekBarConsumer extends ConsumerStatefulWidget {
   final ValueChanged<Duration> onSeekUpdate;
   final VoidCallback onSeekEnd;
   final VoidCallback onSeekCancel;
+  final double idleTouchTargetHeight;
 
   @override
   ConsumerState<PlayerSeekBarConsumer> createState() =>
@@ -898,6 +895,7 @@ class _PlayerSeekBarConsumerState extends ConsumerState<PlayerSeekBarConsumer> {
       previewConfig: previewConfig,
       isPassiveTrack: effectiveDuration <= Duration.zero,
       trackFadeDuration: trackFadeDuration,
+      idleTouchTargetHeight: widget.idleTouchTargetHeight,
       isDragging: snapshot.isSeeking,
       showTrackLoading: isCurrentPlaybackItem && showTrackLoading,
       enabled: canSeek,
@@ -1059,42 +1057,6 @@ class PauseFeedbackIcon extends StatelessWidget {
               Icons.pause_rounded,
               color: Colors.white,
               size: 42,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class PlayFeedbackIcon extends StatelessWidget {
-  const PlayFeedbackIcon({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Center(
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.92, end: 1),
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOutCubic,
-          builder: (context, scale, child) {
-            return Transform.scale(scale: scale, child: child);
-          },
-          child: Container(
-            key: const ValueKey('player_play_feedback'),
-            width: 70,
-            height: 70,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.3),
-                width: 0.5,
-              ),
-            ),
-            child: SvgPicture.asset(
-              'assets/images/player/play.svg',
-              fit: BoxFit.fill,
             ),
           ),
         ),

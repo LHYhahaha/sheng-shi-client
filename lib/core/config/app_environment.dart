@@ -136,6 +136,7 @@ class AppConfig {
   /// 赠送短剧 H5 地址。当前客户端尚无赠送入口，先保留完整参数契约。
   Uri giftDramaUrl({
     required String languageCode,
+    required String dramaId,
     String userId = '',
     String channelId = '',
     String merchantId = '',
@@ -154,6 +155,7 @@ class AppConfig {
       'share_method': shareMethod,
       'shareCode': shareCode,
       'benefitDays': benefitDays,
+      'drama_id': dramaId,
     },
   );
 
@@ -179,6 +181,7 @@ class AppConfig {
   /// Facebook 赠送短剧链接沿用普通分享的 `_sp` 打包格式。
   Uri facebookGiftDramaUrl({
     required String languageCode,
+    required String dramaId,
     String userId = '',
     String channelId = '',
     String merchantId = '',
@@ -192,6 +195,7 @@ class AppConfig {
     merchantId: merchantId,
     shareCode: shareCode,
     benefitDays: benefitDays,
+    dramaId: dramaId,
   );
 
   Uri _facebookGiftUrl({
@@ -202,6 +206,7 @@ class AppConfig {
     required String merchantId,
     required String shareCode,
     required String benefitDays,
+    String dramaId = '',
   }) {
     final packed = _packShareQuery({
       'lang': languageCode,
@@ -211,6 +216,7 @@ class AppConfig {
       'share_method': 'facebook',
       'shareCode': shareCode,
       'benefitDays': benefitDays,
+      'drama_id': dramaId,
     });
     return _webBaseUrl.replace(path: path, queryParameters: {'_sp': packed});
   }

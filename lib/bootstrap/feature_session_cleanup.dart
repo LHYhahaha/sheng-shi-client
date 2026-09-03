@@ -12,6 +12,7 @@ import '../features/gift/application/gift_drama_link_cache.dart';
 import '../features/membership/application/membership_controller.dart';
 import '../features/my_list/application/my_list_controller.dart';
 import '../features/player/application/player_session_cleanup.dart';
+import '../features/player/application/share_drama_reward_coordinator.dart';
 import '../features/profile/application/profile_controller.dart';
 import '../features/store/application/store_controller.dart';
 import '../features/wallet/application/wallet_controller.dart';
@@ -59,6 +60,7 @@ final featureSessionCleanupRegistrationProvider = Provider<void>((ref) {
     },
     (_) async {
       ref.read(giftDramaLinkCacheProvider).clear();
+      ref.read(shareDramaRewardCoordinatorProvider).clear();
     },
     (reason) async {
       walletController.resetForSessionCleanup(reason);

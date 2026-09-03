@@ -41,6 +41,37 @@ void main() {
       expect(adapter.requests[1].queryParameters['dramaId'], 42);
     },
   );
+
+  test(
+    'claims a gift with the share code and parses its granted benefit',
+    () async {
+      final adapter = RecordingHttpAdapter(
+        defaultResponse: RecordingHttpResponse(
+          body: apiEnvelopeSuccess({
+            'benefitDays': 3,
+            'dramaId': '1506',
+            'giftType': 1,
+            'isAvailable': true,
+            'reason': '',
+            // 成功判断仅取 isAvailable，reasonCode 不参与成功分支。
+            'reasonCode': 10,
+            'shareCode': 'abc1234',
+          }),
+        ),
+      );
+      final source = GiftRemoteDataSource(apiClient: _apiClient(adapter));
+
+      final result = await source.claimGift(shareCode: 'abc1234');
+
+      expect(result.benefitDays, 3);
+      expect(result.dramaId, '1506');
+      expect(result.isDrama, isTrue);
+      expect(result.isSuccess, isTrue);
+      expect(adapter.requests.single.method, 'POST');
+      expect(adapter.requests.single.path, '/api/user/gifts/claim');
+      expect(adapter.requests.single.data, {'shareCode': 'abc1234'});
+    },
+  );
 }
 
 ApiClient _apiClient(RecordingHttpAdapter adapter) {

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -34,6 +35,7 @@ import '../../../../shared/url/external_url_launcher.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../../gift/application/gift_drama_link_cache.dart';
+import '../../../gift/data/gift_remote_data_source_provider.dart';
 import '../../../gift/domain/gift_link_data.dart';
 import '../../../entitlement/domain/episode_unlock_type.dart';
 import '../../data/player_exit_recommendation_history_repository_provider.dart';
@@ -52,6 +54,7 @@ import '../../application/player_recharge_unlock_controller.dart';
 import '../../application/player_unlock_modal_coordinator.dart';
 import '../../application/player_rebuild_diagnostics.dart';
 import '../../application/player_session_registry.dart';
+import '../../application/share_drama_reward_coordinator.dart';
 import '../../application/player_ui_controller.dart';
 import '../../application/player_viewport_controller.dart';
 import '../../data/playback_progress_repository_provider.dart';
@@ -59,6 +62,7 @@ import '../../data/drama_playback_target_repository_provider.dart';
 import '../../data/player_content_repository_provider.dart';
 import '../../data/mapper/player_content_mapper.dart';
 import '../../data/player_remote_data_source_provider.dart';
+import '../../data/dto/share_drama_status_dto.dart';
 import '../../../popup/data/popup_repository_provider.dart';
 import '../../../popup/domain/popup.dart';
 import '../../domain/player_access_presentation.dart';
@@ -99,6 +103,29 @@ final class _ExitRecommendationPlayResult
   final PopupExitRecommendation recommendation;
 }
 
+/// 拖动期间不让框架自行决定 fling/回弹；由页面在拖动结束后统一吸附。
+///
+/// 这避免 [PageScrollPhysics] 在短滑时先给出回弹，再与业务层的当前集同步竞争。
+class _PlayerPageDragPhysics extends ScrollPhysics {
+  const _PlayerPageDragPhysics({super.parent});
+
+  // 12% 在轻滑可切换与避免误触间取平衡。
+  static const _pageTurnThreshold = 0.12;
+
+  @override
+  _PlayerPageDragPhysics applyTo(ScrollPhysics? ancestor) {
+    return _PlayerPageDragPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  Simulation? createBallisticSimulation(
+    ScrollMetrics position,
+    double velocity,
+  ) {
+    return null;
+  }
+}
+
 class _InitialResumeCandidate {
   const _InitialResumeCandidate({required this.source, required this.progress});
 
@@ -133,6 +160,7 @@ class PlayerPage extends ConsumerStatefulWidget {
     this.forYouHandoff,
     this.initialExitRecommendationsForTesting,
     this.initialExitRecommendationPopupIdForTesting,
+    this.giftShareCode,
     super.key,
   });
 
@@ -145,7 +173,8 @@ class PlayerPage extends ConsumerStatefulWidget {
       initialUserActionAt = null,
       forYouHandoff = null,
       initialExitRecommendationsForTesting = null,
-      initialExitRecommendationPopupIdForTesting = null;
+      initialExitRecommendationPopupIdForTesting = null,
+      giftShareCode = null;
 
   final String? dramaId;
   final String? episodeId;
@@ -156,6 +185,7 @@ class PlayerPage extends ConsumerStatefulWidget {
   final ForYouPlayerHandoff? forYouHandoff;
   final List<PopupExitRecommendation>? initialExitRecommendationsForTesting;
   final int? initialExitRecommendationPopupIdForTesting;
+  final String? giftShareCode;
 
   @override
   ConsumerState<PlayerPage> createState() => _PlayerPageState();
@@ -196,7 +226,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isLeavingRoute = false;
   bool _isDisposing = false;
   bool _isPressingPlaybackSurface = false;
+  bool _isPagePointerDown = false;
   bool _isPageScrolling = false;
+  bool _isPageSettleAnimation = false;
+  bool _isPageSettleRequested = false;
+  // ScrollEnd 到 viewport state 落位之间有一个 post-frame 间隙。期间不能把
+  // PageController 按旧 currentIndex 对齐，否则用户刚滑到下一页会被拉回。
+  bool _hasPendingPageViewportSettle = false;
+  bool _shouldTrackVideoSurfacePagePosition = true;
   bool _isExitRecommendationHistoryLoading = true;
   bool _hasShownExitRecommendationForDrama = false;
   bool _hasShownDramaTakenDownToast = false;
@@ -549,6 +586,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     Future<void>.microtask(() {
       if (mounted) {
         _refreshDramaGiftLinkOnPlayerEntry(widget.dramaId);
+        _prefetchShareDramaStatus();
       }
     });
     Future<void>.microtask(() async {
@@ -585,6 +623,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       // 收藏状态由随后加载的 `/api/home/detail.is_favorited` 同步到 like controller。
       // 不再在进入播放器时额外请求 `/api/user/short/follow/check`。
 
+      if (widget.giftShareCode != null) {
+        await _claimGiftDramaBeforeLoadingFeed(widget.giftShareCode!);
+      }
+      if (!mounted) return;
       await _loadFeedForTiming();
       _playbackController.recordPlaybackTiming(
         'player startup microtask end',
@@ -592,6 +634,43 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         details: 'feedMode=${widget.feedMode.name}',
       );
     });
+  }
+
+  Future<void> _claimGiftDramaBeforeLoadingFeed(String shareCode) async {
+    final loading = ref.read(paymentLoadingControllerProvider.notifier);
+    loading.show(label: PaymentLoadingLabel.loading);
+    int? benefitDays;
+    int? failureReasonCode;
+    try {
+      final claim = await ref
+          .read(giftRemoteDataSourceProvider)
+          .claimGift(shareCode: shareCode);
+      if (claim.isSuccess) {
+        benefitDays = claim.benefitDays;
+      } else {
+        failureReasonCode = claim.reasonCode;
+      }
+    } on ApiException catch (error) {
+      failureReasonCode = error.businessCode == 3206 ? 8 : -1;
+      developer.log(
+        'gift drama claim failed before loading player detail',
+        error: error,
+      );
+    } catch (error, stackTrace) {
+      developer.log(
+        'gift drama claim failed before loading player detail',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } finally {
+      loading.hide();
+    }
+    if (!mounted) return;
+    showAppCenterToast(
+      benefitDays != null
+          ? context.l10n.giftClaimSuccess(benefitDays: benefitDays)
+          : context.l10n.giftClaimFailureForReason(failureReasonCode ?? -1),
+    );
   }
 
   Future<void> _releaseForYouDecoderBeforeSinglePlayback() async {
@@ -1314,6 +1393,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final viewportProvider = playerViewportControllerProvider(sessionKey);
     final overlayProvider = playerOverlayOrchestratorProvider(sessionKey);
     final performancePolicy = ref.watch(playerPerformancePolicyProvider);
+    _shouldTrackVideoSurfacePagePosition =
+        performancePolicy.allowVideoSurfaceFollowDuringDrag;
 
     final feedSnapshot = ref.watch(
       feedProvider.select(
@@ -1537,6 +1618,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       next,
     ) {
       if (_shouldIgnoreRouteListener) {
+        return;
+      }
+      // 用户手势和吸附动画拥有 PageController；此监听仅用于弹窗选集、远程续播等
+      // 非手势跳页。否则 currentIndex 的中间状态会把正在滑动的页面拉回旧集。
+      if (_isPageScrolling || _hasPendingPageViewportSettle) {
         return;
       }
       if (!_pageController.hasClients) {
@@ -1852,37 +1938,44 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
     final pageView = Listener(
       key: const ValueKey('player_page_view_surface'),
-      onPointerDown: (_) => _setPlaybackSurfacePressed(true),
-      onPointerUp: (_) => _setPlaybackSurfacePressed(false),
-      onPointerCancel: (_) => _setPlaybackSurfacePressed(false),
+      onPointerDown: (_) {
+        _isPagePointerDown = true;
+        _setPlaybackSurfacePressed(true);
+      },
+      onPointerUp: (_) {
+        _isPagePointerDown = false;
+        _setPlaybackSurfacePressed(false);
+        // 部分 Android 机型/嵌套 RefreshIndicator 组合下，PageView 的
+        // ScrollEndNotification 会晚到或缺失；手指抬起后再兜底请求一次落位。
+        SchedulerBinding.instance.addPostFrameCallback(
+          (_) => _requestPageSettle(),
+        );
+      },
+      onPointerCancel: (_) {
+        _isPagePointerDown = false;
+        _setPlaybackSurfacePressed(false);
+        SchedulerBinding.instance.addPostFrameCallback(
+          (_) => _requestPageSettle(),
+        );
+      },
       child: NotificationListener<ScrollNotification>(
         onNotification: _handlePageScrollNotification,
         child: PageView.builder(
           controller: _pageController,
           physics: _isSeekDragging
               ? const NeverScrollableScrollPhysics()
-              : const PageScrollPhysics(parent: ClampingScrollPhysics()),
+              : const _PlayerPageDragPhysics(parent: ClampingScrollPhysics()),
           scrollDirection: Axis.vertical,
+          // 默认 pageSnapping 会把框架的 PageScrollPhysics 放在自定义 physics
+          // 外层，短滑仍按半屏阈值回弹。关闭后由 _settlePageAfterDrag 统一吸附。
+          pageSnapping: false,
+          dragStartBehavior: DragStartBehavior.down,
           // For You 到底时不能追加一个整屏“暂无数据” page。它会让用户看起来像
           // 滑进了空白内容，也与首页/My List 的底部 footer 不一致。
           itemCount: items.length,
-          onPageChanged: (index) {
-            feedEngine.onPageChanged(index);
-            // 在倒数第二条就取下一页，让用户真正滑到末条时网络请求通常已经完成。
-            // 仍由 feed controller 的 isLoadingMore/hasMore 去重，短列表（仅一条）
-            // 会在首条触发一次，保持首次数据不足时的兜底行为。
-            if (widget.feedMode == PlayerFeedMode.forYou &&
-                index >= items.length - 2) {
-              final latestFeed = ref.read(
-                playerFeedControllerProvider(_sessionKey),
-              );
-              if (latestFeed.hasMore) {
-                unawaited(feedController.loadMore());
-              } else {
-                _showForYouNoMoreToast();
-              }
-            }
-          },
+          // PageView 在滑过半页时便会触发 onPageChanged。这里不能提前提交
+          // 当前集，否则顶层 Video 会在手势中途换源，视觉上就像闪到下一页。
+          // 统一在 _finishPageSettle 的落位动画结束后提交。
           itemBuilder: (context, index) {
             final item = items[index];
             final isSettledPage = index == viewportState.settledIndex;
@@ -1984,74 +2077,85 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       ),
     );
 
-    return Stack(
-      children: [
-        ActivePlaybackSurfaceOverlay(
-          sessionKey: _sessionKey,
-          itemId: activeVideoItemId,
-          currentIndex: activeVideoIndex == -1
-              ? settledIndex
-              : activeVideoIndex,
-          pagePositionListenable: _pagePositionNotifier,
-          canShowVideo: canShowActiveVideoOverlay,
-          policy: performancePolicy,
-          isViewportDragging: isViewportDragging,
-          videoFit: settledItem == null
-              ? BoxFit.cover
-              : videoFitForEpisode(settledItem.episode),
-          forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
-        ),
-        widget.feedMode == PlayerFeedMode.forYou
-            ? RefreshIndicator(onRefresh: refreshFeed, child: pageView)
-            : pageView,
-        if (widget.feedMode == PlayerFeedMode.forYou && !_isSeekDragging)
-          PlayerForYouSearchButton(
-            top: 8,
-            onTap: () => unawaited(_openSearch()),
+    return LayoutBuilder(
+      builder: (context, constraints) => Stack(
+        children: [
+          ActivePlaybackSurfaceOverlay(
+            sessionKey: _sessionKey,
+            itemId: activeVideoItemId,
+            currentIndex: activeVideoIndex == -1
+                ? settledIndex
+                : activeVideoIndex,
+            pagePositionListenable: _pagePositionNotifier,
+            pageViewportHeight: constraints.maxHeight,
+            canShowVideo: canShowActiveVideoOverlay,
+            policy: performancePolicy,
+            isViewportDragging: isViewportDragging,
+            videoFit: settledItem == null
+                ? BoxFit.cover
+                : videoFitForEpisode(settledItem.episode),
+            forYouLayout: widget.feedMode == PlayerFeedMode.forYou,
           ),
-        if (widget.feedMode == PlayerFeedMode.singleDrama &&
-            settledItem != null)
-          AnimatedOpacity(
-            key: const ValueKey('player_top_bar_chrome_visibility'),
-            opacity: showsTopBar ? 1 : 0,
-            duration: chromeOverlayFadeDuration,
-            curve: Curves.easeOut,
-            child: IgnorePointer(
-              ignoring: !showsTopBar,
-              child: PlayerTopBar(
-                episodeNumber: settledItem.episode.number,
-                playbackRate: playbackShell.playbackRate,
-                overlayOpacity: 1,
-                showChromeOverlays: showsTopPageChrome,
-                showBackOnly: showsUnlockButton,
-                overlayOpacityListenable:
-                    performancePolicy.allowPressChromeDimming
-                    ? _overlayOpacityNotifier
-                    : null,
-                onBackTap: () {
-                  unawaited(_goBackFromPlayer());
-                },
-                onSpeedTap: _showSpeedSheet,
-                subtitles: subtitles,
-                episodeSources: episodeSources,
-                currentSubtitleLanguage: currentSubtitleLanguage,
-                isSubtitleSelectionResolved: isSubtitleSelectionResolved,
-                showSubtitleEntry:
-                    viewportState.scrollPhase == PlayerViewportScrollPhase.idle,
-                onSubtitleSelected: (language) {
-                  final controller = ref.read(
-                    playerPlaybackControllerProvider(_sessionKey).notifier,
-                  );
-                  unawaited(
-                    language == null
-                        ? controller.setSubtitle(null)
-                        : controller.selectSubtitleLanguage(language),
-                  );
-                },
+          widget.feedMode == PlayerFeedMode.forYou
+              ? RefreshIndicator(
+                  // RefreshIndicator 仍保留，但只在第 0 页的顶部接收通知。
+                  // 一旦 PageView 已开始向上翻页，就完全交还给分页手势，避免
+                  // 嵌套滚动链参与中段的落位判断。
+                  notificationPredicate: _shouldHandleForYouRefresh,
+                  onRefresh: refreshFeed,
+                  child: pageView,
+                )
+              : pageView,
+          if (widget.feedMode == PlayerFeedMode.forYou && !_isSeekDragging)
+            PlayerForYouSearchButton(
+              top: 8,
+              onTap: () => unawaited(_openSearch()),
+            ),
+          if (widget.feedMode == PlayerFeedMode.singleDrama &&
+              settledItem != null)
+            AnimatedOpacity(
+              key: const ValueKey('player_top_bar_chrome_visibility'),
+              opacity: showsTopBar ? 1 : 0,
+              duration: chromeOverlayFadeDuration,
+              curve: Curves.easeOut,
+              child: IgnorePointer(
+                ignoring: !showsTopBar,
+                child: PlayerTopBar(
+                  episodeNumber: settledItem.episode.number,
+                  playbackRate: playbackShell.playbackRate,
+                  overlayOpacity: 1,
+                  showChromeOverlays: showsTopPageChrome,
+                  showBackOnly: showsUnlockButton,
+                  overlayOpacityListenable:
+                      performancePolicy.allowPressChromeDimming
+                      ? _overlayOpacityNotifier
+                      : null,
+                  onBackTap: () {
+                    unawaited(_goBackFromPlayer());
+                  },
+                  onSpeedTap: _showSpeedSheet,
+                  subtitles: subtitles,
+                  episodeSources: episodeSources,
+                  currentSubtitleLanguage: currentSubtitleLanguage,
+                  isSubtitleSelectionResolved: isSubtitleSelectionResolved,
+                  showSubtitleEntry:
+                      viewportState.scrollPhase ==
+                      PlayerViewportScrollPhase.idle,
+                  onSubtitleSelected: (language) {
+                    final controller = ref.read(
+                      playerPlaybackControllerProvider(_sessionKey).notifier,
+                    );
+                    unawaited(
+                      language == null
+                          ? controller.setSubtitle(null)
+                          : controller.selectSubtitleLanguage(language),
+                    );
+                  },
+                ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -2126,7 +2230,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   void _handlePageControllerTick() {
-    _syncActiveVideoPagePosition();
+    // 仅启用 surface 跟手的策略消费这个 notifier；静止 surface 无需逐帧写入。
+    if (_shouldTrackVideoSurfacePagePosition) {
+      _syncActiveVideoPagePosition();
+    }
     _preloadForPredictedPageDuringScroll();
   }
 
@@ -2191,6 +2298,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         targetIndex >= itemCount ||
         settledIndex != targetIndex ||
         _isPageScrolling ||
+        _hasPendingPageViewportSettle ||
         _isAutoAdvancing) {
       return;
     }
@@ -2198,6 +2306,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (!mounted ||
           !_pageController.hasClients ||
           _isPageScrolling ||
+          _hasPendingPageViewportSettle ||
           _isAutoAdvancing) {
         return;
       }
@@ -2235,6 +2344,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (notification is ScrollStartNotification ||
         notification is ScrollUpdateNotification) {
       if (notification is ScrollStartNotification) {
+        if (_isPageSettleAnimation) {
+          return false;
+        }
+        _hasPendingPageViewportSettle = true;
         _allowRemoteResumeEpisodeSwitch = false;
         _feedEngine.onScrollStart();
         final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
@@ -2249,31 +2362,127 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return false;
     }
     if (notification is ScrollEndNotification) {
-      _setPageScrolling(false);
-      final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
-      _feedEngine.onScrollEnd();
-      if (feedState.items.isNotEmpty) {
-        SchedulerBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || !_pageController.hasClients) {
-            return;
-          }
-          final page = _pageController.page;
-          if (page == null) {
-            return;
-          }
-          final settledIndex = page.round().clamp(
-            0,
-            feedState.items.length - 1,
-          );
-          final settledItem = feedState.items[settledIndex];
-          _feedEngine.settleViewport(
-            index: settledIndex,
-            itemId: settledItem.id,
-          );
-        });
+      // Android 的嵌套滚动链可能在手指仍按下时透传一次 ScrollEnd；此时
+      // 不能吸附/切集，否则 PageView 会在中段突然跳到完整的下一页。
+      if (!_isPageSettleAnimation && !_isPagePointerDown) {
+        _requestPageSettle();
       }
     }
     return false;
+  }
+
+  bool _shouldHandleForYouRefresh(ScrollNotification notification) {
+    if (notification.depth != 0 || !_pageController.hasClients) {
+      return false;
+    }
+    final page = _pageController.page ?? _pageController.initialPage.toDouble();
+    const epsilon = 0.001;
+    return page <= epsilon &&
+        notification.metrics.pixels <=
+            notification.metrics.minScrollExtent + epsilon;
+  }
+
+  void _requestPageSettle() {
+    if (!mounted ||
+        !_isPageScrolling ||
+        _isPageSettleAnimation ||
+        _isPageSettleRequested) {
+      return;
+    }
+    _isPageSettleRequested = true;
+    unawaited(_settlePageAfterDrag());
+  }
+
+  Future<void> _settlePageAfterDrag() async {
+    if (!mounted || !_pageController.hasClients) {
+      _finishPageSettle();
+      return;
+    }
+    final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+    if (feedState.items.isEmpty) {
+      _finishPageSettle();
+      return;
+    }
+
+    final viewport = ref.read(playerViewportControllerProvider(_sessionKey));
+    final currentIndex = viewport.settledIndex.clamp(
+      0,
+      feedState.items.length - 1,
+    );
+    final page = _pageController.page ?? currentIndex.toDouble();
+    final delta = page - currentIndex;
+    final targetIndex =
+        (delta >= _PlayerPageDragPhysics._pageTurnThreshold
+                ? currentIndex + 1
+                : delta <= -_PlayerPageDragPhysics._pageTurnThreshold
+                ? currentIndex - 1
+                : currentIndex)
+            .clamp(0, feedState.items.length - 1);
+
+    if (page == targetIndex.toDouble()) {
+      _finishPageSettle(targetIndex: targetIndex);
+      return;
+    }
+
+    _isPageSettleAnimation = true;
+    try {
+      await _pageController.animateToPage(
+        targetIndex,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+      // 在少数嵌套滚动/系统手势打断的场景下，animateToPage 可能已结束但
+      // position 没有抵达终点；动画结束后才兜底校正，正常路径不会触发。
+      if (mounted &&
+          _pageController.hasClients &&
+          ((_pageController.page ?? targetIndex.toDouble()) - targetIndex)
+                  .abs() >
+              0.01) {
+        _pageController.jumpToPage(targetIndex);
+      }
+    } finally {
+      _isPageSettleAnimation = false;
+    }
+    _finishPageSettle(targetIndex: targetIndex);
+  }
+
+  void _finishPageSettle({int? targetIndex}) {
+    final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
+    // 先把视口置为 settling，再写入最终 settled。若反过来，settled listener
+    // 会在还未结束拖动时启动下一集播放，随后又被 markScrollEnd 覆盖状态。
+    _feedEngine.onScrollEnd();
+    if (feedState.items.isNotEmpty) {
+      final index = (targetIndex ?? _pageController.page?.round() ?? 0).clamp(
+        0,
+        feedState.items.length - 1,
+      );
+      // 必须在页面完全落位之后才更新当前集。此时仍保留 scrolling/pending
+      // 标记，避免 currentIndex 的监听器反向驱动 PageController。
+      _feedEngine.onPageChanged(index);
+      _requestMoreForSettledForYouPage(index, feedState);
+      _feedEngine.settleViewport(
+        index: index,
+        itemId: feedState.items[index].id,
+      );
+    }
+    _setPageScrolling(false);
+    _hasPendingPageViewportSettle = false;
+    _isPageSettleRequested = false;
+  }
+
+  void _requestMoreForSettledForYouPage(int index, PlayerFeedState feedState) {
+    if (widget.feedMode != PlayerFeedMode.forYou ||
+        index < feedState.items.length - 2) {
+      return;
+    }
+    // 在倒数第二条落位时请求下一页；控制器自身会根据 isLoadingMore/hasMore 去重。
+    if (feedState.hasMore) {
+      unawaited(
+        ref.read(playerFeedControllerProvider(_sessionKey).notifier).loadMore(),
+      );
+    } else {
+      _showForYouNoMoreToast();
+    }
   }
 
   void _showForYouNoMoreToast() {
@@ -3443,6 +3652,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final contentFuture = contentRepository.getPlayerContent(
       dramaId: content.id,
     );
+    // 复用详情请求，避免初始简略内容的空 recommendations 被误展示为空状态。
+    final recommendationsFuture = contentFuture.then(
+      (detail) => detail.recommendations,
+    );
 
     return showModalBottomSheet<void>(
       context: context,
@@ -3476,6 +3689,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   ),
                 );
               },
+              recommendationsFuture: recommendationsFuture,
             );
           },
         );
@@ -3512,6 +3726,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           }),
         ),
       );
+      final shareStatus = await _loadShareDramaStatus();
       GiftLinkData? gift;
       Future<GiftLinkData>? giftRequestInFlight;
       if (ref.read(entitlementControllerProvider).isMember) {
@@ -3557,6 +3772,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   dramaId: dramaId,
                   dramaTitle: dramaTitle,
                   gift: snapshot.data,
+                  shareStatus: shareStatus,
                 );
               },
             );
@@ -3566,6 +3782,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             dramaId: dramaId,
             dramaTitle: dramaTitle,
             gift: gift,
+            shareStatus: shareStatus,
           );
         },
       ).whenComplete(() {
@@ -3589,40 +3806,105 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     required String dramaId,
     required String dramaTitle,
     required GiftLinkData? gift,
+    required ShareDramaStatusDto? shareStatus,
   }) {
-    if (gift == null || !gift.visible) {
+    // 分享任务完成状态将由后续独立接口下发；先保留 UI 的两个展示分支。
+    final shareHint = _shareHint(
+      context,
+      hasCompletedShareTask: shareStatus?.hasCompletedTask ?? false,
+      firstShareRewardCoins: shareStatus?.shareCoin ?? 0,
+    );
+    if (!ref.read(entitlementControllerProvider).isMember) {
       return PlayerShareSheet(
+        shareHint: shareHint,
         onFacebookTap: () {
-          unawaited(_trackShareChannelClick(dramaId, 'facebook'));
-          unawaited(_reportDramaShareAction(dramaId, 'facebook'));
-          unawaited(_shareToFacebook(dramaId, dramaTitle));
+          unawaited(
+            _handleNormalFacebookShare(dramaId, dramaTitle, shareStatus),
+          );
         },
         onCopyLinkTap: () {
-          unawaited(_trackShareChannelClick(dramaId, 'copy_link'));
-          unawaited(_reportDramaShareAction(dramaId, 'copy_link'));
-          unawaited(_copyShareLink(dramaId, dramaTitle));
+          _handleNormalCopyShare(dramaId, dramaTitle, shareStatus);
         },
       );
     }
     return PlayerGiftShareSheet(
-      quotaLabel:
-          'Free viewing for friends (${gift.usedCount}/${gift.totalCount})',
-      isGiftAvailable: gift.available,
-      unavailableDescription: gift.reGrantAt.isEmpty
-          ? context.l10n.giftShareUnavailableDescription
-          : '${context.l10n.giftShareUnavailableDescription} ${gift.reGrantAt}',
-      onShareFacebookTap: () =>
-          unawaited(_shareToFacebook(dramaId, dramaTitle)),
-      onShareCopyLinkTap: () => unawaited(_copyShareLink(dramaId, dramaTitle)),
+      shareHint: shareHint,
+      quotaLabel: context.l10n.dramaGiftShareSummary(
+        used: gift?.usedCount ?? 0,
+        total: gift?.totalCount ?? 0,
+      ),
+      isGiftAvailable: gift?.visible == true && gift?.available == true,
+      unavailableDescription: context.l10n.giftShareUnavailableLimit(
+        date: context.l10n.formatGiftReGrantDate(gift?.reGrantAt ?? ''),
+      ),
+      onShareFacebookTap: () {
+        unawaited(_handleNormalFacebookShare(dramaId, dramaTitle, shareStatus));
+      },
+      onShareCopyLinkTap: () {
+        _handleNormalCopyShare(dramaId, dramaTitle, shareStatus);
+      },
       onGiftFacebookTap: () {
-        unawaited(_shareGiftDramaToFacebook(dramaTitle, gift));
+        if (gift == null) return;
+        unawaited(_shareGiftDramaToFacebook(dramaId, dramaTitle, gift));
         _invalidateAndRefreshDramaGiftLink(dramaId);
       },
       onGiftCopyLinkTap: () {
-        unawaited(_copyGiftDramaLink(dramaTitle, gift));
+        if (gift == null) return;
+        unawaited(_copyGiftDramaLink(dramaId, dramaTitle, gift));
         _invalidateAndRefreshDramaGiftLink(dramaId);
       },
     );
+  }
+
+  String _shareHint(
+    BuildContext context, {
+    required bool hasCompletedShareTask,
+    required int firstShareRewardCoins,
+  }) {
+    if (hasCompletedShareTask || firstShareRewardCoins <= 0) {
+      return context.l10n.shareDailyRewardHint;
+    }
+    return context.l10n.shareFirstRewardHint(coins: firstShareRewardCoins);
+  }
+
+  Future<void> _handleNormalFacebookShare(
+    String dramaId,
+    String dramaTitle,
+    ShareDramaStatusDto? shareStatus,
+  ) async {
+    unawaited(_trackShareChannelClick(dramaId, 'facebook'));
+    final opened = await _shareToFacebook(dramaId, dramaTitle);
+    if (opened) {
+      _registerShareReward(shareStatus, ShareDramaRewardChannel.facebook);
+    }
+  }
+
+  void _handleNormalCopyShare(
+    String dramaId,
+    String dramaTitle,
+    ShareDramaStatusDto? shareStatus,
+  ) {
+    unawaited(_trackShareChannelClick(dramaId, 'copy_link'));
+    unawaited(_copyShareLink(dramaId, dramaTitle));
+    _registerShareReward(shareStatus, ShareDramaRewardChannel.copyLink);
+  }
+
+  void _registerShareReward(
+    ShareDramaStatusDto? shareStatus,
+    ShareDramaRewardChannel channel,
+  ) {
+    if (shareStatus == null || shareStatus.claimed) return;
+    ref
+        .read(shareDramaRewardCoordinatorProvider)
+        .register(taskKey: shareStatus.taskKey, channel: channel);
+  }
+
+  void _prefetchShareDramaStatus() {
+    unawaited(_loadShareDramaStatus());
+  }
+
+  Future<ShareDramaStatusDto?> _loadShareDramaStatus() {
+    return ref.read(shareDramaRewardCoordinatorProvider).loadStatus();
   }
 
   void _prefetchDramaGiftLink(String dramaId) {
@@ -3675,25 +3957,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             }),
           );
 
-  Future<void> _reportDramaShareAction(
-    String dramaId,
-    String shareChannel,
-  ) async {
-    try {
-      await ref
-          .read(playerRemoteDataSourceProvider)
-          .reportDramaShareAction(dramaId: dramaId, shareChannel: shareChannel);
-    } catch (error, stackTrace) {
-      developer.log(
-        'Failed to report drama share action.',
-        name: 'PlayerShare',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-  }
-
-  Future<void> _shareToFacebook(String dramaId, String dramaTitle) async {
+  Future<bool> _shareToFacebook(String dramaId, String dramaTitle) async {
     final shareUrl = _facebookShareUrl(dramaId);
     final shareMessage = _shareMessage(dramaTitle, shareUrl);
     final facebookShareUrl = Uri.https(
@@ -3711,6 +3975,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         '[PlayerShare] Failed to open Facebook share: $facebookShareUrl',
       );
     }
+    return opened;
   }
 
   Uri _shareUrl(String dramaId, {required String shareMethod}) {
@@ -3747,6 +4012,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Uri _giftDramaUrl(
+    String dramaId,
     GiftLinkData gift, {
     required String shareMethod,
     required bool facebook,
@@ -3760,6 +4026,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     return facebook
         ? AppConfig.current.facebookGiftDramaUrl(
             languageCode: languageCode,
+            dramaId: dramaId,
             userId: entitlement.userId ?? userInfo.userId ?? '',
             channelId: channel?.channelFlag ?? '',
             merchantId: channel?.merchantId ?? '',
@@ -3768,6 +4035,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           )
         : AppConfig.current.giftDramaUrl(
             languageCode: languageCode,
+            dramaId: dramaId,
             userId: entitlement.userId ?? userInfo.userId ?? '',
             channelId: channel?.channelFlag ?? '',
             merchantId: channel?.merchantId ?? '',
@@ -3778,10 +4046,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _shareGiftDramaToFacebook(
+    String dramaId,
     String dramaTitle,
     GiftLinkData gift,
   ) async {
     final shareUrl = _giftDramaUrl(
+      dramaId,
       gift,
       shareMethod: 'facebook',
       facebook: true,
@@ -3795,8 +4065,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     await ref.read(externalUrlLauncherProvider).open(facebookUrl.toString());
   }
 
-  Future<void> _copyGiftDramaLink(String dramaTitle, GiftLinkData gift) async {
+  Future<void> _copyGiftDramaLink(
+    String dramaId,
+    String dramaTitle,
+    GiftLinkData gift,
+  ) async {
     final shareUrl = _giftDramaUrl(
+      dramaId,
       gift,
       shareMethod: 'copy_link',
       facebook: false,

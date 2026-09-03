@@ -1,4 +1,6 @@
 import '../../../../core/network/api_client.dart';
+import '../../../../core/network/json_field_parser.dart';
+import '../../domain/gift_claim_data.dart';
 import '../../domain/gift_link_data.dart';
 
 class GiftRemoteDataSource {
@@ -15,6 +17,15 @@ class GiftRemoteDataSource {
     queryParameters: {'dramaId': dramaId},
   );
 
+  Future<GiftClaimData> claimGift({required String shareCode}) {
+    return _apiClient.post<GiftClaimData>(
+      '/api/user/gifts/claim',
+      data: {'shareCode': shareCode},
+      authPolicy: ApiAuthPolicy.required,
+      decoder: GiftClaimDataDto.fromJson,
+    );
+  }
+
   Future<GiftLinkData> _getGiftLink(
     String path, {
     Map<String, Object?>? queryParameters,
@@ -24,6 +35,38 @@ class GiftRemoteDataSource {
       queryParameters: queryParameters,
       authPolicy: ApiAuthPolicy.required,
       decoder: GiftLinkDataDto.fromJson,
+    );
+  }
+}
+
+class GiftClaimDataDto {
+  static GiftClaimData fromJson(Object? json) {
+    const dtoName = 'GiftClaimDataDto';
+    final map = JsonFieldParser.requireMap(json, dtoName: dtoName);
+    return GiftClaimData(
+      benefitDays: JsonFieldParser.requireInt(
+        map,
+        'benefitDays',
+        dtoName: dtoName,
+      ),
+      dramaId: JsonFieldParser.requireString(map, 'dramaId', dtoName: dtoName),
+      giftType: JsonFieldParser.requireInt(map, 'giftType', dtoName: dtoName),
+      isAvailable: JsonFieldParser.requireBool(
+        map,
+        'isAvailable',
+        dtoName: dtoName,
+      ),
+      reason: JsonFieldParser.requireString(map, 'reason', dtoName: dtoName),
+      reasonCode: JsonFieldParser.requireInt(
+        map,
+        'reasonCode',
+        dtoName: dtoName,
+      ),
+      shareCode: JsonFieldParser.requireString(
+        map,
+        'shareCode',
+        dtoName: dtoName,
+      ),
     );
   }
 }

@@ -261,6 +261,8 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
                   onSeekUpdate: onSeekUpdate,
                   onSeekEnd: onSeekEnd,
                   onSeekCancel: onSeekCancel,
+                  // 避免覆盖紧邻其上方的 For You 观看按钮。
+                  idleTouchTargetHeight: forYouLayout ? 24 : 36,
                 )
               : null,
           isPlaying: false,

@@ -66,7 +66,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   bool _bannerNavigationInProgress = false;
   String? _homeVisiblePreloadDramaId;
   final ValueNotifier<int> _cardVisibilityRevision = ValueNotifier(0);
-  Timer? _cardVisibilityDebounce;
+  final ValueNotifier<bool> _isCardScrollInProgress = ValueNotifier(false);
   final Map<String, HomePreloadCandidate> _pendingVisibleCandidates = {};
   Timer? _candidateSelectionDebounce;
 
@@ -119,9 +119,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     _scrollToTopListener?.close();
     _accessTokenListener?.close();
     _homePageSessionListener?.close();
-    _cardVisibilityDebounce?.cancel();
     _candidateSelectionDebounce?.cancel();
     _cardVisibilityRevision.dispose();
+    _isCardScrollInProgress.dispose();
 
     _scrollController
       ..removeListener(_onScroll)
@@ -175,13 +175,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   void _onScroll() {
-    // Cards evaluate after scrolling settles, then apply their own 400ms dwell
-    // rule. This avoids starting a candidate for every card passed at speed.
-    _cardVisibilityDebounce?.cancel();
-    _cardVisibilityDebounce = Timer(const Duration(milliseconds: 120), () {
-      if (mounted) _cardVisibilityRevision.value += 1;
-    });
-
     // 分页只由真实的滚动位置和业务状态决定，不依赖 footer 手势状态。
     // 这样新一页插入列表时，即使用户仍在快速上滑，也能继续请求下一页。
     if (!_scrollController.hasClients ||
@@ -191,6 +184,26 @@ class _HomePageState extends ConsumerState<HomePage> {
       return;
     }
     unawaited(_loadMoreForCurrentTab());
+  }
+
+  bool _onHomeScrollNotification(ScrollNotification notification) {
+    if (notification.depth != 0) return false;
+    if (notification is ScrollStartNotification) {
+      _isCardScrollInProgress.value = true;
+      // 已确定用户继续浏览时，当前卡片的详情/HLS 预热只会与列表图片解码争抢
+      // 网络和主线程；真实点击发起的预热带有 user intent，不会被此处取消。
+      unawaited(
+        ref
+            .read(playerEntryPreloadCoordinatorProvider.notifier)
+            .cancelVisibleCandidate(reason: 'home_scroll_started'),
+      );
+    } else if (notification is ScrollEndNotification) {
+      _isCardScrollInProgress.value = false;
+      // 仅在滚动停止后让当前已挂载卡片计算可见性。此前每个滚动 tick 都会新建
+      // Timer 并触发整批卡片的 RenderBox 查询，快速滑动时会明显占用 UI 线程。
+      _cardVisibilityRevision.value += 1;
+    }
+    return false;
   }
 
   void _preloadStableVisibleDrama(Drama drama, double visibleFraction) {
@@ -266,6 +279,8 @@ class _HomePageState extends ConsumerState<HomePage> {
           .clamp(position.minScrollExtent, position.maxScrollExtent)
           .toDouble();
       _scrollController.jumpTo(targetOffset);
+      // jumpTo 不保证产生 ScrollEndNotification，分类切换后主动刷新一次。
+      _cardVisibilityRevision.value += 1;
     });
   }
 
@@ -407,6 +422,13 @@ class _HomePageState extends ConsumerState<HomePage> {
         (remoteData == null && homeDataState.error == null);
     final error = homeDataState.error;
     final isEmpty = items.isEmpty;
+    final safeAreaPadding = MediaQuery.paddingOf(context);
+    final gridCrossAxisExtent = math
+        .max(
+          0,
+          MediaQuery.sizeOf(context).width - safeAreaPadding.horizontal - 32,
+        )
+        .toDouble();
 
     if (!isLoading && error == null) {
       _reportHomeFirstViewAfterDisplay();
@@ -423,260 +445,283 @@ class _HomePageState extends ConsumerState<HomePage> {
             builder: _buildHomeRefreshHeader,
           ),
           onRefresh: () => _refreshHome(selectedRemoteTab?.id),
-          childBuilder: (context, physics) => CustomScrollView(
-            controller: _scrollController,
-            physics: physics,
-            slivers: [
-              SliverPersistentHeader(
-                pinned: true,
-                delegate: _HomeFixedHeaderDelegate(
-                  selectedTab: selectedIndex,
-                  tabs: categories,
-                  onTabChanged: (index) {
-                    // 远程数据：直接更新选中索引
-                    _selectTab(index);
-                  },
-                ),
-              ),
-              const HeaderLocator.sliver(),
-              if (bannerState.visibleBanners.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: _HomeRemoteBannerCarousel(
-                    banners: bannerState.visibleBanners,
-                    onImageError: (bannerId) => ref
-                        .read(homeBannerConfigControllerProvider.notifier)
-                        .disableBanner(bannerId),
-                    onTap: _handleBannerTap,
-                    onVisible: _trackBannerExposure,
-                  ),
-                ),
-              if (isLoading)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(child: AppPegTopLoader()),
-                )
-              else if (error != null)
-                SliverFillRemaining(
-                  hasScrollBody: true,
-                  child: _HomeErrorState(
-                    onRetry: () {
-                      ref.read(homeDataControllerProvider.notifier).retry();
-                    },
-                  ),
-                )
-              else if (isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: AppEmptyState(message: context.l10n.emptyNoDramas),
-                  ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 2, 16, 24),
-                  sliver: SliverLayoutBuilder(
-                    builder: (context, constraints) {
-                      if (constraints.crossAxisExtent <= 0) {
-                        return const SliverToBoxAdapter(
-                          child: SizedBox.shrink(),
-                        );
-                      }
-
-                      const crossAxisSpacing = 8.0;
-                      const featuredDramaCount = 9;
-                      const featuredCoverAspectRatio = 109 / 147;
-
-                      int coverCacheWidthFor(int crossAxisCount) {
-                        final tileWidth =
-                            (constraints.crossAxisExtent -
-                                crossAxisSpacing * (crossAxisCount - 1)) /
-                            crossAxisCount;
-                        return math.max(
-                          1,
-                          (tileWidth * MediaQuery.devicePixelRatioOf(context))
-                              .round(),
-                        );
-                      }
-
-                      Widget buildDramaCard({
-                        required int itemIndex,
-                        required int coverCacheWidth,
-                        required bool compact,
-                      }) {
-                        final item = items[itemIndex];
-
-                        return DramaCardExposure(
-                          pageSession: _dramaExposureSession,
-                          analytics: ref.read(analyticsServiceProvider),
-                          dramaId: item.id,
-                          position: itemIndex + 1,
-                          categoryId: selectedRemoteTab?.id.toString() ?? '',
-                          child: _HomeDramaCard(
-                            key: ValueKey('home_drama_card_${item.id}'),
-                            data: item,
-                            coverCacheWidth: coverCacheWidth,
-                            compact: compact,
-                            onStableVisible: (visibleFraction) =>
-                                _preloadStableVisibleDrama(
-                                  item,
-                                  visibleFraction,
-                                ),
-                            visibilityRevision: _cardVisibilityRevision,
-                            onTap: () {
-                              unawaited(
-                                ref
-                                    .read(analyticsServiceProvider)
-                                    .track(
-                                      AnalyticsEvent(
-                                        AnalyticsDefinitions.elementClick,
-                                        {
-                                          'element_name': 'drama_card',
-                                          'drama_id': item.id,
-                                          'position': itemIndex + 1,
-                                          'category_id':
-                                              selectedRemoteTab?.id
-                                                  .toString() ??
-                                              '',
-                                        },
-                                      ),
-                                    ),
-                              );
-                              final tappedAt = DateTime.now();
-                              preparePlayerEntryPreload(
-                                context,
-                                dramaId: item.id,
-                                episodeId: '1',
-                                trigger: 'home_card_tap',
-                                resumeHint: _entryResumeHintFor(item),
-                              );
-                              context.push(
-                                RoutePaths.playerLocation(
-                                  dramaId: item.id,
-                                  episodeId: '1',
-                                  trigger: 'home_card_tap',
-                                  userActionAtMs:
-                                      tappedAt.millisecondsSinceEpoch,
-                                ),
-                              );
-                            },
-                          ),
-                        );
-                      }
-
-                      SliverMasonryGrid buildDramaGrid({
-                        required int startIndex,
-                        required int childCount,
-                        required int crossAxisCount,
-                      }) {
-                        final coverCacheWidth = coverCacheWidthFor(
-                          crossAxisCount,
-                        );
-
-                        return SliverMasonryGrid.count(
-                          crossAxisCount: crossAxisCount,
-                          mainAxisSpacing: 8,
-                          crossAxisSpacing: crossAxisSpacing,
-                          childCount: childCount,
-                          itemBuilder: (context, index) {
-                            return buildDramaCard(
-                              itemIndex: startIndex + index,
-                              coverCacheWidth: coverCacheWidth,
-                              compact: false,
-                            );
+          childBuilder: (context, physics) =>
+              NotificationListener<ScrollNotification>(
+                onNotification: _onHomeScrollNotification,
+                child: CustomScrollView(
+                  controller: _scrollController,
+                  physics: physics,
+                  // 仅预建一小段屏幕外内容，防止高速滑动时过多卡片同时解码图片、
+                  // 参与曝光判断和播放器候选预热。
+                  cacheExtent: 280,
+                  slivers: [
+                    SliverPersistentHeader(
+                      pinned: true,
+                      delegate: _HomeFixedHeaderDelegate(
+                        selectedTab: selectedIndex,
+                        tabs: categories,
+                        onTabChanged: (index) {
+                          // 远程数据：直接更新选中索引
+                          _selectTab(index);
+                        },
+                      ),
+                    ),
+                    const HeaderLocator.sliver(),
+                    if (bannerState.visibleBanners.isNotEmpty)
+                      SliverToBoxAdapter(
+                        child: _HomeRemoteBannerCarousel(
+                          banners: bannerState.visibleBanners,
+                          onImageError: (bannerId) => ref
+                              .read(homeBannerConfigControllerProvider.notifier)
+                              .disableBanner(bannerId),
+                          onTap: _handleBannerTap,
+                          onVisible: _trackBannerExposure,
+                        ),
+                      ),
+                    if (isLoading)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(child: AppPegTopLoader()),
+                      )
+                    else if (error != null)
+                      SliverFillRemaining(
+                        hasScrollBody: true,
+                        child: _HomeErrorState(
+                          onRetry: () {
+                            ref
+                                .read(homeDataControllerProvider.notifier)
+                                .retry();
                           },
-                        );
-                      }
+                        ),
+                      )
+                    else if (isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: AppEmptyState(
+                            message: context.l10n.emptyNoDramas,
+                          ),
+                        ),
+                      )
+                    else
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 2, 16, 24),
+                        sliver: _HomeGridLayout(
+                          crossAxisExtent: gridCrossAxisExtent,
+                          builder: (context, crossAxisExtent) {
+                            if (crossAxisExtent <= 0) {
+                              return const SliverToBoxAdapter(
+                                child: SizedBox.shrink(),
+                              );
+                            }
 
-                      SliverGrid buildFeaturedDramaGrid({
-                        required int childCount,
-                        required bool hasTagRow,
-                      }) {
-                        final tileWidth =
-                            (constraints.crossAxisExtent -
-                                crossAxisSpacing * 2) /
-                            3;
-                        final coverCacheWidth = coverCacheWidthFor(3);
+                            const crossAxisSpacing = 8.0;
+                            const featuredDramaCount = 9;
+                            const featuredCoverAspectRatio = 109 / 147;
 
-                        return SliverGrid(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 3,
+                            int coverCacheWidthFor(int crossAxisCount) {
+                              final tileWidth =
+                                  (crossAxisExtent -
+                                      crossAxisSpacing * (crossAxisCount - 1)) /
+                                  crossAxisCount;
+                              return math.max(
+                                1,
+                                (tileWidth *
+                                        MediaQuery.devicePixelRatioOf(context))
+                                    .round(),
+                              );
+                            }
+
+                            Widget buildDramaCard({
+                              required int itemIndex,
+                              required int coverCacheWidth,
+                              required bool compact,
+                            }) {
+                              final item = items[itemIndex];
+
+                              return DramaCardExposure(
+                                pageSession: _dramaExposureSession,
+                                analytics: ref.read(analyticsServiceProvider),
+                                dramaId: item.id,
+                                position: itemIndex + 1,
+                                categoryId:
+                                    selectedRemoteTab?.id.toString() ?? '',
+                                visibilityRevision: _cardVisibilityRevision,
+                                isScrollInProgress: _isCardScrollInProgress,
+                                child: _HomeDramaCard(
+                                  key: ValueKey('home_drama_card_${item.id}'),
+                                  data: item,
+                                  coverCacheWidth: coverCacheWidth,
+                                  compact: compact,
+                                  onStableVisible: (visibleFraction) =>
+                                      _preloadStableVisibleDrama(
+                                        item,
+                                        visibleFraction,
+                                      ),
+                                  visibilityRevision: _cardVisibilityRevision,
+                                  isScrollInProgress: _isCardScrollInProgress,
+                                  onTap: () {
+                                    unawaited(
+                                      ref
+                                          .read(analyticsServiceProvider)
+                                          .track(
+                                            AnalyticsEvent(
+                                              AnalyticsDefinitions.elementClick,
+                                              {
+                                                'element_name': 'drama_card',
+                                                'drama_id': item.id,
+                                                'position': itemIndex + 1,
+                                                'category_id':
+                                                    selectedRemoteTab?.id
+                                                        .toString() ??
+                                                    '',
+                                              },
+                                            ),
+                                          ),
+                                    );
+                                    final tappedAt = DateTime.now();
+                                    preparePlayerEntryPreload(
+                                      context,
+                                      dramaId: item.id,
+                                      episodeId: '1',
+                                      trigger: 'home_card_tap',
+                                      resumeHint: _entryResumeHintFor(item),
+                                    );
+                                    context.push(
+                                      RoutePaths.playerLocation(
+                                        dramaId: item.id,
+                                        episodeId: '1',
+                                        trigger: 'home_card_tap',
+                                        userActionAtMs:
+                                            tappedAt.millisecondsSinceEpoch,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              );
+                            }
+
+                            SliverMasonryGrid buildDramaGrid({
+                              required int startIndex,
+                              required int childCount,
+                              required int crossAxisCount,
+                            }) {
+                              final coverCacheWidth = coverCacheWidthFor(
+                                crossAxisCount,
+                              );
+
+                              return SliverMasonryGrid(
                                 mainAxisSpacing: 8,
                                 crossAxisSpacing: crossAxisSpacing,
-                                mainAxisExtent:
-                                    tileWidth / featuredCoverAspectRatio +
-                                    (hasTagRow
-                                        ? _HomeDramaCard
-                                              .compactTextHeightWithTag
-                                        : _HomeDramaCard
-                                              .compactTextHeightWithoutTag),
-                              ),
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) => buildDramaCard(
-                              itemIndex: index,
-                              coverCacheWidth: coverCacheWidth,
-                              compact: true,
-                            ),
-                            childCount: childCount,
-                          ),
-                        );
-                      }
+                                gridDelegate:
+                                    SliverSimpleGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: crossAxisCount,
+                                    ),
+                                delegate: SliverChildBuilderDelegate(
+                                  (context, index) => buildDramaCard(
+                                    itemIndex: startIndex + index,
+                                    coverCacheWidth: coverCacheWidth,
+                                    compact: false,
+                                  ),
+                                  // 首页卡片没有 KeepAliveClientMixin。去掉默认包装，
+                                  // 离开 Masonry 缓存区即可释放它的 State、计时器和
+                                  // 可见性监听；独立重绘边界仍需保留。
+                                  addAutomaticKeepAlives: false,
+                                  childCount: childCount,
+                                ),
+                              );
+                            }
 
-                      // 仅首个分类保留前九个的三列九宫格；其他分类全部使用
-                      // 两列剧卡，避免切换分类后仍出现首屏特化布局。
-                      if (selectedIndex != 0) {
-                        return buildDramaGrid(
-                          startIndex: 0,
-                          childCount: items.length,
-                          crossAxisCount: 2,
-                        );
-                      }
+                            SliverGrid buildFeaturedDramaGrid({
+                              required int childCount,
+                              required bool hasTagRow,
+                            }) {
+                              final tileWidth =
+                                  (crossAxisExtent - crossAxisSpacing * 2) / 3;
+                              final coverCacheWidth = coverCacheWidthFor(3);
 
-                      final firstSectionCount = math.min(
-                        featuredDramaCount,
-                        items.length,
-                      );
-                      final remainingCount = items.length - firstSectionCount;
-                      final featuredCardsHaveNoTags = items
-                          .take(firstSectionCount)
-                          .every((item) => item.tags.isEmpty);
+                              return SliverGrid(
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 3,
+                                      mainAxisSpacing: 8,
+                                      crossAxisSpacing: crossAxisSpacing,
+                                      mainAxisExtent:
+                                          tileWidth / featuredCoverAspectRatio +
+                                          (hasTagRow
+                                              ? _HomeDramaCard
+                                                    .compactTextHeightWithTag
+                                              : _HomeDramaCard
+                                                    .compactTextHeightWithoutTag),
+                                    ),
+                                delegate: SliverChildBuilderDelegate(
+                                  (context, index) => buildDramaCard(
+                                    itemIndex: index,
+                                    coverCacheWidth: coverCacheWidth,
+                                    compact: true,
+                                  ),
+                                  childCount: childCount,
+                                ),
+                              );
+                            }
 
-                      return SliverMainAxisGroup(
-                        slivers: [
-                          buildFeaturedDramaGrid(
-                            childCount: firstSectionCount,
-                            hasTagRow: !featuredCardsHaveNoTags,
-                          ),
-                          if (remainingCount > 0) ...[
-                            const SliverToBoxAdapter(
-                              child: SizedBox(height: 8),
-                            ),
-                            buildDramaGrid(
-                              startIndex: firstSectionCount,
-                              childCount: remainingCount,
-                              crossAxisCount: 2,
-                            ),
-                          ],
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              SliverToBoxAdapter(
-                child: _HomeFeedFooter(
-                  isLoading: homeDataState.isLoadingMore,
-                  hasMore: selectedRemoteTab?.hasMoreDramas == true,
-                  error: homeDataState.loadMoreError,
-                  onRetry: () {
-                    final tab = selectedRemoteTab;
-                    if (tab != null) {
-                      unawaited(_retryLoadMore(tab.id));
-                    }
-                  },
+                            // 仅首个分类保留前九个的三列九宫格；其他分类全部使用
+                            // 两列剧卡，避免切换分类后仍出现首屏特化布局。
+                            if (selectedIndex != 0) {
+                              return buildDramaGrid(
+                                startIndex: 0,
+                                childCount: items.length,
+                                crossAxisCount: 2,
+                              );
+                            }
+
+                            final firstSectionCount = math.min(
+                              featuredDramaCount,
+                              items.length,
+                            );
+                            final remainingCount =
+                                items.length - firstSectionCount;
+                            final featuredCardsHaveNoTags = items
+                                .take(firstSectionCount)
+                                .every((item) => item.tags.isEmpty);
+
+                            return SliverMainAxisGroup(
+                              slivers: [
+                                buildFeaturedDramaGrid(
+                                  childCount: firstSectionCount,
+                                  hasTagRow: !featuredCardsHaveNoTags,
+                                ),
+                                if (remainingCount > 0) ...[
+                                  const SliverToBoxAdapter(
+                                    child: SizedBox(height: 20),
+                                  ),
+                                  buildDramaGrid(
+                                    startIndex: firstSectionCount,
+                                    childCount: remainingCount,
+                                    crossAxisCount: 2,
+                                  ),
+                                ],
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    SliverToBoxAdapter(
+                      child: _HomeFeedFooter(
+                        isLoading: homeDataState.isLoadingMore,
+                        hasMore: selectedRemoteTab?.hasMoreDramas == true,
+                        error: homeDataState.loadMoreError,
+                        onRetry: () {
+                          final tab = selectedRemoteTab;
+                          if (tab != null) {
+                            unawaited(_retryLoadMore(tab.id));
+                          }
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
         ),
       ),
     );
@@ -788,6 +833,17 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
     context.go(location);
   }
+}
+
+/// 首页网格列宽只取决于视口尺寸，不应在每个 scrollOffset 变化时重新构建。
+class _HomeGridLayout extends StatelessWidget {
+  const _HomeGridLayout({required this.crossAxisExtent, required this.builder});
+
+  final double crossAxisExtent;
+  final Widget Function(BuildContext context, double crossAxisExtent) builder;
+
+  @override
+  Widget build(BuildContext context) => builder(context, crossAxisExtent);
 }
 
 Widget _buildHomeRefreshHeader(BuildContext context, IndicatorState state) =>
@@ -1097,7 +1153,7 @@ class _HomeTitleBarState extends ConsumerState<_HomeTitleBar> {
                   width: 0.5,
                   color: Color(0XFF949494).withValues(alpha: 0.3),
                 ),
-                borderRadius: BorderRadius.circular(7),
+                borderRadius: BorderRadius.circular(4),
               ),
               child: Row(
                 children: [
@@ -1313,6 +1369,7 @@ class _HomeDramaCard extends StatefulWidget {
     required this.onTap,
     required this.onStableVisible,
     required this.visibilityRevision,
+    required this.isScrollInProgress,
     super.key,
   });
 
@@ -1322,13 +1379,14 @@ class _HomeDramaCard extends StatefulWidget {
   final VoidCallback onTap;
   final ValueChanged<double> onStableVisible;
   final ValueListenable<int> visibilityRevision;
+  final ValueListenable<bool> isScrollInProgress;
 
   /// 375pt 设计基准下，三列封面为 109 × 147。
   static const coverAspectRatio = 109 / 147;
 
   /// 九宫格标题区域：无标签时不为标签行保留高度。
   static const compactTextHeightWithoutTag = 48.0;
-  static const compactTextHeightWithTag = 72.0;
+  static const compactTextHeightWithTag = 64.0;
 
   @override
   State<_HomeDramaCard> createState() => _HomeDramaCardState();
@@ -1345,16 +1403,23 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
       if (mounted) _evaluateVisibility();
     });
     widget.visibilityRevision.addListener(_evaluateVisibility);
+    widget.isScrollInProgress.addListener(_handleScrollActivityChanged);
   }
 
   @override
   void dispose() {
     _stableVisibleTimer?.cancel();
     widget.visibilityRevision.removeListener(_evaluateVisibility);
+    widget.isScrollInProgress.removeListener(_handleScrollActivityChanged);
     super.dispose();
   }
 
   void _evaluateVisibility() {
+    if (widget.isScrollInProgress.value) {
+      _stableVisibleTimer?.cancel();
+      _stableVisibleTimer = null;
+      return;
+    }
     final renderObject = context.findRenderObject();
     if (renderObject is! RenderBox || !renderObject.hasSize) return;
     if (!_isAtLeastHalfVisible()) {
@@ -1373,6 +1438,13 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
       _didNotifyStableVisible = true;
       widget.onStableVisible(_visibleFraction());
     });
+  }
+
+  void _handleScrollActivityChanged() {
+    if (widget.isScrollInProgress.value) {
+      _stableVisibleTimer?.cancel();
+      _stableVisibleTimer = null;
+    }
   }
 
   bool _isAtLeastHalfVisible() {
@@ -1396,17 +1468,23 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
 
     return Material(
       color: widget.compact ? Colors.transparent : Color(0XFF1C1821),
-      borderRadius: BorderRadius.circular(4),
-      clipBehavior: Clip.antiAlias,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(4)),
+      ),
+      // 列表滚动时不让整张卡片都进入抗锯齿裁剪层；仅封面需要裁剪圆角。
+      clipBehavior: Clip.none,
       child: InkWell(
         onTap: widget.onTap,
+        borderRadius: BorderRadius.circular(4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AspectRatio(
               aspectRatio: _HomeDramaCard.coverAspectRatio,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(widget.compact ? 4 : 0),
+                borderRadius: widget.compact
+                    ? BorderRadius.circular(4)
+                    : const BorderRadius.vertical(top: Radius.circular(4)),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -1445,9 +1523,9 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
             Padding(
               padding: EdgeInsets.fromLTRB(
                 widget.compact ? 0 : 10,
-                8,
-                10,
-                widget.compact ? 8 : 14,
+                widget.compact ? 4 : 10,
+                widget.compact ? 0 : 10,
+                widget.compact ? 0 : 10,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1474,10 +1552,7 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
                         style: _HomeTag.compactTextStyle(context),
                       )
                     else
-                      SizedBox(
-                        height: 16,
-                        child: _HomeTagsRow(tags: visibleTags),
-                      ),
+                      _HomeTagsRow(tags: visibleTags)
                   ],
                 ],
               ),

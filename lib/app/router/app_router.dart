@@ -199,10 +199,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final forYouHandoff = state.extra is ForYouPlayerHandoff
               ? state.extra! as ForYouPlayerHandoff
               : null;
+          final giftShareCode = state.uri.queryParameters['giftShareCode'];
 
           // 所有普通播放器路由统一从这里提交用户点击预取；For You handoff 已持有
           // 当前播放器位置/session，不能重复启动普通详情/HLS 预热。
-          if (forYouHandoff == null) {
+          if (forYouHandoff == null && giftShareCode == null) {
             // GoRouter builder 属于 widget build 期，不能同步修改 Riverpod state。
             // 用下一轮 event loop 派发，而不是等首帧 post-frame callback：这样详情、
             // 播放进度和 HLS 首段会与 PlayerPage 首次 build 并行，但不会在 build 期
@@ -229,6 +230,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 ? null
                 : DateTime.fromMillisecondsSinceEpoch(userActionAtMs),
             forYouHandoff: forYouHandoff,
+            giftShareCode: giftShareCode,
           );
         },
       ),

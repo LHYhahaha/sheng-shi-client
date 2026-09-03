@@ -57,6 +57,7 @@ abstract final class RoutePaths {
     required String episodeId,
     String? trigger,
     int? userActionAtMs,
+    String? giftShareCode,
   }) {
     final location = '/player/$dramaId/$episodeId';
     final triggerKey = trigger == null ? null : 'trigger';
@@ -64,6 +65,8 @@ abstract final class RoutePaths {
     final queryParameters = <String, String>{
       ?triggerKey: '$trigger',
       ?userActionKey: '$userActionAtMs',
+      if (giftShareCode != null && giftShareCode.trim().isNotEmpty)
+        'giftShareCode': giftShareCode.trim(),
     };
     if (queryParameters.isEmpty) {
       return location;

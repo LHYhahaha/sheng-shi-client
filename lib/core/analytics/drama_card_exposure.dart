@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'analytics_definition.dart';
@@ -16,6 +17,8 @@ class DramaCardExposure extends StatefulWidget {
     this.categoryId,
     this.cardScene,
     this.searchKeyword,
+    this.visibilityRevision,
+    this.isScrollInProgress,
     required this.child,
     super.key,
   });
@@ -27,6 +30,15 @@ class DramaCardExposure extends StatefulWidget {
   final String? categoryId;
   final String? cardScene;
   final String? searchKeyword;
+
+  /// 页面级可见性刷新信号。
+  ///
+  /// 传入后由页面在滚动停止时统一刷新，避免每张缓存中的卡片各自轮询。
+  /// 未传入时保留通用组件原有的行为。
+  final ValueListenable<int>? visibilityRevision;
+
+  /// 页面滚动开始时立即撤销尚未满足停留时长的曝光计时。
+  final ValueListenable<bool>? isScrollInProgress;
   final Widget child;
 
   /// 页面销毁时释放该会话的去重记录，避免静态缓存累积。
@@ -59,26 +71,44 @@ class _DramaCardExposureState extends State<DramaCardExposure> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _evaluate());
-    _visibilityPoller = Timer.periodic(
-      const Duration(milliseconds: 200),
-      (_) => _evaluate(),
-    );
+    final visibilityRevision = widget.visibilityRevision;
+    if (visibilityRevision != null) {
+      visibilityRevision.addListener(_evaluate);
+    } else {
+      _visibilityPoller = Timer.periodic(
+        const Duration(milliseconds: 200),
+        (_) => _evaluate(),
+      );
+    }
+    widget.isScrollInProgress?.addListener(_handleScrollActivityChanged);
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     _visibilityPoller?.cancel();
+    widget.visibilityRevision?.removeListener(_evaluate);
+    widget.isScrollInProgress?.removeListener(_handleScrollActivityChanged);
     super.dispose();
   }
 
   void _evaluate() {
-    if (!mounted || _isReported || !_isAtLeastHalfVisible()) {
+    if (!mounted ||
+        widget.isScrollInProgress?.value == true ||
+        _isReported ||
+        !_isAtLeastHalfVisible()) {
       _timer?.cancel();
       _timer = null;
       return;
     }
     _timer ??= Timer(const Duration(seconds: 1), _report);
+  }
+
+  void _handleScrollActivityChanged() {
+    if (widget.isScrollInProgress?.value == true) {
+      _timer?.cancel();
+      _timer = null;
+    }
   }
 
   bool get _isReported =>
@@ -112,14 +142,16 @@ class _DramaCardExposureState extends State<DramaCardExposure> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      NotificationListener<ScrollNotification>(
-        onNotification: (notification) {
-          if (notification.depth == 0) _evaluate();
-          return false;
-        },
-        child: widget.child,
-      );
+  Widget build(BuildContext context) {
+    if (widget.visibilityRevision != null) return widget.child;
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification.depth == 0) _evaluate();
+        return false;
+      },
+      child: widget.child,
+    );
+  }
 }
 
 Map<String, Object?>? _optionalStringParameter(String key, String? value) {

@@ -2,12 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/compact_count_formatter.dart';
 import 'player_like_controller.dart';
-import '../data/local/player_like_cache.dart';
 
 /// 获取实时的点赞数 provider。
 ///
-/// 优先使用按 dramaId 缓存的最近一次接口计数，使普通播放器刷新后的结果能同步
-/// 回仍然保留在 IndexedStack 中的 For You 页面。
+/// 计数基线来自当前页面的内容接口，乐观变化量只保留在当前页面状态中。
 final playerLikeCountProvider = Provider.family<String, (String, int, String)>((
   ref,
   args,
@@ -19,7 +17,6 @@ final playerLikeCountProvider = Provider.family<String, (String, int, String)>((
 
   final originalCount =
       likeState.serverFavoriteCount ??
-      PlayerLikeCache.getCachedInitialLikeCount(dramaId) ??
       (favoriteCount > 0
           ? favoriteCount
           : _extractCountFromLabel(likeCountLabel));

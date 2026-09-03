@@ -142,9 +142,22 @@ class MediaKitPlayerSession implements PlayerPlaybackSession {
 
   @override
   Future<void> pause() async {
+    if (_isDisposed) {
+      return;
+    }
     final sessionId = identityHashCode(this);
     developer.log('[MediaKitSession#$sessionId] pause requested');
-    await player.pause();
+    try {
+      await player.pause();
+    } catch (error) {
+      // 页面退出、内存回收和锁集覆盖层会并发收敛播放器。即使在上面的检查后，
+      // native Player 仍可能已在另一个异步路径释放；pause 是幂等清理操作，
+      // 此时无需再向 Flutter 抛出未捕获异常。
+      if (_isDisposedPlayerError(error)) {
+        return;
+      }
+      rethrow;
+    }
     developer.log('[MediaKitSession#$sessionId] pause completed');
   }
 
@@ -173,11 +186,15 @@ class MediaKitPlayerSession implements PlayerPlaybackSession {
     try {
       await player.dispose();
     } catch (error) {
-      if (error is AssertionError &&
-          error.toString().contains('[Player] has been disposed')) {
+      if (_isDisposedPlayerError(error)) {
         return;
       }
       rethrow;
     }
+  }
+
+  bool _isDisposedPlayerError(Object error) {
+    return error is AssertionError &&
+        error.toString().contains('[Player] has been disposed');
   }
 }

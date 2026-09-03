@@ -1406,6 +1406,7 @@ class PlayerSeekBar extends StatefulWidget {
     this.hasThumbnailPreviewAsset = false,
     this.isPassiveTrack = false,
     this.trackFadeDuration = Duration.zero,
+    this.idleTouchTargetHeight = 36,
     this.previewPosition,
     this.onDragStart,
     this.onDragUpdate,
@@ -1422,6 +1423,7 @@ class PlayerSeekBar extends StatefulWidget {
   final PlayerSeekPreviewConfig previewConfig;
   final bool isPassiveTrack;
   final Duration trackFadeDuration;
+  final double idleTouchTargetHeight;
   final Duration? previewPosition;
   final bool enabled;
   final bool isDragging;
@@ -1437,8 +1439,6 @@ class PlayerSeekBar extends StatefulWidget {
 
 class _PlayerSeekBarState extends State<PlayerSeekBar> {
   // 保持 2px 的非拖动轨道视觉，但为点击和开始拖动保留更大的垂直热区。
-  static const _idleTouchTargetHeight = 36.0;
-
   @override
   Widget build(BuildContext context) {
     final progress = _ratio(widget.previewPosition ?? widget.position);
@@ -1458,7 +1458,7 @@ class _PlayerSeekBarState extends State<PlayerSeekBar> {
         ? 112.0
         : showTimeBubble
         ? 40.0
-        : _idleTouchTargetHeight;
+        : widget.idleTouchTargetHeight;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1828,16 +1828,13 @@ class _LikeActionItem extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (isLoading)
-                const AppPegTopLoader(size: 15, noBackground: true)
-              else
-                Image.asset(
-                  isLiked
-                      ? "assets/images/player/click_like.png"
-                      : "assets/images/player/unclick_like.png",
-                  width: 28,
-                  height: 28,
-                ),
+              Image.asset(
+                isLiked
+                    ? "assets/images/player/click_like.png"
+                    : "assets/images/player/unclick_like.png",
+                width: 28,
+                height: 28,
+              ),
               const SizedBox(height: 3),
               Flexible(
                 child: Text(
@@ -1846,7 +1843,7 @@ class _LikeActionItem extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: isLiked ? const Color(0xFFFFD700) : Colors.white,
+                    color: Colors.white,
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                     height: 16 / 12,

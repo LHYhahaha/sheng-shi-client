@@ -401,7 +401,7 @@ class _MembershipBody extends StatelessWidget {
               bottomInset +
               (state.hasContent && !useFloatingPurchaseButton
                   ? MembershipLayout.bottomButtonAreaHeight
-                  : 30),
+                  : 50),
         ),
         physics: const ClampingScrollPhysics(),
         children: [

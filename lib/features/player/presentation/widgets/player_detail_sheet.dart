@@ -143,26 +143,32 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
                         onChanged: (tab) => setState(() => _selectedTab = tab),
                       ),
                       const SizedBox(height: 18),
-                      _selectedTab == PlayerDetailTab.synopsis
-                          ? _SynopsisPanel(
-                              content: widget.content,
-                              onRecommendationSelected:
-                                  widget.onRecommendationSelected,
-                              recommendationsFuture:
-                                  widget.recommendationsFuture,
-                            )
-                          : _EpisodesPanel(
-                              dramaId: widget.content.id,
-                              episodes: widget.content.episodes,
-                              currentEpisode: widget.currentEpisode,
-                              currentEpisodeId: widget.currentEpisodeId,
-                              rangeStart: _rangeStart,
-                              onRangeChanged: (value) {
-                                setState(() => _rangeStart = value);
-                              },
-                              onEpisodeSelected: widget.onEpisodeSelected,
-                              totalEpisodes: widget.content.episodeTotal,
-                            ),
+                      Visibility(
+                        visible: _selectedTab == PlayerDetailTab.synopsis,
+                        maintainState: true,
+                        child: _SynopsisPanel(
+                          content: widget.content,
+                          onRecommendationSelected:
+                              widget.onRecommendationSelected,
+                          recommendationsFuture: widget.recommendationsFuture,
+                        ),
+                      ),
+                      Visibility(
+                        visible: _selectedTab == PlayerDetailTab.episodes,
+                        maintainState: true,
+                        child: _EpisodesPanel(
+                          dramaId: widget.content.id,
+                          episodes: widget.content.episodes,
+                          currentEpisode: widget.currentEpisode,
+                          currentEpisodeId: widget.currentEpisodeId,
+                          rangeStart: _rangeStart,
+                          onRangeChanged: (value) {
+                            setState(() => _rangeStart = value);
+                          },
+                          onEpisodeSelected: widget.onEpisodeSelected,
+                          totalEpisodes: widget.content.episodeTotal,
+                        ),
+                      ),
                     ],
                   ),
                 ),

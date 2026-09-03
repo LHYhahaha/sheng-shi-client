@@ -8,6 +8,7 @@ import '../dto/player_episode_unlock_dto.dart';
 import '../dto/player_feed_page_dto.dart';
 import '../dto/player_recommendation_dto.dart';
 import '../dto/short_follow_check_dto.dart';
+import '../dto/share_drama_status_dto.dart';
 import '../dto/watch_progress_dto.dart';
 import '../dto/watch_progress_report_dto.dart';
 
@@ -169,6 +170,17 @@ class PlayerRemoteDataSource {
       },
       authPolicy: ApiAuthPolicy.required,
       decoder: (_) {},
+    );
+  }
+
+  /// 获取当天短剧分享任务信息。
+  Future<ShareDramaStatusDto> fetchShareDramaStatus() {
+    return _apiClient.get<ShareDramaStatusDto>(
+      '/api/activity/share-drama/info',
+      authPolicy: ApiAuthPolicy.required,
+      decoder: (data) => ShareDramaStatusDto.fromJson(
+        JsonFieldParser.requireMap(data, dtoName: 'ShareDramaStatusDto'),
+      ),
     );
   }
 

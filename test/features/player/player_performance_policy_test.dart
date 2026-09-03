@@ -286,7 +286,7 @@ void main() {
   test('stable 派生 preload 仍为最小可用窗口', () {
     final config = PlayerPerformancePolicy.stable.toPreloadConfig();
     expect(config.effectivePreparedForwardSessionCount, 1);
-    expect(config.effectiveRetainedBackwardSessionCount, 10);
+    expect(config.effectiveRetainedBackwardSessionCount, 1);
     expect(config.forwardHlsPreloadCountFor(true), 1);
   });
 
