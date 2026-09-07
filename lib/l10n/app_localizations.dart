@@ -514,6 +514,45 @@ class AppLocalizations {
     zh: '隐私政策',
   );
 
+  String get settingsPreferenceSaveError => _remoteText(
+    'settings.preference.save_error',
+    en: 'Unable to save setting. Please try again.',
+    zh: '设置保存失败，请重试',
+  );
+
+  String get settingsCellularDownload => _remoteText(
+    'settings.cellular_download.title',
+    en: 'Allow Cellular Data Download',
+    zh: '允许使用流量下载',
+  );
+  String get settingsCellularDownloadConfirm => _remoteText(
+    'settings.cellular_download.confirm',
+    en: 'Do I need to use data traffic\nfor downloading?',
+    zh: '是否允许使用移动流量下载？',
+  );
+  String get settingsAbout =>
+      _remoteText('settings.about.title', en: 'About', zh: '关于');
+
+  String get settingsClearCache =>
+      _remoteText('settings.cache.title', en: 'Clear Cache', zh: '清理缓存');
+  String get settingsClearCacheConfirm => _remoteText(
+    'settings.cache.confirm',
+    en: 'Whether to clear the cache',
+    zh: '是否清理缓存？',
+  );
+  String get settingsClearCacheYes =>
+      _remoteText('settings.cache.yes', en: 'Yes', zh: '确认');
+  String get settingsCacheEmpty => _remoteText(
+    'settings.cache.empty',
+    en: 'No cache to clear',
+    zh: '暂无可清理缓存',
+  );
+  String get settingsCacheError => _remoteText(
+    'settings.cache.error',
+    en: 'Failed to clear cache. Please try again later.',
+    zh: '清理失败，请稍后重试',
+  );
+
   String get settingsToastLoggedOut =>
       _remoteText('settings.toast.logged_out', en: 'Logged out', zh: '已退出登录');
 

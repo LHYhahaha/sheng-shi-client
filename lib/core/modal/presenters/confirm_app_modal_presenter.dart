@@ -40,8 +40,10 @@ class ConfirmAppModalPresenter implements AppModalPresenter {
               Navigator.of(dialogContext).pop(ConfirmResult.dismissed);
             }
           },
-          child: request.style == ConfirmModalStyle.searchHistoryClear
-              ? _SearchHistoryClearDialog(
+          child:
+              (request.style == ConfirmModalStyle.searchHistoryClear ||
+                  request.style == ConfirmModalStyle.compact)
+              ? _CompactConfirmDialog(
                   request: request,
                   onCancel: () =>
                       Navigator.of(dialogContext).pop(ConfirmResult.cancelled),
@@ -86,8 +88,8 @@ class ConfirmAppModalPresenter implements AppModalPresenter {
   }
 }
 
-class _SearchHistoryClearDialog extends StatelessWidget {
-  const _SearchHistoryClearDialog({
+class _CompactConfirmDialog extends StatelessWidget {
+  const _CompactConfirmDialog({
     required this.request,
     required this.onCancel,
     required this.onConfirm,
@@ -100,7 +102,7 @@ class _SearchHistoryClearDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const backgroundColor = Color(0xFF363636);
-    const dividerColor = Color(0xFF5D5D5D);
+    Color dividerColor = Color(0xFFFFFFFF).withValues(alpha: 0.2);
 
     return Dialog(
       key: ValueKey('app_modal_confirm_${request.requestId}'),
@@ -115,18 +117,19 @@ class _SearchHistoryClearDialog extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
+                padding: EdgeInsets.fromLTRB(32, 32, 32, 24),
                 child: Text(
                   request.title,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
+                    height: 1.5,
                     fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
-              const Divider(height: 1, thickness: 1, color: dividerColor),
+              Divider(height: 1, thickness: 1, color: dividerColor),
               SizedBox(
                 height: 50,
                 child: Row(
@@ -136,6 +139,8 @@ class _SearchHistoryClearDialog extends StatelessWidget {
                         onPressed: onCancel,
                         style: TextButton.styleFrom(
                           foregroundColor: Colors.white,
+                          overlayColor: Colors.transparent,
+                          splashFactory: NoSplash.splashFactory,
                           shape: const RoundedRectangleBorder(),
                         ),
                         child: Text(
@@ -147,7 +152,7 @@ class _SearchHistoryClearDialog extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const VerticalDivider(
+                    VerticalDivider(
                       width: 1,
                       thickness: 1,
                       color: dividerColor,
@@ -157,6 +162,8 @@ class _SearchHistoryClearDialog extends StatelessWidget {
                         onPressed: onConfirm,
                         style: TextButton.styleFrom(
                           foregroundColor: const Color(0xFFFF4D5A),
+                          overlayColor: Colors.transparent,
+                          splashFactory: NoSplash.splashFactory,
                           shape: const RoundedRectangleBorder(),
                         ),
                         child: Text(

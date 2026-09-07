@@ -20,7 +20,10 @@ enum ConfirmModalStyle {
   /// 应用内通用确认弹窗。
   standard,
 
-  /// 搜索历史清空确认弹窗。
+  /// 灰底、底部等宽双按钮的轻量确认弹窗。
+  compact,
+
+  /// 搜索历史清空确认弹窗（保留原有调用兼容）。
   searchHistoryClear,
 }
 

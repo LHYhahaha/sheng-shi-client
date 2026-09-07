@@ -13,7 +13,45 @@ class HlsDiskCacheStore {
 
   final int maxBytes;
   Future<_HlsDiskIndex>? _indexFuture;
+  int _generation = 0;
   Future<void> _writeTail = Future<void>.value();
+
+  /// Only media payloads count; the empty index is bookkeeping, not cache.
+  Future<int> sizeBytes() async {
+    await _writeTail;
+    final index = await _index();
+    var total = 0;
+    await for (final entity in index.directory.list(followLinks: false)) {
+      if (entity is File && entity.path != index.indexFile.path) {
+        try {
+          total += await entity.length();
+        } on FileSystemException {
+          if (await entity.exists()) rethrow;
+        }
+      }
+    }
+    return total;
+  }
+
+  Future<void> clear() {
+    _generation++;
+    final operation = _writeTail.then((_) async {
+      final index = await _index();
+      index.entries.clear();
+      await for (final entity in index.directory.list(followLinks: false)) {
+        if (entity is File && entity.path != index.indexFile.path) {
+          try {
+            await entity.delete();
+          } on FileSystemException {
+            if (await entity.exists()) rethrow;
+          }
+        }
+      }
+      await _save(index);
+    });
+    _writeTail = operation.catchError((_) {});
+    return operation;
+  }
 
   /// 由播放地址生成与签名无关的缓存 key。
   ///
@@ -76,6 +114,7 @@ class HlsDiskCacheStore {
     );
     return HlsDiskCacheStreamWriter._(
       store: this,
+      generation: _generation,
       key: key,
       file: file,
       temp: temp,
@@ -86,6 +125,10 @@ class HlsDiskCacheStore {
   Future<void> _commitStreamWriter(HlsDiskCacheStreamWriter writer) {
     final operation = _writeTail.then((_) async {
       try {
+        if (writer.generation != _generation) {
+          await writer._deleteTemp();
+          return;
+        }
         final index = await _index();
         if (await writer.file.exists()) await writer.file.delete();
         await writer.temp.rename(writer.file.path);
@@ -197,6 +240,7 @@ class HlsDiskCacheStore {
 class HlsDiskCacheStreamWriter {
   HlsDiskCacheStreamWriter._({
     required HlsDiskCacheStore store,
+    required this.generation,
     required this.key,
     required this.file,
     required this.temp,
@@ -205,6 +249,7 @@ class HlsDiskCacheStreamWriter {
        _sink = temp.openWrite();
 
   final HlsDiskCacheStore _store;
+  final int generation;
   final String key;
   final File file;
   final File temp;

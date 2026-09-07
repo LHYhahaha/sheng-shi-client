@@ -32,6 +32,7 @@ class WalletHistoryPage extends ConsumerStatefulWidget {
 class _WalletHistoryPageState extends ConsumerState<WalletHistoryPage> {
   late final ScrollController _scrollController;
   bool _didTriggerLoadMoreNearEnd = false;
+  bool _initialLoadPending = true;
 
   @override
   void initState() {
@@ -92,6 +93,7 @@ class _WalletHistoryPageState extends ConsumerState<WalletHistoryPage> {
   }
 
   void _loadInitial() {
+    if (!mounted) return;
     _didTriggerLoadMoreNearEnd = false;
     final controller = ref.read(walletControllerProvider.notifier);
     switch (widget.type) {
@@ -101,6 +103,9 @@ class _WalletHistoryPageState extends ConsumerState<WalletHistoryPage> {
         controller.loadConsumptionRecords(WalletConsumptionStatus.spent);
       case WalletRecordType.coins:
         controller.loadRewardCoins();
+    }
+    if (_initialLoadPending) {
+      setState(() => _initialLoadPending = false);
     }
   }
 
@@ -153,6 +158,7 @@ class _WalletHistoryPageState extends ConsumerState<WalletHistoryPage> {
               ),
             Expanded(
               child: _HistoryBody(
+                isLoading: _initialLoadPending || state.isHistoryLoading,
                 state: state,
                 type: widget.type,
                 scrollController: _scrollController,
@@ -183,6 +189,7 @@ class _HistoryHeader extends StatelessWidget {
 
 class _HistoryBody extends StatelessWidget {
   const _HistoryBody({
+    required this.isLoading,
     required this.state,
     required this.type,
     required this.scrollController,
@@ -192,6 +199,7 @@ class _HistoryBody extends StatelessWidget {
   });
 
   final WalletState state;
+  final bool isLoading;
   final WalletRecordType type;
   final ScrollController scrollController;
   final VoidCallback onRetry;
@@ -200,8 +208,8 @@ class _HistoryBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (state.isLoading) {
-      return Column(children: [SizedBox(height: 240), AppPegTopLoader()]);
+    if (isLoading) {
+      return const Column(children: [SizedBox(height: 240), AppPegTopLoader()]);
     }
 
     if (state.historyError != null) {
