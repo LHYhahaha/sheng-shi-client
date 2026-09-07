@@ -23,6 +23,7 @@ import 'package:drama_client/features/player/domain/player_playback_source.dart'
 import 'package:drama_client/features/player/domain/player_preload_config.dart';
 import 'package:drama_client/features/player/domain/player_preload_state.dart';
 import 'package:drama_client/features/player/domain/player_subtitle.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -80,6 +81,114 @@ void main() {
     expect(state.status, PlayerPlaybackStatus.playing);
     expect(state.currentItemId, 'drama-a-ep-2');
   });
+
+  test(
+    'replaces a disposed native session and completes the same open',
+    () async {
+      final disposedSession = _FakePlaybackSession(
+        openError: AssertionError('[Player] has been disposed'),
+      );
+      final replacementSession = _FakePlaybackSession();
+      var factoryCalls = 0;
+      final container = _createContainer(
+        disposedSession,
+        sessionFactory: () =>
+            factoryCalls++ == 0 ? disposedSession : replacementSession,
+      );
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+
+      await container.read(provider.notifier).playItem(_item(1));
+
+      expect(disposedSession.openedSources, [_playableSource(1)]);
+      expect(replacementSession.openedSources, [_playableSource(1)]);
+      expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+    },
+  );
+
+  test('window release never disposes the active takeover session', () async {
+    final activeSession = _FakePlaybackSession();
+    final nearbySession = _FakePlaybackSession();
+    final manager = PlayerPlaybackPrepareManager(
+      sessionFactory: _FakePlaybackSession.new,
+    );
+    PlaybackSource sourceFor(String itemId) => PlaybackSource(
+      itemId: itemId,
+      remoteUrl: _videoUrl,
+      playableSource: _videoUrl,
+      cacheKey: itemId,
+      expiresAt: DateTime.now().add(const Duration(minutes: 1)),
+      codecHint: 'hls',
+      status: PlaybackSourceStatus.preloaded,
+    );
+
+    await manager.retainPaused(
+      PreparedPlaybackSession(
+        itemId: 'active',
+        source: sourceFor('active'),
+        session: activeSession,
+      ),
+    );
+    await manager.retainPaused(
+      PreparedPlaybackSession(
+        itemId: 'nearby',
+        source: sourceFor('nearby'),
+        session: nearbySession,
+      ),
+    );
+
+    final released = await manager.releaseExceptSession(activeSession);
+
+    expect(released, ['nearby']);
+    expect(activeSession.isDisposed, isFalse);
+    expect(nearbySession.isDisposed, isTrue);
+    expect(manager.windowItemIds, isEmpty);
+  });
+
+  test(
+    'decoder-pressure trim keeps next prepared but releases retained',
+    () async {
+      final retainedSession = _FakePlaybackSession();
+      final preparedSession = _FakePlaybackSession();
+      final manager = PlayerPlaybackPrepareManager(
+        sessionFactory: _FakePlaybackSession.new,
+      );
+      PlaybackSource sourceFor(String itemId) => PlaybackSource(
+        itemId: itemId,
+        remoteUrl: _videoUrl,
+        playableSource: _videoUrl,
+        cacheKey: itemId,
+        expiresAt: DateTime.now().add(const Duration(minutes: 1)),
+        codecHint: 'hls',
+        status: PlaybackSourceStatus.preloaded,
+      );
+
+      await manager.retainPaused(
+        PreparedPlaybackSession(
+          itemId: 'previous',
+          source: sourceFor('previous'),
+          session: retainedSession,
+          kind: PreparedPlaybackSessionKind.retained,
+        ),
+      );
+      await manager.retainPaused(
+        PreparedPlaybackSession(
+          itemId: 'next',
+          source: sourceFor('next'),
+          session: preparedSession,
+          kind: PreparedPlaybackSessionKind.prepared,
+        ),
+      );
+
+      final released = await manager.releaseRetained(
+        reason: 'test decoder pressure',
+      );
+
+      expect(released, ['previous']);
+      expect(retainedSession.isDisposed, isTrue);
+      expect(preparedSession.isDisposed, isFalse);
+      expect(manager.windowItemIds, ['next']);
+    },
+  );
 
   test('periodic watch progress restarts after completed auto next', () async {
     final session = _FakePlaybackSession();
@@ -3115,6 +3224,33 @@ void main() {
     },
   );
 
+  test(
+    'prepare warm-up timeout enables a temporary decoder-pressure window',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final currentSession = _FakePlaybackSession();
+      final preparedSession = _FakePlaybackSession(emitWidthOnOpen: false);
+      var index = 0;
+      final sessions = [currentSession, preparedSession];
+      final container = _createPrepareContainer(
+        () => sessions[index++],
+        warmUpTimeout: const Duration(milliseconds: 20),
+      );
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      await controller.preloadAround([_item(1), _item(2)], 0);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+
+      final report = controller.exportTimingReport();
+      expect(report, contains('prepare warm-up timeout'));
+      expect(report, contains('decoder pressure detected'));
+    },
+  );
+
   test('logs playback advancing before first frame diagnostics', () async {
     final session = _FakePlaybackSession(emitWidthOnOpen: false);
     final container = _createContainer(session);
@@ -3478,6 +3614,7 @@ void main() {
 
 ProviderContainer _createContainer(
   _FakePlaybackSession session, {
+  PlayerPlaybackSession Function()? sessionFactory,
   bool addDisposeTearDown = true,
   PlayerPlaybackPreloadManager? preloadManager,
   PlayerPlaybackPreloadManager? predictivePreloadManager,
@@ -3499,7 +3636,9 @@ ProviderContainer _createContainer(
       hlsLocalProxyConfigProvider.overrideWithValue(
         const HlsLocalProxyConfig(enabled: false),
       ),
-      playerPlaybackSessionFactoryProvider.overrideWithValue(() => session),
+      playerPlaybackSessionFactoryProvider.overrideWithValue(
+        sessionFactory ?? () => session,
+      ),
       playerPlaybackPreloadManagerProvider.overrideWithValue(
         playbackCacheManager,
       ),
@@ -3683,7 +3822,10 @@ class _CountingPlaybackSourceRepository
   var preloadCount = 0;
 
   @override
-  Future<PlaybackSource> resolve(PlayerFeedItem item) async {
+  Future<PlaybackSource> resolve(
+    PlayerFeedItem item, {
+    int? maxVideoHeight,
+  }) async {
     resolveCount += 1;
     final source = item.episode.videoSource!;
     return PlaybackSource(
@@ -3702,6 +3844,7 @@ class _CountingPlaybackSourceRepository
   Future<PlaybackPreloadState> preload(
     PlayerFeedItem item, {
     Duration? preferredPosition,
+    int? maxVideoHeight,
   }) async {
     preloadCount += 1;
     return PlaybackPreloadState(
@@ -3774,6 +3917,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   _FakePlaybackSession({
     this.openCompleter,
     this.shouldThrowOnOpen = false,
+    this.openError,
     this.emitWidthOnOpen = true,
     this.positionOnOpen,
     this.emitPositionOnSeek = true,
@@ -3781,6 +3925,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
 
   final Completer<void>? openCompleter;
   final bool emitWidthOnOpen;
+  final Object? openError;
   final Duration? positionOnOpen;
   final bool emitPositionOnSeek;
   bool shouldThrowOnOpen;
@@ -3848,6 +3993,10 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     openHttpHeaders.add(httpHeaders);
     _bufferingController.add(true);
     await (openCompleter?.future ?? Future<void>.value());
+    final error = openError;
+    if (error != null) {
+      throw error;
+    }
     if (shouldThrowOnOpen) {
       throw StateError('open failed');
     }

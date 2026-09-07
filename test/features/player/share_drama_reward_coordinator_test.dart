@@ -14,6 +14,7 @@ void main() {
 
       coordinator.register(
         taskKey: 'coin.share_drama',
+        claimed: false,
         channel: ShareDramaRewardChannel.facebook,
       );
 
@@ -48,6 +49,7 @@ void main() {
 
     coordinator.register(
       taskKey: 'coin.share_drama',
+      claimed: false,
       channel: ShareDramaRewardChannel.copyLink,
     );
     coordinator.onLifecycleChanged(AppLifecycleState.paused);
@@ -70,6 +72,7 @@ void main() {
 
       coordinator.register(
         taskKey: 'coin.share_drama',
+        claimed: false,
         channel: ShareDramaRewardChannel.copyLink,
       );
       coordinator.onLifecycleChanged(AppLifecycleState.paused);
@@ -79,6 +82,47 @@ void main() {
     },
   );
 
+  test(
+    'reports a completed share even when no reward task key is available',
+    () async {
+      final events = <String>[];
+      final coordinator = ShareDramaRewardCoordinator(
+        claimReward: (_) async => events.add('claim'),
+        reportShareAction: () async => events.add('report'),
+      );
+
+      coordinator.register(
+        taskKey: null,
+        claimed: false,
+        channel: ShareDramaRewardChannel.copyLink,
+      );
+      coordinator.onLifecycleChanged(AppLifecycleState.paused);
+      coordinator.onLifecycleChanged(AppLifecycleState.resumed);
+
+      await Future<void>.delayed(Duration.zero);
+      expect(events, ['report']);
+    },
+  );
+
+  test('reports but does not claim an already claimed share task', () async {
+    final events = <String>[];
+    final coordinator = ShareDramaRewardCoordinator(
+      claimReward: (_) async => events.add('claim'),
+      reportShareAction: () async => events.add('report'),
+    );
+
+    coordinator.register(
+      taskKey: 'coin.share_drama',
+      claimed: true,
+      channel: ShareDramaRewardChannel.copyLink,
+    );
+    coordinator.onLifecycleChanged(AppLifecycleState.paused);
+    coordinator.onLifecycleChanged(AppLifecycleState.resumed);
+
+    await Future<void>.delayed(Duration.zero);
+    expect(events, ['report']);
+  });
+
   test('latest copy replaces the previous pending reward', () async {
     final claims = <String>[];
     final coordinator = ShareDramaRewardCoordinator(
@@ -87,10 +131,12 @@ void main() {
 
     coordinator.register(
       taskKey: 'old-task',
+      claimed: false,
       channel: ShareDramaRewardChannel.copyLink,
     );
     coordinator.register(
       taskKey: 'new-task',
+      claimed: false,
       channel: ShareDramaRewardChannel.copyLink,
     );
     coordinator.onLifecycleChanged(AppLifecycleState.hidden);
@@ -114,6 +160,7 @@ void main() {
 
       coordinator.register(
         taskKey: 'coin.share_drama',
+        claimed: false,
         channel: ShareDramaRewardChannel.copyLink,
       );
       coordinator.onLifecycleChanged(AppLifecycleState.paused);

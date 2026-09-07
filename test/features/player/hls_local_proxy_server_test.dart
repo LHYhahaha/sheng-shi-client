@@ -297,6 +297,7 @@ class _ThrowingProxyServer extends HlsLocalProxyServer {
   Future<String> proxyUrlFor(
     String remoteUrl, {
     HlsTrafficOwner owner = HlsTrafficOwner.playback,
+    int? maxVideoHeight,
   }) {
     throw StateError('proxy unavailable');
   }

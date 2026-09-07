@@ -7,6 +7,7 @@ class ProfileMenuRow extends StatelessWidget {
     required this.title,
     required this.onTap,
     this.subtitle,
+    this.badgeLabel,
     this.iconAssetPath = 'assets/images/profile/language_icon_figma.png',
     this.enabled = true,
     super.key,
@@ -14,6 +15,7 @@ class ProfileMenuRow extends StatelessWidget {
 
   final String title;
   final String? subtitle;
+  final String? badgeLabel;
   final VoidCallback onTap;
   final String iconAssetPath;
   final bool enabled;
@@ -72,12 +74,32 @@ class ProfileMenuRow extends StatelessWidget {
                 ],
               ),
             ),
+            if (badgeLabel != null) ...[
+              Container(
+                key: const Key('profile_menu_reward_badge'),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF007A),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  badgeLabel!,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
             Padding(
               padding: subtitle != null
                   ? const EdgeInsets.only(top: 8.0)
                   : EdgeInsets.zero,
               child: Image.asset(
-                "assets/images/common/white_right.png",
+                "assets/images/common/grey_right_icon.png",
                 color: Colors.white.withValues(alpha: 0.4),
                 height: 20,
                 width: 20,

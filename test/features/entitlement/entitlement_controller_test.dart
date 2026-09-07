@@ -421,6 +421,30 @@ void main() {
       );
     });
 
+    test(
+      'setAutoUnlockEnabled retains session unlocks omitted by its response',
+      () async {
+        final container = ProviderContainer(
+          overrides: [
+            entitlementRepositoryProvider.overrideWithValue(
+              _AutoUnlockResponseOmitsEpisodeRepository(),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        final controller = container.read(
+          entitlementControllerProvider.notifier,
+        );
+        await controller.load();
+
+        await controller.setAutoUnlockEnabled(true);
+
+        final state = container.read(entitlementControllerProvider);
+        expect(state.autoUnlockEnabled, isTrue);
+        expect(state.unlockedEpisodeIds, contains('155638'));
+      },
+    );
+
     test('grantMockMembership updates isMember', () async {
       final container = _containerWith(
         MockEntitlementRepository.loggedInNonMemberLowCoins(),
@@ -548,6 +572,49 @@ class _DelayedEntitlementRepository implements EntitlementRepository {
     required int price,
     required String operationId,
   }) => _result.future;
+}
+
+class _AutoUnlockResponseOmitsEpisodeRepository
+    implements EntitlementRepository {
+  static const _initialState = UserEntitlementState(
+    isGuest: false,
+    isMember: false,
+    coinBalance: 317,
+    autoUnlockEnabled: false,
+    unlockedEpisodeIds: <String>{'155638'},
+  );
+
+  @override
+  Future<UserEntitlementState> fetchState() async => _initialState;
+
+  @override
+  Future<UserEntitlementState> setAutoUnlockEnabled(bool enabled) async {
+    return const UserEntitlementState(
+      isGuest: false,
+      isMember: false,
+      coinBalance: 317,
+      autoUnlockEnabled: true,
+      unlockedEpisodeIds: <String>{},
+    );
+  }
+
+  @override
+  Future<UserEntitlementState> grantMockCoins({
+    required int amount,
+    required String source,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<UserEntitlementState> grantMockMembership({required String source}) =>
+      throw UnimplementedError();
+
+  @override
+  Future<UserEntitlementState> unlockEpisodeWithCoins({
+    required String dramaId,
+    required String episodeId,
+    required int price,
+    required String operationId,
+  }) => throw UnimplementedError();
 }
 
 ProviderContainer _containerWith(

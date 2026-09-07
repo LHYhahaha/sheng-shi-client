@@ -19,6 +19,7 @@ import 'package:drama_client/features/rewards/domain/member_point_details.dart';
 import 'package:drama_client/features/rewards/domain/member_point_exchange_options.dart';
 import 'package:drama_client/features/rewards/domain/member_point_exchange_result.dart';
 import 'package:drama_client/features/rewards/domain/member_points_repository.dart';
+import 'package:drama_client/features/rewards/domain/reward_coin_remaining.dart';
 import 'package:drama_client/features/rewards/domain/reward_coins_check_in_status.dart';
 import 'package:drama_client/features/rewards/domain/reward_coins_check_in_claim_result.dart';
 import 'package:drama_client/features/rewards/domain/reward_coins_repository.dart';
@@ -1474,6 +1475,11 @@ class _FakeRewardCoinsRepository implements RewardCoinsRepository {
 
   @override
   Future<RewardCoinsCheckInClaimResult> claimTask({required String taskKey}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<RewardCoinRemaining> getRemainingCoin() {
     throw UnimplementedError();
   }
 

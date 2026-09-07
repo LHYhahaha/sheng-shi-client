@@ -1,8 +1,6 @@
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
-import '../../../core/logging/app_log.dart' as developer;
-
 /// 播放器 session 抽象。
 ///
 /// 控制器只依赖这个接口，避免直接绑定 media_kit，测试也可以注入 fake session。
@@ -118,25 +116,18 @@ class MediaKitPlayerSession implements PlayerPlaybackSession {
     Duration? start,
     Map<String, String>? httpHeaders,
   }) async {
-    developer.log(
-      'MediaKitPlayerSession: 开始打开视频 - source=$source, play=$play, start=$start',
-    );
     try {
       final media = Media(source, start: start, httpHeaders: httpHeaders);
-      developer.log('MediaKitPlayerSession: Media 对象已创建，${media.end}');
       await player.open(media, play: play);
-      developer.log('MediaKitPlayerSession: 视频打开成功 - source=$source');
-    } catch (e, st) {
-      developer.log(
-        'MediaKitPlayerSession: 视频打开失败 - source=$source, error=$e\n$st',
-      );
+    } catch (_) {
+      // 播放控制器会统一记录 source resolve / media open / 首帧耗时和错误；这里
+      // 不再重复打印 URL、play、pause、seek 等高频底层调用。
       rethrow;
     }
   }
 
   @override
   Future<void> play() {
-    developer.log('MediaKitPlayerSession: play');
     return player.play();
   }
 
@@ -145,8 +136,6 @@ class MediaKitPlayerSession implements PlayerPlaybackSession {
     if (_isDisposed) {
       return;
     }
-    final sessionId = identityHashCode(this);
-    developer.log('[MediaKitSession#$sessionId] pause requested');
     try {
       await player.pause();
     } catch (error) {
@@ -158,12 +147,10 @@ class MediaKitPlayerSession implements PlayerPlaybackSession {
       }
       rethrow;
     }
-    developer.log('[MediaKitSession#$sessionId] pause completed');
   }
 
   @override
   Future<void> seek(Duration position) {
-    developer.log('MediaKitPlayerSession: seek - position=$position');
     return player.seek(position);
   }
 

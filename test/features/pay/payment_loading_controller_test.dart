@@ -3,11 +3,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('payment loading supports an animation-only state', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final controller = container.read(
+      paymentLoadingControllerProvider.notifier,
+    );
+    controller.show(label: PaymentLoadingLabel.none);
+
+    final state = container.read(paymentLoadingControllerProvider);
+    expect(state.isVisible, isTrue);
+    expect(state.label, PaymentLoadingLabel.none);
+  });
+
   test('payment loading tracks visible label by phase', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);
 
-    final controller = container.read(paymentLoadingControllerProvider.notifier);
+    final controller = container.read(
+      paymentLoadingControllerProvider.notifier,
+    );
 
     controller.show(label: PaymentLoadingLabel.loading);
     var state = container.read(paymentLoadingControllerProvider);

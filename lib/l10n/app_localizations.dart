@@ -451,7 +451,7 @@ class AppLocalizations {
       _remoteText('profile.wallet.coins', en: 'Coins', zh: '金币');
 
   String get profileWallet =>
-      _remoteText('profile.wallet.wallet', en: 'Wallet >', zh: '钱包 >');
+      _remoteText('profile.wallet.wallet', en: 'Wallet', zh: '钱包');
 
   String get profileTopUp =>
       _remoteText('profile.button.top_up', en: 'Top Up', zh: '充值');
@@ -1782,6 +1782,24 @@ class AppLocalizations {
   // ── 1.0.2 / 短剧播放页 ─────────────────────────────────────────────
   String get playerSubtitleEntry =>
       _remoteText('player.subtitle.entry', en: 'Subtitles', zh: '字幕');
+
+  String get playerSettingsTitle =>
+      _remoteText('player.settings.title', en: 'Playback Settings', zh: '播放设置');
+
+  String get playerSettingsQuality =>
+      _remoteText('player.settings.quality', en: 'Current Quality', zh: '当前画质');
+
+  String get playerSettingsPip =>
+      _remoteText('player.settings.pip', en: 'Picture-in-Picture', zh: '画中画');
+
+  String get playerQualityAuto =>
+      _remoteText('player.quality.auto', en: 'Auto', zh: '自动');
+
+  String get playerQualityFailed => _remoteText(
+    'player.quality.failed',
+    en: 'Quality switch failed. Try again.',
+    zh: '切换失败，请稍后重试',
+  );
 
   String get playerSubtitleOff =>
       _remoteText('player.subtitle.off', en: 'Off', zh: '关闭');

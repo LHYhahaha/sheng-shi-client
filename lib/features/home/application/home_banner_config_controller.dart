@@ -41,6 +41,7 @@ class HomeBannerConfigState {
 /// 首页 Banner 配置：一个冷启动内最多请求一次，异常直接显示为空。
 class HomeBannerConfigController extends Notifier<HomeBannerConfigState> {
   Future<void>? _loadOperation;
+  int _loadGeneration = 0;
 
   @override
   HomeBannerConfigState build() {
@@ -68,7 +69,15 @@ class HomeBannerConfigController extends Notifier<HomeBannerConfigState> {
     return _loadOperation ??= _load();
   }
 
-  Future<void> _load() async {
+  /// Re-fetches banner configuration after a global setting (such as language)
+  /// changes. A failed refresh keeps the previously usable carousel visible.
+  Future<void> refresh() {
+    _loadOperation = _load(preserveBannersOnError: state.hasLoaded);
+    return _loadOperation!;
+  }
+
+  Future<void> _load({bool preserveBannersOnError = false}) async {
+    final generation = ++_loadGeneration;
     try {
       final response = await HomeBannerRemoteDataSource(
         apiClient: ref.read(apiClientProvider),
@@ -81,9 +90,21 @@ class HomeBannerConfigController extends Notifier<HomeBannerConfigState> {
                 _isValidTarget(banner);
           })
           .toList(growable: false);
-      state = state.copyWith(banners: valid, hasLoaded: true);
+      if (generation != _loadGeneration) {
+        return;
+      }
+      state = state.copyWith(
+        banners: valid,
+        hasLoaded: true,
+        unavailableBannerIds: const <String>{},
+      );
     } catch (_) {
-      state = state.copyWith(banners: const <HomeBannerDto>[], hasLoaded: true);
+      if (generation != _loadGeneration) {
+        return;
+      }
+      state = preserveBannersOnError
+          ? state.copyWith(hasLoaded: true)
+          : state.copyWith(banners: const <HomeBannerDto>[], hasLoaded: true);
     }
   }
 

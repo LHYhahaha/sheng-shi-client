@@ -6,9 +6,12 @@ import 'dart:io';
 import '../domain/player_feed.dart';
 import '../domain/player_playback_source.dart';
 import '../domain/player_preload_state.dart';
+import '../domain/player_video_quality.dart';
 import 'hls_disk_cache_store.dart';
+import 'hls_video_quality_parser.dart';
 import 'hls_local_proxy_server.dart';
 import 'hls_network_request_coordinator.dart';
+import 'hls_source_profile_store.dart';
 
 /// HLS 预热结果。
 ///
@@ -18,6 +21,10 @@ class HlsPlaylistPrefetchResult {
     required this.url,
     required this.contentLength,
     required this.isMasterPlaylist,
+    required this.renditionCount,
+    required this.sourceRenditionCount,
+    required this.fellBackAboveMaxHeight,
+    required this.isSingleRendition,
     required this.fetchedAt,
     required this.mediaPlaylistUrl,
     required this.segmentUrls,
@@ -37,6 +44,21 @@ class HlsPlaylistPrefetchResult {
   ///
   /// master playlist 会再选择一个 variant media playlist 预热。
   final bool isMasterPlaylist;
+
+  /// Number of selectable variants found in the source playlist. A direct
+  /// media playlist is treated as one rendition.
+  final int renditionCount;
+
+  /// Variant count before the local automatic-quality cap was applied.
+  final int sourceRenditionCount;
+
+  /// True when no rendition met the automatic cap and the proxy kept the
+  /// source playlist playable (for example a 1080p-only episode).
+  final bool fellBackAboveMaxHeight;
+
+  /// A single rendition cannot benefit from rendition selection. Its preload
+  /// policy intentionally protects only the decoder bootstrap segment.
+  final bool isSingleRendition;
 
   /// 预热完成时间。
   final DateTime fetchedAt;
@@ -77,6 +99,11 @@ class HlsPlaylistPreloadCancelledException implements Exception {
   String toString() => 'HlsPlaylistPreloadCancelledException';
 }
 
+/// Determines whether a preload is allowed to spend the full bootstrap
+/// segment budget. Critical work is a concrete user path (Home entry or the
+/// adjacent episode); speculative work is only a gesture prediction.
+enum HlsPreloadIntent { critical, speculative }
+
 class HlsPlaylistHttpResponse {
   const HlsPlaylistHttpResponse({
     required this.statusCode,
@@ -109,8 +136,17 @@ abstract interface class HlsPlaylistHttpClient {
   void releasePending();
 }
 
+/// Optional capability used only by background preheat. It lets the preloader
+/// decline a known oversized segment before its body takes bandwidth.
+abstract interface class HlsPlaylistContentLengthClient {
+  Future<int?> contentLength(Uri uri, {required Duration timeout});
+}
+
 class DartIoHlsPlaylistHttpClient
-    implements HlsPlaylistHttpClient, HlsNetworkStreamingHttpClient {
+    implements
+        HlsPlaylistHttpClient,
+        HlsPlaylistContentLengthClient,
+        HlsNetworkStreamingHttpClient {
   DartIoHlsPlaylistHttpClient({HttpClient? client})
     : _client = client ?? HttpClient();
 
@@ -140,6 +176,83 @@ class DartIoHlsPlaylistHttpClient
       );
     } finally {
       _pendingRequests.remove(request);
+    }
+  }
+
+  @override
+  Future<int?> contentLength(Uri uri, {required Duration timeout}) async {
+    // Preloading normally uses the localhost proxy. A probe must target the
+    // embedded CDN URI directly: asking the proxy for HEAD/Range would make it
+    // fetch and stream the whole segment before it can answer, defeating the
+    // purpose of the one-byte check.
+    final probeUri = _unwrapLocalProxyUri(uri);
+    final fromHead = await _contentLengthFromHead(probeUri, timeout: timeout);
+    if (fromHead != null) return fromHead;
+    return _contentLengthFromRangeProbe(probeUri, timeout: timeout);
+  }
+
+  Uri _unwrapLocalProxyUri(Uri uri) {
+    final embedded = uri.queryParameters['url'];
+    final embeddedUri = embedded == null ? null : Uri.tryParse(embedded);
+    if ((uri.host == 'localhost' || uri.host == '127.0.0.1') &&
+        embeddedUri != null &&
+        embeddedUri.hasScheme &&
+        embeddedUri.hasAuthority) {
+      return embeddedUri;
+    }
+    return uri;
+  }
+
+  Future<int?> _contentLengthFromHead(
+    Uri uri, {
+    required Duration timeout,
+  }) async {
+    final request = await _client.headUrl(uri).timeout(timeout);
+    _pendingRequests.add(request);
+    try {
+      final response = await request.close().timeout(timeout);
+      await response.drain<void>().timeout(timeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) return null;
+      final length = response.contentLength;
+      return length < 0 ? null : length;
+    } catch (_) {
+      // Some CDNs reject HEAD even though GET is valid. This is optimization
+      // only and must never turn into a playback/preload failure.
+      return null;
+    } finally {
+      _pendingRequests.remove(request);
+    }
+  }
+
+  Future<int?> _contentLengthFromRangeProbe(
+    Uri uri, {
+    required Duration timeout,
+  }) async {
+    HttpClientRequest? request;
+    try {
+      request = await _client.getUrl(uri).timeout(timeout);
+      request.headers.set(HttpHeaders.rangeHeader, 'bytes=0-0');
+      _pendingRequests.add(request);
+      final response = await request.close().timeout(timeout);
+      // A compliant range response carries the total size as, for example,
+      // `bytes 0-0/2576916`. If a CDN ignores Range and sends 200, do not
+      // drain it: that would silently turn a one-byte probe into a full GET.
+      if (response.statusCode != HttpStatus.partialContent) {
+        request.abort();
+        return null;
+      }
+      final contentRange = response.headers.value(
+        HttpHeaders.contentRangeHeader,
+      );
+      final total = int.tryParse(contentRange?.split('/').last ?? '');
+      await response.drain<void>().timeout(timeout);
+      return total != null && total >= 0 ? total : null;
+    } catch (_) {
+      return null;
+    } finally {
+      if (request != null) {
+        _pendingRequests.remove(request);
+      }
     }
   }
 
@@ -189,14 +302,18 @@ class HlsPlaylistPreloader {
     this.sharedRequestTimeout = const Duration(seconds: 12),
     this.maxSegments = 2,
     this.maxPreheatBytes = 2 * 1024 * 1024,
+    this.maxSingleSegmentPreheatBytes = 1024 * 1024,
+    this.intent = HlsPreloadIntent.critical,
     HlsLocalCacheStore? cacheStore,
     HlsDiskCacheStore? diskCacheStore,
     HlsNetworkRequestCoordinator? networkCoordinator,
+    HlsSourceProfileStore? sourceProfileStore,
   }) : _client = client ?? DartIoHlsPlaylistHttpClient(),
        _cacheStore = cacheStore,
        _diskCacheStore = diskCacheStore,
        _networkCoordinator =
-           networkCoordinator ?? HlsNetworkRequestCoordinator();
+           networkCoordinator ?? HlsNetworkRequestCoordinator(),
+       _sourceProfileStore = sourceProfileStore;
 
   /// HLS HTTP client。
   ///
@@ -205,6 +322,7 @@ class HlsPlaylistPreloader {
   final HlsLocalCacheStore? _cacheStore;
   final HlsDiskCacheStore? _diskCacheStore;
   final HlsNetworkRequestCoordinator _networkCoordinator;
+  final HlsSourceProfileStore? _sourceProfileStore;
 
   /// 单次 playlist/segment 预热的等待预算。
   ///
@@ -226,6 +344,15 @@ class HlsPlaylistPreloader {
   ///
   /// 控制流量上限，避免首段过大时抢占当前播放带宽。
   final int maxPreheatBytes;
+
+  /// Per-segment ceiling for background bootstrap fetches. A total budget
+  /// alone is insufficient because it is known only after a large GET ends.
+  final int maxSingleSegmentPreheatBytes;
+
+  /// A critical preload must remain useful for the Home/next-episode hit even
+  /// when its first segment is large. Only speculative work yields a known
+  /// oversized segment before downloading its body.
+  final HlsPreloadIntent intent;
   int _generation = 0;
   HlsRequestPriority _activePriority = HlsRequestPriority.preload;
 
@@ -255,6 +382,22 @@ class HlsPlaylistPreloader {
     );
   }
 
+  /// Fetches only the master playlist and returns its selectable renditions.
+  ///
+  /// This deliberately does not call [prefetch]: opening the quality menu must
+  /// not spend bandwidth downloading the preloader's default variant/segments.
+  Future<List<PlayerVideoQuality>> inspectQualities(String sourceUrl) async {
+    final uri = _parseHttpUri(sourceUrl);
+    final generation = _generation;
+    final response = await _getOrThrow(uri, generation: generation);
+    if (!response.body.contains('#EXT-X-STREAM-INF')) {
+      return const [];
+    }
+    final qualities = HlsVideoQualityParser.parse(uri, response.body);
+    _logMasterPlaylistVariants(uri, response.body);
+    return qualities;
+  }
+
   /// 普通播放器已接管同一 source 时，把尚未发出的关键段请求提升为 playback。
   ///
   /// 已经在飞行的请求不能重启，否则反而丢掉已下载字节；它们仍可通过 singleflight
@@ -281,6 +424,16 @@ class HlsPlaylistPreloader {
     );
 
     final isMasterPlaylist = response.body.contains('#EXT-X-STREAM-INF');
+    final renditions = isMasterPlaylist
+        ? _parseVariants(uri, response.body)
+        : const <_HlsVariant>[];
+    final embeddedProfile = _parseEmbeddedRenditionProfile(response.body);
+    final renditionCount = isMasterPlaylist ? renditions.length : 1;
+    final sourceRenditionCount =
+        embeddedProfile?.sourceRenditionCount ?? renditionCount;
+    final fellBackAboveMaxHeight =
+        embeddedProfile?.fellBackAboveMaxHeight ?? false;
+    final isSingleRendition = renditionCount <= 1;
     var mediaPlaylistUri = uri;
     var mediaPlaylistBody = response.body;
     var contentLength = response.byteLength;
@@ -316,13 +469,29 @@ class HlsPlaylistPreloader {
       mediaPlaylistBody,
       preferredPosition: preferredPosition,
     );
+    final hasResumeTarget = resumeTargetIndex != null && resumeTargetIndex > 0;
+    // A single-rendition source often has a large 1080p segment. For a fresh
+    // start, only the decoder bootstrap segment can improve first frame; the
+    // second segment merely competes with actual playback. Resume keeps its
+    // existing first+target policy because both segments are necessary.
+    final effectiveMaxSegments = isSingleRendition && !hasResumeTarget
+        ? 1
+        : maxSegments;
+    diagnostics.add(
+      'hls rendition profile sourceCount=$sourceRenditionCount '
+      'effectiveCount=$renditionCount fallbackAboveCap=$fellBackAboveMaxHeight '
+      'single=$isSingleRendition maxSegments=$effectiveMaxSegments '
+      'intent=${intent.name}',
+    );
     final segmentUris = _segmentUrisAroundPosition(
       mediaPlaylistUri,
       mediaPlaylistBody,
       resumeTargetIndex: resumeTargetIndex,
-    ).take(maxSegments).toList(growable: false);
+    ).take(effectiveMaxSegments).toList(growable: false);
     final preheatedSegments = <Uri>[];
     var segmentBytesPreheated = 0;
+    var firstSegmentBytes = 0;
+    var firstSegmentElapsedMs = 0;
 
     // 续播有两个同等关键的冷点：播放器初始化所需的首段，以及目标时间附近的段。
     // 原来顺序下载会让目标段必须等首段完成；当用户已经有 55/74 秒进度时，这正好
@@ -352,6 +521,10 @@ class HlsPlaylistPreloader {
           contentType: _segmentContentType(segmentUri),
         );
         final segmentBytes = segmentResponse.byteLength;
+        if (index == 0) {
+          firstSegmentBytes = segmentBytes;
+          firstSegmentElapsedMs = _elapsedMs(startedAt);
+        }
         segmentBytesPreheated += segmentBytes;
         preheatedSegments.add(segmentUri);
         diagnostics.add(
@@ -373,6 +546,21 @@ class HlsPlaylistPreloader {
         final segmentUri = segmentUris[index];
         final segmentStartedAt = DateTime.now();
         diagnostics.add('hls segment ${index + 1} preheat start');
+        if (intent == HlsPreloadIntent.speculative && !hasResumeTarget) {
+          final knownLength = await _preflightContentLength(
+            segmentUri,
+            generation: generation,
+          );
+          if (knownLength != null &&
+              knownLength > maxSingleSegmentPreheatBytes) {
+            diagnostics.add(
+              'hls segment ${index + 1} preheat skipped knownBytes='
+              '$knownLength perSegmentLimit=$maxSingleSegmentPreheatBytes '
+              'intent=${intent.name}',
+            );
+            continue;
+          }
+        }
         final segmentResponse = await _getOrThrow(
           segmentUri,
           generation: generation,
@@ -384,6 +572,10 @@ class HlsPlaylistPreloader {
           contentType: _segmentContentType(segmentUri),
         );
         final segmentBytes = segmentResponse.byteLength;
+        if (index == 0) {
+          firstSegmentBytes = segmentBytes;
+          firstSegmentElapsedMs = _elapsedMs(segmentStartedAt);
+        }
         segmentBytesPreheated += segmentBytes;
         preheatedSegments.add(segmentUri);
         diagnostics.add(
@@ -397,11 +589,34 @@ class HlsPlaylistPreloader {
       }
     }
     diagnostics.add('segment preheat bytes=$segmentBytesPreheated');
+    final sourceProfileStore = _sourceProfileStore;
+    if (sourceProfileStore != null) {
+      unawaited(
+        sourceProfileStore.record(
+          HlsSourceProfile(
+            key: SharedPreferencesHlsSourceProfileStore.stableKeyForSource(
+              sourceUrl,
+            ),
+            renditionCount: renditionCount,
+            sourceRenditionCount: sourceRenditionCount,
+            fellBackAboveMaxHeight: fellBackAboveMaxHeight,
+            isSingleRendition: isSingleRendition,
+            firstSegmentBytes: firstSegmentBytes,
+            firstSegmentElapsedMs: firstSegmentElapsedMs,
+            updatedAtMs: DateTime.now().millisecondsSinceEpoch,
+          ),
+        ),
+      );
+    }
 
     return HlsPlaylistPrefetchResult(
       url: sourceUrl,
       contentLength: contentLength,
       isMasterPlaylist: isMasterPlaylist,
+      renditionCount: renditionCount,
+      sourceRenditionCount: sourceRenditionCount,
+      fellBackAboveMaxHeight: fellBackAboveMaxHeight,
+      isSingleRendition: isSingleRendition,
       fetchedAt: DateTime.now(),
       mediaPlaylistUrl: mediaPlaylistUri.toString(),
       segmentUrls: preheatedSegments
@@ -410,6 +625,20 @@ class HlsPlaylistPreloader {
       segmentBytesPreheated: segmentBytesPreheated,
       diagnostics: diagnostics,
     );
+  }
+
+  Future<int?> _preflightContentLength(
+    Uri uri, {
+    required int generation,
+  }) async {
+    final client = _client;
+    if (client is! HlsPlaylistContentLengthClient) return null;
+    final length = await (client as HlsPlaylistContentLengthClient)
+        .contentLength(uri, timeout: sharedRequestTimeout);
+    if (generation != _generation) {
+      throw const HlsPlaylistPreloadCancelledException();
+    }
+    return length;
   }
 
   void releasePending() {
@@ -488,10 +717,12 @@ class HlsPlaylistPreloader {
     if (variants.isEmpty) {
       return null;
     }
+    // 自动首播必须和 local proxy 放行的最高保守 rendition 保持一致；以前这里
+    // 总选最低码率，而播放器 ABR 常选 720p，导致预热的 540p 分片无法复用。
     variants.sort((left, right) {
-      final leftBandwidth = left.bandwidth ?? 1 << 62;
-      final rightBandwidth = right.bandwidth ?? 1 << 62;
-      return leftBandwidth.compareTo(rightBandwidth);
+      final leftBandwidth = left.bandwidth ?? 0;
+      final rightBandwidth = right.bandwidth ?? 0;
+      return rightBandwidth.compareTo(leftBandwidth);
     });
     return variants.first.uri;
   }
@@ -677,6 +908,35 @@ class _HlsVariant {
   final String? resolution;
 }
 
+class _EmbeddedHlsRenditionProfile {
+  const _EmbeddedHlsRenditionProfile({
+    required this.sourceRenditionCount,
+    required this.fellBackAboveMaxHeight,
+  });
+
+  final int sourceRenditionCount;
+  final bool fellBackAboveMaxHeight;
+}
+
+_EmbeddedHlsRenditionProfile? _parseEmbeddedRenditionProfile(String body) {
+  final line = const LineSplitter()
+      .convert(body)
+      .cast<String?>()
+      .firstWhere(
+        (value) => value?.trim().startsWith('#PLAYER-HLS-PROFILE:') ?? false,
+        orElse: () => null,
+      );
+  if (line == null) return null;
+  final source = int.tryParse(
+    RegExp(r'sourceVariants=(\d+)').firstMatch(line)?.group(1) ?? '',
+  );
+  if (source == null || source <= 0) return null;
+  return _EmbeddedHlsRenditionProfile(
+    sourceRenditionCount: source,
+    fellBackAboveMaxHeight: RegExp(r'fallbackAboveCap=1').hasMatch(line),
+  );
+}
+
 class HlsPlayerPlaybackPreloadManager implements PlayerPlaybackPreloadManager {
   HlsPlayerPlaybackPreloadManager({required HlsPlaylistPreloader preloader})
     : _preloader = preloader;
@@ -710,6 +970,19 @@ class HlsPlayerPlaybackPreloadManager implements PlayerPlaybackPreloadManager {
         status: PlaybackPreloadStatus.cancelled,
         startedAt: startedAt,
         completedAt: DateTime.now(),
+      );
+    } on TimeoutException catch (error) {
+      // The wait budget only stops additional warming work. Playlist or the
+      // bootstrap segment may already be in the shared request/cache, so this
+      // is useful degraded work rather than a playback failure.
+      return PlaybackPreloadState(
+        itemId: item.id,
+        sourceUrl: source.playableSource,
+        status: PlaybackPreloadStatus.partial,
+        startedAt: startedAt,
+        completedAt: DateTime.now(),
+        error: error,
+        details: 'timeout_soft; playlist_or_bootstrap_may_be_reusable',
       );
     } catch (error) {
       return PlaybackPreloadState(

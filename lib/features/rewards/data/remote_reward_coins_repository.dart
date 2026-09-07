@@ -1,5 +1,6 @@
 import '../domain/reward_coins_check_in_status.dart';
 import '../domain/reward_coins_check_in_claim_result.dart';
+import '../domain/reward_coin_remaining.dart';
 import '../domain/reward_task.dart';
 import '../domain/reward_coins_repository.dart';
 import 'remote/reward_coins_remote_data_source.dart';
@@ -28,6 +29,12 @@ class RemoteRewardCoinsRepository implements RewardCoinsRepository {
     required String taskKey,
   }) async {
     final dto = await _remoteDataSource.claimTask(taskKey: taskKey);
+    return dto.toDomain();
+  }
+
+  @override
+  Future<RewardCoinRemaining> getRemainingCoin() async {
+    final dto = await _remoteDataSource.getRemainingCoin();
     return dto.toDomain();
   }
 

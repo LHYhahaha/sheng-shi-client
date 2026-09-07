@@ -88,12 +88,13 @@ class ShareDramaRewardCoordinator {
   }
 
   void register({
-    required String taskKey,
+    required String? taskKey,
+    required bool claimed,
     required ShareDramaRewardChannel channel,
   }) {
-    if (taskKey.isEmpty) return;
     _pending = _PendingShareDramaReward(
-      taskKey: taskKey,
+      taskKey: taskKey?.trim(),
+      claimed: claimed,
       channel: channel,
       createdAt: _clock(),
     );
@@ -118,30 +119,44 @@ class ShareDramaRewardCoordinator {
     }
 
     _pending = null;
-    _claimAndRefresh(pending.taskKey);
+    _reportAndClaimIfEligible(
+      taskKey: pending.taskKey,
+      claimed: pending.claimed,
+    );
     return pending.channel;
   }
 
-  void _claimAndRefresh(String taskKey) {
-    if (taskKey.isEmpty || _claimInFlightTaskKey == taskKey) return;
-    _claimInFlightTaskKey = taskKey;
+  /// A reported share is independent of whether task status was available.
+  /// A task key and an unclaimed reward are only required for the subsequent
+  /// reward claim.
+  void _reportAndClaimIfEligible({
+    required String? taskKey,
+    required bool claimed,
+  }) {
     unawaited(
-      _reportThenClaim(taskKey).whenComplete(() async {
-        if (_claimInFlightTaskKey == taskKey) {
-          _claimInFlightTaskKey = null;
-        }
-        await refreshStatus();
-      }),
+      _reportThenClaimIfEligible(
+        taskKey: taskKey,
+        claimed: claimed,
+      ).whenComplete(refreshStatus),
     );
   }
 
-  Future<void> _reportThenClaim(String taskKey) async {
+  Future<void> _reportThenClaimIfEligible({
+    required String? taskKey,
+    required bool claimed,
+  }) async {
     try {
       await _reportShareAction?.call();
     } catch (_) {}
+    if (claimed || taskKey == null || taskKey.isEmpty) return;
+    if (_claimInFlightTaskKey == taskKey) return;
+    _claimInFlightTaskKey = taskKey;
     try {
       await _claimReward(taskKey);
     } catch (_) {}
+    if (_claimInFlightTaskKey == taskKey) {
+      _claimInFlightTaskKey = null;
+    }
   }
 
   void clear() {
@@ -201,11 +216,13 @@ class ShareDramaClaimedTodayStore {
 class _PendingShareDramaReward {
   _PendingShareDramaReward({
     required this.taskKey,
+    required this.claimed,
     required this.channel,
     required this.createdAt,
   });
 
-  final String taskKey;
+  final String? taskKey;
+  final bool claimed;
   final ShareDramaRewardChannel channel;
   final DateTime createdAt;
   bool didEnterBackground = false;

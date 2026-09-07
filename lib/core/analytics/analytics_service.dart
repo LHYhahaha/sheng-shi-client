@@ -230,6 +230,7 @@ class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
           platform: common['platform']! as String,
           appVersion: common['app_version']! as String,
           language: common['language']! as String,
+          deviceId: common['device_id'] as String?,
           userId: common['user_id'] as String?,
           channelId: common['channel_id'] as String?,
           merchantId: common['merchant_id'] as String?,
@@ -252,6 +253,7 @@ class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
       'commonParams': {
         'appVersion': common['app_version'],
         'channelId': common['channel_id'],
+        'deviceId': common['device_id'],
         'entrySourceId': common['entry_source_id'],
         'entrySourceType': common['entry_source_type'],
         'eventId': common['event_id'],

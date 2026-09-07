@@ -224,6 +224,7 @@ class HlsLocalProxyServer {
   Future<String> proxyUrlFor(
     String remoteUrl, {
     HlsTrafficOwner owner = HlsTrafficOwner.playback,
+    int? maxVideoHeight,
   }) async {
     final remoteUri = _parseRemoteUri(remoteUrl);
     final server = await _ensureStarted();
@@ -234,7 +235,11 @@ class HlsLocalProxyServer {
       host: 'localhost',
       port: server.port,
       path: '/playlist.m3u8',
-      queryParameters: {'url': remoteUri.toString(), 'owner': owner.queryValue},
+      queryParameters: {
+        'url': remoteUri.toString(),
+        'owner': owner.queryValue,
+        if (maxVideoHeight != null) 'maxVideoHeight': '$maxVideoHeight',
+      },
     );
     _log('proxy source generated source=$remoteUrl proxy=$proxyUri');
     return proxyUri.toString();
@@ -281,8 +286,11 @@ class HlsLocalProxyServer {
       final owner = HlsTrafficOwner.fromQuery(
         request.uri.queryParameters['owner'],
       );
+      final maxVideoHeight = int.tryParse(
+        request.uri.queryParameters['maxVideoHeight'] ?? '',
+      );
       if (request.uri.path.endsWith('.m3u8')) {
-        await _proxyPlaylist(request, remoteUri, owner);
+        await _proxyPlaylist(request, remoteUri, owner, maxVideoHeight);
       } else {
         await _proxySegment(request, remoteUri, owner);
       }
@@ -300,6 +308,7 @@ class HlsLocalProxyServer {
     HttpRequest request,
     Uri remoteUri,
     HlsTrafficOwner owner,
+    int? maxVideoHeight,
   ) async {
     final startedAt = DateTime.now();
     final cacheKey = remoteUri.toString();
@@ -364,8 +373,19 @@ class HlsLocalProxyServer {
       );
       return;
     }
-    _logPlaylistEncryption(remoteUri, response.body);
-    final firstSegment = parseFirstHlsMediaSegment(remoteUri, response.body);
+    final renditionFilter = maxVideoHeight == null
+        ? HlsMasterPlaylistFilterResult.unfiltered(response.body)
+        : filterHlsMasterPlaylistWithProfile(
+            response.body,
+            maxHeight: maxVideoHeight,
+          );
+    final playlistBody = _embedHlsRenditionProfile(
+      renditionFilter.body,
+      sourceRenditionCount: renditionFilter.sourceRenditionCount,
+      fellBackAboveMaxHeight: renditionFilter.fellBackAboveMaxHeight,
+    );
+    _logPlaylistEncryption(remoteUri, playlistBody);
+    final firstSegment = parseFirstHlsMediaSegment(remoteUri, playlistBody);
     if (firstSegment != null) {
       _firstSegmentDurations[firstSegment.uri.toString()] =
           firstSegment.duration;
@@ -379,7 +399,7 @@ class HlsLocalProxyServer {
     // 也避免客户端在 spike 阶段承担完整 HLS manifest 解析职责。
     final rewritten = rewritePlaylist(
       remoteUri,
-      response.body,
+      playlistBody,
       localBaseUri: _localBaseUri(request),
       owner: owner,
     );
@@ -494,6 +514,10 @@ class HlsLocalProxyServer {
       remoteUri,
       priority: HlsRequestPriority.playback,
       open: () => client.open(remoteUri, timeout: timeout),
+      streamWriterFactory: (contentType) => _diskCacheStore.openStreamWriter(
+        HlsDiskCacheStore.keyForUri(remoteUri),
+        contentType: contentType,
+      ),
     );
     final metadata = await handle.metadata;
     if (generation != _generation) {
@@ -528,12 +552,11 @@ class HlsLocalProxyServer {
           completed.statusCode >= 300) {
         return;
       }
-      _cacheStore.write(cacheKey, completed.bytes);
-      await _diskCacheStore.write(
-        HlsDiskCacheStore.keyForUri(remoteUri),
-        completed.bytes,
-        contentType: completed.contentType,
-      );
+      // Large segments have already been streamed to the disk writer above.
+      // Keep only complete, bounded resources in the memory LRU.
+      if (completed.isCompleteInMemory) {
+        _cacheStore.write(cacheKey, completed.bytes);
+      }
       _log(
         'segment proxy stream fetch cacheTier=remote source=$remoteUri '
         'elapsedMs=${_elapsedMs(startedAt)} bytes=${completed.bytes.length}'
@@ -726,6 +749,114 @@ HlsFirstMediaSegment? parseFirstHlsMediaSegment(
   return null;
 }
 
+/// Removes video variants above [maxHeight] from a master playlist.
+///
+/// If every variant would be removed (for example an episode only provides
+/// 1080p), the original playlist is returned. This is the product exception
+/// that keeps a single 1080p episode playable and preheatable for everyone.
+String filterHlsMasterPlaylistByMaxHeight(
+  String playlistBody, {
+  required int maxHeight,
+}) =>
+    filterHlsMasterPlaylistWithProfile(playlistBody, maxHeight: maxHeight).body;
+
+/// Filtering result retains source information for the preloader's policy.
+/// The response embeds it in a harmless HLS comment; HLS parsers ignore
+/// comments, while diagnostics can distinguish a true one-rendition source
+/// from a multi-rendition source narrowed to one automatic rendition.
+class HlsMasterPlaylistFilterResult {
+  const HlsMasterPlaylistFilterResult({
+    required this.body,
+    required this.sourceRenditionCount,
+    required this.fellBackAboveMaxHeight,
+  });
+
+  factory HlsMasterPlaylistFilterResult.unfiltered(String body) =>
+      HlsMasterPlaylistFilterResult(
+        body: body,
+        sourceRenditionCount: _hlsMasterPlaylistVariantCount(body),
+        fellBackAboveMaxHeight: false,
+      );
+
+  final String body;
+  final int sourceRenditionCount;
+  final bool fellBackAboveMaxHeight;
+}
+
+HlsMasterPlaylistFilterResult filterHlsMasterPlaylistWithProfile(
+  String playlistBody, {
+  required int maxHeight,
+}) {
+  final lines = const LineSplitter().convert(playlistBody);
+  if (!lines.any((line) => line.trim().startsWith('#EXT-X-STREAM-INF'))) {
+    return HlsMasterPlaylistFilterResult.unfiltered(playlistBody);
+  }
+  final result = <String>[];
+  var keptVariants = 0;
+  var totalVariants = 0;
+  for (var index = 0; index < lines.length; index += 1) {
+    final line = lines[index];
+    if (!line.trim().startsWith('#EXT-X-STREAM-INF')) {
+      result.add(line);
+      continue;
+    }
+    totalVariants += 1;
+    var uriIndex = index + 1;
+    while (uriIndex < lines.length && lines[uriIndex].trim().isEmpty) {
+      uriIndex += 1;
+    }
+    if (uriIndex >= lines.length || lines[uriIndex].trim().startsWith('#')) {
+      result.add(line);
+      continue;
+    }
+    final height = int.tryParse(
+      RegExp(
+            r'RESOLUTION=\d+x(\d+)',
+            caseSensitive: false,
+          ).firstMatch(line)?.group(1) ??
+          '',
+    );
+    // Unknown resolution stays available: it cannot safely be classified as
+    // 1080p by the client. CDN metadata should be fixed separately.
+    final shouldKeep = height == null || height <= maxHeight;
+    if (shouldKeep) {
+      result.add(line);
+      for (var copied = index + 1; copied <= uriIndex; copied += 1) {
+        result.add(lines[copied]);
+      }
+      keptVariants += 1;
+    }
+    index = uriIndex;
+  }
+  final fellBackAboveMaxHeight = keptVariants == 0 && totalVariants > 0;
+  return HlsMasterPlaylistFilterResult(
+    body: fellBackAboveMaxHeight ? playlistBody : result.join('\n'),
+    sourceRenditionCount: totalVariants,
+    fellBackAboveMaxHeight: fellBackAboveMaxHeight,
+  );
+}
+
+int _hlsMasterPlaylistVariantCount(String playlistBody) => const LineSplitter()
+    .convert(playlistBody)
+    .where((line) => line.trim().startsWith('#EXT-X-STREAM-INF'))
+    .length;
+
+String _embedHlsRenditionProfile(
+  String playlistBody, {
+  required int sourceRenditionCount,
+  required bool fellBackAboveMaxHeight,
+}) {
+  if (sourceRenditionCount <= 0) return playlistBody;
+  final lines = const LineSplitter().convert(playlistBody);
+  final profile =
+      '#PLAYER-HLS-PROFILE:sourceVariants=$sourceRenditionCount,'
+      'fallbackAboveCap=${fellBackAboveMaxHeight ? 1 : 0}';
+  if (lines.isEmpty || lines.first.trim() != '#EXTM3U') {
+    return '$profile\n$playlistBody';
+  }
+  return [lines.first, profile, ...lines.skip(1)].join('\n');
+}
+
 String rewritePlaylist(
   Uri playlistUri,
   String playlistBody, {
@@ -796,13 +927,18 @@ class HlsProxyPlaybackSourceResolver {
   Future<String> resolvePlayableSource(
     String remoteUrl, {
     HlsTrafficOwner owner = HlsTrafficOwner.playback,
+    int? maxVideoHeight,
   }) async {
     if (!config.enabled) {
       return remoteUrl;
     }
     final startedAt = DateTime.now();
     try {
-      final proxyUrl = await proxyServer.proxyUrlFor(remoteUrl, owner: owner);
+      final proxyUrl = await proxyServer.proxyUrlFor(
+        remoteUrl,
+        owner: owner,
+        maxVideoHeight: maxVideoHeight,
+      );
       const shouldPrint = bool.fromEnvironment('PLAYER_TIMING_LOGS');
       if (shouldPrint) {
         debugPrint(

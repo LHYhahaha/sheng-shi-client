@@ -23,16 +23,28 @@ class MockPlayerPlaybackSourceRepository
   bool failNextResolve = false;
 
   @override
-  Future<PlaybackSource> resolve(PlayerFeedItem item) async {
-    return _resolve(item, status: PlaybackSourceStatus.resolved);
+  Future<PlaybackSource> resolve(
+    PlayerFeedItem item, {
+    int? maxVideoHeight,
+  }) async {
+    return _resolve(
+      item,
+      status: PlaybackSourceStatus.resolved,
+      maxVideoHeight: maxVideoHeight,
+    );
   }
 
   @override
   Future<PlaybackPreloadState> preload(
     PlayerFeedItem item, {
     Duration? preferredPosition,
+    int? maxVideoHeight,
   }) async {
-    final source = await _resolve(item, status: PlaybackSourceStatus.preloaded);
+    final source = await _resolve(
+      item,
+      status: PlaybackSourceStatus.preloaded,
+      maxVideoHeight: maxVideoHeight,
+    );
     return preloadManager.preload(
       item: item,
       source: source,
@@ -43,6 +55,7 @@ class MockPlayerPlaybackSourceRepository
   Future<PlaybackSource> _resolve(
     PlayerFeedItem item, {
     required PlaybackSourceStatus status,
+    int? maxVideoHeight,
   }) async {
     final remoteUrl = item.episode.videoSource;
     if (remoteUrl == null) {
@@ -61,6 +74,7 @@ class MockPlayerPlaybackSourceRepository
       owner: item.mode == PlayerFeedMode.forYou
           ? HlsTrafficOwner.forYou
           : HlsTrafficOwner.playback,
+      maxVideoHeight: maxVideoHeight,
     );
 
     return PlaybackSource(

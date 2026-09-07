@@ -413,7 +413,8 @@ class MembershipController extends Notifier<MembershipState> {
   }) async {
     final purchaseGeneration = ++_purchaseGeneration;
     final loading = ref.read(paymentLoadingControllerProvider.notifier);
-    loading.show(label: PaymentLoadingLabel.loading);
+    // 会员 tab 发起开通时只显示全局加载动画，不显示通用“加载中”文案。
+    loading.show(label: PaymentLoadingLabel.none);
     try {
       final platformProductId = plan.platformProductId;
       if (platformProductId == null || platformProductId.isEmpty) {

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:drama_client/features/entitlement/application/entitlement_controller.dart';
 import 'package:drama_client/features/entitlement/data/entitlement_repository_provider.dart';
 import 'package:drama_client/features/entitlement/data/mock_entitlement_repository.dart';
 import 'package:drama_client/features/pay/application/iap_purchase_service.dart';
@@ -185,16 +186,46 @@ void main() {
       expect(container.read(provider).status, PlayerRechargeUnlockStatus.idle);
     },
   );
+
+  testWidgets(
+    'coin unlock records the requested episode when success response omits ids',
+    (tester) async {
+      final container = _container(
+        unlockRepository: const _FakePlayerRechargeUnlockRepository(
+          responseDramaId: 0,
+          responseEpisodeId: 0,
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(playerRechargeUnlockControllerProvider('single-a').notifier)
+          .unlockWithCoin(
+            autoUnlockNext: false,
+            coin: 60,
+            dramaId: 100,
+            episodeNo: 2,
+            shortTitle: 'Drama',
+            cover: '',
+            episodeId: 200,
+          );
+
+      final entitlement = container.read(entitlementControllerProvider);
+      expect(entitlement.isEpisodeUnlocked('200'), isTrue);
+      expect(entitlement.isEpisodeUnlocked('0'), isFalse);
+    },
+  );
 }
 
 ProviderContainer _container({
   _FakeIapPurchaseService? iap,
   _FakePayRepository? pay,
+  PlayerRechargeUnlockRepository? unlockRepository,
 }) {
   return ProviderContainer(
     overrides: [
       playerRechargeUnlockRepositoryProvider.overrideWithValue(
-        const _FakePlayerRechargeUnlockRepository(),
+        unlockRepository ?? const _FakePlayerRechargeUnlockRepository(),
       ),
       iapPurchaseServiceProvider.overrideWithValue(
         iap ?? _FakeIapPurchaseService(),
@@ -209,7 +240,13 @@ ProviderContainer _container({
 
 class _FakePlayerRechargeUnlockRepository
     implements PlayerRechargeUnlockRepository {
-  const _FakePlayerRechargeUnlockRepository();
+  const _FakePlayerRechargeUnlockRepository({
+    this.responseDramaId,
+    this.responseEpisodeId,
+  });
+
+  final int? responseDramaId;
+  final int? responseEpisodeId;
 
   @override
   Future<PlayerRechargeUnlockOffer> fetchOffer({
@@ -269,8 +306,8 @@ class _FakePlayerRechargeUnlockRepository
       bonusCoin: 0,
       coin: 100,
       costCoin: coin,
-      dramaId: dramaId,
-      episodeId: episodeId ?? 1,
+      dramaId: responseDramaId ?? dramaId,
+      episodeId: responseEpisodeId ?? episodeId ?? 1,
       success: true,
       userId: 1,
     );

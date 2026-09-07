@@ -62,6 +62,51 @@ class HlsDiskCacheStore {
     return operation;
   }
 
+  /// Streams a resource directly to a temporary file.  The completed file is
+  /// published atomically, so incomplete downloads are never cache hits.
+  Future<HlsDiskCacheStreamWriter> openStreamWriter(
+    String key, {
+    String? contentType,
+  }) async {
+    final index = await _index();
+    final digest = sha256.convert(utf8.encode(key)).toString();
+    final file = File('${index.directory.path}/$digest.bin');
+    final temp = File(
+      '${index.directory.path}/$digest.${DateTime.now().microsecondsSinceEpoch}.tmp',
+    );
+    return HlsDiskCacheStreamWriter._(
+      store: this,
+      key: key,
+      file: file,
+      temp: temp,
+      contentType: contentType,
+    );
+  }
+
+  Future<void> _commitStreamWriter(HlsDiskCacheStreamWriter writer) {
+    final operation = _writeTail.then((_) async {
+      try {
+        final index = await _index();
+        if (await writer.file.exists()) await writer.file.delete();
+        await writer.temp.rename(writer.file.path);
+        index.entries[writer.key] = _HlsDiskIndexEntry(
+          fileName: writer.file.uri.pathSegments.last,
+          bytes: writer.length,
+          contentType: writer.contentType,
+          lastAccessMs: DateTime.now().millisecondsSinceEpoch,
+        );
+        await _trim(index);
+        await _save(index);
+      } catch (_) {
+        try {
+          if (await writer.temp.exists()) await writer.temp.delete();
+        } catch (_) {}
+      }
+    });
+    _writeTail = operation.catchError((_) {});
+    return operation;
+  }
+
   Future<void> _write(
     String key,
     List<int> bytes, {
@@ -146,6 +191,59 @@ class HlsDiskCacheStore {
       }),
       flush: true,
     );
+  }
+}
+
+class HlsDiskCacheStreamWriter {
+  HlsDiskCacheStreamWriter._({
+    required HlsDiskCacheStore store,
+    required this.key,
+    required this.file,
+    required this.temp,
+    this.contentType,
+  }) : _store = store,
+       _sink = temp.openWrite();
+
+  final HlsDiskCacheStore _store;
+  final String key;
+  final File file;
+  final File temp;
+  final String? contentType;
+  final IOSink _sink;
+  var _length = 0;
+  var _closed = false;
+
+  int get length => _length;
+
+  void add(List<int> chunk) {
+    if (_closed) return;
+    _sink.add(chunk);
+    _length += chunk.length;
+  }
+
+  Future<void> commit() async {
+    if (_closed) return;
+    _closed = true;
+    await _sink.close();
+    if (_length == 0 || _length > _store.maxBytes) {
+      await _deleteTemp();
+      return;
+    }
+    await _store._commitStreamWriter(this);
+  }
+
+  Future<void> abort() async {
+    if (!_closed) {
+      _closed = true;
+      await _sink.close();
+    }
+    await _deleteTemp();
+  }
+
+  Future<void> _deleteTemp() async {
+    try {
+      if (await temp.exists()) await temp.delete();
+    } catch (_) {}
   }
 }
 

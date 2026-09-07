@@ -886,8 +886,14 @@ class PlayerRechargeUnlockController
       if (result.success) {
         debugPrint('[PlayerRecharge] 金币解锁成功: ${result.toJson()}');
 
-        // 1. 更新 entitlement 状态（已解锁剧集列表 + 金币余额）
-        final episodeIdStr = result.episodeId.toString();
+        // 1. 更新 entitlement 状态（已解锁剧集列表 + 金币余额）。
+        //
+        // 本地播放会话必须以本次请求的目标为准，而不是使用响应回显的
+        // dramaId/episodeId。部分成功响应只返回余额或会将缺失 ID 解成 0；若把
+        // 这个值写入 unlockedEpisodeIds，刚解锁的首个锁集仍会留在顺序解锁列表
+        // 中，下一集就会被误判为跳集，进而展示会员/充值入口。
+        final episodeIdStr = episodeId.toString();
+        final dramaIdStr = dramaId.toString();
         ref
             .read(entitlementControllerProvider.notifier)
             .updateAfterCoinUnlock(
@@ -901,7 +907,7 @@ class PlayerRechargeUnlockController
         ref
             .read(playerFeedControllerProvider(sessionKey).notifier)
             .updateEpisodeViewingEntitlementType(
-              dramaId: result.dramaId.toString(),
+              dramaId: dramaIdStr,
               episodeId: episodeIdStr,
               viewingEntitlementType: 'coin',
             );
@@ -911,7 +917,7 @@ class PlayerRechargeUnlockController
           final success = ref
               .read(playerFeedControllerProvider(sessionKey).notifier)
               .updateEpisodeVideoUrl(
-                dramaId: result.dramaId.toString(),
+                dramaId: dramaIdStr,
                 episodeId: episodeIdStr,
                 sourceUrl: result.sourceUrl!,
               );

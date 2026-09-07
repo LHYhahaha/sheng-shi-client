@@ -1085,7 +1085,7 @@ class PlayerBottomMeta extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(left: 6),
                   child: Image.asset(
-                    'assets/images/common/grey_right_icon.png',
+                    'assets/images/common/white_right.png',
                     width: 20,
                     height: 20,
                     cacheWidth: (20 * MediaQuery.devicePixelRatioOf(context))

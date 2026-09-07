@@ -58,7 +58,7 @@ void main() {
   });
 
   test(
-    'master playlist resolves lowest variant and preheats first segments',
+    'master playlist resolves highest allowed variant and preheats first segments',
     () async {
       final client = _FakeHlsPlaylistHttpClient(
         responses: const {
@@ -71,7 +71,7 @@ void main() {
                 '#EXT-X-STREAM-INF:BANDWIDTH=800000\n'
                 'low/index.m3u8\n',
           ),
-          'https://cdn.example.test/low/index.m3u8': HlsPlaylistHttpResponse(
+          'https://cdn.example.test/high/index.m3u8': HlsPlaylistHttpResponse(
             statusCode: 200,
             body:
                 '#EXTM3U\n'
@@ -83,7 +83,7 @@ void main() {
                 '#EXTINF:4,\n'
                 'seg3.ts\n',
           ),
-          'https://cdn.example.test/low/seg1.ts': HlsPlaylistHttpResponse(
+          'https://cdn.example.test/high/seg1.ts': HlsPlaylistHttpResponse(
             statusCode: 200,
             body: 'aaaa',
           ),
@@ -109,62 +109,66 @@ void main() {
         isTrue,
       );
       expect(
-        cacheStore.contains('https://cdn.example.test/low/seg1.ts'),
+        cacheStore.contains('https://cdn.example.test/high/seg1.ts'),
         isTrue,
       );
       expect(
         result.mediaPlaylistUrl,
-        'https://cdn.example.test/low/index.m3u8',
+        'https://cdn.example.test/high/index.m3u8',
       );
       expect(result.segmentUrls, [
-        'https://cdn.example.test/low/seg1.ts',
+        'https://cdn.example.test/high/seg1.ts',
         'https://cdn.example.test/seg2.ts',
       ]);
       expect(result.segmentBytesPreheated, 8);
       expect(result.contentLength, greaterThan(0));
       expect(client.requestedUris.map((uri) => uri.toString()), [
         'https://cdn.example.test/master.m3u8',
-        'https://cdn.example.test/low/index.m3u8',
-        'https://cdn.example.test/low/seg1.ts',
+        'https://cdn.example.test/high/index.m3u8',
+        'https://cdn.example.test/high/seg1.ts',
         'https://cdn.example.test/seg2.ts',
       ]);
     },
   );
 
-  test('media playlist directly preheats relative segments', () async {
-    final client = _FakeHlsPlaylistHttpClient(
-      responses: const {
-        'https://cdn.example.test/drama/ep1/index.m3u8':
-            HlsPlaylistHttpResponse(
-              statusCode: 200,
-              body:
-                  '#EXTM3U\n'
-                  '#EXTINF:4,\n'
-                  'segments/first.ts\n'
-                  '#EXTINF:4,\n'
-                  '/shared/second.ts\n',
-            ),
-        'https://cdn.example.test/drama/ep1/segments/first.ts':
-            HlsPlaylistHttpResponse(statusCode: 200, body: 'first'),
-        'https://cdn.example.test/shared/second.ts': HlsPlaylistHttpResponse(
-          statusCode: 200,
-          body: 'second',
-        ),
-      },
-    );
-    final preloader = HlsPlaylistPreloader(client: client);
+  test(
+    'single-rendition media playlist preheats only its bootstrap segment',
+    () async {
+      final client = _FakeHlsPlaylistHttpClient(
+        responses: const {
+          'https://cdn.example.test/drama/ep1/index.m3u8':
+              HlsPlaylistHttpResponse(
+                statusCode: 200,
+                body:
+                    '#EXTM3U\n'
+                    '#EXTINF:4,\n'
+                    'segments/first.ts\n'
+                    '#EXTINF:4,\n'
+                    '/shared/second.ts\n',
+              ),
+          'https://cdn.example.test/drama/ep1/segments/first.ts':
+              HlsPlaylistHttpResponse(statusCode: 200, body: 'first'),
+          'https://cdn.example.test/shared/second.ts': HlsPlaylistHttpResponse(
+            statusCode: 200,
+            body: 'second',
+          ),
+        },
+      );
+      final preloader = HlsPlaylistPreloader(client: client);
 
-    final result = await preloader.prefetch(
-      'https://cdn.example.test/drama/ep1/index.m3u8',
-    );
+      final result = await preloader.prefetch(
+        'https://cdn.example.test/drama/ep1/index.m3u8',
+      );
 
-    expect(result.isMasterPlaylist, isFalse);
-    expect(result.segmentUrls, [
-      'https://cdn.example.test/drama/ep1/segments/first.ts',
-      'https://cdn.example.test/shared/second.ts',
-    ]);
-    expect(result.segmentBytesPreheated, 11);
-  });
+      expect(result.isMasterPlaylist, isFalse);
+      expect(result.renditionCount, 1);
+      expect(result.isSingleRendition, isTrue);
+      expect(result.segmentUrls, [
+        'https://cdn.example.test/drama/ep1/segments/first.ts',
+      ]);
+      expect(result.segmentBytesPreheated, 5);
+    },
+  );
 
   test(
     'resume preheat covers decoder bootstrap and the saved-position segment',
@@ -252,6 +256,103 @@ void main() {
     );
   });
 
+  test('known oversized single-rendition segment is not downloaded', () async {
+    final client = _ContentLengthFakeHlsPlaylistHttpClient(
+      responses: const {
+        'https://cdn.example.test/drama/ep1.m3u8': HlsPlaylistHttpResponse(
+          statusCode: 200,
+          body: '#EXTM3U\n#EXTINF:4,\nfirst.ts\n',
+        ),
+      },
+      contentLengths: const {
+        'https://cdn.example.test/drama/first.ts': 2 * 1024 * 1024,
+      },
+    );
+    final result = await HlsPlaylistPreloader(
+      client: client,
+      maxSingleSegmentPreheatBytes: 1024 * 1024,
+      intent: HlsPreloadIntent.speculative,
+    ).prefetch('https://cdn.example.test/drama/ep1.m3u8');
+
+    expect(result.segmentUrls, isEmpty);
+    expect(result.segmentBytesPreheated, 0);
+    expect(client.requestedUris.map((uri) => uri.toString()), [
+      'https://cdn.example.test/drama/ep1.m3u8',
+    ]);
+    expect(
+      client.contentLengthUris.single.toString(),
+      'https://cdn.example.test/drama/first.ts',
+    );
+    expect(
+      result.diagnostics.join(' '),
+      contains('preheat skipped knownBytes'),
+    );
+  });
+
+  test('critical preload keeps a known oversized bootstrap segment', () async {
+    final client = _ContentLengthFakeHlsPlaylistHttpClient(
+      responses: const {
+        'https://cdn.example.test/drama/ep1.m3u8': HlsPlaylistHttpResponse(
+          statusCode: 200,
+          body: '#EXTM3U\n#EXTINF:4,\nfirst.ts\n',
+        ),
+        'https://cdn.example.test/drama/first.ts': HlsPlaylistHttpResponse(
+          statusCode: 200,
+          body: 'critical-bootstrap',
+        ),
+      },
+      contentLengths: const {
+        'https://cdn.example.test/drama/first.ts': 2 * 1024 * 1024,
+      },
+    );
+
+    final result = await HlsPlaylistPreloader(
+      client: client,
+      maxSingleSegmentPreheatBytes: 1024 * 1024,
+    ).prefetch('https://cdn.example.test/drama/ep1.m3u8');
+
+    expect(
+      result.segmentUrls.single,
+      'https://cdn.example.test/drama/first.ts',
+    );
+    expect(client.contentLengthUris, isEmpty);
+  });
+
+  test(
+    'embedded proxy profile distinguishes cap fallback from source count',
+    () async {
+      final client = _FakeHlsPlaylistHttpClient(
+        responses: const {
+          'https://cdn.example.test/master.m3u8': HlsPlaylistHttpResponse(
+            statusCode: 200,
+            body:
+                '#EXTM3U\n'
+                '#PLAYER-HLS-PROFILE:sourceVariants=3,fallbackAboveCap=1\n'
+                '#EXT-X-STREAM-INF:BANDWIDTH=2000000\n'
+                'only/index.m3u8\n',
+          ),
+          'https://cdn.example.test/only/index.m3u8': HlsPlaylistHttpResponse(
+            statusCode: 200,
+            body: '#EXTM3U\n#EXTINF:4,\nfirst.ts\n',
+          ),
+          'https://cdn.example.test/only/first.ts': HlsPlaylistHttpResponse(
+            statusCode: 200,
+            body: 'first',
+          ),
+        },
+      );
+
+      final result = await HlsPlaylistPreloader(
+        client: client,
+      ).prefetch('https://cdn.example.test/master.m3u8');
+
+      expect(result.renditionCount, 1);
+      expect(result.sourceRenditionCount, 3);
+      expect(result.fellBackAboveMaxHeight, isTrue);
+      expect(result.isSingleRendition, isTrue);
+    },
+  );
+
   test('HTTP non-2xx returns preload failed', () async {
     final manager = HlsPlayerPlaybackPreloadManager(
       preloader: HlsPlaylistPreloader(
@@ -273,22 +374,25 @@ void main() {
     expect(result.error, isA<HlsPlaylistPrefetchException>());
   });
 
-  test('timeout returns preload failed', () async {
-    final manager = HlsPlayerPlaybackPreloadManager(
-      preloader: HlsPlaylistPreloader(
-        client: _FakeHlsPlaylistHttpClient(pending: true),
-        timeout: const Duration(milliseconds: 1),
-      ),
-    );
+  test(
+    'timeout returns preload partial rather than playback failure',
+    () async {
+      final manager = HlsPlayerPlaybackPreloadManager(
+        preloader: HlsPlaylistPreloader(
+          client: _FakeHlsPlaylistHttpClient(pending: true),
+          timeout: const Duration(milliseconds: 1),
+        ),
+      );
 
-    final result = await manager.preload(
-      item: _item(1),
-      source: _source('https://cdn.example.test/drama/ep1.m3u8'),
-    );
+      final result = await manager.preload(
+        item: _item(1),
+        source: _source('https://cdn.example.test/drama/ep1.m3u8'),
+      );
 
-    expect(result.status, PlaybackPreloadStatus.failed);
-    expect(result.error, isA<TimeoutException>());
-  });
+      expect(result.status, PlaybackPreloadStatus.partial);
+      expect(result.error, isA<TimeoutException>());
+    },
+  );
 
   test(
     'preload wait budget does not shorten a shared request lifetime',
@@ -484,6 +588,23 @@ class _FakeHlsPlaylistHttpClient implements HlsPlaylistHttpClient {
     if (completer != null && !completer.isCompleted) {
       completer.complete(response);
     }
+  }
+}
+
+class _ContentLengthFakeHlsPlaylistHttpClient extends _FakeHlsPlaylistHttpClient
+    implements HlsPlaylistContentLengthClient {
+  _ContentLengthFakeHlsPlaylistHttpClient({
+    required super.responses,
+    required this.contentLengths,
+  });
+
+  final Map<String, int> contentLengths;
+  final contentLengthUris = <Uri>[];
+
+  @override
+  Future<int?> contentLength(Uri uri, {required Duration timeout}) async {
+    contentLengthUris.add(uri);
+    return contentLengths[uri.toString()];
   }
 }
 

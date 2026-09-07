@@ -4,13 +4,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../drama/domain/drama.dart';
+import '../../entitlement/application/entitlement_controller.dart';
+import '../data/hls_disk_cache_store.dart';
 import '../data/drama_playback_target_repository_provider.dart';
 import '../data/player_feed_repository_provider.dart';
 import '../data/player_playback_source_repository_provider.dart';
 import '../data/player_preload_config_provider.dart';
+import '../data/player_video_quality_preference_repository_provider.dart';
 import '../domain/player_feed.dart';
 import '../domain/drama_playback_target.dart';
 import '../domain/player_preload_state.dart';
+import '../domain/player_startup_quality_plan.dart';
+import '../domain/player_video_quality.dart';
 import 'player_playback_timing_trace.dart';
 
 final playerStartupPreloadControllerProvider =
@@ -39,7 +44,14 @@ class PlayerEntryResumeHint {
       episodeId != '0' && position > Duration.zero && duration > Duration.zero;
 }
 
-enum PlayerStartupPreloadStatus { idle, pending, success, failed, cancelled }
+enum PlayerStartupPreloadStatus {
+  idle,
+  pending,
+  success,
+  partial,
+  failed,
+  cancelled,
+}
 
 /// 首页启动预热的可观测状态。
 ///
@@ -56,6 +68,7 @@ class PlayerStartupPreloadState {
     this.completedAt,
     this.error,
     this.details,
+    this.qualityPlan,
     this.retainedCandidates = const [],
   });
 
@@ -68,6 +81,7 @@ class PlayerStartupPreloadState {
       completedAt = null,
       error = null,
       details = null,
+      qualityPlan = null,
       retainedCandidates = const [];
 
   /// startup preload 当前阶段。
@@ -87,8 +101,6 @@ class PlayerStartupPreloadState {
   final String? itemId;
 
   /// 启动预热时使用的原始 episode source hint。
-  ///
-  /// matches 会同时比较 itemId 和 sourceUrl，避免同一 item 换源后误认为预热命中。
   final String? sourceUrl;
 
   /// 预热开始时间。
@@ -111,6 +123,9 @@ class PlayerStartupPreloadState {
   /// 可能包含 HLS playlist/segment 预热摘要。不要作为业务判断输入。
   final String? details;
 
+  /// Non-null only after the master playlist has been resolved for this entry.
+  final PlayerStartupQualityPlan? qualityPlan;
+
   /// 最近被新曝光候选替换的启动预热记录。
   ///
   /// 这里只保留少量元数据，不保存视频字节；playlist/完整分片由 HLS 缓存负责。
@@ -118,22 +133,31 @@ class PlayerStartupPreloadState {
   final List<PlayerStartupRetainedCandidate> retainedCandidates;
 
   bool matches(PlayerFeedItem item) {
-    final source = item.episode.videoSource;
-    if (source == null) {
-      return false;
-    }
-    if (status == PlayerStartupPreloadStatus.success &&
-        itemId == item.id &&
-        sourceUrl == source) {
+    if (status == PlayerStartupPreloadStatus.success && matchesSource(item)) {
       return true;
     }
     return retainedCandidates.any(
       (candidate) =>
           candidate.status == PlayerStartupPreloadStatus.success &&
           candidate.itemId == item.id &&
-          candidate.sourceUrl == source,
+          _sameStableHlsSource(candidate.sourceUrl, item.episode.videoSource),
     );
   }
+
+  /// 签名 URL 每次进入可能仅 expires/verify 不同；HLS 缓存也按这一稳定 key
+  /// 复用，因此 startup 命中判断必须使用相同规则，不能把可复用预热误记为 miss。
+  bool matchesSource(PlayerFeedItem item) =>
+      itemId == item.id &&
+      _sameStableHlsSource(sourceUrl, item.episode.videoSource);
+}
+
+bool _sameStableHlsSource(String? left, String? right) {
+  if (left == null || right == null) return false;
+  final leftUri = Uri.tryParse(left);
+  final rightUri = Uri.tryParse(right);
+  if (leftUri == null || rightUri == null) return left == right;
+  return HlsDiskCacheStore.keyForUri(leftUri) ==
+      HlsDiskCacheStore.keyForUri(rightUri);
 }
 
 /// 已被新的可见卡片替换、但仍保留缓存可复用价值的启动预热记录。
@@ -168,6 +192,8 @@ class PlayerStartupPreloadController
   static const _maxRetainedCandidates = 3;
 
   int _generation = 0;
+  String? _qualityPlanItemId;
+  Future<PlayerStartupQualityPlan>? _qualityPlanFuture;
   final _retainedCandidates = <PlayerStartupRetainedCandidate>[];
   late final PlayerPlaybackTimingTrace _timingTrace;
 
@@ -183,6 +209,22 @@ class PlayerStartupPreloadController
   }
 
   List<PlayerPlaybackTimingEvent> get timingEvents => _timingTrace.events;
+
+  /// Lets the player join the Home master-playlist resolution already in
+  /// progress for the same episode instead of issuing a second request.
+  Future<PlayerStartupQualityPlan?> qualityPlanFor(PlayerFeedItem item) {
+    final readyPlan = state.qualityPlan;
+    if (readyPlan != null && readyPlan.matches(item)) {
+      return Future<PlayerStartupQualityPlan?>.value(readyPlan);
+    }
+    if (_qualityPlanItemId == item.id) {
+      return _qualityPlanFuture?.then<PlayerStartupQualityPlan?>(
+            (plan) => plan,
+          ) ??
+          Future<PlayerStartupQualityPlan?>.value(null);
+    }
+    return Future<PlayerStartupQualityPlan?>.value(null);
+  }
 
   String exportTimingReport() {
     return _timingTrace.exportReport();
@@ -216,6 +258,9 @@ class PlayerStartupPreloadController
       _retainCurrentCandidate(reason: 'visible_candidate_replaced');
     }
     final generation = ++_generation;
+    final qualityPreferenceFuture = ref
+        .read(playerVideoQualityPreferenceRepositoryProvider)
+        .read();
     _record(
       'startup preload request',
       itemId: dramaId,
@@ -304,6 +349,31 @@ class PlayerStartupPreloadController
         return;
       }
 
+      // Expose the candidate immediately. Preference lookup and master-list
+      // parsing may still be in flight, but a tap must be able to promote the
+      // existing startup request rather than observe an idle gap.
+      final startedAt = DateTime.now();
+      final masterSource = item.episode.videoSource;
+      state = PlayerStartupPreloadState(
+        status: PlayerStartupPreloadStatus.pending,
+        dramaId: dramaId,
+        itemId: item.id,
+        sourceUrl: masterSource,
+        startedAt: startedAt,
+        retainedCandidates: _retainedSnapshot(),
+      );
+
+      _qualityPlanItemId = item.id;
+      final qualityPlanFuture = _resolveQualityPlanAfterPreference(
+        item,
+        qualityPreferenceFuture,
+      );
+      _qualityPlanFuture = qualityPlanFuture;
+      final qualityPlan = await qualityPlanFuture;
+      if (!_isCurrent(generation)) return;
+      final preferenceId = qualityPlan.preferenceId;
+      final qualityAwareItem = qualityPlan.applyTo(item);
+
       final selectedTarget = preferredEpisodeId == item.episode.id
           ? null
           : localTarget?.episodeId == item.episode.id &&
@@ -334,14 +404,14 @@ class PlayerStartupPreloadController
         );
       }
 
-      final source = item.episode.videoSource;
-      final startedAt = DateTime.now();
+      final source = qualityAwareItem.episode.videoSource;
       state = PlayerStartupPreloadState(
         status: PlayerStartupPreloadStatus.pending,
         dramaId: dramaId,
         itemId: item.id,
         sourceUrl: source,
         startedAt: startedAt,
+        qualityPlan: qualityPlan,
         retainedCandidates: _retainedSnapshot(),
       );
       _record(
@@ -359,13 +429,22 @@ class PlayerStartupPreloadController
 
       final preloadState = await ref
           .read(playerStartupPlaybackSourceRepositoryProvider)
-          .preload(item, preferredPosition: selectedTarget?.position);
+          .preload(
+            qualityAwareItem,
+            preferredPosition: selectedTarget?.position,
+            // 必须与自动首播、相邻 HLS 预热和 next prepare 使用同一 rendition；
+            // 否则首页预拉 1080p、实际首播 540p 时，缓存无法命中首分片。
+            maxVideoHeight: preferenceId == PlayerVideoQuality.automaticId
+                ? 540
+                : null,
+          );
       if (!_isCurrent(generation)) {
         return;
       }
 
       final status = switch (preloadState.status) {
         PlaybackPreloadStatus.success => PlayerStartupPreloadStatus.success,
+        PlaybackPreloadStatus.partial => PlayerStartupPreloadStatus.partial,
         PlaybackPreloadStatus.failed => PlayerStartupPreloadStatus.failed,
         PlaybackPreloadStatus.cancelled => PlayerStartupPreloadStatus.cancelled,
         PlaybackPreloadStatus.pending => PlayerStartupPreloadStatus.pending,
@@ -379,11 +458,13 @@ class PlayerStartupPreloadController
         completedAt: DateTime.now(),
         error: preloadState.error,
         details: preloadState.details,
+        qualityPlan: qualityPlan,
         retainedCandidates: _retainedSnapshot(),
       );
       _record(
         switch (status) {
           PlayerStartupPreloadStatus.success => 'startup preload success',
+          PlayerStartupPreloadStatus.partial => 'startup preload partial',
           PlayerStartupPreloadStatus.failed => 'startup preload failed',
           PlayerStartupPreloadStatus.cancelled => 'startup preload cancelled',
           PlayerStartupPreloadStatus.pending => 'startup preload pending',
@@ -410,6 +491,73 @@ class PlayerStartupPreloadController
       );
       _record('startup preload failed', itemId: dramaId, error: error);
     }
+  }
+
+  Future<PlayerStartupQualityPlan> _resolveQualityPlan(
+    PlayerFeedItem item, {
+    required String preferenceId,
+  }) async {
+    final masterSourceUrl = item.episode.videoSource!;
+    List<PlayerVideoQuality> qualities;
+    try {
+      qualities = await ref
+          .read(startupHlsPlaylistPreloaderProvider)
+          .inspectQualities(masterSourceUrl);
+    } catch (_) {
+      qualities = const [];
+    }
+    final effectiveQuality = preferenceId == PlayerVideoQuality.automaticId
+        ? null
+        : _fallbackQualityFor(
+            qualities,
+            preferenceId,
+            isMember: ref.read(entitlementControllerProvider).isMember,
+          );
+    return PlayerStartupQualityPlan(
+      itemId: item.id,
+      masterSourceUrl: masterSourceUrl,
+      playableSourceUrl: effectiveQuality?.playlistUrl ?? masterSourceUrl,
+      preferenceId: preferenceId,
+      effectiveQualityId: preferenceId == PlayerVideoQuality.automaticId
+          ? PlayerVideoQuality.automaticId
+          : effectiveQuality?.id ?? preferenceId,
+      qualities: List<PlayerVideoQuality>.unmodifiable(qualities),
+    );
+  }
+
+  Future<PlayerStartupQualityPlan> _resolveQualityPlanAfterPreference(
+    PlayerFeedItem item,
+    Future<String> preferenceFuture,
+  ) async {
+    final preferenceId = await preferenceFuture;
+    return _resolveQualityPlan(item, preferenceId: preferenceId);
+  }
+
+  PlayerVideoQuality? _fallbackQualityFor(
+    List<PlayerVideoQuality> qualities,
+    String preferredId, {
+    required bool isMember,
+  }) {
+    if (qualities.isEmpty) return null;
+    final allowed = qualities.length == 1 || isMember
+        ? qualities
+        : qualities.where((quality) => !quality.isMemberOnly).toList();
+    if (allowed.isEmpty) return qualities.first;
+    for (final quality in allowed) {
+      if (quality.id == preferredId) return quality;
+    }
+    final preferredHeight = int.tryParse(
+      RegExp(r'^(\d+)p$').firstMatch(preferredId)?.group(1) ?? '',
+    );
+    if (preferredHeight == null) return allowed.last;
+    final lower =
+        allowed.where((quality) => quality.height < preferredHeight).toList()
+          ..sort((left, right) => right.height.compareTo(left.height));
+    if (lower.isNotEmpty) return lower.first;
+    final higher =
+        allowed.where((quality) => quality.height > preferredHeight).toList()
+          ..sort((left, right) => left.height.compareTo(right.height));
+    return higher.isEmpty ? allowed.first : higher.first;
   }
 
   Future<void> cancel({String reason = 'cancel', bool syncState = true}) async {

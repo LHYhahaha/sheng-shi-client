@@ -81,8 +81,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       ? () {}
                       : () => context.push(RoutePaths.privacyPolicy),
                 ),
-                if (!isGuest)
+                // `logout()` switches the shared auth state to guest before this
+                // page navigates away. Keep the button mounted while the blocking
+                // overlay is visible so the screen does not visibly reflow during
+                // that short transition.
+                if (!isGuest || _isLoggingOut)
                   InkWell(
+                    key: const ValueKey('settings_logout_button'),
                     onTap: _isLoggingOut ? null : _logout,
                     splashColor: Colors.transparent,
                     highlightColor: Colors.transparent,

@@ -16,6 +16,7 @@ import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../../shared/widgets/app_secondary_page_header.dart';
+import '../../../home/application/home_banner_config_controller.dart';
 
 class LanguagePage extends ConsumerStatefulWidget {
   const LanguagePage({super.key});
@@ -65,6 +66,10 @@ class _LanguagePageState extends ConsumerState<LanguagePage> {
         await localeController.selectAndSave(
           AppLocaleController.localeForLanguageCode(languageCode),
         );
+        // Banner resources are returned according to the request's Lang header.
+        // Reload after the locale is committed so Home renders the matching set
+        // when the user returns to it.
+        await ref.read(homeBannerConfigControllerProvider.notifier).refresh();
         // 切换完成后以新的 Accept-Language 请求活跃上报；上报器会自行读取
         // 当前 FCM token，已拿到时自动携带 pushToken，且失败不阻塞返回页面。
         unawaited(ref.read(appActiveReporterProvider).reportAppLaunch());

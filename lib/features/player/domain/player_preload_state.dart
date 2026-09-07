@@ -1,7 +1,7 @@
 /// HLS preload 的阶段状态。
 ///
-/// pending/success/failed/cancelled 只描述 HTTP 预热，不描述播放器是否可播放。
-enum PlaybackPreloadStatus { pending, success, failed, cancelled }
+/// These states describe HTTP warming only; none proves that media can play.
+enum PlaybackPreloadStatus { pending, success, partial, failed, cancelled }
 
 /// 单个 item 的 HLS 预热状态。
 ///
@@ -38,7 +38,7 @@ class PlaybackPreloadState {
 
   /// 预热结束时间。
   ///
-  /// pending 时为空。cancelled/failed/success 都应填入，方便排查释放时机。
+  /// pending 时为空；其他终态都应填入，方便排查释放时机。
   final DateTime? completedAt;
 
   /// 预热错误。

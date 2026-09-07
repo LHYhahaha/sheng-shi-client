@@ -10,11 +10,13 @@ class HlsNetworkResponse {
     required this.statusCode,
     required this.bytes,
     this.contentType,
+    this.isCompleteInMemory = true,
   });
 
   final int statusCode;
   final List<int> bytes;
   final String? contentType;
+  final bool isCompleteInMemory;
 }
 
 /// 可逐块消费的远端 HLS 响应。用于让本地代理在分片尚未完整下载时就开始向
@@ -96,10 +98,25 @@ class HlsNetworkRequestCoordinator {
     Uri uri, {
     required HlsRequestPriority priority,
     required Future<HlsNetworkStreamResponse> Function() open,
+    Future<HlsDiskCacheStreamWriter?> Function(String? contentType)?
+    streamWriterFactory,
   }) {
     final key = HlsDiskCacheStore.keyForUri(uri);
     final existing = _streamFlights[key];
     if (existing != null) {
+      // A late subscriber cannot safely reconstruct an already-truncated
+      // replay buffer. Start an independent request instead of serving a
+      // corrupt segment; normal short HLS segments still singleflight.
+      if (!existing.canReplayForNewSubscriber) {
+        _log(
+          'stream replay budget exceeded; bypass join',
+          uri,
+          priority: priority,
+        );
+        final detached = _HlsStreamFlight(open: open, onDone: () {});
+        detached.start();
+        return detached.subscribe();
+      }
       _log('stream join', uri, priority: priority);
       return existing.subscribe();
     }
@@ -107,6 +124,7 @@ class HlsNetworkRequestCoordinator {
     late final _HlsStreamFlight flight;
     flight = _HlsStreamFlight(
       open: open,
+      streamWriterFactory: streamWriterFactory,
       onDone: () {
         if (identical(_streamFlights[key], flight)) {
           _streamFlights.remove(key);
@@ -129,15 +147,26 @@ class HlsNetworkRequestCoordinator {
 }
 
 class _HlsStreamFlight {
-  _HlsStreamFlight({required this.open, required this.onDone});
+  _HlsStreamFlight({
+    required this.open,
+    required this.onDone,
+    this.streamWriterFactory,
+  });
+
+  static const _maxReplayBytes = 4 * 1024 * 1024;
 
   final Future<HlsNetworkStreamResponse> Function() open;
   final void Function() onDone;
+  final Future<HlsDiskCacheStreamWriter?> Function(String? contentType)?
+  streamWriterFactory;
   final _chunks = StreamController<List<int>>.broadcast();
   final _metadata = Completer<HlsNetworkStreamMetadata>();
   final _completed = Completer<HlsNetworkResponse>();
   final _buffer = <int>[];
   var _started = false;
+  var _replayTruncated = false;
+
+  bool get canReplayForNewSubscriber => !_replayTruncated;
 
   void start() {
     if (_started) return;
@@ -174,6 +203,9 @@ class _HlsStreamFlight {
   Future<void> _run() async {
     try {
       final response = await open();
+      final writer = response.statusCode >= 200 && response.statusCode < 300
+          ? await streamWriterFactory?.call(response.contentType)
+          : null;
       _metadata.complete(
         HlsNetworkStreamMetadata(
           statusCode: response.statusCode,
@@ -181,15 +213,24 @@ class _HlsStreamFlight {
         ),
       );
       await for (final chunk in response.chunks) {
-        _buffer.addAll(chunk);
+        writer?.add(chunk);
+        if (!_replayTruncated) {
+          if (_buffer.length + chunk.length <= _maxReplayBytes) {
+            _buffer.addAll(chunk);
+          } else {
+            _replayTruncated = true;
+          }
+        }
         _chunks.add(chunk);
       }
       await _chunks.close();
+      await writer?.commit();
       _completed.complete(
         HlsNetworkResponse(
           statusCode: response.statusCode,
           bytes: List<int>.unmodifiable(_buffer),
           contentType: response.contentType,
+          isCompleteInMemory: !_replayTruncated,
         ),
       );
     } catch (error, stackTrace) {

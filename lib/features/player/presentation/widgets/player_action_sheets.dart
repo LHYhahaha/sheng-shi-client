@@ -9,6 +9,344 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_primary_button.dart';
 import '../../../../shared/widgets/custom_switch.dart';
+import '../../domain/player_video_quality.dart';
+
+enum PlayerPlaybackSettingsDestination { language, quality }
+
+class PlayerPlaybackSettingsSheet extends StatelessWidget {
+  const PlayerPlaybackSettingsSheet({
+    required this.languageLabel,
+    required this.qualityLabel,
+    required this.canShowLanguage,
+    required this.canShowQuality,
+    super.key,
+  });
+
+  final String languageLabel;
+  final String qualityLabel;
+  final bool canShowLanguage;
+  final bool canShowQuality;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CompactPlayerSheet(
+      // height: canShowLanguage && canShowQuality ? 194 : 144,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              SizedBox(height: 40, width: 40),
+              const Spacer(),
+              Text(
+                context.l10n.playerSettingsTitle,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight(510),
+                ),
+              ),
+              const Spacer(),
+              _CloseButton(onTap: () => Navigator.of(context).pop()),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2C2C2E),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              children: [
+                if (canShowLanguage)
+                  _SettingsRow(
+                    key: const ValueKey('player_settings_language'),
+                    iconAsset: 'assets/images/player/player_cc.png',
+                    label: context.l10n.playerSubtitleEntry,
+                    value: languageLabel,
+                    onTap: () => Navigator.of(
+                      context,
+                    ).pop(PlayerPlaybackSettingsDestination.language),
+                  ),
+                if (canShowLanguage && canShowQuality) SizedBox(height: 32),
+                if (canShowQuality)
+                  _SettingsRow(
+                    key: const ValueKey('player_settings_quality'),
+                    iconAsset: 'assets/images/player/player_hdr.png',
+                    label: context.l10n.playerSettingsQuality,
+                    value: qualityLabel,
+                    onTap: () => Navigator.of(
+                      context,
+                    ).pop(PlayerPlaybackSettingsDestination.quality),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class PlayerLanguageSheet extends StatelessWidget {
+  const PlayerLanguageSheet({
+    required this.options,
+    required this.selectedCode,
+    required this.onSelected,
+    this.showCloseSubtitleOption = false,
+    super.key,
+  });
+
+  final List<({String label, String code})> options;
+  final String? selectedCode;
+  final ValueChanged<String?> onSelected;
+
+  /// Only external subtitles can be disabled independently. Embedded subtitle
+  /// sources represent video renditions, so they must never expose this row.
+  final bool showCloseSubtitleOption;
+
+  @override
+  Widget build(BuildContext context) {
+    return _PlayerSelectionSheet(
+      title: context.l10n.playerSubtitleEntry,
+      child: ListView.separated(
+        shrinkWrap: true,
+        itemCount: options.length + (showCloseSubtitleOption ? 1 : 0),
+        separatorBuilder: (_, _) => const SizedBox(height: 3),
+        itemBuilder: (context, index) {
+          if (showCloseSubtitleOption && index == 0) {
+            return _SelectionRow(
+              key: const ValueKey('player_language_off'),
+              label: context.l10n.playerSubtitleOff,
+              selected: selectedCode == null,
+              onTap: () {
+                Navigator.of(context).pop();
+                onSelected(null);
+              },
+            );
+          }
+          final option = options[index - (showCloseSubtitleOption ? 1 : 0)];
+          final selected = _sameCode(option.code, selectedCode);
+          return _SelectionRow(
+            key: ValueKey('player_language_${option.code}'),
+            label: option.label,
+            selected: selected,
+            onTap: () {
+              Navigator.of(context).pop();
+              onSelected(option.code);
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class PlayerQualitySheet extends StatelessWidget {
+  const PlayerQualitySheet({
+    required this.qualities,
+    required this.selectedQualityId,
+    required this.isMember,
+    this.isLoading = false,
+    required this.onSelected,
+    super.key,
+  });
+
+  final List<PlayerVideoQuality> qualities;
+  final String selectedQualityId;
+  final bool isMember;
+  final bool isLoading;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final isSingleQuality = qualities.length == 1;
+    return _PlayerSelectionSheet(
+      title: context.l10n.playerSettingsQuality,
+      child: isLoading
+          ? const Center(child: CircularProgressIndicator(color: Colors.white))
+          : ListView.separated(
+              shrinkWrap: true,
+              itemCount: qualities.length + (isSingleQuality ? 0 : 1),
+              separatorBuilder: (_, _) => const SizedBox(height: 3),
+              itemBuilder: (context, index) {
+                if (!isSingleQuality && index == 0) {
+                  return _SelectionRow(
+                    key: const ValueKey('player_quality_auto'),
+                    label: context.l10n.playerQualityAuto,
+                    selected:
+                        selectedQualityId == PlayerVideoQuality.automaticId,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onSelected(PlayerVideoQuality.automaticId);
+                    },
+                  );
+                }
+                final quality = qualities[index - (isSingleQuality ? 0 : 1)];
+                final memberOnly =
+                    quality.isMemberOnly && qualities.length > 1 && !isMember;
+                final selected =
+                    !memberOnly &&
+                    (selectedQualityId == quality.id ||
+                        (isSingleQuality &&
+                            selectedQualityId ==
+                                PlayerVideoQuality.automaticId));
+                return _SelectionRow(
+                  key: ValueKey('player_quality_${quality.id}'),
+                  label: quality.label,
+                  // A sole rendition is the actual result of Auto as well,
+                  // so it should carry the selected state instead of adding
+                  // a redundant Auto row.
+                  selected: selected,
+                  memberOnly: memberOnly,
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    onSelected(quality.id);
+                  },
+                );
+              },
+            ),
+    );
+  }
+}
+
+class _PlayerSelectionSheet extends StatelessWidget {
+  const _PlayerSelectionSheet({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => _CompactPlayerSheet(
+    height: MediaQuery.sizeOf(context).height * .52,
+    child: Column(
+      children: [
+        Row(
+          children: [
+            SizedBox(width: 40, height: 40),
+            const Spacer(),
+            Text(
+              title,
+              style: const TextStyle(color: Colors.white, fontSize: 18),
+            ),
+            const Spacer(),
+            _CloseButton(onTap: () => Navigator.of(context).pop()),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Expanded(child: child),
+      ],
+    ),
+  );
+}
+
+class _SettingsRow extends StatelessWidget {
+  const _SettingsRow({
+    required super.key,
+    required this.iconAsset,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String iconAsset;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(24),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0),
+      child: Row(
+        children: [
+          Image.asset(iconAsset, width: 20, height: 20),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.9),
+              fontSize: 16,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: .50),
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(width: 3),
+          Image.asset(
+            "assets/images/common/white_right.png",
+            height: 20,
+            width: 20,
+            color: Colors.white.withValues(alpha: .5),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _SelectionRow extends StatelessWidget {
+  const _SelectionRow({
+    required super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.memberOnly = false,
+  });
+
+  final String label;
+  final bool selected;
+  final bool memberOnly;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(22),
+    child: Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: selected ? const Color(0xFF2C2C2E) : Colors.transparent,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: memberOnly
+                  ? const Color(0xFFF5D28A)
+                  : Colors.white.withValues(alpha: selected ? 1 : .5),
+              fontSize: 16,
+            ),
+          ),
+          if (memberOnly) const SizedBox(width: 7),
+          if (memberOnly)
+            Image.asset(
+              'assets/images/player/player_vip.png',
+              width: 16,
+              height: 16,
+            ),
+          const Spacer(),
+          if (selected)
+            const Icon(Icons.check_rounded, color: Colors.white, size: 21),
+        ],
+      ),
+    ),
+  );
+}
+
+bool _sameCode(String first, String? second) =>
+    second != null && first.trim().toLowerCase() == second.trim().toLowerCase();
 
 class PlayerShareSheet extends StatelessWidget {
   const PlayerShareSheet({
@@ -25,7 +363,7 @@ class PlayerShareSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _CompactPlayerSheet(
-      height: 300,
+      height: 270,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -286,7 +624,7 @@ class _PlayerGiftShareSheetState extends State<PlayerGiftShareSheet> {
     return _CompactPlayerSheet(
       // Keep both tabs at the taller gift-unavailable height so switching tabs
       // does not move the sheet.
-      height: 300,
+      height: 270,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -297,9 +635,10 @@ class _PlayerGiftShareSheetState extends State<PlayerGiftShareSheet> {
                 child: Container(
                   height: 36,
                   padding: const EdgeInsets.all(4),
+                  margin: EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF323238),
-                    borderRadius: BorderRadius.circular(22),
+                    color: const Color(0xFF313136),
+                    borderRadius: BorderRadius.circular(40),
                   ),
                   child: Row(
                     children: [
@@ -371,9 +710,11 @@ class _PlayerShareTab extends StatelessWidget {
     required this.selected,
     required this.onTap,
   });
+
   final String label;
   final bool selected;
   final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) => Expanded(
     child: GestureDetector(
@@ -382,12 +723,17 @@ class _PlayerShareTab extends StatelessWidget {
         duration: const Duration(milliseconds: 160),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF898892) : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
+          color: selected ? const Color(0xFF696971) : Colors.transparent,
+          borderRadius: BorderRadius.circular(40),
         ),
         child: Text(
           label,
-          style: const TextStyle(color: Colors.white, fontSize: 14),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            height: 14 / 18,
+            fontWeight: FontWeight(selected ? 510 : 400),
+          ),
         ),
       ),
     ),
@@ -399,8 +745,10 @@ class _GiftShareTargets extends StatelessWidget {
     required this.onFacebookTap,
     required this.onCopyLinkTap,
   });
+
   final VoidCallback onFacebookTap;
   final VoidCallback onCopyLinkTap;
+
   @override
   Widget build(BuildContext context) => Row(
     mainAxisAlignment: MainAxisAlignment.spaceEvenly,

@@ -8,6 +8,7 @@ import 'hls_playlist_preloader.dart';
 import 'hls_local_proxy_server.dart';
 import 'hls_disk_cache_store.dart';
 import 'hls_network_request_coordinator.dart';
+import 'hls_source_profile_store.dart';
 import 'hls_traffic_gate.dart';
 import 'mock_player_playback_source_repository.dart';
 import 'player_content_repository_provider.dart';
@@ -28,6 +29,7 @@ final hlsPlaylistPreloaderProvider = Provider<HlsPlaylistPreloader>((ref) {
     cacheStore: ref.watch(hlsLocalCacheStoreProvider),
     diskCacheStore: ref.watch(hlsDiskCacheStoreProvider),
     networkCoordinator: ref.watch(hlsNetworkRequestCoordinatorProvider),
+    sourceProfileStore: ref.watch(hlsSourceProfileStoreProvider),
   );
   ref.onDispose(preloader.releasePending);
   return preloader;
@@ -54,9 +56,11 @@ final forYouPredictiveHlsPlaylistPreloaderProvider =
       final preloader = HlsPlaylistPreloader(
         timeout: config.effectivePreloadTimeout,
         maxPreheatBytes: config.effectiveMaxPreloadBytes,
+        intent: HlsPreloadIntent.speculative,
         cacheStore: ref.watch(hlsLocalCacheStoreProvider),
         diskCacheStore: ref.watch(hlsDiskCacheStoreProvider),
         networkCoordinator: ref.watch(hlsNetworkRequestCoordinatorProvider),
+        sourceProfileStore: ref.watch(hlsSourceProfileStoreProvider),
       );
       ref.onDispose(preloader.releasePending);
       return preloader;
@@ -90,6 +94,10 @@ final hlsNetworkRequestCoordinatorProvider =
     Provider<HlsNetworkRequestCoordinator>((ref) {
       return HlsNetworkRequestCoordinator();
     });
+
+final hlsSourceProfileStoreProvider = Provider<HlsSourceProfileStore>((ref) {
+  return SharedPreferencesHlsSourceProfileStore();
+});
 
 final hlsTrafficGateProvider = Provider<HlsTrafficGate>((ref) {
   return HlsTrafficGate();
@@ -141,6 +149,7 @@ final startupHlsPlaylistPreloaderProvider = Provider<HlsPlaylistPreloader>((
     cacheStore: ref.watch(hlsLocalCacheStoreProvider),
     diskCacheStore: ref.watch(hlsDiskCacheStoreProvider),
     networkCoordinator: ref.watch(hlsNetworkRequestCoordinatorProvider),
+    sourceProfileStore: ref.watch(hlsSourceProfileStoreProvider),
   );
   ref.onDispose(preloader.releasePending);
   return preloader;

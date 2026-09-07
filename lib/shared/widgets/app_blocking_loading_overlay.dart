@@ -22,7 +22,7 @@ class AppBlockingLoadingOverlay extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const AppPegTopLoader(size: 18),
+                  const AppPegTopLoader(size: 20),
                   if (label != null && label!.isNotEmpty) ...[
                     const SizedBox(height: 20),
                     Text(

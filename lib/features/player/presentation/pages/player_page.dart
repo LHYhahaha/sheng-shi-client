@@ -34,9 +34,11 @@ import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/url/external_url_launcher.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
-import '../../../gift/application/gift_drama_link_cache.dart';
+// TODO(next release): 重新启用赠送短剧分享时恢复此依赖。
+// import '../../../gift/application/gift_drama_link_cache.dart';
 import '../../../gift/data/gift_remote_data_source_provider.dart';
-import '../../../gift/domain/gift_link_data.dart';
+// TODO(next release): 重新启用赠送短剧分享时恢复此依赖。
+// import '../../../gift/domain/gift_link_data.dart';
 import '../../../entitlement/domain/episode_unlock_type.dart';
 import '../../data/player_exit_recommendation_history_repository_provider.dart';
 import '../../../auth/application/auth_controller.dart';
@@ -73,6 +75,7 @@ import '../../domain/player_feed.dart';
 import '../../domain/player_playback_progress.dart';
 import '../../domain/drama_playback_target.dart';
 import '../../domain/player_subtitle.dart';
+import '../../domain/player_video_quality.dart';
 import '../widgets/player_action_sheets.dart';
 import '../widgets/player_detail_sheet.dart';
 import '../widgets/player_exit_recommendation_dialog.dart';
@@ -258,6 +261,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _resumePlaybackOnRouteReturn = false;
   bool _isCoveredByAnotherRoute = false;
   String? _pendingAdUnlockedItemId;
+  int _adUnlockPromptGeneration = 0;
   final Map<String, _AdUnlockStatusCacheEntry> _adUnlockStatusCache =
       <String, _AdUnlockStatusCacheEntry>{};
   final Map<String, Future<AdUnlockStatus?>> _adUnlockStatusInFlight =
@@ -467,9 +471,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   @override
   void didPushNext() {
+    // Player 自己打开的金币/充值框也会触发 RouteAware.didPushNext；这类弹框
+    // 关闭后还要继续使用此前预取的广告资格，不能让它作废 generation。
     if (_isLeavingRoute || _isModalOpen) {
       return;
     }
+    // 只有外部路由覆盖播放器时，才使尚未完成的广告提示请求失效。
+    _adUnlockPromptGeneration += 1;
     _isCoveredByAnotherRoute = true;
     final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
     _resumePlaybackOnRouteReturn = playback.isPlaying;
@@ -585,7 +593,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     // 不 await，避免把赠剧资格请求放到首帧关键路径上。
     Future<void>.microtask(() {
       if (mounted) {
-        _refreshDramaGiftLinkOnPlayerEntry(widget.dramaId);
+        // TODO(next release): 恢复赠送短剧分享时，进入播放器后刷新赠送影片资格。
+        // _refreshDramaGiftLinkOnPlayerEntry(widget.dramaId);
         _prefetchShareDramaStatus();
       }
     });
@@ -737,6 +746,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   void dispose() {
     // 涓婃姤瑙傜湅閫€鍑轰簨浠?
     _isDisposing = true;
+    _adUnlockPromptGeneration += 1;
     _cancelAnalyticsPauseTimer();
     unawaited(_trackPlaybackEnd(reason: 'exit'));
     unawaited(_playbackController.reportWatchProgress(eventType: 4));
@@ -1483,26 +1493,27 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       }
     });
 
-    ref.listen(
-      entitlementControllerProvider.select(
-        (state) => (
-          userId: state.userId,
-          isMember: state.isMember,
-          membershipExpiresAt: state.membershipExpiresAt,
-        ),
-      ),
-      (previous, next) {
-        if (previous == null || previous == next) return;
-        // 支付、续费、到期或账号切换后都不能继续使用旧 shareCode/次数。
-        // 已打开的弹框保留快照，避免在弹框内替换内容造成闪动；下次打开读取新值。
-        ref.read(giftDramaLinkCacheProvider).clear();
-        if (!next.isMember) return;
-        final currentItem = ref.read(feedProvider).currentItem;
-        if (currentItem != null) {
-          _refreshDramaGiftLink(currentItem.content.id);
-        }
-      },
-    );
+    // TODO(next release): 恢复赠送短剧分享时，再根据会员状态清理并刷新赠送资格。
+    // ref.listen(
+    //   entitlementControllerProvider.select(
+    //     (state) => (
+    //       userId: state.userId,
+    //       isMember: state.isMember,
+    //       membershipExpiresAt: state.membershipExpiresAt,
+    //     ),
+    //   ),
+    //   (previous, next) {
+    //     if (previous == null || previous == next) return;
+    //     // 支付、续费、到期或账号切换后都不能继续使用旧 shareCode/次数。
+    //     // 已打开的弹框保留快照，避免在弹框内替换内容造成闪动；下次打开读取新值。
+    //     ref.read(giftDramaLinkCacheProvider).clear();
+    //     if (!next.isMember) return;
+    //     final currentItem = ref.read(feedProvider).currentItem;
+    //     if (currentItem != null) {
+    //       _refreshDramaGiftLink(currentItem.content.id);
+    //     }
+    //   },
+    // );
 
     ref.listen(
       viewportProvider.select(PlayerViewportSettledSnapshot.fromState),
@@ -1564,8 +1575,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           accessPlayable: accessPlayable,
           isItemChange: isItemChange,
         );
-        _prepareAdUnlockForSettledItem(settledItem);
-        _prefetchDramaGiftLink(settledItem.content.id);
+        _prepareAdUnlockForSettledItem();
+        // TODO(next release): 恢复赠送短剧分享时，切集后预请求赠送影片资格。
+        // _prefetchDramaGiftLink(settledItem.content.id);
         unawaited(
           feedEngine.onViewportSettled(
             item: settledItem,
@@ -1928,6 +1940,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     // 解锁页隐藏顶部信息，但返回入口必须始终可用。
     final showsTopPageChrome = showsPageChrome && !showsUnlockButton;
     final showsTopBar = showsTopPageChrome || showsUnlockButton;
+    final canShowLanguageSetting =
+        isSubtitleSelectionResolved &&
+        (episodeSources.isNotEmpty
+            ? episodeSources.length > 1
+            : subtitles.isNotEmpty);
+    final canShowQualitySetting = playbackShell.availableVideoQualityCount > 1;
+    final canShowPlaybackSettings =
+        canShowLanguageSetting || canShowQualitySetting;
     final canShowActiveVideoOverlay =
         settledItem != null &&
         accessForSettled == PlayerAccessPresentationState.playable;
@@ -2134,6 +2154,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                     unawaited(_goBackFromPlayer());
                   },
                   onSpeedTap: _showSpeedSheet,
+                  onSettingsTap: _showPlaybackSettingsSheet,
+                  showSettingsMenu: canShowPlaybackSettings,
                   subtitles: subtitles,
                   episodeSources: episodeSources,
                   currentSubtitleLanguage: currentSubtitleLanguage,
@@ -2448,16 +2470,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   void _finishPageSettle({int? targetIndex}) {
     final feedState = ref.read(playerFeedControllerProvider(_sessionKey));
-    // 先把视口置为 settling，再写入最终 settled。若反过来，settled listener
-    // 会在还未结束拖动时启动下一集播放，随后又被 markScrollEnd 覆盖状态。
+    // 先让 viewport 结束 scrolling 状态；自动解锁/充值 sheet 的调度会拒绝
+    // isPageScrolling=true。必须在发出最终 settled 事件前清掉该标记，否则
+    // 自动 sheet 只会在这里被跳过，之后也没有新的 settled 事件重新调度它。
     _feedEngine.onScrollEnd();
+    _setPageScrolling(false);
     if (feedState.items.isNotEmpty) {
       final index = (targetIndex ?? _pageController.page?.round() ?? 0).clamp(
         0,
         feedState.items.length - 1,
       );
-      // 必须在页面完全落位之后才更新当前集。此时仍保留 scrolling/pending
-      // 标记，避免 currentIndex 的监听器反向驱动 PageController。
+      // 页面已完全落位，才更新当前集并触发权限判断/自动 sheet 调度。
       _feedEngine.onPageChanged(index);
       _requestMoreForSettledForYouPage(index, feedState);
       _feedEngine.settleViewport(
@@ -2465,7 +2488,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         itemId: feedState.items[index].id,
       );
     }
-    _setPageScrolling(false);
     _hasPendingPageViewportSettle = false;
     _isPageSettleRequested = false;
   }
@@ -3322,10 +3344,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!mounted) {
       return;
     }
-    // Request early, but do not change the underlying paywall until the
-    // original unlock sheet has been dismissed.
-    final adUnlockStatus = _fetchAdUnlockStatus(item);
+    // 提前获取资格，保证用户关闭金币/充值框后能立即衔接广告提示；是否真正展示
+    // 仍要在每次异步完成后校验同一播放器路由和同一锁集。
+    final adUnlockStatus = _preloadAdUnlockStatus(item);
+    final adUnlockPromptGeneration = _adUnlockPromptGeneration;
     var didUnlockWithCoins = false;
+    var didCompleteRecharge = false;
     _isModalOpen = true;
     _syncAutoImmersiveBlockers();
     try {
@@ -3335,32 +3359,48 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         intent,
         launchedByAutoSheet: launchedByAutoSheet,
       );
+      if (!mounted) return;
       // 金币解锁成功后当前集已恢复播放；不能再使用打开金币框前预取到的
       // 广告资格弹出二次解锁确认框。
+      final rechargeState = ref.read(
+        playerRechargeUnlockControllerProvider(_sessionKey),
+      );
+      final latestCurrentItem = ref
+          .read(playerFeedControllerProvider(_sessionKey))
+          .currentItem;
+      // `PlayerRechargeUnlockController.success` 会保留到下一次操作。不能把上一
+      // 集金币解锁留下的 success 当作本次“关闭弹窗”已经支付成功，否则会跳过
+      // 关闭金币框后应展示的广告解锁提示。
+      final currentItemWasUnlocked =
+          latestCurrentItem?.id == item.id &&
+          !latestCurrentItem!.episode.isLocked;
       didUnlockWithCoins =
           intent == PlayerOverlaySheetIntent.coinUnlock &&
-          ref
-                  .read(playerRechargeUnlockControllerProvider(_sessionKey))
-                  .status ==
-              PlayerRechargeUnlockStatus.success;
+          rechargeState.status == PlayerRechargeUnlockStatus.success &&
+          currentItemWasUnlocked;
+      didCompleteRecharge =
+          (intent == PlayerOverlaySheetIntent.rechargeUnlock ||
+              intent == PlayerOverlaySheetIntent.membership) &&
+          rechargeState.status == PlayerRechargeUnlockStatus.success &&
+          rechargeState.itemId == item.id;
     } finally {
       if (mounted) {
         _isModalOpen = false;
         _activeCoinSheetItemId = null;
         _activeRechargeSheetItemId = null;
         _restoreUnlockPaywallAfterModalIfNeeded(item);
-        if (!didUnlockWithCoins) {
+        if (!didUnlockWithCoins && !didCompleteRecharge) {
           unawaited(
-            _applyAdUnlockActionAfterOriginalSheet(item, adUnlockStatus),
+            _applyAdUnlockActionAfterOriginalSheet(
+              item,
+              adUnlockStatus,
+              generation: adUnlockPromptGeneration,
+            ),
           );
         }
         _syncAutoImmersiveBlockers();
       }
     }
-  }
-
-  Future<AdUnlockStatus?> _fetchAdUnlockStatus(PlayerFeedItem item) async {
-    return _preloadAdUnlockStatus(item);
   }
 
   String _adUnlockCacheKey(PlayerFeedItem item) =>
@@ -3435,22 +3475,19 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
   }
 
-  void _prepareAdUnlockForSettledItem(PlayerFeedItem item) {
+  void _prepareAdUnlockForSettledItem() {
     if (!ref.read(useRemotePlayerApiProvider)) return;
-    // 素材和剧集资格彼此独立：素材可在任何播放页后台预热，资格只预取当前
-    // 顺序可解锁的锁定集，避免为普通集额外请求状态接口。
+    // 只预热素材；广告提示只会由关闭当前集的金币/充值框后续触发，且异步
+    // 资格回包必须再次通过当前路由与当前集校验。
     unawaited(_preloadAdMaterial());
-    if (_isAdUnlockCandidate(item)) {
-      unawaited(_preloadAdUnlockStatus(item));
-    }
   }
 
   bool _canPresentAdUnlockFor(PlayerFeedItem item) {
+    if (!mounted) return false;
     final current = ref
         .read(playerFeedControllerProvider(_sessionKey))
         .currentItem;
-    return mounted &&
-        !_isDisposing &&
+    return !_isDisposing &&
         !_isLeavingRoute &&
         !_isCoveredByAnotherRoute &&
         !_isModalOpen &&
@@ -3463,6 +3500,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         current.episode.isLocked &&
         _isSequentialUnlockEligible(current) &&
         !_isAdUnlockTemporarilyUnavailable(current);
+  }
+
+  bool _canPresentDeferredAdUnlockFor(
+    PlayerFeedItem item, {
+    required int generation,
+  }) {
+    final route = ModalRoute.of(context);
+    return generation == _adUnlockPromptGeneration &&
+        route?.isCurrent == true &&
+        _canPresentAdUnlockFor(item);
   }
 
   void _markAdUnlockUnavailable(PlayerFeedItem item) {
@@ -3488,10 +3535,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   Future<void> _applyAdUnlockActionAfterOriginalSheet(
     PlayerFeedItem item,
-    Future<AdUnlockStatus?> statusFuture,
-  ) async {
+    Future<AdUnlockStatus?> statusFuture, {
+    required int generation,
+  }) async {
     final status = await statusFuture;
-    if (status == null || !_canPresentAdUnlockFor(item)) return;
+    if (status == null ||
+        !_canPresentDeferredAdUnlockFor(item, generation: generation)) {
+      return;
+    }
     final latest = ref
         .read(playerFeedControllerProvider(_sessionKey))
         .currentItem;
@@ -3508,12 +3559,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final kind = latest.episode.unlockType == EpisodeUnlockType.membership
         ? AdUnlockDramaKind.member
         : AdUnlockDramaKind.normal;
-    // 状态接口已确认当前集可展示广告解锁时，即使先前后台素材预热返回过
-    // 2501，也应重新尝试一次，不能用素材失败覆盖最新资格状态。
     final materialPrepared = await _preloadAdMaterial(retryIfUnavailable: true);
-    if (!materialPrepared || !_canPresentAdUnlockFor(item)) return;
-    final materialPreloader = ref.read(adMaterialPreloaderProvider);
-    final material = materialPreloader.cachedMaterial;
+    if (!materialPrepared ||
+        !_canPresentDeferredAdUnlockFor(item, generation: generation)) {
+      return;
+    }
+    final material = ref.read(adMaterialPreloaderProvider).cachedMaterial;
     if (material == null) return;
     final updatedItem = ref
         .read(playerFeedControllerProvider(_sessionKey).notifier)
@@ -3524,11 +3575,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               isAvailable: true,
               watchedToday: status.usedCount(kind),
               dailyLimit: status.dailyLimit(kind),
-              closeAfter: const Duration(seconds: 0),
+              closeAfter: Duration.zero,
             ),
           ),
         );
-    if (!mounted || updatedItem == null) return;
+    if (updatedItem == null ||
+        !_canPresentDeferredAdUnlockFor(item, generation: generation)) {
+      return;
+    }
+    if (!mounted) return;
     _isModalOpen = true;
     _syncAutoImmersiveBlockers();
     final bool shouldWatchAd;
@@ -3546,9 +3601,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       );
     } finally {
       _isModalOpen = false;
-      if (mounted) {
-        _syncAutoImmersiveBlockers();
-      }
+      if (mounted) _syncAutoImmersiveBlockers();
     }
     if (!mounted || !shouldWatchAd) return;
     await _openAdUnlock(updatedItem, actionAlreadyTracked: true);
@@ -3727,22 +3780,23 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         ),
       );
       final shareStatus = await _loadShareDramaStatus();
-      GiftLinkData? gift;
-      Future<GiftLinkData>? giftRequestInFlight;
-      if (ref.read(entitlementControllerProvider).isMember) {
-        final parsedDramaId = int.tryParse(dramaId);
-        if (parsedDramaId != null && parsedDramaId > 0) {
-          final cache = ref.read(giftDramaLinkCacheProvider);
-          giftRequestInFlight = cache.inFlightFor(parsedDramaId);
-          if (giftRequestInFlight == null) {
-            try {
-              gift = await cache.get(parsedDramaId);
-            } catch (_) {
-              // 资格接口失败时仍允许使用普通分享。
-            }
-          }
-        }
-      }
+      // TODO(next release): 恢复赠送短剧分享时，会员打开分享弹窗前请求赠送影片资格。
+      // GiftLinkData? gift;
+      // Future<GiftLinkData>? giftRequestInFlight;
+      // if (ref.read(entitlementControllerProvider).isMember) {
+      //   final parsedDramaId = int.tryParse(dramaId);
+      //   if (parsedDramaId != null && parsedDramaId > 0) {
+      //     final cache = ref.read(giftDramaLinkCacheProvider);
+      //     giftRequestInFlight = cache.inFlightFor(parsedDramaId);
+      //     if (giftRequestInFlight == null) {
+      //       try {
+      //         gift = await cache.get(parsedDramaId);
+      //       } catch (_) {
+      //         // 资格接口失败时仍允许使用普通分享。
+      //       }
+      //     }
+      //   }
+      // }
       if (!mounted || _isLeavingRoute) return;
 
       _isModalOpen = true;
@@ -3759,31 +3813,38 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         isDismissible: true,
         enableDrag: true,
         builder: (context) {
-          final pendingRequest = giftRequestInFlight;
-          if (pendingRequest != null) {
-            return FutureBuilder<GiftLinkData>(
-              future: pendingRequest,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const PlayerShareLoadingSheet();
-                }
-                return _buildShareSheet(
-                  context,
-                  dramaId: dramaId,
-                  dramaTitle: dramaTitle,
-                  gift: snapshot.data,
-                  shareStatus: shareStatus,
-                );
-              },
-            );
-          }
           return _buildShareSheet(
             context,
             dramaId: dramaId,
             dramaTitle: dramaTitle,
-            gift: gift,
             shareStatus: shareStatus,
           );
+          // TODO(next release): 恢复赠送短剧分享时，等待已发起的资格请求后展示结果。
+          // final pendingRequest = giftRequestInFlight;
+          // if (pendingRequest != null) {
+          //   return FutureBuilder<GiftLinkData>(
+          //     future: pendingRequest,
+          //     builder: (context, snapshot) {
+          //       if (snapshot.connectionState != ConnectionState.done) {
+          //         return const PlayerShareLoadingSheet();
+          //       }
+          //       return _buildShareSheet(
+          //         context,
+          //         dramaId: dramaId,
+          //         dramaTitle: dramaTitle,
+          //         gift: snapshot.data,
+          //         shareStatus: shareStatus,
+          //       );
+          //     },
+          //   );
+          // }
+          // return _buildShareSheet(
+          //   context,
+          //   dramaId: dramaId,
+          //   dramaTitle: dramaTitle,
+          //   gift: gift,
+          //   shareStatus: shareStatus,
+          // );
         },
       ).whenComplete(() {
         unawaited(
@@ -3805,7 +3866,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     BuildContext context, {
     required String dramaId,
     required String dramaTitle,
-    required GiftLinkData? gift,
     required ShareDramaStatusDto? shareStatus,
   }) {
     // 分享任务完成状态将由后续独立接口下发；先保留 UI 的两个展示分支。
@@ -3814,46 +3874,56 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       hasCompletedShareTask: shareStatus?.hasCompletedTask ?? false,
       firstShareRewardCoins: shareStatus?.shareCoin ?? 0,
     );
-    if (!ref.read(entitlementControllerProvider).isMember) {
-      return PlayerShareSheet(
-        shareHint: shareHint,
-        onFacebookTap: () {
-          unawaited(
-            _handleNormalFacebookShare(dramaId, dramaTitle, shareStatus),
-          );
-        },
-        onCopyLinkTap: () {
-          _handleNormalCopyShare(dramaId, dramaTitle, shareStatus);
-        },
-      );
-    }
-    return PlayerGiftShareSheet(
+    return PlayerShareSheet(
       shareHint: shareHint,
-      quotaLabel: context.l10n.dramaGiftShareSummary(
-        used: gift?.usedCount ?? 0,
-        total: gift?.totalCount ?? 0,
-      ),
-      isGiftAvailable: gift?.visible == true && gift?.available == true,
-      unavailableDescription: context.l10n.giftShareUnavailableLimit(
-        date: context.l10n.formatGiftReGrantDate(gift?.reGrantAt ?? ''),
-      ),
-      onShareFacebookTap: () {
+      onFacebookTap: () {
         unawaited(_handleNormalFacebookShare(dramaId, dramaTitle, shareStatus));
       },
-      onShareCopyLinkTap: () {
+      onCopyLinkTap: () {
         _handleNormalCopyShare(dramaId, dramaTitle, shareStatus);
       },
-      onGiftFacebookTap: () {
-        if (gift == null) return;
-        unawaited(_shareGiftDramaToFacebook(dramaId, dramaTitle, gift));
-        _invalidateAndRefreshDramaGiftLink(dramaId);
-      },
-      onGiftCopyLinkTap: () {
-        if (gift == null) return;
-        unawaited(_copyGiftDramaLink(dramaId, dramaTitle, gift));
-        _invalidateAndRefreshDramaGiftLink(dramaId);
-      },
     );
+    // TODO(next release): 恢复会员赠送短剧分享入口。
+    // if (!ref.read(entitlementControllerProvider).isMember) {
+    //   return PlayerShareSheet(
+    //     shareHint: shareHint,
+    //     onFacebookTap: () {
+    //       unawaited(
+    //         _handleNormalFacebookShare(dramaId, dramaTitle, shareStatus),
+    //       );
+    //     },
+    //     onCopyLinkTap: () {
+    //       _handleNormalCopyShare(dramaId, dramaTitle, shareStatus);
+    //     },
+    //   );
+    // }
+    // return PlayerGiftShareSheet(
+    //   shareHint: shareHint,
+    //   quotaLabel: context.l10n.dramaGiftShareSummary(
+    //     used: gift?.usedCount ?? 0,
+    //     total: gift?.totalCount ?? 0,
+    //   ),
+    //   isGiftAvailable: gift?.visible == true && gift?.available == true,
+    //   unavailableDescription: context.l10n.giftShareUnavailableLimit(
+    //     date: context.l10n.formatGiftReGrantDate(gift?.reGrantAt ?? ''),
+    //   ),
+    //   onShareFacebookTap: () {
+    //     unawaited(_handleNormalFacebookShare(dramaId, dramaTitle, shareStatus));
+    //   },
+    //   onShareCopyLinkTap: () {
+    //     _handleNormalCopyShare(dramaId, dramaTitle, shareStatus);
+    //   },
+    //   onGiftFacebookTap: () {
+    //     if (gift == null) return;
+    //     unawaited(_shareGiftDramaToFacebook(dramaId, dramaTitle, gift));
+    //     _invalidateAndRefreshDramaGiftLink(dramaId);
+    //   },
+    //   onGiftCopyLinkTap: () {
+    //     if (gift == null) return;
+    //     unawaited(_copyGiftDramaLink(dramaId, dramaTitle, gift));
+    //     _invalidateAndRefreshDramaGiftLink(dramaId);
+    //   },
+    // );
   }
 
   String _shareHint(
@@ -3893,10 +3963,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     ShareDramaStatusDto? shareStatus,
     ShareDramaRewardChannel channel,
   ) {
-    if (shareStatus == null || shareStatus.claimed) return;
     ref
         .read(shareDramaRewardCoordinatorProvider)
-        .register(taskKey: shareStatus.taskKey, channel: channel);
+        .register(
+          // Status only controls whether a reward can be claimed. It must not
+          // suppress the completed-share action report.
+          taskKey: shareStatus?.taskKey,
+          claimed: shareStatus?.claimed == true,
+          channel: channel,
+        );
   }
 
   void _prefetchShareDramaStatus() {
@@ -3907,6 +3982,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     return ref.read(shareDramaRewardCoordinatorProvider).loadStatus();
   }
 
+  // TODO(next release): 恢复赠送短剧分享逻辑及资格接口请求。
+  /*
   void _prefetchDramaGiftLink(String dramaId) {
     if (!ref.read(entitlementControllerProvider).isMember) return;
     final parsedDramaId = int.tryParse(dramaId);
@@ -3945,6 +4022,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       cache.refresh(parsedDramaId).then<void>((_) {}, onError: (_, _) {}),
     );
   }
+  */
 
   Future<void> _trackShareChannelClick(String dramaId, String shareMethod) =>
       ref
@@ -4011,6 +4089,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
   }
 
+  /*
   Uri _giftDramaUrl(
     String dramaId,
     GiftLinkData gift, {
@@ -4082,6 +4161,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
     if (mounted) showAppCenterToast(context.l10n.shareToastCopySuccess);
   }
+  */
 
   String _shareMessage(String dramaTitle, Uri shareUrl) {
     return context.l10n.shareMessage(
@@ -4131,7 +4211,185 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
   }
 
-  Future<void> _showPendingUnlockActionSheet() async {
+  Future<void> _showPlaybackSettingsSheet() async {
+    if (_isModalOpen) return;
+    final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
+    final languages = _languageOptions(
+      playback.availableSubtitles,
+      playback.availableEpisodeSources,
+    );
+    final canShowLanguage =
+        playback.isSubtitleSelectionResolved &&
+        (playback.availableEpisodeSources.isNotEmpty
+            ? playback.availableEpisodeSources.length > 1
+            : playback.availableSubtitles.isNotEmpty);
+    final canShowCloseSubtitleOption =
+        playback.availableEpisodeSources.isEmpty &&
+        playback.availableSubtitles.isNotEmpty;
+    // Quality is a switching control, so a sole rendition has no entry.
+    // Loading, failed and empty results are likewise hidden.
+    final canShowQuality = playback.availableVideoQualities.length > 1;
+    _isModalOpen = true;
+    _syncAutoImmersiveBlockers();
+    final destination =
+        await showModalBottomSheet<PlayerPlaybackSettingsDestination>(
+          context: context,
+          backgroundColor: Colors.transparent,
+          barrierColor: Colors.black.withValues(alpha: .7),
+          builder: (_) => PlayerPlaybackSettingsSheet(
+            languageLabel:
+                canShowCloseSubtitleOption &&
+                    playback.currentSubtitleLanguage == null
+                ? context.l10n.playerSubtitleOff
+                : _languageLabel(languages, playback.currentSubtitleLanguage),
+            qualityLabel: _qualityLabel(
+              playback.availableVideoQualities,
+              playback.selectedVideoQualityId,
+            ),
+            canShowLanguage: canShowLanguage,
+            canShowQuality: canShowQuality,
+          ),
+        );
+    _isModalOpen = false;
+    if (!mounted) return;
+    _syncAutoImmersiveBlockers();
+    if (destination == PlayerPlaybackSettingsDestination.language) {
+      await _showLanguageSheet(
+        languages,
+        playback.currentSubtitleLanguage,
+        canShowCloseSubtitleOption,
+      );
+    } else if (destination == PlayerPlaybackSettingsDestination.quality) {
+      await _showQualitySheet();
+    }
+  }
+
+  Future<void> _showLanguageSheet(
+    List<({String label, String code})> options,
+    String? selectedCode,
+    bool showCloseSubtitleOption,
+  ) async {
+    _isModalOpen = true;
+    _syncAutoImmersiveBlockers();
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: .7),
+      builder: (_) => PlayerLanguageSheet(
+        options: options,
+        selectedCode: selectedCode,
+        // episodeSources takes precedence whenever present. Only standalone
+        // external subtitle tracks may be switched off independently.
+        showCloseSubtitleOption: showCloseSubtitleOption,
+        onSelected: (code) {
+          final controller = ref.read(
+            playerPlaybackControllerProvider(_sessionKey).notifier,
+          );
+          unawaited(
+            code == null
+                ? controller.setSubtitle(null)
+                : controller.selectSubtitleLanguage(code),
+          );
+        },
+      ),
+    );
+    _isModalOpen = false;
+    if (mounted) _syncAutoImmersiveBlockers();
+  }
+
+  Future<void> _showQualitySheet() async {
+    _isModalOpen = true;
+    _syncAutoImmersiveBlockers();
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: .7),
+      builder: (_) => Consumer(
+        builder: (context, ref, _) {
+          final playback = ref.watch(
+            playerPlaybackControllerProvider(_sessionKey),
+          );
+          return PlayerQualitySheet(
+            qualities: playback.availableVideoQualities,
+            selectedQualityId: playback.selectedVideoQualityId,
+            isLoading: playback.isVideoQualityLoading,
+            isMember: ref.watch(entitlementControllerProvider).isMember,
+            onSelected: (qualityId) {
+              unawaited(_selectVideoQuality(qualityId));
+            },
+          );
+        },
+      ),
+    );
+    _isModalOpen = false;
+    if (mounted) _syncAutoImmersiveBlockers();
+  }
+
+  Future<void> _selectVideoQuality(String qualityId) async {
+    final result = await ref
+        .read(playerPlaybackControllerProvider(_sessionKey).notifier)
+        .selectVideoQuality(qualityId);
+    if (!mounted) return;
+    if (result == PlayerVideoQualitySelectionResult.requiresMembership) {
+      await _showPendingUnlockActionSheet(membershipOnly: true);
+    } else if (result == PlayerVideoQualitySelectionResult.failed) {
+      showAppCenterToast(context.l10n.playerQualityFailed);
+    }
+  }
+
+  List<({String label, String code})> _languageOptions(
+    List<PlayerSubtitle> subtitles,
+    List<PlayerEpisodeSource> episodeSources,
+  ) {
+    final sources = episodeSources.isNotEmpty
+        ? episodeSources.map(
+            (source) => (
+              label: source.language,
+              code: source.languageCode.isNotEmpty
+                  ? source.languageCode
+                  : source.language,
+            ),
+          )
+        : subtitles.map(
+            (subtitle) => (
+              label: subtitle.language,
+              code: subtitle.languageCode.isNotEmpty
+                  ? subtitle.languageCode
+                  : subtitle.language,
+            ),
+          );
+    return sources.toList(growable: false);
+  }
+
+  String _languageLabel(
+    List<({String label, String code})> options,
+    String? selectedCode,
+  ) {
+    for (final option in options) {
+      if (option.code.trim().toLowerCase() ==
+          selectedCode?.trim().toLowerCase()) {
+        return option.label;
+      }
+    }
+    if (selectedCode != null && selectedCode.isNotEmpty) {
+      return selectedCode;
+    }
+    return options.isEmpty ? '' : options.first.label;
+  }
+
+  String _qualityLabel(List<PlayerVideoQuality> qualities, String selectedId) {
+    if (selectedId == PlayerVideoQuality.automaticId) {
+      return context.l10n.playerQualityAuto;
+    }
+    for (final quality in qualities) {
+      if (quality.id == selectedId) return quality.label;
+    }
+    return context.l10n.playerQualityAuto;
+  }
+
+  Future<void> _showPendingUnlockActionSheet({
+    bool membershipOnly = false,
+  }) async {
     final now = DateTime.now();
     if (_isModalOpen ||
         _isOpeningUnlockActionSheet ||
@@ -4148,8 +4406,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (currentItem == null) {
         return;
       }
-      final engine = _feedEngine;
-      final intent = await engine.prepareManualUnlock(currentItem);
+      final intent = membershipOnly
+          ? PlayerOverlaySheetIntent.membership
+          : await _feedEngine.prepareManualUnlock(currentItem);
       if (!mounted) {
         return;
       }

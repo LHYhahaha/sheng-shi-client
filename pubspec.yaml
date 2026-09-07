@@ -1,7 +1,7 @@
 name: drama_client
 description: Flutter short drama client.
 publish_to: 'none'
-version: 1.0.3+4
+version: 1.0.3+6
 
 environment:
   sdk: ">=3.11.0 <4.0.0"
@@ -99,3 +99,7 @@ flutter:
           weight: 500
         - asset: assets/sf-pro-display/SFPRODISPLAYBOLD.OTF
           weight: 700
+
+
+dependency_overrides:
+  firebase_core_web: 3.10.0

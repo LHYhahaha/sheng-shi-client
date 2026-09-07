@@ -2,6 +2,7 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/network/json_field_parser.dart';
 import '../dto/reward_coins_check_in_status_dto.dart';
 import '../dto/reward_coins_check_in_claim_result_dto.dart';
+import '../dto/reward_coin_remaining_dto.dart';
 import '../dto/reward_task_list_dto.dart';
 
 class RewardCoinsRemoteDataSource {
@@ -48,6 +49,16 @@ class RewardCoinsRemoteDataSource {
           data,
           dtoName: 'RewardCoinsCheckInClaimResultDto',
         ),
+      ),
+    );
+  }
+
+  Future<RewardCoinRemainingDto> getRemainingCoin() {
+    return _apiClient.get<RewardCoinRemainingDto>(
+      '/api/activity/bonus-coin/remaining',
+      authPolicy: ApiAuthPolicy.required,
+      decoder: (data) => RewardCoinRemainingDto.fromJson(
+        JsonFieldParser.requireMap(data, dtoName: 'RewardCoinRemainingDto'),
       ),
     );
   }

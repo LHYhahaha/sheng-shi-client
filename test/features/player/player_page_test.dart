@@ -2249,6 +2249,48 @@ void main() {
     );
   });
 
+  testWidgets(
+    'swiping into affordable coin episode with auto unlock off shows coin dialog',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildPlayerApp(
+          repository: _FakePlayerFeedRepository._(
+            items: _itemsWithAccessPattern([
+              _EpisodeAccessFixture.free(1, _mockVideoUrl),
+              _EpisodeAccessFixture.locked(2, _mockSecondVideoUrl),
+            ]),
+          ),
+          entitlementRepository:
+              MockEntitlementRepository.loggedInNonMemberEnoughCoinsAutoOff(),
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      await tester.fling(find.byType(PageView), const Offset(0, -700), 1600);
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('player_coin_unlock_confirm')),
+        findsNothing,
+      );
+
+      await _pumpAutoUnlockSheet(tester);
+
+      expect(
+        find.byKey(const ValueKey('player_coin_unlock_confirm')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('player_recharge_unlock_close')),
+        findsNothing,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('player_coin_unlock_close')));
+      await tester.pumpAndSettle();
+    },
+  );
+
   testWidgets('auto unlock sheet can reappear after leaving dismissed item', (
     tester,
   ) async {

@@ -1,17 +1,19 @@
-import 'dart:math' as math;
+import 'dart:ui' show PathMetric;
 
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 
-/// Three staggered instances of the supplied polygon image falling into view.
+/// Shared animated line-chart loading indicator.
 ///
-/// The image is used without a color filter, preserving its original pink
-/// gradient. Use an SVG asset instead if runtime theme colors are required.
+/// The name is retained so existing loading call sites continue to use the
+/// same component. Its visual is a pink line chart: a muted track with a
+/// moving, highlighted segment.
 class AppPegTopLoader extends StatefulWidget {
   const AppPegTopLoader({
     this.size = 20,
-    this.duration = const Duration(milliseconds: 1000),
+    this.duration = const Duration(milliseconds: 1400),
+    this.pauseDuration = const Duration(milliseconds: 500),
     this.isAnimating = true,
     this.noBackground = false,
     this.semanticLabel,
@@ -19,12 +21,19 @@ class AppPegTopLoader extends StatefulWidget {
   }) : assert(size > 0);
 
   final double size;
+
+  /// Time for one moving highlight to travel across the chart.
   final Duration duration;
+
+  /// Delay after the highlight fades out before the next pass begins.
+  final Duration pauseDuration;
   final bool isAnimating;
 
   /// Optional override for assistive technologies. Defaults to the localized
   /// common loading label from [AppLocalizations].
   final String? semanticLabel;
+
+  /// Removes the dark rounded surface while retaining the line animation.
   final bool noBackground;
 
   @override
@@ -35,8 +44,10 @@ class _AppPegTopLoaderState extends State<AppPegTopLoader>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: widget.duration,
+    duration: _cycleDuration,
   );
+
+  Duration get _cycleDuration => widget.duration + widget.pauseDuration;
 
   @override
   void initState() {
@@ -47,8 +58,9 @@ class _AppPegTopLoaderState extends State<AppPegTopLoader>
   @override
   void didUpdateWidget(covariant AppPegTopLoader oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.duration != widget.duration) {
-      _controller.duration = widget.duration;
+    if (oldWidget.duration != widget.duration ||
+        oldWidget.pauseDuration != widget.pauseDuration) {
+      _controller.duration = _cycleDuration;
     }
     if (oldWidget.isAnimating != widget.isAnimating) {
       _syncAnimation();
@@ -71,27 +83,33 @@ class _AppPegTopLoaderState extends State<AppPegTopLoader>
 
   @override
   Widget build(BuildContext context) {
+    // The chart is intentionally compact within its square background, with
+    // room around the peak and trough like the reference loading mark.
+    final lineSize = Size(widget.size * 2, widget.size * 1.55);
     final loader = Semantics(
       label: widget.semanticLabel ?? AppLocalizations.maybeOf(context).loading,
       liveRegion: true,
       child: ExcludeSemantics(
         child: RepaintBoundary(
-          child: SizedBox.square(
-            dimension: widget.size,
+          child: SizedBox.fromSize(
+            size: lineSize,
             child: AnimatedBuilder(
               animation: _controller,
-              builder: (context, child) => Stack(
-                clipBehavior: Clip.none,
-                alignment: Alignment.center,
-                children: List.generate(
-                  3,
-                  (index) => _FallingPolygon(
-                    progress: (_controller.value - index * .3 + 1) % 1,
-                    index: index,
-                    size: widget.size,
+              builder: (context, child) {
+                final motionFraction =
+                    widget.duration.inMicroseconds /
+                    _cycleDuration.inMicroseconds;
+                return CustomPaint(
+                  painter: _LineChartLoaderPainter(
+                    // Hold at 1 during the pause; the painter makes the moving
+                    // segment fully transparent at that point.
+                    progress: (_controller.value / motionFraction)
+                        .clamp(0, 1)
+                        .toDouble(),
+                    strokeWidth: widget.size * .11,
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
         ),
@@ -99,21 +117,14 @@ class _AppPegTopLoaderState extends State<AppPegTopLoader>
     );
     return widget.noBackground
         ? loader
-        : AppPegTopLoaderBackground(
-            // The falling polygons travel beyond their nominal square. Reserve
-            // that full path in a square surface that encloses every frame.
-            padding: EdgeInsets.fromLTRB(
-              widget.size * 1.5,
-              widget.size * 2,
-              widget.size * 1.5,
-              widget.size,
-            ),
-            child: loader,
+        : SizedBox.square(
+            dimension: widget.size * 4.2,
+            child: AppPegTopLoaderBackground(child: Center(child: loader)),
           );
   }
 }
 
-/// Reusable rounded dark surface for the peg loading animation.
+/// Reusable rounded dark surface for the shared loading animation.
 class AppPegTopLoaderBackground extends StatelessWidget {
   const AppPegTopLoaderBackground({
     required this.child,
@@ -136,91 +147,72 @@ class AppPegTopLoaderBackground extends StatelessWidget {
   );
 }
 
-class _FallingPolygon extends StatelessWidget {
-  const _FallingPolygon({
+class _LineChartLoaderPainter extends CustomPainter {
+  const _LineChartLoaderPainter({
     required this.progress,
-    required this.index,
-    required this.size,
+    required this.strokeWidth,
   });
+
+  static const _color = Color(0xFFFF007A);
 
   final double progress;
-  final int index;
-  final double size;
+  final double strokeWidth;
 
   @override
-  Widget build(BuildContext context) {
-    final keyframe = _PolygonKeyframe.at(progress, index);
-    return Opacity(
-      opacity: keyframe.opacity,
-      child: Transform.translate(
-        offset: Offset(keyframe.x * size, keyframe.y * size),
-        child: Transform.rotate(
-          angle: keyframe.angle * math.pi / 180,
-          child: Transform.scale(
-            scale: keyframe.scale,
-            child: Image.asset(
-              'assets/images/common/polygon_2.png',
-              width: size,
-              height: size,
-              filterQuality: FilterQuality.high,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0, size.height * .5)
+      ..lineTo(size.width * .25, size.height * .5)
+      ..lineTo(size.width * .32, size.height * .98)
+      ..lineTo(size.width * .68, size.height * .02)
+      ..lineTo(size.width * .75, size.height * .5)
+      ..lineTo(size.width, size.height * .5);
+    final trackPaint = Paint()
+      ..color = _color.withValues(alpha: .2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(path, trackPaint);
 
-class _PolygonKeyframe {
-  const _PolygonKeyframe({
-    required this.x,
-    required this.y,
-    required this.scale,
-    required this.angle,
-    required this.opacity,
-  });
-
-  factory _PolygonKeyframe.at(double progress, int index) {
-    const stops = [0.0, .25, .5, .75, 1.0];
-    const scales = [.5, .75, 1.0, .5, 0.0];
-    const ys = [-2.0, -1.0, 0.0, .5, 1.0];
-    final xStart = switch (index) {
-      1 => -1.0,
-      2 => 1.0,
-      _ => 0.0,
-    };
-    final xEnd = switch (index) {
-      1 => .25,
-      2 => -.25,
-      _ => 0.0,
-    };
-    final angleStart = switch (index) {
-      1 => -10.0,
-      2 => 10.0,
-      _ => 0.0,
-    };
-    final segment = (progress * 4).floor().clamp(0, 3).toInt();
-    final local =
-        (progress - stops[segment]) / (stops[segment + 1] - stops[segment]);
-    double between(List<double> values) =>
-        values[segment] + (values[segment + 1] - values[segment]) * local;
-
-    return _PolygonKeyframe(
-      x: xStart + (xEnd - xStart) * progress,
-      y: between(ys),
-      scale: between(scales),
-      angle: angleStart + (-angleStart - angleStart) * progress,
-      opacity: progress < .25
-          ? progress * 4
-          : progress > .75
-          ? (1 - progress) * 4
-          : 1,
-    );
+    final metric = path.computeMetrics().single;
+    final dashLength = metric.length * .25;
+    const entryFraction = .25;
+    final isEntering = progress < entryFraction;
+    final travelProgress = isEntering
+        ? 0.0
+        : (progress - entryFraction) / (1 - entryFraction);
+    final start = metric.length * travelProgress;
+    final visibleLength = isEntering
+        ? dashLength * (progress / entryFraction)
+        : dashLength;
+    // The highlight stays visible until it exits at the right edge. The pause
+    // then holds progress at 1, where it is fully hidden before restarting.
+    final activeOpacity = progress < 1 ? 1.0 : 0.0;
+    final activePaint = Paint()
+      ..color = _color.withValues(alpha: activeOpacity.clamp(0, 1))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    _drawSegment(canvas, metric, start, visibleLength, activePaint);
   }
 
-  final double x;
-  final double y;
-  final double scale;
-  final double angle;
-  final double opacity;
+  void _drawSegment(
+    Canvas canvas,
+    PathMetric metric,
+    double start,
+    double length,
+    Paint paint,
+  ) {
+    final end = (start + length).clamp(0, metric.length).toDouble();
+    if (start < end) {
+      canvas.drawPath(metric.extractPath(start, end), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _LineChartLoaderPainter oldDelegate) =>
+      oldDelegate.progress != progress ||
+      oldDelegate.strokeWidth != strokeWidth;
 }

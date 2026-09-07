@@ -52,7 +52,9 @@ class PlayerOverlayOrchestrator
     extends Notifier<PlayerOverlayOrchestratorState> {
   PlayerOverlayOrchestrator(this.sessionKey);
 
-  static const dwellDelay = Duration(milliseconds: 900);
+  // 给滑动落位留出极短缓冲，避免手势刚结束就遮挡内容；同时不要让锁集
+  // 停留过久才出现解锁入口。
+  static const dwellDelay = Duration(milliseconds: 350);
 
   final String sessionKey;
   int _scheduleGeneration = 0;

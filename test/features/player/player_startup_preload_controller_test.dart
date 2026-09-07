@@ -524,7 +524,10 @@ class _FakePlaybackSourceRepository implements PlayerPlaybackSourceRepository {
   var failNextPreload = false;
 
   @override
-  Future<PlaybackSource> resolve(PlayerFeedItem item) async {
+  Future<PlaybackSource> resolve(
+    PlayerFeedItem item, {
+    int? maxVideoHeight,
+  }) async {
     return PlaybackSource(
       itemId: item.id,
       remoteUrl: item.episode.videoSource!,
@@ -540,6 +543,7 @@ class _FakePlaybackSourceRepository implements PlayerPlaybackSourceRepository {
   Future<PlaybackPreloadState> preload(
     PlayerFeedItem item, {
     Duration? preferredPosition,
+    int? maxVideoHeight,
   }) async {
     preloadCount += 1;
     lastPreloadedItemId = item.id;

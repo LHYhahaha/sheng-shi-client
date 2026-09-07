@@ -166,16 +166,8 @@ class _FakeDramaRepository implements DramaRepository {
   @override
   Future<List<DramaCategory>> getHomeData() async {
     return const [
-      DramaCategory(
-        flag: 'popular',
-        title: 'Popular',
-        dramas: _dramas,
-      ),
-      DramaCategory(
-        flag: 'new',
-        title: 'New',
-        dramas: _dramas,
-      ),
+      DramaCategory(flag: 'popular', title: 'Popular', dramas: _dramas),
+      DramaCategory(flag: 'new', title: 'New', dramas: _dramas),
     ];
   }
 }
@@ -200,7 +192,10 @@ class _FakePlaybackSourceRepository implements PlayerPlaybackSourceRepository {
   final preloadedItemIds = <String>[];
 
   @override
-  Future<PlaybackSource> resolve(PlayerFeedItem item) async {
+  Future<PlaybackSource> resolve(
+    PlayerFeedItem item, {
+    int? maxVideoHeight,
+  }) async {
     return PlaybackSource(
       itemId: item.id,
       remoteUrl: item.episode.videoSource!,
@@ -213,7 +208,11 @@ class _FakePlaybackSourceRepository implements PlayerPlaybackSourceRepository {
   }
 
   @override
-  Future<PlaybackPreloadState> preload(PlayerFeedItem item) async {
+  Future<PlaybackPreloadState> preload(
+    PlayerFeedItem item, {
+    Duration? preferredPosition,
+    int? maxVideoHeight,
+  }) async {
     if (preloadCompleter != null) {
       return preloadCompleter!.future;
     }
@@ -229,6 +228,7 @@ class _FakePreloadManager implements PlayerPlaybackPreloadManager {
   Future<PlaybackPreloadState> preload({
     required PlayerFeedItem item,
     required PlaybackSource source,
+    Duration? preferredPosition,
   }) async {
     return _successPreloadState();
   }

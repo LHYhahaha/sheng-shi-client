@@ -30,7 +30,10 @@ class RemotePlayerPlaybackSourceRepository
   final HlsProxyPlaybackSourceResolver? _proxyResolver;
 
   @override
-  Future<PlaybackSource> resolve(PlayerFeedItem item) async {
+  Future<PlaybackSource> resolve(
+    PlayerFeedItem item, {
+    int? maxVideoHeight,
+  }) async {
     // 直接使用 episode.videoSource（来自首页 API 的 source_url），无需调用 playback-source API
     final remoteUrl = item.episode.videoSource;
     if (remoteUrl == null || remoteUrl.isEmpty) {
@@ -44,6 +47,7 @@ class RemotePlayerPlaybackSourceRepository
           status: PlaybackSourceStatus.resolved,
         ),
         item: item,
+        maxVideoHeight: maxVideoHeight,
       );
     }
 
@@ -59,6 +63,7 @@ class RemotePlayerPlaybackSourceRepository
         httpHeaders: _httpHeaders,
       ),
       item: item,
+      maxVideoHeight: maxVideoHeight,
     );
   }
 
@@ -66,6 +71,7 @@ class RemotePlayerPlaybackSourceRepository
   Future<PlaybackPreloadState> preload(
     PlayerFeedItem item, {
     Duration? preferredPosition,
+    int? maxVideoHeight,
   }) async {
     // 直接使用 episode.videoSource，无需调用 playback-source API
     final remoteUrl = item.episode.videoSource;
@@ -73,18 +79,16 @@ class RemotePlayerPlaybackSourceRepository
       final dto = await _remoteDataSource.getPlaybackSource(
         episodeId: item.episode.id,
       );
-      final source = await _applyProxy(
-        _mapper.mapSource(
-          dto,
-          item: item,
-          status: PlaybackSourceStatus.preloaded,
-        ),
+      final source = _mapper.mapSource(
+        dto,
         item: item,
+        status: PlaybackSourceStatus.preloaded,
       );
       return _preloadKnownSource(
         item,
         source,
         preferredPosition: preferredPosition,
+        maxVideoHeight: maxVideoHeight,
       );
     }
 
@@ -104,6 +108,7 @@ class RemotePlayerPlaybackSourceRepository
         httpHeaders: _httpHeaders,
       ),
       preferredPosition: preferredPosition,
+      maxVideoHeight: maxVideoHeight,
     );
   }
 
@@ -111,10 +116,16 @@ class RemotePlayerPlaybackSourceRepository
     PlayerFeedItem item,
     PlaybackSource source, {
     Duration? preferredPosition,
+    int? maxVideoHeight,
   }) async {
+    final resolved = await _applyProxy(
+      source,
+      item: item,
+      maxVideoHeight: maxVideoHeight,
+    );
     return _preloadManager.preload(
       item: item,
-      source: source,
+      source: resolved,
       preferredPosition: preferredPosition,
     );
   }
@@ -122,6 +133,7 @@ class RemotePlayerPlaybackSourceRepository
   Future<PlaybackSource> _applyProxy(
     PlaybackSource source, {
     required PlayerFeedItem item,
+    int? maxVideoHeight,
   }) async {
     final playableSource =
         await _proxyResolver?.resolvePlayableSource(
@@ -129,6 +141,7 @@ class RemotePlayerPlaybackSourceRepository
           owner: item.mode == PlayerFeedMode.forYou
               ? HlsTrafficOwner.forYou
               : HlsTrafficOwner.playback,
+          maxVideoHeight: maxVideoHeight,
         ) ??
         source.remoteUrl;
     return PlaybackSource(

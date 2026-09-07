@@ -100,6 +100,84 @@ void main() {
     expect(find.byType(PlayerDetailSheet), findsNothing);
   });
 
+  testWidgets('episode ranges navigate the full list and track its scroll', (
+    tester,
+  ) async {
+    final episodes = List.generate(
+      60,
+      (index) => PlayerEpisode(
+        id: 'ep-${index + 1}',
+        number: index + 1,
+        isLocked: false,
+        unlockType: EpisodeUnlockType.free,
+        videoUrl: 'https://example.com/${index + 1}.m3u8',
+      ),
+    );
+    await _openDetailSheet(
+      tester,
+      initialTab: PlayerDetailTab.episodes,
+      currentEpisode: 2,
+      episodes: episodes,
+    );
+
+    // The initial range no longer filters the list to its first 30 episodes.
+    expect(find.text('31'), findsOneWidget);
+
+    await tester.tap(find.text('31-60'));
+    await tester.pumpAndSettle();
+
+    expect(tester.getTopLeft(find.text('31')).dy, greaterThan(0));
+    expect(tester.widget<Text>(find.text('31-60')).style?.color, Colors.white);
+
+    await tester.drag(find.byType(GridView), const Offset(0, 1000));
+    await tester.pumpAndSettle();
+
+    // Scrolling back to the first section also restores its active range.
+    expect(tester.widget<Text>(find.text('1-30')).style?.color, Colors.white);
+    await tester.tap(find.text('1-30'));
+    await tester.pumpAndSettle();
+
+    expect(tester.getTopLeft(find.text('1')).dy, greaterThan(0));
+    expect(tester.widget<Text>(find.text('1-30')).style?.color, Colors.white);
+  });
+
+  testWidgets('last episode range stops with its first row at the top', (
+    tester,
+  ) async {
+    final episodes = List.generate(
+      70,
+      (index) => PlayerEpisode(
+        id: 'ep-${index + 1}',
+        number: index + 1,
+        isLocked: false,
+        unlockType: EpisodeUnlockType.free,
+        videoUrl: 'https://example.com/${index + 1}.m3u8',
+      ),
+    );
+    await _openDetailSheet(
+      tester,
+      initialTab: PlayerDetailTab.episodes,
+      currentEpisode: 2,
+      episodes: episodes,
+    );
+
+    // The sheet expands before its episode list starts scrolling.
+    await tester.dragFrom(const Offset(400, 500), const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('61-70'));
+    await tester.pumpAndSettle();
+    final firstRowTop = tester.getTopLeft(find.text('61')).dy;
+
+    // The trailing row (66-70) cannot be scrolled above the range's first row.
+    await tester.dragFrom(const Offset(400, 400), const Offset(0, -1000));
+    await tester.pumpAndSettle();
+
+    expect(tester.getTopLeft(find.text('61')).dy, closeTo(firstRowTop, 1));
+    expect(tester.getTopLeft(find.text('66')).dy, greaterThan(firstRowTop));
+    expect(tester.widget<Text>(find.text('61-70')).style?.color, Colors.white);
+  });
+
   testWidgets('duplicate episode numbers select only the current episode id', (
     tester,
   ) async {
@@ -253,7 +331,7 @@ Future<void> _openDetailSheet(
                           }
                           Navigator.of(sheetContext).pop();
                         },
-                        onRecommendationSelected: (_) {},
+                        onRecommendationSelected: (recommendation, position) {},
                       );
                     },
                   );

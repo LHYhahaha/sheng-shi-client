@@ -7,6 +7,7 @@ import 'package:drama_client/core/analytics/analytics_provider.dart';
 import 'package:drama_client/core/analytics/analytics_service.dart';
 import 'package:drama_client/core/channel/channel_config_service.dart';
 import 'package:drama_client/core/network/api_client_provider.dart';
+import 'package:drama_client/core/network/api_request_context.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -49,6 +50,7 @@ void main() {
         platform: 'android',
         appVersion: '1.0.3',
         language: 'zh-CN',
+        deviceId: 'device-1',
         userId: 'user-1',
         pageName: 'home_page',
       ),
@@ -69,6 +71,7 @@ void main() {
     final commonParams = payload!.commonParams.toJson();
     expect(commonParams['event_id'], 'evt-1');
     expect(commonParams['event_time'], 1785823200000);
+    expect(commonParams['device_id'], 'device-1');
     expect(commonParams['channel_id'], '');
     expect(commonParams['merchant_id'], '');
     expect(commonParams['region_code'], '');
@@ -117,6 +120,24 @@ void main() {
       expect(common['merchant_id'], 'merchant-1');
     },
   );
+
+  test('analytics context reuses the API Device-Id header value', () {
+    const requestContext = ApiRequestContext.test(deviceId: 'device-header-1');
+    final container = ProviderContainer(
+      overrides: [
+        apiRequestContextProvider.overrideWithValue(requestContext),
+        channelConfigProvider.overrideWith(
+          (ref) async => const ChannelConfig(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    expect(
+      container.read(analyticsContextProvider).deviceId,
+      requestContext.deviceId,
+    );
+  });
 
   test('popup_close only accepts popup_name', () async {
     final errors = <AnalyticsValidationError>[];

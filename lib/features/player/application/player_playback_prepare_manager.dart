@@ -156,6 +156,7 @@ class PlayerPlaybackPrepareManager {
     required PlayerFeedItem item,
     required PlayerPlaybackSourceRepository sourceRepository,
     Duration? warmUpTimeout,
+    int? maxVideoHeight,
   }) async {
     if (item.episode.isLocked ||
         item.episode.isUnavailable ||
@@ -177,10 +178,11 @@ class PlayerPlaybackPrepareManager {
     StreamSubscription<Duration>? positionSubscription;
     StreamSubscription<Duration>? durationSubscription;
     StreamSubscription<int?>? widthSubscription;
-    StreamSubscription<bool>? playingSubscription;
-    StreamSubscription<bool>? bufferingSubscription;
     try {
-      final source = await sourceRepository.resolve(item);
+      final source = await sourceRepository.resolve(
+        item,
+        maxVideoHeight: maxVideoHeight,
+      );
       if (generation != _generation) {
         return null;
       }
@@ -210,12 +212,6 @@ class PlayerPlaybackPrepareManager {
         if (position > Duration.zero) {
           hasPlaybackAdvanced = true;
           prepared?.hasPlaybackAdvanced = true;
-          _log(
-            'prepare position advanced',
-            itemId: item.id,
-            source: source.playableSource,
-            details: 'positionMs=${position.inMilliseconds}',
-          );
         }
       });
       durationSubscription = session.durationStream.listen((value) {
@@ -233,7 +229,10 @@ class PlayerPlaybackPrepareManager {
         );
       });
       widthSubscription = session.widthStream.listen((width) {
-        if (width == null || width <= 0 || hasFirstFrame) {
+        if (width == null || width <= 0) {
+          return;
+        }
+        if (hasFirstFrame) {
           return;
         }
         hasFirstFrame = true;
@@ -247,22 +246,6 @@ class PlayerPlaybackPrepareManager {
         if (!firstFrameCompleter.isCompleted) {
           firstFrameCompleter.complete();
         }
-      });
-      playingSubscription = session.playingStream.listen((isPlaying) {
-        _log(
-          isPlaying
-              ? 'prepare playingStream true'
-              : 'prepare playingStream false',
-          itemId: item.id,
-          source: source.playableSource,
-        );
-      });
-      bufferingSubscription = session.bufferingStream.listen((isBuffering) {
-        _log(
-          isBuffering ? 'prepare buffering start' : 'prepare buffering end',
-          itemId: item.id,
-          source: source.playableSource,
-        );
       });
       final warmUpCancel = Completer<void>();
       _warmUpCancels[item.id] = warmUpCancel;
@@ -286,7 +269,7 @@ class PlayerPlaybackPrepareManager {
       await session.open(
         source.playableSource,
         play: true,
-        // httpHeaders: source.httpHeaders,
+        httpHeaders: source.httpHeaders,
       );
       _log(
         'prepare open completed',
@@ -299,8 +282,6 @@ class PlayerPlaybackPrepareManager {
         await positionSubscription.cancel();
         await durationSubscription.cancel();
         await widthSubscription.cancel();
-        await playingSubscription.cancel();
-        await bufferingSubscription.cancel();
         await session.dispose();
         return null;
       }
@@ -321,10 +302,6 @@ class PlayerPlaybackPrepareManager {
       widthSubscription = null;
       _pendingSessions.remove(item.id);
       await _put(prepared);
-      await playingSubscription.cancel();
-      await bufferingSubscription.cancel();
-      playingSubscription = null;
-      bufferingSubscription = null;
       unawaited(
         _finishWarmUp(
           itemId: item.id,
@@ -342,8 +319,6 @@ class PlayerPlaybackPrepareManager {
       await positionSubscription?.cancel();
       await durationSubscription?.cancel();
       await widthSubscription?.cancel();
-      await playingSubscription?.cancel();
-      await bufferingSubscription?.cancel();
       if (session != null) {
         await session.dispose();
       }
@@ -437,6 +412,25 @@ class PlayerPlaybackPrepareManager {
     );
   }
 
+  /// 只释放回滑保留的 session，不影响向前预热的 next。
+  ///
+  /// Android 高分辨率硬解资源紧张时，controller 用它把窗口从
+  /// previous/current/next 收紧成 current/next；HLS 的磁盘与内存缓存不在这里，
+  /// 因此回滑仍会命中已预热的网络资源。
+  Future<List<String>> releaseRetained({required String reason}) async {
+    final released = <String>[];
+    for (final entry in List<MapEntry<String, PreparedPlaybackSession>>.from(
+      _window.entries,
+    )) {
+      if (entry.value.kind != PreparedPlaybackSessionKind.retained) {
+        continue;
+      }
+      released.add(entry.key);
+      await releaseItem(entry.key, reason: reason);
+    }
+    return released;
+  }
+
   Future<void> release() async {
     // 整窗释放会 bump generation，使未完成的 prepare/open 结果失效。不要只清 map，
     // 否则异步 warm-up 可能在释放后继续 pause/setVolume 已被接管的 session。
@@ -463,6 +457,50 @@ class PlayerPlaybackPrepareManager {
         'windowItemsAfter=$_windowItemsText',
       ]),
     );
+  }
+
+  /// Releases prepared/retained sessions while preserving [activeSession].
+  ///
+  /// A PageView memory-pressure callback can race with a prepared-session
+  /// takeover. In that tiny window the same session may still be present in
+  /// [_window] even though it is now the controller's current player. Removing
+  /// it from the window is correct; disposing it is not.
+  Future<List<String>> releaseExceptSession(
+    PlayerPlaybackSession activeSession,
+  ) async {
+    _generation += 1;
+    final releasedIds = <String>[];
+    for (final itemId in List<String>.from(_warmUpCancels.keys)) {
+      _completeWarmUpCancel(itemId);
+    }
+    for (final entry in Map<String, PlayerPlaybackSession>.from(
+      _pendingSessions,
+    ).entries) {
+      _pendingSessions.remove(entry.key);
+      if (identical(entry.value, activeSession)) {
+        continue;
+      }
+      releasedIds.add(entry.key);
+      await entry.value.dispose();
+    }
+    for (final entry in Map<String, PreparedPlaybackSession>.from(
+      _window,
+    ).entries) {
+      _window.remove(entry.key);
+      if (identical(entry.value.session, activeSession)) {
+        continue;
+      }
+      releasedIds.add(entry.key);
+      await entry.value.dispose();
+    }
+    _log(
+      'prepare manager release except active',
+      details: _details([
+        'released=${releasedIds.join(',')}',
+        'windowItemsAfter=$_windowItemsText',
+      ]),
+    );
+    return releasedIds;
   }
 
   Future<void> _finishWarmUp({
@@ -588,6 +626,7 @@ class NoopPlayerPlaybackPrepareManager extends PlayerPlaybackPrepareManager {
     required PlayerFeedItem item,
     required PlayerPlaybackSourceRepository sourceRepository,
     Duration? warmUpTimeout,
+    int? maxVideoHeight,
   }) async {
     return null;
   }

@@ -133,6 +133,7 @@ class PlayerPlaybackShellSnapshot {
     required this.surfaceLifecycle,
     required this.hasVideoController,
     required this.playbackRate,
+    required this.availableVideoQualityCount,
   });
 
   factory PlayerPlaybackShellSnapshot.fromState(PlayerPlaybackState state) {
@@ -143,6 +144,7 @@ class PlayerPlaybackShellSnapshot {
       surfaceLifecycle: state.surfaceLifecycle,
       hasVideoController: state.videoController != null,
       playbackRate: state.playbackRate,
+      availableVideoQualityCount: state.availableVideoQualities.length,
     );
   }
 
@@ -152,6 +154,7 @@ class PlayerPlaybackShellSnapshot {
   final PlayerVideoSurfaceLifecycle surfaceLifecycle;
   final bool hasVideoController;
   final double playbackRate;
+  final int availableVideoQualityCount;
 
   bool get shouldAttachVideoSurface =>
       surfaceLifecycle == PlayerVideoSurfaceLifecycle.attached;
@@ -168,7 +171,8 @@ class PlayerPlaybackShellSnapshot {
         other.status == status &&
         other.surfaceLifecycle == surfaceLifecycle &&
         other.hasVideoController == hasVideoController &&
-        other.playbackRate == playbackRate;
+        other.playbackRate == playbackRate &&
+        other.availableVideoQualityCount == availableVideoQualityCount;
   }
 
   @override
@@ -179,6 +183,7 @@ class PlayerPlaybackShellSnapshot {
     surfaceLifecycle,
     hasVideoController,
     playbackRate,
+    availableVideoQualityCount,
   );
 }
 
@@ -993,16 +998,10 @@ class CenterPlayButton extends StatelessWidget {
         key: const ValueKey('player_center_play_button'),
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: Container(
-          width: 70,
+        child: Image.asset(
+          'assets/images/player/pause.png',
           height: 70,
-          padding: EdgeInsets.all(23),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.7),
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-          ),
-          child: SvgPicture.asset('assets/images/player/pause.svg'),
+          width: 70,
         ),
       ),
     );
@@ -1021,8 +1020,8 @@ class CenterPauseButton extends StatelessWidget {
         key: const ValueKey('player_center_pause_button'),
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: SvgPicture.asset(
-          'assets/images/player/play.svg',
+        child: Image.asset(
+          'assets/images/player/play.png',
           width: 70,
           height: 70,
         ),
@@ -1074,6 +1073,8 @@ class PlayerTopBar extends StatelessWidget {
     this.overlayOpacityListenable,
     required this.onBackTap,
     required this.onSpeedTap,
+    this.onSettingsTap = _noop,
+    this.showSettingsMenu = false,
     required this.subtitles,
     required this.episodeSources,
     required this.currentSubtitleLanguage,
@@ -1090,6 +1091,10 @@ class PlayerTopBar extends StatelessWidget {
   final ValueListenable<double>? overlayOpacityListenable;
   final VoidCallback onBackTap;
   final VoidCallback onSpeedTap;
+  final VoidCallback onSettingsTap;
+  final bool showSettingsMenu;
+
+  static void _noop() {}
   final List<PlayerSubtitle> subtitles;
   final List<PlayerEpisodeSource> episodeSources;
   final String? currentSubtitleLanguage;
@@ -1127,6 +1132,8 @@ class PlayerTopBar extends StatelessWidget {
             playbackRate: playbackRate,
             onBackTap: onBackTap,
             onSpeedTap: onSpeedTap,
+            onSettingsTap: onSettingsTap,
+            showSettingsMenu: showSettingsMenu,
             subtitles: subtitles,
             episodeSources: episodeSources,
             currentSubtitleLanguage: currentSubtitleLanguage,
@@ -1151,6 +1158,8 @@ class PlayerTopBar extends StatelessWidget {
           playbackRate: playbackRate,
           onBackTap: onBackTap,
           onSpeedTap: onSpeedTap,
+          onSettingsTap: onSettingsTap,
+          showSettingsMenu: showSettingsMenu,
           subtitles: subtitles,
           episodeSources: episodeSources,
           currentSubtitleLanguage: currentSubtitleLanguage,
@@ -1172,6 +1181,8 @@ class PlayerTopBarContent extends StatelessWidget {
     required this.playbackRate,
     required this.onBackTap,
     required this.onSpeedTap,
+    required this.onSettingsTap,
+    required this.showSettingsMenu,
     required this.subtitles,
     required this.episodeSources,
     required this.currentSubtitleLanguage,
@@ -1186,6 +1197,8 @@ class PlayerTopBarContent extends StatelessWidget {
   final double playbackRate;
   final VoidCallback onBackTap;
   final VoidCallback onSpeedTap;
+  final VoidCallback onSettingsTap;
+  final bool showSettingsMenu;
   final List<PlayerSubtitle> subtitles;
   final List<PlayerEpisodeSource> episodeSources;
   final String? currentSubtitleLanguage;
@@ -1204,7 +1217,7 @@ class PlayerTopBarContent extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(
           PlayerTopBarMetrics.horizontal,
           PlayerTopBarMetrics.top,
-          PlayerTopBarMetrics.horizontal,
+          PlayerTopBarMetrics.horizontal - 6,
           0,
         ),
         child: SizedBox(
@@ -1242,7 +1255,21 @@ class PlayerTopBarContent extends StatelessWidget {
                 ),
               ],
               const Spacer(),
-              if (!showBackOnly &&
+              if (!showBackOnly && showSettingsMenu)
+                GestureDetector(
+                  key: const ValueKey('player_settings_button'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onSettingsTap,
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Image.asset(
+                      'assets/images/player/player_more.png',
+                      width: 24,
+                      height: 24,
+                    ),
+                  ),
+                )
+              else if (!showBackOnly &&
                   showSubtitleEntry &&
                   isSubtitleSelectionResolved &&
                   (episodeSources.isNotEmpty

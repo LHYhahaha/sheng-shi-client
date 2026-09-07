@@ -5,13 +5,10 @@ final paymentLoadingControllerProvider =
       PaymentLoadingController.new,
     );
 
-enum PaymentLoadingLabel { loading, confirmingPayment }
+enum PaymentLoadingLabel { none, loading, confirmingPayment }
 
 class PaymentLoadingState {
-  const PaymentLoadingState({
-    required this.isVisible,
-    required this.label,
-  });
+  const PaymentLoadingState({required this.isVisible, required this.label});
 
   const PaymentLoadingState.hidden()
     : isVisible = false,

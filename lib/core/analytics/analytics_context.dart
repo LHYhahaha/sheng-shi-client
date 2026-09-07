@@ -7,6 +7,7 @@ class AnalyticsContext {
     required this.platform,
     required this.appVersion,
     required this.language,
+    this.deviceId,
     this.userId,
     this.channelId,
     this.merchantId,
@@ -21,6 +22,9 @@ class AnalyticsContext {
   final String platform;
   final String appVersion;
   final String language;
+
+  /// 与接口 `Device-Id` 请求头相同的安装级标识。
+  final String? deviceId;
   final String? userId;
   final String? channelId;
   final String? merchantId;
@@ -36,6 +40,7 @@ class AnalyticsContext {
       platform: platform,
       appVersion: appVersion,
       language: language,
+      deviceId: deviceId,
       userId: userId,
       channelId: channelId,
       merchantId: merchantId,
@@ -56,6 +61,7 @@ class AnalyticsContext {
       'platform': platform,
       'app_version': appVersion,
       'language': language,
+      'device_id': deviceId ?? '',
       'user_id': userId ?? '',
       'channel_id': channelId ?? '',
       'merchant_id': merchantId ?? '',

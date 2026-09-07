@@ -33,6 +33,8 @@ final analyticsContextProvider = Provider<AnalyticsContext>((ref) {
     platform: ref.watch(apiPlatformProvider),
     appVersion: ref.watch(apiAppVersionProvider),
     language: ref.watch(apiLangProvider),
+    // 直接复用 API 请求上下文，保证埋点的 deviceId 与 `Device-Id` header 一致。
+    deviceId: ref.watch(apiRequestContextProvider).deviceId,
     // 埋点 user_id 使用服务端业务用户 ID（int64 字符串），不使用展示用 showId。
     // 权益接口完成刷新前，回退到 /api/user/get 已保存的同一字段。
     userId: entitlement.userId ?? userInfo.userId,

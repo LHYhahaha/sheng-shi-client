@@ -2,6 +2,7 @@ import 'package:drama_client/features/player/data/dto/player_episode_dto.dart';
 import 'package:drama_client/features/player/data/dto/player_content_dto.dart';
 import 'package:drama_client/features/player/data/mapper/player_content_mapper.dart';
 import 'package:drama_client/features/player/domain/player_subtitle.dart';
+import 'package:drama_client/features/player/presentation/widgets/player_action_sheets.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_playback_layer.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:drama_client/shared/theme/app_colors.dart';
@@ -527,4 +528,55 @@ void main() {
     expect(find.text('English'), findsWidgets);
     expect(find.text('中文'), findsOneWidget);
   });
+
+  testWidgets('external subtitle sheet provides an off option', (tester) async {
+    String? selectedCode = 'en';
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const [AppLocalizations.delegate],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: PlayerLanguageSheet(
+            options: const [(label: 'English', code: 'en')],
+            selectedCode: selectedCode,
+            showCloseSubtitleOption: true,
+            onSelected: (code) => selectedCode = code,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('player_language_off')), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_language_en')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('player_language_off')));
+    expect(selectedCode, isNull);
+  });
+
+  testWidgets('embedded subtitle sheet never provides an off option', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const [AppLocalizations.delegate],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const Scaffold(
+          body: PlayerLanguageSheet(
+            options: [
+              (label: 'English', code: 'en'),
+              (label: '中文', code: 'zh'),
+            ],
+            selectedCode: 'en',
+            onSelected: _ignoreSelectedLanguage,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('player_language_off')), findsNothing);
+    expect(find.byKey(const ValueKey('player_language_en')), findsOneWidget);
+    expect(find.byKey(const ValueKey('player_language_zh')), findsOneWidget);
+  });
 }
+
+void _ignoreSelectedLanguage(String? _) {}

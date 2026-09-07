@@ -1034,10 +1034,12 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         final isPaymentLoading = paymentLoading.isVisible;
         final accountBan = ref.watch(accountBanControllerProvider);
         final isBanned = accountBan.isBanned;
-        final paymentLoadingLabel =
-            paymentLoading.label == PaymentLoadingLabel.loading
-            ? context.l10n.loading
-            : context.l10n.storePurchaseProcessing;
+        final paymentLoadingLabel = switch (paymentLoading.label) {
+          PaymentLoadingLabel.none => null,
+          PaymentLoadingLabel.loading => context.l10n.loading,
+          PaymentLoadingLabel.confirmingPayment =>
+            context.l10n.storePurchaseProcessing,
+        };
         return StartupSplashGate(
           child: AccountBannedOverlay(
             child: PopScope(
@@ -1049,7 +1051,8 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
                   AppModalHost(child: wrapped),
                   if (!isBanned)
                     PopupEntryOverlay(
-                      onImageTap: (popup) => _handlePopupImageTap(router, popup),
+                      onImageTap: (popup) =>
+                          _handlePopupImageTap(router, popup),
                       onPlayTap: (popup) => _handlePopupPlayTap(router, popup),
                     ),
                   if (isPaymentLoading && !isBanned)

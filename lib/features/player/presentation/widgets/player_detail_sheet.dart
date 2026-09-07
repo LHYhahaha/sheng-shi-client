@@ -17,6 +17,14 @@ enum PlayerDetailTab { synopsis, episodes }
 
 enum _DetailSheetMode { compact, expanded }
 
+List<({int start, int end})> _episodeRanges(int totalEpisodes) {
+  final ranges = <({int start, int end})>[];
+  for (var start = 1; start <= totalEpisodes; start += 30) {
+    ranges.add((start: start, end: (start + 29).clamp(start, totalEpisodes)));
+  }
+  return ranges;
+}
+
 class PlayerDetailSheet extends StatefulWidget {
   const PlayerDetailSheet({
     required this.content,
@@ -53,6 +61,7 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
   late final DraggableScrollableController _sheetController;
   late PlayerDetailTab _selectedTab = widget.initialTab;
   late _DetailSheetMode _mode = _DetailSheetMode.compact;
+  final _episodesPanelKey = GlobalKey<_EpisodesPanelState>();
   int _rangeStart = 1;
 
   @override
@@ -100,6 +109,85 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
     );
   }
 
+  Widget _buildPinnedEpisodes({
+    required BuildContext context,
+    required ScrollController scrollController,
+    required double bottomInset,
+  }) {
+    const contentTop = _topChromeHeight + 8;
+    const pinnedContentHeight = 211.0;
+    final ranges = _episodeRanges(widget.content.episodeTotal);
+
+    return Stack(
+      children: [
+        SingleChildScrollView(
+          controller: scrollController,
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            contentTop + pinnedContentHeight,
+            16,
+            bottomInset + 32,
+          ),
+          child: _EpisodesPanel(
+            key: _episodesPanelKey,
+            dramaId: widget.content.id,
+            episodes: widget.content.episodes,
+            currentEpisode: widget.currentEpisode,
+            currentEpisodeId: widget.currentEpisodeId,
+            sheetScrollController: scrollController,
+            rangeStart: _rangeStart,
+            onRangeChanged: (value) => setState(() => _rangeStart = value),
+            onEpisodeSelected: widget.onEpisodeSelected,
+            totalEpisodes: widget.content.episodeTotal,
+          ),
+        ),
+        Positioned(
+          left: 16,
+          right: 16,
+          top: contentTop,
+          height: pinnedContentHeight,
+          child: DecoratedBox(
+            decoration: const BoxDecoration(color: _sheetColor),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _Header(content: widget.content),
+                const SizedBox(height: 18),
+                _SegmentedControl(
+                  selectedTab: _selectedTab,
+                  onChanged: (tab) => setState(() => _selectedTab = tab),
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  height: 36,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: ranges.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(width: 20),
+                    itemBuilder: (context, index) {
+                      final range = ranges[index];
+                      return _RangeButton(
+                        label: '${range.start}-${range.end}',
+                        selected: _rangeStart == range.start,
+                        onTap: () => _episodesPanelKey.currentState
+                            ?._selectRange(range.start),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
@@ -118,60 +206,47 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           clipBehavior: Clip.antiAlias,
           child: Stack(
+            fit: StackFit.expand,
             children: [
               Positioned.fill(
-                child: SingleChildScrollView(
-                  controller: scrollController,
-                  physics: const BouncingScrollPhysics(
-                    parent: AlwaysScrollableScrollPhysics(),
-                  ),
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    _topChromeHeight + 8,
-                    16,
-                    bottomInset + 32,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _Header(content: widget.content),
-                      const SizedBox(height: 18),
-                      _SegmentedControl(
-                        selectedTab: _selectedTab,
-                        onChanged: (tab) => setState(() => _selectedTab = tab),
-                      ),
-                      const SizedBox(height: 18),
-                      Visibility(
-                        visible: _selectedTab == PlayerDetailTab.synopsis,
-                        maintainState: true,
-                        child: _SynopsisPanel(
-                          content: widget.content,
-                          onRecommendationSelected:
-                              widget.onRecommendationSelected,
-                          recommendationsFuture: widget.recommendationsFuture,
+                child: _selectedTab == PlayerDetailTab.episodes
+                    ? _buildPinnedEpisodes(
+                        context: context,
+                        scrollController: scrollController,
+                        bottomInset: bottomInset,
+                      )
+                    : SingleChildScrollView(
+                        controller: scrollController,
+                        physics: const BouncingScrollPhysics(
+                          parent: AlwaysScrollableScrollPhysics(),
+                        ),
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          _topChromeHeight + 8,
+                          16,
+                          bottomInset + 32,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _Header(content: widget.content),
+                            const SizedBox(height: 18),
+                            _SegmentedControl(
+                              selectedTab: _selectedTab,
+                              onChanged: (tab) =>
+                                  setState(() => _selectedTab = tab),
+                            ),
+                            const SizedBox(height: 18),
+                            _SynopsisPanel(
+                              content: widget.content,
+                              onRecommendationSelected:
+                                  widget.onRecommendationSelected,
+                              recommendationsFuture:
+                                  widget.recommendationsFuture,
+                            ),
+                          ],
                         ),
                       ),
-                      Visibility(
-                        visible: _selectedTab == PlayerDetailTab.episodes,
-                        maintainState: true,
-                        child: _EpisodesPanel(
-                          dramaId: widget.content.id,
-                          episodes: widget.content.episodes,
-                          currentEpisode: widget.currentEpisode,
-                          currentEpisodeId: widget.currentEpisodeId,
-                          rangeStart: _rangeStart,
-                          onRangeChanged: (value) {
-                            setState(() => _rangeStart = value);
-                          },
-                          onEpisodeSelected: widget.onEpisodeSelected,
-                          totalEpisodes: widget.content.episodeTotal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ),
               Positioned(
                 left: 0,
@@ -660,6 +735,7 @@ class _EpisodesPanel extends StatefulWidget {
     required this.episodes,
     required this.currentEpisode,
     required this.currentEpisodeId,
+    required this.sheetScrollController,
     required this.rangeStart,
     required this.onRangeChanged,
     required this.onEpisodeSelected,
@@ -671,6 +747,7 @@ class _EpisodesPanel extends StatefulWidget {
   final List<PlayerEpisode> episodes;
   final int currentEpisode;
   final String? currentEpisodeId;
+  final ScrollController sheetScrollController;
   final int rangeStart;
   final ValueChanged<int> onRangeChanged;
   final ValueChanged<PlayerEpisode> onEpisodeSelected;
@@ -682,14 +759,21 @@ class _EpisodesPanel extends StatefulWidget {
 
 class _EpisodesPanelState extends State<_EpisodesPanel> {
   late final ScrollController _rangeScrollController;
+  final _episodeGridKey = GlobalKey();
   bool _hasScrolledToSelected = false;
+  bool _isSelectingRange = false;
+  bool _isClampingScroll = false;
+  bool _isSpacerUpdateScheduled = false;
+  double _bottomSpacerHeight = 0;
 
   @override
   void initState() {
     super.initState();
     _rangeScrollController = ScrollController();
+    widget.sheetScrollController.addListener(_syncRangeWithEpisodeList);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToSelectedRange();
+      _ensureLastRangeCanLead();
     });
   }
 
@@ -701,6 +785,10 @@ class _EpisodesPanelState extends State<_EpisodesPanel> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToSelectedRange();
       });
+    }
+    if (oldWidget.sheetScrollController != widget.sheetScrollController) {
+      oldWidget.sheetScrollController.removeListener(_syncRangeWithEpisodeList);
+      widget.sheetScrollController.addListener(_syncRangeWithEpisodeList);
     }
   }
 
@@ -733,8 +821,147 @@ class _EpisodesPanelState extends State<_EpisodesPanel> {
     _hasScrolledToSelected = true;
   }
 
+  void _syncRangeWithEpisodeList() {
+    if (_isSelectingRange ||
+        !widget.sheetScrollController.hasClients ||
+        widget.episodes.isEmpty) {
+      return;
+    }
+
+    final gridContext = _episodeGridKey.currentContext;
+    final gridBox = gridContext?.findRenderObject() as RenderBox?;
+    if (gridBox == null) {
+      return;
+    }
+
+    // DraggableScrollableSheet changes the viewport height while expanding.
+    // Recalculate after that frame so the final range can still reach row one.
+    _scheduleLastRangeSpacerUpdate();
+
+    final maximumOffset = _maximumEpisodeListOffset(gridBox);
+    if (!_isClampingScroll &&
+        widget.sheetScrollController.offset > maximumOffset + 0.5) {
+      _isClampingScroll = true;
+      widget.sheetScrollController.jumpTo(maximumOffset);
+      _isClampingScroll = false;
+      return;
+    }
+
+    final firstVisibleIndex = _firstVisibleEpisodeIndex(gridBox: gridBox);
+    final episodeNumber = widget.episodes[firstVisibleIndex].number;
+    final visibleRangeStart = ((episodeNumber - 1) ~/ 30) * 30 + 1;
+
+    if (visibleRangeStart != widget.rangeStart) {
+      widget.onRangeChanged(visibleRangeStart);
+    }
+  }
+
+  void _selectRange(int rangeStart) {
+    widget.onRangeChanged(rangeStart);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final gridContext = _episodeGridKey.currentContext;
+      final gridBox = gridContext?.findRenderObject() as RenderBox?;
+      if (!mounted ||
+          gridBox == null ||
+          !widget.sheetScrollController.hasClients) {
+        return;
+      }
+
+      final targetIndex = widget.episodes.indexWhere(
+        (episode) => episode.number >= rangeStart,
+      );
+      if (targetIndex < 0) {
+        return;
+      }
+
+      final targetRow = targetIndex ~/ 5;
+      final targetOffset = targetRow * _episodeRowStride(gridBox);
+      _isSelectingRange = true;
+      widget.sheetScrollController
+          .animateTo(
+            targetOffset
+                .clamp(
+                  0.0,
+                  widget.sheetScrollController.position.maxScrollExtent,
+                )
+                .toDouble(),
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+          )
+          .whenComplete(() {
+            if (!mounted) {
+              return;
+            }
+            _isSelectingRange = false;
+            widget.onRangeChanged(rangeStart);
+          });
+    });
+  }
+
+  double _episodeRowStride(RenderBox gridBox) {
+    const crossAxisCount = 5;
+    const spacing = 4.0;
+    const childAspectRatio = 66 / 54;
+    final childWidth =
+        (gridBox.size.width - spacing * (crossAxisCount - 1)) / crossAxisCount;
+    return childWidth / childAspectRatio + spacing;
+  }
+
+  double _maximumEpisodeListOffset(RenderBox gridBox) {
+    final lastRangeStart = ((widget.totalEpisodes - 1) ~/ 30) * 30 + 1;
+    final firstIndexOfLastRange = widget.episodes.indexWhere(
+      (episode) => episode.number >= lastRangeStart,
+    );
+    if (firstIndexOfLastRange < 0) {
+      return 0;
+    }
+    return firstIndexOfLastRange ~/ 5 * _episodeRowStride(gridBox);
+  }
+
+  void _ensureLastRangeCanLead() {
+    if (!mounted || !widget.sheetScrollController.hasClients) {
+      return;
+    }
+
+    final gridContext = _episodeGridKey.currentContext;
+    final gridBox = gridContext?.findRenderObject() as RenderBox?;
+    if (gridBox == null) {
+      return;
+    }
+
+    final missingScrollExtent =
+        (_maximumEpisodeListOffset(gridBox) -
+                widget.sheetScrollController.position.maxScrollExtent)
+            .clamp(0.0, double.infinity)
+            .toDouble();
+    if (missingScrollExtent > 0.5) {
+      setState(() => _bottomSpacerHeight += missingScrollExtent);
+    }
+  }
+
+  void _scheduleLastRangeSpacerUpdate() {
+    if (_isSpacerUpdateScheduled) {
+      return;
+    }
+    _isSpacerUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _isSpacerUpdateScheduled = false;
+      _ensureLastRangeCanLead();
+    });
+  }
+
+  int _firstVisibleEpisodeIndex({required RenderBox gridBox}) {
+    final row =
+        ((widget.sheetScrollController.offset / _episodeRowStride(gridBox)) +
+                0.01)
+            .floor()
+            .clamp(0, (widget.episodes.length - 1) ~/ 5);
+    return (row * 5).clamp(0, widget.episodes.length - 1).toInt();
+  }
+
   @override
   void dispose() {
+    widget.sheetScrollController.removeListener(_syncRangeWithEpisodeList);
     _rangeScrollController.dispose();
     super.dispose();
   }
@@ -770,72 +997,39 @@ class _EpisodesPanelState extends State<_EpisodesPanel> {
       );
     }
 
-    final ranges = _generateRanges();
-    final visibleEpisodes = widget.episodes
-        .where((episode) {
-          return episode.number >= widget.rangeStart &&
-              episode.number < widget.rangeStart + 30;
-        })
-        .toList(growable: false);
+    _scheduleLastRangeSpacerUpdate();
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          height: 36,
-          child: ListView.separated(
-            controller: _rangeScrollController,
-            scrollDirection: Axis.horizontal,
-            itemCount: ranges.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 20),
-            itemBuilder: (context, index) {
-              return _RangeButton(
-                label: '${ranges[index].start}-${ranges[index].end}',
-                selected: widget.rangeStart == ranges[index].start,
-                onTap: () => widget.onRangeChanged(ranges[index].start),
-              );
-            },
+        GridView.builder(
+          key: _episodeGridKey,
+          physics: const NeverScrollableScrollPhysics(),
+          shrinkWrap: true,
+          padding: const EdgeInsets.only(bottom: 24),
+          itemCount: widget.episodes.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 5,
+            crossAxisSpacing: 4,
+            mainAxisSpacing: 4,
+            childAspectRatio: 66 / 54,
           ),
+          itemBuilder: (context, index) {
+            final episode = widget.episodes[index];
+            final hasCurrentEpisodeId =
+                widget.currentEpisodeId?.isNotEmpty ?? false;
+            final selected = hasCurrentEpisodeId
+                ? episode.id == widget.currentEpisodeId
+                : episode.number == widget.currentEpisode;
+            return _EpisodeTile(
+              dramaId: widget.dramaId,
+              episode: episode,
+              selected: selected,
+              onTap: () => widget.onEpisodeSelected(episode),
+              currentEpisode: widget.currentEpisode,
+            );
+          },
         ),
-        const SizedBox(height: 12),
-        if (visibleEpisodes.isEmpty)
-          Center(
-            child: Text(
-              context.l10n.playerNoEpisodes,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.5),
-                fontSize: 14,
-                height: 18 / 14,
-              ),
-            ),
-          )
-        else
-          GridView.builder(
-            physics: const NeverScrollableScrollPhysics(),
-            shrinkWrap: true,
-            itemCount: visibleEpisodes.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 5,
-              crossAxisSpacing: 4,
-              mainAxisSpacing: 4,
-              childAspectRatio: 66 / 54,
-            ),
-            itemBuilder: (context, index) {
-              final episode = visibleEpisodes[index];
-              final hasCurrentEpisodeId =
-                  widget.currentEpisodeId?.isNotEmpty ?? false;
-              final selected = hasCurrentEpisodeId
-                  ? episode.id == widget.currentEpisodeId
-                  : episode.number == widget.currentEpisode;
-              return _EpisodeTile(
-                dramaId: widget.dramaId,
-                episode: episode,
-                selected: selected,
-                onTap: () => widget.onEpisodeSelected(episode),
-                currentEpisode: widget.currentEpisode,
-              );
-            },
-          ),
+        SizedBox(height: _bottomSpacerHeight),
       ],
     );
   }

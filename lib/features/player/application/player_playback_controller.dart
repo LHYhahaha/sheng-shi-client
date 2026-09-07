@@ -10,18 +10,23 @@ import 'package:http/http.dart' as http;
 import '../../../core/locale/app_locale_controller.dart';
 import '../../../core/logging/app_log.dart' as developer;
 import '../../../core/runtime/api_lang_provider.dart';
+import '../../entitlement/application/entitlement_controller.dart';
 import '../data/playback_progress_repository_provider.dart';
 import '../data/drama_playback_target_repository_provider.dart';
 import '../data/player_playback_source_repository_provider.dart';
 import '../data/player_preload_config_provider.dart';
 import '../data/player_remote_data_source_provider.dart';
+import '../data/player_video_quality_preference_repository.dart';
+import '../data/player_video_quality_preference_repository_provider.dart';
 import '../domain/player_feed.dart';
 import '../domain/drama_playback_target.dart';
 import '../domain/player_content.dart';
 import '../domain/player_playback_progress.dart';
 import '../domain/player_playback_source.dart';
 import '../domain/player_preload_state.dart';
+import '../domain/player_startup_quality_plan.dart';
 import '../domain/player_subtitle.dart';
+import '../domain/player_video_quality.dart';
 import 'player_feed_controller.dart';
 import 'player_playback_prepare_manager.dart';
 import 'player_playback_timing_trace.dart';
@@ -146,6 +151,10 @@ class PlayerPlaybackState {
     this.currentSubtitlePosition = PlayerSubtitlePosition.bottom,
     this.subtitleCues = const [],
     this.currentSubtitleText = '',
+    this.availableVideoQualities = const [],
+    this.selectedVideoQualityId = PlayerVideoQuality.automaticId,
+    this.isVideoQualitySwitching = false,
+    this.isVideoQualityLoading = false,
   });
 
   const PlayerPlaybackState.initial({VideoController? videoController})
@@ -175,6 +184,10 @@ class PlayerPlaybackState {
         currentSubtitlePosition: PlayerSubtitlePosition.bottom,
         subtitleCues: const [],
         currentSubtitleText: '',
+        availableVideoQualities: const [],
+        selectedVideoQualityId: PlayerVideoQuality.automaticId,
+        isVideoQualitySwitching: false,
+        isVideoQualityLoading: false,
       );
 
   /// 当前页面应该绑定到 `Video` 组件的 media_kit 控制器。
@@ -332,6 +345,22 @@ class PlayerPlaybackState {
   /// 为空字符串表示当前位置无字幕。UI 据此渲染字幕 overlay。
   final String currentSubtitleText;
 
+  /// Current episode's manual HLS renditions. The automatic option is implicit.
+  final List<PlayerVideoQuality> availableVideoQualities;
+
+  /// The persisted preference currently applied to this source: `auto` or a
+  /// [PlayerVideoQuality.id]. It is intentionally independent of the actual
+  /// ABR rendition in automatic mode.
+  final String selectedVideoQualityId;
+
+  /// Lets the future settings UI display “加载中” without inferring it from
+  /// general buffering, which can also be caused by normal network playback.
+  final bool isVideoQualitySwitching;
+
+  /// Master playlist rendition parsing runs alongside source opening, never
+  /// from a settings-sheet tap.
+  final bool isVideoQualityLoading;
+
   bool get isPlaying => status == PlayerPlaybackStatus.playing;
   bool get isOpening => status == PlayerPlaybackStatus.opening;
   bool get isError => status == PlayerPlaybackStatus.error;
@@ -404,6 +433,10 @@ class PlayerPlaybackState {
     String? currentSubtitleText,
     bool clearSubtitle = false,
     bool clearSubtitleLanguage = false,
+    List<PlayerVideoQuality>? availableVideoQualities,
+    String? selectedVideoQualityId,
+    bool? isVideoQualitySwitching,
+    bool? isVideoQualityLoading,
   }) {
     return PlayerPlaybackState(
       videoController: clearVideoController
@@ -455,6 +488,14 @@ class PlayerPlaybackState {
           currentSubtitlePosition ?? this.currentSubtitlePosition,
       subtitleCues: subtitleCues ?? this.subtitleCues,
       currentSubtitleText: currentSubtitleText ?? this.currentSubtitleText,
+      availableVideoQualities:
+          availableVideoQualities ?? this.availableVideoQualities,
+      selectedVideoQualityId:
+          selectedVideoQualityId ?? this.selectedVideoQualityId,
+      isVideoQualitySwitching:
+          isVideoQualitySwitching ?? this.isVideoQualitySwitching,
+      isVideoQualityLoading:
+          isVideoQualityLoading ?? this.isVideoQualityLoading,
     );
   }
 
@@ -494,7 +535,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   // 等待。此时 1.4 秒已足够区分正常 decoder 初始化与 Android HLS 卡住；更早重开
   // 可直接复用刚下载的 playlist/关键段，避免旧的 2.8 秒空转。
   static const _firstFrameVideoRecoveryDelay = Duration(milliseconds: 1400);
-  static const _preloadReadinessAdvance = Duration(milliseconds: 750);
+  // 压力模式只能在连续稳定播放后恢复。不要用固定倒计时恢复，否则设备正好仍然
+  // 紧张时会重新引入第三个 MediaCodec session。
+  static const _decoderPressureStablePlayback = Duration(seconds: 15);
+  // 首帧后不必再等待 750ms 才开始下一集预热；350ms 已能避开首段最敏感的
+  // buffer 窗口，同时减少用户快速滑到下一集时完全冷开的概率。低端档本身禁用
+  // 相邻预热，因此不会额外增加 MediaCodec 压力。
+  static const _preloadReadinessAdvance = Duration(milliseconds: 350);
   static const _resumeOpenStartMinPosition = Duration(seconds: 10);
   static const _localResumeReadBudget = Duration(milliseconds: 180);
 
@@ -549,6 +596,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   late final PlayerPlaybackPrepareManager _prepareManager;
   late final PlaybackProgressRepository _progressRepository;
   late final DramaPlaybackTargetRepository _dramaPlaybackTargetRepository;
+  late final PlayerVideoQualityPreferenceRepository
+  _videoQualityPreferenceRepository;
+  Future<void>? _videoQualityPreferenceReady;
+  bool _hasLoadedVideoQualityPreference = false;
+  String _preferredVideoQualityId = PlayerVideoQuality.automaticId;
+  PlayerFeedItem? _currentQualityMasterItem;
   var _subscriptions = <StreamSubscription<dynamic>>[];
   final _preloadedItemIds = <String>{};
   final _predictivePreloadedItemIds = <String>{};
@@ -562,6 +615,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   bool _lastResumeProgressRequiresSeekAfterOpen = false;
   bool _lastResumeProgressWasPending = false;
   int _generation = 0;
+  // 画质和内嵌语言都会重开当前 source。它们可能由连续点击同时触发，不能让较早
+  // 的异步请求在较晚请求完成后再写回旧 source/state。
+  int _sourceSwitchOperation = 0;
   int _preloadGeneration = 0;
   int _predictivePreloadGeneration = 0;
   String? _predictivePreloadItemId;
@@ -615,6 +671,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   Timer? _forYouEntryWarmReleaseTimer;
   PlaybackSource? _currentPlaybackSource;
   bool _currentPlaybackHasFirstFrame = false;
+  bool _decoderPressureActive = false;
+  DateTime? _decoderPressureStableSince;
+  String? _decoderPressureReason;
   bool _firstFrameVideoRecoveryAttempted = false;
   String? _firstFrameAutoRetryItemId;
   Duration _currentPlaybackPosition = Duration.zero;
@@ -903,11 +962,17 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       forYouPredictivePlaybackPreloadManagerProvider,
     );
     _prepareManager = ref.read(playerPlaybackPrepareManagerFactoryProvider)();
-    _prepareManager.timingLogger = _logTiming;
+    _prepareManager.timingLogger = _handlePrepareTiming;
     _progressRepository = ref.read(playbackProgressRepositoryProvider);
     _dramaPlaybackTargetRepository = ref.read(
       dramaPlaybackTargetRepositoryProvider,
     );
+    _videoQualityPreferenceRepository = ref.read(
+      playerVideoQualityPreferenceRepositoryProvider,
+    );
+    // Populate the in-memory preference while Home is preparing entry media.
+    // A launch plan can still bypass this wait when it is already available.
+    unawaited(initializeVideoQualityPreference());
     _attachSessionStreams(_session);
     _logTiming('create current session', details: 'reason=build');
     ref.onDispose(() {
@@ -935,6 +1000,312 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     return PlayerPlaybackState.initial(
       videoController: _session.videoController,
     );
+  }
+
+  /// Called when the future quality settings surface is first needed.  Delaying
+  /// this read keeps background player instances from unexpectedly changing a
+  /// source before their settings UI has attached.
+  Future<void> initializeVideoQualityPreference() {
+    if (_hasLoadedVideoQualityPreference) {
+      return _videoQualityPreferenceReady ?? Future<void>.value();
+    }
+    _hasLoadedVideoQualityPreference = true;
+    return _videoQualityPreferenceReady = _restoreVideoQualityPreference();
+  }
+
+  Future<void> _restoreVideoQualityPreference() async {
+    _preferredVideoQualityId = await _videoQualityPreferenceRepository.read();
+    // Once an episode is opening/playing, its selected id represents the
+    // effective rendition (which may be a non-member fallback from a stored
+    // 1080p preference). Do not let a late preference read repaint it as the
+    // unavailable historical preference.
+    if (ref.mounted && state.currentItemId == null) {
+      state = state.copyWith(selectedVideoQualityId: _preferredVideoQualityId);
+    }
+  }
+
+  PlayerStartupQualityPlan? _startupQualityPlanFor(PlayerFeedItem item) {
+    final plan = ref.read(playerStartupPreloadControllerProvider).qualityPlan;
+    return plan != null && plan.matches(item) ? plan : null;
+  }
+
+  /// Loads the current episode's HLS renditions without preheating any media
+  /// playlist or segment.  The future quality UI can call this as it opens.
+  Future<List<PlayerVideoQuality>> loadAvailableVideoQualities() async {
+    await initializeVideoQualityPreference();
+    final item = _currentQualityMasterItem ?? _currentOriginalItem;
+    final sourceUrl = item?.episode.videoSource;
+    if (item == null || sourceUrl == null || sourceUrl.isEmpty) {
+      return const [];
+    }
+    if (state.availableVideoQualities.isNotEmpty) {
+      return state.availableVideoQualities;
+    }
+    // Kept as an explicit recovery API for a failed background inspection.
+    // Normal settings UI only reads state and never calls this method.
+    return _inspectVideoQualities(item, sourceUrl);
+  }
+
+  Future<List<PlayerVideoQuality>> _inspectVideoQualities(
+    PlayerFeedItem item,
+    String sourceUrl,
+  ) async {
+    try {
+      final qualities = await ref
+          .read(hlsPlaylistPreloaderProvider)
+          .inspectQualities(sourceUrl);
+      if (!ref.mounted || state.currentItemId != item.id) {
+        return qualities;
+      }
+      // A manual preference can fall back on a neighbouring episode. Keep the
+      // preference for subsequent episodes, but show the rendition actually
+      // in use as selected in this episode's quality sheet.
+      final effectiveQuality =
+          _preferredVideoQualityId == PlayerVideoQuality.automaticId
+          ? null
+          : _fallbackQualityFor(
+              qualities,
+              _preferredVideoQualityId,
+              isMember: ref.read(entitlementControllerProvider).isMember,
+            );
+      state = state.copyWith(
+        availableVideoQualities: qualities,
+        selectedVideoQualityId:
+            _preferredVideoQualityId == PlayerVideoQuality.automaticId
+            ? PlayerVideoQuality.automaticId
+            : effectiveQuality?.id ?? _preferredVideoQualityId,
+        isVideoQualityLoading: false,
+      );
+      return qualities;
+    } catch (error) {
+      _logTiming(
+        'video quality inspect failed',
+        itemId: item.id,
+        source: sourceUrl,
+        error: error,
+      );
+      if (ref.mounted && state.currentItemId == item.id) {
+        state = state.copyWith(isVideoQualityLoading: false);
+      }
+      return const [];
+    }
+  }
+
+  /// Changes to one concrete rendition while retaining position and play state.
+  ///
+  /// A non-member still receives 1080p in [availableVideoQualities]; this
+  /// method returns [PlayerVideoQualitySelectionResult.requiresMembership] so
+  /// the UI can show its distinct visual treatment and route to membership.
+  Future<PlayerVideoQualitySelectionResult> selectVideoQuality(
+    String qualityId,
+  ) async {
+    final operation = ++_sourceSwitchOperation;
+    await initializeVideoQualityPreference();
+    if (!_isCurrentSourceSwitch(operation)) {
+      return PlayerVideoQualitySelectionResult.switched;
+    }
+    final masterItem = _currentQualityMasterItem ?? _currentOriginalItem;
+    if (masterItem == null || state.currentItemId != masterItem.id) {
+      return PlayerVideoQualitySelectionResult.unavailable;
+    }
+    final qualities = state.availableVideoQualities.isEmpty
+        ? await loadAvailableVideoQualities()
+        : state.availableVideoQualities;
+    if (!_isCurrentSourceSwitch(operation)) {
+      return PlayerVideoQualitySelectionResult.switched;
+    }
+    final selected = qualityId == PlayerVideoQuality.automaticId
+        ? null
+        : _qualityById(qualities, qualityId);
+    if (qualityId != PlayerVideoQuality.automaticId && selected == null) {
+      return PlayerVideoQualitySelectionResult.unavailable;
+    }
+    final onlyRendition = qualities.length <= 1;
+    if (selected != null &&
+        selected.isMemberOnly &&
+        !onlyRendition &&
+        !ref.read(entitlementControllerProvider).isMember) {
+      return PlayerVideoQualitySelectionResult.requiresMembership;
+    }
+    if (state.selectedVideoQualityId == qualityId &&
+        !state.isVideoQualitySwitching) {
+      return PlayerVideoQualitySelectionResult.switched;
+    }
+
+    final oldQualityId = state.selectedVideoQualityId;
+    final oldPosition = state.position;
+    final oldDuration = state.duration;
+    final wasPlaying = state.isPlaying;
+    final targetUrl = selected?.playlistUrl ?? masterItem.episode.videoSource;
+    if (targetUrl == null || targetUrl.isEmpty) {
+      return PlayerVideoQualitySelectionResult.unavailable;
+    }
+    final targetItem = masterItem.copyWith(
+      episode: masterItem.episode.copyWith(videoUrl: targetUrl),
+    );
+    state = state.copyWith(
+      isVideoQualitySwitching: true,
+      selectedVideoQualityId: qualityId,
+    );
+    _pendingResumeProgress = PlaybackProgress(
+      itemId: targetItem.id,
+      position: oldPosition,
+      duration: oldDuration,
+      updatedAt: DateTime.now(),
+    );
+    _pendingResumeProgressRequiresSeekAfterOpen = true;
+    _pauseWhenOpenCompletes = !wasPlaying;
+    try {
+      _preferredVideoQualityId = qualityId;
+      // Startup and in-player preloads deliberately use separate managers.
+      // Drop a Home-created Auto rendition before opening this manual choice;
+      // otherwise a 540p startup request can keep consuming bandwidth while
+      // the player has already moved to (for example) 720p.
+      await ref
+          .read(playerStartupPreloadControllerProvider.notifier)
+          .cancel(reason: 'manual video quality changed', syncState: false);
+      if (!_isCurrentSourceSwitch(operation)) {
+        return PlayerVideoQualitySelectionResult.switched;
+      }
+      await _disposePreloads();
+      if (!_isCurrentSourceSwitch(operation)) {
+        return PlayerVideoQualitySelectionResult.switched;
+      }
+      await _releaseSessionWindowFor('video quality changed');
+      if (!_isCurrentSourceSwitch(operation)) {
+        return PlayerVideoQualitySelectionResult.switched;
+      }
+      _lastPlayItemRequest = null;
+      await playItem(targetItem, forceReopen: true, rethrowOnFailure: true);
+      if (!_isCurrentSourceSwitch(operation)) {
+        return PlayerVideoQualitySelectionResult.switched;
+      }
+      if (!ref.mounted) return PlayerVideoQualitySelectionResult.failed;
+      _preferredVideoQualityId = qualityId;
+      unawaited(_videoQualityPreferenceRepository.save(qualityId));
+      state = state.copyWith(
+        selectedVideoQualityId: qualityId,
+        isVideoQualitySwitching: false,
+      );
+      return PlayerVideoQualitySelectionResult.switched;
+    } catch (error) {
+      if (!_isCurrentSourceSwitch(operation)) {
+        return PlayerVideoQualitySelectionResult.switched;
+      }
+      _preferredVideoQualityId = oldQualityId;
+      _logTiming(
+        'video quality switch failed; restoring old source',
+        itemId: masterItem.id,
+        source: targetUrl,
+        error: error,
+      );
+      _pendingResumeProgress = PlaybackProgress(
+        itemId: masterItem.id,
+        position: oldPosition,
+        duration: oldDuration,
+        updatedAt: DateTime.now(),
+      );
+      _pendingResumeProgressRequiresSeekAfterOpen = true;
+      _pauseWhenOpenCompletes = !wasPlaying;
+      _lastPlayItemRequest = null;
+      try {
+        await playItem(masterItem, forceReopen: true);
+      } catch (_) {
+        // playItem records the error state; there is no further safe fallback.
+      }
+      if (_isCurrentSourceSwitch(operation)) {
+        state = state.copyWith(
+          selectedVideoQualityId: oldQualityId,
+          isVideoQualitySwitching: false,
+        );
+      }
+      return PlayerVideoQualitySelectionResult.failed;
+    }
+  }
+
+  PlayerVideoQuality? _qualityById(
+    List<PlayerVideoQuality> qualities,
+    String id,
+  ) {
+    for (final quality in qualities) {
+      if (quality.id == id) return quality;
+    }
+    return null;
+  }
+
+  /// Resolves the preference for an item before issuing an HLS preheat.  This
+  /// is intentionally shared by all controller-owned preload paths: a manual
+  /// 720p preference must never cause the preloader to fetch its old default
+  /// (lowest bitrate) rendition first.
+  Future<PlayerFeedItem> _itemUsingPreferredVideoQuality(
+    PlayerFeedItem item,
+  ) async {
+    if (!_hasLoadedVideoQualityPreference) return item;
+    await _videoQualityPreferenceReady;
+    final preferredId = _preferredVideoQualityId;
+    final sourceUrl = item.episode.videoSource;
+    if (preferredId == PlayerVideoQuality.automaticId ||
+        sourceUrl == null ||
+        sourceUrl.isEmpty) {
+      return item;
+    }
+    try {
+      final qualities = await ref
+          .read(hlsPlaylistPreloaderProvider)
+          .inspectQualities(sourceUrl);
+      final selected = _fallbackQualityFor(
+        qualities,
+        preferredId,
+        isMember: ref.read(entitlementControllerProvider).isMember,
+      );
+      if (selected == null) return item;
+      return item.copyWith(
+        episode: item.episode.copyWith(videoUrl: selected.playlistUrl),
+      );
+    } catch (error) {
+      _logTiming(
+        'quality-aware preload source fallback to master',
+        itemId: item.id,
+        source: sourceUrl,
+        error: error,
+      );
+      return item;
+    }
+  }
+
+  PlayerVideoQuality? _fallbackQualityFor(
+    List<PlayerVideoQuality> qualities,
+    String preferredId, {
+    required bool isMember,
+  }) {
+    if (qualities.isEmpty) return null;
+    final allowed = qualities.length == 1 || isMember
+        ? qualities
+        : qualities.where((quality) => !quality.isMemberOnly).toList();
+    if (allowed.isEmpty) return qualities.first;
+    final exact = _qualityById(allowed, preferredId);
+    if (exact != null) return exact;
+    final preferredHeight = int.tryParse(
+      RegExp(r'^(\d+)p$').firstMatch(preferredId)?.group(1) ?? '',
+    );
+    if (preferredHeight == null) return allowed.last;
+    final lower =
+        allowed.where((quality) => quality.height < preferredHeight).toList()
+          ..sort((left, right) => right.height.compareTo(left.height));
+    if (lower.isNotEmpty) return lower.first;
+    final higher =
+        allowed.where((quality) => quality.height > preferredHeight).toList()
+          ..sort((left, right) => left.height.compareTo(right.height));
+    return higher.isEmpty ? allowed.first : higher.first;
+  }
+
+  /// Automatic playback starts from a single conservative 540p-or-lower
+  /// rendition. This makes HLS preload, prepared session and real playback
+  /// consume identical segments; manual quality selection remains unrestricted.
+  int? _automaticVideoHeightCap() {
+    return _preferredVideoQualityId == PlayerVideoQuality.automaticId
+        ? 540
+        : null;
   }
 
   /// 防止短时间内重复调用 playItem 导致多次 open
@@ -970,6 +1341,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     final prepared = await _prepareManager.prepare(
       item: item,
       sourceRepository: ref.read(playerPlaybackSourceRepositoryProvider),
+      maxVideoHeight: _automaticVideoHeightCap(),
       // 首页首条的用户进入窗口比相邻滑动更长。仅这个隐藏态 session 继续静音
       // 解码最多 8 秒，避免 4 秒时暂停后又在用户点入时重新恢复解码。
       warmUpTimeout: const Duration(seconds: 8),
@@ -1022,16 +1394,40 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     PlayerFeedItem? item, {
     bool resumeIfCurrentSource = false,
     bool forceReopen = false,
+    bool rethrowOnFailure = false,
   }) async {
     if (_isSessionDisposed) {
       return;
     }
 
+    PlayerStartupQualityPlan? startupQualityPlan;
     if (item != null) {
       _visibilitySuspendedItem = null;
+      if (_currentQualityMasterItem?.id != item.id) {
+        _currentQualityMasterItem = item;
+      }
       final previousLanguage = _preferredSubtitleLanguage;
       _currentOriginalItem = item;
       item = _itemUsingPreferredEmbeddedSource(item);
+      startupQualityPlan = _startupQualityPlanFor(item);
+      startupQualityPlan ??= await ref
+          .read(playerStartupPreloadControllerProvider.notifier)
+          .qualityPlanFor(item);
+      if (startupQualityPlan != null && !startupQualityPlan.matches(item)) {
+        startupQualityPlan = null;
+      }
+      if (startupQualityPlan != null) {
+        // Home has already chosen and warmed this exact rendition. Reuse it
+        // directly instead of parsing the master playlist a second time.
+        _preferredVideoQualityId = startupQualityPlan.preferenceId;
+        item = startupQualityPlan.applyTo(item);
+      } else {
+        // Direct/deep-link entry has no Home plan. Resolve the saved choice
+        // before opening so it never flashes Auto then switches quality.
+        await initializeVideoQualityPreference();
+        if (!ref.mounted || _isSessionDisposed) return;
+        item = await _itemUsingPreferredVideoQuality(item);
+      }
       if (previousLanguage != null &&
           _preferredSubtitleLanguage != previousLanguage) {
         await _disposePreloads();
@@ -1103,8 +1499,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         ]),
       );
       if (startupPreload.status == PlayerStartupPreloadStatus.pending &&
-          startupPreload.itemId == item.id &&
-          startupPreload.sourceUrl == item.episode.videoSource) {
+          startupPreload.matchesSource(item)) {
         // startup 预热只保留 playlist、初始化首段和续播目标段，且与本地代理共用
         // 稳定 key 的 singleflight。真实播放加入后会优先消费同一资源；不再在刚
         // 拿到地址的 20~30ms 内整体取消，避免高续播位置来不及拉到目标分片。
@@ -1286,9 +1681,29 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       currentSubtitleLanguage: item.episode.episodeSources.isEmpty
           ? null
           : _subtitleLanguageCodeForEpisodeSource(item.episode),
+      availableVideoQualities: startupQualityPlan?.qualities ?? const [],
+      isVideoQualityLoading: startupQualityPlan == null,
+      selectedVideoQualityId:
+          startupQualityPlan?.effectiveQualityId ?? _preferredVideoQualityId,
       videoController: _session.videoController,
       surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
     );
+    _yieldBackgroundPreloadsToOpeningPlayback(
+      itemId: item.id,
+      playbackGeneration: generation,
+    );
+    // Playlist inspection is concurrent with media opening.  It populates the
+    // settings cache without delaying first frame or a later three-dot tap.
+    // `item` can be a concrete manual rendition. Always inspect the master
+    // playlist retained above so the settings sheet keeps every option.
+    final qualityMaster = _currentQualityMasterItem;
+    final qualityMasterSource = qualityMaster?.episode.videoSource;
+    if (startupQualityPlan == null &&
+        qualityMaster != null &&
+        qualityMasterSource != null &&
+        qualityMasterSource.isNotEmpty) {
+      unawaited(_inspectVideoQualities(qualityMaster, qualityMasterSource));
+    }
     _armFirstFrameTimeout(generation: generation, item: item);
 
     var didResolveSource = false;
@@ -1436,7 +1851,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       _logTiming('source resolve start', itemId: item.id, source: sourceHint);
       final playbackSource = await ref
           .read(playerPlaybackSourceRepositoryProvider)
-          .resolve(item);
+          .resolve(item, maxVideoHeight: _automaticVideoHeightCap());
       didResolveSource = true;
       _logTiming(
         'source resolve end',
@@ -1474,12 +1889,35 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
             ? 'reason=media open play=true'
             : 'reason=resume open start autoplay',
       );
-      await _session.open(
-        playbackSource.playableSource,
-        play: _isPlaybackVisible && !_pauseWhenOpenCompletes,
-        start: resumeStart,
-        httpHeaders: playbackSource.httpHeaders,
-      );
+      try {
+        await _session.open(
+          playbackSource.playableSource,
+          play: _isPlaybackVisible && !_pauseWhenOpenCompletes,
+          start: resumeStart,
+          httpHeaders: playbackSource.httpHeaders,
+        );
+      } catch (error) {
+        // A route/Video surface teardown can dispose the native Player just
+        // before a user retry reaches open. Do not reuse that session (or its
+        // VideoController): replace it once and retry this exact open. Other
+        // media errors retain the normal failure path below.
+        if (!_isDisposedPlayerError(error) ||
+            !await _replaceDisposedSessionForOpen(generation)) {
+          rethrow;
+        }
+        _logTiming(
+          'media open retry with replacement session',
+          itemId: item.id,
+          source: playbackSource.playableSource,
+          details: 'reason=disposed_player',
+        );
+        await _session.open(
+          playbackSource.playableSource,
+          play: _isPlaybackVisible && !_pauseWhenOpenCompletes,
+          start: resumeStart,
+          httpHeaders: playbackSource.httpHeaders,
+        );
+      }
       _logTiming(
         'media open end',
         itemId: item.id,
@@ -1613,6 +2051,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         errorKind: errorKind,
         expectedGeneration: generation,
       );
+      if (rethrowOnFailure) {
+        Error.throwWithStackTrace(error, st);
+      }
     }
   }
 
@@ -1756,7 +2197,16 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       }
     }
 
-    for (final item in selectedCandidates) {
+    for (final candidate in selectedCandidates) {
+      // Resolve the user's rendition preference before any playlist/segment
+      // request.  `candidate.id` remains stable, while its source becomes the
+      // selected variant m3u8 when manual quality is active.
+      final item = await _itemUsingPreferredVideoQuality(candidate);
+      if (!ref.mounted ||
+          _isSessionDisposed ||
+          preloadGeneration != _preloadGeneration) {
+        return;
+      }
       final currentPreload = _preloadStates[item.id];
       if (_preloadedItemIds.contains(item.id) ||
           currentPreload?.status == PlaybackPreloadStatus.pending) {
@@ -1779,7 +2229,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         );
         final result = await ref
             .read(playerPlaybackSourceRepositoryProvider)
-            .preload(item);
+            .preload(item, maxVideoHeight: _automaticVideoHeightCap());
         _logTiming(
           'preload end',
           itemId: item.id,
@@ -1836,9 +2286,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (_isSessionDisposed || item.mode != PlayerFeedMode.forYou) {
       return;
     }
-    final preferredItem = _itemUsingPreferredEmbeddedSource(
+    final subtitlePreferredItem = _itemUsingPreferredEmbeddedSource(
       item,
       updatePreference: false,
+    );
+    final preferredItem = await _itemUsingPreferredVideoQuality(
+      subtitlePreferredItem,
     );
     final sourceUrl = preferredItem.episode.videoSource;
     if (preferredItem.episode.isLocked ||
@@ -1865,7 +2318,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       final startedAt = DateTime.now();
       final result = await ref
           .read(forYouPredictivePlaybackSourceRepositoryProvider)
-          .preload(preferredItem);
+          .preload(preferredItem, maxVideoHeight: _automaticVideoHeightCap());
       if (!ref.mounted ||
           _isSessionDisposed ||
           generation != _predictivePreloadGeneration) {
@@ -2761,6 +3214,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           : null,
     );
     state = state.copyWith(isBuffering: effectiveBuffering);
+    _updateDecoderPressureStability();
     _syncWatchProgressReportTimer();
   }
 
@@ -2781,6 +3235,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
     if (!isPlaying && _shouldRecoverUnexpectedPause()) {
+      unawaited(
+        _enterDecoderPressureMode(
+          'current paused while next media session was warming',
+        ),
+      );
       unawaited(_recoverFromUnexpectedPause());
       return;
     }
@@ -2814,6 +3273,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           : PlayerPlaybackStatus.paused,
       hasEnded: isPlaying ? false : state.hasEnded,
     );
+    _updateDecoderPressureStability();
     _syncWatchProgressReportTimer();
   }
 
@@ -2897,6 +3357,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
     _positionRollbackRecoveryInFlight = true;
+    unawaited(
+      _enterDecoderPressureMode(
+        'current position rolled back while next media session was warming',
+      ),
+    );
     final generation = _generation;
     final itemId = state.currentItemId;
     final source = state.currentSource;
@@ -3005,6 +3470,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
     _lastPositionUpdate = clamped;
     _currentPlaybackPosition = clamped;
+    _maybeRestoreDecoderWindowAfterStablePlayback();
 
     if (clamped > Duration.zero &&
         state.currentItemId != null &&
@@ -3314,6 +3780,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       hasFirstFrame: true,
       isBuffering: false,
     );
+    _updateDecoderPressureStability();
     _currentPlaybackHasFirstFrame = true;
     _waitForVideoSurfaceFirstFrameRendered();
     // 首帧仅表示已经有一张可渲染画面，不代表连续分片已经准备充分。下一条预热
@@ -3389,6 +3856,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         return;
       }
       _firstFrameVideoRecoveryAttempted = true;
+      unawaited(
+        _enterDecoderPressureMode(
+          'audio advanced but video first frame was unavailable',
+        ),
+      );
       _logTiming(
         'first frame video recovery reopen',
         itemId: itemId,
@@ -3519,6 +3991,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         source: state.currentSource,
         error: error,
       );
+      if (state.position > Duration.zero ||
+          _playingBeforeFirstFrameAt != null) {
+        unawaited(
+          _enterDecoderPressureMode(
+            'first frame timed out after playback had started',
+          ),
+        );
+      }
       if (_shouldAutoRetryFirstFrameTimeout(item)) {
         _firstFrameAutoRetryItemId = item.id;
         _logTiming(
@@ -3698,6 +4178,36 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
   }
 
+  /// Recreates only the current session after media_kit proves its native
+  /// Player has already been disposed. This is deliberately a narrow recovery
+  /// path: normal source/decoder errors must not silently create another
+  /// player, while a disposed player can never recover by reopening it.
+  Future<bool> _replaceDisposedSessionForOpen(int generation) async {
+    if (!ref.mounted || !_isCurrent(generation) || _isSessionDisposed) {
+      return false;
+    }
+    final cancelOldStreams = _cancelSessionStreams();
+    _session = ref.read(playerPlaybackSessionFactoryProvider).call();
+    _attachSessionStreams(_session);
+    // Publish the replacement before awaiting listener cancellation. The
+    // currently mounted Video widget then receives a fresh controller instead
+    // of subscribing again to the disposed controller from the failed session.
+    state = state.copyWith(
+      videoController: _session.videoController,
+      surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
+    );
+    _logTiming(
+      'create current session',
+      details: 'reason=recover disposed player before open',
+    );
+    await cancelOldStreams;
+    return ref.mounted && _isCurrent(generation) && !_isSessionDisposed;
+  }
+
+  bool _isDisposedPlayerError(Object error) =>
+      error is AssertionError &&
+      error.toString().contains('[Player] has been disposed');
+
   Future<void> _replaceCurrentSession(PreparedPlaybackSession prepared) async {
     final previousSession = _session;
     final previousSource = _currentPlaybackSource;
@@ -3714,7 +4224,19 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _attachSessionStreams(_session);
     await previousSession.pause();
     final preloadConfig = ref.read(playerPreloadConfigProvider);
-    if (previousSource != null &&
+    if (_shouldConstrainNativeDecoderWindow) {
+      final released = await _releaseRetainedSessionsForDecoderPressure();
+      await previousSession.dispose();
+      _logTiming(
+        'dispose current session',
+        itemId: previousItemId,
+        source: previousSource?.playableSource,
+        details: _timingDetails([
+          'reason=${_decoderPressureReason ?? 'decoder pressure'}',
+          'releasedRetained=${released.join(',')}',
+        ]),
+      );
+    } else if (previousSource != null &&
         previousItemId != null &&
         preloadConfig.effectiveRetainedBackwardSessionCount > 0) {
       // next prepared 被接管后，旧 current 变成 previous retained。这个窗口最多保留
@@ -3774,6 +4296,19 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   Future<bool> _retainCurrentBeforeNormalOpen(String nextItemId) async {
     if (_prepareManager is NoopPlayerPlaybackPrepareManager) {
+      return false;
+    }
+    if (_shouldConstrainNativeDecoderWindow) {
+      final released = await _releaseRetainedSessionsForDecoderPressure();
+      _logTiming(
+        'retain current skipped',
+        itemId: _currentPlaybackItemId,
+        source: _currentPlaybackSource?.playableSource,
+        details: _timingDetails([
+          'reason=${_decoderPressureReason ?? 'decoder pressure'}',
+          'releasedRetained=${released.join(',')}',
+        ]),
+      );
       return false;
     }
     if (ref
@@ -3868,6 +4403,23 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
     final startedAt = DateTime.now();
     try {
+      if (_shouldConstrainNativeDecoderWindow) {
+        final released = await _releaseRetainedSessionsForDecoderPressure();
+        if (!ref.mounted || _isSessionDisposed) {
+          return;
+        }
+        if (released.isNotEmpty) {
+          _logTiming(
+            'decoder window constrained before prepare',
+            itemId: state.currentItemId,
+            source: state.currentSource,
+            details: _timingDetails([
+              'reason=${_decoderPressureReason ?? 'decoder pressure'}',
+              'releasedRetained=${released.join(',')}',
+            ]),
+          );
+        }
+      }
       _logTiming(
         'prepare start',
         itemId: item.id,
@@ -3878,6 +4430,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       final prepared = await _prepareManager.prepare(
         item: item,
         sourceRepository: ref.read(playerPlaybackSourceRepositoryProvider),
+        maxVideoHeight: _automaticVideoHeightCap(),
       );
       if (!ref.mounted ||
           _isSessionDisposed ||
@@ -3908,6 +4461,20 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
                 'firstFrameReady=${prepared.hasFirstFrame}',
               ]),
       );
+      if (prepared != null && _shouldConstrainNativeDecoderWindow) {
+        final released = await _releaseRetainedSessionsForDecoderPressure();
+        if (released.isNotEmpty) {
+          _logTiming(
+            'decoder window constrained after prepare',
+            itemId: item.id,
+            source: prepared.source.playableSource,
+            details: _timingDetails([
+              'reason=${_decoderPressureReason ?? 'decoder pressure'}',
+              'releasedRetained=${released.join(',')}',
+            ]),
+          );
+        }
+      }
       if (prepared != null &&
           state.currentItemId != null &&
           state.currentSource != null &&
@@ -4352,6 +4919,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   /// 根据 language 切换外挂字幕或带内嵌字幕的视频资源。
   Future<void> selectSubtitleLanguage(String language) async {
+    final operation = ++_sourceSwitchOperation;
     final sources = state.availableEpisodeSources;
     if (sources.isEmpty) {
       final external = _findSubtitle(state.availableSubtitles, language);
@@ -4359,6 +4927,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       _externalSubtitlesClosed = false;
       _preferredSubtitleLanguage = _subtitleMatchCode(external);
       await _setExternalSubtitle(external);
+      if (!_isCurrentSourceSwitch(operation)) return;
       return;
     }
 
@@ -4373,7 +4942,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       currentSubtitleLanguage: _episodeSourceMatchCode(source),
     );
     await _disposePreloads();
+    if (!_isCurrentSourceSwitch(operation)) return;
     await _releaseSessionWindowFor('embedded subtitle language changed');
+    if (!_isCurrentSourceSwitch(operation)) return;
     if (position > Duration.zero) {
       _pendingResumeProgress = PlaybackProgress(
         itemId: item.id,
@@ -4384,7 +4955,11 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
     _lastPlayItemRequest = null;
     await playItem(item);
+    if (!_isCurrentSourceSwitch(operation)) return;
   }
+
+  bool _isCurrentSourceSwitch(int operation) =>
+      ref.mounted && !_isSessionDisposed && operation == _sourceSwitchOperation;
 
   PlayerFeedItem _itemUsingPreferredEmbeddedSource(
     PlayerFeedItem item, {
@@ -4726,6 +5301,37 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _syncPreloadState();
   }
 
+  /// When a real item enters `opening`, no speculative preload may advance to
+  /// another playlist/segment. `releasePending` invalidates only the
+  /// preloader's continuation; it deliberately leaves an in-flight shared
+  /// request alive so the proxy for this item can join it without redownloading
+  /// bytes. The predictive scope never includes the current item, so it can
+  /// yield immediately as well.
+  void _yieldBackgroundPreloadsToOpeningPlayback({
+    required String itemId,
+    required int playbackGeneration,
+  }) {
+    final preloadGeneration = ++_preloadGeneration;
+    _activePreloadAllowedIds = <String>{itemId};
+    _cancelPreloadsNotIn(_activePreloadAllowedIds);
+    unawaited(_predictivePreloadManager.releasePending());
+    unawaited(() async {
+      await _preloadManager.releasePending();
+      if (!ref.mounted ||
+          _isSessionDisposed ||
+          !_isCurrent(playbackGeneration) ||
+          preloadGeneration != _preloadGeneration) {
+        return;
+      }
+      _syncPreloadState();
+      _logTiming(
+        'opening yielded background preloads',
+        itemId: itemId,
+        details: 'continuations_cancelled=true shared_requests_preserved=true',
+      );
+    }());
+  }
+
   void _cancelPreloadsNotIn(Set<String> allowedIds) {
     final now = DateTime.now();
     for (final entry in List<MapEntry<String, PlaybackPreloadState>>.from(
@@ -4818,6 +5424,113 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _lastSavedProgressDuration = null;
   }
 
+  void _handlePrepareTiming(
+    String event, {
+    String? itemId,
+    String? source,
+    String? details,
+  }) {
+    _logTiming(event, itemId: itemId, source: source, details: details);
+    // next 已被静音播放到 warm-up timeout，说明它在真实播放器层并未及时获得首帧。
+    // 这可能包含弱网因素，因此后续仍需连续稳定播放才允许恢复，不记成永久结论。
+    if (event == 'prepare warm-up timeout') {
+      unawaited(
+        _enterDecoderPressureMode('next media-session warm-up timed out'),
+      );
+    }
+  }
+
+  /// 只在本会话已观察到真实压力时收紧。高分辨率不是触发条件；它只会增加某些
+  /// 设备出现压力的概率，避免让所有 1080p 内容无条件牺牲回滑体验。
+  bool get _shouldConstrainNativeDecoderWindow {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return false;
+    }
+    return _decoderPressureActive;
+  }
+
+  Future<List<String>> _releaseRetainedSessionsForDecoderPressure() async {
+    if (_prepareManager is NoopPlayerPlaybackPrepareManager) {
+      return const <String>[];
+    }
+    return _prepareManager.releaseRetained(
+      reason: 'android decoder pressure window',
+    );
+  }
+
+  Future<void> _enterDecoderPressureMode(String reason) async {
+    if (!ref.mounted ||
+        _isSessionDisposed ||
+        defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    final wasConstrained = _decoderPressureActive;
+    _decoderPressureActive = true;
+    _decoderPressureStableSince = _isPlaybackStableForDecoderRecovery
+        ? DateTime.now()
+        : null;
+    _decoderPressureReason = reason;
+    final released = await _releaseRetainedSessionsForDecoderPressure();
+    if (!ref.mounted || _isSessionDisposed) {
+      return;
+    }
+    _logTiming(
+      wasConstrained
+          ? 'decoder pressure observed again'
+          : 'decoder pressure detected',
+      itemId: state.currentItemId,
+      source: state.currentSource,
+      details: _timingDetails([
+        'reason=$reason',
+        'restoreAfterStablePlaybackMs=${_decoderPressureStablePlayback.inMilliseconds}',
+        'releasedRetained=${released.join(',')}',
+      ]),
+    );
+  }
+
+  bool get _isPlaybackStableForDecoderRecovery =>
+      state.currentSource != null &&
+      state.hasFirstFrame &&
+      state.status == PlayerPlaybackStatus.playing &&
+      !state.isBuffering &&
+      _isPlaybackVisible &&
+      !_pauseWhenOpenCompletes;
+
+  void _updateDecoderPressureStability() {
+    if (!_decoderPressureActive) {
+      return;
+    }
+    if (!_isPlaybackStableForDecoderRecovery) {
+      _decoderPressureStableSince = null;
+      return;
+    }
+    _decoderPressureStableSince ??= DateTime.now();
+  }
+
+  void _maybeRestoreDecoderWindowAfterStablePlayback() {
+    _updateDecoderPressureStability();
+    final stableSince = _decoderPressureStableSince;
+    if (!_decoderPressureActive || stableSince == null) {
+      return;
+    }
+    final stableFor = DateTime.now().difference(stableSince);
+    if (stableFor < _decoderPressureStablePlayback) {
+      return;
+    }
+    _decoderPressureActive = false;
+    _decoderPressureStableSince = null;
+    _decoderPressureReason = null;
+    _logTiming(
+      'decoder window restored',
+      itemId: state.currentItemId,
+      source: state.currentSource,
+      details: _timingDetails([
+        'reason=continuous stable playback',
+        'stablePlaybackMs=${stableFor.inMilliseconds}',
+      ]),
+    );
+  }
+
   Future<void> _retainSessionWindowOnly(
     Set<String> allowedIds, {
     required String reason,
@@ -4837,8 +5550,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   Future<void> _releaseSessionWindowFor(String reason) async {
     final stopwatch = Stopwatch()..start();
-    final itemIds = _prepareManager.windowItemIds;
-    await _prepareManager.release();
+    final itemIds = await _prepareManager.releaseExceptSession(_session);
     stopwatch.stop();
     for (final itemId in itemIds) {
       _logTiming(

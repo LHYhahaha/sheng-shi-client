@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_refresh/easy_refresh.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -931,11 +932,14 @@ class _HomeRemoteBannerCarouselState extends State<_HomeRemoteBannerCarousel> {
   Timer? _visibilityTimer;
   Timer? _visibilityPoller;
   int _activeIndex = 0;
+  int _precacheGeneration = 0;
+  bool _areImagesPrecached = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _evaluateVisibility());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _precacheImages());
     _visibilityPoller = Timer.periodic(
       const Duration(milliseconds: 200),
       (_) => _evaluateVisibility(),
@@ -948,6 +952,10 @@ class _HomeRemoteBannerCarouselState extends State<_HomeRemoteBannerCarousel> {
     if (_activeIndex >= widget.banners.length) {
       _activeIndex = 0;
       _resetVisibilityTimer();
+    }
+    if (!_haveSameImageUrls(oldWidget.banners, widget.banners)) {
+      _areImagesPrecached = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _precacheImages());
     }
   }
 
@@ -993,6 +1001,42 @@ class _HomeRemoteBannerCarouselState extends State<_HomeRemoteBannerCarousel> {
     return visible.width * visible.height >= rect.width * rect.height * .5;
   }
 
+  bool _haveSameImageUrls(
+    List<HomeBannerDto> previous,
+    List<HomeBannerDto> next,
+  ) {
+    if (previous.length != next.length) return false;
+    for (var index = 0; index < previous.length; index++) {
+      if (previous[index].imageUrl != next[index].imageUrl) return false;
+    }
+    return true;
+  }
+
+  Future<void> _precacheImages() async {
+    if (!mounted) return;
+    final generation = ++_precacheGeneration;
+    final banners = List<HomeBannerDto>.of(widget.banners);
+    await Future.wait(
+      banners.map((banner) async {
+        try {
+          await precacheImage(
+            CachedNetworkImageProvider(banner.imageUrl),
+            context,
+            onError: (_, _) {
+              if (mounted && generation == _precacheGeneration) {
+                widget.onImageError(banner.bannerId);
+              }
+            },
+          );
+        } catch (_) {
+          // The carousel will show its existing error fallback for this item.
+        }
+      }),
+    );
+    if (!mounted || generation != _precacheGeneration) return;
+    setState(() => _areImagesPrecached = true);
+  }
+
   @override
   Widget build(BuildContext context) => Container(
     key: const Key('home_remote_banner_carousel'),
@@ -1001,7 +1045,9 @@ class _HomeRemoteBannerCarouselState extends State<_HomeRemoteBannerCarousel> {
     child: ClipRRect(
       borderRadius: BorderRadius.circular(6),
       child: Swiper(
-        autoplay: widget.banners.length > 1,
+        // All banner images are warmed in the Flutter image cache before the
+        // first automatic transition, so every slide is ready when it appears.
+        autoplay: _areImagesPrecached && widget.banners.length > 1,
         autoplayDelay: 3000,
         itemCount: widget.banners.length,
         itemBuilder: (context, index) {
@@ -1552,7 +1598,7 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
                         style: _HomeTag.compactTextStyle(context),
                       )
                     else
-                      _HomeTagsRow(tags: visibleTags)
+                      _HomeTagsRow(tags: visibleTags),
                   ],
                 ],
               ),

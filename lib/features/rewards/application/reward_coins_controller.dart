@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/reward_coins_repository_provider.dart';
 import '../domain/reward_coins_check_in_status.dart';
 import '../domain/reward_coins_check_in_claim_result.dart';
+import '../domain/reward_coin_remaining.dart';
 import '../domain/reward_task.dart';
 import '../../entitlement/application/entitlement_controller.dart';
 import '../../pay/application/payment_loading_controller.dart';
@@ -10,6 +11,7 @@ import '../../pay/application/payment_loading_controller.dart';
 class RewardCoinsState {
   const RewardCoinsState({
     this.checkInStatus,
+    this.remainingCoin,
     this.tasks = const [],
     this.isCheckInLoading = false,
     this.isTasksLoading = false,
@@ -20,6 +22,9 @@ class RewardCoinsState {
   });
 
   final RewardCoinsCheckInStatus? checkInStatus;
+
+  /// null 表示接口尚未成功返回；个人中心此时不展示入口角标。
+  final RewardCoinRemaining? remainingCoin;
   final List<RewardTask> tasks;
   final bool isCheckInLoading;
   final bool isTasksLoading;
@@ -30,6 +35,7 @@ class RewardCoinsState {
 
   RewardCoinsState copyWith({
     RewardCoinsCheckInStatus? checkInStatus,
+    RewardCoinRemaining? remainingCoin,
     List<RewardTask>? tasks,
     bool? isCheckInLoading,
     bool? isTasksLoading,
@@ -40,9 +46,13 @@ class RewardCoinsState {
     bool clearCheckInError = false,
     bool clearTasksError = false,
     bool clearError = false,
+    bool clearRemainingCoin = false,
   }) {
     return RewardCoinsState(
       checkInStatus: checkInStatus ?? this.checkInStatus,
+      remainingCoin: clearRemainingCoin
+          ? null
+          : remainingCoin ?? this.remainingCoin,
       tasks: tasks ?? this.tasks,
       isCheckInLoading: isCheckInLoading ?? this.isCheckInLoading,
       isTasksLoading: isTasksLoading ?? this.isTasksLoading,
@@ -64,6 +74,7 @@ final rewardCoinsControllerProvider =
 class RewardCoinsController extends Notifier<RewardCoinsState> {
   int _checkInGeneration = 0;
   int _tasksGeneration = 0;
+  int _remainingCoinGeneration = 0;
 
   @override
   RewardCoinsState build() {
@@ -119,6 +130,24 @@ class RewardCoinsController extends Notifier<RewardCoinsState> {
     }
   }
 
+  Future<void> loadRemainingCoin() async {
+    final generation = ++_remainingCoinGeneration;
+    try {
+      final remainingCoin = await ref
+          .read(rewardCoinsRepositoryProvider)
+          .getRemainingCoin();
+      if (generation != _remainingCoinGeneration) return;
+      // 个人中心保留上次成功值；只有服务端数值变化时才重建标签，避免切回
+      // Me 页面时标签闪烁或产生无意义的 UI 更新。
+      if (state.remainingCoin?.value == remainingCoin.value) return;
+      state = state.copyWith(remainingCoin: remainingCoin);
+    } catch (_) {
+      if (generation != _remainingCoinGeneration) return;
+      // 按产品约定，接口失败或未取得数据时不展示标签。
+      state = state.copyWith(clearRemainingCoin: true);
+    }
+  }
+
   Future<void> reportTaskAction({required String actionKey}) async {
     await ref
         .read(rewardCoinsRepositoryProvider)
@@ -142,6 +171,7 @@ class RewardCoinsController extends Notifier<RewardCoinsState> {
         await Future.wait([
           loadTasks(),
           ref.read(entitlementControllerProvider.notifier).refreshFromServer(),
+          loadRemainingCoin(),
         ]);
       }
       return result;
@@ -168,6 +198,7 @@ class RewardCoinsController extends Notifier<RewardCoinsState> {
         await Future.wait([
           loadCheckInStatus(),
           ref.read(entitlementControllerProvider.notifier).refreshFromServer(),
+          loadRemainingCoin(),
         ]);
       }
       return result;

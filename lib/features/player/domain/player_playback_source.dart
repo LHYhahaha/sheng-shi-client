@@ -69,11 +69,12 @@ class PlaybackSource {
 /// resolve/preload 必须统一在这里进入，后续签名 URL、鉴权、缓存 key 和过期策略都会
 /// 挂在这个层级。UI 直接使用 episode.videoSource 会绕过这些保护。
 abstract interface class PlayerPlaybackSourceRepository {
-  Future<PlaybackSource> resolve(PlayerFeedItem item);
+  Future<PlaybackSource> resolve(PlayerFeedItem item, {int? maxVideoHeight});
 
   Future<PlaybackPreloadState> preload(
     PlayerFeedItem item, {
     Duration? preferredPosition,
+    int? maxVideoHeight,
   });
 }
 

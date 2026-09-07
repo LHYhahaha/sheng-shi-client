@@ -82,4 +82,48 @@ void main() {
       expect((await preload.completed).bytes, [1, 2, 3, 4]);
     },
   );
+
+  test(
+    'large stream never gives a late subscriber a truncated replay',
+    () async {
+      final coordinator = HlsNetworkRequestCoordinator();
+      final first = StreamController<List<int>>();
+      final second = StreamController<List<int>>();
+      var openCount = 0;
+
+      Future<HlsNetworkStreamResponse> open() async {
+        openCount += 1;
+        return HlsNetworkStreamResponse(
+          statusCode: 200,
+          chunks: openCount == 1 ? first.stream : second.stream,
+        );
+      }
+
+      coordinator.streamFetch(
+        Uri.parse('https://cdn.example.test/large.ts'),
+        priority: HlsRequestPriority.preload,
+        open: open,
+      );
+      await Future<void>.delayed(Duration.zero);
+      first.add(List<int>.filled(4 * 1024 * 1024 + 1, 1));
+      await Future<void>.delayed(Duration.zero);
+
+      final playback = coordinator.streamFetch(
+        Uri.parse('https://cdn.example.test/large.ts'),
+        priority: HlsRequestPriority.playback,
+        open: open,
+      );
+      await Future<void>.delayed(Duration.zero);
+      second.add([7, 8]);
+      await second.close();
+
+      final received = <int>[];
+      await for (final chunk in playback.chunks) {
+        received.addAll(chunk);
+      }
+      await first.close();
+      expect(openCount, 2);
+      expect(received, [7, 8]);
+    },
+  );
 }

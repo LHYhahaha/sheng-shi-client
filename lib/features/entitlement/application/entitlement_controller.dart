@@ -140,9 +140,19 @@ class EntitlementController extends Notifier<UserEntitlementState> {
   }
 
   Future<void> setAutoUnlockEnabled(bool enabled) async {
-    state = await ref
+    // “自动解锁”接口只变更用户偏好，但它随后返回的 entitlement 快照在部分
+    // 服务端版本中没有携带当前剧的已解锁集（会返回空列表）。不能让这份不完整
+    // 快照清掉本会话刚通过金币确认的解锁记录，否则下一集会被当成跳集。
+    final locallyUnlockedEpisodeIds = state.unlockedEpisodeIds;
+    final updatedState = await ref
         .read(entitlementRepositoryProvider)
         .setAutoUnlockEnabled(enabled);
+    state = updatedState.copyWith(
+      unlockedEpisodeIds: <String>{
+        ...locallyUnlockedEpisodeIds,
+        ...updatedState.unlockedEpisodeIds,
+      },
+    );
   }
 
   /// 从钱包 API 同步金币和赠币余额到权益系统。
