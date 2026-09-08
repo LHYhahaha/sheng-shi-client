@@ -95,6 +95,7 @@ class HomeDramaDto {
     required this.tagsName,
     this.isFavorited = 0,
     this.watchProgress,
+    this.trial,
   });
 
   final int id;
@@ -110,6 +111,7 @@ class HomeDramaDto {
   final List<String> tagsName;
   final int isFavorited;
   final HomeWatchProgressDto? watchProgress;
+  final HomeTrialDto? trial;
 
   factory HomeDramaDto.fromJson(Map<String, Object?> json) {
     return HomeDramaDto(
@@ -126,6 +128,7 @@ class HomeDramaDto {
       episodeTotal: JsonFieldParser.optionalInt(json, 'episode_total') ?? 0,
       tagsName: _parseTagsName(json['tags_name']),
       isFavorited: JsonFieldParser.optionalInt(json, 'is_favorited') ?? 0,
+      trial: HomeTrialDto.fromJsonOrNull(json['trial']),
       watchProgress: HomeWatchProgressDto.fromJsonOrNull(
         json['watch_progress'],
       ),
@@ -135,6 +138,32 @@ class HomeDramaDto {
   static List<String> _parseTagsName(Object? value) {
     if (value is! List) return const <String>[];
     return value.whereType<String>().toList(growable: false);
+  }
+}
+
+/// 首页剧卡的试看配置，仅解析接口数据。
+class HomeTrialDto {
+  const HomeTrialDto({
+    required this.trialEnabled,
+    required this.trialEpisodeNum,
+    required this.trialDurationSec,
+  });
+
+  final int trialEnabled;
+  final int trialEpisodeNum;
+  final int trialDurationSec;
+
+  factory HomeTrialDto.fromJson(Map<String, Object?> json) {
+    return HomeTrialDto(
+      trialEnabled: JsonFieldParser.optionalInt(json, 'trial_enabled') ?? 0,
+      trialEpisodeNum: JsonFieldParser.optionalInt(json, 'trial_episode_num') ?? 0,
+      trialDurationSec: JsonFieldParser.optionalInt(json, 'trial_duration_sec') ?? 0,
+    );
+  }
+
+  static HomeTrialDto? fromJsonOrNull(Object? value) {
+    if (value is! Map) return null;
+    return HomeTrialDto.fromJson(Map<String, Object?>.from(value));
   }
 }
 

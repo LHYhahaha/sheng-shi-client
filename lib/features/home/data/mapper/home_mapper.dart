@@ -45,6 +45,13 @@ class HomeMapper {
       episodeTotal: dto.episodeTotal,
       tags: dto.tagsName,
       isFavorited: dto.isFavorited == 1,
+      trial: dto.trial == null
+          ? null
+          : HomeTrial(
+              trialEnabled: dto.trial!.trialEnabled == 1,
+              trialEpisodeNum: dto.trial!.trialEpisodeNum,
+              trialDurationSec: dto.trial!.trialDurationSec,
+            ),
       watchProgress: dto.watchProgress == null
           ? null
           : HomeWatchProgress(

@@ -45,6 +45,13 @@ class PlayerContentMapper {
       favoriteCount: dto.favoriteCount,
       isFavorited: dto.isFavorited,
       episodeTotal: dto.episodeTotal,
+      trial: dto.trial == null
+          ? null
+          : PlayerTrial(
+              trialEnabled: dto.trial!.trialEnabled == 1,
+              trialEpisodeNum: dto.trial!.trialEpisodeNum,
+              trialDurationSec: dto.trial!.trialDurationSec,
+            ),
       watchProgress: dto.watchProgress == null
           ? null
           : PlayerWatchProgress(

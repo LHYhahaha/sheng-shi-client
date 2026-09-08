@@ -1,3 +1,4 @@
+import '../../../drama/data/dto/drama_trial_dto.dart';
 import '../../../../core/network/json_field_parser.dart';
 import '../../../drama/data/dto/drama_watch_progress_dto.dart';
 
@@ -18,6 +19,7 @@ class PlayerRecommendationDto {
     required this.status,
     required this.episodeTotal,
     this.watchProgress,
+    this.trial,
   });
 
   final int id;
@@ -32,6 +34,7 @@ class PlayerRecommendationDto {
   final int status;
   final int episodeTotal;
   final DramaWatchProgressDto? watchProgress;
+  final DramaTrialDto? trial;
 
   factory PlayerRecommendationDto.fromJson(Map<String, Object?> json) {
     return PlayerRecommendationDto(
@@ -47,6 +50,7 @@ class PlayerRecommendationDto {
       isVipOnly: JsonFieldParser.optionalInt(json, 'is_vip_only') ?? 0,
       status: JsonFieldParser.optionalInt(json, 'status') ?? 0,
       episodeTotal: JsonFieldParser.optionalInt(json, 'episode_total') ?? 0,
+      trial: DramaTrialDto.fromJsonOrNull(json['trial']),
       watchProgress: DramaWatchProgressDto.fromJsonOrNull(
         json['watch_progress'],
       ),

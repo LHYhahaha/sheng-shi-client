@@ -27,6 +27,7 @@ class PlayerContentDto {
     required this.onlineAt,
     required this.episodes,
     this.watchProgress,
+    this.trial,
   });
 
   final int id;
@@ -58,6 +59,8 @@ class PlayerContentDto {
   /// 的 null 语义区分。
   final WatchProgressDto? watchProgress;
 
+  final PlayerTrialDto? trial;
+
   factory PlayerContentDto.fromJson(Map<String, Object?> json) {
     return PlayerContentDto(
       id: JsonFieldParser.optionalInt(json, 'id') ?? 0,
@@ -82,6 +85,7 @@ class PlayerContentDto {
       episodeTotal: JsonFieldParser.optionalInt(json, 'episode_total') ?? 0,
       onlineAt: JsonFieldParser.optionalString(json, 'online_at') ?? '',
       episodes: _parseEpisodes(json['episodes']),
+      trial: PlayerTrialDto.fromJsonOrNull(json['trial']),
       watchProgress: WatchProgressDto.fromDetailJsonOrNull(
         json['watch_progress'],
         dramaId: JsonFieldParser.optionalInt(json, 'id') ?? 0,
@@ -122,5 +126,31 @@ class PlayerContentDto {
         .whereType<Map<String, Object?>>()
         .map(PlayerEpisodeDto.fromJson)
         .toList(growable: false);
+  }
+}
+
+/// 详情接口下发的限时试看配置；缺失时保留为 null。
+class PlayerTrialDto {
+  const PlayerTrialDto({
+    required this.trialEnabled,
+    required this.trialEpisodeNum,
+    required this.trialDurationSec,
+  });
+
+  final int trialEnabled;
+  final int trialEpisodeNum;
+  final int trialDurationSec;
+
+  factory PlayerTrialDto.fromJson(Map<String, Object?> json) {
+    return PlayerTrialDto(
+      trialEnabled: JsonFieldParser.optionalInt(json, 'trial_enabled') ?? 0,
+      trialEpisodeNum: JsonFieldParser.optionalInt(json, 'trial_episode_num') ?? 0,
+      trialDurationSec: JsonFieldParser.optionalInt(json, 'trial_duration_sec') ?? 0,
+    );
+  }
+
+  static PlayerTrialDto? fromJsonOrNull(Object? value) {
+    if (value is! Map) return null;
+    return PlayerTrialDto.fromJson(Map<String, Object?>.from(value));
   }
 }

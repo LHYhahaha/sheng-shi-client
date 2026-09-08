@@ -27,6 +27,7 @@ class SearchMapper {
       isVipOnly: dto.isVipOnly == 1,
       status: dto.status,
       watchProgress: dto.watchProgress?.toDomain(),
+      trial: dto.trial?.toDomain(),
     );
   }
 
@@ -56,6 +57,7 @@ class SearchMapper {
       status: dto.status,
       episodeTotal: dto.episodeTotal,
       watchProgress: dto.watchProgress?.toDomain(),
+      trial: dto.trial?.toDomain(),
     );
   }
 }

@@ -1,3 +1,4 @@
+import '../../drama/domain/drama_trial.dart';
 import '../../entitlement/domain/episode_unlock_type.dart';
 import '../../drama/domain/drama_watch_progress.dart';
 import 'player_subtitle.dart';
@@ -41,6 +42,7 @@ class PlayerContent {
     this.likeCountDelta = 0,
     this.episodeTotal = 0,
     this.watchProgress,
+    this.trial,
     this.isDramaAvailable = true,
     this.recommendationsStatus = PlayerRecommendationLoadStatus.loaded,
   });
@@ -134,6 +136,9 @@ class PlayerContent {
   /// 详情接口下发的权威续播记录；只用于普通播放器初始目标选择。
   final PlayerWatchProgress? watchProgress;
 
+  /// 限时试看配置，仅保留接口数据，后续业务逻辑按需使用。
+  final PlayerTrial? trial;
+
   /// 短剧整体是否上架。
   ///
   /// 详情接口的 `status != 1` 会使所有剧集进入既有 unavailable 播放态；保留
@@ -163,6 +168,18 @@ class PlayerContent {
     }
     return firstLocked?.id == episode.id;
   }
+}
+
+class PlayerTrial {
+  const PlayerTrial({
+    required this.trialEnabled,
+    required this.trialEpisodeNum,
+    required this.trialDurationSec,
+  });
+
+  final bool trialEnabled;
+  final int trialEpisodeNum;
+  final int trialDurationSec;
 }
 
 class PlayerWatchProgress {
@@ -355,6 +372,7 @@ class PlayerRecommendation {
     required this.subtitle,
     required this.coverAssetPath,
     this.watchProgress,
+    this.trial,
   });
 
   /// 推荐剧 id。
@@ -371,6 +389,7 @@ class PlayerRecommendation {
   /// 推荐封面 asset 路径。
   final String coverAssetPath;
   final DramaWatchProgress? watchProgress;
+  final DramaTrial? trial;
 }
 
 /// 播放内容仓库边界。

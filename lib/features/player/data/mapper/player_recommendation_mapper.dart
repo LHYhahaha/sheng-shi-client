@@ -19,6 +19,7 @@ class PlayerRecommendationMapper {
           ? dto.coverUrl
           : _fallbackCoverAssetPath,
       watchProgress: dto.watchProgress?.toDomain(),
+      trial: dto.trial?.toDomain(),
     );
   }
 

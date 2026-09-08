@@ -88,6 +88,7 @@ class HomeDrama {
     required this.tags,
     this.isFavorited = false,
     this.watchProgress,
+    this.trial,
   });
 
   final String id;
@@ -103,6 +104,20 @@ class HomeDrama {
   final List<String> tags;
   final bool isFavorited;
   final HomeWatchProgress? watchProgress;
+  final HomeTrial? trial;
+}
+
+/// 首页剧卡的试看配置，后续业务逻辑按需使用。
+class HomeTrial {
+  const HomeTrial({
+    required this.trialEnabled,
+    required this.trialEpisodeNum,
+    required this.trialDurationSec,
+  });
+
+  final bool trialEnabled;
+  final int trialEpisodeNum;
+  final int trialDurationSec;
 }
 
 /// 首页剧卡随接口下发的用户观看进度。

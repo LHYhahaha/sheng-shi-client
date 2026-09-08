@@ -1,3 +1,4 @@
+import '../../drama/domain/drama_trial.dart';
 import '../../drama/domain/drama_watch_progress.dart';
 
 enum SearchSortType {
@@ -43,6 +44,7 @@ class SearchResultDrama {
     required this.status,
     required this.episodeTotal,
     this.watchProgress,
+    this.trial,
   });
 
   final String id;
@@ -58,4 +60,5 @@ class SearchResultDrama {
   final int status;
   final int episodeTotal;
   final DramaWatchProgress? watchProgress;
+  final DramaTrial? trial;
 }

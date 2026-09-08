@@ -90,6 +90,10 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   int _externalPlayerOpenGeneration = 0;
   bool _isWaitingForExternalPlayerAuthentication = false;
 
+  // This State is above MaterialApp, so its context has no Localizations.
+  AppLocalizations get _appLocalizations =>
+      AppLocalizations(ref.read(appLocaleControllerProvider));
+
   @override
   void initState() {
     super.initState();
@@ -330,7 +334,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     } on ApiException catch (error) {
       if (mounted) {
         showAppCenterToast(
-          context.l10n.giftClaimFailureForReason(
+          _appLocalizations.giftClaimFailureForReason(
             error.businessCode == 3206 ? 8 : -1,
           ),
         );
@@ -349,14 +353,14 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
 
     if (!claim.isSuccess) {
       showAppCenterToast(
-        context.l10n.giftClaimFailureForReason(claim.reasonCode),
+        _appLocalizations.giftClaimFailureForReason(claim.reasonCode),
       );
       return;
     }
 
     if (claim.isTemporaryVip) {
       showAppCenterToast(
-        context.l10n.memberGiftClaimed(days: claim.benefitDays),
+        _appLocalizations.memberGiftClaimed(days: claim.benefitDays),
       );
       await ref
           .read(entitlementControllerProvider.notifier)
@@ -365,7 +369,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     }
 
     showAppCenterToast(
-      context.l10n.giftClaimSuccess(benefitDays: claim.benefitDays),
+      _appLocalizations.giftClaimSuccess(benefitDays: claim.benefitDays),
     );
 
     if (!claim.isDrama || claim.dramaId.isEmpty || claim.dramaId == '0') return;
@@ -688,7 +692,7 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         .read(shareDramaRewardCoordinatorProvider)
         .onLifecycleChanged(state);
     if (shareRewardChannel == ShareDramaRewardChannel.facebook) {
-      showAppCenterToast(context.l10n.shareRewardArrivalHint);
+      showAppCenterToast(_appLocalizations.shareRewardArrivalHint);
     }
     if (state == AppLifecycleState.resumed) {
       // 首次启动时 ADID 尚未生成或接口失败时，在回前台补偿绑定。
