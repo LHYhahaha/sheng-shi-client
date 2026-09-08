@@ -354,7 +354,7 @@ class _MemberPageState extends ConsumerState<MemberPage> {
           used: gift.usedCount,
           total: gift.totalCount,
         ),
-        isEligible: gift.available,
+        isEligible: gift.canGift,
         unavailableDescription: context.l10n.giftShareUnavailableLimit(
           date: context.l10n.formatGiftReGrantDate(gift.reGrantAt),
         ),

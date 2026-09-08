@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -267,8 +269,7 @@ class PlayerPlaybackState {
 
   /// 当前播放倍速。
   ///
-  /// 倍速属于 session 状态，For You 和单剧通过不同 sessionKey 隔离。不要把它放成
-  /// 全局设置，避免一个播放器页面影响另一个。
+  /// 当前会话独立生效；最近一次选择持久化，供后续新播放页使用。
   final double playbackRate;
 
   /// 当前 Android/iOS 视频 surface 的挂载生命周期。
@@ -954,8 +955,24 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     await playItem(item);
   }
 
+  static const _ratePreferenceKey = 'player.playback_rate.preference';
+  static const _supportedRates = [0.75, 1.0, 1.25, 1.5, 2.0, 3.0];
+  double _preferredPlaybackRate = 1.0;
+  late Future<void> _ratePreferenceReady;
+
+  Future<void> _loadPlaybackRate() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final rate = prefs.getDouble(_ratePreferenceKey);
+      if (_supportedRates.contains(rate)) _preferredPlaybackRate = rate!;
+    } catch (_) {
+      // Local storage failures must not prevent playback.
+    }
+  }
+
   @override
   PlayerPlaybackState build() {
+    _ratePreferenceReady = _loadPlaybackRate();
     _session = ref.read(playerPlaybackSessionFactoryProvider).call();
     _preloadManager = ref.read(playerPlaybackPreloadManagerProvider);
     _predictivePreloadManager = ref.read(
@@ -1409,6 +1426,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       final previousLanguage = _preferredSubtitleLanguage;
       _currentOriginalItem = item;
       item = _itemUsingPreferredEmbeddedSource(item);
+      await _ratePreferenceReady;
+      if (!ref.mounted || _isSessionDisposed) return;
+      state = state.copyWith(playbackRate: _preferredPlaybackRate);
       startupQualityPlan = _startupQualityPlanFor(item);
       startupQualityPlan ??= await ref
           .read(playerStartupPreloadControllerProvider.notifier)
@@ -1917,6 +1937,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           start: resumeStart,
           httpHeaders: playbackSource.httpHeaders,
         );
+      }
+      if (_preferredPlaybackRate != 1.0) {
+        await _session.setRate(_preferredPlaybackRate);
       }
       _logTiming(
         'media open end',
@@ -2567,14 +2590,25 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   Future<void> setPlaybackRate(double rate) async {
-    if (_isSessionDisposed || rate <= 0) {
+    if (_isSessionDisposed || !_supportedRates.contains(rate)) {
       return;
     }
+    await _ratePreferenceReady;
+    if (!ref.mounted || _isSessionDisposed) return;
     await _session.setRate(rate);
+    _preferredPlaybackRate = rate;
     if (!ref.mounted) {
       return;
     }
     state = state.copyWith(playbackRate: rate);
+    try {
+      await (await SharedPreferences.getInstance()).setDouble(
+        _ratePreferenceKey,
+        rate,
+      );
+    } catch (_) {
+      // Keep the successful playback change when persistence is unavailable.
+    }
   }
 
   Future<void> pause() async {
@@ -4219,6 +4253,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     await _cancelSessionStreams();
     await prepared.detachFirstFrameListener();
     _session = prepared.session;
+    await _session.setRate(_preferredPlaybackRate);
     _currentPlaybackSource = prepared.source;
     _currentPlaybackItemId = prepared.itemId;
     _attachSessionStreams(_session);

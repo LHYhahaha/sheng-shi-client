@@ -26,6 +26,30 @@ void main() {
     expect(link?.shareCode, 'abc123');
   });
 
+  test('parses an Adjust drama gift link with camel-case parameters', () {
+    final link = GiftDeepLink.tryParse(
+      Uri.parse(
+        'https://juan365drama.go.link/?adj_t=239vozer&adj_campaign=drama_gift&dramaId=721&landingType=drama_gift&shareCode=11z18EL',
+      ),
+    );
+
+    expect(link?.type, GiftDeepLinkType.drama);
+    expect(link?.dramaId, '721');
+    expect(link?.shareCode, '11z18EL');
+  });
+
+  test('parses an Adjust temporary VIP gift link', () {
+    final link = GiftDeepLink.tryParse(
+      Uri.parse(
+        'https://juan365drama.go.link/?adj_t=239vozer&landingType=temp_vip_gift&shareCode=vip123',
+      ),
+    );
+
+    expect(link?.type, GiftDeepLinkType.temporaryVip);
+    expect(link?.dramaId, isNull);
+    expect(link?.shareCode, 'vip123');
+  });
+
   test('rejects incomplete or unsupported gift links', () {
     expect(
       GiftDeepLink.tryParse(

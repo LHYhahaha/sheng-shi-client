@@ -230,7 +230,10 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     if (ref.read(accountBanControllerProvider).isBanned) {
       return;
     }
-    if (uri.scheme != 'novashort' || uri.host != 'player') {
+    final isPlayerScheme = uri.scheme == 'novashort' && uri.host == 'player';
+    final isAdjustLink =
+        uri.scheme == 'https' && uri.host == 'juan365drama.go.link';
+    if (!isPlayerScheme && !isAdjustLink) {
       debugPrint('[AppLink] Ignored unsupported link: $uri');
       return;
     }

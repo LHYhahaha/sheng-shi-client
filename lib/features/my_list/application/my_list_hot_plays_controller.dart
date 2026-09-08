@@ -51,7 +51,9 @@ class MyListHotPlaysController extends Notifier<MyListHotPlaysState> {
     state = MyListHotPlaysState(dramas: state.dramas, isLoading: true);
 
     try {
-      final ranking = await ref.read(searchRepositoryProvider).getHotPlays();
+      final ranking = await ref
+          .read(searchRepositoryProvider)
+          .getHotPlays(isRecommend: true);
       if (generation != _generation) {
         return;
       }

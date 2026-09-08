@@ -9,6 +9,9 @@ class GiftLinkData {
     required this.totalCount,
     required this.usedCount,
     required this.visible,
+    this.cycleStartAt = '',
+    this.cycleEndAt = '',
+    this.shareUrlExpiresAt = '',
   });
 
   final bool available;
@@ -20,4 +23,9 @@ class GiftLinkData {
   final int totalCount;
   final int usedCount;
   final bool visible;
+  final String cycleStartAt;
+  final String cycleEndAt;
+  final String shareUrlExpiresAt;
+
+  bool get canGift => visible && available && remainCount > 0;
 }

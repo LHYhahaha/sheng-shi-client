@@ -21,6 +21,9 @@ dependencies:
   crypto: ^3.0.7
   firebase_analytics: ^12.3.0
   firebase_core: ^4.7.0
+  # Widget Preview uses this project as a dependency and ignores its overrides.
+  # 3.11.0 fails to compile with the current Flutter/Dart SDK.
+  firebase_core_web: 3.10.0
   firebase_messaging: ^16.2.0
   flutter_riverpod: ^3.3.1
   flutter_cache_manager: ^3.4.2
@@ -99,7 +102,3 @@ flutter:
           weight: 500
         - asset: assets/sf-pro-display/SFPRODISPLAYBOLD.OTF
           weight: 700
-
-
-dependency_overrides:
-  firebase_core_web: 3.10.0

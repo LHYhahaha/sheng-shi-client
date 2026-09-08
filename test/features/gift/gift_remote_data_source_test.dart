@@ -8,6 +8,62 @@ import '../../helpers/fake_api_envelope.dart';
 import '../../helpers/recording_http_adapter.dart';
 
 void main() {
+  test('parses gift cycle timestamps without losing nanosecond precision', () {
+    final gift = GiftLinkDataDto.fromJson({
+      'cycleStartAt': '2026-09-01T00:00:00.123456789Z',
+      'cycleEndAt': '2026-09-30T23:59:59.999999999Z',
+      'shareUrlExpiresAt': '2026-09-10T00:00:00.123456789Z',
+    });
+
+    expect(gift.cycleStartAt, '2026-09-01T00:00:00.123456789Z');
+    expect(gift.cycleEndAt, '2026-09-30T23:59:59.999999999Z');
+    expect(gift.shareUrlExpiresAt, '2026-09-10T00:00:00.123456789Z');
+  });
+
+  test(
+    'gift eligibility requires visibility, availability and remaining quota',
+    () {
+      for (final visible in [false, true]) {
+        for (final available in [false, true]) {
+          for (final remainCount in [-1, 0, 1]) {
+            final gift = GiftLinkDataDto.fromJson({
+              'visible': visible,
+              'available': available,
+              'remainCount': remainCount,
+            });
+            expect(gift.canGift, visible && available && remainCount > 0);
+          }
+        }
+      }
+    },
+  );
+
+  test('non-member response can omit share information', () async {
+    final adapter = RecordingHttpAdapter(
+      defaultResponse: RecordingHttpResponse(
+        body: apiEnvelopeSuccess({
+          'visible': false,
+          'available': false,
+          'remainCount': 0,
+          'totalCount': 0,
+          'usedCount': 0,
+          'cycleStartAt': '2026-09-01T00:00:00Z',
+          'cycleEndAt': '2026-09-30T23:59:59Z',
+          'reGrantAt': '2026/10/01',
+        }),
+      ),
+    );
+    final gift = await GiftRemoteDataSource(
+      apiClient: _apiClient(adapter),
+    ).getVipGiftLink();
+
+    expect(gift.canGift, isFalse);
+    expect(gift.shareCode, isEmpty);
+    expect(gift.shareUrl, isEmpty);
+    expect(gift.shareUrlExpiresAt, isEmpty);
+    expect(gift.reGrantAt, '2026/10/01');
+  });
+
   test(
     'loads VIP and drama gift links with their required GET parameters',
     () async {

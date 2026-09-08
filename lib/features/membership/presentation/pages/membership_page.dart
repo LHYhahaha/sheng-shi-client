@@ -270,12 +270,11 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
       ),
     );
 
-    if (!widget.handleBackNavigation && !isPurchaseFlowActive) {
-      return page;
-    }
-
+    // Keep the subtree stable when a tab enters/exits payment. Inserting a
+    // PopScope only during payment remounts the ListView and resets its offset,
+    // while this State still retains the collapsed-header flag.
     return PopScope(
-      canPop: false,
+      canPop: !widget.handleBackNavigation && !isPurchaseFlowActive,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) {
           return;
@@ -325,20 +324,25 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
       return;
     }
 
-    unawaited(
-      ref
-          .read(analyticsServiceProvider)
-          .track(
-            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
-              'element_name': 'vip_purchase_button',
-              'product_id': plan.id,
-              'product_type': _analyticsProductTypeForPlan(plan),
-            }),
-          ),
-    );
+    final analytics = ref.read(analyticsServiceProvider);
     await ref
         .read(membershipControllerProvider.notifier)
-        .purchaseSelectedPlan();
+        .purchaseSelectedPlan(
+          onPaymentActionResolved: (shouldShowCashier) {
+            unawaited(
+              analytics.track(
+                AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                  'element_name': 'vip_purchase_button',
+                  'product_id': plan.id,
+                  'product_type': _analyticsProductTypeForPlan(plan),
+                  'payment_click_action': shouldShowCashier
+                      ? 'open_payment_popup'
+                      : 'start_payment',
+                }),
+              ),
+            );
+          },
+        );
   }
 
   void _goBack({Object? result}) {

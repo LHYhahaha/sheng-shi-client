@@ -43,6 +43,44 @@ String _playableSource(int episodeNumber) {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  test('rate persists across episodes and new pages', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final controller = container.read(
+      playerPlaybackControllerProvider('speed:first').notifier,
+    );
+    await controller.playItem(_item(1));
+    await controller.setPlaybackRate(1.25);
+    await controller.playItem(_item(2));
+    expect(session.rates.last, 1.25);
+    expect(
+      container
+          .read(playerPlaybackControllerProvider('speed:first'))
+          .playbackRate,
+      1.25,
+    );
+    final nextSession = _FakePlaybackSession();
+    final next = _createContainer(nextSession);
+    await next
+        .read(playerPlaybackControllerProvider('speed:next').notifier)
+        .playItem(_item(1));
+    expect(nextSession.rates.last, 1.25);
+    SharedPreferences.setMockInitialValues({});
+    final freshSession = _FakePlaybackSession();
+    final fresh = _createContainer(freshSession);
+    await fresh
+        .read(playerPlaybackControllerProvider('speed:cleared').notifier)
+        .playItem(_item(1));
+    expect(
+      fresh
+          .read(playerPlaybackControllerProvider('speed:cleared'))
+          .playbackRate,
+      1.0,
+    );
+  });
+
   test('watch progress item override reports the episode being left', () async {
     final session = _FakePlaybackSession();
     final remoteDataSource = _RecordingPlayerRemoteDataSource();

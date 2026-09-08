@@ -1255,6 +1255,37 @@ class PlayerTopBarContent extends StatelessWidget {
                 ),
               ],
               const Spacer(),
+              if (!showBackOnly)
+                GestureDetector(
+                  key: const ValueKey('player_speed_button'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onSpeedTap,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Image.asset(
+                          "assets/images/player/speed.png",
+                          width: 24,
+                          height: 24,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          context.l10n.playerSpeed,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            fontSize: 12,
+                            height: 14 / 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               if (!showBackOnly && showSettingsMenu)
                 GestureDetector(
                   key: const ValueKey('player_settings_button'),
@@ -1283,27 +1314,6 @@ class PlayerTopBarContent extends StatelessWidget {
                   onSubtitleSelected: onSubtitleSelected,
                   showChromeOverlays: showChromeOverlays,
                 ),
-              // const SizedBox(width: 4),
-              // // 倍速按钮
-              // GestureDetector(
-              //   key: const ValueKey('player_speed_button'),
-              //   behavior: HitTestBehavior.opaque,
-              //   onTap: onSpeedTap,
-              //   child: Padding(
-              //     padding: const EdgeInsets.symmetric(
-              //       horizontal: 4,
-              //       vertical: 6,
-              //     ),
-              //     child: Text(
-              //       _formatRate(context, playbackRate),
-              //       style: const TextStyle(
-              //         color: Colors.white,
-              //         fontSize: 14,
-              //         height: 18 / 14,
-              //       ),
-              //     ),
-              //   ),
-              // ),
             ],
           ),
         ),

@@ -12,8 +12,13 @@ class SearchRemoteDataSource {
     return _getRanking('/api/home/search/hot');
   }
 
-  Future<SearchRankingResponseDto> getHotPlays() {
-    return _getRanking('/api/home/play/hot');
+  Future<SearchRankingResponseDto> getHotPlays({bool? isRecommend}) {
+    return _getRanking(
+      '/api/home/play/hot',
+      queryParameters: isRecommend == null
+          ? null
+          : {'is_recommend': isRecommend},
+    );
   }
 
   Future<SearchRankingResponseDto> getNewOnline() {
@@ -57,9 +62,13 @@ class SearchRemoteDataSource {
     );
   }
 
-  Future<SearchRankingResponseDto> _getRanking(String path) async {
+  Future<SearchRankingResponseDto> _getRanking(
+    String path, {
+    Map<String, Object?>? queryParameters,
+  }) async {
     return _apiClient.get<SearchRankingResponseDto>(
       path,
+      queryParameters: queryParameters,
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) {
         if (data is! Map) {

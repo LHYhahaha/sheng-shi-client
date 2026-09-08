@@ -295,7 +295,9 @@ class MembershipController extends Notifier<MembershipState> {
   }
 
   /// 当前选中商品的购买入口：先取服务端支付方式，再决定是否展示收银台。
-  Future<void> purchaseSelectedPlan() async {
+  Future<void> purchaseSelectedPlan({
+    void Function(bool shouldShowCashier)? onPaymentActionResolved,
+  }) async {
     final plan = state.selectedPlan;
     if (plan == null) {
       return;
@@ -307,8 +309,10 @@ class MembershipController extends Notifier<MembershipState> {
       state = state.copyWith(paymentRuleId: options.ruleId);
       final supportedMethods = _supportedPaymentMethods(options.options);
       if (supportedMethods.isEmpty) {
+        onPaymentActionResolved?.call(false);
         await _startPayment(plan, _defaultPaymentChannel);
       } else if (supportedMethods.length == 1) {
+        onPaymentActionResolved?.call(false);
         await _startPayment(
           plan,
           supportedMethods.single.payChannel,
@@ -317,10 +321,12 @@ class MembershipController extends Notifier<MembershipState> {
       } else {
         _preparePaymentMethodSelection(options, supportedMethods);
         showConfirmation();
+        onPaymentActionResolved?.call(true);
       }
     } catch (error, stackTrace) {
       debugPrint('[Membership] payment options failed: $error\n$stackTrace');
       // 支付方式接口不可用时，按空列表处理，走设备默认支付方式兜底。
+      onPaymentActionResolved?.call(false);
       await _startPayment(plan, _defaultPaymentChannel);
     }
   }

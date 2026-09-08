@@ -8,6 +8,7 @@ import 'package:drama_client/features/pay/application/iap_price_service.dart';
 import 'package:drama_client/features/pay/provider/iap_price_service_provider.dart';
 import 'package:drama_client/features/pay/application/payment_loading_controller.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
@@ -15,6 +16,31 @@ import '../../helpers/app_modal_test_harness.dart';
 
 void main() {
   group('membership page layout', () {
+    testWidgets('tab retains scroll position when payment starts and ends', (tester) async {
+      await tester.pumpWidget(_buildMembershipPage(
+        home: const MembershipPage(showBackButton: false, handleBackNavigation: false),
+      ));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      final list = find.byKey(const Key('membership_scroll_body'));
+      await tester.drag(list, const Offset(0, -400));
+      await tester.pumpAndSettle();
+      final scrollable = find.descendant(of: list, matching: find.byType(Scrollable)).first;
+      final before = tester.state<ScrollableState>(scrollable);
+      final offset = before.position.pixels;
+      expect(offset, greaterThan(0));
+      final container = ProviderScope.containerOf(tester.element(find.byType(MembershipPage)));
+      final loading = container.read(paymentLoadingControllerProvider.notifier);
+      loading.show();
+      await tester.pump();
+      expect(tester.state<ScrollableState>(scrollable), same(before));
+      expect(before.position.pixels, closeTo(offset, 0.1));
+      loading.hide();
+      await tester.pump();
+      expect(tester.state<ScrollableState>(scrollable), same(before));
+      expect(before.position.pixels, closeTo(offset, 0.1));
+    });
+
     testWidgets('shows hero, plans, benefits and tips', (tester) async {
       await tester.pumpWidget(_buildMembershipPage());
       await tester.pump(const Duration(seconds: 1));
@@ -279,11 +305,12 @@ Color _planBorderColor(WidgetTester tester, String planId) {
 }
 
 Widget _buildMembershipPage({
+  Widget home = const MembershipPage(),
   MembershipRepository repository = const _FakeMembershipRepository(),
   List overrides = const [],
 }) {
   return buildAppModalTestApp(
-    home: const MembershipPage(),
+    home: home,
     overrides: [
       membershipRepositoryProvider.overrideWithValue(repository),
       ...overrides,

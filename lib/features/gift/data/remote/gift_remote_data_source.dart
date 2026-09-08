@@ -84,6 +84,9 @@ class GiftLinkDataDto {
       totalCount: _int(map['totalCount']),
       usedCount: _int(map['usedCount']),
       visible: _bool(map['visible']),
+      cycleStartAt: _string(map['cycleStartAt']),
+      cycleEndAt: _string(map['cycleEndAt']),
+      shareUrlExpiresAt: _string(map['shareUrlExpiresAt']),
     );
   }
 }

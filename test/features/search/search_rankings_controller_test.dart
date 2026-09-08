@@ -72,7 +72,7 @@ class _FakeSearchRepository implements SearchRepository {
   }
 
   @override
-  Future<SearchRanking> getHotPlays() {
+  Future<SearchRanking> getHotPlays({bool? isRecommend}) {
     return _result(SearchRankingType.hotPlays, 'hot plays');
   }
 

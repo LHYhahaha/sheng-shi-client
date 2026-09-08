@@ -11,7 +11,7 @@ import '../../../../shared/widgets/app_primary_button.dart';
 import '../../../../shared/widgets/custom_switch.dart';
 import '../../domain/player_video_quality.dart';
 
-enum PlayerPlaybackSettingsDestination { language, quality }
+enum PlayerPlaybackSettingsDestination { language, quality, speed }
 
 class PlayerPlaybackSettingsSheet extends StatelessWidget {
   const PlayerPlaybackSettingsSheet({
@@ -19,9 +19,11 @@ class PlayerPlaybackSettingsSheet extends StatelessWidget {
     required this.qualityLabel,
     required this.canShowLanguage,
     required this.canShowQuality,
+    this.playbackRate = 1.0,
     super.key,
   });
 
+  final double playbackRate;
   final String languageLabel;
   final String qualityLabel;
   final bool canShowLanguage;
@@ -59,6 +61,26 @@ class PlayerPlaybackSettingsSheet extends StatelessWidget {
             ),
             child: Column(
               children: [
+                ListTile(
+                  key: const ValueKey('player_settings_speed'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(
+                    Icons.speed_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  title: Text(
+                    context.l10n.playerSpeed,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  trailing: Text(
+                    '${playbackRate}x',
+                    style: const TextStyle(color: Colors.white54),
+                  ),
+                  onTap: () => Navigator.of(
+                    context,
+                  ).pop(PlayerPlaybackSettingsDestination.speed),
+                ),
                 if (canShowLanguage)
                   _SettingsRow(
                     key: const ValueKey('player_settings_language'),
@@ -1015,87 +1037,88 @@ class PlayerSpeedSheet extends StatelessWidget {
     super.key,
   });
 
-  static const rates = [2.0, 1.5, 1.2, 1.0, 0.8];
+  static const rates = [3.0, 2.0, 1.5, 1.25, 1.0, 0.75];
 
   final double selectedRate;
   final ValueChanged<double> onRateSelected;
 
   @override
   Widget build(BuildContext context) {
-    return _CompactPlayerSheet(
-      height: 288,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Material(
+      color: const Color(0xFF1C1C1C),
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      clipBehavior: Clip.antiAlias,
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                context.l10n.playerSpeed,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  height: 20 / 16,
-                ),
+              Row(
+                children: [
+                  const SizedBox(width: 40),
+                  Expanded(
+                    child: Text(
+                      context.l10n.playerSpeed,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  _CloseButton(onTap: () => Navigator.of(context).pop()),
+                ],
               ),
-              const Spacer(),
-              _CloseButton(onTap: () => Navigator.of(context).pop()),
+              const SizedBox(height: 12),
+              for (final rate in rates)
+                Semantics(
+                  selected: selectedRate == rate,
+                  button: true,
+                  child: InkWell(
+                    key: ValueKey('player_speed_option_$rate'),
+                    borderRadius: BorderRadius.circular(24),
+                    onTap: () {
+                      onRateSelected(rate);
+                      Navigator.of(context).pop();
+                    },
+                    child: Container(
+                      height: 56,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: selectedRate == rate
+                            ? const Color(0xFF2C2C2E)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            '${rate}x',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: selectedRate == rate
+                                  ? Colors.white.withValues(alpha: .9)
+                                  : Colors.white.withValues(alpha: .4),
+                            ),
+                          ),
+                          const Spacer(),
+                          if (selectedRate == rate)
+                            const Icon(
+                              Icons.check_rounded,
+                              key: ValueKey('player_speed_selected_check'),
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
-          const SizedBox(height: 8),
-          for (final rate in rates)
-            _SpeedOption(
-              rate: rate,
-              selected: (selectedRate - rate).abs() < 0.01,
-              onTap: () {
-                onRateSelected(rate);
-                Navigator.of(context).pop();
-              },
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SpeedOption extends StatelessWidget {
-  const _SpeedOption({
-    required this.rate,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final double rate;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: SizedBox(
-        height: 40,
-        child: Row(
-          children: [
-            Text(
-              '${rate.toStringAsFixed(1)}x',
-              style: TextStyle(
-                color: selected ? AppColors.primary : Colors.white,
-                fontSize: 15,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                height: 20 / 15,
-              ),
-            ),
-            const Spacer(),
-            if (selected)
-              const Icon(
-                Icons.check_rounded,
-                key: ValueKey('player_speed_selected_check'),
-                color: AppColors.primary,
-                size: 22,
-              ),
-          ],
         ),
       ),
     );

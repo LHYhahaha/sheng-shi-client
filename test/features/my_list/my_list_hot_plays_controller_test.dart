@@ -98,7 +98,7 @@ class _FakeSearchRepository implements SearchRepository {
   Future<void> reportSearchResultClick({required String dramaId}) async {}
 
   @override
-  Future<SearchRanking> getHotPlays() async {
+  Future<SearchRanking> getHotPlays({bool? isRecommend}) async {
     hotPlaysRequestCount += 1;
     if (shouldThrow) {
       throw StateError('hot plays failed');

@@ -20,8 +20,10 @@ class RemoteSearchRepository implements SearchRepository {
   }
 
   @override
-  Future<SearchRanking> getHotPlays() async {
-    return _mapper.mapRanking(await _remoteDataSource.getHotPlays());
+  Future<SearchRanking> getHotPlays({bool? isRecommend}) async {
+    return _mapper.mapRanking(
+      await _remoteDataSource.getHotPlays(isRecommend: isRecommend),
+    );
   }
 
   @override

@@ -4,7 +4,7 @@ import 'search_results.dart';
 abstract interface class SearchRepository {
   Future<SearchRanking> getHotSearches();
 
-  Future<SearchRanking> getHotPlays();
+  Future<SearchRanking> getHotPlays({bool? isRecommend});
 
   Future<SearchRanking> getNewOnline();
 

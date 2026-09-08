@@ -15,7 +15,12 @@ class GiftDeepLink {
   bool get isTemporaryVip => type == GiftDeepLinkType.temporaryVip;
 
   static GiftDeepLink? tryParse(Uri uri) {
-    final landingType = uri.queryParameters['landing_type']?.trim();
+    // Adjust 直达链接使用驼峰参数；H5 唤起 App 的既有链接使用下划线参数。
+    // 两者都归一到相同的领取流程。
+    final landingType =
+        (uri.queryParameters['landing_type'] ??
+                uri.queryParameters['landingType'])
+            ?.trim();
     final shareCode = uri.queryParameters['shareCode']?.trim();
     if (landingType == null ||
         landingType.isEmpty ||
@@ -34,7 +39,9 @@ class GiftDeepLink {
   }
 
   static GiftDeepLink? _dramaGift(Uri uri, String shareCode) {
-    final dramaId = uri.queryParameters['drama_id']?.trim();
+    final dramaId =
+        (uri.queryParameters['drama_id'] ?? uri.queryParameters['dramaId'])
+            ?.trim();
     if (dramaId == null || dramaId.isEmpty) return null;
     return GiftDeepLink(
       type: GiftDeepLinkType.drama,

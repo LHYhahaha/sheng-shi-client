@@ -1935,14 +1935,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     // 解锁页隐藏顶部信息，但返回入口必须始终可用。
     final showsTopPageChrome = showsPageChrome && !showsUnlockButton;
     final showsTopBar = showsTopPageChrome || showsUnlockButton;
-    final canShowLanguageSetting =
-        isSubtitleSelectionResolved &&
-        (episodeSources.isNotEmpty
-            ? episodeSources.length > 1
-            : subtitles.isNotEmpty);
-    final canShowQualitySetting = playbackShell.availableVideoQualityCount > 1;
-    final canShowPlaybackSettings =
-        canShowLanguageSetting || canShowQualitySetting;
+    const canShowPlaybackSettings = true;
     final canShowActiveVideoOverlay =
         settledItem != null &&
         accessForSettled == PlayerAccessPresentationState.playable;
@@ -4155,12 +4148,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _showSpeedSheet() async {
+    if (_isModalOpen) return;
     _isModalOpen = true;
     _syncAutoImmersiveBlockers();
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: 0.7),
+      isScrollControlled: true,
       isDismissible: true,
       enableDrag: true,
       builder: (context) {
@@ -4210,6 +4205,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           backgroundColor: Colors.transparent,
           barrierColor: Colors.black.withValues(alpha: .7),
           builder: (_) => PlayerPlaybackSettingsSheet(
+            playbackRate: playback.playbackRate,
             languageLabel:
                 canShowCloseSubtitleOption &&
                     playback.currentSubtitleLanguage == null
@@ -4226,7 +4222,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _isModalOpen = false;
     if (!mounted) return;
     _syncAutoImmersiveBlockers();
-    if (destination == PlayerPlaybackSettingsDestination.language) {
+    if (destination == PlayerPlaybackSettingsDestination.speed) {
+      await _showSpeedSheet();
+    } else if (destination == PlayerPlaybackSettingsDestination.language) {
       await _showLanguageSheet(
         languages,
         playback.currentSubtitleLanguage,
