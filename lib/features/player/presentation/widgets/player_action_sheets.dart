@@ -11,7 +11,7 @@ import '../../../../shared/widgets/app_primary_button.dart';
 import '../../../../shared/widgets/custom_switch.dart';
 import '../../domain/player_video_quality.dart';
 
-enum PlayerPlaybackSettingsDestination { language, quality, speed }
+enum PlayerPlaybackSettingsDestination { language, quality }
 
 class PlayerPlaybackSettingsSheet extends StatelessWidget {
   const PlayerPlaybackSettingsSheet({
@@ -19,11 +19,9 @@ class PlayerPlaybackSettingsSheet extends StatelessWidget {
     required this.qualityLabel,
     required this.canShowLanguage,
     required this.canShowQuality,
-    this.playbackRate = 1.0,
     super.key,
   });
 
-  final double playbackRate;
   final String languageLabel;
   final String qualityLabel;
   final bool canShowLanguage;
@@ -61,26 +59,6 @@ class PlayerPlaybackSettingsSheet extends StatelessWidget {
             ),
             child: Column(
               children: [
-                ListTile(
-                  key: const ValueKey('player_settings_speed'),
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(
-                    Icons.speed_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                  title: Text(
-                    context.l10n.playerSpeed,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  trailing: Text(
-                    '${playbackRate}x',
-                    style: const TextStyle(color: Colors.white54),
-                  ),
-                  onTap: () => Navigator.of(
-                    context,
-                  ).pop(PlayerPlaybackSettingsDestination.speed),
-                ),
                 if (canShowLanguage)
                   _SettingsRow(
                     key: const ValueKey('player_settings_language'),

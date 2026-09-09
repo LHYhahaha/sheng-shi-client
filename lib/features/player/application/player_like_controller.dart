@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/user_library/user_library_sync_controller.dart';
 import '../data/player_remote_data_source_provider.dart';
+import '../data/player_auto_favorite_history.dart';
 import '../data/remote/player_remote_data_source.dart';
 
 /// 播放页点赞状态 provider，按 dramaId 隔离。
@@ -71,9 +72,11 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
   // Notifier.build may run more than once when a dependency is refreshed.
   // This reference is reassigned on each build, so it must not be `late final`.
   late PlayerRemoteDataSource _remoteDataSource;
+  int _generation = 0;
 
   @override
   PlayerLikeState build() {
+    _generation++;
     _remoteDataSource = ref.watch(playerRemoteDataSourceProvider);
     final syncedIsLiked = ref
         .read(userLibrarySyncControllerProvider)
@@ -120,6 +123,74 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
       isLoading: false,
       error: null,
     );
+  }
+
+  /// Automatic favorites are confirmed before updating UI, unlike manual taps.
+  Future<bool> autoFavorite({
+    required String userId,
+    required bool Function() isCurrent,
+  }) async {
+    final id = int.tryParse(dramaId);
+    if (userId.isEmpty ||
+        id == null ||
+        id <= 0 ||
+        state.isLiked ||
+        state.isLoading ||
+        !isCurrent()) {
+      return false;
+    }
+    final keepAlive = ref.keepAlive();
+    final generation = _generation;
+    bool canApply() => ref.mounted && generation == _generation && isCurrent();
+    final history = ref.read(playerAutoFavoriteHistoryProvider);
+    state = state.copyWith(isLoading: true);
+    try {
+      if (await history.hasSucceeded(userId, dramaId) || !canApply()) {
+        return false;
+      }
+      // An unresolved detail snapshot is not evidence of an unfavorited drama.
+      final known = ref
+          .read(userLibrarySyncControllerProvider)
+          .favoriteFor(dramaId);
+      if (known == true ||
+          (known == null &&
+              await _remoteDataSource.checkShortFollowStatus(dramaId: id))) {
+        if (canApply()) {
+          state = state.copyWith(isLoading: false);
+          applyExternalFavoriteState(true);
+          ref
+              .read(userLibrarySyncControllerProvider.notifier)
+              .setFavorite(dramaId: dramaId, isFavorited: true);
+        }
+        return false;
+      }
+      if (!canApply()) return false;
+      await _remoteDataSource.followShort(dramaId: id);
+      // Record against the initiating account even if it left during the request.
+      try {
+        await history.markSucceeded(userId, dramaId);
+      } catch (_) {
+        // The history retains the confirmed success in memory on disk failure.
+      }
+      if (!canApply()) return false;
+      state = state.copyWith(
+        isLoading: false,
+        isLiked: true,
+        likeCountDelta: state.likeCountDelta + 1,
+      );
+      ref
+          .read(userLibrarySyncControllerProvider.notifier)
+          .setFavorite(dramaId: dramaId, isFavorited: true);
+      return true;
+    } catch (_) {
+      // Playback is independent of both network and local storage failures.
+      return false;
+    } finally {
+      if (ref.mounted && generation == _generation) {
+        state = state.copyWith(isLoading: false);
+      }
+      keepAlive.close();
+    }
   }
 
   /// 切换点赞状态。

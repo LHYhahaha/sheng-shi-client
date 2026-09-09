@@ -17,6 +17,7 @@ class ProfileHeader extends StatelessWidget {
     this.onGuestTap,
     this.secondaryText,
     this.displayName,
+    this.loginRewardCoins,
     super.key,
   });
 
@@ -30,6 +31,9 @@ class ProfileHeader extends StatelessWidget {
 
   /// 传入时替换默认的昵称/登录文案。
   final String? displayName;
+
+  /// 未绑定三方账号时展示的登录奖励；由页面传入，方便后续接入接口。
+  final int? loginRewardCoins;
 
   @override
   Widget build(BuildContext context) {
@@ -69,27 +73,74 @@ class ProfileHeader extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Row(
+                  Stack(
+                    clipBehavior: Clip.none,
                     children: [
-                      Text(
-                        resolvedDisplayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: AppColors.textPrimary,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          height: 1.3,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            resolvedDisplayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.3,
+                                ),
+                          ),
+                          SizedBox(width: 4),
+                          state.isLoggedIn
+                              ? SizedBox()
+                              : Image.asset(
+                                  "assets/images/profile/log_icon.png",
+                                  height: 20,
+                                  width: 20,
+                                ),
+                        ],
                       ),
-                      SizedBox(width: 4),
-                      state.isLoggedIn
-                          ? SizedBox()
-                          : Image.asset(
-                              "assets/images/profile/log_icon.png",
-                              height: 20,
-                              width: 20,
-                            ),
+                      if (!state.isLoggedIn && (loginRewardCoins ?? 0) > 0)
+                        Positioned(
+                          top: -20,
+                          left: 13,
+                          child: Stack(
+                            key: const Key('profile_login_reward_badge'),
+                            children: [
+                              Positioned.fill(
+                                child: SvgPicture.asset(
+                                  'assets/images/profile/login_reward_badge_bg.svg',
+                                  fit: BoxFit.fill,
+                                ),
+                              ),
+                              Container(
+                                constraints: const BoxConstraints(minWidth: 54),
+                                padding: const EdgeInsets.fromLTRB(6, 2, 6, 4),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Image.asset(
+                                      'assets/images/profile/coin.png',
+                                      width: 13,
+                                      height: 13,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      '+$loginRewardCoins',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w500,
+                                        height: 1.3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 1),

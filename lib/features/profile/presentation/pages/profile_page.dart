@@ -132,6 +132,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           children: [
             ProfileHeader(
               state: state,
+              // 样式占位，后续替换为登录奖励接口返回的可领取金币数。
+              loginRewardCoins: 310,
               onLoginTap: () {
                 if (authState.session.isGuest) {
                   context.push(RoutePaths.auth);

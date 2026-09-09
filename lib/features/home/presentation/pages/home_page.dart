@@ -28,6 +28,7 @@ import '../../../../core/notification/startup_notification_permission_reporter.d
 import '../../../../features/drama/domain/drama.dart';
 import '../../../../features/entitlement/application/entitlement_controller.dart';
 import '../../../../features/player/application/player_entry_preload_coordinator.dart';
+import '../../../rewards/application/reward_coins_controller.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/media/media_resource.dart';
 import '../../../../shared/theme/app_colors.dart';
@@ -1192,13 +1193,9 @@ class _HomeTitleBarState extends ConsumerState<_HomeTitleBar> {
               _openSearch();
             },
             child: Container(
-              padding: EdgeInsets.symmetric(vertical: 7, horizontal: 13),
+              padding: EdgeInsets.symmetric(vertical: 7, horizontal: 8),
               decoration: BoxDecoration(
                 color: Color(0XFF3A3A3A).withValues(alpha: 0.6),
-                border: Border.all(
-                  width: 0.5,
-                  color: Color(0XFF949494).withValues(alpha: 0.3),
-                ),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Row(
@@ -1207,12 +1204,12 @@ class _HomeTitleBarState extends ConsumerState<_HomeTitleBar> {
                     "assets/images/player/search.svg",
                     width: 24,
                     height: 24,
-                    colorFilter: const ColorFilter.mode(
-                      Color(0XFFAFAFAF),
+                    colorFilter: ColorFilter.mode(
+                      Color(0XFFFFFFFF).withValues(alpha: 0.4),
                       BlendMode.srcIn,
                     ),
                   ),
-                  SizedBox(width: 8),
+                  SizedBox(width: 6),
                   Expanded(
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 320),
@@ -1245,10 +1242,10 @@ class _HomeTitleBarState extends ConsumerState<_HomeTitleBar> {
                         textAlign: TextAlign.start,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: const Color(0XFFAFAFAF),
+                          color: Color(0XFFFFFFFF).withValues(alpha: 0.4),
                           fontSize: 14,
                           fontWeight: FontWeight.normal,
-                          height: 1.5,
+                          height: 18/14,
                         ),
                       ),
                     ),
@@ -1279,25 +1276,124 @@ class _HomeTitleBarState extends ConsumerState<_HomeTitleBar> {
             );
           },
           child: const Padding(
-            padding: EdgeInsets.only(right: 1, left: 7),
-            child: _VipCrown(),
+            padding: EdgeInsets.only(left: 7),
+            child: _HeadIcon(
+              imageUrl: 'assets/images/home/vip_crown_figma.png',
+            ),
           ),
         ),
+        const _HomeRewardEntry(),
       ],
     );
   }
 }
 
-class _VipCrown extends StatelessWidget {
-  const _VipCrown();
+class _HomeRewardEntry extends ConsumerStatefulWidget {
+  const _HomeRewardEntry();
+
+  @override
+  ConsumerState<_HomeRewardEntry> createState() => _HomeRewardEntryState();
+}
+
+class _HomeRewardEntryState extends ConsumerState<_HomeRewardEntry> {
+  @override
+  void initState() {
+    super.initState();
+    ref.listenManual(
+      authTokenStoreProvider.select((state) => state.accessToken),
+      (_, token) {
+        if (token != null && token.isNotEmpty) {
+          Future.microtask(_refresh);
+        }
+      },
+      fireImmediately: true,
+    );
+  }
+
+  Future<void> _refresh() async {
+    if (!mounted || !ref.read(authTokenStoreProvider).hasAccessToken) return;
+    await ref.read(rewardCoinsControllerProvider.notifier).loadRemainingCoin();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(appShellCurrentTabIndexProvider, (previous, current) {
+      if (current == AppShellDestinations.homeIndex && previous != current) {
+        unawaited(_refresh());
+      }
+    });
+    final remainingCoin = ref.watch(
+      rewardCoinsControllerProvider.select((state) => state.remainingCoin),
+    );
+    final hasToken = ref.watch(
+      authTokenStoreProvider.select((state) => state.hasAccessToken),
+    );
+    return Semantics(
+      button: true,
+      label: context.l10n.profileReward,
+      child: GestureDetector(
+        key: const ValueKey('home_reward_entry'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () async {
+          await context.push<void>(RoutePaths.rewardsLocation());
+          await _refresh();
+        },
+        child: Padding(
+          padding: const EdgeInsets.only(left: 0),
+          child: Stack(
+            alignment: Alignment.topRight,
+            children: [
+              const SizedBox(
+                width: 44,
+                height: 44,
+                child: Center(
+                  child: _HeadIcon(
+                    imageUrl: 'assets/images/home/gift.png',
+                    size: 44,
+                  ),
+                ),
+              ),
+              if (hasToken && remainingCoin?.isPositive == true)
+                Container(
+                  key: const ValueKey('home_reward_badge'),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  margin: EdgeInsets.only(top: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8014F),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '+${remainingCoin!.value}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight(330),
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeadIcon extends StatelessWidget {
+  const _HeadIcon({required this.imageUrl, this.size});
+
+  final String imageUrl;
+  final double? size;
 
   @override
   Widget build(BuildContext context) {
     return Image.asset(
-      'assets/images/home/vip_crown_figma.png',
-      width: 36,
-      height: 34,
-      cacheWidth: (36 * MediaQuery.devicePixelRatioOf(context)).round(),
+      imageUrl,
+      width: size ?? 44,
+      height: size ?? 44,
+      cacheWidth: ((size ?? 44) * MediaQuery.devicePixelRatioOf(context))
+          .round(),
       fit: BoxFit.contain,
       filterQuality: FilterQuality.low,
     );

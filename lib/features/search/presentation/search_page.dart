@@ -601,7 +601,7 @@ class _SearchBarState extends State<_SearchBar> {
                         minHeight: 32,
                       ),
                       prefixIcon: Padding(
-                        padding: const EdgeInsets.only(left: 15, right: 4),
+                        padding: const EdgeInsets.only(left: 15, right: 2),
                         child: GestureDetector(
                           key: const ValueKey('search_submit_button'),
                           behavior: HitTestBehavior.opaque,
@@ -648,18 +648,18 @@ class _SearchBarState extends State<_SearchBar> {
                       fillColor: AppColors.textPrimary.withValues(alpha: 0.14),
                       contentPadding: const EdgeInsets.symmetric(vertical: 10),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(
-                          width: 0.5,
-                          color: AppColors.textPrimary.withValues(alpha: 0.2),
-                        ),
+                        borderRadius: BorderRadius.circular(4),
+                        // borderSide: BorderSide(
+                        //   width: 0.5,
+                        //   color: AppColors.textPrimary.withValues(alpha: 0.2),
+                        // ),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(
-                          width: 0.5,
-                          color: AppColors.textPrimary.withValues(alpha: 0.2),
-                        ),
+                        borderRadius: BorderRadius.circular(4),
+                        // borderSide: BorderSide(
+                        //   width: 0.5,
+                        //   color: AppColors.textPrimary.withValues(alpha: 0.2),
+                        // ),
                       ),
                     ),
                   ),

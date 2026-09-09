@@ -1387,8 +1387,8 @@ class _RedeemPointsPanel extends ConsumerWidget {
                             l10n.memberPointsPaidMemberOnly,
                             style: TextStyle(
                               color: _mutedColor,
-                              fontSize: 10,
-                              height: 1.45,
+                              fontSize: 12,
+                              height: 1.5,
                             ),
                           ),
                         ),
@@ -1503,7 +1503,7 @@ class _PanelHeader extends StatelessWidget {
           : HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 13, 16, 8),
+        padding: const EdgeInsets.fromLTRB(16, 13, 16, 4),
         child: Row(
           children: [
             Expanded(

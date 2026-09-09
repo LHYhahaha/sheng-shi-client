@@ -42,6 +42,8 @@ import '../../data/player_exit_recommendation_history_repository_provider.dart';
 import '../../../auth/application/auth_controller.dart';
 import '../../../auth/domain/auth_session.dart';
 import '../../application/player_feed_controller.dart';
+import '../../application/player_auto_favorite_tracker.dart';
+import '../../application/player_like_controller.dart';
 import '../../application/player_entry_preload_coordinator.dart';
 import '../../application/player_feed_engine.dart';
 import '../../application/player_runtime_coordinator.dart';
@@ -205,6 +207,71 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   late final PageController _pageController;
   late final String _sessionKey;
+  final _autoFavoriteTracker = PlayerAutoFavoriteTracker();
+
+  void _observeAutoFavorite() {
+    if (!mounted ||
+        _isDisposing ||
+        widget.feedMode != PlayerFeedMode.singleDrama) {
+      return;
+    }
+    final feed = ref.read(playerFeedControllerProvider(_sessionKey));
+    final item = feed.currentItem;
+    if (_isLeavingRoute || item == null) {
+      _autoFavoriteTracker.reset();
+      return;
+    }
+    final userId = ref.read(userInfoStoreProvider).userId ?? '';
+    final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
+    final effectivePlaying =
+        _previousLifecycleState == AppLifecycleState.resumed &&
+        _isPlaybackViewVisible &&
+        playback.currentItemId == item.id &&
+        playback.isPlaying &&
+        playback.hasFirstFrame &&
+        !playback.isBuffering &&
+        !playback.isSeeking &&
+        !playback.hasEnded &&
+        !ref.read(playerUiControllerProvider(_sessionKey)).showsPaywall &&
+        item.episode.viewingEntitlementType != 'trial' &&
+        !item.episode.isLocked &&
+        _feedEngine.accessPresentationFor(item) ==
+            PlayerAccessPresentationState.playable;
+    if (!_autoFavoriteTracker.observe(
+      userId: userId,
+      dramaId: item.content.id,
+      episodeId: item.episode.id,
+      episodeNumber: item.episode.number,
+      effectivePlaying: effectivePlaying,
+    )) {
+      return;
+    }
+    unawaited(_requestAutoFavorite(userId, item.content.id));
+  }
+
+  Future<void> _requestAutoFavorite(String userId, String dramaId) async {
+    bool isCurrent() =>
+        mounted &&
+        !_isDisposing &&
+        !_isLeavingRoute &&
+        ref.read(userInfoStoreProvider).userId == userId &&
+        ref
+                .read(playerFeedControllerProvider(_sessionKey))
+                .currentItem
+                ?.content
+                .id ==
+            dramaId;
+    final succeeded = await ref
+        .read(playerLikeControllerProvider(dramaId).notifier)
+        .autoFavorite(userId: userId, isCurrent: isCurrent);
+    if (succeeded &&
+        isCurrent() &&
+        _isPlaybackViewVisible &&
+        _previousLifecycleState == AppLifecycleState.resumed) {
+      showAppCenterToast('已为您自动加入收藏列表');
+    }
+  }
+
   late final PlayerPlaybackController _playbackController;
   late final PlayerOverlayOrchestrator _overlayOrchestrator;
   late final AppModalService _modalService;
@@ -477,6 +544,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     // 只有外部路由覆盖播放器时，才使尚未完成的广告提示请求失效。
     _adUnlockPromptGeneration += 1;
     _isCoveredByAnotherRoute = true;
+    _autoFavoriteTracker.pause();
     final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
     _resumePlaybackOnRouteReturn = playback.isPlaying;
     unawaited(_playbackController.pauseForVisibility());
@@ -741,6 +809,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   @override
   void dispose() {
+    _autoFavoriteTracker.reset();
     // 涓婃姤瑙傜湅閫€鍑轰簨浠?
     _isDisposing = true;
     _adUnlockPromptGeneration += 1;
@@ -773,6 +842,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) _autoFavoriteTracker.pause();
     ref
         .read(playerUiControllerProvider(_sessionKey).notifier)
         .onRouteVisibilityChanged(state == AppLifecycleState.resumed);
@@ -1399,6 +1469,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final uiProvider = playerUiControllerProvider(sessionKey);
     final viewportProvider = playerViewportControllerProvider(sessionKey);
     final overlayProvider = playerOverlayOrchestratorProvider(sessionKey);
+    if (widget.feedMode == PlayerFeedMode.singleDrama) {
+      ref.listen(
+        playerPlaybackControllerProvider(sessionKey),
+        (_, _) => _observeAutoFavorite(),
+      );
+      ref.listen(feedProvider, (_, _) => _observeAutoFavorite());
+      ref.listen(uiProvider, (_, _) => _observeAutoFavorite());
+      ref.listen(
+        userInfoStoreProvider.select((state) => state.userId),
+        (_, _) => _observeAutoFavorite(),
+      );
+    }
     final performancePolicy = ref.watch(playerPerformancePolicyProvider);
     _shouldTrackVideoSurfacePagePosition =
         performancePolicy.allowVideoSurfaceFollowDuringDrag;
@@ -1935,7 +2017,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     // 解锁页隐藏顶部信息，但返回入口必须始终可用。
     final showsTopPageChrome = showsPageChrome && !showsUnlockButton;
     final showsTopBar = showsTopPageChrome || showsUnlockButton;
-    const canShowPlaybackSettings = true;
+    final canShowPlaybackSettings =
+        (isSubtitleSelectionResolved &&
+            (episodeSources.isNotEmpty
+                ? episodeSources.length > 1
+                : subtitles.isNotEmpty)) ||
+        playbackShell.availableVideoQualityCount > 1;
     final canShowActiveVideoOverlay =
         settledItem != null &&
         accessForSettled == PlayerAccessPresentationState.playable;
@@ -4205,7 +4292,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           backgroundColor: Colors.transparent,
           barrierColor: Colors.black.withValues(alpha: .7),
           builder: (_) => PlayerPlaybackSettingsSheet(
-            playbackRate: playback.playbackRate,
             languageLabel:
                 canShowCloseSubtitleOption &&
                     playback.currentSubtitleLanguage == null
@@ -4222,9 +4308,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _isModalOpen = false;
     if (!mounted) return;
     _syncAutoImmersiveBlockers();
-    if (destination == PlayerPlaybackSettingsDestination.speed) {
-      await _showSpeedSheet();
-    } else if (destination == PlayerPlaybackSettingsDestination.language) {
+    if (destination == PlayerPlaybackSettingsDestination.language) {
       await _showLanguageSheet(
         languages,
         playback.currentSubtitleLanguage,
