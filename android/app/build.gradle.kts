@@ -73,6 +73,46 @@ android {
             resValue("string", "VEST_PKG_ID", "1001")
         }
 
+        create("CY") {
+            dimension = "channel"
+            applicationId = "com.novashort.shortdrama"
+            resValue("string", "channel_flag", "CY_001")
+            resValue("string", "MERCHANT_ID", "333")
+            resValue("string", "VEST_PKG_ID", "1001")
+        }
+
+        create("XM") {
+            dimension = "channel"
+            applicationId = "com.novashort.shortdrama"
+            resValue("string", "channel_flag", "XM_001")
+            resValue("string", "MERCHANT_ID", "333")
+            resValue("string", "VEST_PKG_ID", "1001")
+        }
+
+        create("vivo") {
+            dimension = "channel"
+            applicationId = "com.novashort.shortdrama"
+            resValue("string", "channel_flag", "vivo_001")
+            resValue("string", "MERCHANT_ID", "333")
+            resValue("string", "VEST_PKG_ID", "1001")
+        }
+
+        create("OPPO") {
+            dimension = "channel"
+            applicationId = "com.novashort.shortdrama"
+            resValue("string", "channel_flag", "OPPO_001")
+            resValue("string", "MERCHANT_ID", "333")
+            resValue("string", "VEST_PKG_ID", "1001")
+        }
+
+        create("HW") {
+            dimension = "channel"
+            applicationId = "com.novashort.shortdrama"
+            resValue("string", "channel_flag", "HW_001")
+            resValue("string", "MERCHANT_ID", "333")
+            resValue("string", "VEST_PKG_ID", "1001")
+        }
+
         create("haha") {
             dimension = "channel"
             applicationId = "com.novashort.shortdrama"
