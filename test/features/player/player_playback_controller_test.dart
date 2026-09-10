@@ -45,6 +45,65 @@ String _playableSource(int episodeNumber) {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  test(
+    'effective watch samples exclude preview and break on replay seek',
+    () async {
+      final session = _FakePlaybackSession();
+      final container = _createContainer(session);
+      final controller = container.read(
+        playerPlaybackControllerProvider('watch:samples').notifier,
+      );
+      await controller.playItem(_item(1));
+      final samples = <(Duration?, int)>[];
+      controller.onEffectiveWatchPosition = (position, generation) {
+        samples.add((position, generation));
+      };
+      session.emitDuration(const Duration(seconds: 100));
+      session.emitPosition(const Duration(seconds: 1));
+      await Future<void>.delayed(Duration.zero);
+      final firstGeneration = samples.last.$2;
+      controller.beginSeek();
+      controller.updateSeekPreview(const Duration(seconds: 30));
+      expect(
+        samples.where((event) => event.$1 == const Duration(seconds: 30)),
+        isEmpty,
+      );
+      await controller.endSeek();
+      await Future<void>.delayed(Duration.zero);
+      expect(samples.any((event) => event.$1 == null), true);
+      session.emitPosition(const Duration(seconds: 31));
+      await Future<void>.delayed(Duration.zero);
+      expect(samples.last.$2, greaterThan(firstGeneration));
+      samples.clear();
+      await controller.replay();
+      expect(samples.first.$1, null);
+    },
+  );
+
+  test(
+    'effective watch observer failure cannot interrupt seek or position updates',
+    () async {
+      final session = _FakePlaybackSession();
+      final container = _createContainer(session);
+      final provider = playerPlaybackControllerProvider(
+        'watch:observer-failure',
+      );
+      final controller = container.read(provider.notifier);
+      await controller.playItem(_item(1));
+      controller.onEffectiveWatchPosition = (_, _) =>
+          throw StateError('observer failed');
+      session.emitDuration(const Duration(seconds: 100));
+      session.emitPosition(const Duration(seconds: 10));
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(provider).position, const Duration(seconds: 10));
+      controller.beginSeek();
+      controller.updateSeekPreview(const Duration(seconds: 30));
+      await controller.endSeek();
+      expect(session.seekedPositions, contains(const Duration(seconds: 30)));
+      expect(container.read(provider).position, const Duration(seconds: 30));
+    },
+  );
+
   test('rate persists across episodes and new pages', () async {
     final session = _FakePlaybackSession();
     final container = _createContainer(session);

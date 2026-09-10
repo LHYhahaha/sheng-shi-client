@@ -39,8 +39,14 @@ class RemoteRewardCoinsRepository implements RewardCoinsRepository {
   }
 
   @override
-  Future<List<RewardTask>> getTasks({required int rewardType}) async {
-    final dto = await _remoteDataSource.getTasks(rewardType: rewardType);
+  Future<List<RewardTask>> getTasks({
+    required int rewardType,
+    int? businessType,
+  }) async {
+    final dto = await _remoteDataSource.getTasks(
+      rewardType: rewardType,
+      businessType: businessType,
+    );
     return dto.toDomain();
   }
 

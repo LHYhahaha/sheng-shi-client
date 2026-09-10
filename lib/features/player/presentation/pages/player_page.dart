@@ -43,6 +43,12 @@ import '../../../auth/application/auth_controller.dart';
 import '../../../auth/domain/auth_session.dart';
 import '../../application/player_feed_controller.dart';
 import '../../application/player_auto_favorite_tracker.dart';
+import '../../application/daily_effective_watch_controller.dart';
+import '../../application/player_watch_reward_coordinator.dart';
+import '../../application/player_watch_reward_coordinator_provider.dart';
+import '../../domain/daily_effective_watch.dart';
+import '../../../rewards/domain/reward_coins_check_in_claim_result.dart';
+import '../../../rewards/presentation/widget/reward_coins_claim_success_toast.dart';
 import '../../application/player_like_controller.dart';
 import '../../application/player_entry_preload_coordinator.dart';
 import '../../application/player_feed_engine.dart';
@@ -209,6 +215,107 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   late final String _sessionKey;
   final _autoFavoriteTracker = PlayerAutoFavoriteTracker();
 
+  late final DailyEffectiveWatchController _dailyWatch;
+  bool _dailyWatchActive = false;
+  bool _dailyWatchAdBlocked = false;
+
+  PlayerWatchRewardCoordinator? _watchRewards;
+
+  bool get _canClaimWatchReward =>
+      mounted &&
+      !_isDisposing &&
+      !_isLeavingRoute &&
+      widget.feedMode == PlayerFeedMode.singleDrama &&
+      _isPlaybackViewVisible &&
+      !_dailyWatchAdBlocked &&
+      _previousLifecycleState == AppLifecycleState.resumed;
+
+  void _syncWatchRewards() {
+    final coordinator = _watchRewards;
+    if (coordinator == null || !mounted || _isDisposing) return;
+    final watch = ref.read(dailyEffectiveWatchControllerProvider);
+    final userId = ref.read(userInfoStoreProvider).userId ?? '';
+    final dayKey = watch.dayKey;
+    bool isCurrent() =>
+        _canClaimWatchReward &&
+        ref.read(userInfoStoreProvider).userId == userId &&
+        ref.read(dailyEffectiveWatchControllerProvider).ready &&
+        ref.read(dailyEffectiveWatchControllerProvider).dayKey == dayKey &&
+        IndiaWatchDay.key(DateTime.now()) == dayKey;
+    coordinator.update(
+      owner: _sessionKey,
+      userId: userId,
+      dayKey: dayKey,
+      seconds: watch.totalEffectiveSeconds,
+      visible: watch.ready && watch.userId == userId && isCurrent(),
+      isCurrent: isCurrent,
+      onSuccess: _onWatchRewardSuccess,
+    );
+  }
+
+  void _onWatchRewardSuccess(RewardCoinsCheckInClaimResult result) {
+    if (!_canClaimWatchReward) return;
+    showRewardClaimSuccessToast(
+      context,
+      rewardAmount: result.rewardAmount,
+      type: result.rewardType == PlayerWatchRewardCoordinator.coinType
+          ? RewardClaimToastType.coins
+          : RewardClaimToastType.points,
+    );
+  }
+
+  bool get _canCountDailyWatch {
+    if (!mounted ||
+        _isDisposing ||
+        _isLeavingRoute ||
+        _dailyWatchAdBlocked ||
+        !_isPlaybackViewVisible ||
+        _previousLifecycleState != AppLifecycleState.resumed) {
+      return false;
+    }
+    final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
+    final item = ref
+        .read(playerFeedControllerProvider(_sessionKey))
+        .currentItem;
+    return item != null &&
+        playback.currentItemId == item.id &&
+        playback.isPlaying &&
+        playback.hasFirstFrame &&
+        playback.hasRenderedFirstFrame &&
+        !playback.isBuffering &&
+        !playback.isOpening &&
+        !playback.isSeeking &&
+        !playback.hasEnded &&
+        !ref.read(playerUiControllerProvider(_sessionKey)).showsPaywall;
+  }
+
+  void _stopDailyWatch() {
+    if (!_dailyWatchActive) return;
+    _dailyWatchActive = false;
+    _dailyWatch.stop(_sessionKey);
+  }
+
+  void _onEffectiveWatchPosition(Duration? position, int generation) {
+    if (position == null || !_canCountDailyWatch) {
+      _stopDailyWatch();
+      return;
+    }
+    final item = ref
+        .read(playerFeedControllerProvider(_sessionKey))
+        .currentItem!;
+    final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
+    _dailyWatchActive = true;
+    _dailyWatch.observe(
+      owner: _sessionKey,
+      userId: ref.read(userInfoStoreProvider).userId ?? '',
+      dramaId: item.content.id,
+      episodeId: item.episode.id,
+      generation: generation,
+      position: position,
+      rate: playback.playbackRate,
+    );
+  }
+
   void _observeAutoFavorite() {
     if (!mounted ||
         _isDisposing ||
@@ -264,11 +371,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final succeeded = await ref
         .read(playerLikeControllerProvider(dramaId).notifier)
         .autoFavorite(userId: userId, isCurrent: isCurrent);
+    if (!mounted) return;
     if (succeeded &&
         isCurrent() &&
         _isPlaybackViewVisible &&
         _previousLifecycleState == AppLifecycleState.resumed) {
-      showAppCenterToast('已为您自动加入收藏列表');
+      showAppCenterToast(context.l10n.favoriteAutoAddToast);
     }
   }
 
@@ -298,6 +406,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isPageScrolling = false;
   bool _isPageSettleAnimation = false;
   bool _isPageSettleRequested = false;
+
   // ScrollEnd 到 viewport state 落位之间有一个 post-frame 间隙。期间不能把
   // PageController 按旧 currentIndex 对齐，否则用户刚滑到下一页会被拉回。
   bool _hasPendingPageViewportSettle = false;
@@ -544,7 +653,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     // 只有外部路由覆盖播放器时，才使尚未完成的广告提示请求失效。
     _adUnlockPromptGeneration += 1;
     _isCoveredByAnotherRoute = true;
+    _watchRewards?.leave(_sessionKey);
     _autoFavoriteTracker.pause();
+    _stopDailyWatch();
     final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
     _resumePlaybackOnRouteReturn = playback.isPlaying;
     unawaited(_playbackController.pauseForVisibility());
@@ -553,6 +664,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   @override
   void didPopNext() {
     _isCoveredByAnotherRoute = false;
+    _syncWatchRewards();
     final shouldResumePlayback = _resumePlaybackOnRouteReturn;
     _resumePlaybackOnRouteReturn = false;
     if (_previousLifecycleState != AppLifecycleState.resumed ||
@@ -607,6 +719,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _playbackController = ref.read(
       playerPlaybackControllerProvider(_sessionKey).notifier,
     );
+    _dailyWatch = ref.read(dailyEffectiveWatchControllerProvider.notifier);
+    _playbackController.onEffectiveWatchPosition = _onEffectiveWatchPosition;
+    if (widget.feedMode == PlayerFeedMode.singleDrama) {
+      _watchRewards = ref.read(playerWatchRewardCoordinatorProvider);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _syncWatchRewards());
+    }
     _analyticsService = ref.read(analyticsServiceProvider);
     _adUnlockEntryExposureTracker = AdUnlockEntryExposureTracker(
       analytics: _analyticsService,
@@ -809,6 +927,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   @override
   void dispose() {
+    _watchRewards?.leave(_sessionKey);
+    _stopDailyWatch();
+    _playbackController.onEffectiveWatchPosition = null;
     _autoFavoriteTracker.reset();
     // 涓婃姤瑙傜湅閫€鍑轰簨浠?
     _isDisposing = true;
@@ -842,12 +963,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) _autoFavoriteTracker.pause();
+    if (state != AppLifecycleState.resumed) {
+      _autoFavoriteTracker.pause();
+      _stopDailyWatch();
+    } else {
+      unawaited(_dailyWatch.flush());
+    }
     ref
         .read(playerUiControllerProvider(_sessionKey).notifier)
         .onRouteVisibilityChanged(state == AppLifecycleState.resumed);
     final previous = _previousLifecycleState;
     _previousLifecycleState = state;
+    _syncWatchRewards();
     if (state == AppLifecycleState.resumed) {
       // 从外部应用（例如 Facebook 分享页）返回时，恢复播放器可操作的默认
       // chrome；不能只依赖“是否自动续播”，否则暂停状态返回会残留沉浸 UI。
@@ -1471,6 +1598,37 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final overlayProvider = playerOverlayOrchestratorProvider(sessionKey);
     if (widget.feedMode == PlayerFeedMode.singleDrama) {
       ref.listen(
+        dailyEffectiveWatchControllerProvider.select(
+          (value) => (
+            value.userId,
+            value.dayKey,
+            value.ready,
+            value.totalEffectiveSeconds,
+          ),
+        ),
+        (_, _) => _syncWatchRewards(),
+      );
+      ref.listen(
+        userInfoStoreProvider.select((value) => value.userId),
+        (_, _) => _syncWatchRewards(),
+      );
+    }
+    ref.listen(playerPlaybackControllerProvider(sessionKey), (previous, next) {
+      if (!_canCountDailyWatch ||
+          previous?.currentSource != next.currentSource ||
+          previous?.currentItemId != next.currentItemId ||
+          previous?.playbackRate != next.playbackRate) {
+        _stopDailyWatch();
+      }
+    });
+    ref.listen(uiProvider, (_, _) {
+      if (!_canCountDailyWatch) _stopDailyWatch();
+    });
+    ref.listen(feedProvider.select((value) => value.currentItem?.id), (_, _) {
+      _stopDailyWatch();
+    });
+    if (widget.feedMode == PlayerFeedMode.singleDrama) {
+      ref.listen(
         playerPlaybackControllerProvider(sessionKey),
         (_, _) => _observeAutoFavorite(),
       );
@@ -1567,6 +1725,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     // hidden.  Refresh only after navigation makes the player visible, which
     // keeps the feed current without allowing background audio.
     ref.listen(appShellCurrentTabIndexProvider, (previous, next) {
+      if (!_isPlaybackViewVisible) _stopDailyWatch();
       if (next == AppShellDestinations.forYouIndex) {
         unawaited(_handleForYouTabSelected());
       }
@@ -2864,6 +3023,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     _isLeavingRoute = true;
+    _watchRewards?.leave(_sessionKey);
     if (context.canPop()) {
       context.pop(handoffResult);
     } else {
@@ -3133,6 +3293,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   ) {
     _cancelExitRecommendationRequestIfPending();
     _isLeavingRoute = true;
+    _watchRewards?.leave(_sessionKey);
     preparePlayerEntryPreload(
       context,
       dramaId: '${recommendation.id}',
@@ -4557,16 +4718,25 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       sessionController.session!,
     );
     materialPreloader.consumeMaterial(session);
-    final result = await Navigator.of(context).push<AdUnlockRouteResult>(
-      MaterialPageRoute(
-        builder: (_) => AdUnlockPage(
-          session: session,
-          dramaId: item.content.id,
-          episodeId: item.episode.id,
-          onUnlockConfirmed: () => _refreshAdUnlockedEpisode(item),
+    _dailyWatchAdBlocked = true;
+    _watchRewards?.leave(_sessionKey);
+    _stopDailyWatch();
+    AdUnlockRouteResult? result;
+    try {
+      result = await Navigator.of(context).push<AdUnlockRouteResult>(
+        MaterialPageRoute(
+          builder: (_) => AdUnlockPage(
+            session: session,
+            dramaId: item.content.id,
+            episodeId: item.episode.id,
+            onUnlockConfirmed: () => _refreshAdUnlockedEpisode(item),
+          ),
         ),
-      ),
-    );
+      );
+    } finally {
+      _dailyWatchAdBlocked = false;
+      _syncWatchRewards();
+    }
     if (!mounted || result is! AdUnlockRouteResult) return;
     await result.refreshFuture;
     await _playPendingAdUnlockedEpisode();

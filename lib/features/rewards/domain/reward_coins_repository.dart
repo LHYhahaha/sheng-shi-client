@@ -8,7 +8,10 @@ abstract interface class RewardCoinsRepository {
   Future<RewardCoinsCheckInClaimResult> claimCheckIn();
   Future<RewardCoinsCheckInClaimResult> claimTask({required String taskKey});
   Future<RewardCoinRemaining> getRemainingCoin();
-  Future<List<RewardTask>> getTasks({required int rewardType});
+  Future<List<RewardTask>> getTasks({
+    required int rewardType,
+    int? businessType,
+  });
 
   Future<void> reportTaskAction({required String actionKey});
 }

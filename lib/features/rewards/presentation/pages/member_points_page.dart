@@ -28,6 +28,7 @@ import '../../domain/member_point_daily_detail.dart';
 import '../../domain/member_point_exchange_options.dart';
 import '../widget/member_points_claim_success_dialog.dart';
 import '../widget/member_points_exchange_confirm_dialog.dart';
+import '../widget/reward_coins_claim_success_toast.dart';
 import '../widget/reward_rules_sheet.dart';
 
 const _purple = Color(0xFF8800FF);
@@ -1380,7 +1381,7 @@ class _RedeemPointsPanel extends ConsumerWidget {
                         showRules: true,
                       ),
                       Padding(
-                        padding: EdgeInsets.fromLTRB(16, 0, 14, 10),
+                        padding: EdgeInsets.fromLTRB(16, 0, 14, 14),
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
@@ -1503,7 +1504,7 @@ class _PanelHeader extends StatelessWidget {
           : HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 13, 16, 4),
+        padding: const EdgeInsets.fromLTRB(16, 13, 16, 0),
         child: Row(
           children: [
             Expanded(
@@ -1801,54 +1802,47 @@ class _VipBenefitsPanel extends StatelessWidget {
       ('assets/images/rewards/points_hd.png', l10n.benefitHd, null),
     ];
 
-    return ClipRRect(
-      key: const Key('vip_benefits_panel'),
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(36)),
-      child: ColoredBox(
-        color: const Color(0xFF0E0016),
-        child: CustomPaint(
-          key: const Key('vip_benefits_top_border'),
-          foregroundPainter: _VipBenefitsTopBorderPainter(
-            color: Color(0XFFDA8AFF).withValues(alpha: 0.4),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 20),
-            child: Column(
+    return Container(
+      decoration: BoxDecoration(
+        image: DecorationImage(
+          fit: BoxFit.fill,
+          image: AssetImage("assets/images/rewards/purple_benefit_bac.png"),
+        ),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 20),
+      child: Column(
+        children: [
+          _SectionTitle(title: l10n.membershipBenefits),
+          const SizedBox(height: 24),
+          for (var index = 0; index < benefits.length; index++) ...[
+            Row(
               children: [
-                _SectionTitle(title: l10n.membershipBenefits),
-                const SizedBox(height: 24),
-                for (var index = 0; index < benefits.length; index++) ...[
-                  Row(
+                Image.asset(benefits[index].$1, width: 30, height: 30),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Image.asset(benefits[index].$1, width: 30, height: 30),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _VipBenefitTitle(
-                              text: benefits[index].$2,
-                              highlight: index == 0 ? '8000+' : null,
-                            ),
-                            if (benefits[index].$3 != null)
-                              Text(
-                                benefits[index].$3!,
-                                style: TextStyle(
-                                  color: _titleColor.withValues(alpha: 0.4),
-                                  fontSize: 12,
-                                ),
-                              ),
-                          ],
-                        ),
+                      _VipBenefitTitle(
+                        text: benefits[index].$2,
+                        highlight: index == 0 ? '8000+' : null,
                       ),
+                      if (benefits[index].$3 != null)
+                        Text(
+                          benefits[index].$3!,
+                          style: TextStyle(
+                            color: _titleColor.withValues(alpha: 0.4),
+                            fontSize: 12,
+                          ),
+                        ),
                     ],
                   ),
-                  if (index < benefits.length - 1) const SizedBox(height: 15),
-                ],
+                ),
               ],
             ),
-          ),
-        ),
+            if (index < benefits.length - 1) const SizedBox(height: 15),
+          ],
+        ],
       ),
     );
   }
@@ -1914,7 +1908,7 @@ class _VipSeriesPanel extends ConsumerWidget {
         VipOnlyDramasSection(
           exposurePageSession: dramaExposureSession,
           exposureAnalytics: analytics,
-          topPadding: 6,
+          topPadding: 0,
           needDivider: true,
           listPadding: EdgeInsetsGeometry.only(left: 16),
           backgroundColor: const Color(0xFF0E0016),

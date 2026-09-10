@@ -552,6 +552,36 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   Timer? _firstFrameProgressProbeTimer;
   Timer? _firstFrameVideoRecoveryTimer;
   Timer? _firstFrameTimeoutTimer;
+
+  /// Raw confirmed media samples; null ends a continuous watch segment.
+  void Function(Duration? position, int generation)? onEffectiveWatchPosition;
+  int _effectiveWatchGeneration = 0;
+  int _effectiveWatchSeekDepth = 0;
+
+  void _emitEffectiveWatchPosition(Duration? position) {
+    try {
+      onEffectiveWatchPosition?.call(position, _effectiveWatchGeneration);
+    } catch (error, stackTrace) {
+      developer.log(
+        'Effective watch observer failed; playback continues',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _seekWithWatchBoundary(Duration target) async {
+    ++_effectiveWatchGeneration;
+    ++_effectiveWatchSeekDepth;
+    _emitEffectiveWatchPosition(null);
+    try {
+      await _session.seek(target);
+    } finally {
+      --_effectiveWatchSeekDepth;
+      ++_effectiveWatchGeneration;
+    }
+  }
+
   Timer? _watchProgressReportTimer;
   DateTime? _watchProgressReportTimerStartedAt;
   Duration? _watchProgressReportRemaining;
@@ -913,7 +943,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       _pauseWhenOpenCompletes = false;
       _accessOverlayPausedItemId = null;
       ++_generation;
-      await _session.seek(target);
+      await _seekWithWatchBoundary(target);
       if (!ref.mounted) {
         return;
       }
@@ -1969,7 +1999,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       // source is open so the rendered video cannot remain at a server-chosen
       // middle position while the UI shows the requested rewind point.
       if (resumeStart != null && resumeProgressRequiresSeekAfterOpen) {
-        await _session.seek(resumeStart);
+        await _seekWithWatchBoundary(resumeStart);
         if (!ref.mounted || !_isCurrent(generation)) {
           return;
         }
@@ -2530,7 +2560,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _pauseWhenOpenCompletes = false;
     _userPauseRequested = false;
     if (state.hasEnded) {
-      await _session.seek(Duration.zero);
+      await _seekWithWatchBoundary(Duration.zero);
       _ignoreNextCompleted = false;
       _currentPlaybackPosition = Duration.zero;
       state = state.copyWith(position: Duration.zero, hasEnded: false);
@@ -2548,7 +2578,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
     _pauseWhenOpenCompletes = false;
-    await _session.seek(Duration.zero);
+    await _seekWithWatchBoundary(Duration.zero);
     _ignoreNextCompleted = false;
     _currentPlaybackPosition = Duration.zero;
     await _session.play();
@@ -2573,7 +2603,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         : _currentPlaybackDuration;
     final target = duration > offset ? duration - offset : Duration.zero;
     _pauseWhenOpenCompletes = false;
-    await _session.seek(target);
+    await _seekWithWatchBoundary(target);
     _ignoreNextCompleted = false;
     _currentPlaybackPosition = target;
     await _session.play();
@@ -2810,7 +2840,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _ignoreNextCompleted =
         state.duration > Duration.zero &&
         target >= state.duration - const Duration(milliseconds: 500);
-    await _session.seek(target);
+    await _seekWithWatchBoundary(target);
     if (_wasPlayingBeforeSeek) {
       await _session.play();
       if (ref.mounted) {
@@ -3346,7 +3376,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
     try {
       if (position > Duration.zero) {
-        await _session.seek(position);
+        await _seekWithWatchBoundary(position);
       }
       if (!ref.mounted || !_isCurrent(generation) || _userPauseRequested) {
         return;
@@ -3413,7 +3443,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       ]),
     );
     try {
-      await _session.seek(repairTarget);
+      await _seekWithWatchBoundary(repairTarget);
       if (!ref.mounted || !_isCurrent(generation) || _userPauseRequested) {
         return;
       }
@@ -3496,6 +3526,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (_shouldRecoverPositionRollback(clamped)) {
       unawaited(_recoverFromPositionRollback(clamped));
       return;
+    }
+    if (_effectiveWatchSeekDepth == 0) {
+      _emitEffectiveWatchPosition(clamped);
     }
     final last = _lastPositionUpdate;
     if (last != null &&
@@ -4191,6 +4224,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   void _attachSessionStreams(PlayerPlaybackSession session) {
+    ++_effectiveWatchGeneration;
+    _emitEffectiveWatchPosition(null);
     _subscriptions = <StreamSubscription<dynamic>>[
       session.bufferingStream.listen(_handleBuffering),
       session.playingStream.listen(_handlePlaying),
@@ -4597,7 +4632,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _lastAppliedResumeItemId = progress.itemId;
     _lastAppliedResumePosition = progress.position;
     _armRestoreFloor(progress.position, generation);
-    await _session.seek(progress.position);
+    await _seekWithWatchBoundary(progress.position);
     if (!ref.mounted || !_isCurrent(generation)) {
       return;
     }
@@ -4658,7 +4693,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     unawaited(() async {
       try {
         _armRestoreFloor(target, generation);
-        await _session.seek(target);
+        await _seekWithWatchBoundary(target);
         await Future<void>.delayed(const Duration(milliseconds: 120));
         if (!ref.mounted || !_isCurrent(generation) || _isSessionDisposed) {
           return;
@@ -4699,7 +4734,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       );
       return;
     }
-    await _session.seek(position);
+    await _seekWithWatchBoundary(position);
     if (!ref.mounted || !_isCurrent(generation)) {
       return;
     }

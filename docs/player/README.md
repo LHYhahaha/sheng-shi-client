@@ -4,6 +4,7 @@
 
 ## 文档
 
+- [当日有效播放时长缓存方案](daily-effective-watch-time-plan.md)：普通播放页与 For You 的实际观看计时、当日区间去重、持久化与观看任务自动领取（已实现）。
 - [Player Experience System Architecture](player-experience-architecture-plan.md)：播放器主架构和 Home / For You / 单剧边界。
 - [Player Feed Engine Refactor Plan](player-feed-engine-refactor-plan.md)：当前封板版 FeedEngine、drag/settled、performance policy 的设计说明。
 - [Player Android Stable Mode Plan](player-android-stable-mode-plan.md)：Android / iOS / low-end 三档播放 surface 策略。

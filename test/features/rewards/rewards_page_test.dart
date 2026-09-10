@@ -1484,8 +1484,10 @@ class _FakeRewardCoinsRepository implements RewardCoinsRepository {
   }
 
   @override
-  Future<List<RewardTask>> getTasks({required int rewardType}) async =>
-      _rewardCoinTasks();
+  Future<List<RewardTask>> getTasks({
+    required int rewardType,
+    int? businessType,
+  }) async => _rewardCoinTasks();
 
   @override
   Future<void> reportTaskAction({required String actionKey}) async {}

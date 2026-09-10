@@ -100,8 +100,10 @@ class _FakeRewardCoinsRepository implements RewardCoinsRepository {
   }
 
   @override
-  Future<List<RewardTask>> getTasks({required int rewardType}) =>
-      throw UnimplementedError();
+  Future<List<RewardTask>> getTasks({
+    required int rewardType,
+    int? businessType,
+  }) => throw UnimplementedError();
 
   @override
   Future<void> reportTaskAction({required String actionKey}) =>

@@ -16,6 +16,7 @@ import '../../../core/notification/startup_notification_permission_reporter.dart
 import '../../../core/oauth/oauth_service.dart';
 import '../../../core/runtime/install_id_provider.dart';
 import '../../entitlement/application/entitlement_controller.dart';
+import '../../rewards/application/reward_coins_controller.dart';
 import '../data/auth_repository_provider.dart';
 import '../domain/auth_repository.dart';
 import '../domain/auth_session.dart';
@@ -384,6 +385,7 @@ class AuthController extends Notifier<AuthState> {
         debugPrint('[AuthController] ${provider.name} login completed.');
       }
       _syncNotificationPermission(session);
+      unawaited(_refreshRewardTasks());
       unawaited(_refreshCurrentSessionInBackground(_generation));
     } catch (error) {
       if (_isThirdPartyLoginProvider(provider)) {
@@ -474,6 +476,7 @@ class AuthController extends Notifier<AuthState> {
       );
       _syncNotificationPermission(session);
       ref.read(accountBanControllerProvider.notifier).clearAfterVerification();
+      unawaited(_refreshRewardTasks());
       return true;
     } catch (error) {
       if (_isCurrent(generation)) {
@@ -721,6 +724,12 @@ class AuthController extends Notifier<AuthState> {
         '[AuthController.load] Background session sync stack: $stackTrace',
       );
     }
+  }
+
+  Future<void> _refreshRewardTasks() async {
+    // 登录完成状态由服务端维护；这里只刷新主账号的任务和可领取数，不领取奖励。
+    final rewards = ref.read(rewardCoinsControllerProvider.notifier);
+    await Future.wait([rewards.loadTasks(), rewards.loadRemainingCoin()]);
   }
 
   Future<AuthSession> _sessionFromCurrentStores({

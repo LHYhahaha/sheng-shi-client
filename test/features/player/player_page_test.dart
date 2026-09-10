@@ -1,5 +1,14 @@
 import 'dart:async';
 
+import 'package:drama_client/core/auth/user_info_store.dart';
+import 'package:drama_client/features/player/application/daily_effective_watch_controller.dart';
+import 'package:drama_client/features/player/data/watch_reward_repository_provider.dart';
+import 'package:drama_client/features/player/data/shared_preferences_watch_reward_attempt_store.dart';
+import 'package:drama_client/features/player/domain/daily_effective_watch.dart';
+import 'package:drama_client/features/player/domain/watch_reward_repository.dart';
+import 'package:drama_client/features/rewards/domain/reward_task.dart';
+import 'package:drama_client/features/rewards/domain/reward_coins_check_in_claim_result.dart';
+
 import 'package:dio/dio.dart';
 import 'package:drama_client/app/app_root_navigator_key.dart';
 import 'package:drama_client/app/router/route_paths.dart';
@@ -61,6 +70,38 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  for (final forYou in [true, false]) {
+    testWidgets(
+      'watch task entry requests only on single drama: forYou=$forYou',
+      (tester) async {
+        final rewards = _WatchTaskRepository();
+        await tester.pumpWidget(
+          _buildPlayerApp(
+            initialLocation: forYou ? RoutePaths.forYou : '/player/drama-a/1',
+            repository: _FakePlayerFeedRepository.empty(),
+            providerOverrides: [
+              userInfoStoreProvider.overrideWith(_WatchUser.new),
+              dailyEffectiveWatchControllerProvider.overrideWith(
+                _ReadyWatch.new,
+              ),
+              watchRewardRepositoryProvider.overrideWithValue(rewards),
+              watchRewardAttemptStoreProvider.overrideWithValue(
+                _WatchAttempts(),
+              ),
+            ],
+          ),
+        );
+        for (var i = 0; i < 10; i++) {
+          await tester.pump();
+        }
+        expect(rewards.lists, forYou ? 0 : 1);
+        expect(rewards.claims, forYou ? 0 : 1);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      },
+    );
+  }
+
   testWidgets('for you like highlights and reports the current drama', (
     tester,
   ) async {
@@ -4474,5 +4515,80 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     await _rateController.close();
     await _widthController.close();
     await _errorController.close();
+  }
+}
+
+class _WatchUser extends UserInfoStore {
+  @override
+  UserInfoSnapshot build() => const UserInfoSnapshot(userId: 'watch-user');
+}
+
+class _ReadyWatch extends DailyEffectiveWatchController {
+  @override
+  DailyEffectiveWatchState build() {
+    final day = IndiaWatchDay.key(DateTime.now());
+    return DailyEffectiveWatchState(
+      userId: 'watch-user',
+      dayKey: day,
+      snapshot: DailyEffectiveWatchSnapshot(
+        userId: 'watch-user',
+        dayKey: day,
+        creditedMs: 300000,
+      ),
+    );
+  }
+
+  @override
+  Future<void> flush() async {}
+}
+
+class _WatchAttempts implements WatchRewardAttemptStore {
+  @override
+  Future<Map<String, WatchRewardAttempt>> read(
+    String userId,
+    String dayKey,
+  ) async => {};
+  @override
+  Future<void> write(
+    String userId,
+    String dayKey,
+    Map<String, WatchRewardAttempt> attempts,
+  ) async {}
+}
+
+class _WatchTaskRepository implements WatchRewardRepository {
+  int lists = 0;
+  int claims = 0;
+  @override
+  Future<List<RewardTask>> getWatchTasks() async {
+    lists++;
+    return [
+      const RewardTask(
+        claimed: false,
+        completed: false,
+        conditionText: 'watch',
+        cycleType: 'TASK_CYCLE_TYPE_DAILY',
+        displayName: 'watch',
+        progressValue: 0,
+        rewardMax: 10,
+        rewardMin: 10,
+        rewardType: 'REWARD_TYPE_BONUS_COIN',
+        targetValue: 300,
+        taskKey: 'watch.300',
+      ),
+    ];
+  }
+
+  @override
+  Future<RewardCoinsCheckInClaimResult> claim(String taskKey) async {
+    claims++;
+    return const RewardCoinsCheckInClaimResult(
+      balance: 0,
+      claimNo: 'test',
+      grantedAt: '',
+      rewardAmount: 0,
+      rewardType: 'REWARD_TYPE_BONUS_COIN',
+      status: 'CLAIM_STATUS_PENDING',
+    );
   }
 }

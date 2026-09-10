@@ -65,13 +65,13 @@ android {
 
     productFlavors {
 
-        create("GF") {
-            dimension = "channel"
-            applicationId = "com.novashort.shortdrama"
-            resValue("string", "channel_flag", "GF_001")
-            resValue("string", "MERCHANT_ID", "333")
-            resValue("string", "VEST_PKG_ID", "1001")
-        }
+//        create("GF") {
+//            dimension = "channel"
+//            applicationId = "com.novashort.shortdrama"
+//            resValue("string", "channel_flag", "GF_001")
+//            resValue("string", "MERCHANT_ID", "333")
+//            resValue("string", "VEST_PKG_ID", "1001")
+//        }
 
         create("haha") {
             dimension = "channel"
@@ -80,6 +80,46 @@ android {
             resValue("string", "MERCHANT_ID", "329")
             resValue("string", "VEST_PKG_ID", "1001")
         }
+//
+//        create("CY") {
+//            dimension = "channel"
+//            applicationId = "com.novashort.shortdrama"
+//            resValue("string", "channel_flag", "CY_001")
+//            resValue("string", "MERCHANT_ID", "333")
+//            resValue("string", "VEST_PKG_ID", "1001")
+//        }
+//
+//        create("XM") {
+//            dimension = "channel"
+//            applicationId = "com.novashort.shortdrama"
+//            resValue("string", "channel_flag", "XM_001")
+//            resValue("string", "MERCHANT_ID", "333")
+//            resValue("string", "VEST_PKG_ID", "1001")
+//        }
+//
+//        create("vivo") {
+//            dimension = "channel"
+//            applicationId = "com.novashort.shortdrama"
+//            resValue("string", "channel_flag", "vivo_001")
+//            resValue("string", "MERCHANT_ID", "333")
+//            resValue("string", "VEST_PKG_ID", "1001")
+//        }
+//
+//        create("OPPO") {
+//            dimension = "channel"
+//            applicationId = "com.novashort.shortdrama"
+//            resValue("string", "channel_flag", "OPPO_001")
+//            resValue("string", "MERCHANT_ID", "333")
+//            resValue("string", "VEST_PKG_ID", "1001")
+//        }
+//
+//        create("HW") {
+//            dimension = "channel"
+//            applicationId = "com.novashort.shortdrama"
+//            resValue("string", "channel_flag", "HW_001")
+//            resValue("string", "MERCHANT_ID", "333")
+//            resValue("string", "VEST_PKG_ID", "1001")
+//        }
 //        create("GF_test") {
 //            dimension = "channel"
 //            applicationId = "com.novashort.shortdrama"

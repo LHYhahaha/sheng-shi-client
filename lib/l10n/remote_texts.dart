@@ -277,6 +277,12 @@ abstract final class RemoteTexts {
     fallbackZh: '{points} 会员积分',
   );
 
+  static const rewardsClaimSuccessPoints = RemoteTextSpec(
+    key: 'rewards.claim_success.points',
+    fallbackEn: '{points} Points',
+    fallbackZh: '{points}积分',
+  );
+
   static const memberCenterModalExchangeRules = RemoteTextSpec(
     key: 'member_center.modal.exchange.rules',
     fallbackEn:

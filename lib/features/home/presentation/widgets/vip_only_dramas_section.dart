@@ -143,7 +143,7 @@ class _VipOnlyDramaCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
-              aspectRatio: 0.68,
+              aspectRatio: 109/147,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: AppCachedNetworkImage(

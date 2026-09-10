@@ -63,10 +63,28 @@ class RewardCoinsRemoteDataSource {
     );
   }
 
-  Future<RewardTaskListDto> getTasks({required int rewardType}) {
+  Future<RewardTaskListDto> getTasks({
+    required int rewardType,
+    int? businessType,
+  }) {
     return _apiClient.get<RewardTaskListDto>(
       '/api/activity/task/list',
-      queryParameters: {'rewardType': rewardType},
+      queryParameters: {
+        'rewardType': rewardType,
+        'businessType': ?businessType,
+      },
+      authPolicy: ApiAuthPolicy.required,
+      decoder: (data) => RewardTaskListDto.fromJson(
+        JsonFieldParser.requireMap(data, dtoName: 'RewardTaskListDto'),
+      ),
+    );
+  }
+
+  /// Player requests watching tasks for both coins and member points.
+  Future<RewardTaskListDto> getWatchTasks() {
+    return _apiClient.get<RewardTaskListDto>(
+      '/api/activity/task/list',
+      queryParameters: {'businessType': 2, 'rewardType': 0},
       authPolicy: ApiAuthPolicy.required,
       decoder: (data) => RewardTaskListDto.fromJson(
         JsonFieldParser.requireMap(data, dtoName: 'RewardTaskListDto'),

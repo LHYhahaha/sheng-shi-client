@@ -1780,6 +1780,14 @@ class AppLocalizations {
     zh: '热播推荐',
   );
 
+  String get favoriteAutoAddToast => _remoteText(
+    'favorite.toast.auto_added',
+    en: 'Auto-added to My List',
+    zh: '已为您自动加入收藏列表',
+  );
+
+
+
   // ── 1.0.2 / 搜索页 ─────────────────────────────────────────────
   String get searchRankHotSearch =>
       _remoteText('search.rank.hot_search', en: 'Top Searched', zh: '热搜榜');
@@ -1838,6 +1846,12 @@ class AppLocalizations {
     'player.quality.failed',
     en: 'Quality switch failed. Try again.',
     zh: '切换失败，请稍后重试',
+  );
+
+  String get playerQualityUnsupported => _remoteText(
+    'player.speed.unsupported',
+    en: "Speed switching isn't supported yet.",
+    zh: '暂不支持切换',
   );
 
   String get playerSubtitleOff =>
@@ -1987,6 +2001,12 @@ class AppLocalizations {
     en: '{coins} coins',
     zh: '{coins}金币',
   ).replaceAll('{coins}', coins.toString());
+
+  String rewardsClaimSuccessPoints(Object points) => _remoteText(
+    'rewards.claim_success.points',
+    en: '{points} Points',
+    zh: '{points}积分',
+  ).replaceAll('{points}', points.toString());
 
   String rewardsSigninDaysCount(Object days) => _remoteText(
     'rewards.signin.days_count',

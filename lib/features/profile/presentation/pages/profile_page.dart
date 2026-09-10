@@ -19,6 +19,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/media/media_resource.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../application/profile_controller.dart';
+import '../../application/login_reward_provider.dart';
 import '../widgets/profile_coins_card.dart';
 import '../widgets/profile_header.dart';
 import '../widgets/profile_membership_card.dart';
@@ -44,13 +45,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   }
 
   void _loadEntitlementData() {
-    Future.microtask(
-      () => ref.read(entitlementControllerProvider.notifier).load(),
-    );
-    Future.microtask(
-      () =>
-          ref.read(rewardCoinsControllerProvider.notifier).loadRemainingCoin(),
-    );
+    // initState 尚未结束时不能通过 WidgetRef.invalidate 访问 ProviderScope。
+    Future.microtask(() {
+      if (!mounted) return;
+      ref.invalidate(loginRewardCoinsProvider);
+      unawaited(ref.read(entitlementControllerProvider.notifier).load());
+      unawaited(
+        ref.read(rewardCoinsControllerProvider.notifier).loadRemainingCoin(),
+      );
+    });
   }
 
   @override
@@ -61,6 +64,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final entitlementState = ref.watch(entitlementControllerProvider);
     final userInfoState = ref.watch(userInfoStoreProvider);
     final authUser = authState.user;
+    final loginRewardCoins = ref.watch(loginRewardCoinsProvider);
 
     // 监听 Tab 索引变化，每次切换到 Profile Tab 时刷新权益数据
     ref.listen(appShellCurrentTabIndexProvider, (previous, current) {
@@ -132,8 +136,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           children: [
             ProfileHeader(
               state: state,
-              // 样式占位，后续替换为登录奖励接口返回的可领取金币数。
-              loginRewardCoins: 310,
+              loginRewardCoins: loginRewardCoins.asData?.value,
               onLoginTap: () {
                 if (authState.session.isGuest) {
                   context.push(RoutePaths.auth);

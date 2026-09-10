@@ -52,7 +52,8 @@ class EntitlementRemoteDataSource {
 
     final dto = UserEntitlementStateDto(
       isGuest: userInfo['isGuest'] as bool? ?? true,
-      userId: _stringValue(userInfo['userId'] ?? data['userId']),
+      // 业务 ID 保留字符串精度；内层为空时仍允许使用外层 ID。
+      userId: _stringValue(userInfo['userId']) ?? _stringValue(data['userId']),
       isMember: membership['isMember'] as bool? ?? false,
       membershipExpiresAt: membership['membershipExpiresAt'] != null
           ? JsonFieldParser.optionalDateTime(membership, 'membershipExpiresAt')
