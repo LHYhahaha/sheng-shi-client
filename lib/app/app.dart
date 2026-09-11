@@ -691,7 +691,10 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     final shareRewardChannel = ref
         .read(shareDramaRewardCoordinatorProvider)
         .onLifecycleChanged(state);
-    if (shareRewardChannel == ShareDramaRewardChannel.facebook) {
+    final isNormalPlayerVisible = ref.read(
+      playerShareRewardHintVisibleProvider,
+    );
+    if (shareRewardChannel != null && isNormalPlayerVisible) {
       showAppCenterToast(_appLocalizations.shareRewardArrivalHint);
     }
     if (state == AppLifecycleState.resumed) {

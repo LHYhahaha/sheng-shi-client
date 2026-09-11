@@ -13,6 +13,21 @@ import '../data/player_remote_data_source_provider.dart';
 
 enum ShareDramaRewardChannel { facebook, copyLink }
 
+/// 复制链接奖励仅在仍停留播放器时才显示回前台提示。
+final playerShareRewardHintVisibleProvider =
+    NotifierProvider<PlayerShareRewardHintVisibleController, bool>(
+      PlayerShareRewardHintVisibleController.new,
+    );
+
+class PlayerShareRewardHintVisibleController extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void setVisible(bool value) {
+    state = value;
+  }
+}
+
 /// 跨播放器页面存活的短剧分享奖励领取协调器。
 class ShareDramaRewardCoordinator {
   ShareDramaRewardCoordinator({
@@ -92,20 +107,30 @@ class ShareDramaRewardCoordinator {
     }
   }
 
-  void register({
+  bool register({
     required String? taskKey,
     required bool claimed,
     required ShareDramaRewardChannel channel,
+    required bool showRewardHint,
   }) {
+    final normalizedTaskKey = taskKey?.trim();
+    // 仅已明确领取过时跳过。任务状态未知时仍应上报分享动作，
+    // 但因没有 taskKey 不会发起领取。
+    if (claimed) {
+      _pending = null;
+      return false;
+    }
     _pending = _PendingShareDramaReward(
-      taskKey: taskKey?.trim(),
+      taskKey: normalizedTaskKey,
       claimed: claimed,
       channel: channel,
+      showRewardHint: showRewardHint,
       createdAt: _clock(),
     );
+    return true;
   }
 
-  /// Facebook 回前台时返回提示事件；领取成功或失败均不提示。
+  /// 回前台时返回是否需要展示奖励提示；领取成功或失败均不提示。
   ShareDramaRewardChannel? onLifecycleChanged(AppLifecycleState state) {
     final pending = _pending;
     if (pending == null) return null;
@@ -128,12 +153,10 @@ class ShareDramaRewardCoordinator {
       taskKey: pending.taskKey,
       claimed: pending.claimed,
     );
-    return pending.channel;
+    return pending.showRewardHint ? pending.channel : null;
   }
 
-  /// A reported share is independent of whether task status was available.
-  /// A task key and an unclaimed reward are only required for the subsequent
-  /// reward claim.
+  /// 尚未领取或任务状态未知时都上报；仅已知 taskKey 的任务才会领取。
   void _reportAndClaimIfEligible({
     required String? taskKey,
     required bool claimed,
@@ -237,12 +260,14 @@ class _PendingShareDramaReward {
     required this.taskKey,
     required this.claimed,
     required this.channel,
+    required this.showRewardHint,
     required this.createdAt,
   });
 
   final String? taskKey;
   final bool claimed;
   final ShareDramaRewardChannel channel;
+  final bool showRewardHint;
   final DateTime createdAt;
   bool didEnterBackground = false;
 }

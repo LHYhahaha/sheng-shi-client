@@ -546,6 +546,17 @@ class _ExpiredConsumptionRecordRow extends StatelessWidget {
 
   final WalletRecord record;
 
+  String _sourceTypeLabel(BuildContext context) {
+    return switch (record.rewardSourceType) {
+      2 => context.l10n.claimCoinsTypeSigninBonus,
+      3 => context.l10n.claimCoinsTypeTaskBonus,
+      4 => context.l10n.claimCoinsTypeRechargeBonus,
+      // sourceType 5 (other) is displayed as an admin credit by product rule.
+      1 || 5 => context.l10n.claimCoinsTypeAdminBonus,
+      _ => context.l10n.claimCoinsName,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final secondaryStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -563,7 +574,8 @@ class _ExpiredConsumptionRecordRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                context.l10n.walletText(record.titleText),
+                // context.l10n.walletText(record.titleText),
+                context.l10n.consumptionExpiredReward,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -572,15 +584,13 @@ class _ExpiredConsumptionRecordRow extends StatelessWidget {
                   height: 1.5,
                 ),
               ),
-              if (record.subtitleText != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  context.l10n.walletText(record.subtitleText!),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: secondaryStyle,
-                ),
-              ],
+              const SizedBox(height: 4),
+              Text(
+                _sourceTypeLabel(context),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: secondaryStyle,
+              ),
               const SizedBox(height: 4),
               Text(
                 record.dateLabel,
@@ -615,7 +625,7 @@ class _CoinRewardRecordRow extends StatelessWidget {
 
   String _sourceTypeLabel(BuildContext context) {
     return switch (record.rewardSourceType) {
-      1 => context.l10n.claimCoinsTypeAdminBonus,
+      1 || 5 => context.l10n.claimCoinsTypeAdminBonus,
       2 => context.l10n.claimCoinsTypeSigninBonus,
       3 => context.l10n.claimCoinsTypeTaskBonus,
       4 => context.l10n.claimCoinsTypeRechargeBonus,

@@ -111,6 +111,7 @@ class WalletMapper {
       trailingLabel: UiText.raw(dto.expireCoin),
       trailingSubtitle: RemoteTexts.consumptionHistoryCoins.uiText(),
       consumptionStatus: WalletConsumptionStatus.expired,
+      rewardSourceType: dto.sourceType,
     );
   }
 

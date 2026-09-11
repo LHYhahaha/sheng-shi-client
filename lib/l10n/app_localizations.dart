@@ -884,6 +884,12 @@ class AppLocalizations {
   String get consumptionHistoryExpired =>
       _remoteText('consumption_history.tab.expired', en: 'Expired', zh: '已过期');
 
+  String get consumptionExpiredReward => _remoteText(
+    'consumption.expired.reward',
+    en: 'Reward Coins Expired',
+    zh: '奖励金币已过期',
+  );
+
   String consumptionHistoryEpisodeIndex(int index) => resolveRemoteText(
     RemoteTexts.consumptionHistoryEpisodeIndex,
     args: {'index': index},
@@ -1594,8 +1600,11 @@ class AppLocalizations {
   String get claimCoinsName =>
       _remoteText('claim_coins.reward.name', en: 'Reward Coins', zh: '奖励金币');
 
-  String get claimCoinsTypeRechargeBonus =>
-      _remoteText('claim_coins.type.recharge_bonus', en: 'Recharge', zh: '充值');
+  String get claimCoinsTypeRechargeBonus => _remoteText(
+    'claim_coins.type.recharge_bonus',
+    en: 'Recharge',
+    zh: '充值赠送',
+  );
 
   String get claimCoinsTypeSigninBonus => _remoteText(
     'claim_coins.type.signin_bonus',

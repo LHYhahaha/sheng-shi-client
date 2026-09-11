@@ -53,4 +53,22 @@ void main() {
     expect(state.settledIndex, 2);
     expect(state.settledItemId, 'ep-3');
   });
+
+  test('replays a settled viewport with a new generation', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final provider = playerViewportControllerProvider('for-you-tab');
+    final controller = container.read(provider.notifier);
+
+    controller.initialize(index: 0, itemId: 'ep-1');
+    final firstGeneration = container.read(provider).generation;
+
+    controller.replaySettled();
+
+    final state = container.read(provider);
+    expect(state.scrollPhase, PlayerViewportScrollPhase.idle);
+    expect(state.settledIndex, 0);
+    expect(state.settledItemId, 'ep-1');
+    expect(state.generation, firstGeneration + 1);
+  });
 }

@@ -656,6 +656,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   bool _pauseWhenOpenCompletes = false;
   bool _isPlaybackVisible = true;
   bool _isSuspendedForCompetingPlayer = false;
+  Future<void> _competingPlayerTransition = Future<void>.value();
   // Android 上 next 的真实首帧预热会短时间内同时占用 previous/current/next 三个
   // MediaCodec。部分机型会把正在播放的 current 异常切成 paused（并非一次新的
   // playItem/open）。只在这个很小的危险窗口内恢复 current，避免用户看到播几秒又
@@ -990,7 +991,16 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   double _preferredPlaybackRate = 1.0;
   late Future<void> _ratePreferenceReady;
 
+  bool get _isForYouSession =>
+      sessionKey == PlayerPlaybackSessionKeys.forYouTab;
+
   Future<void> _loadPlaybackRate() async {
+    if (_isForYouSession) {
+      // For You always plays at normal speed. Its controller is kept alive
+      // across tab switches, so it must neither read nor modify the regular
+      // player's persisted preference.
+      return;
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       final rate = prefs.getDouble(_ratePreferenceKey);
@@ -2628,6 +2638,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
     await _ratePreferenceReady;
     if (!ref.mounted || _isSessionDisposed) return;
+    if (_isForYouSession) {
+      // There is no For You speed control, but keep this boundary defensive
+      // for callers added in the future.
+      _preferredPlaybackRate = 1.0;
+      state = state.copyWith(playbackRate: 1.0);
+      return;
+    }
     await _session.setRate(rate);
     _preferredPlaybackRate = rate;
     if (!ref.mounted) {
@@ -3048,39 +3065,79 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     );
   }
 
-  /// 被普通播放器暂时抢占时暂停 For You，不销毁当前/已 prepared 的 session。
+  /// 被普通播放器暂时抢占时释放 For You 的 native decoder。
   ///
-  /// 已下载分片保留在内存/磁盘；HLS traffic gate 会阻止 For You 后续回源，返回时
-  /// 解除冻结即可继续用现有 session 播放。
-  Future<void> suspendForCompetingPlayer() async {
-    if (_isSessionDisposed) return;
+  /// Android 上暂停的 MediaCodec 仍会占用解码资源；普通页同时会打开 current
+  /// 与相邻预热 session。保留 For You 的 session 会让返回后继续下滑时无法创建
+  /// 新 decoder。返回 For You 时重新创建 session 并打开当前 item。
+  Future<void> _enqueueCompetingPlayerTransition(
+    Future<void> Function() operation,
+  ) {
+    final next = _competingPlayerTransition.then<void>(
+      (_) => operation(),
+      onError: (_, _) => operation(),
+    );
+    // Keep the queue usable after a native player failure. The caller still
+    // receives [next] and can handle that failure independently.
+    _competingPlayerTransition = next.then<void>((_) {}, onError: (_, _) {});
+    return next;
+  }
+
+  Future<void> suspendForCompetingPlayer() =>
+      _enqueueCompetingPlayerTransition(_suspendForCompetingPlayer);
+
+  Future<void> _suspendForCompetingPlayer() async {
+    if (!ref.mounted || _isSessionDisposed) return;
     _isSuspendedForCompetingPlayer = true;
     ref.read(hlsTrafficGateProvider).suspendForYou();
     _pauseWhenOpenCompletes = true;
     _pauseWatchProgressReportTimer();
     ++_generation;
+    final suspendedItem = _currentOriginalItem;
+    if (suspendedItem != null) {
+      _visibilitySuspendedItem = suspendedItem;
+    }
     await _session.pause();
-    await _prepareManager.pauseAll(reason: 'competing player');
+    // The whole prepared window is released below. Pausing it first is
+    // redundant and can race with an in-flight prepared-session takeover.
+    await _releaseSessionWindowFor('competing player');
     await _disposePreloads();
+    await _cancelSessionStreams();
+    await _disposeSessionOnly(shouldPause: false);
+    _currentPlaybackItemId = null;
+    _currentPlaybackSource = null;
+    _clearCurrentPlaybackSnapshot();
     if (!ref.mounted) return;
     state = state.copyWith(
-      status: state.currentSource == null
-          ? state.status
-          : PlayerPlaybackStatus.paused,
+      status: PlayerPlaybackStatus.paused,
       isBuffering: false,
+      currentItemId: null,
+      clearSource: true,
       surfaceLifecycle: PlayerVideoSurfaceLifecycle.detached,
       clearVideoController: true,
     );
     _logTiming(
       'for you suspended for competing player',
-      details: _timingDetails(['sessionRetained=true', 'networkGate=closed']),
+      details: _timingDetails(['sessionReleased=true', 'networkGate=closed']),
     );
   }
 
   /// 普通播放器已返回或用户明确切回 For You，才解除其抢占状态。
-  Future<void> resumeAfterCompetingPlayer() async {
-    if (_isSessionDisposed) {
+  Future<void> resumeAfterCompetingPlayer() =>
+      _enqueueCompetingPlayerTransition(_resumeAfterCompetingPlayer);
+
+  Future<void> _resumeAfterCompetingPlayer() async {
+    if (!ref.mounted) {
       return;
+    }
+    if (_isSessionDisposed) {
+      _isSessionDisposed = false;
+      _session = ref.read(playerPlaybackSessionFactoryProvider).call();
+      _attachSessionStreams(_session);
+      _logTiming(
+        'create current session',
+        details: 'reason=resume after competing player',
+      );
     }
     _isSuspendedForCompetingPlayer = false;
     await resumeAfterVisibilityPause();
@@ -3199,6 +3256,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     bool syncState = true,
     Duration disposeDelay = Duration.zero,
   }) async {
+    if (_isSessionDisposed) {
+      return;
+    }
     // 单剧页离开时做强释放：当前 session、prepared window、HLS pending 都要清掉。
     // For You tab 不走 disposeSession，而是 pauseForVisibility，以保留 tab provider。
     _pauseWhenOpenCompletes = true;
