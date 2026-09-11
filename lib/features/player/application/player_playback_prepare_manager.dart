@@ -353,12 +353,14 @@ class PlayerPlaybackPrepareManager {
 
   /// 暂停所有已完成的 prepared session，但不释放它们。
   ///
-  /// 用于 For You 被普通播放器暂时抢占：保留已打开的 decoder/session 与缓存命中机会，
-  /// 同时避免它继续播放。仍在 prepare 的 session 不在这里强制 dispose；外层网络闸门
-  /// 会阻止其继续回源，warm-up 自己会在首帧或超时后 pause。
+  /// 用于临时冻结已打开的 decoder/session，同时避免后台继续播放。仍在 prepare
+  /// 的 session 不在这里强制 dispose；外层网络闸门会阻止其继续回源，warm-up 自己
+  /// 会在首帧或超时后 pause。
   Future<void> pauseAll({String reason = 'pause all'}) async {
     final before = _windowItemsText;
-    for (final prepared in _window.values) {
+    // Native pause awaits. A takeover or release can update [_window] while
+    // it is pending, so iterate a snapshot instead of the live map view.
+    for (final prepared in List<PreparedPlaybackSession>.from(_window.values)) {
       await prepared.session.pause();
     }
     _log(

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:drama_client/core/network/api_client.dart';
 import 'package:drama_client/core/network/api_request_context.dart';
 import 'package:drama_client/features/wallet/data/dto/wallet_page_dto.dart';
+import 'package:drama_client/features/wallet/data/dto/wallet_expired_consumption_record_dto.dart';
 import 'package:drama_client/features/wallet/data/dto/wallet_reward_coin_record_dto.dart';
 import 'package:drama_client/features/wallet/data/dto/wallet_transaction_record_dto.dart';
 import 'package:drama_client/features/wallet/data/mapper/wallet_mapper.dart';
@@ -103,6 +104,19 @@ void main() {
     expect(record.rewardSourceType, 2);
     expect(record.sourceOrderNo, 'checkin-20260727');
     expect(record.subtitle, 'Check-in reward');
+  });
+
+  test('expired consumption records preserve their source type', () {
+    final dto = WalletExpiredConsumptionRecordDto.fromJson({
+      'recordId': 'expired-1001',
+      'expireCoin': '50',
+      'sourceName': 'Check-in reward',
+      'sourceType': 2,
+      'title': 'Reward coins',
+    });
+    final record = const WalletMapper().mapExpiredConsumption(dto);
+
+    expect(record.rewardSourceType, 2);
   });
 
   test('permanent reward coin records use the permanent validity text', () {

@@ -19,6 +19,7 @@ void main() {
         taskKey: 'coin.share_drama',
         claimed: false,
         channel: ShareDramaRewardChannel.facebook,
+        showRewardHint: true,
       );
 
       expect(coordinator.onLifecycleChanged(AppLifecycleState.resumed), isNull);
@@ -54,6 +55,7 @@ void main() {
       taskKey: 'coin.share_drama',
       claimed: false,
       channel: ShareDramaRewardChannel.copyLink,
+      showRewardHint: false,
     );
     coordinator.onLifecycleChanged(AppLifecycleState.paused);
     coordinator.onLifecycleChanged(AppLifecycleState.resumed);
@@ -77,6 +79,7 @@ void main() {
         taskKey: 'coin.share_drama',
         claimed: false,
         channel: ShareDramaRewardChannel.facebook,
+        showRewardHint: false,
       );
       coordinator.onLifecycleChanged(AppLifecycleState.paused);
       coordinator.onLifecycleChanged(AppLifecycleState.resumed);
@@ -99,6 +102,7 @@ void main() {
         taskKey: 'coin.share_drama',
         claimed: false,
         channel: ShareDramaRewardChannel.facebook,
+        showRewardHint: false,
       );
       coordinator.onLifecycleChanged(AppLifecycleState.paused);
       coordinator.onLifecycleChanged(AppLifecycleState.resumed);
@@ -124,6 +128,7 @@ void main() {
         taskKey: 'coin.share_drama',
         claimed: false,
         channel: ShareDramaRewardChannel.copyLink,
+        showRewardHint: false,
       );
       coordinator.onLifecycleChanged(AppLifecycleState.paused);
       coordinator.onLifecycleChanged(AppLifecycleState.resumed);
@@ -133,7 +138,7 @@ void main() {
   );
 
   test(
-    'reports a completed share even when no reward task key is available',
+    'reports a share without claiming when the reward task is unknown',
     () async {
       final events = <String>[];
       final coordinator = ShareDramaRewardCoordinator(
@@ -148,6 +153,7 @@ void main() {
         taskKey: null,
         claimed: false,
         channel: ShareDramaRewardChannel.copyLink,
+        showRewardHint: false,
       );
       coordinator.onLifecycleChanged(AppLifecycleState.paused);
       coordinator.onLifecycleChanged(AppLifecycleState.resumed);
@@ -157,7 +163,7 @@ void main() {
     },
   );
 
-  test('reports but does not claim an already claimed share task', () async {
+  test('does not register an already claimed share task', () async {
     final events = <String>[];
     final coordinator = ShareDramaRewardCoordinator(
       claimReward: (_) async {
@@ -171,12 +177,13 @@ void main() {
       taskKey: 'coin.share_drama',
       claimed: true,
       channel: ShareDramaRewardChannel.copyLink,
+      showRewardHint: false,
     );
     coordinator.onLifecycleChanged(AppLifecycleState.paused);
     coordinator.onLifecycleChanged(AppLifecycleState.resumed);
 
     await Future<void>.delayed(Duration.zero);
-    expect(events, ['report']);
+    expect(events, isEmpty);
   });
 
   test('latest copy replaces the previous pending reward', () async {
@@ -192,11 +199,13 @@ void main() {
       taskKey: 'old-task',
       claimed: false,
       channel: ShareDramaRewardChannel.copyLink,
+      showRewardHint: false,
     );
     coordinator.register(
       taskKey: 'new-task',
       claimed: false,
       channel: ShareDramaRewardChannel.copyLink,
+      showRewardHint: true,
     );
     coordinator.onLifecycleChanged(AppLifecycleState.hidden);
     expect(
@@ -224,6 +233,7 @@ void main() {
         taskKey: 'coin.share_drama',
         claimed: false,
         channel: ShareDramaRewardChannel.copyLink,
+        showRewardHint: false,
       );
       coordinator.onLifecycleChanged(AppLifecycleState.paused);
       now = now.add(const Duration(minutes: 5));

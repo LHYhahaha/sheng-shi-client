@@ -105,6 +105,23 @@ class PlayerViewportController extends Notifier<PlayerViewportState> {
     );
   }
 
+  /// Re-emits the current settled target for listeners that subscribed after
+  /// the first feed load. This keeps playback driven by the normal viewport
+  /// listener instead of requiring a user gesture to create another settle.
+  void replaySettled() {
+    if (state.settledItemId == null ||
+        state.scrollPhase != PlayerViewportScrollPhase.idle) {
+      return;
+    }
+    state = state.copyWith(generation: state.generation + 1);
+    PlayerRebuildDiagnostics.recordTiming(
+      'viewportSettledReplay',
+      itemId: state.settledItemId,
+      details:
+          'session=$sessionKey index=${state.settledIndex} generation=${state.generation}',
+    );
+  }
+
   /// 手指按下开始拖动：进入 dragging，禁止 runtime（不更新 settled）。
   void markScrollStart() {
     if (state.scrollPhase == PlayerViewportScrollPhase.dragging) {

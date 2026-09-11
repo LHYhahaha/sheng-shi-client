@@ -138,6 +138,37 @@ void main() {
     },
   );
 
+  test(
+    'for you always uses 1x and leaves the saved player rate untouched',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'player.playback_rate.preference': 3.0,
+      });
+      final forYouSession = _FakePlaybackSession();
+      final forYou = _createContainer(forYouSession);
+      final forYouProvider = playerPlaybackControllerProvider('for-you-tab');
+
+      await Future<void>.delayed(Duration.zero);
+      expect(forYou.read(forYouProvider).playbackRate, 1.0);
+      await forYou.read(forYouProvider.notifier).playItem(_item(1));
+      await forYou.read(forYouProvider.notifier).setPlaybackRate(3.0);
+      expect(forYouSession.rates, isEmpty);
+      expect(forYou.read(forYouProvider).playbackRate, 1.0);
+      expect(
+        (await SharedPreferences.getInstance()).getDouble(
+          'player.playback_rate.preference',
+        ),
+        3.0,
+      );
+
+      final playerSession = _FakePlaybackSession();
+      final player = _createContainer(playerSession);
+      final playerProvider = playerPlaybackControllerProvider('speed:restore');
+      await player.read(playerProvider.notifier).playItem(_item(1));
+      expect(playerSession.rates.last, 3.0);
+    },
+  );
+
   test('rate persists across episodes and new pages', () async {
     final session = _FakePlaybackSession();
     final container = _createContainer(session);
@@ -1495,27 +1526,35 @@ void main() {
     expect(session.playCount, 1);
   });
 
-  testWidgets('For You suspension retains its session while pausing playback', (
-    tester,
-  ) async {
-    final currentSession = _FakePlaybackSession();
-    final container = _createPrepareContainer(
-      () => currentSession,
-      sourceRepository: _CountingPlaybackSourceRepository(),
-    );
-    addTearDown(container.dispose);
-    final provider = playerPlaybackControllerProvider('for-you-tab');
-    final controller = container.read(provider.notifier);
+  test(
+    'For You suspension releases its decoder and reopens on return',
+    () async {
+      final currentSession = _FakePlaybackSession();
+      final resumedSession = _FakePlaybackSession();
+      var sessionIndex = 0;
+      final container = _createContainer(
+        currentSession,
+        sessionFactory: () => [currentSession, resumedSession][sessionIndex++],
+      );
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('for-you-tab');
+      final controller = container.read(provider.notifier);
 
-    await controller.playItem(_item(1, mode: PlayerFeedMode.forYou));
-    await tester.runAsync(controller.suspendForCompetingPlayer);
+      await controller.playItem(_item(1, mode: PlayerFeedMode.forYou));
+      final suspension = controller.suspendForCompetingPlayer();
+      final resume = controller.resumeAfterCompetingPlayer();
+      await suspension;
 
-    expect(currentSession.isDisposed, isFalse);
-    expect(container.read(provider).currentSource, _videoUrl);
-    expect(container.read(provider).status, PlayerPlaybackStatus.paused);
+      expect(currentSession.isDisposed, isTrue);
+      expect(container.read(provider).currentSource, isNull);
+      expect(container.read(provider).status, PlayerPlaybackStatus.paused);
+      await resume;
 
-    expect(currentSession.openedSources, [_videoUrl]);
-  });
+      expect(currentSession.openedSources, [_videoUrl]);
+      expect(resumedSession.openedSources, [_videoUrl]);
+      expect(resumedSession.rates, isEmpty);
+    },
+  );
 
   test('locked item pauses playback and detaches video surface', () async {
     final session = _FakePlaybackSession();
@@ -1685,6 +1724,20 @@ void main() {
       container.read(provider).surfaceLifecycle,
       PlayerVideoSurfaceLifecycle.detached,
     );
+  });
+
+  test('disposeSession is safe when route cleanup runs twice', () async {
+    final session = _FakePlaybackSession();
+    final container = _createContainer(session);
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(1));
+    await controller.disposeSession();
+    await controller.disposeSession();
+
+    expect(session.isDisposed, isTrue);
+    expect(container.read(provider).status, PlayerPlaybackStatus.idle);
   });
 
   test(
@@ -2306,7 +2359,8 @@ void main() {
       forYouSession.emitCompleted(true);
       await Future<void>.delayed(Duration.zero);
 
-      expect(container.read(forYouProvider).playbackRate, 1.5);
+      expect(forYouSession.rates, isEmpty);
+      expect(container.read(forYouProvider).playbackRate, 1.0);
       expect(container.read(forYouProvider).hasEnded, isTrue);
       expect(container.read(singleProvider).playbackRate, 1.0);
       expect(container.read(singleProvider).hasEnded, isFalse);

@@ -417,6 +417,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _hasShownExitRecommendationForDrama = false;
   bool _hasShownDramaTakenDownToast = false;
   bool _didRecordFirstBuild = false;
+  bool _didReplayInitialViewport = false;
   bool _allowRemoteResumeEpisodeSwitch = true;
   bool _enforceInitialHandoffRewindSeek = false;
   bool _isExitRecommendationRequestInFlight = false;
@@ -652,6 +653,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (_isLeavingRoute || _isModalOpen) {
       return;
     }
+    _setShareRewardHintVisibleAfterBuild(false);
     // 只有外部路由覆盖播放器时，才使尚未完成的广告提示请求失效。
     _adUnlockPromptGeneration += 1;
     _isCoveredByAnotherRoute = true;
@@ -666,6 +668,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   @override
   void didPopNext() {
     _isCoveredByAnotherRoute = false;
+    _setShareRewardHintVisibleAfterBuild(true);
     _syncWatchRewards();
     final shouldResumePlayback = _resumePlaybackOnRouteReturn;
     _resumePlaybackOnRouteReturn = false;
@@ -679,12 +682,39 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   Future<void> _restoreAfterCoveredRoutePops(bool shouldResumePlayback) async {
     if (widget.feedMode == PlayerFeedMode.forYou) {
       await _playbackController.resumeAfterCompetingPlayer();
+      if (ref
+              .read(playerPlaybackControllerProvider(_sessionKey))
+              .currentSource ==
+          null) {
+        ref
+            .read(playerViewportControllerProvider(_sessionKey).notifier)
+            .replaySettled();
+      }
     } else if (shouldResumePlayback) {
       await _resumePlaybackAfterLifecyclePause();
     } else {
       await _restorePlaybackSurfaceAfterVisibilityPause();
     }
     await _playPendingAdUnlockedEpisode();
+  }
+
+  /// Route notifications and lifecycle callbacks can arrive while Flutter is
+  /// building this page. Riverpod must only be updated after that build.
+  void _setShareRewardHintVisibleAfterBuild(bool visible) {
+    // For You is a persistent feed, not a normal player route. Its sharing
+    // actions must never register or surface player-task reward hints.
+    final isNormalPlayer = widget.feedMode == PlayerFeedMode.singleDrama;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // A widget-test teardown may dispose the root container before this
+      // callback runs. In a running app the root container outlives routes.
+      try {
+        _providerContainer
+            .read(playerShareRewardHintVisibleProvider.notifier)
+            .setVisible(isNormalPlayer && visible);
+      } on StateError {
+        // The surrounding ProviderScope has already been disposed.
+      }
+    });
   }
 
   Future<void> _playPendingAdUnlockedEpisode() async {
@@ -714,10 +744,31 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   void initState() {
     super.initState();
     _providerContainer = ProviderScope.containerOf(context, listen: false);
+    _setShareRewardHintVisibleAfterBuild(true);
     WidgetsBinding.instance.addObserver(this);
     _pageController = PageController();
     _pageController.addListener(_handlePageControllerTick);
     _sessionKey = _createSessionKey();
+    final viewportProvider = playerViewportControllerProvider(_sessionKey);
+    ref.listenManual(
+      viewportProvider.select(PlayerViewportSettledSnapshot.fromState),
+      (_, next) {
+        if (_didReplayInitialViewport || next.itemId == null) {
+          return;
+        }
+        _didReplayInitialViewport = true;
+        void replay() => ref.read(viewportProvider.notifier).replaySettled();
+        // A preloaded For You feed may already be settled before this page's
+        // first build installs its regular listener. Delay only that case to
+        // the first frame; later feed loads can replay immediately.
+        if (_didRecordFirstBuild) {
+          replay();
+        } else {
+          WidgetsBinding.instance.addPostFrameCallback((_) => replay());
+        }
+      },
+      fireImmediately: true,
+    );
     _playbackController = ref.read(
       playerPlaybackControllerProvider(_sessionKey).notifier,
     );
@@ -781,7 +832,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (mounted) {
         // TODO(next release): 恢复播放器赠送影片分享时，进入播放器后刷新资格。
         // _refreshDramaGiftLinkOnPlayerEntry(widget.dramaId);
-        _prefetchShareDramaStatus();
+        if (widget.feedMode == PlayerFeedMode.singleDrama) {
+          _prefetchShareDramaStatus();
+        }
       }
     });
     Future<void>.microtask(() async {
@@ -804,6 +857,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         elapsed: startupStopwatch.elapsed,
         details: 'feedMode=${widget.feedMode.name}',
       );
+      // The shell may still be completing its tab transition when For You is
+      // first built. Open the visibility gate before the feed emits its first
+      // settled item; otherwise playItem treats that item as hidden and no
+      // later gesture-free event exists to retry it.
+      if (widget.feedMode == PlayerFeedMode.forYou) {
+        await _playbackController.resumeAfterCompetingPlayer();
+        if (!mounted) {
+          return;
+        }
+      }
       final uiController = ref.read(
         playerUiControllerProvider(_sessionKey).notifier,
       );
@@ -930,6 +993,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   @override
   void dispose() {
+    _setShareRewardHintVisibleAfterBuild(false);
     _watchRewards?.leave(_sessionKey);
     _stopDailyWatch();
     _playbackController.onEffectiveWatchPosition = null;
@@ -1129,7 +1193,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   /// recovered item on tab entry so the normal settled-only playback path can
   /// open it, or resume the source that was opened while hidden.
   Future<void> _restoreRecoveredForYouPlaybackOnReturn() async {
-    if (widget.feedMode != PlayerFeedMode.forYou || !_isPlaybackViewVisible) {
+    if (widget.feedMode != PlayerFeedMode.forYou) {
       return;
     }
     final feed = ref.read(playerFeedControllerProvider(_sessionKey));
@@ -1144,6 +1208,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     }
     ref.invalidate(playerViewportControllerProvider(_sessionKey));
     _feedEngine.initializeViewport(index: feed.currentIndex, itemId: item.id);
+    ref
+        .read(playerViewportControllerProvider(_sessionKey).notifier)
+        .replaySettled();
   }
 
   bool _shouldResumePlaybackWhenForYouReturns(PlayerPlaybackState playback) {
@@ -3012,6 +3079,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _cancelExitRecommendationRequestIfPending();
     final handoffResult = _currentForYouHandoffSnapshot();
     if (handoffResult != null) {
+      // Keep the native Player alive until this route has popped and its Video
+      // surface is removed. Disposing it while the surface is still mounted
+      // makes a late Android resize callback access a disposed media_kit
+      // Player, which aborts the For You return flow.
       await _playbackController.detachSurfaceForRoutePop();
     } else {
       // 非 For You 入口保留原来的强释放顺序，避免改变首页进入普通播放页的行为。
@@ -3375,17 +3446,24 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (updatedItem == null) {
       return;
     }
-    await ref
-        .read(
-          playerPlaybackControllerProvider(
-            PlayerPlaybackSessionKeys.forYouTab,
-          ).notifier,
-        )
-        .synchronizeExternalProgress(
-          item: updatedItem,
-          position: _forYouResumePosition(snapshot.position, snapshot.duration),
-          duration: snapshot.duration,
-        );
+    final forYouPlayback = ref.read(
+      playerPlaybackControllerProvider(
+        PlayerPlaybackSessionKeys.forYouTab,
+      ).notifier,
+    );
+    // This callback is the authoritative completion path for Watch Now. The
+    // For You decoder was deliberately released before the ordinary player
+    // opened, so recreate it before applying the returned position. Otherwise
+    // synchronizeExternalProgress exits early and leaves a black page.
+    await forYouPlayback.resumeAfterCompetingPlayer();
+    if (!mounted) {
+      return;
+    }
+    await forYouPlayback.synchronizeExternalProgress(
+      item: updatedItem,
+      position: _forYouResumePosition(snapshot.position, snapshot.duration),
+      duration: snapshot.duration,
+    );
   }
 
   ForYouPlaybackSnapshot? _currentForYouHandoffSnapshot() {
@@ -4188,7 +4266,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     unawaited(_trackShareChannelClick(dramaId, 'facebook'));
     final opened = await _shareToFacebook(dramaId, dramaTitle);
     if (opened) {
-      _registerShareReward(shareStatus, ShareDramaRewardChannel.facebook);
+      _registerShareReward(
+        shareStatus,
+        ShareDramaRewardChannel.facebook,
+        showRewardHint: _shouldShowShareRewardHint(shareStatus),
+      );
     }
   }
 
@@ -4199,22 +4281,34 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   ) {
     unawaited(_trackShareChannelClick(dramaId, 'copy_link'));
     unawaited(_copyShareLink(dramaId, dramaTitle));
-    _registerShareReward(shareStatus, ShareDramaRewardChannel.copyLink);
+    _registerShareReward(
+      shareStatus,
+      ShareDramaRewardChannel.copyLink,
+      // 与 Facebook 一致，须在五分钟内回到前台后才提示并领取。
+      showRewardHint: _shouldShowShareRewardHint(shareStatus),
+    );
   }
 
-  void _registerShareReward(
+  bool _registerShareReward(
     ShareDramaStatusDto? shareStatus,
-    ShareDramaRewardChannel channel,
-  ) {
-    ref
+    ShareDramaRewardChannel channel, {
+    required bool showRewardHint,
+  }) {
+    if (widget.feedMode != PlayerFeedMode.singleDrama) return false;
+    return ref
         .read(shareDramaRewardCoordinatorProvider)
         .register(
-          // Status only controls whether a reward can be claimed. It must not
-          // suppress the completed-share action report.
           taskKey: shareStatus?.taskKey,
           claimed: shareStatus?.claimed == true,
           channel: channel,
+          showRewardHint: showRewardHint,
         );
+  }
+
+  bool _shouldShowShareRewardHint(ShareDramaStatusDto? shareStatus) {
+    return shareStatus != null &&
+        !shareStatus.hasCompletedTask &&
+        shareStatus.shareCoin > 0;
   }
 
   void _prefetchShareDramaStatus() {
@@ -4222,6 +4316,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<ShareDramaStatusDto?> _loadShareDramaStatus() {
+    if (widget.feedMode != PlayerFeedMode.singleDrama) {
+      return Future<ShareDramaStatusDto?>.value(null);
+    }
     return ref.read(shareDramaRewardCoordinatorProvider).loadStatus();
   }
 
