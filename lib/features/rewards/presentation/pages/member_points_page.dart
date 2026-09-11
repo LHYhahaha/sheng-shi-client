@@ -1793,13 +1793,14 @@ class _VipBenefitsPanel extends StatelessWidget {
         l10n.benefitSeriesTitle,
         l10n.benefitSeriesHighlight,
       ),
-      ('assets/images/rewards/points_download.png', l10n.benefitDownload, null),
+      // ('assets/images/rewards/points_download.png', l10n.benefitDownload, null),
       (
         'assets/images/rewards/points_dramas.png',
         l10n.benefitMembersOnly,
         null,
       ),
       ('assets/images/rewards/points_hd.png', l10n.benefitHd, null),
+      ('assets/images/rewards/points_ad.png', l10n.benefitNoAds, null),
     ];
 
     return Container(

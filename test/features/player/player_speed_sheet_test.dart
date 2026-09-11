@@ -9,6 +9,8 @@ void main() {
     tester,
   ) async {
     double? selected;
+    final currentRate = ValueNotifier<double>(1.0);
+    addTearDown(currentRate.dispose);
     await tester.pumpWidget(
       MaterialApp(
         localizationsDelegates: const [
@@ -24,9 +26,12 @@ void main() {
               onPressed: () => showModalBottomSheet<void>(
                 context: context,
                 isScrollControlled: true,
-                builder: (_) => PlayerSpeedSheet(
-                  selectedRate: 2.0,
-                  onRateSelected: (rate) => selected = rate,
+                builder: (_) => ValueListenableBuilder<double>(
+                  valueListenable: currentRate,
+                  builder: (_, rate, _) => PlayerSpeedSheet(
+                    selectedRate: rate,
+                    onRateSelected: (rate) => selected = rate,
+                  ),
                 ),
               ),
               child: const Text('Open'),
@@ -44,7 +49,24 @@ void main() {
       find.byKey(const ValueKey('player_speed_selected_check')),
       findsOneWidget,
     );
-    await tester.tap(find.text('1.25x'));
+    currentRate.value = 3.0;
+    await tester.pump();
+    final check = find.byKey(const ValueKey('player_speed_selected_check'));
+    expect(check, findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('player_speed_option_3.0')),
+        matching: check,
+      ),
+      findsOneWidget,
+    );
+    final press = await tester.startGesture(
+      tester.getCenter(find.text('1.25x')),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(check, findsOneWidget);
+    expect(selected, isNull);
+    await press.up();
     await tester.pumpAndSettle();
     expect(selected, 1.25);
     expect(find.byType(PlayerSpeedSheet), findsNothing);

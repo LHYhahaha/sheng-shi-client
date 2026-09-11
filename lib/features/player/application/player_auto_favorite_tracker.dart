@@ -10,6 +10,7 @@ class PlayerAutoFavoriteTracker {
   String? _episodeId;
   int? _episodeNumber;
   bool _forward = false;
+  bool _eligibleBeforeSwitch = false;
   bool _started = false;
   final Set<String> _episodes = {};
   Duration _elapsed = Duration.zero;
@@ -30,10 +31,12 @@ class PlayerAutoFavoriteTracker {
     _elapsed = Duration.zero;
     _runningSince = null;
     _forward = false;
+    _eligibleBeforeSwitch = false;
     _started = false;
   }
 
   /// Returns true only at the first full-access playback of a forward visit.
+  /// Both episode count and elapsed time must qualify before entering that visit.
   bool observe({
     required String userId,
     required String dramaId,
@@ -49,6 +52,8 @@ class PlayerAutoFavoriteTracker {
     }
     if (_episodeId != episodeId) {
       _forward = _episodeNumber != null && episodeNumber > _episodeNumber!;
+      _eligibleBeforeSwitch =
+          _episodes.length >= 2 && _elapsed >= const Duration(seconds: 120);
       _episodeId = episodeId;
       _episodeNumber = episodeNumber;
       _started = false;
@@ -58,9 +63,7 @@ class PlayerAutoFavoriteTracker {
     if (_started) return false;
     _started = true;
     _episodes.add(episodeId);
-    return _forward &&
-        _episodes.length >= 2 &&
-        _elapsed >= const Duration(seconds: 120);
+    return _forward && _eligibleBeforeSwitch;
   }
 }
 

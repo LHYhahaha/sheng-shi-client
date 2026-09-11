@@ -65,11 +65,19 @@ android {
 
     productFlavors {
 
-//        create("GF") {
+        create("GF") {
+            dimension = "channel"
+            applicationId = "com.novashort.shortdrama"
+            resValue("string", "channel_flag", "GF_001")
+            resValue("string", "MERCHANT_ID", "333")
+            resValue("string", "VEST_PKG_ID", "1001")
+        }
+//
+//        create("APPPRO") {
 //            dimension = "channel"
 //            applicationId = "com.novashort.shortdrama"
-//            resValue("string", "channel_flag", "GF_001")
-//            resValue("string", "MERCHANT_ID", "333")
+//            resValue("string", "channel_flag", "app_developer")
+//            resValue("string", "MERCHANT_ID", "334")
 //            resValue("string", "VEST_PKG_ID", "1001")
 //        }
 

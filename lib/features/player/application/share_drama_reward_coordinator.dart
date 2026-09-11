@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/auth/user_info_store.dart';
+import '../../entitlement/application/entitlement_controller.dart';
+import '../../rewards/application/reward_coins_controller.dart';
 import '../../rewards/data/reward_coins_repository_provider.dart';
 import '../data/dto/share_drama_status_dto.dart';
 import '../data/player_remote_data_source_provider.dart';
@@ -14,21 +16,24 @@ enum ShareDramaRewardChannel { facebook, copyLink }
 /// 跨播放器页面存活的短剧分享奖励领取协调器。
 class ShareDramaRewardCoordinator {
   ShareDramaRewardCoordinator({
-    required Future<void> Function(String taskKey) claimReward,
+    required Future<bool> Function(String taskKey) claimReward,
     Future<void> Function()? reportShareAction,
     Future<ShareDramaStatusDto> Function()? fetchStatus,
+    Future<void> Function()? onRewardClaimed,
     ShareDramaClaimedTodayStore? claimedTodayStore,
     DateTime Function()? clock,
     this.validity = const Duration(minutes: 5),
   }) : _claimReward = claimReward,
        _reportShareAction = reportShareAction,
        _fetchStatus = fetchStatus,
+       _onRewardClaimed = onRewardClaimed,
        _claimedTodayStore = claimedTodayStore,
        _clock = clock ?? DateTime.now;
 
-  final Future<void> Function(String taskKey) _claimReward;
+  final Future<bool> Function(String taskKey) _claimReward;
   final Future<void> Function()? _reportShareAction;
   final Future<ShareDramaStatusDto> Function()? _fetchStatus;
+  final Future<void> Function()? _onRewardClaimed;
   final ShareDramaClaimedTodayStore? _claimedTodayStore;
   final DateTime Function() _clock;
   final Duration validity;
@@ -152,7 +157,10 @@ class ShareDramaRewardCoordinator {
     if (_claimInFlightTaskKey == taskKey) return;
     _claimInFlightTaskKey = taskKey;
     try {
-      await _claimReward(taskKey);
+      final claimedSuccessfully = await _claimReward(taskKey);
+      if (claimedSuccessfully) {
+        await _onRewardClaimed?.call();
+      }
     } catch (_) {}
     if (_claimInFlightTaskKey == taskKey) {
       _claimInFlightTaskKey = null;
@@ -172,7 +180,8 @@ final shareDramaRewardCoordinatorProvider =
       final repository = ref.watch(rewardCoinsRepositoryProvider);
       return ShareDramaRewardCoordinator(
         claimReward: (taskKey) async {
-          await repository.claimTask(taskKey: taskKey);
+          final result = await repository.claimTask(taskKey: taskKey);
+          return result.isSuccess;
         },
         reportShareAction: () =>
             repository.reportTaskAction(actionKey: 'share_drama'),
@@ -182,6 +191,16 @@ final shareDramaRewardCoordinatorProvider =
         claimedTodayStore: ShareDramaClaimedTodayStore(
           userId: () => ref.read(userInfoStoreProvider).userId,
         ),
+        onRewardClaimed: () async {
+          await Future.wait([
+            ref
+                .read(entitlementControllerProvider.notifier)
+                .refreshFromServer(),
+            ref
+                .read(rewardCoinsControllerProvider.notifier)
+                .loadRemainingCoin(),
+          ]);
+        },
       );
     });
 

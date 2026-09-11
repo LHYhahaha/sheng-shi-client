@@ -9,7 +9,10 @@ void main() {
     () async {
       final claims = <String>[];
       final coordinator = ShareDramaRewardCoordinator(
-        claimReward: (taskKey) async => claims.add(taskKey),
+        claimReward: (taskKey) async {
+          claims.add(taskKey);
+          return true;
+        },
       );
 
       coordinator.register(
@@ -33,7 +36,7 @@ void main() {
   test('refreshes the share status after claiming a reward', () async {
     var statusRequestCount = 0;
     final coordinator = ShareDramaRewardCoordinator(
-      claimReward: (_) async {},
+      claimReward: (_) async => true,
       fetchStatus: () async {
         statusRequestCount++;
         return const ShareDramaStatusDto(
@@ -62,11 +65,58 @@ void main() {
   });
 
   test(
+    'refreshes dependent state only after a successful reward claim',
+    () async {
+      var refreshCount = 0;
+      final coordinator = ShareDramaRewardCoordinator(
+        claimReward: (_) async => true,
+        onRewardClaimed: () async => refreshCount++,
+      );
+
+      coordinator.register(
+        taskKey: 'coin.share_drama',
+        claimed: false,
+        channel: ShareDramaRewardChannel.facebook,
+      );
+      coordinator.onLifecycleChanged(AppLifecycleState.paused);
+      coordinator.onLifecycleChanged(AppLifecycleState.resumed);
+
+      await Future<void>.delayed(Duration.zero);
+      expect(refreshCount, 1);
+    },
+  );
+
+  test(
+    'does not refresh dependent state after a failed reward claim',
+    () async {
+      var refreshCount = 0;
+      final coordinator = ShareDramaRewardCoordinator(
+        claimReward: (_) async => false,
+        onRewardClaimed: () async => refreshCount++,
+      );
+
+      coordinator.register(
+        taskKey: 'coin.share_drama',
+        claimed: false,
+        channel: ShareDramaRewardChannel.facebook,
+      );
+      coordinator.onLifecycleChanged(AppLifecycleState.paused);
+      coordinator.onLifecycleChanged(AppLifecycleState.resumed);
+
+      await Future<void>.delayed(Duration.zero);
+      expect(refreshCount, 0);
+    },
+  );
+
+  test(
     'reports the action before claiming a completed but unclaimed task',
     () async {
       final events = <String>[];
       final coordinator = ShareDramaRewardCoordinator(
-        claimReward: (_) async => events.add('claim'),
+        claimReward: (_) async {
+          events.add('claim');
+          return true;
+        },
         reportShareAction: () async => events.add('report'),
       );
 
@@ -87,7 +137,10 @@ void main() {
     () async {
       final events = <String>[];
       final coordinator = ShareDramaRewardCoordinator(
-        claimReward: (_) async => events.add('claim'),
+        claimReward: (_) async {
+          events.add('claim');
+          return true;
+        },
         reportShareAction: () async => events.add('report'),
       );
 
@@ -107,7 +160,10 @@ void main() {
   test('reports but does not claim an already claimed share task', () async {
     final events = <String>[];
     final coordinator = ShareDramaRewardCoordinator(
-      claimReward: (_) async => events.add('claim'),
+      claimReward: (_) async {
+        events.add('claim');
+        return true;
+      },
       reportShareAction: () async => events.add('report'),
     );
 
@@ -126,7 +182,10 @@ void main() {
   test('latest copy replaces the previous pending reward', () async {
     final claims = <String>[];
     final coordinator = ShareDramaRewardCoordinator(
-      claimReward: (taskKey) async => claims.add(taskKey),
+      claimReward: (taskKey) async {
+        claims.add(taskKey);
+        return true;
+      },
     );
 
     coordinator.register(
@@ -154,7 +213,10 @@ void main() {
       var now = DateTime(2026, 8, 31, 12);
       var claimCount = 0;
       final coordinator = ShareDramaRewardCoordinator(
-        claimReward: (_) async => claimCount++,
+        claimReward: (_) async {
+          claimCount++;
+          return true;
+        },
         clock: () => now,
       );
 

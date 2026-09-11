@@ -18,6 +18,7 @@ class ProfileHeader extends StatelessWidget {
     this.secondaryText,
     this.displayName,
     this.loginRewardCoins,
+    this.isMemberPage,
     super.key,
   });
 
@@ -25,6 +26,7 @@ class ProfileHeader extends StatelessWidget {
   final VoidCallback? onLoginTap;
   final VoidCallback? onAccountTap;
   final VoidCallback? onGuestTap;
+  final bool? isMemberPage;
 
   /// 传入时替换默认的 Show ID 展示，不提供复制操作。
   final String? secondaryText;
@@ -91,7 +93,7 @@ class ProfileHeader extends StatelessWidget {
                                 ),
                           ),
                           SizedBox(width: 4),
-                          state.isLoggedIn
+                          state.isLoggedIn || isMemberPage == true
                               ? SizedBox()
                               : Image.asset(
                                   "assets/images/profile/log_icon.png",

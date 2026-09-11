@@ -65,6 +65,7 @@ class AnalyticsValidationError implements Exception {
 ///
 /// `session_start`、公共参数 `session_id` 与 `app_session_id` 已按当前需求移除。
 abstract final class AnalyticsDefinitions {
+  static const vipProductLoadResult = 'vip_product_load_result';
   static const appFirstOpen = 'app_first_open';
   static const appLaunch = 'app_launch';
   static const appExit = 'app_exit';
@@ -223,6 +224,10 @@ abstract final class AnalyticsDefinitions {
           requiredWhen: (params) => params['popup_name'] == 'recharge_popup',
           allowedValues: {'with_coin', 'vip_only'},
         ),
+        'episode_no': AnalyticsParameterRule(
+          type: AnalyticsParameterType.number,
+          requiredWhen: (params) => params['popup_name'] == 'recharge_popup',
+        ),
       },
       // 弹框名称字典中，不同弹框还会携带短剧、剧集、商品等业务字段。
       allowAdditionalParameters: true,
@@ -313,6 +318,30 @@ abstract final class AnalyticsDefinitions {
         'recharge_popup_type': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
           requiredWhen: (params) => params['popup_name'] == 'recharge_popup',
+          allowedValues: {'with_coin', 'vip_only'},
+        ),
+        'episode_no': AnalyticsParameterRule(
+          type: AnalyticsParameterType.number,
+          requiredWhen: (params) => params['popup_name'] == 'recharge_popup',
+        ),
+      },
+    ),
+    vipProductLoadResult: AnalyticsEventDefinition(
+      name: vipProductLoadResult,
+      parameters: {
+        'product_load_result': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          required: true,
+          allowedValues: {
+            'success',
+            'empty',
+            'request_failed',
+            'google_request_failed',
+          },
+        ),
+        'product_count': _requiredNumber,
+        'recharge_popup_type': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
           allowedValues: {'with_coin', 'vip_only'},
         ),
       },

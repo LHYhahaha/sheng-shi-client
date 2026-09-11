@@ -774,15 +774,11 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     startupLoadingTiming.mark('bottom-tabs end');
   }
 
-  /// 启动埋点的 userId 就绪策略：
-  ///
-  /// 1. 已有有效 token 且本地已恢复 userId，立即上报；
-  /// 2. 有 token 但没有 userId，等待权益接口回写用户资料；
-  /// 3. 权益接口失败或没有 token，不再阻塞启动埋点。
-  ///
-  /// 用户资料后续更新时，AnalyticsService 会在每个新事件创建时重新读取
-  /// analyticsContextProvider，因此后续事件的公共参数会自动带上新的 userId。
+  /// 启动事件先按发生时间记录；缺少 userId 时由上传队列持久化等待。
+  /// 用户资料就绪后只补齐缺失的 userId，不改变事件时间或其他快照字段。
   Future<void> _initializeStartupAnalytics() async {
+    await ref.read(analyticsLifecycleTrackerProvider).onApplicationReady();
+    if (!mounted) return;
     final token = ref.read(authTokenStoreProvider);
     if (token.hasAccessToken) {
       await ref.read(userInfoStoreProvider.notifier).waitForHydration();
@@ -798,7 +794,6 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
 
     if (!mounted) return;
     await ref.read(analyticsUploadSinkProvider).enableUploads();
-    await ref.read(analyticsLifecycleTrackerProvider).onApplicationReady();
   }
 
   Future<void> _reportAppLaunchSafely() async {

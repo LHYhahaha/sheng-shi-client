@@ -21,11 +21,13 @@ void main() {
     final request = FeatureAppModalRequest(
       requestId: 'unlock-1',
       source: AppModalSource.player,
-      channel: 'player.coin_unlock',
+      channel: 'player.recharge_unlock',
       analyticsPopupShowParameters: const {
-        'popup_name': 'episode_unlock_confirm_popup',
+        'popup_name': 'recharge_popup',
         'drama_id': '99',
         'episode_id': '100',
+        'episode_no': 7,
+        'recharge_popup_type': 'with_coin',
         'required_coin_amount': 60,
       },
     );
@@ -35,6 +37,9 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     expect(sink.events, hasLength(2));
+    expect(sink.events[0].eventName, 'popup_show');
+    expect(sink.events[1].eventName, 'popup_close');
+    expect(sink.events[0].eventParams['episode_no'], 7);
     expect(sink.events[1].eventParams, sink.events[0].eventParams);
   });
 }

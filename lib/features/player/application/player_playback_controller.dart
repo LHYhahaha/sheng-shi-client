@@ -998,6 +998,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     } catch (_) {
       // Local storage failures must not prevent playback.
     }
+    if (ref.mounted && !_isSessionDisposed) {
+      state = state.copyWith(playbackRate: _preferredPlaybackRate);
+    }
   }
 
   @override
@@ -3250,7 +3253,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (ref.mounted) {
       state = PlayerPlaybackState.initial(
         videoController: _session.videoController,
-      );
+      ).copyWith(playbackRate: _preferredPlaybackRate);
     }
     _logTiming('create current session', details: 'reason=session cleanup');
   }
@@ -3801,7 +3804,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (!ref.mounted) {
       return;
     }
-    if (rate <= 0) {
+    // Opening a source can report the engine's default rate before the saved
+    // choice is applied. Only an acknowledged preference may update the UI;
+    // setPlaybackRate publishes a new choice after setRate succeeds.
+    if (rate != _preferredPlaybackRate) {
       return;
     }
     state = state.copyWith(playbackRate: rate);

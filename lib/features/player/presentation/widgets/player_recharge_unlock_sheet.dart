@@ -1,3 +1,4 @@
+import '../../../pay/application/vip_product_load_reporter.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -60,6 +61,8 @@ class PlayerRechargeUnlockSheet extends ConsumerStatefulWidget {
 
 class _PlayerRechargeUnlockSheetState
     extends ConsumerState<PlayerRechargeUnlockSheet> {
+  final _vipProductLoadReporter = VipProductLoadReporter();
+
   Timer? _timer;
   var _paymentMethodOpen = false;
   var _didHandleDirectPaymentTerminal = false;
@@ -242,6 +245,21 @@ class _PlayerRechargeUnlockSheetState
   Widget build(BuildContext context) {
     final provider = playerRechargeUnlockControllerProvider(widget.sessionKey);
     final state = ref.watch(provider);
+    _vipProductLoadReporter.reportAfterFrame(
+      attempt: state.vipProductLoadResult,
+      productCount: ref.watch(entitlementControllerProvider).isMember
+          ? 0
+          : state.offer?.membershipPackages.length ?? 0,
+      isCurrent: () =>
+          mounted &&
+          TickerMode.valuesOf(context).enabled &&
+          identical(
+            ref.read(provider).vipProductLoadResult,
+            state.vipProductLoadResult,
+          ),
+      analytics: () => ref.read(analyticsServiceProvider),
+      rechargePopupType: state.rechargePopupType.analyticsValue,
+    );
 
     ref.listen(provider.select((state) => state.status), (previous, next) {
       if (_paymentMethodOpen || _didHandleDirectPaymentTerminal || !mounted) {
@@ -1305,8 +1323,9 @@ class _BenefitIcon extends StatelessWidget {
     return switch (icon) {
       PlayerRechargeBenefitIcon.series =>
         "assets/images/profile/brown_series.svg",
-      PlayerRechargeBenefitIcon.download =>
-        "assets/images/profile/brown_download.svg",
+      // PlayerRechargeBenefitIcon.download =>
+      //   "assets/images/profile/brown_download.svg",
+      PlayerRechargeBenefitIcon.ad => "assets/images/profile/brown_ad.svg",
       PlayerRechargeBenefitIcon.hd => "assets/images/profile/brown_hd.svg",
       PlayerRechargeBenefitIcon.points =>
         "assets/images/profile/brown_points.svg",
@@ -1360,8 +1379,9 @@ class _BenefitGrid extends StatelessWidget {
     return switch (icon) {
       PlayerRechargeBenefitIcon.series =>
         context.l10n.rechargeBenefitUnlockDramas,
-      PlayerRechargeBenefitIcon.download =>
-        context.l10n.rechargeBenefitDownload,
+      // PlayerRechargeBenefitIcon.download =>
+      //   context.l10n.rechargeBenefitDownload,
+      PlayerRechargeBenefitIcon.ad => context.l10n.benefitNoAds,
       PlayerRechargeBenefitIcon.hd => context.l10n.rechargeBenefitHd,
       PlayerRechargeBenefitIcon.points =>
         context.l10n.rechargeBenefitDailyPoints,

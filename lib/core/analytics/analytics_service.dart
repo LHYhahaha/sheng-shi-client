@@ -59,16 +59,19 @@ class AnalyticsInMemoryEventSink implements AnalyticsEventSink {
 class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
   AnalyticsBatchUploadEventSink({
     required ApiClient Function() apiClientReader,
+    String? Function()? userIdReader,
     this.batchSize = 20,
     this.flushDelay = const Duration(seconds: 5),
     bool uploadsEnabled = true,
   }) : assert(batchSize > 0),
        _apiClientReader = apiClientReader,
+       _userIdReader = userIdReader,
        _uploadsEnabled = uploadsEnabled;
 
   /// 上传可能在语言切换、测试网络切换之后才由重试计时器触发，因此不能
   /// 固定创建时的 ApiClient；发送前读取当前实例以带上最新请求上下文。
   final ApiClient Function() _apiClientReader;
+  final String? Function()? _userIdReader;
   final int batchSize;
   final Duration flushDelay;
   final List<AnalyticsPayload> _pending = <AnalyticsPayload>[];
@@ -93,8 +96,7 @@ class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
   /// 开启上传并立即发送已恢复或已入队的事件。
   Future<void> enableUploads() async {
     _uploadsEnabled = true;
-    await initialize();
-    await _flushPending();
+    await flush();
   }
 
   @override
@@ -109,6 +111,7 @@ class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
       );
     }
     _pending.add(payload);
+    _fillMissingUserIds();
     await _persistPending();
     if (!_uploadsEnabled) {
       return;
@@ -123,8 +126,32 @@ class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
   /// 供切后台、网络恢复等时机立即补发。
   Future<void> flush() async {
     await initialize();
+    if (_fillMissingUserIds()) await _persistPending();
     if (!_uploadsEnabled) return;
     await _flushPending();
+  }
+
+  // Only fill missing identity. Preserve every other event-time snapshot field.
+  bool _fillMissingUserIds() {
+    final userId = _userIdReader?.call();
+    if (userId == null || userId.trim().isEmpty) return false;
+    var changed = false;
+    for (var index = 0; index < _pending.length; index++) {
+      final payload = _pending[index];
+      final common = payload.commonParams;
+      if (common.context.userId?.trim().isNotEmpty ?? false) continue;
+      _pending[index] = AnalyticsPayload(
+        eventName: payload.eventName,
+        commonParams: AnalyticsCommonParams(
+          eventId: common.eventId,
+          eventTime: common.eventTime,
+          context: common.context.copyWith(userId: userId),
+        ),
+        eventParams: payload.eventParams,
+      );
+      changed = true;
+    }
+    return changed;
   }
 
   void dispose() {
@@ -152,7 +179,15 @@ class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
 
   Future<void> _doFlush() async {
     while (_pending.isNotEmpty) {
-      final batch = _pending.take(batchSize).toList(growable: false);
+      if (_fillMissingUserIds()) await _persistPending();
+      final batch = _pending
+          .where(
+            (payload) =>
+                payload.commonParams.context.userId?.trim().isNotEmpty ?? false,
+          )
+          .take(batchSize)
+          .toList(growable: false);
+      if (batch.isEmpty) return;
       final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
       final rawBody = jsonEncode({
         'events': batch.map(_toRequestEvent).toList(growable: false),
@@ -172,7 +207,7 @@ class AnalyticsBatchUploadEventSink implements AnalyticsEventSink {
           ),
           decoder: (data) => Map<String, Object?>.from(data! as Map),
         );
-        _pending.removeRange(0, batch.length);
+        _pending.removeWhere(batch.contains);
         await _persistPending();
       } catch (error) {
         debugPrint('[Analytics] Batch upload failed: $error');

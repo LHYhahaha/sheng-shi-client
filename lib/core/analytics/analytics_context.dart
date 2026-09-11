@@ -1,7 +1,7 @@
 /// 某一时刻可自动补齐的公共埋点上下文。
 ///
-/// 上下文在事件发生时被快照，不在异步上传时重新读取，避免离线事件被后续
-/// 的登录态、页面或渠道状态污染。
+/// 上下文在事件发生时被快照；仅缺失的 userId 可在就绪后补齐，
+/// 已有的用户归属、页面、渠道和事件时间保持不变。
 class AnalyticsContext {
   const AnalyticsContext({
     required this.platform,
@@ -35,13 +35,17 @@ class AnalyticsContext {
   final String? entrySourceId;
   final String? h5VisitorId;
 
-  AnalyticsContext copyWith({String? entrySourceType, String? entrySourceId}) {
+  AnalyticsContext copyWith({
+    String? entrySourceType,
+    String? entrySourceId,
+    String? userId,
+  }) {
     return AnalyticsContext(
       platform: platform,
       appVersion: appVersion,
       language: language,
       deviceId: deviceId,
-      userId: userId,
+      userId: userId ?? this.userId,
       channelId: channelId,
       merchantId: merchantId,
       regionCode: regionCode,

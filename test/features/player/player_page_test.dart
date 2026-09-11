@@ -3464,7 +3464,7 @@ void main() {
     expect(find.text('A Life That Shines Again >'), findsOneWidget);
   });
 
-  testWidgets('detail sheet opens compact and toggles expand/shrink', (
+  testWidgets('detail sheet expands from its scrollable content', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -3476,30 +3476,8 @@ void main() {
     await tester.tap(find.text('Episodes').first);
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('player_detail_sheet_expand')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('player_detail_sheet_shrink')),
-      findsNothing,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('player_detail_sheet_expand')));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('player_detail_sheet_shrink')),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('player_detail_sheet_shrink')));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('player_detail_sheet_expand')),
-      findsOneWidget,
-    );
+    await _expandPlayerDetailSheet(tester);
+    expect(find.byType(CustomScrollView), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('player_detail_sheet_close')));
     await tester.pumpAndSettle();
@@ -3775,7 +3753,7 @@ double _topBarOpacity(WidgetTester tester) {
 }
 
 Future<void> _expandPlayerDetailSheet(WidgetTester tester) async {
-  await tester.tap(find.byKey(const ValueKey('player_detail_sheet_expand')));
+  await tester.drag(find.byType(CustomScrollView).first, const Offset(0, -500));
   await tester.pumpAndSettle();
 }
 

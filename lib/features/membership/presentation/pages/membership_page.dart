@@ -19,6 +19,7 @@ import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../../shared/widgets/app_secondary_page_header.dart';
+import '../../../pay/application/vip_product_load_reporter.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../../pay/domain/member_product_type.dart';
 import '../../../player/application/player_entry_preload_coordinator.dart';
@@ -66,6 +67,8 @@ class MembershipPage extends ConsumerStatefulWidget {
 }
 
 class _MembershipPageState extends ConsumerState<MembershipPage> {
+  final _vipProductLoadReporter = VipProductLoadReporter();
+
   final _dramaExposureSession = Object();
   late final ScrollController _scrollController;
   bool _modalOpen = false;
@@ -127,6 +130,18 @@ class _MembershipPageState extends ConsumerState<MembershipPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(membershipControllerProvider);
+    _vipProductLoadReporter.reportAfterFrame(
+      attempt: state.vipProductLoadResult,
+      productCount: state.error == null ? state.plans.length : 0,
+      isCurrent: () =>
+          mounted &&
+          TickerMode.valuesOf(context).enabled &&
+          identical(
+            ref.read(membershipControllerProvider).vipProductLoadResult,
+            state.vipProductLoadResult,
+          ),
+      analytics: () => ref.read(analyticsServiceProvider),
+    );
     final controller = ref.read(membershipControllerProvider.notifier);
     final isPaymentLoading = ref.watch(
       paymentLoadingControllerProvider.select((state) => state.isVisible),

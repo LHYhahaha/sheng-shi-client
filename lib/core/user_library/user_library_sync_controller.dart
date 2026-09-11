@@ -1,6 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/session_cleanup_types.dart';
+import '../auth/user_info_store.dart';
+
+/// 收藏及片单缓存使用真实业务 userId 隔离，包含游客账号。
+final userLibraryAccountIdProvider = Provider<String?>((ref) {
+  return ref.watch(userInfoStoreProvider.select((value) => value.userId));
+});
 
 /// 用户收藏状态的本地同步层。
 ///
@@ -21,7 +27,10 @@ class UserLibrarySyncState {
 
 class UserLibrarySyncController extends Notifier<UserLibrarySyncState> {
   @override
-  UserLibrarySyncState build() => const UserLibrarySyncState();
+  UserLibrarySyncState build() {
+    ref.watch(userLibraryAccountIdProvider);
+    return const UserLibrarySyncState();
+  }
 
   /// 本地用户操作优先于随后到达的旧列表快照。
   void setFavorite({required String dramaId, required bool isFavorited}) {
@@ -31,17 +40,6 @@ class UserLibrarySyncController extends Notifier<UserLibrarySyncState> {
         dramaId: isFavorited,
       }),
     );
-  }
-
-  /// 仅在尚未有本地操作时采纳接口快照，避免旧回包使 UI 回退。
-  void observeFavoriteFromServer({
-    required String dramaId,
-    required bool? isFavorited,
-  }) {
-    if (isFavorited == null || state.favoriteByDramaId.containsKey(dramaId)) {
-      return;
-    }
-    setFavorite(dramaId: dramaId, isFavorited: isFavorited);
   }
 
   void resetForSessionCleanup(SessionCleanupReason reason) {

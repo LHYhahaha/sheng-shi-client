@@ -231,7 +231,13 @@ class StorePackageBenefit {
 }
 
 /// 商店权益图标类型。
-enum StoreBenefitIcon { drama, download, hd, points }
+enum StoreBenefitIcon {
+  drama,
+  // download,
+  ad,
+  hd,
+  points,
+}
 
 /// 充值页聚合数据。
 ///

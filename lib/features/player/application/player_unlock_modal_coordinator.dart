@@ -193,6 +193,7 @@ class PlayerUnlockModalCoordinator {
         'popup_name': AnalyticsPopupNames.recharge,
         'drama_id': item.content.id,
         'episode_id': item.episode.id,
+        'episode_no': item.episode.number,
         'required_coin_amount': item.episode.requiredCoins,
         'recharge_popup_type': popupType.analyticsValue,
       },

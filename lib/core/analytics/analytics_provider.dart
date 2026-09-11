@@ -52,11 +52,21 @@ final analyticsUploadSinkProvider = Provider<AnalyticsBatchUploadEventSink>((
 ) {
   final sink = AnalyticsBatchUploadEventSink(
     apiClientReader: () => ref.read(apiClientProvider),
+    userIdReader: () =>
+        ref.mounted ? ref.read(analyticsContextProvider).userId : null,
     // 启动事件必须等认证后的用户资料或权益请求结果；由 App bootstrap
     // 调用 enableUploads 后才允许真正请求 batch-upload。
     uploadsEnabled: false,
   );
   unawaited(sink.initialize());
+  ref.listen(analyticsContextProvider.select((context) => context.userId), (
+    _,
+    userId,
+  ) {
+    if (userId != null && userId.trim().isNotEmpty) {
+      unawaited(sink.flush());
+    }
+  });
   final subscription = Connectivity().onConnectivityChanged.listen((results) {
     if (results.any((result) => result != ConnectivityResult.none)) {
       unawaited(sink.flush());

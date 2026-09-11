@@ -50,7 +50,7 @@ class MockStoreRepository implements StoreRepository {
           badgeLabel: '23:59:59',
           benefits: [
             StorePackageBenefit(icon: StoreBenefitIcon.drama),
-            StorePackageBenefit(icon: StoreBenefitIcon.download),
+            StorePackageBenefit(icon: StoreBenefitIcon.ad),
             StorePackageBenefit(icon: StoreBenefitIcon.hd),
             StorePackageBenefit(icon: StoreBenefitIcon.points),
           ],
@@ -63,7 +63,7 @@ class MockStoreRepository implements StoreRepository {
           priceLabel: r'$14.99',
           benefits: [
             StorePackageBenefit(icon: StoreBenefitIcon.drama),
-            StorePackageBenefit(icon: StoreBenefitIcon.download),
+            StorePackageBenefit(icon: StoreBenefitIcon.ad),
             StorePackageBenefit(icon: StoreBenefitIcon.hd),
             StorePackageBenefit(icon: StoreBenefitIcon.points),
           ],

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:readmore/readmore.dart';
 
@@ -57,6 +55,9 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
   static const _minSize = 0.42;
   static const _maxSize = 0.95;
   static const _topChromeHeight = 66.0;
+  static const _contentTopInset = _topChromeHeight + 8;
+  static const _headerAndTabsHeight = _contentTopInset + 91 + 18 + 36 + 18;
+  static const _episodeRangeHeight = 48.0;
 
   late final DraggableScrollableController _sheetController;
   late PlayerDetailTab _selectedTab = widget.initialTab;
@@ -91,99 +92,104 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
     }
   }
 
-  Future<void> _setMode(_DetailSheetMode mode) async {
-    if (_mode == mode) {
-      return;
-    }
-    setState(() => _mode = mode);
-    if (!_sheetController.isAttached) {
-      return;
-    }
-    final targetSize = mode == _DetailSheetMode.compact
-        ? _compactSize
-        : _expandedSize;
-    await _sheetController.animateTo(
-      targetSize,
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOutCubic,
+  Widget _buildHeaderAndTabs() {
+    return Container(
+      color: _sheetColor,
+      padding: const EdgeInsets.fromLTRB(16, _contentTopInset, 16, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Header(content: widget.content),
+          const SizedBox(height: 18),
+          _SegmentedControl(
+            selectedTab: _selectedTab,
+            onChanged: (tab) => setState(() => _selectedTab = tab),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildPinnedEpisodes({
-    required BuildContext context,
+  Widget _buildEpisodeRangeSelector() {
+    final ranges = _episodeRanges(widget.content.episodeTotal);
+
+    return Container(
+      color: _sheetColor,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: SizedBox(
+        height: 36,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: ranges.length,
+          separatorBuilder: (context, index) => const SizedBox(width: 20),
+          itemBuilder: (context, index) {
+            final range = ranges[index];
+            return _RangeButton(
+              label: '${range.start}-${range.end}',
+              selected: _rangeStart == range.start,
+              onTap: () =>
+                  _episodesPanelKey.currentState?._selectRange(range.start),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScrollableContent({
     required ScrollController scrollController,
     required double bottomInset,
   }) {
-    const contentTop = _topChromeHeight + 8;
-    const pinnedContentHeight = 211.0;
-    final ranges = _episodeRanges(widget.content.episodeTotal);
-
-    return Stack(
-      children: [
-        SingleChildScrollView(
-          controller: scrollController,
-          physics: const BouncingScrollPhysics(
-            parent: AlwaysScrollableScrollPhysics(),
-          ),
-          padding: EdgeInsets.fromLTRB(
-            16,
-            contentTop + pinnedContentHeight,
-            16,
-            bottomInset + 32,
-          ),
-          child: _EpisodesPanel(
-            key: _episodesPanelKey,
-            dramaId: widget.content.id,
-            episodes: widget.content.episodes,
-            currentEpisode: widget.currentEpisode,
-            currentEpisodeId: widget.currentEpisodeId,
-            sheetScrollController: scrollController,
-            rangeStart: _rangeStart,
-            onRangeChanged: (value) => setState(() => _rangeStart = value),
-            onEpisodeSelected: widget.onEpisodeSelected,
-            totalEpisodes: widget.content.episodeTotal,
+    final pinHeaders = _mode == _DetailSheetMode.expanded;
+    return CustomScrollView(
+      controller: scrollController,
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
+      slivers: [
+        SliverPersistentHeader(
+          pinned: pinHeaders,
+          delegate: _FixedExtentHeaderDelegate(
+            extent: _headerAndTabsHeight,
+            child: _buildHeaderAndTabs(),
           ),
         ),
-        Positioned(
-          left: 16,
-          right: 16,
-          top: contentTop,
-          height: pinnedContentHeight,
-          child: DecoratedBox(
-            decoration: const BoxDecoration(color: _sheetColor),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _Header(content: widget.content),
-                const SizedBox(height: 18),
-                _SegmentedControl(
-                  selectedTab: _selectedTab,
-                  onChanged: (tab) => setState(() => _selectedTab = tab),
-                ),
-                const SizedBox(height: 18),
-                SizedBox(
-                  height: 36,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: ranges.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(width: 20),
-                    itemBuilder: (context, index) {
-                      final range = ranges[index];
-                      return _RangeButton(
-                        label: '${range.start}-${range.end}',
-                        selected: _rangeStart == range.start,
-                        onTap: () => _episodesPanelKey.currentState
-                            ?._selectRange(range.start),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
+        if (_selectedTab == PlayerDetailTab.episodes) ...[
+          SliverPersistentHeader(
+            pinned: pinHeaders,
+            delegate: _FixedExtentHeaderDelegate(
+              extent: _episodeRangeHeight,
+              child: _buildEpisodeRangeSelector(),
             ),
           ),
-        ),
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 32),
+            sliver: SliverToBoxAdapter(
+              child: _EpisodesPanel(
+                key: _episodesPanelKey,
+                dramaId: widget.content.id,
+                episodes: widget.content.episodes,
+                currentEpisode: widget.currentEpisode,
+                currentEpisodeId: widget.currentEpisodeId,
+                sheetScrollController: scrollController,
+                rangeStart: _rangeStart,
+                onRangeChanged: (value) => setState(() => _rangeStart = value),
+                onEpisodeSelected: widget.onEpisodeSelected,
+                totalEpisodes: widget.content.episodeTotal,
+              ),
+            ),
+          ),
+        ] else
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 32),
+            sliver: SliverToBoxAdapter(
+              child: _SynopsisPanel(
+                content: widget.content,
+                onRecommendationSelected: widget.onRecommendationSelected,
+                recommendationsFuture: widget.recommendationsFuture,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -193,6 +199,7 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return DraggableScrollableSheet(
+      key: const ValueKey('player_detail_sheet_draggable'),
       controller: _sheetController,
       expand: false,
       initialChildSize: _compactSize,
@@ -202,6 +209,7 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
       snapSizes: const [_minSize, _compactSize, _expandedSize],
       builder: (context, scrollController) {
         return Material(
+          key: const ValueKey('player_detail_sheet_surface'),
           color: _sheetColor,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           clipBehavior: Clip.antiAlias,
@@ -209,44 +217,10 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
             fit: StackFit.expand,
             children: [
               Positioned.fill(
-                child: _selectedTab == PlayerDetailTab.episodes
-                    ? _buildPinnedEpisodes(
-                        context: context,
-                        scrollController: scrollController,
-                        bottomInset: bottomInset,
-                      )
-                    : SingleChildScrollView(
-                        controller: scrollController,
-                        physics: const BouncingScrollPhysics(
-                          parent: AlwaysScrollableScrollPhysics(),
-                        ),
-                        padding: EdgeInsets.fromLTRB(
-                          16,
-                          _topChromeHeight + 8,
-                          16,
-                          bottomInset + 32,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _Header(content: widget.content),
-                            const SizedBox(height: 18),
-                            _SegmentedControl(
-                              selectedTab: _selectedTab,
-                              onChanged: (tab) =>
-                                  setState(() => _selectedTab = tab),
-                            ),
-                            const SizedBox(height: 18),
-                            _SynopsisPanel(
-                              content: widget.content,
-                              onRecommendationSelected:
-                                  widget.onRecommendationSelected,
-                              recommendationsFuture:
-                                  widget.recommendationsFuture,
-                            ),
-                          ],
-                        ),
-                      ),
+                child: _buildScrollableContent(
+                  scrollController: scrollController,
+                  bottomInset: bottomInset,
+                ),
               ),
               Positioned(
                 left: 0,
@@ -303,25 +277,6 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
                         top: 8,
                         child: AppSheetHandle(),
                       ),
-                      // Positioned(
-                      //   left: 16,
-                      //   top: 22,
-                      //   child: AppRoundIconButton(
-                      //     key: _mode == _DetailSheetMode.compact
-                      //         ? const ValueKey('player_detail_sheet_expand')
-                      //         : const ValueKey('player_detail_sheet_shrink'),
-                      //     icon: _mode == _DetailSheetMode.compact
-                      //         ? Icons.open_in_full_rounded
-                      //         : Icons.close_fullscreen_rounded,
-                      //     onTap: () {
-                      //       if (_mode == _DetailSheetMode.compact) {
-                      //         unawaited(_setMode(_DetailSheetMode.expanded));
-                      //       } else {
-                      //         unawaited(_setMode(_DetailSheetMode.compact));
-                      //       }
-                      //     },
-                      //   ),
-                      // ),
                       Positioned(
                         right: 16,
                         top: 18,
@@ -343,6 +298,30 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
   }
 }
 
+class _FixedExtentHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _FixedExtentHeaderDelegate({required this.extent, required this.child});
+
+  final double extent;
+  final Widget child;
+
+  @override
+  double get minExtent => extent;
+
+  @override
+  double get maxExtent => extent;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) => child;
+
+  @override
+  bool shouldRebuild(_FixedExtentHeaderDelegate oldDelegate) =>
+      extent != oldDelegate.extent || child != oldDelegate.child;
+}
+
 class _Header extends StatelessWidget {
   const _Header({required this.content});
 
@@ -350,7 +329,6 @@ class _Header extends StatelessWidget {
 
   Widget _buildCoverImage() {
     final coverUrl = content.coverUrl;
-    final posterPath = content.posterAssetPath;
 
     if (coverUrl != null && coverUrl.isNotEmpty) {
       return AppCachedNetworkImage(
@@ -489,7 +467,6 @@ class _SynopsisPanel extends StatefulWidget {
     required this.content,
     required this.onRecommendationSelected,
     this.recommendationsFuture,
-    super.key,
   });
 
   final PlayerContent content;
@@ -502,7 +479,6 @@ class _SynopsisPanel extends StatefulWidget {
 }
 
 class _SynopsisPanelState extends State<_SynopsisPanel> {
-  bool _isExpanded = false;
   Future<List<PlayerRecommendation>>? _cachedFuture;
 
   @override

@@ -34,9 +34,11 @@ import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/url/external_url_launcher.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
-import '../../../gift/application/gift_drama_link_cache.dart';
+// TODO(next release): 重新启用播放器赠送影片分享时恢复此依赖。
+// import '../../../gift/application/gift_drama_link_cache.dart';
 import '../../../gift/data/gift_remote_data_source_provider.dart';
-import '../../../gift/domain/gift_link_data.dart';
+// TODO(next release): 重新启用播放器赠送影片分享时恢复此依赖。
+// import '../../../gift/domain/gift_link_data.dart';
 import '../../../entitlement/domain/episode_unlock_type.dart';
 import '../../data/player_exit_recommendation_history_repository_provider.dart';
 import '../../../auth/application/auth_controller.dart';
@@ -777,7 +779,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     // 不 await，避免把赠剧资格请求放到首帧关键路径上。
     Future<void>.microtask(() {
       if (mounted) {
-        _refreshDramaGiftLinkOnPlayerEntry(widget.dramaId);
+        // TODO(next release): 恢复播放器赠送影片分享时，进入播放器后刷新资格。
+        // _refreshDramaGiftLinkOnPlayerEntry(widget.dramaId);
         _prefetchShareDramaStatus();
       }
     });
@@ -1731,6 +1734,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       }
     });
 
+    // TODO(next release): 恢复播放器赠送影片分享时，根据会员状态清理并刷新资格。
+    /*
     ref.listen(
       entitlementControllerProvider.select(
         (state) => (
@@ -1751,6 +1756,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         }
       },
     );
+    */
 
     ref.listen(
       viewportProvider.select(PlayerViewportSettledSnapshot.fromState),
@@ -1813,7 +1819,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           isItemChange: isItemChange,
         );
         _prepareAdUnlockForSettledItem();
-        _prefetchDramaGiftLink(settledItem.content.id);
+        // TODO(next release): 恢复播放器赠送影片分享时，切集后预请求资格。
+        // _prefetchDramaGiftLink(settledItem.content.id);
         unawaited(
           feedEngine.onViewportSettled(
             item: settledItem,
@@ -4016,22 +4023,23 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         ),
       );
       final shareStatus = await _loadShareDramaStatus();
-      GiftLinkData? gift;
-      Future<GiftLinkData>? giftRequestInFlight;
-      if (ref.read(entitlementControllerProvider).isMember) {
-        final parsedDramaId = int.tryParse(dramaId);
-        if (parsedDramaId != null && parsedDramaId > 0) {
-          final cache = ref.read(giftDramaLinkCacheProvider);
-          giftRequestInFlight = cache.inFlightFor(parsedDramaId);
-          if (giftRequestInFlight == null) {
-            try {
-              gift = await cache.get(parsedDramaId);
-            } catch (_) {
-              // 资格接口失败时仍允许使用普通分享。
-            }
-          }
-        }
-      }
+      // TODO(next release): 恢复播放器赠送影片分享时，会员打开弹框前请求资格。
+      // GiftLinkData? gift;
+      // Future<GiftLinkData>? giftRequestInFlight;
+      // if (ref.read(entitlementControllerProvider).isMember) {
+      //   final parsedDramaId = int.tryParse(dramaId);
+      //   if (parsedDramaId != null && parsedDramaId > 0) {
+      //     final cache = ref.read(giftDramaLinkCacheProvider);
+      //     giftRequestInFlight = cache.inFlightFor(parsedDramaId);
+      //     if (giftRequestInFlight == null) {
+      //       try {
+      //         gift = await cache.get(parsedDramaId);
+      //       } catch (_) {
+      //         // 资格接口失败时仍允许使用普通分享。
+      //       }
+      //     }
+      //   }
+      // }
       if (!mounted || _isLeavingRoute) return;
 
       _isModalOpen = true;
@@ -4048,31 +4056,38 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         isDismissible: true,
         enableDrag: true,
         builder: (context) {
-          final pendingRequest = giftRequestInFlight;
-          if (pendingRequest != null) {
-            return FutureBuilder<GiftLinkData>(
-              future: pendingRequest,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const PlayerShareLoadingSheet();
-                }
-                return _buildShareSheet(
-                  context,
-                  dramaId: dramaId,
-                  dramaTitle: dramaTitle,
-                  gift: snapshot.data,
-                  shareStatus: shareStatus,
-                );
-              },
-            );
-          }
           return _buildShareSheet(
             context,
             dramaId: dramaId,
             dramaTitle: dramaTitle,
-            gift: gift,
             shareStatus: shareStatus,
           );
+          // TODO(next release): 恢复播放器赠送影片分享时，等待已发起的资格请求。
+          // final pendingRequest = giftRequestInFlight;
+          // if (pendingRequest != null) {
+          //   return FutureBuilder<GiftLinkData>(
+          //     future: pendingRequest,
+          //     builder: (context, snapshot) {
+          //       if (snapshot.connectionState != ConnectionState.done) {
+          //         return const PlayerShareLoadingSheet();
+          //       }
+          //       return _buildShareSheet(
+          //         context,
+          //         dramaId: dramaId,
+          //         dramaTitle: dramaTitle,
+          //         gift: snapshot.data,
+          //         shareStatus: shareStatus,
+          //       );
+          //     },
+          //   );
+          // }
+          // return _buildShareSheet(
+          //   context,
+          //   dramaId: dramaId,
+          //   dramaTitle: dramaTitle,
+          //   gift: gift,
+          //   shareStatus: shareStatus,
+          // );
         },
       ).whenComplete(() {
         unawaited(
@@ -4094,7 +4109,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     BuildContext context, {
     required String dramaId,
     required String dramaTitle,
-    required GiftLinkData? gift,
     required ShareDramaStatusDto? shareStatus,
   }) {
     // 分享任务完成状态将由后续独立接口下发；先保留 UI 的两个展示分支。
@@ -4103,46 +4117,56 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       hasCompletedShareTask: shareStatus?.hasCompletedTask ?? false,
       firstShareRewardCoins: shareStatus?.shareCoin ?? 0,
     );
-    if (!ref.read(entitlementControllerProvider).isMember) {
-      return PlayerShareSheet(
-        shareHint: shareHint,
-        onFacebookTap: () {
-          unawaited(
-            _handleNormalFacebookShare(dramaId, dramaTitle, shareStatus),
-          );
-        },
-        onCopyLinkTap: () {
-          _handleNormalCopyShare(dramaId, dramaTitle, shareStatus);
-        },
-      );
-    }
-    return PlayerGiftShareSheet(
+    return PlayerShareSheet(
       shareHint: shareHint,
-      quotaLabel: context.l10n.dramaGiftShareSummary(
-        used: gift?.usedCount ?? 0,
-        total: gift?.totalCount ?? 0,
-      ),
-      isGiftAvailable: gift?.visible == true && gift?.available == true,
-      unavailableDescription: context.l10n.giftShareUnavailableLimit(
-        date: context.l10n.formatGiftReGrantDate(gift?.reGrantAt ?? ''),
-      ),
-      onShareFacebookTap: () {
+      onFacebookTap: () {
         unawaited(_handleNormalFacebookShare(dramaId, dramaTitle, shareStatus));
       },
-      onShareCopyLinkTap: () {
+      onCopyLinkTap: () {
         _handleNormalCopyShare(dramaId, dramaTitle, shareStatus);
       },
-      onGiftFacebookTap: () {
-        if (gift == null) return;
-        unawaited(_shareGiftDramaToFacebook(dramaId, dramaTitle, gift));
-        _invalidateAndRefreshDramaGiftLink(dramaId);
-      },
-      onGiftCopyLinkTap: () {
-        if (gift == null) return;
-        unawaited(_copyGiftDramaLink(dramaId, dramaTitle, gift));
-        _invalidateAndRefreshDramaGiftLink(dramaId);
-      },
     );
+    // TODO(next release): 恢复会员赠送影片的分享标签和链接操作。
+    // if (!ref.read(entitlementControllerProvider).isMember) {
+    //   return PlayerShareSheet(
+    //     shareHint: shareHint,
+    //     onFacebookTap: () {
+    //       unawaited(
+    //         _handleNormalFacebookShare(dramaId, dramaTitle, shareStatus),
+    //       );
+    //     },
+    //     onCopyLinkTap: () {
+    //       _handleNormalCopyShare(dramaId, dramaTitle, shareStatus);
+    //     },
+    //   );
+    // }
+    // return PlayerGiftShareSheet(
+    //   shareHint: shareHint,
+    //   quotaLabel: context.l10n.dramaGiftShareSummary(
+    //     used: gift?.usedCount ?? 0,
+    //     total: gift?.totalCount ?? 0,
+    //   ),
+    //   isGiftAvailable: gift?.visible == true && gift?.available == true,
+    //   unavailableDescription: context.l10n.giftShareUnavailableLimit(
+    //     date: context.l10n.formatGiftReGrantDate(gift?.reGrantAt ?? ''),
+    //   ),
+    //   onShareFacebookTap: () {
+    //     unawaited(_handleNormalFacebookShare(dramaId, dramaTitle, shareStatus));
+    //   },
+    //   onShareCopyLinkTap: () {
+    //     _handleNormalCopyShare(dramaId, dramaTitle, shareStatus);
+    //   },
+    //   onGiftFacebookTap: () {
+    //     if (gift == null) return;
+    //     unawaited(_shareGiftDramaToFacebook(dramaId, dramaTitle, gift));
+    //     _invalidateAndRefreshDramaGiftLink(dramaId);
+    //   },
+    //   onGiftCopyLinkTap: () {
+    //     if (gift == null) return;
+    //     unawaited(_copyGiftDramaLink(dramaId, dramaTitle, gift));
+    //     _invalidateAndRefreshDramaGiftLink(dramaId);
+    //   },
+    // );
   }
 
   String _shareHint(
@@ -4201,6 +4225,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     return ref.read(shareDramaRewardCoordinatorProvider).loadStatus();
   }
 
+  // TODO(next release): 恢复播放器赠送影片分享资格缓存。
+  /*
   void _prefetchDramaGiftLink(String dramaId) {
     if (!ref.read(entitlementControllerProvider).isMember) return;
     final parsedDramaId = int.tryParse(dramaId);
@@ -4239,6 +4265,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       cache.refresh(parsedDramaId).then<void>((_) {}, onError: (_, _) {}),
     );
   }
+  */
 
   Future<void> _trackShareChannelClick(String dramaId, String shareMethod) =>
       ref
@@ -4305,6 +4332,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
   }
 
+  /*
   Uri _giftDramaUrl(
     String dramaId,
     GiftLinkData gift, {
@@ -4376,6 +4404,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     );
     if (mounted) showAppCenterToast(context.l10n.shareToastCopySuccess);
   }
+  */
 
   String _shareMessage(String dramaTitle, Uri shareUrl) {
     return context.l10n.shareMessage(
@@ -4406,11 +4435,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       isScrollControlled: true,
       isDismissible: true,
       enableDrag: true,
-      builder: (context) {
-        return PlayerSpeedSheet(
-          selectedRate: ref
-              .read(playerPlaybackControllerProvider(_sessionKey))
-              .playbackRate,
+      builder: (context) => Consumer(
+        builder: (context, ref, _) => PlayerSpeedSheet(
+          selectedRate: ref.watch(
+            playerPlaybackControllerProvider(
+              _sessionKey,
+            ).select((state) => state.playbackRate),
+          ),
           onRateSelected: (rate) {
             unawaited(
               ref
@@ -4418,8 +4449,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   .setPlaybackRate(rate),
             );
           },
-        );
-      },
+        ),
+      ),
     );
     _isModalOpen = false;
     if (mounted) {

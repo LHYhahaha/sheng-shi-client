@@ -1,5 +1,9 @@
+import 'package:drama_client/core/auth/user_info_store.dart';
 import 'dart:async';
 
+import 'package:drama_client/core/analytics/analytics_context.dart';
+import 'package:drama_client/core/analytics/analytics_provider.dart';
+import 'package:drama_client/core/analytics/analytics_service.dart';
 import 'package:drama_client/core/network/api_client.dart';
 import 'package:drama_client/core/user_library/user_library_sync_controller.dart';
 import 'package:drama_client/features/player/application/player_auto_favorite_tracker.dart';
@@ -65,12 +69,35 @@ void main() {
       expect(play(3), false);
     });
 
-    test('second episode and forward jumps qualify; backward does not', () {
+    test(
+      'two episodes must have played before the qualifying forward switch',
+      () {
+        play(1);
+        now += const Duration(seconds: 130);
+        expect(play(2), false);
+        expect(play(3), true);
+        expect(play(1), false);
+        expect(play(4), true);
+      },
+    );
+
+    test('jumping forward cannot supply the second watched episode', () {
       play(1);
-      now += const Duration(seconds: 121);
-      expect(play(4), true);
-      expect(play(1), false);
-      expect(play(4), true);
+      now += const Duration(seconds: 130);
+      expect(play(5), false);
+      expect(play(8), true);
+    });
+
+    test('eligible switch waits for full-access playback of the target', () {
+      play(1);
+      now += const Duration(seconds: 110);
+      expect(play(2), false);
+      now += const Duration(seconds: 10);
+      expect(play(2), false);
+      expect(play(3, effective: false), false);
+      now += const Duration(minutes: 5);
+      expect(play(3), true);
+      expect(play(3), false);
     });
 
     test('pause, background, loading and trial do not accrue time', () {
@@ -94,7 +121,8 @@ void main() {
       expect(play(2), false);
       now += const Duration(seconds: 121);
       expect(play(2), false);
-      expect(play(3), true);
+      expect(play(3), false);
+      expect(play(4), true);
     });
 
     test(
@@ -116,14 +144,90 @@ void main() {
     late _Remote remote;
     late ProviderContainer container;
     late PlayerLikeController controller;
+    late AnalyticsInMemoryEventSink analyticsSink;
     setUp(() {
       remote = _Remote();
+      analyticsSink = AnalyticsInMemoryEventSink();
       container = ProviderContainer(
-        overrides: [playerRemoteDataSourceProvider.overrideWithValue(remote)],
+        overrides: [
+          playerRemoteDataSourceProvider.overrideWithValue(remote),
+          analyticsServiceProvider.overrideWithValue(
+            AnalyticsService(
+              contextReader: () => const AnalyticsContext(
+                platform: 'android',
+                appVersion: '1.0.0',
+                language: 'en',
+              ),
+              eventSink: analyticsSink,
+            ),
+          ),
+        ],
       );
       container.listen(playerLikeControllerProvider('42'), (_, _) {});
       controller = container.read(playerLikeControllerProvider('42').notifier);
       addTearDown(container.dispose);
+    });
+
+    test(
+      'account switch clears favorite and accepts new detail snapshot',
+      () async {
+        final user = container.read(userInfoStoreProvider.notifier);
+        await user.waitForHydration();
+        await user.saveFromMap({'userId': 'guest'});
+        final provider = playerLikeControllerProvider('1');
+        final subscription = container.listen(provider, (_, _) {});
+        addTearDown(subscription.close);
+        container
+            .read(userLibrarySyncControllerProvider.notifier)
+            .setFavorite(dramaId: '1', isFavorited: true);
+        expect(container.read(provider).isLiked, isTrue);
+        await user.saveFromMap({'userId': 'facebook'});
+        final controller = container.read(provider.notifier);
+        controller.syncFeedLikeState(isLiked: false, favoriteCount: 10);
+        expect(container.read(provider).isLiked, isFalse);
+        await user.saveFromMap({'userId': 'facebook', 'nickname': 'updated'});
+        expect(container.read(provider).serverFavoriteCount, 10);
+      },
+    );
+
+    test('latest detail snapshot replaces an earlier server snapshot', () {
+      final provider = playerLikeControllerProvider('1');
+      final subscription = container.listen(provider, (_, _) {});
+      addTearDown(subscription.close);
+      final controller = container.read(provider.notifier);
+
+      controller.syncFeedLikeState(isLiked: true, favoriteCount: 11);
+      controller.syncFeedLikeState(isLiked: false, favoriteCount: 10);
+
+      expect(container.read(provider).isLiked, isFalse);
+      expect(container.read(provider).serverFavoriteCount, 10);
+      expect(
+        container.read(userLibrarySyncControllerProvider).favoriteFor('1'),
+        isNull,
+      );
+    });
+
+    test('old manual failure cannot roll back new account favorite', () async {
+      final user = container.read(userInfoStoreProvider.notifier);
+      await user.waitForHydration();
+      await user.saveFromMap({'userId': 'guest'});
+      controller = container.read(playerLikeControllerProvider('42').notifier);
+      remote.pending = Completer<void>();
+      final request = controller.toggleLike();
+      await user.saveFromMap({'userId': 'facebook'});
+      container
+          .read(playerLikeControllerProvider('42').notifier)
+          .syncFeedLikeState(isLiked: true, favoriteCount: 20);
+      remote.pending!.completeError(StateError('old request failed'));
+      await request;
+      expect(
+        container.read(playerLikeControllerProvider('42')).isLiked,
+        isTrue,
+      );
+      expect(
+        container.read(userLibrarySyncControllerProvider).favoriteFor('42'),
+        isNull,
+      );
     });
 
     test(
@@ -136,6 +240,13 @@ void main() {
         );
         await Future<void>.delayed(Duration.zero);
         expect(remote.calls, 1);
+        expect(analyticsSink.events.single.eventName, 'element_click');
+        expect(analyticsSink.events.single.eventParams, {
+          'element_name': 'favorite_toggle_button',
+          'drama_id': '42',
+          'favorite_action': 'add',
+          'favorite_trigger_type': 'auto',
+        });
         expect(
           container.read(playerLikeControllerProvider('42')).isLiked,
           false,
@@ -146,6 +257,7 @@ void main() {
         );
         remote.pending!.complete();
         expect(await request, true);
+        expect(analyticsSink.events, hasLength(1));
         expect(
           container.read(playerLikeControllerProvider('42')).isLiked,
           true,

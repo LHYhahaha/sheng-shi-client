@@ -90,6 +90,7 @@ class PlayerWatchRewardCoordinator {
 
   bool get _active =>
       !_disposed && _owner != null && _isCurrent?.call() == true;
+
   bool _valid(int generation) => _active && generation == _generation;
 
   void _kick() {
@@ -221,7 +222,9 @@ class PlayerWatchRewardCoordinator {
         return byTarget != 0 ? byTarget : a.taskKey.compareTo(b.taskKey);
       });
     for (final task in sorted) {
-      if (task.claimed || task.targetValue > _seconds || !_isLatestTier(task)) {
+      if (task.claimed ||
+          task.targetValue + 10 > _seconds ||
+          !_isLatestTier(task)) {
         continue;
       }
       final attempt = history[task.taskKey] ?? const WatchRewardAttempt();

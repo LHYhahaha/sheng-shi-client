@@ -120,7 +120,8 @@ class StoreMapper {
   List<StorePackageBenefit> _defaultBenefits() {
     return const [
       StorePackageBenefit(icon: StoreBenefitIcon.drama),
-      StorePackageBenefit(icon: StoreBenefitIcon.download),
+      // StorePackageBenefit(icon: StoreBenefitIcon.download),
+      StorePackageBenefit(icon: StoreBenefitIcon.ad),
       StorePackageBenefit(icon: StoreBenefitIcon.hd),
       StorePackageBenefit(icon: StoreBenefitIcon.points),
     ];

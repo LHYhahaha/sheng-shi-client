@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics_definition.dart';
+import '../../../core/analytics/analytics_event.dart';
+import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/user_library/user_library_sync_controller.dart';
 import '../data/player_remote_data_source_provider.dart';
 import '../data/player_auto_favorite_history.dart';
@@ -76,6 +81,7 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
 
   @override
   PlayerLikeState build() {
+    ref.watch(userLibraryAccountIdProvider);
     _generation++;
     _remoteDataSource = ref.watch(playerRemoteDataSourceProvider);
     final syncedIsLiked = ref
@@ -105,11 +111,8 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
   ///
   /// 请求进行中时忽略列表回包，避免旧快照覆盖当前页面的乐观状态。
   void syncFeedLikeState({required bool? isLiked, required int favoriteCount}) {
-    final librarySync = ref.read(userLibrarySyncControllerProvider.notifier);
-    librarySync.observeFavoriteFromServer(
-      dramaId: dramaId,
-      isFavorited: isLiked,
-    );
+    // 服务端快照不是本地覆盖值。只有用户刚刚完成的收藏/取消操作才写入
+    // UserLibrarySync，因此新的 /api/home/detail 响应可以更新旧快照。
     isLiked =
         ref.read(userLibrarySyncControllerProvider).favoriteFor(dramaId) ??
         isLiked;
@@ -141,7 +144,12 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
     }
     final keepAlive = ref.keepAlive();
     final generation = _generation;
-    bool canApply() => ref.mounted && generation == _generation && isCurrent();
+    final accountId = ref.read(userLibraryAccountIdProvider);
+    bool canApply() =>
+        ref.mounted &&
+        accountId == ref.read(userLibraryAccountIdProvider) &&
+        generation == _generation &&
+        isCurrent();
     final history = ref.read(playerAutoFavoriteHistoryProvider);
     state = state.copyWith(isLoading: true);
     try {
@@ -165,6 +173,18 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
         return false;
       }
       if (!canApply()) return false;
+      unawaited(
+        ref
+            .read(analyticsServiceProvider)
+            .track(
+              AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                'element_name': 'favorite_toggle_button',
+                'drama_id': dramaId,
+                'favorite_action': 'add',
+                'favorite_trigger_type': 'auto',
+              }),
+            ),
+      );
       await _remoteDataSource.followShort(dramaId: id);
       // Record against the initiating account even if it left during the request.
       try {
@@ -199,6 +219,12 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
       return;
     }
 
+    final generation = _generation;
+    final accountId = ref.read(userLibraryAccountIdProvider);
+    bool canApply() =>
+        ref.mounted &&
+        accountId == ref.read(userLibraryAccountIdProvider) &&
+        generation == _generation;
     final currentIsLiked = state.isLiked;
     final dramaIdInt = int.tryParse(dramaId) ?? 0;
 
@@ -232,9 +258,11 @@ class PlayerLikeController extends Notifier<PlayerLikeState> {
         await _remoteDataSource.followShort(dramaId: dramaIdInt);
       }
 
+      if (!canApply()) return;
       // 请求成功，保留已立即呈现的状态；不写入跨页面缓存。
       state = state.copyWith(isLoading: false);
     } catch (e) {
+      if (!canApply()) return;
       // 请求失败，恢复点击前的图标与数量。
       state = PlayerLikeState(
         isLiked: currentIsLiked,

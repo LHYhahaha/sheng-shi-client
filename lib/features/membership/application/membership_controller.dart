@@ -12,6 +12,7 @@ import '../../../core/notification/startup_notification_permission_reporter.dart
 import '../../../core/runtime/api_region_code_provider.dart';
 import '../../../core/utils/period_iso_parser.dart';
 import '../../entitlement/application/entitlement_controller.dart';
+import '../../pay/domain/vip_product_load_result.dart';
 import '../../pay/application/google_play_pricing_extractor.dart';
 import '../../pay/application/iap_pending_purchase_cleaner.dart';
 import '../../pay/application/iap_price_service.dart';
@@ -52,6 +53,7 @@ enum MembershipPurchaseFailureKind {
 
 class MembershipState {
   const MembershipState({
+    this.vipProductLoadResult,
     required this.isLoading,
     required this.isActive,
     required this.heroTitle,
@@ -70,7 +72,8 @@ class MembershipState {
   });
 
   const MembershipState.initial()
-    : isLoading = true,
+    : vipProductLoadResult = null,
+      isLoading = true,
       isActive = false,
       heroTitle = '',
       heroSubtitle = '',
@@ -121,7 +124,10 @@ class MembershipState {
     return null;
   }
 
+  final VipProductLoadResult? vipProductLoadResult;
+
   MembershipState copyWith({
+    VipProductLoadResult? vipProductLoadResult,
     bool? isLoading,
     bool? isActive,
     String? heroTitle,
@@ -143,6 +149,9 @@ class MembershipState {
     bool clearPaymentRuleId = false,
   }) {
     return MembershipState(
+      vipProductLoadResult: isLoading == true
+          ? null
+          : vipProductLoadResult ?? this.vipProductLoadResult,
       isLoading: isLoading ?? this.isLoading,
       isActive: isActive ?? this.isActive,
       heroTitle: heroTitle ?? this.heroTitle,
@@ -189,6 +198,7 @@ class MembershipController extends Notifier<MembershipState> {
 
   Future<void> load() async {
     final generation = ++_generation;
+    var queryingGoogle = false;
     state = state.copyWith(
       isLoading: true,
       clearError: true,
@@ -204,7 +214,9 @@ class MembershipController extends Notifier<MembershipState> {
         return;
       }
 
+      queryingGoogle = true;
       final iapResult = await _queryIapProducts(data.plans);
+      queryingGoogle = false;
       if (!_isCurrent(generation)) {
         return;
       }
@@ -217,6 +229,10 @@ class MembershipController extends Notifier<MembershipState> {
         heroTitle: data.heroTitle,
         heroSubtitle: data.heroSubtitle,
         plans: List<MembershipPlan>.unmodifiable(plans),
+        vipProductLoadResult: VipProductLoadResult.loaded(
+          sourceCount: data.plans.length,
+          displayCount: plans.length,
+        ),
         selectedPlanId: plans.isEmpty ? null : plans.first.id,
         iapProductDetails: iapResult.details,
         isGoogleBillingUnavailable: iapResult.isGoogleBillingUnavailable,
@@ -227,7 +243,13 @@ class MembershipController extends Notifier<MembershipState> {
       if (!_isCurrent(generation)) {
         return;
       }
-      state = state.copyWith(isLoading: false, error: error);
+      state = state.copyWith(
+        isLoading: false,
+        error: error,
+        vipProductLoadResult: VipProductLoadResult(
+          queryingGoogle ? 'google_request_failed' : 'request_failed',
+        ),
+      );
     }
   }
 
@@ -244,6 +266,7 @@ class MembershipController extends Notifier<MembershipState> {
     }
 
     final generation = ++_generation;
+    var queryingGoogle = false;
     try {
       final data = await ref
           .read(membershipRepositoryProvider)
@@ -253,7 +276,9 @@ class MembershipController extends Notifier<MembershipState> {
         return;
       }
 
+      queryingGoogle = true;
       final iapResult = await _queryIapProducts(data.plans);
+      queryingGoogle = false;
       if (!_isCurrent(generation)) {
         return;
       }
@@ -272,6 +297,10 @@ class MembershipController extends Notifier<MembershipState> {
         heroTitle: data.heroTitle,
         heroSubtitle: data.heroSubtitle,
         plans: List<MembershipPlan>.unmodifiable(plans),
+        vipProductLoadResult: VipProductLoadResult.loaded(
+          sourceCount: data.plans.length,
+          displayCount: plans.length,
+        ),
         selectedPlanId: nextSelectedPlanId,
         iapProductDetails: iapResult.details,
         isGoogleBillingUnavailable: iapResult.isGoogleBillingUnavailable,
@@ -279,6 +308,13 @@ class MembershipController extends Notifier<MembershipState> {
       );
     } catch (error, stackTrace) {
       debugPrint('[Membership] silent refresh failed: $error\n$stackTrace');
+      if (_isCurrent(generation)) {
+        state = state.copyWith(
+          vipProductLoadResult: VipProductLoadResult(
+            queryingGoogle ? 'google_request_failed' : 'request_failed',
+          ),
+        );
+      }
     }
   }
 

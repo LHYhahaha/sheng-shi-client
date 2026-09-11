@@ -1200,14 +1200,14 @@ class _HomeTitleBarState extends ConsumerState<_HomeTitleBar> {
               ),
               child: Row(
                 children: [
-                  SvgPicture.asset(
-                    "assets/images/player/search.svg",
-                    width: 24,
-                    height: 24,
-                    colorFilter: ColorFilter.mode(
-                      Color(0XFFFFFFFF).withValues(alpha: 0.4),
-                      BlendMode.srcIn,
-                    ),
+                  Image.asset(
+                    "assets/images/home/search.png",
+                    width: 20,
+                    height: 20,
+                    // colorFilter: ColorFilter.mode(
+                    //   Color(0XFFFFFFFF).withValues(alpha: 0.4),
+                    //   BlendMode.srcIn,
+                    // ),
                   ),
                   SizedBox(width: 6),
                   Expanded(
@@ -1245,7 +1245,7 @@ class _HomeTitleBarState extends ConsumerState<_HomeTitleBar> {
                           color: Color(0XFFFFFFFF).withValues(alpha: 0.4),
                           fontSize: 14,
                           fontWeight: FontWeight.normal,
-                          height: 18/14,
+                          height: 18 / 14,
                         ),
                       ),
                     ),
@@ -1335,6 +1335,15 @@ class _HomeRewardEntryState extends ConsumerState<_HomeRewardEntry> {
         key: const ValueKey('home_reward_entry'),
         behavior: HitTestBehavior.opaque,
         onTap: () async {
+          unawaited(
+            ref
+                .read(analyticsServiceProvider)
+                .track(
+                  const AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+                    'element_name': 'home_reward_coin_entry',
+                  }),
+                ),
+          );
           await context.push<void>(RoutePaths.rewardsLocation());
           await _refresh();
         },

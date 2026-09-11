@@ -10,6 +10,7 @@ import '../../../core/analytics/analytics_event.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../entitlement/application/entitlement_controller.dart';
 import '../../../core/runtime/api_region_code_provider.dart';
+import '../../pay/domain/vip_product_load_result.dart';
 import '../../pay/application/iap_pending_purchase_cleaner.dart';
 import '../../pay/application/payment_loading_controller.dart';
 import '../../pay/provider/iap_purchase_service_provider.dart';
@@ -74,6 +75,7 @@ enum PlayerRechargePurchaseFailureKind {
 /// 时的弹窗展示和 remote purchase 流程，成功后再通知 PlayerPage 继续 pending unlock。
 class PlayerRechargeUnlockState {
   const PlayerRechargeUnlockState({
+    this.vipProductLoadResult,
     required this.status,
     this.itemId,
     this.offer,
@@ -89,7 +91,8 @@ class PlayerRechargeUnlockState {
   });
 
   const PlayerRechargeUnlockState.initial()
-    : status = PlayerRechargeUnlockStatus.idle,
+    : vipProductLoadResult = null,
+      status = PlayerRechargeUnlockStatus.idle,
       itemId = null,
       offer = null,
       selectedCoinPackageId = null,
@@ -145,7 +148,10 @@ class PlayerRechargeUnlockState {
     return null;
   }
 
+  final VipProductLoadResult? vipProductLoadResult;
+
   PlayerRechargeUnlockState copyWith({
+    VipProductLoadResult? vipProductLoadResult,
     PlayerRechargeUnlockStatus? status,
     String? itemId,
     PlayerRechargeUnlockOffer? offer,
@@ -165,6 +171,7 @@ class PlayerRechargeUnlockState {
     bool clearError = false,
   }) {
     return PlayerRechargeUnlockState(
+      vipProductLoadResult: vipProductLoadResult ?? this.vipProductLoadResult,
       status: status ?? this.status,
       itemId: itemId ?? this.itemId,
       offer: offer ?? this.offer,
@@ -272,6 +279,12 @@ class PlayerRechargeUnlockController
         status: PlayerRechargeUnlockStatus.idle,
         itemId: itemId,
         offer: offer,
+        vipProductLoadResult: VipProductLoadResult.loaded(
+          sourceCount:
+              offer.sourceMembershipProductCount ??
+              offer.membershipPackages.length,
+          displayCount: offer.membershipPackages.length,
+        ),
         selectedCoinPackageId: null,
         selectedMembershipPackageId: null,
         paymentStage: null,
@@ -284,6 +297,11 @@ class PlayerRechargeUnlockController
       }
       state = state.copyWith(
         status: PlayerRechargeUnlockStatus.failed,
+        vipProductLoadResult: VipProductLoadResult(
+          error is VipProductGoogleRequestException
+              ? 'google_request_failed'
+              : 'request_failed',
+        ),
         purchaseFailureKind: PlayerRechargePurchaseFailureKind.paymentOptions,
         error: error,
       );

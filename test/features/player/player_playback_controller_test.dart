@@ -104,6 +104,40 @@ void main() {
     },
   );
 
+  test(
+    'saved 3x is published before opening media and ignores stale 1x',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'player.playback_rate.preference': 3.0,
+      });
+      final session = _FakePlaybackSession();
+      final container = _createContainer(session);
+      final provider = playerPlaybackControllerProvider('speed:restore');
+      final controller = container.read(provider.notifier);
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(provider).playbackRate, 3.0);
+      expect(session.rates, isEmpty);
+
+      session._rateController.add(1.0);
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(provider).playbackRate, 3.0);
+
+      await controller.playItem(_item(1));
+      expect(session.rates.last, 3.0);
+      await controller.setPlaybackRate(1.0);
+      session._rateController.add(3.0);
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(provider).playbackRate, 1.0);
+      expect(session.rates.last, 1.0);
+      expect(
+        (await SharedPreferences.getInstance()).getDouble(
+          'player.playback_rate.preference',
+        ),
+        1.0,
+      );
+    },
+  );
+
   test('rate persists across episodes and new pages', () async {
     final session = _FakePlaybackSession();
     final container = _createContainer(session);

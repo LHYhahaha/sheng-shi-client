@@ -9,50 +9,27 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('detail sheet opens compact with expand control for Episodes', (
+  testWidgets(
+    'detail sheet opens compact with a unified scrollable for Episodes',
+    (tester) async {
+      await _openDetailSheet(tester, initialTab: PlayerDetailTab.episodes);
+
+      expect(find.byType(CustomScrollView), findsOneWidget);
+      expect(find.text('1-2'), findsOneWidget);
+    },
+  );
+
+  testWidgets('dragging the cover row expands the detail sheet', (
     tester,
   ) async {
     await _openDetailSheet(tester, initialTab: PlayerDetailTab.episodes);
+    final sheet = find.byKey(const ValueKey('player_detail_sheet_surface'));
+    final compactHeight = tester.getSize(sheet).height;
 
-    expect(
-      find.byKey(const ValueKey('player_detail_sheet_expand')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('player_detail_sheet_shrink')),
-      findsNothing,
-    );
-    expect(find.text('1-2'), findsOneWidget);
-  });
+    await _expandDetailSheetFromCover(tester);
 
-  testWidgets('expand and shrink toggle detail sheet mode controls', (
-    tester,
-  ) async {
-    await _openDetailSheet(tester, initialTab: PlayerDetailTab.episodes);
-
-    await tester.tap(find.byKey(const ValueKey('player_detail_sheet_expand')));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('player_detail_sheet_shrink')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('player_detail_sheet_expand')),
-      findsNothing,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('player_detail_sheet_shrink')));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('player_detail_sheet_expand')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('player_detail_sheet_shrink')),
-      findsNothing,
-    );
+    final expandedHeight = tester.getSize(sheet).height;
+    expect(expandedHeight, greaterThan(compactHeight));
   });
 
   testWidgets('close dismisses detail sheet', (tester) async {
@@ -91,8 +68,7 @@ void main() {
       },
     );
 
-    await tester.tap(find.byKey(const ValueKey('player_detail_sheet_expand')));
-    await tester.pumpAndSettle();
+    await _expandDetailSheetFromCover(tester);
     await tester.tap(find.text('1'));
     await tester.pumpAndSettle();
 
@@ -119,6 +95,7 @@ void main() {
       currentEpisode: 2,
       episodes: episodes,
     );
+    await _expandDetailSheetFromCover(tester);
 
     // The initial range no longer filters the list to its first 30 episodes.
     expect(find.text('31'), findsOneWidget);
@@ -161,9 +138,7 @@ void main() {
       episodes: episodes,
     );
 
-    // The sheet expands before its episode list starts scrolling.
-    await tester.dragFrom(const Offset(400, 500), const Offset(0, -500));
-    await tester.pumpAndSettle();
+    await _expandDetailSheetFromCover(tester);
 
     await tester.tap(find.text('61-70'));
     await tester.pumpAndSettle();
@@ -220,7 +195,7 @@ void main() {
 
     final scrollView = find.descendant(
       of: find.byType(PlayerDetailSheet),
-      matching: find.byType(SingleChildScrollView),
+      matching: find.byType(CustomScrollView),
     );
     final topChrome = find.byKey(
       const ValueKey('player_detail_sheet_top_chrome'),
@@ -253,6 +228,11 @@ void main() {
       );
     },
   );
+}
+
+Future<void> _expandDetailSheetFromCover(WidgetTester tester) async {
+  await tester.drag(find.text('Reborn: The Cure'), const Offset(0, -500));
+  await tester.pumpAndSettle();
 }
 
 Future<void> _openDetailSheet(

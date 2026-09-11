@@ -25,10 +25,10 @@ class MembershipBenefitsPanel extends StatelessWidget {
       // highlight: l10n.benefitSeriesHighlight,
       description: l10n.benefitSeriesHighlight,
     ),
-    MembershipBenefit(
-      iconPath: 'assets/images/membership/membership_download.png',
-      title: l10n.benefitDownload,
-    ),
+    // MembershipBenefit(
+    //   iconPath: 'assets/images/membership/membership_download.png',
+    //   title: l10n.benefitDownload,
+    // ),
     MembershipBenefit(
       iconPath: 'assets/images/membership/membership_only.png',
       title: l10n.benefitMembersOnly,
@@ -36,6 +36,10 @@ class MembershipBenefitsPanel extends StatelessWidget {
     MembershipBenefit(
       iconPath: 'assets/images/membership/membership_hd.png',
       title: l10n.benefitHd,
+    ),
+    MembershipBenefit(
+      iconPath: 'assets/images/membership/membership_ad.png',
+      title: l10n.benefitNoAds,
     ),
   ];
 

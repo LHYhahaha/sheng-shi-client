@@ -967,12 +967,9 @@ class _PlayerCoinUnlockSheetState extends ConsumerState<PlayerCoinUnlockSheet> {
             ),
           ),
           const SizedBox(height: 24),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 45),
-            child: Divider(
-              color: Colors.white.withValues(alpha: 0.08),
-              height: 1,
-            ),
+          Divider(
+            color: Colors.white.withValues(alpha: 0.08),
+            height: 1,
           ),
           const SizedBox(height: 20),
           Row(
@@ -1058,6 +1055,9 @@ class PlayerSpeedSheet extends StatelessWidget {
                   child: InkWell(
                     key: ValueKey('player_speed_option_$rate'),
                     borderRadius: BorderRadius.circular(24),
+                    splashFactory: NoSplash.splashFactory,
+                    highlightColor: Colors.transparent,
+                    hoverColor: Colors.transparent,
                     onTap: () {
                       onRateSelected(rate);
                       Navigator.of(context).pop();

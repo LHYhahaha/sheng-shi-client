@@ -9,6 +9,7 @@ import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/auth/session_cleanup_types.dart';
 import '../../../core/runtime/api_region_code_provider.dart';
 import '../../entitlement/application/entitlement_controller.dart';
+import '../../pay/domain/vip_product_load_result.dart';
 import '../../pay/application/iap_pending_purchase_cleaner.dart';
 import '../../pay/application/google_play_pricing_extractor.dart';
 import '../../pay/application/iap_price_service.dart';
@@ -48,6 +49,7 @@ enum StorePurchaseFailureKind {
 
 class StoreState {
   const StoreState({
+    this.vipProductLoadResult,
     required this.isLoading,
     required this.balance,
     required this.coinPackages,
@@ -66,7 +68,8 @@ class StoreState {
   });
 
   const StoreState.initial()
-    : isLoading = true,
+    : vipProductLoadResult = null,
+      isLoading = true,
       balance = 0,
       coinPackages = const [],
       vipPackages = const [],
@@ -119,7 +122,10 @@ class StoreState {
     return null;
   }
 
+  final VipProductLoadResult? vipProductLoadResult;
+
   StoreState copyWith({
+    VipProductLoadResult? vipProductLoadResult,
     bool? isLoading,
     int? balance,
     List<StorePackage>? coinPackages,
@@ -141,6 +147,9 @@ class StoreState {
     bool clearPaymentRuleId = false,
   }) {
     return StoreState(
+      vipProductLoadResult: isLoading == true
+          ? null
+          : vipProductLoadResult ?? this.vipProductLoadResult,
       isLoading: isLoading ?? this.isLoading,
       balance: balance ?? this.balance,
       coinPackages: coinPackages ?? this.coinPackages,
@@ -188,6 +197,7 @@ class StoreController extends Notifier<StoreState> {
 
   Future<void> load() async {
     final generation = ++_generation;
+    var queryingGoogle = false;
     state = state.copyWith(
       isLoading: true,
       clearError: true,
@@ -229,6 +239,7 @@ class StoreController extends Notifier<StoreState> {
       var iapDetails = <String, ProductDetails>{};
       var isGoogleBillingUnavailable = false;
       if (channelProductIds.isNotEmpty) {
+        queryingGoogle = true;
         final service = ref.read(iapPriceServiceProvider);
         if (!await service.isGooglePlayBillingAvailable()) {
           isGoogleBillingUnavailable = true;
@@ -243,6 +254,7 @@ class StoreController extends Notifier<StoreState> {
         return;
       }
 
+      queryingGoogle = false;
       final priceService = iapDetails.isEmpty
           ? null
           : ref.read(iapPriceServiceProvider);
@@ -267,6 +279,10 @@ class StoreController extends Notifier<StoreState> {
         balance: data.balance,
         coinPackages: List<StorePackage>.unmodifiable(coinPackages),
         vipPackages: List<StorePackage>.unmodifiable(vipPackages),
+        vipProductLoadResult: VipProductLoadResult.loaded(
+          sourceCount: vipPackagesRaw.length,
+          displayCount: vipPackages.length,
+        ),
         tips: data.tips,
         selectedPackageId: selectedId,
         iapProductDetails: iapDetails,
@@ -278,7 +294,13 @@ class StoreController extends Notifier<StoreState> {
       if (!_isCurrent(generation)) {
         return;
       }
-      state = state.copyWith(isLoading: false, error: error);
+      state = state.copyWith(
+        isLoading: false,
+        error: error,
+        vipProductLoadResult: VipProductLoadResult(
+          queryingGoogle ? 'google_request_failed' : 'request_failed',
+        ),
+      );
     }
   }
 

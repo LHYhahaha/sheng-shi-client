@@ -149,10 +149,14 @@ class MyListState {
 /// 是为了后续接真实收藏/播放历史接口时能在这里统一处理乐观更新、失败回滚和重试。
 class MyListController extends Notifier<MyListState> {
   int _generation = 0;
+  String? _accountId;
   bool _isLoadMoreRequestInFlight = false;
 
   @override
   MyListState build() {
+    _accountId = ref.watch(userLibraryAccountIdProvider);
+    ++_generation;
+    _isLoadMoreRequestInFlight = false;
     ref.listen<UserLibrarySyncState>(userLibrarySyncControllerProvider, (
       previous,
       next,
@@ -278,7 +282,7 @@ class MyListController extends Notifier<MyListState> {
       }
       state = state.copyWith(clearOpenPlayItemId: true);
     } finally {
-      _isLoadMoreRequestInFlight = false;
+      if (_isCurrent(generation)) _isLoadMoreRequestInFlight = false;
     }
   }
 
@@ -356,7 +360,7 @@ class MyListController extends Notifier<MyListState> {
 
       state = state.copyWith(isLoadingMore: false, loadMoreError: error);
     } finally {
-      _isLoadMoreRequestInFlight = false;
+      if (_isCurrent(generation)) _isLoadMoreRequestInFlight = false;
     }
   }
 
@@ -427,6 +431,8 @@ class MyListController extends Notifier<MyListState> {
       return;
     }
 
+    final generation = _generation;
+    final accountId = ref.read(userLibraryAccountIdProvider);
     final selectedDramaIds = state.selectedIds;
     final tab = state.selectedTab;
     if (tab == MyListTab.collection) {
@@ -461,6 +467,11 @@ class MyListController extends Notifier<MyListState> {
         );
       }
     } catch (error) {
+      if (!ref.mounted ||
+          accountId != ref.read(userLibraryAccountIdProvider) ||
+          !_isCurrent(generation)) {
+        return;
+      }
       if (tab == MyListTab.collection) {
         final sync = ref.read(userLibrarySyncControllerProvider.notifier);
         for (final dramaId in selectedDramaIds) {
@@ -473,6 +484,8 @@ class MyListController extends Notifier<MyListState> {
   }
 
   Future<void> deleteItem(int dramaId) async {
+    final generation = _generation;
+    final accountId = ref.read(userLibraryAccountIdProvider);
     final tab = state.selectedTab;
     if (tab == MyListTab.collection) {
       ref
@@ -503,6 +516,11 @@ class MyListController extends Notifier<MyListState> {
         await repository.deletePlayHistory(historyId: dramaId);
       }
     } catch (error) {
+      if (!ref.mounted ||
+          accountId != ref.read(userLibraryAccountIdProvider) ||
+          !_isCurrent(generation)) {
+        return;
+      }
       if (tab == MyListTab.collection) {
         ref
             .read(userLibrarySyncControllerProvider.notifier)
@@ -535,7 +553,10 @@ class MyListController extends Notifier<MyListState> {
     state = state.copyWith(clearOpenPlayItemId: true);
   }
 
-  bool _isCurrent(int generation) => generation == _generation;
+  bool _isCurrent(int generation) =>
+      ref.mounted &&
+      _accountId == ref.read(userLibraryAccountIdProvider) &&
+      generation == _generation;
 
   List<MyListItem> _mergeLibrarySync(
     List<MyListItem> items, {

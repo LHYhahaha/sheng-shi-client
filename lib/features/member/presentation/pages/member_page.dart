@@ -235,6 +235,7 @@ class _MemberPageState extends ConsumerState<MemberPage> {
                   const _MemberNavBar(),
                   const SizedBox(height: 32),
                   ProfileHeader(
+                    isMemberPage:true,
                     state: headerState,
                     secondaryText: membershipValidityText,
                     displayName: displayName,
@@ -814,11 +815,11 @@ class _PrivilegesSection extends StatelessWidget {
           subtitle: context.l10n.benefitSeriesHighlight,
         ),
         const SizedBox(height: 20),
-        _PrivilegeItem(
-          icon: 'assets/images/membership/member_download.png',
-          title: context.l10n.benefitDownload,
-        ),
-        const SizedBox(height: 14),
+        // _PrivilegeItem(
+        //   icon: 'assets/images/membership/member_download.png',
+        //   title: context.l10n.benefitDownload,
+        // ),
+        // const SizedBox(height: 14),
         _PrivilegeItem(
           icon: 'assets/images/membership/member_points.png',
           title: context.l10n.benefitSeriesDescription,
@@ -835,20 +836,20 @@ class _PrivilegesSection extends StatelessWidget {
           icon: 'assets/images/membership/member_hd.png',
           title: context.l10n.benefitHd,
         ),
-        const SizedBox(height: 20),
-        _PrivilegeItem(
-          icon: 'assets/images/membership/member_drama_gift.png',
-          title: context.l10n.benefitGiftDrama,
-          subtitle: context.l10n.benefitGiftWeekly(_giftWeeklyCount),
-        ),
-        const SizedBox(height: 20),
-        _PrivilegeItem(
-          icon: 'assets/images/membership/member_member_gift.png',
-          title: context.l10n.benefitGiftMember,
-          subtitle: context.l10n.benefitGiftWeekly(_giftWeeklyCount),
-          showChevron: true,
-          onTap: onGiftMemberTap,
-        ),
+        // const SizedBox(height: 20),
+        // _PrivilegeItem(
+        //   icon: 'assets/images/membership/member_drama_gift.png',
+        //   title: context.l10n.benefitGiftDrama,
+        //   subtitle: context.l10n.benefitGiftWeekly(_giftWeeklyCount),
+        // ),
+        // const SizedBox(height: 20),
+        // _PrivilegeItem(
+        //   icon: 'assets/images/membership/member_member_gift.png',
+        //   title: context.l10n.benefitGiftMember,
+        //   subtitle: context.l10n.benefitGiftWeekly(_giftWeeklyCount),
+        //   showChevron: true,
+        //   onTap: onGiftMemberTap,
+        // ),
         const SizedBox(height: 20),
         _PrivilegeItem(
           icon: 'assets/images/membership/member_ad.png',

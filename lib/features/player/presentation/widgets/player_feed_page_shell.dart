@@ -292,6 +292,7 @@ class _PlayerFeedPageShellState extends ConsumerState<PlayerFeedPageShell> {
                             'element_name': 'favorite_toggle_button',
                             'drama_id': item.content.id,
                             'favorite_action': favoriteAction,
+                            'favorite_trigger_type': 'manual',
                           }),
                         ),
                   );

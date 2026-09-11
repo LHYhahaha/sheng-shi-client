@@ -1,3 +1,5 @@
+import 'package:drama_client/core/auth/user_info_store.dart';
+import 'package:drama_client/core/user_library/user_library_sync_controller.dart';
 import 'package:drama_client/features/my_list/application/my_list_controller.dart';
 import 'package:drama_client/features/my_list/data/my_list_repository_provider.dart';
 import 'package:drama_client/features/my_list/domain/my_list_item.dart';
@@ -6,6 +8,33 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'account switch removes previous unfollow override from server list',
+    () async {
+      final container = _createContainer(_FakeMyListRepository());
+      final user = container.read(userInfoStoreProvider.notifier);
+      await user.waitForHydration();
+      await user.saveFromMap({'userId': 'guest'});
+      final controller = container.read(myListControllerProvider.notifier);
+      await controller.load();
+      container
+          .read(userLibrarySyncControllerProvider.notifier)
+          .setFavorite(dramaId: '1', isFavorited: false);
+      expect(container.read(myListControllerProvider).items, isEmpty);
+      await user.saveFromMap({'userId': 'facebook'});
+      expect(container.read(myListControllerProvider).items, isEmpty);
+      await controller.load();
+      expect(
+        container.read(myListControllerProvider).items.map((e) => e.dramaId),
+        [1],
+      );
+      expect(
+        container.read(userLibrarySyncControllerProvider).favoriteFor('1'),
+        isNull,
+      );
+    },
+  );
+
   test('loads collection items by default', () async {
     final repository = _FakeMyListRepository();
     final container = _createContainer(repository);

@@ -26,6 +26,7 @@ class PlayerRechargeUnlockMapper {
 
     return PlayerRechargeUnlockOffer(
       requiredCoins: requiredCoins,
+      sourceMembershipProductCount: isMember ? 0 : memberProducts.length,
       coinPackages: coinProducts
           .where((p) => _isVisible(p as CoinProductDto, iapDetails))
           .map((p) => mapCoinProduct(p as CoinProductDto, iapDetails))
@@ -146,9 +147,13 @@ class PlayerRechargeUnlockMapper {
         icon: PlayerRechargeBenefitIcon.series,
         label: 'Unlock 8,000+ dramas',
       ),
+      // PlayerRechargeBenefit(
+      //   icon: PlayerRechargeBenefitIcon.download,
+      //   label: 'Download episodes',
+      // ),
       PlayerRechargeBenefit(
-        icon: PlayerRechargeBenefitIcon.download,
-        label: 'Download episodes',
+        icon: PlayerRechargeBenefitIcon.ad,
+        label: 'Ad-free',
       ),
       PlayerRechargeBenefit(
         icon: PlayerRechargeBenefitIcon.hd,

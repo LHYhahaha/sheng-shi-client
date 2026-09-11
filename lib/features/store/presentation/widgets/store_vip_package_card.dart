@@ -380,7 +380,8 @@ class _BenefitGrid extends StatelessWidget {
   String _localizedLabel(BuildContext context, StoreBenefitIcon icon) {
     return switch (icon) {
       StoreBenefitIcon.drama => context.l10n.rechargeBenefitUnlockDramas,
-      StoreBenefitIcon.download => context.l10n.rechargeBenefitDownload,
+      // StoreBenefitIcon.download => context.l10n.rechargeBenefitDownload,
+      StoreBenefitIcon.ad => context.l10n.benefitNoAds,
       StoreBenefitIcon.hd => context.l10n.rechargeBenefitHd,
       StoreBenefitIcon.points => context.l10n.rechargeBenefitDailyPoints,
     };
@@ -389,7 +390,8 @@ class _BenefitGrid extends StatelessWidget {
   String _iconFor(StoreBenefitIcon icon) {
     return switch (icon) {
       StoreBenefitIcon.drama => "assets/images/profile/brown_series.svg",
-      StoreBenefitIcon.download => "assets/images/profile/brown_download.svg",
+      // StoreBenefitIcon.download => "assets/images/profile/brown_download.svg",
+      StoreBenefitIcon.ad => "assets/images/profile/brown_ad.svg",
       StoreBenefitIcon.hd => "assets/images/profile/brown_hd.svg",
       StoreBenefitIcon.points => "assets/images/profile/brown_points.svg",
     };

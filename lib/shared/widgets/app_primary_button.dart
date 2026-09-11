@@ -30,9 +30,22 @@ class AppPrimaryButton extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 18),
-              const SizedBox(width: 8),
-              Text(label),
+              icon == Icons.play_arrow_rounded
+                  ? Image.asset(
+                      "assets/images/player/play_button_icon.png",
+                      height: 12,
+                      width: 12,
+                    )
+                  : Icon(icon, size: 18),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 18 / 14,
+                  fontWeight: FontWeight(590),
+                ),
+              ),
             ],
           );
 
@@ -40,7 +53,7 @@ class AppPrimaryButton extends StatelessWidget {
       width: double.infinity,
       child: FilledButton(
         style: FilledButton.styleFrom(
-          padding: EdgeInsets.symmetric(vertical: 13)
+          padding: EdgeInsets.symmetric(vertical: 13),
           // backgroundColor: AppColors.primary,
           // foregroundColor: AppColors.textPrimary,
           // disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.45),

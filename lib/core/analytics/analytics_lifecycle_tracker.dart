@@ -16,8 +16,8 @@ abstract interface class AnalyticsFirstOpenStore {
 
 /// 协调冷启动事件与首个页面事件的顺序。
 ///
-/// 页面可在路由首帧写入页面上下文，但必须等 `app_launch` 的公共参数就绪后，
-/// 才允许真正上报 `page_view`。
+/// 页面可在路由首帧写入页面上下文，但先记录 `app_launch` 再记录 `page_view`；
+/// 缺失 userId 的事件由上传队列统一等待补齐。
 class AnalyticsStartupGate {
   AnalyticsStartupGate({bool isReady = false}) {
     if (isReady) _ready.complete();
@@ -74,11 +74,13 @@ class AnalyticsLifecycleTracker {
   Future<void> onApplicationReady() async {
     if (_initialized) return;
     _initialized = true;
-    _foregroundStartedAt = _now();
+    final occurredAt = _now();
+    _foregroundStartedAt = occurredAt;
     try {
       if (await _firstOpenStore.markFirstOpenIfNeeded()) {
         await _analytics.track(
           const AnalyticsEvent(AnalyticsDefinitions.appFirstOpen),
+          occurredAt: occurredAt,
         );
         _onFirstOpen?.call();
       }
@@ -86,6 +88,7 @@ class AnalyticsLifecycleTracker {
         const AnalyticsEvent(AnalyticsDefinitions.appLaunch, {
           'launch_type': 'cold',
         }),
+        occurredAt: occurredAt,
       );
     } finally {
       // 即使埋点 Sink 发生异常，也不能永久阻塞首个页面事件。

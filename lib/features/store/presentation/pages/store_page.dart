@@ -19,6 +19,7 @@ import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/widgets/app_retry_button.dart';
 import '../../../../shared/widgets/app_secondary_page_header.dart';
+import '../../../pay/application/vip_product_load_reporter.dart';
 import '../../../pay/application/payment_loading_controller.dart';
 import '../../../pay/domain/member_product_type.dart';
 import '../../application/store_controller.dart';
@@ -37,6 +38,8 @@ class StorePage extends ConsumerStatefulWidget {
 }
 
 class _StorePageState extends ConsumerState<StorePage> {
+  final _vipProductLoadReporter = VipProductLoadReporter();
+
   bool _modalOpen = false;
   bool _returnedAfterPurchase = false;
   late final AppModalService _modalService;
@@ -58,6 +61,18 @@ class _StorePageState extends ConsumerState<StorePage> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final state = ref.watch(storeControllerProvider);
+    _vipProductLoadReporter.reportAfterFrame(
+      attempt: state.vipProductLoadResult,
+      productCount: state.error == null ? state.vipPackages.length : 0,
+      isCurrent: () =>
+          mounted &&
+          TickerMode.valuesOf(context).enabled &&
+          identical(
+            ref.read(storeControllerProvider).vipProductLoadResult,
+            state.vipProductLoadResult,
+          ),
+      analytics: () => ref.read(analyticsServiceProvider),
+    );
     final controller = ref.read(storeControllerProvider.notifier);
     final isPaymentLoading = ref.watch(
       paymentLoadingControllerProvider.select((state) => state.isVisible),

@@ -130,9 +130,13 @@ class ProfileMembershipCard extends StatelessWidget {
                   iconAssetPath: 'assets/images/profile/brown_points.svg',
                   label: l10n.profileDailyPoints,
                 ),
+                // _BenefitItem(
+                //   iconAssetPath: 'assets/images/profile/brown_download.svg',
+                //   label: l10n.profileDownload,
+                // ),
                 _BenefitItem(
-                  iconAssetPath: 'assets/images/profile/brown_download.svg',
-                  label: l10n.profileDownload,
+                  iconAssetPath: 'assets/images/profile/brown_ad.svg',
+                  label: l10n.benefitNoAds,
                 ),
                 _BenefitItem(
                   iconAssetPath: 'assets/images/profile/brown_hd.svg',

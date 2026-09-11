@@ -60,11 +60,13 @@ void main() {
       );
       final dio = Dio()..httpClientAdapter = adapter;
       final client = ApiClient(dio: dio, accessTokenReader: () => 'test-token');
+      late ProviderContainer container;
       final sink = AnalyticsBatchUploadEventSink(
         apiClientReader: () => client,
+        userIdReader: () => container.read(analyticsContextProvider).userId,
         uploadsEnabled: false,
       );
-      final container = ProviderContainer(
+      container = ProviderContainer(
         overrides: [
           apiClientProvider.overrideWithValue(client),
           useRemoteEntitlementApiProvider.overrideWithValue(true),
@@ -80,6 +82,18 @@ void main() {
       // Create the service before user information arrives, like cold startup.
       final analytics = container.read(analyticsServiceProvider);
       expect(container.read(analyticsContextProvider).userId, isNull);
+      final recorded = await analytics.track(
+        const AnalyticsEvent(AnalyticsDefinitions.appLaunch, {
+          'launch_type': 'cold',
+        }),
+      );
+      await sink.enableUploads();
+      expect(
+        adapter.requests.where(
+          (request) => request.path == '/api/analytics/event/batch-upload',
+        ),
+        isEmpty,
+      );
       expect(
         await container
             .read(entitlementControllerProvider.notifier)
@@ -90,17 +104,14 @@ void main() {
       if (nestedId == expectedId) {
         expect(container.read(userInfoStoreProvider).userId, expectedId);
       }
-      await analytics.track(
-        const AnalyticsEvent(AnalyticsDefinitions.appLaunch, {
-          'launch_type': 'cold',
-        }),
-      );
       await sink.enableUploads();
       final request = adapter.requests.singleWhere(
         (request) => request.path == '/api/analytics/event/batch-upload',
       );
       final body = jsonDecode(request.data! as String) as Map<String, dynamic>;
       final common = (body['events'] as List).single['commonParams'] as Map;
+      expect(common['eventTime'], recorded!.commonParams.eventTime);
+      expect(common['eventId'], recorded.commonParams.eventId);
       expect(common['userId'], expectedId);
       expect(common['userId'], isA<String>());
     });

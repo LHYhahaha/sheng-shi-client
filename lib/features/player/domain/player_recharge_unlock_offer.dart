@@ -14,10 +14,13 @@ class PlayerRechargeUnlockOffer {
     required this.benefits,
     required this.tips,
     this.isGoogleBillingUnavailable = false,
+    this.sourceMembershipProductCount,
   });
 
   /// 当前剧集解锁需要的金币数。
   final int requiredCoins;
+
+  final int? sourceMembershipProductCount;
 
   /// 金币充值档位。
   ///
@@ -157,4 +160,6 @@ class PlayerRechargeBenefit {
 /// 权益 icon 语义。
 ///
 /// domain 层不依赖 Flutter IconData，避免业务模型和 Material UI 绑定。
-enum PlayerRechargeBenefitIcon { series, download, hd, points }
+enum PlayerRechargeBenefitIcon { series,
+  // download,
+  hd, points,ad }

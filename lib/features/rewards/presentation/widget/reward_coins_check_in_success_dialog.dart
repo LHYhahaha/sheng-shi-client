@@ -47,7 +47,7 @@ class _RewardCoinsCheckInSuccessDialog extends StatelessWidget {
             width: width,
             height: 240,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               border: GradientBoxBorder(
                 width: 1,
                 gradient: LinearGradient(
