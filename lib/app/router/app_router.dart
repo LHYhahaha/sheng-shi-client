@@ -10,6 +10,7 @@ import '../shell/app_shell.dart';
 import '../../features/auth/presentation/pages/account_cancellation_page.dart';
 import '../../features/auth/presentation/pages/account_page.dart';
 import '../../features/auth/presentation/pages/auth_page.dart';
+import '../../features/auth/presentation/pages/phone_login_page.dart';
 import '../../features/bottom_tab_config/presentation/bottom_tab_content_slot.dart';
 import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/member/presentation/pages/member_page.dart';
@@ -248,6 +249,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.auth,
         name: RouteNames.auth,
         builder: (context, state) => const AuthPage(),
+      ),
+      GoRoute(
+        path: RoutePaths.phoneLogin,
+        name: RouteNames.phoneLogin,
+        builder: (context, state) => const PhoneLoginPage(),
       ),
       GoRoute(
         path: RoutePaths.account,

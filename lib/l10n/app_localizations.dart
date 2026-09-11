@@ -690,6 +690,36 @@ class AppLocalizations {
     zh: '使用设备登录',
   );
 
+  String get authPhoneLogin =>
+      _remoteText('login.button.phone', en: 'Sign in with Phone', zh: '手机号登录');
+
+  String get phoneLoginPhoneHint => _remoteText(
+    'login.phone.placeholder',
+    en: 'Enter phone number',
+    zh: '请输入手机号',
+  );
+
+  String get phoneLoginCodeHint => _remoteText(
+    'login.phone.code.placeholder',
+    en: 'Enter the verification code',
+    zh: '请输入验证码',
+  );
+
+  String get phoneLoginGetCode =>
+      _remoteText('login.phone.code.get', en: 'Get code', zh: '获取验证码');
+
+  String get phoneLoginSignIn =>
+      _remoteText('login.phone.sign_in', en: 'Sign in', zh: '登录');
+
+  String get phoneLoginAgreement => _remoteText(
+    'login.phone.agreement',
+    en: 'I have read and agreed to the User Agreement & Privacy Policy',
+    zh: '我已阅读并同意用户协议和隐私政策',
+  );
+
+  String get phoneLoginChooseCountry =>
+      _remoteText('login.phone.country.choose', en: 'Choose', zh: '选择国家／地区');
+
   String get authGoogleLogin => _remoteText(
     'login.button.google',
     en: 'Sign in with Google',
@@ -1785,8 +1815,6 @@ class AppLocalizations {
     en: 'Auto-added to My List',
     zh: '已为您自动加入收藏列表',
   );
-
-
 
   // ── 1.0.2 / 搜索页 ─────────────────────────────────────────────
   String get searchRankHotSearch =>

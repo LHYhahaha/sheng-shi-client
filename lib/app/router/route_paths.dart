@@ -11,6 +11,7 @@ abstract final class RoutePaths {
   static const profileFeedback = '/profile/feedback';
   static const search = '/search';
   static const auth = '/auth';
+  static const phoneLogin = '/auth/phone';
   static const account = '/account';
   static const store = '/store';
   static const wallet = '/wallet';

@@ -11,6 +11,7 @@ abstract final class RouteNames {
   static const profileFeedback = 'profile-feedback';
   static const search = 'search';
   static const auth = 'auth';
+  static const phoneLogin = 'phone-login';
   static const account = 'account';
   static const store = 'store';
   static const wallet = 'wallet';

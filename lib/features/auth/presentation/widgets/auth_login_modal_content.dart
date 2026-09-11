@@ -7,6 +7,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../app/router/route_paths.dart';
 import '../../application/auth_controller.dart';
+import '../../application/phone_login_config_provider.dart';
 import '../../domain/auth_session.dart';
 import '../modal/auth_login_intent.dart';
 import 'auth_action_button.dart';
@@ -29,6 +30,13 @@ class AuthLoginModalContent extends ConsumerWidget {
     final l10n = context.l10n;
     final state = ref.watch(authControllerProvider);
     final controller = ref.read(authControllerProvider.notifier);
+    final isPhoneLoginEnabled = ref
+        .watch(phoneLoginEnabledProvider)
+        .when(
+          data: (enabled) => enabled,
+          loading: () => true,
+          error: (_, _) => false,
+        );
 
     final prompt = message ?? _defaultMessage(l10n);
 
@@ -86,6 +94,22 @@ class AuthLoginModalContent extends ConsumerWidget {
               : null,
         ),
         const SizedBox(height: 12),
+        if (isPhoneLoginEnabled) ...[
+          AuthActionButton(
+            key: const ValueKey('auth_modal_phone_button'),
+            label: l10n.authPhoneLogin,
+            icon: Icons.phone_iphone_rounded,
+            assetIconPath: 'assets/images/auth/mobile.png',
+            backgroundColor: AppColors.textPrimary,
+            foregroundColor: const Color(0xFF1A1A1A),
+            onPressed: () {
+              final router = GoRouter.of(context);
+              Navigator.of(context).pop();
+              router.push(RoutePaths.phoneLogin);
+            },
+          ),
+          const SizedBox(height: 12),
+        ],
         Stack(
           clipBehavior: Clip.none,
           children: [

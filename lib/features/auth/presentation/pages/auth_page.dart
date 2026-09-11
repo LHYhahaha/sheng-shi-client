@@ -12,6 +12,7 @@ import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/widgets/app_secondary_page_header.dart';
 import '../../application/auth_controller.dart';
 import '../../application/facebook_login_config_provider.dart';
+import '../../application/phone_login_config_provider.dart';
 import '../../domain/auth_session.dart';
 import '../widgets/auth_login_modal_content.dart';
 
@@ -25,6 +26,7 @@ class AuthPage extends ConsumerStatefulWidget {
 class _AuthPageState extends ConsumerState<AuthPage> {
   bool _returnedAfterLogin = false;
   bool _facebookConfigRequested = false;
+  bool _phoneConfigRequested = false;
 
   @override
   void didChangeDependencies() {
@@ -35,6 +37,10 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     _facebookConfigRequested = true;
     // 登录入口每次打开都必须重新读取服务端开关，不能复用上一次进入的缓存结果。
     ref.invalidate(facebookLoginEnabledProvider);
+    if (!_phoneConfigRequested) {
+      _phoneConfigRequested = true;
+      ref.invalidate(phoneLoginEnabledProvider);
+    }
   }
 
   void _returnToSourceAfterLogin(BuildContext context) {
@@ -62,6 +68,13 @@ class _AuthPageState extends ConsumerState<AuthPage> {
         .when(
           data: (enabled) => enabled,
           loading: () => false,
+          error: (_, _) => false,
+        );
+    final isPhoneLoginEnabled = ref
+        .watch(phoneLoginEnabledProvider)
+        .when(
+          data: (enabled) => enabled,
+          loading: () => true,
           error: (_, _) => false,
         );
     final l10n = context.l10n;
@@ -131,6 +144,8 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                           .login(AuthProviderType.facebook)
                     : null,
                 isFacebookLoginEnabled: isFacebookLoginEnabled,
+                isPhoneLoginEnabled: isPhoneLoginEnabled,
+                onPhonePressed: () => context.push(RoutePaths.phoneLogin),
               ),
           ],
         ),
@@ -145,12 +160,16 @@ class _LoginBody extends StatelessWidget {
     required this.onGooglePressed,
     required this.onFacebookPressed,
     required this.isFacebookLoginEnabled,
+    required this.isPhoneLoginEnabled,
+    required this.onPhonePressed,
   });
 
   final AuthProviderType? pendingProvider;
   final VoidCallback? onGooglePressed;
   final VoidCallback? onFacebookPressed;
   final bool isFacebookLoginEnabled;
+  final bool isPhoneLoginEnabled;
+  final VoidCallback onPhonePressed;
 
   @override
   Widget build(BuildContext context) {
@@ -208,6 +227,22 @@ class _LoginBody extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
+          if (isPhoneLoginEnabled) ...[
+            _SocialLoginButton(
+              key: const ValueKey('auth_phone_button'),
+              label: l10n.authPhoneLogin,
+              isLoading: false,
+              onPressed: onPhonePressed,
+              backgroundColor: AppColors.textPrimary,
+              foregroundColor: const Color(0xFF1A1A1A),
+              icon: Image.asset(
+                'assets/images/auth/mobile.png',
+                width: 22,
+                height: 22,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           const AuthTermsText(width: double.infinity),
         ],
       ),
