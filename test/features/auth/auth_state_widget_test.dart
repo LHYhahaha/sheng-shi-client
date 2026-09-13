@@ -295,10 +295,7 @@ class _WidgetAuthRepository implements AuthRepository {
       throw StateError('delete failed');
     }
     _session = const AuthSession.guest();
-    return DeleteAccountResult(
-      session: _session,
-      shouldExitApp: true,
-    );
+    return DeleteAccountResult(session: _session, shouldExitApp: true);
   }
 }
 
@@ -326,6 +323,7 @@ AuthSession _sessionFor(AuthProviderType provider) {
       id: '15589299',
       nickname: switch (provider) {
         AuthProviderType.device => 'Device User',
+        AuthProviderType.phone => 'Phone User',
         AuthProviderType.google => 'Google User',
         AuthProviderType.facebook => 'Facebook User',
       },

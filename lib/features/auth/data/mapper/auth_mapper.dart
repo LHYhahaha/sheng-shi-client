@@ -39,6 +39,8 @@ class AuthMapper {
         return AuthProviderType.google;
       case 'facebook':
         return AuthProviderType.facebook;
+      case 'phone':
+        return AuthProviderType.phone;
       case 'device':
       default:
         return AuthProviderType.device;

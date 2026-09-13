@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/auth/auth_token_store.dart';
+import '../../../core/auth/session_cleanup_types.dart';
 import '../data/reward_coins_repository_provider.dart';
 import '../domain/reward_coins_check_in_status.dart';
 import '../domain/reward_coins_check_in_claim_result.dart';
@@ -75,6 +77,9 @@ class RewardCoinsController extends Notifier<RewardCoinsState> {
   int _checkInGeneration = 0;
   int _tasksGeneration = 0;
   int _remainingCoinGeneration = 0;
+  Future<void>? _tasksInFlight;
+  Future<void>? _remainingCoinInFlight;
+  String? _remainingCoinInFlightToken;
 
   @override
   RewardCoinsState build() {
@@ -111,7 +116,17 @@ class RewardCoinsController extends Notifier<RewardCoinsState> {
     }
   }
 
-  Future<void> loadTasks() async {
+  Future<void> loadTasks() {
+    final inFlight = _tasksInFlight;
+    if (inFlight != null) return inFlight;
+    final request = _loadTasks();
+    _tasksInFlight = request;
+    return request.whenComplete(() {
+      if (identical(_tasksInFlight, request)) _tasksInFlight = null;
+    });
+  }
+
+  Future<void> _loadTasks() async {
     final generation = ++_tasksGeneration;
     state = state.copyWith(isTasksLoading: true, clearTasksError: true);
     try {
@@ -130,7 +145,27 @@ class RewardCoinsController extends Notifier<RewardCoinsState> {
     }
   }
 
-  Future<void> loadRemainingCoin() async {
+  Future<void> loadRemainingCoin() {
+    final token = ref.read(authTokenStoreProvider).accessToken;
+    final inFlight = _remainingCoinInFlight;
+    // 首页 token 监听与 AuthController 的账号切换刷新可能同时触发；只要使用
+    // 相同 token，就必须共用同一个请求。token 不同时才让旧响应失效并重拉。
+    if (inFlight != null && _remainingCoinInFlightToken == token) {
+      return inFlight;
+    }
+    if (inFlight != null) _remainingCoinGeneration++;
+    final request = _loadRemainingCoin();
+    _remainingCoinInFlight = request;
+    _remainingCoinInFlightToken = token;
+    return request.whenComplete(() {
+      if (identical(_remainingCoinInFlight, request)) {
+        _remainingCoinInFlight = null;
+        _remainingCoinInFlightToken = null;
+      }
+    });
+  }
+
+  Future<void> _loadRemainingCoin() async {
     final generation = ++_remainingCoinGeneration;
     try {
       final remainingCoin = await ref
@@ -146,6 +181,16 @@ class RewardCoinsController extends Notifier<RewardCoinsState> {
       // 按产品约定，接口失败或未取得数据时不展示标签。
       state = state.copyWith(clearRemainingCoin: true);
     }
+  }
+
+  void resetForSessionCleanup(SessionCleanupReason reason) {
+    _tasksGeneration++;
+    _remainingCoinGeneration++;
+    _remainingCoinInFlightToken = null;
+    state = const RewardCoinsState(
+      isCheckInLoading: true,
+      isTasksLoading: true,
+    );
   }
 
   Future<void> reportTaskAction({required String actionKey}) async {

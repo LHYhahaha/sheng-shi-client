@@ -9,10 +9,10 @@ import '../../../../core/oauth/oauth_service.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
+import '../../../../shared/widgets/app_peg_top_loader.dart';
 import '../../../../shared/widgets/app_secondary_page_header.dart';
 import '../../application/auth_controller.dart';
 import '../../application/facebook_login_config_provider.dart';
-import '../../application/phone_login_config_provider.dart';
 import '../../domain/auth_session.dart';
 import '../widgets/auth_login_modal_content.dart';
 
@@ -25,22 +25,17 @@ class AuthPage extends ConsumerStatefulWidget {
 
 class _AuthPageState extends ConsumerState<AuthPage> {
   bool _returnedAfterLogin = false;
-  bool _facebookConfigRequested = false;
-  bool _phoneConfigRequested = false;
+  bool _loginConfigRequested = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_facebookConfigRequested) {
+    if (_loginConfigRequested) {
       return;
     }
-    _facebookConfigRequested = true;
+    _loginConfigRequested = true;
     // 登录入口每次打开都必须重新读取服务端开关，不能复用上一次进入的缓存结果。
-    ref.invalidate(facebookLoginEnabledProvider);
-    if (!_phoneConfigRequested) {
-      _phoneConfigRequested = true;
-      ref.invalidate(phoneLoginEnabledProvider);
-    }
+    ref.invalidate(loginConfigProvider);
   }
 
   void _returnToSourceAfterLogin(BuildContext context) {
@@ -63,25 +58,17 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(authControllerProvider);
-    final isFacebookLoginEnabled = ref
-        .watch(facebookLoginEnabledProvider)
-        .when(
-          data: (enabled) => enabled,
-          loading: () => false,
-          error: (_, _) => false,
-        );
-    final isPhoneLoginEnabled = ref
-        .watch(phoneLoginEnabledProvider)
-        .when(
-          data: (enabled) => enabled,
-          loading: () => true,
-          error: (_, _) => false,
-        );
+    final loginConfigState = ref.watch(loginConfigProvider);
+    final loginConfig = loginConfigState.asData?.value;
+    final isFacebookLoginEnabled = loginConfig?.facebookVisible ?? false;
+    final isPhoneLoginEnabled = loginConfig?.phoneVisible ?? false;
     final l10n = context.l10n;
 
     ref.listen(authControllerProvider, (previous, next) {
       if (next.isLoggedIn) {
-        _returnToSourceAfterLogin(context);
+        if (ModalRoute.of(context)?.isCurrent ?? false) {
+          _returnToSourceAfterLogin(context);
+        }
         return;
       }
 
@@ -107,12 +94,15 @@ class _AuthPageState extends ConsumerState<AuthPage> {
       }
     });
 
-    if (state.isLoggedIn) {
+    if (state.isLoggedIn && (ModalRoute.of(context)?.isCurrent ?? false)) {
       _returnToSourceAfterLogin(context);
     }
 
     return Scaffold(
       backgroundColor: const Color(0xFF090012),
+      // 手机号页在其上方显示键盘时，本页仍会留在 Navigator 栈内；不参与键盘
+      // 尺寸压缩，保持登录方式页原始排版，也避免后台 route 的 RenderFlex 溢出。
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: Stack(
           children: [
@@ -130,7 +120,9 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                 },
               ),
             ),
-            if (!state.isLoggedIn && !_returnedAfterLogin)
+            if (loginConfigState.isLoading)
+              const Center(child: AppPegTopLoader())
+            else if (!state.isLoggedIn && !_returnedAfterLogin)
               _LoginBody(
                 pendingProvider: state.pendingProvider,
                 onGooglePressed: state.pendingProvider == null
@@ -237,8 +229,8 @@ class _LoginBody extends StatelessWidget {
               foregroundColor: const Color(0xFF1A1A1A),
               icon: Image.asset(
                 'assets/images/auth/mobile.png',
-                width: 22,
-                height: 22,
+                width: 30,
+                height: 30,
               ),
             ),
             const SizedBox(height: 12),

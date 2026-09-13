@@ -72,21 +72,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         _loadEntitlementData();
       }
     });
-    // 登录页覆盖在个人中心之上时，ProfilePage 仍保持挂载。三方登录成功后这里会
-    // 收到新的 AuthState，必须清掉游客/旧账号的可领取金币标签并按新 token 重拉。
-    ref.listen(authControllerProvider, (previous, current) {
-      final didChangeAccount = previous?.user?.userId != current.user?.userId;
-      final didCompleteLogin =
-          previous?.pendingProvider != null &&
-          current.pendingProvider == null &&
-          current.isLoggedIn;
-      if (current.isLoggedIn && (didChangeAccount || didCompleteLogin)) {
-        unawaited(
-          ref.read(rewardCoinsControllerProvider.notifier).loadRemainingCoin(),
-        );
-      }
-    });
-
     // 展示层合成：用户资料来自当前 token 同步后的 UserInfoStore；
     // 是否游客用于交互分流，以 AuthState 为准。
     // 金币数据来自 entitlementState（/api/user/entitlements 接口）

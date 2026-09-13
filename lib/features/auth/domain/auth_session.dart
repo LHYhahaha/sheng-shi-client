@@ -4,7 +4,7 @@ import '../../../shared/media/media_resource.dart';
 ///
 /// 枚举值用于 UI loading 和 repository 分发，不应直接映射第三方 SDK 的原始字符串；
 /// SDK 字段变化应在 auth repository 内部适配。
-enum AuthProviderType { device, google, facebook }
+enum AuthProviderType { device, phone, google, facebook }
 
 /// 客户端感知的 session 种类（展示与流程分支，不含 token）。
 ///

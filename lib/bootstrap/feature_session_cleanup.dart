@@ -14,6 +14,7 @@ import '../features/my_list/application/my_list_controller.dart';
 import '../features/player/application/player_session_cleanup.dart';
 import '../features/player/application/share_drama_reward_coordinator.dart';
 import '../features/profile/application/profile_controller.dart';
+import '../features/rewards/application/reward_coins_controller.dart';
 import '../features/store/application/store_controller.dart';
 import '../features/wallet/application/wallet_controller.dart';
 
@@ -42,6 +43,9 @@ final featureSessionCleanupRegistrationProvider = Provider<void>((ref) {
   final myListController = ref.read(myListControllerProvider.notifier);
   final storeController = ref.read(storeControllerProvider.notifier);
   final membershipController = ref.read(membershipControllerProvider.notifier);
+  final rewardCoinsController = ref.read(
+    rewardCoinsControllerProvider.notifier,
+  );
   final userLibrarySyncController = ref.read(
     userLibrarySyncControllerProvider.notifier,
   );
@@ -57,6 +61,9 @@ final featureSessionCleanupRegistrationProvider = Provider<void>((ref) {
     },
     (reason) async {
       entitlementController.resetForSessionCleanup(reason);
+    },
+    (reason) async {
+      rewardCoinsController.resetForSessionCleanup(reason);
     },
     (_) async {
       ref.read(giftDramaLinkCacheProvider).clear();

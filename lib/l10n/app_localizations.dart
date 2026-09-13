@@ -695,18 +695,69 @@ class AppLocalizations {
 
   String get phoneLoginPhoneHint => _remoteText(
     'login.phone.placeholder',
-    en: 'Enter phone number',
+    en: 'Enter Phone Number',
     zh: '请输入手机号',
   );
 
-  String get phoneLoginCodeHint => _remoteText(
-    'login.phone.code.placeholder',
-    en: 'Enter the verification code',
-    zh: '请输入验证码',
-  );
+  String get phoneLoginCodeHint =>
+      _remoteText('login.sms.code_placeholder', en: 'Enter Code', zh: '请输入验证码');
 
   String get phoneLoginGetCode =>
-      _remoteText('login.phone.code.get', en: 'Get code', zh: '获取验证码');
+      _remoteText('login.sms.send_code', en: 'Send Code', zh: '发送验证码');
+
+  String smsCodeMessage(String code) => _interpolate(
+    _remoteText(
+      'login.sms.code_message',
+      en: 'NovaShort code: {code}. Do not share.',
+      zh: '【NovaShort】验证码：{code}，请勿泄露。',
+    ),
+    {'code': code},
+  );
+
+  String get phoneLoginInvalidPhone => _remoteText(
+    'login.sms.phone_invalid',
+    en: 'Enter a valid phone number.',
+    zh: '请输入正确的手机号',
+  );
+
+  String get phoneLoginDailyLimit => _remoteText(
+    'login.sms.daily_limit',
+    en: 'Daily limit reached. Try again tomorrow.',
+    zh: '该手机号今日获取次数已达上限，请明天再试',
+  );
+
+  String get phoneLoginPhoneUnavailable => _remoteText(
+    'login.sms.phone_unavailable',
+    en: "This number can't receive codes. Use another.",
+    zh: '该手机号暂时无法接收验证码，请更换手机号',
+  );
+
+  String get phoneLoginTooFrequent => _remoteText(
+    'login.sms.too_frequent',
+    en: 'Too many attempts. Try again later.',
+    zh: '操作频繁，请稍后再试',
+  );
+
+  String get phoneLoginSendCodeFailed => _remoteText(
+    'login.sms.send_failed',
+    en: 'Code not sent. Try again later.',
+    zh: '验证码发送失败，请稍后重试',
+  );
+
+  String get phoneLoginInvalidCode =>
+      _remoteText('login.sms.code_invalid', en: 'Incorrect code.', zh: '验证码错误');
+
+  String get phoneLoginExpiredCode => _remoteText(
+    'login.sms.code_expired',
+    en: 'Code expired. Get a new one.',
+    zh: '验证码已过期，请重新获取',
+  );
+
+  String get phoneLoginRegionUnsupported => _remoteText(
+    'login.phone.region_unsupported',
+    en: "Phone sign-in isn't available in your region.",
+    zh: '当前地区暂不支持手机号登录',
+  );
 
   String get phoneLoginSignIn =>
       _remoteText('login.phone.sign_in', en: 'Sign in', zh: '登录');
@@ -717,8 +768,18 @@ class AppLocalizations {
     zh: '我已阅读并同意用户协议和隐私政策',
   );
 
+  String get phoneLoginAgreementPrefix => _remoteText(
+    'login.phone.agreement.prefix',
+    en: 'I have read and agreed to the ',
+    zh: '我已阅读并同意',
+  );
+
+  String get phoneLoginAgreementConnector =>
+      _remoteText('login.phone.agreement.connector', en: ' & ', zh: '和');
+
   String get phoneLoginChooseCountry =>
-      _remoteText('login.phone.country.choose', en: 'Choose', zh: '选择国家／地区');
+      _remoteText('login.phone.code_select', en: 'Country Code', zh: '区号');
+
 
   String get authGoogleLogin => _remoteText(
     'login.button.google',

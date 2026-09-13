@@ -57,6 +57,9 @@ class RemoteAuthRepository
       ),
       AuthProviderType.google ||
       AuthProviderType.facebook => await _loginWithOAuth(provider),
+      AuthProviderType.phone => throw UnsupportedError(
+        'Phone login requires SMS verification.',
+      ),
     };
 
     if (provider == AuthProviderType.device) {
@@ -255,6 +258,7 @@ class RemoteAuthRepository
     return switch (value) {
       'facebook' => AuthProviderType.facebook,
       'google' => AuthProviderType.google,
+      'phone' => AuthProviderType.phone,
       _ => AuthProviderType.device,
     };
   }
@@ -266,6 +270,7 @@ class RemoteAuthRepository
           await _oauthService?.signOutFacebook();
         case AuthProviderType.google:
           await _oauthService?.signOutGoogle();
+        case AuthProviderType.phone:
         case AuthProviderType.device:
           break;
       }

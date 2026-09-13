@@ -1,42 +1,42 @@
-import 'dart:convert';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_client_provider.dart';
 import '../../../core/network/json_field_parser.dart';
 
-const facebookLoginConfigCode = 'facebook_login_config';
+class LoginConfig {
+  const LoginConfig({
+    required this.facebookVisible,
+    required this.phoneVisible,
+  });
+  final bool facebookVisible;
+  final bool phoneVisible;
+  factory LoginConfig.fromJson(Object? json) {
+    final map = JsonFieldParser.requireMap(
+      json,
+      dtoName: 'LoginConfigResponse',
+    );
+    return LoginConfig(
+      facebookVisible: map['facebook_login_visible'] == true,
+      phoneVisible: map['phone_login_visible'] == true,
+    );
+  }
+}
 
-/// 是否展示 Facebook 登录按钮。
-///
-/// 所有非明确的 `enabled: true` 情况（接口异常、配置缺失或 content 非法）均关闭，
-/// 避免在服务端未配置时暴露不可用的三方登录入口。
-final facebookLoginEnabledProvider = FutureProvider<bool>((ref) async {
+final loginConfigProvider = FutureProvider<LoginConfig>((ref) async {
   try {
     return await ref
         .watch(apiClientProvider)
-        .get<bool>(
-          '/api/config/param',
-          queryParameters: const {'code': facebookLoginConfigCode},
-          authPolicy: ApiAuthPolicy.none,
-          decoder: (data) {
-            final config = JsonFieldParser.requireMap(
-              data,
-              dtoName: 'ParamConfig',
-            );
-            if (config['code'] != facebookLoginConfigCode) {
-              return false;
-            }
-            final content = JsonFieldParser.optionalString(config, 'content');
-            if (content == null) {
-              return false;
-            }
-            final parsed = jsonDecode(content);
-            return parsed is Map && parsed['enabled'] == true;
-          },
+        .get<LoginConfig>(
+          '/api/config/login-config',
+          authPolicy: ApiAuthPolicy.required,
+          decoder: LoginConfig.fromJson,
         );
   } catch (_) {
-    return false;
+    return const LoginConfig(facebookVisible: false, phoneVisible: false);
   }
 });
+
+final facebookLoginEnabledProvider = FutureProvider<bool>(
+  (ref) async => (await ref.watch(loginConfigProvider.future)).facebookVisible,
+);

@@ -34,6 +34,7 @@ class MockAuthRepository
         userId: '15589299',
         nickname: switch (provider) {
           AuthProviderType.device => 'Device User',
+          AuthProviderType.phone => 'Phone User',
           AuthProviderType.google => 'Google User',
           AuthProviderType.facebook => 'Facebook User',
         },

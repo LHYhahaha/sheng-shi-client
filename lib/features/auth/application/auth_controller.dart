@@ -18,6 +18,7 @@ import '../../../core/runtime/install_id_provider.dart';
 import '../../entitlement/application/entitlement_controller.dart';
 import '../../rewards/application/reward_coins_controller.dart';
 import '../data/auth_repository_provider.dart';
+import 'phone_login_config_provider.dart';
 import '../domain/auth_repository.dart';
 import '../domain/auth_session.dart';
 import '../domain/delete_account_result.dart';
@@ -366,10 +367,10 @@ class AuthController extends Notifier<AuthState> {
       final repositorySession = switch (provider) {
         AuthProviderType.google || AuthProviderType.facebook =>
           await login.timeout(ref.read(thirdPartyLoginTimeoutProvider)),
-        AuthProviderType.device => await login,
+        AuthProviderType.device || AuthProviderType.phone => await login,
       };
 
-      final session = await _syncCurrentSession(
+      final session = await _refreshSessionData(
         fallbackProvider: provider,
         fallbackSession: repositorySession,
       );
@@ -384,9 +385,6 @@ class AuthController extends Notifier<AuthState> {
       if (_isThirdPartyLoginProvider(provider)) {
         debugPrint('[AuthController] ${provider.name} login completed.');
       }
-      _syncNotificationPermission(session);
-      unawaited(_refreshRewardTasks());
-      unawaited(_refreshCurrentSessionInBackground(_generation));
     } catch (error) {
       if (_isThirdPartyLoginProvider(provider)) {
         debugPrint(
@@ -397,6 +395,59 @@ class AuthController extends Notifier<AuthState> {
       if (_isThirdPartyLoginProvider(provider)) {
         _trackLoginFailure(provider, error);
       }
+      state = state.copyWith(
+        isLoading: false,
+        error: error,
+        failedAction: AuthFailureAction.login,
+        clearPendingProvider: true,
+      );
+    }
+  }
+
+  Future<void> loginWithPhone({
+    required String callingCode,
+    required String number,
+    required String code,
+  }) async {
+    if (state.pendingProvider != null) return;
+    state = state.copyWith(
+      pendingProvider: AuthProviderType.phone,
+      clearError: true,
+      clearFailedAction: true,
+    );
+    try {
+      final result = await ref
+          .read(phoneSmsServiceProvider)
+          .verifyCode(callingCode: callingCode, number: number, code: code);
+      await ref
+          .read(authTokenStoreProvider.notifier)
+          .save(
+            AuthTokenSnapshot(
+              accessToken: result.accessToken,
+              refreshToken: result.refreshToken,
+              expiresAt: DateTime.fromMillisecondsSinceEpoch(
+                result.accessExpireAt * 1000,
+              ),
+              refreshExpiresAt: DateTime.fromMillisecondsSinceEpoch(
+                result.refreshExpireAt * 1000,
+              ),
+              sessionKind: AuthTokenSessionKind.authenticated,
+              subjectId: result.userId.toString(),
+              provider: 'phone',
+            ),
+          );
+      final session = await _refreshSessionData(
+        fallbackProvider: AuthProviderType.phone,
+        fallbackSession: const AuthSession.guest(),
+      );
+      state = state.copyWith(
+        isLoading: false,
+        session: session,
+        clearPendingProvider: true,
+        clearError: true,
+        clearFailedAction: true,
+      );
+    } catch (error) {
       state = state.copyWith(
         isLoading: false,
         error: error,
@@ -521,7 +572,7 @@ class AuthController extends Notifier<AuthState> {
         );
       }
       final repositorySession = await repository.login(AuthProviderType.device);
-      final session = await _syncCurrentSession(
+      final session = await _refreshSessionData(
         fallbackProvider: AuthProviderType.device,
         fallbackSession: repositorySession,
       );
@@ -532,11 +583,6 @@ class AuthController extends Notifier<AuthState> {
         clearPendingProvider: true,
         clearFailedAction: true,
       );
-      _syncNotificationPermission(session);
-      // 手动退出后同样已经拿到新的 device/guest token。资料与权益在 cleanup
-      // 中被清空，必须复用启动/会话失效后的后台刷新，补回游客 showId 等展示资料。
-      // 不 await，不能让退出页面等待 /api/user/entitlements。
-      unawaited(_refreshCurrentSessionInBackground(_generation));
     } catch (error) {
       state = state.copyWith(
         isLoading: false,
@@ -628,7 +674,7 @@ class AuthController extends Notifier<AuthState> {
     AuthRepository repository,
   ) async {
     final repositorySession = await repository.login(AuthProviderType.device);
-    final session = await _syncCurrentSession(
+    final session = await _refreshSessionData(
       fallbackProvider: AuthProviderType.device,
       fallbackSession: repositorySession,
     );
@@ -676,35 +722,32 @@ class AuthController extends Notifier<AuthState> {
     );
   }
 
+  Future<AuthSession> _refreshSessionData({
+    required AuthProviderType fallbackProvider,
+    AuthSession? fallbackSession,
+  }) async {
+    final verified = await ref
+        .read(entitlementControllerProvider.notifier)
+        .refreshFromServer();
+    if (verified) {
+      ref.read(accountBanControllerProvider.notifier).clearAfterVerification();
+    }
+    final session = await _sessionFromCurrentStores(
+      fallbackProvider: fallbackProvider,
+      fallbackSession: fallbackSession,
+    );
+    _syncNotificationPermission(session);
+    await _refreshRewardTasks();
+    return session;
+  }
+
   /// 有效 token 的冷启动后台同步：权益接口刷新用户资料和权益，任一失败都保留首屏
   /// 已恢复的本地状态。若服务端实际判定 token 失效，ApiClient 的统一会话恢复流程
   /// 会递增 generation，本方法不会覆盖其结果。
   Future<void> _refreshCurrentSessionInBackground(int generation) async {
-    final repository = ref.read(authRepositoryProvider);
-    if (repository is! CurrentAuthSessionSynchronizer) {
-      return;
-    }
-    final synchronizer = repository as CurrentAuthSessionSynchronizer;
-
     try {
-      final results = await Future.wait<Object?>([
-        synchronizer.syncCurrentSession(),
-        ref.read(entitlementControllerProvider.notifier).refreshFromServer(),
-      ]);
-      if (!_isCurrent(generation)) {
-        return;
-      }
-
-      final remoteSession = results[0]! as AuthSession;
-      final isEntitlementVerified = results[1]! as bool;
-      if (isEntitlementVerified) {
-        ref
-            .read(accountBanControllerProvider.notifier)
-            .clearAfterVerification();
-      }
-      final session = await _sessionFromCurrentStores(
+      final session = await _refreshSessionData(
         fallbackProvider: AuthProviderType.device,
-        fallbackSession: remoteSession,
       );
       if (!_isCurrent(generation)) {
         return;
@@ -714,7 +757,6 @@ class AuthController extends Notifier<AuthState> {
         clearError: true,
         clearFailedAction: true,
       );
-      _syncNotificationPermission(session);
     } catch (error, stackTrace) {
       // 后台校验失败不触发设备登录，也不打断已恢复的首屏。
       debugPrint(
@@ -762,6 +804,7 @@ class AuthController extends Notifier<AuthState> {
     return switch (value) {
       'facebook' => AuthProviderType.facebook,
       'google' => AuthProviderType.google,
+      'phone' => AuthProviderType.phone,
       'device' => AuthProviderType.device,
       _ => null,
     };
