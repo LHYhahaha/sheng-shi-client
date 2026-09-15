@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -26,6 +27,26 @@ class FacebookOAuthService implements OAuthService {
   final FacebookAuth _facebookAuth;
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
   Future<void>? _googleInitializeFuture;
+
+  /// 仅用于定位 Limited Login 返回字段；认证可信性仍必须由服务端校验 JWT。
+  @visibleForTesting
+  static Map<String, dynamic>? decodeJwtPayloadForLogging(String token) {
+    final segments = token.split('.');
+    if (segments.length != 3) {
+      return null;
+    }
+
+    try {
+      final decoded = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(segments[1]))),
+      );
+      return decoded is Map<String, dynamic>
+          ? decoded
+          : Map<String, dynamic>.from(decoded as Map);
+    } catch (_) {
+      return null;
+    }
+  }
 
   Future<void> _initializeGoogleSignIn() {
     if (_googleServerClientId.isEmpty) {
@@ -87,6 +108,19 @@ class FacebookOAuthService implements OAuthService {
             );
           }
           if (accessToken is! ClassicToken) {
+            final limitedToken = accessToken as LimitedToken;
+            debugPrint(
+              '[FacebookOAuth] Limited Login JWT: '
+              '${limitedToken.tokenString}',
+            );
+            debugPrint(
+              '[FacebookOAuth] Limited Login response: '
+              '${jsonEncode(limitedToken.toJson())}',
+            );
+            debugPrint(
+              '[FacebookOAuth] Limited Login JWT payload: '
+              '${jsonEncode(decodeJwtPayloadForLogging(limitedToken.tokenString))}',
+            );
             throw const OAuthException(
               'facebook',
               'Limited Facebook login is not supported by this backend.',

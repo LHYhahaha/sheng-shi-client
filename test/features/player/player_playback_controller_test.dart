@@ -23,6 +23,7 @@ import 'package:drama_client/features/player/domain/player_playback_source.dart'
 import 'package:drama_client/features/player/domain/player_preload_config.dart';
 import 'package:drama_client/features/player/domain/player_preload_state.dart';
 import 'package:drama_client/features/player/domain/player_subtitle.dart';
+import 'package:drama_client/features/player/domain/player_video_quality.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -166,6 +167,34 @@ void main() {
       final playerProvider = playerPlaybackControllerProvider('speed:restore');
       await player.read(playerProvider.notifier).playItem(_item(1));
       expect(playerSession.rates.last, 3.0);
+    },
+  );
+
+  test(
+    'For You keeps automatic quality separate from player preference',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'player.video_quality.preference': '720p',
+      });
+      final forYouSession = _FakePlaybackSession();
+      final forYou = _createContainer(forYouSession);
+      final forYouProvider = playerPlaybackControllerProvider('for-you-tab');
+
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        forYou.read(forYouProvider).selectedVideoQualityId,
+        PlayerVideoQuality.automaticId,
+      );
+
+      final playerSession = _FakePlaybackSession();
+      final player = _createContainer(playerSession);
+      final playerProvider = playerPlaybackControllerProvider(
+        'quality:restore',
+      );
+      await player
+          .read(playerProvider.notifier)
+          .initializeVideoQualityPreference();
+      expect(player.read(playerProvider).selectedVideoQualityId, '720p');
     },
   );
 
@@ -3552,9 +3581,14 @@ void main() {
   test(
     'For You automatically reopens once before exposing a retryable error',
     () async {
-      final session = _FakePlaybackSession(emitWidthOnOpen: false);
+      final sessions = <_FakePlaybackSession>[
+        _FakePlaybackSession(emitWidthOnOpen: false),
+        _FakePlaybackSession(emitWidthOnOpen: false),
+      ];
+      var sessionIndex = 0;
       final container = _createContainer(
-        session,
+        sessions.first,
+        sessionFactory: () => sessions[sessionIndex++],
         sourceRepository: _CountingPlaybackSourceRepository(),
         firstFrameTimeout: const Duration(milliseconds: 10),
       );
@@ -3566,15 +3600,51 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 60));
 
       final state = container.read(provider);
-      expect(session.openedSources, hasLength(2));
+      expect(sessions[0].openedSources, hasLength(1));
+      expect(sessions[1].openedSources, hasLength(1));
       expect(state.currentItemId, isNotNull);
       expect(state.status, PlayerPlaybackStatus.error);
       expect(
         controller.exportTimingReport(),
         contains('first-frame timeout auto retry'),
       );
+      expect(
+        controller.exportTimingReport(),
+        contains('for you rebuild failed session'),
+      );
     },
   );
+
+  test('For You tab return rebuilds a failed native session', () async {
+    final item = _item(1, mode: PlayerFeedMode.forYou);
+    final sessions = <_FakePlaybackSession>[
+      _FakePlaybackSession(),
+      _FakePlaybackSession(),
+    ];
+    var sessionIndex = 0;
+    final container = _createContainer(
+      sessions.first,
+      sessionFactory: () => sessions[sessionIndex++],
+    );
+    addTearDown(container.dispose);
+    final provider = playerPlaybackControllerProvider('for-you-tab');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(item);
+    sessions.first.emitError('fatal decoder failure');
+    await Future<void>.delayed(Duration.zero);
+    expect(container.read(provider).status, PlayerPlaybackStatus.error);
+
+    await controller.recoverForYouPlaybackIfFailed(
+      item,
+      trigger: 'tab_selected',
+    );
+
+    expect(sessions.first.openedSources, hasLength(1));
+    expect(sessions[1].openedSources, hasLength(1));
+    expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+    expect(controller.exportTimingReport(), contains('trigger=tab_selected'));
+  });
 
   test('HTTP 400 HLS segment error is not treated as recoverable', () async {
     final session = _FakePlaybackSession();

@@ -656,6 +656,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   bool _pauseWhenOpenCompletes = false;
   bool _isPlaybackVisible = true;
   bool _isSuspendedForCompetingPlayer = false;
+  bool _isRetainedForCompetingPlayer = false;
   Future<void> _competingPlayerTransition = Future<void>.value();
   // Android 上 next 的真实首帧预热会短时间内同时占用 previous/current/next 三个
   // MediaCodec。部分机型会把正在播放的 current 异常切成 paused（并非一次新的
@@ -708,6 +709,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   String? _decoderPressureReason;
   bool _firstFrameVideoRecoveryAttempted = false;
   String? _firstFrameAutoRetryItemId;
+  Future<void> _forYouRecoveryOperation = Future<void>.value();
   Duration _currentPlaybackPosition = Duration.zero;
   Duration _currentPlaybackDuration = Duration.zero;
   Duration _currentPlaybackBufferedPosition = Duration.zero;
@@ -1030,9 +1032,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _videoQualityPreferenceRepository = ref.read(
       playerVideoQualityPreferenceRepositoryProvider,
     );
-    // Populate the in-memory preference while Home is preparing entry media.
-    // A launch plan can still bypass this wait when it is already available.
-    unawaited(initializeVideoQualityPreference());
+    // For You owns an automatic rendition policy. It must not inherit the
+    // ordinary player's persisted manual quality while its persistent tab
+    // session is recreated after a handoff.
+    if (!_isForYouSession) {
+      // Populate the in-memory preference while Home is preparing entry media.
+      // A launch plan can still bypass this wait when it is already available.
+      unawaited(initializeVideoQualityPreference());
+    }
     _attachSessionStreams(_session);
     _logTiming('create current session', details: 'reason=build');
     ref.onDispose(() {
@@ -1066,6 +1073,16 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   /// this read keeps background player instances from unexpectedly changing a
   /// source before their settings UI has attached.
   Future<void> initializeVideoQualityPreference() {
+    if (_isForYouSession) {
+      _hasLoadedVideoQualityPreference = true;
+      _preferredVideoQualityId = PlayerVideoQuality.automaticId;
+      if (ref.mounted && state.currentItemId == null) {
+        state = state.copyWith(
+          selectedVideoQualityId: PlayerVideoQuality.automaticId,
+        );
+      }
+      return _videoQualityPreferenceReady ??= Future<void>.value();
+    }
     if (_hasLoadedVideoQualityPreference) {
       return _videoQualityPreferenceReady ?? Future<void>.value();
     }
@@ -1159,6 +1176,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   Future<PlayerVideoQualitySelectionResult> selectVideoQuality(
     String qualityId,
   ) async {
+    if (_isForYouSession) {
+      // For You has no manual quality setting. Keeping this defensive guard
+      // prevents a future UI caller from persisting a choice into the regular
+      // player's preference or rebuilding the feed's active decoder.
+      return PlayerVideoQualitySelectionResult.unavailable;
+    }
+    await _releaseRetainedForYouSession('ordinary player quality changed');
     final operation = ++_sourceSwitchOperation;
     await initializeVideoQualityPreference();
     if (!_isCurrentSourceSwitch(operation)) {
@@ -1300,6 +1324,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   Future<PlayerFeedItem> _itemUsingPreferredVideoQuality(
     PlayerFeedItem item,
   ) async {
+    if (_isForYouSession) return item;
     if (!_hasLoadedVideoQualityPreference) return item;
     await _videoQualityPreferenceReady;
     final preferredId = _preferredVideoQualityId;
@@ -1458,6 +1483,13 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }) async {
     if (_isSessionDisposed) {
       return;
+    }
+
+    if (!_isForYouSession &&
+        item != null &&
+        state.currentItemId != null &&
+        state.currentItemId != item.id) {
+      await _releaseRetainedForYouSession('ordinary player item changed');
     }
 
     PlayerStartupQualityPlan? startupQualityPlan;
@@ -2946,6 +2978,36 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     unawaited(_disposePreloads());
   }
 
+  /// Keeps only For You's paused current session for an immediate return from
+  /// the ordinary player. Its prepared/retained neighbours are released, so
+  /// this reservation is always lower priority than the foreground player.
+  Future<void> retainForCompetingPlayer() async {
+    if (!_isForYouSession || _isSessionDisposed) {
+      return;
+    }
+    _isRetainedForCompetingPlayer = true;
+    await pauseForRouteHandoff();
+  }
+
+  bool get isRetainedForCompetingPlayer => _isRetainedForCompetingPlayer;
+
+  Future<void> _releaseRetainedForYouSession(String reason) async {
+    if (_isForYouSession) return;
+    if (!ref
+        .read(playerSessionRegistryProvider)
+        .contains(PlayerPlaybackSessionKeys.forYouTab)) {
+      return;
+    }
+    final forYou = ref.read(
+      playerPlaybackControllerProvider(
+        PlayerPlaybackSessionKeys.forYouTab,
+      ).notifier,
+    );
+    if (!forYou.isRetainedForCompetingPlayer) return;
+    _logTiming('release retained For You session', details: 'reason=$reason');
+    await forYou.suspendForCompetingPlayer();
+  }
+
   /// 返回上一个播放器页面前只暂停并卸载当前 Surface。
   ///
   /// route pop 后 provider dispose 会完成强释放；这里不把释放耗时放在返回手势的关键
@@ -3089,6 +3151,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   Future<void> _suspendForCompetingPlayer() async {
     if (!ref.mounted || _isSessionDisposed) return;
     _isSuspendedForCompetingPlayer = true;
+    _isRetainedForCompetingPlayer = false;
     ref.read(hlsTrafficGateProvider).suspendForYou();
     _pauseWhenOpenCompletes = true;
     _pauseWatchProgressReportTimer();
@@ -3140,7 +3203,102 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       );
     }
     _isSuspendedForCompetingPlayer = false;
+    _isRetainedForCompetingPlayer = false;
     await resumeAfterVisibilityPause();
+  }
+
+  /// Rebuilds a For You native session only after it has entered a terminal
+  /// playback failure.  A route/tab return must not merely call `play()` on a
+  /// controller whose Android VideoOutput or decoder has already died.
+  ///
+  /// This is deliberately narrower than a generic resume: normal opening and
+  /// buffering keep their existing behaviour, while an error or a missing
+  /// source for the visible item gets a fresh session.  Calls are serialised so
+  /// Tab changes, pull-to-refresh and route returns cannot dispose a session
+  /// that another recovery has just created.
+  Future<void> recoverForYouPlaybackIfFailed(
+    PlayerFeedItem? item, {
+    required String trigger,
+    bool forceRebuild = false,
+  }) {
+    if (sessionKey != PlayerPlaybackSessionKeys.forYouTab ||
+        item == null ||
+        item.episode.isLocked ||
+        item.episode.isUnavailable ||
+        item.episode.videoSource == null) {
+      return Future<void>.value();
+    }
+    final shouldRecover =
+        forceRebuild ||
+        state.status == PlayerPlaybackStatus.error ||
+        (state.currentItemId == item.id && state.currentSource == null);
+    if (!shouldRecover) {
+      return Future<void>.value();
+    }
+    final next = _forYouRecoveryOperation.then<void>(
+      (_) => _recreateForYouSessionAndPlay(item, trigger: trigger),
+      onError: (_, _) => _recreateForYouSessionAndPlay(item, trigger: trigger),
+    );
+    // Preserve a usable queue after a native failure. The caller still sees
+    // the actual failure through [next].
+    _forYouRecoveryOperation = next.then<void>((_) {}, onError: (_, _) {});
+    return next;
+  }
+
+  Future<void> _recreateForYouSessionAndPlay(
+    PlayerFeedItem item, {
+    required String trigger,
+  }) async {
+    if (!ref.mounted ||
+        sessionKey != PlayerPlaybackSessionKeys.forYouTab ||
+        !_isPlaybackVisible ||
+        _isSuspendedForCompetingPlayer) {
+      return;
+    }
+    // A queued recovery may have become stale while the user refreshed or
+    // swiped. Only rebuild the item that is still current.
+    if (state.currentItemId != null && state.currentItemId != item.id) {
+      return;
+    }
+    _logTiming(
+      'for you rebuild failed session',
+      itemId: item.id,
+      source: item.episode.videoSource,
+      details: _timingDetails(['trigger=$trigger']),
+    );
+    ++_generation;
+    _cancelFirstFrameTimeout();
+    _firstFrameProgressProbeTimer?.cancel();
+    _firstFrameVideoRecoveryTimer?.cancel();
+    _pauseWatchProgressReportTimer();
+    await _releaseSessionWindowFor('for you failed session rebuild');
+    await _disposePreloads();
+    if (!_isSessionDisposed) {
+      await _session.pause();
+      await _cancelSessionStreams();
+      await _disposeSessionOnly(shouldPause: false);
+    }
+    if (!ref.mounted || !_isPlaybackVisible || _isSuspendedForCompetingPlayer) {
+      return;
+    }
+    _isSessionDisposed = false;
+    _session = ref.read(playerPlaybackSessionFactoryProvider).call();
+    _attachSessionStreams(_session);
+    _currentPlaybackItemId = null;
+    _currentPlaybackSource = null;
+    _clearCurrentPlaybackSnapshot();
+    _lastPlayItemRequest = null;
+    state = state.copyWith(
+      status: PlayerPlaybackStatus.idle,
+      clearSource: true,
+      clearError: true,
+      hasFirstFrame: false,
+      hasRenderedFirstFrame: false,
+      isBuffering: false,
+      videoController: _session.videoController,
+      surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
+    );
+    await playItem(item, forceReopen: true);
   }
 
   Future<void> detachSurfaceForVisibility({bool syncState = true}) async {
@@ -4141,6 +4299,20 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           details:
               'reason=first_frame_timeout maxAttempts=1 mode=${item.mode.name}',
         );
+        if (sessionKey == PlayerPlaybackSessionKeys.forYouTab) {
+          // For You may keep its widget alive in an IndexedStack while the
+          // native Android decoder/Surface is already unusable. Reopening the
+          // same session leaves that failure black forever; create a fresh
+          // native session instead.
+          unawaited(
+            recoverForYouPlaybackIfFailed(
+              item,
+              trigger: 'first_frame_timeout',
+              forceRebuild: true,
+            ),
+          );
+          return;
+        }
         unawaited(playItem(item, forceReopen: true));
         return;
       }

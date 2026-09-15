@@ -348,6 +348,35 @@ void main() {
     },
   );
 
+  test(
+    'bare feed source URL falls back to the resolved playback source',
+    () async {
+      final remoteDataSource = _FakePlaybackSourceRemoteDataSource(
+        source: _playbackSource(hlsUrl: 'https://cdn.example.com/signed.m3u8'),
+      );
+      final repository = RemotePlayerPlaybackSourceRepository(
+        remoteDataSource: remoteDataSource,
+        preloadManager: MockPlayerPlaybackPreloadManager(
+          preloadDelay: Duration.zero,
+        ),
+      );
+      final original = _feedItem();
+      final item = PlayerFeedItem(
+        id: original.id,
+        mode: PlayerFeedMode.forYou,
+        content: original.content,
+        episode: original.episode.copyWith(
+          videoUrl: 'https://cdn.example.com/',
+        ),
+      );
+
+      final resolved = await repository.resolve(item);
+
+      expect(resolved.remoteUrl, 'https://cdn.example.com/signed.m3u8');
+      expect(remoteDataSource.requestedEpisodeIds, ['ep-1']);
+    },
+  );
+
   test('playback source remote datasource requires auth policy', () async {
     final adapter = _FakeHttpClientAdapter(
       responseData: {
@@ -649,11 +678,13 @@ class _FakePlaybackSourceRemoteDataSource
   _FakePlaybackSourceRemoteDataSource({required this.source});
 
   final PlaybackSourceDto source;
+  final requestedEpisodeIds = <String>[];
 
   @override
   Future<PlaybackSourceDto> getPlaybackSource({
     required String episodeId,
   }) async {
+    requestedEpisodeIds.add(episodeId);
     return source;
   }
 }

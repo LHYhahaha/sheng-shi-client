@@ -34,9 +34,11 @@ class RemotePlayerPlaybackSourceRepository
     PlayerFeedItem item, {
     int? maxVideoHeight,
   }) async {
-    // 直接使用 episode.videoSource（来自首页 API 的 source_url），无需调用 playback-source API
     final remoteUrl = item.episode.videoSource;
-    if (remoteUrl == null || remoteUrl.isEmpty) {
+    if (!_isDirectPlayableSource(remoteUrl)) {
+      // Feed 的 source_url 只是 source hint。线上偶尔会下发 CDN 根地址；
+      // 它不是媒体清单，直接交给 native player 会表现为 playing 后无首帧。
+      // 这时回退到带签名/有效期的 playback-source 解析接口。
       final dto = await _remoteDataSource.getPlaybackSource(
         episodeId: item.episode.id,
       );
@@ -50,12 +52,13 @@ class RemotePlayerPlaybackSourceRepository
         maxVideoHeight: maxVideoHeight,
       );
     }
+    final playableRemoteUrl = remoteUrl!;
 
     return _applyProxy(
       PlaybackSource(
         itemId: item.id,
-        remoteUrl: remoteUrl,
-        playableSource: remoteUrl,
+        remoteUrl: playableRemoteUrl,
+        playableSource: playableRemoteUrl,
         cacheKey: _cacheKey(item),
         expiresAt: DateTime.now().add(const Duration(minutes: 30)),
         codecHint: 'hls',
@@ -73,9 +76,8 @@ class RemotePlayerPlaybackSourceRepository
     Duration? preferredPosition,
     int? maxVideoHeight,
   }) async {
-    // 直接使用 episode.videoSource，无需调用 playback-source API
     final remoteUrl = item.episode.videoSource;
-    if (remoteUrl == null || remoteUrl.isEmpty) {
+    if (!_isDirectPlayableSource(remoteUrl)) {
       final dto = await _remoteDataSource.getPlaybackSource(
         episodeId: item.episode.id,
       );
@@ -91,6 +93,7 @@ class RemotePlayerPlaybackSourceRepository
         maxVideoHeight: maxVideoHeight,
       );
     }
+    final playableRemoteUrl = remoteUrl!;
 
     // 已解锁 source_url 的服务端契约是 HLS m3u8。入口可以是通用
     // `/api/video/source`，不以 URL 后缀判断；未来支持非 HLS 时应由后端下发
@@ -99,8 +102,8 @@ class RemotePlayerPlaybackSourceRepository
       item,
       PlaybackSource(
         itemId: item.id,
-        remoteUrl: remoteUrl,
-        playableSource: remoteUrl,
+        remoteUrl: playableRemoteUrl,
+        playableSource: playableRemoteUrl,
         cacheKey: _cacheKey(item),
         expiresAt: DateTime.now().add(const Duration(minutes: 30)),
         codecHint: 'hls',
@@ -158,5 +161,20 @@ class RemotePlayerPlaybackSourceRepository
 
   String _cacheKey(PlayerFeedItem item) {
     return 'player:${item.content.id}:${item.episode.id}';
+  }
+
+  /// The feed may provide a CDN root as a hint. Keep extensionless, real
+  /// media endpoints supported, but never treat a bare origin/path root as a
+  /// playable stream.
+  bool _isDirectPlayableSource(String? source) {
+    if (source == null || source.trim().isEmpty) {
+      return false;
+    }
+    final uri = Uri.tryParse(source);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+      return false;
+    }
+    final path = uri.path;
+    return path.isNotEmpty && path != '/';
   }
 }

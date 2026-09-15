@@ -61,6 +61,7 @@ dependencies:
   gradient_borders: ^1.0.4
   flutter_local_notifications: ^22.2.0
   easy_refresh: ^3.5.1
+  sign_in_with_apple: ^8.1.0
 
 dev_dependencies:
   flutter_test:
