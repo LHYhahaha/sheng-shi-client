@@ -811,11 +811,12 @@ HlsMasterPlaylistFilterResult filterHlsMasterPlaylistWithProfile(
     }
     final height = int.tryParse(
       RegExp(
-            r'RESOLUTION=\d+x(\d+)',
+            r'RESOLUTION=(\d+)x\d+',
             caseSensitive: false,
           ).firstMatch(line)?.group(1) ??
           '',
     );
+    // The source contract puts the rendition quality in the first dimension.
     // Unknown resolution stays available: it cannot safely be classified as
     // 1080p by the client. CDN metadata should be fixed separately.
     final shouldKeep = height == null || height <= maxHeight;
