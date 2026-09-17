@@ -24,7 +24,9 @@ class HlsVideoQualityParser {
       final bandwidthMatch = RegExp(
         r'(?:AVERAGE-)?BANDWIDTH=(\d+)',
       ).firstMatch(streamInf);
-      final height = int.tryParse(resolution?.group(2) ?? '') ?? 0;
+      // The source contract encodes the rendition quality in the first
+      // RESOLUTION dimension: 540xXX, 720xXX, 1080xXX.
+      final height = int.tryParse(resolution?.group(1) ?? '') ?? 0;
       final width = int.tryParse(resolution?.group(1) ?? '');
       final bandwidth = int.tryParse(bandwidthMatch?.group(1) ?? '');
       qualities.add(

@@ -9,14 +9,14 @@ void main() {
     path: '/a/master.m3u8',
   );
 
-  test('parses, deduplicates and orders HLS renditions by height', () {
+  test('parses, deduplicates and orders HLS renditions by quality', () {
     final qualities = HlsVideoQualityParser.parse(master, '''
 #EXTM3U
-#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=854x480
+#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=480x854
 480/index.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=1500000,RESOLUTION=1280x720
+#EXT-X-STREAM-INF:BANDWIDTH=1500000,RESOLUTION=720x1280
 720/index.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1920x1080
+#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1080x1920
 1080/index.m3u8
 ''');
 
@@ -31,9 +31,9 @@ void main() {
   test('keeps the higher bandwidth entry for duplicated heights', () {
     final qualities = HlsVideoQualityParser.parse(master, '''
 #EXTM3U
-#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=1280x720
+#EXT-X-STREAM-INF:BANDWIDTH=1000000,RESOLUTION=720x1280
 720-low.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=1500000,RESOLUTION=1280x720
+#EXT-X-STREAM-INF:BANDWIDTH=1500000,RESOLUTION=720x1280
 720-high.m3u8
 ''');
 
@@ -45,12 +45,42 @@ void main() {
     expect(qualities.single.bandwidth, 1500000);
   });
 
+  test('uses the first resolution dimension as the rendition quality', () {
+    final qualities = HlsVideoQualityParser.parse(master, '''
+#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=1100000,RESOLUTION=540x960
+540/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=1600000,RESOLUTION=720x1280
+720/index.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=2900000,RESOLUTION=1080x1920
+1080/index.m3u8
+''');
+
+    expect(qualities.map((quality) => quality.id), ['1080p', '720p', '540p']);
+  });
+
+  test('automatic quality cap uses the first resolution dimension', () {
+    final filtered = filterHlsMasterPlaylistByMaxHeight('''
+#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=1100000,RESOLUTION=540x960
+540.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=1600000,RESOLUTION=720x1280
+720.m3u8
+#EXT-X-STREAM-INF:BANDWIDTH=2900000,RESOLUTION=1080x1920
+1080.m3u8
+''', maxHeight: 540);
+
+    expect(filtered, contains('540.m3u8'));
+    expect(filtered, isNot(contains('720.m3u8')));
+    expect(filtered, isNot(contains('1080.m3u8')));
+  });
+
   test('automatic quality cap excludes 1080p but retains lower variants', () {
     final filtered = filterHlsMasterPlaylistByMaxHeight('''
 #EXTM3U
-#EXT-X-STREAM-INF:BANDWIDTH=1500000,RESOLUTION=1280x720
+#EXT-X-STREAM-INF:BANDWIDTH=1500000,RESOLUTION=720x1280
 720.m3u8
-#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1920x1080
+#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1080x1920
 1080.m3u8
 ''', maxHeight: 1079);
 
@@ -61,7 +91,7 @@ void main() {
   test('automatic quality cap keeps a single 1080p rendition playable', () {
     const master = '''
 #EXTM3U
-#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1920x1080
+#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1080x1920
 1080.m3u8
 ''';
 
