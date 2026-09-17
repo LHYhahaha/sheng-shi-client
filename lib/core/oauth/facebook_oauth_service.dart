@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import 'oauth_service.dart';
 
@@ -21,12 +22,28 @@ class FacebookOAuthService implements OAuthService {
     'com.yushi.drama/facebook_auth_recovery',
   );
 
-  FacebookOAuthService({FacebookAuth? facebookAuth})
-    : _facebookAuth = facebookAuth ?? FacebookAuth.instance;
+  FacebookOAuthService({
+    FacebookAuth? facebookAuth,
+    Future<AuthorizationCredentialAppleID> Function()? requestAppleCredential,
+  }) : _facebookAuth = facebookAuth ?? FacebookAuth.instance,
+       _requestAppleCredential =
+           requestAppleCredential ?? _requestAppleCredentialFromNative;
 
   final FacebookAuth _facebookAuth;
+  final Future<AuthorizationCredentialAppleID> Function()
+  _requestAppleCredential;
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
   Future<void>? _googleInitializeFuture;
+
+  static Future<AuthorizationCredentialAppleID>
+  _requestAppleCredentialFromNative() {
+    return SignInWithApple.getAppleIDCredential(
+      scopes: const [
+        AppleIDAuthorizationScopes.email,
+        AppleIDAuthorizationScopes.fullName,
+      ],
+    );
+  }
 
   /// 仅用于定位 Limited Login 返回字段；认证可信性仍必须由服务端校验 JWT。
   @visibleForTesting
@@ -258,8 +275,40 @@ class FacebookOAuthService implements OAuthService {
   }
 
   @override
-  Future<String?> signInWithApple() {
-    throw UnimplementedError('Apple login not implemented yet');
+  Future<String?> signInWithApple() async {
+    try {
+      debugPrint('[AppleOAuth] Starting native authorization.');
+      final credential = await _requestAppleCredential();
+      final identityToken = credential.identityToken;
+      if (identityToken == null || identityToken.isEmpty) {
+        throw const OAuthException(
+          'apple',
+          'Apple authorization succeeded but identity token is missing',
+          null,
+          OAuthFailureReason.credentialMissing,
+        );
+      }
+
+      debugPrint(
+        '[AppleOAuth] Native authorization credential: '
+        'userIdentifier=${credential.userIdentifier}, '
+        'givenName=${credential.givenName}, '
+        'familyName=${credential.familyName}, '
+        'email=${credential.email}, '
+        'authorizationCode=${credential.authorizationCode}, '
+        'identityToken=$identityToken',
+      );
+      return identityToken;
+    } on SignInWithAppleAuthorizationException catch (error) {
+      if (error.code == AuthorizationErrorCode.canceled) {
+        return null;
+      }
+      throw OAuthException('apple', error.message, error);
+    } on OAuthException {
+      rethrow;
+    } catch (error) {
+      throw OAuthException('apple', 'Unexpected error during login', error);
+    }
   }
 
   @override

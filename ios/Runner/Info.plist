@@ -22,15 +22,6 @@
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
-	<key>CHANNEL_FLAG</key>
-    <string>$(CHANNEL_FLAG)</string>
-
-    <key>MERCHANT_ID</key>
-    <string>$(MERCHANT_ID)</string>
-
-    <key>VEST_PKG_ID</key>
-    <string>$(VEST_PKG_ID)</string>
-
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -52,6 +43,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>CHANNEL_FLAG</key>
+	<string>$(CHANNEL_FLAG)</string>
 	<key>FacebookAppID</key>
 	<string>3996208420512909</string>
 	<key>FacebookClientToken</key>
@@ -62,6 +55,8 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>MERCHANT_ID</key>
+	<string>$(MERCHANT_ID)</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -102,5 +97,7 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
+	<key>VEST_PKG_ID</key>
+	<string>$(VEST_PKG_ID)</string>
 </dict>
 </plist>

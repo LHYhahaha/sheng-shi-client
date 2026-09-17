@@ -780,7 +780,6 @@ class AppLocalizations {
   String get phoneLoginChooseCountry =>
       _remoteText('login.phone.code_select', en: 'Country Code', zh: '区号');
 
-
   String get authGoogleLogin => _remoteText(
     'login.button.google',
     en: 'Sign in with Google',
@@ -2123,6 +2122,12 @@ class AppLocalizations {
     'login.button.apple',
     en: 'Sign in with Apple',
     zh: 'Apple登录',
+  );
+
+  String get authAppleAuthorizationSucceeded => _remoteText(
+    'auth.apple.authorization_succeeded',
+    en: 'Apple authorization succeeded. Server login is not enabled yet.',
+    zh: 'Apple 授权成功，登录服务暂未接入。',
   );
 
   // ── 1.0.2 / 问题与帮助 ─────────────────────────────────────────────
