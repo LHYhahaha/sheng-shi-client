@@ -9,7 +9,6 @@ import '../analytics/analytics_service.dart';
 import '../network/api_client.dart';
 import '../network/api_client_provider.dart';
 import '../analytics/analytics_provider.dart';
-import 'startup_notification_permission_requester.dart';
 
 /// 将系统通知权限同步给当前账号；不主动触发系统授权弹窗。
 ///
@@ -24,8 +23,6 @@ class StartupNotificationPermissionReporter {
     AnalyticsService? analytics,
     Future<String?> Function(String showId)? getLastAnalyticsStatus,
     Future<void> Function(String showId, String status)? markAnalyticsStatus,
-    Future<StartupNotificationPermissionRequestResult?> Function()?
-    getStartupResult,
   }) : _apiClient = apiClient,
        _getStatus = getStatus ?? _defaultGetStatus,
        _getLastReportedEnabled =
@@ -39,9 +36,7 @@ class StartupNotificationPermissionReporter {
        _getLastAnalyticsStatus =
            getLastAnalyticsStatus ?? _defaultGetLastAnalyticsStatus,
        _markAnalyticsStatus =
-           markAnalyticsStatus ?? _defaultMarkAnalyticsStatus,
-       _getStartupResult =
-           getStartupResult ?? getStartupNotificationPermissionRequestResult;
+           markAnalyticsStatus ?? _defaultMarkAnalyticsStatus;
 
   final ApiClient _apiClient;
   final Future<permissions.PermissionStatus> Function() _getStatus;
@@ -52,9 +47,6 @@ class StartupNotificationPermissionReporter {
   final Future<String?> Function(String showId) _getLastAnalyticsStatus;
   final Future<void> Function(String showId, String status)
   _markAnalyticsStatus;
-  final Future<StartupNotificationPermissionRequestResult?> Function()
-  _getStartupResult;
-
   final Map<String, Future<void>> _accountSyncs = <String, Future<void>>{};
   final Set<String> _pendingAnalyticsStatusKeys = <String>{};
 
@@ -62,67 +54,74 @@ class StartupNotificationPermissionReporter {
   @Deprecated('Use syncForAccount after authentication or membership purchase.')
   Future<void> checkAndReportOnHomeArrival() async {}
 
-  Future<void> syncForAccount(
-    String? showId, {
-    bool isExplicitResult = false,
-  }) async {
+  Future<void> syncForAccount(String? showId) {
     if (showId == null || showId.isEmpty) {
-      return;
+      return Future<void>.value();
     }
 
-    // 明确授权结果不能被同时进行的普通检查合并，避免丢失授权弹窗后的状态读取。
-    final syncKey = '$showId:$isExplicitResult';
-    final inFlight = _accountSyncs[syncKey];
-    if (inFlight != null) return inFlight;
+    return _enqueueAccountSync(showId, () => _syncForAccount(showId));
+  }
 
-    final sync = _syncForAccount(showId, isExplicitResult: isExplicitResult);
-    _accountSyncs[syncKey] = sync;
+  /// 系统授权弹窗明确返回允许后调用。
+  ///
+  /// 该结果优先于弹窗展示期间读取到的未授权状态，并与同账号普通检查串行。
+  Future<void> recordGrantedForAccount(String? showId) {
+    if (showId == null || showId.isEmpty) {
+      return Future<void>.value();
+    }
+
+    return _enqueueAccountSync(showId, () => _recordGrantedForAccount(showId));
+  }
+
+  Future<void> _enqueueAccountSync(
+    String showId,
+    Future<void> Function() operation,
+  ) async {
+    final previous = _accountSyncs[showId] ?? Future<void>.value();
+    final sync = previous.then<void>((_) => operation());
+    _accountSyncs[showId] = sync;
     try {
       await sync;
     } finally {
-      if (identical(_accountSyncs[syncKey], sync)) {
-        _accountSyncs.remove(syncKey);
+      if (identical(_accountSyncs[showId], sync)) {
+        _accountSyncs.remove(showId);
       }
     }
   }
 
-  /// 用户操作系统授权弹窗后调用。
-  ///
-  /// 此方法将本次读取标记为系统授权弹窗后的结果。
-  Future<void> recordExplicitResultForAccount(String? showId) {
-    return syncForAccount(showId, isExplicitResult: true);
-  }
-
-  Future<void> _syncForAccount(
-    String showId, {
-    required bool isExplicitResult,
-  }) async {
+  Future<void> _syncForAccount(String showId) async {
     final accessToken = _apiClient.requestContext.accessToken;
     if (accessToken == null || accessToken.isEmpty) return;
 
     try {
-      final startupResult = await _getStartupResult();
       final previous = await _getLastReportedEnabled(showId);
-      final usesStartupResult = startupResult != null && previous == null;
-      final permission = usesStartupResult ? null : await _getStatus();
-      final enabled = !usesStartupResult
-          ? _isGranted(permission!)
-          : startupResult == StartupNotificationPermissionRequestResult.granted;
+      final permission = await _getStatus();
+      final enabled = _isGranted(permission);
       if (previous != enabled) {
         await _reportEnablePush(enabled);
         // 只有服务端成功接收后才更新本地状态，失败时下一次触发会重试。
         await _markReportedEnabled(showId, enabled);
       }
 
-      await _trackPermissionStatus(
-        showId,
-        !usesStartupResult
-            ? _analyticsStatus(permission!)
-            : _analyticsStatusForStartupResult(startupResult),
-        isExplicitResult: isExplicitResult,
-      );
+      await _trackPermissionStatus(showId, _analyticsStatus(permission));
     } catch (error) {
       debugPrint('[NotificationPermission] Sync ignored: $error');
+    }
+  }
+
+  Future<void> _recordGrantedForAccount(String showId) async {
+    final accessToken = _apiClient.requestContext.accessToken;
+    if (accessToken == null || accessToken.isEmpty) return;
+
+    try {
+      final previous = await _getLastReportedEnabled(showId);
+      if (previous != true) {
+        await _reportEnablePush(true);
+        await _markReportedEnabled(showId, true);
+      }
+      await _trackPermissionStatus(showId, 'granted');
+    } catch (error) {
+      debugPrint('[NotificationPermission] Granted sync ignored: $error');
     }
   }
 
@@ -130,11 +129,7 @@ class StartupNotificationPermissionReporter {
     return status.isGranted || status.isProvisional;
   }
 
-  Future<void> _trackPermissionStatus(
-    String showId,
-    String? status, {
-    required bool isExplicitResult,
-  }) async {
+  Future<void> _trackPermissionStatus(String showId, String? status) async {
     final analytics = _analytics;
     if (analytics == null) return;
 
@@ -166,17 +161,6 @@ class StartupNotificationPermissionReporter {
       return 'denied';
     }
     return null;
-  }
-
-  static String _analyticsStatusForStartupResult(
-    StartupNotificationPermissionRequestResult result,
-  ) {
-    return switch (result) {
-      StartupNotificationPermissionRequestResult.granted => 'granted',
-      StartupNotificationPermissionRequestResult.denied => 'denied',
-      StartupNotificationPermissionRequestResult.notDetermined =>
-        'not_determined',
-    };
   }
 }
 

@@ -1,7 +1,48 @@
 import 'package:drama_client/core/adjust/adjust_event_reporter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('uses the iOS Adjust event tokens for the matching events', () {
+    final tokens = AdjustEventTokens.forPlatform(TargetPlatform.iOS);
+
+    expect(tokens.appFirstOpen, 'l0kgl3');
+    expect(tokens.homeFirstView, '9qksln');
+    expect(tokens.checkoutStart, 'uqyu5x');
+    expect(tokens.dramaPlayStart, '3gn2et');
+  });
+
+  test('keeps Android Adjust event tokens unchanged', () {
+    final tokens = AdjustEventTokens.forPlatform(TargetPlatform.android);
+
+    expect(tokens.appFirstOpen, 'xklyoy');
+    expect(tokens.homeFirstView, '37fm6a');
+    expect(tokens.checkoutStart, 'm8l7ax');
+    expect(tokens.dramaPlayStart, 'x7p5qa');
+  });
+
+  test('uses the iOS Adjust app token', () {
+    expect(
+      AdjustPlatformConfiguration.forPlatform(TargetPlatform.iOS).appToken,
+      'r7kxnc1vswe8',
+    );
+  });
+
+  test('reports the iOS app-first-open token on iOS', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final client = _RecordingEventClient();
+    final reporter = AdjustEventReporter(
+      eventClient: client,
+      homeFirstViewStore: _FirstViewStore(),
+    );
+
+    reporter.reportAppFirstOpen();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(client.events, [const _RecordedEvent('l0kgl3', {})]);
+  });
+
   test('reports app_first_open with the required Adjust token', () async {
     final client = _RecordingEventClient();
     final reporter = AdjustEventReporter(

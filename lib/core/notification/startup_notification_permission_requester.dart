@@ -27,7 +27,7 @@ class StartupNotificationPermissionRequester {
        _requestPermission = requestPermission ?? _defaultRequestPermission,
        _saveInitialResult = saveInitialResult ?? _defaultSaveInitialResult;
 
-  Future<void>? _request;
+  Future<StartupNotificationPermissionRequestResult?>? _request;
   final bool Function() _supportsRuntimeRequest;
   final Future<bool> Function() _getAttempted;
   final Future<void> Function() _markAttempted;
@@ -35,24 +35,27 @@ class StartupNotificationPermissionRequester {
   final Future<void> Function(StartupNotificationPermissionRequestResult result)
   _saveInitialResult;
 
-  Future<void> requestIfNeeded() {
+  Future<StartupNotificationPermissionRequestResult?> requestIfNeeded() {
     return _request ??= _requestIfNeeded();
   }
 
-  Future<void> _requestIfNeeded() async {
-    if (!_supportsRuntimeRequest() || await _getAttempted()) return;
+  Future<StartupNotificationPermissionRequestResult?> _requestIfNeeded() async {
+    if (!_supportsRuntimeRequest() || await _getAttempted()) return null;
 
     try {
       await _markAttempted();
       final result = await _requestPermission();
-      await _saveInitialResult(_mapResult(result));
+      final mappedResult = _mapResult(result);
+      await _saveInitialResult(mappedResult);
       debugPrint('[NotificationPermission] Startup request result: $result');
+      return mappedResult;
     } catch (error) {
       await _saveInitialResult(
         StartupNotificationPermissionRequestResult.notDetermined,
       );
       // 通知权限不可用不能影响应用首屏或会话初始化。
       debugPrint('[NotificationPermission] Startup request ignored: $error');
+      return null;
     }
   }
 
@@ -75,7 +78,11 @@ const _initialResultPreferenceKey =
     'notification_permission.startup_request_result.v1';
 
 bool _defaultSupportsRuntimeRequest() =>
-    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    !kIsWeb && supportsNotificationRuntimeRequest(defaultTargetPlatform);
+
+/// iOS and Android require an explicit user decision before alerts can appear.
+bool supportsNotificationRuntimeRequest(TargetPlatform platform) =>
+    platform == TargetPlatform.android || platform == TargetPlatform.iOS;
 
 Future<bool> _defaultGetAttempted() async {
   final preferences = await SharedPreferences.getInstance();

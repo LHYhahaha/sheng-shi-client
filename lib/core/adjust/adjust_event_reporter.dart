@@ -6,15 +6,10 @@ import 'package:adjust_sdk/adjust_event.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'adjust_platform_configuration.dart';
 import 'adjust_service.dart';
 
-/// 客户端可上报的 Adjust 事件 token。
-abstract final class AdjustEventTokens {
-  static const appFirstOpen = 'xklyoy';
-  static const dramaPlayStart = 'x7p5qa';
-  static const homeFirstView = '37fm6a';
-  static const checkoutStart = 'm8l7ax';
-}
+export 'adjust_platform_configuration.dart';
 
 /// 隔离 Adjust SDK，便于事件规则独立测试。
 abstract interface class AdjustEventClient {
@@ -40,7 +35,7 @@ class AdjustSdkEventClient implements AdjustEventClient {
 
   @override
   void track(String eventToken, {Map<String, String> parameters = const {}}) {
-    if (defaultTargetPlatform != TargetPlatform.android) {
+    if (!_isAdjustSupportedPlatform(defaultTargetPlatform)) {
       debugPrint(
         '[Adjust] Event skipped: token=$eventToken '
         'platform=${defaultTargetPlatform.name}.',
@@ -78,7 +73,7 @@ class AdjustSdkEventClient implements AdjustEventClient {
 
   @override
   Future<void> recoverPendingEvents() async {
-    if (defaultTargetPlatform != TargetPlatform.android) return;
+    if (!_isAdjustSupportedPlatform(defaultTargetPlatform)) return;
     debugPrint('[Adjust] Pending event recovery requested at startup.');
     _service.initialize();
     await _flushPendingEvents();
@@ -279,18 +274,21 @@ class AdjustEventReporter {
   final AdjustEventClient _eventClient;
   final AdjustHomeFirstViewStore _homeFirstViewStore;
 
-  void reportAppFirstOpen() => _report(AdjustEventTokens.appFirstOpen);
+  AdjustEventTokenSet get _tokens =>
+      AdjustEventTokens.forPlatform(defaultTargetPlatform);
 
-  void reportDramaPlayStart() => _report(AdjustEventTokens.dramaPlayStart);
+  void reportAppFirstOpen() => _report(_tokens.appFirstOpen);
+
+  void reportDramaPlayStart() => _report(_tokens.dramaPlayStart);
 
   Future<void> recoverPendingEvents() => _eventClient.recoverPendingEvents();
 
   Future<void> reportHomeFirstView() async {
     try {
       if (!await _homeFirstViewStore.markReportedIfNeeded()) return;
-      _eventClient.track(AdjustEventTokens.homeFirstView);
+      _eventClient.track(_tokens.homeFirstView);
     } catch (error, stackTrace) {
-      _logFailure(AdjustEventTokens.homeFirstView, error, stackTrace);
+      _logFailure(_tokens.homeFirstView, error, stackTrace);
     }
   }
 
@@ -301,7 +299,7 @@ class AdjustEventReporter {
     required String currency,
   }) {
     _report(
-      AdjustEventTokens.checkoutStart,
+      _tokens.checkoutStart,
       parameters: {
         'product_type': productType,
         'product_id': productId,
@@ -328,3 +326,6 @@ class AdjustEventReporter {
     debugPrintStack(stackTrace: stackTrace);
   }
 }
+
+bool _isAdjustSupportedPlatform(TargetPlatform platform) =>
+    platform == TargetPlatform.android || platform == TargetPlatform.iOS;

@@ -1,8 +1,15 @@
 import 'package:drama_client/core/notification/startup_notification_permission_requester.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:permission_handler/permission_handler.dart' as permissions;
 
 void main() {
+  test('supports notification permission requests on iOS and Android', () {
+    expect(supportsNotificationRuntimeRequest(TargetPlatform.iOS), isTrue);
+    expect(supportsNotificationRuntimeRequest(TargetPlatform.android), isTrue);
+    expect(supportsNotificationRuntimeRequest(TargetPlatform.macOS), isFalse);
+  });
+
   test('requests only once and persists a granted initial result', () async {
     var attempted = false;
     var requestCount = 0;

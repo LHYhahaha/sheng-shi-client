@@ -163,56 +163,42 @@ void main() {
     },
   );
 
-  test('reports an indeterminate startup result as disabled', () async {
-    bool? reportedEnabled;
-    String? storedAnalyticsStatus;
-    final sink = AnalyticsInMemoryEventSink(logEvents: false);
-    final reporter = StartupNotificationPermissionReporter(
-      apiClient: _apiClient(adapter),
-      getStatus: () async => permissions.PermissionStatus.granted,
-      getStartupResult: () async =>
-          StartupNotificationPermissionRequestResult.notDetermined,
-      getLastReportedEnabled: (_) async => null,
-      markReportedEnabled: (_, _) async {},
-      reportEnablePush: (enabled) async => reportedEnabled = enabled,
-      analytics: AnalyticsService(
-        contextReader: () => const AnalyticsContext(
-          platform: 'android',
-          appVersion: '1.0.3',
-          language: 'en',
-          userId: 'show-a',
-        ),
-        eventSink: sink,
-      ),
-      getLastAnalyticsStatus: (_) async => storedAnalyticsStatus,
-      markAnalyticsStatus: (_, status) async => storedAnalyticsStatus = status,
-    );
-
-    await reporter.syncForAccount('show-a');
-
-    expect(reportedEnabled, isFalse);
-    expect(sink.events.single.eventParams, {
-      'permission_status': 'not_determined',
-    });
-  });
-
   test(
-    'uses the current system state after the startup result was reported',
+    'reports granted after an initial denied status when the user allows',
     () async {
-      bool? reportedEnabled;
+      final reports = <bool>[];
+      String? storedAnalyticsStatus;
+      final sink = AnalyticsInMemoryEventSink(logEvents: false);
       final reporter = StartupNotificationPermissionReporter(
         apiClient: _apiClient(adapter),
-        getStatus: () async => permissions.PermissionStatus.granted,
-        getStartupResult: () async =>
-            StartupNotificationPermissionRequestResult.notDetermined,
-        getLastReportedEnabled: (_) async => false,
+        getStatus: () async => permissions.PermissionStatus.denied,
+        getLastReportedEnabled: (_) async => reports.isEmpty ? null : false,
         markReportedEnabled: (_, _) async {},
-        reportEnablePush: (enabled) async => reportedEnabled = enabled,
+        reportEnablePush: (enabled) async {
+          reports.add(enabled);
+        },
+        analytics: AnalyticsService(
+          contextReader: () => const AnalyticsContext(
+            platform: 'ios',
+            appVersion: '1.0.3',
+            language: 'en',
+            userId: 'show-a',
+          ),
+          eventSink: sink,
+        ),
+        getLastAnalyticsStatus: (_) async => storedAnalyticsStatus,
+        markAnalyticsStatus: (_, status) async =>
+            storedAnalyticsStatus = status,
       );
 
       await reporter.syncForAccount('show-a');
+      await reporter.recordGrantedForAccount('show-a');
 
-      expect(reportedEnabled, isTrue);
+      expect(reports, [false, true]);
+      expect(sink.events.map((event) => event.eventParams), [
+        {'permission_status': 'denied'},
+        {'permission_status': 'granted'},
+      ]);
     },
   );
 }

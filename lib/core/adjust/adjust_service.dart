@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../config/app_environment.dart';
 import 'adjust_device_identifier_reporter.dart';
 import 'adjust_deeplink_dispatcher.dart';
+import 'adjust_platform_configuration.dart';
 
 /// NovaShort 的 Adjust 初始化边界。
 ///
@@ -14,7 +15,7 @@ import 'adjust_deeplink_dispatcher.dart';
 /// 不应分散在业务页面中直接调用 Adjust SDK。
 class AdjustService {
   AdjustService({
-    String appToken = _novaShortAppToken,
+    String? appToken,
     AppEnvironment? environment,
     AdjustDeviceIdentifierReporter? deviceIdentifierReporter,
     void Function(Uri deeplink)? onDeferredDeeplink,
@@ -25,8 +26,6 @@ class AdjustService {
            ? null
            : AdjustDeeplinkDispatcher(onDeferredDeeplink);
 
-  /// NovaShort 在 Adjust 后台登记的应用识别码。
-  static const _novaShortAppToken = 'i3xfcgiqzsao';
   static const _metaAppId = '3996208420512909';
   static bool _initializationRequested = false;
   static bool _deviceIdentifierSyncInProgress = false;
@@ -34,7 +33,7 @@ class AdjustService {
   static final _sessionConfirmed = Completer<void>();
   static final _eventResults = StreamController<AdjustEventResult>.broadcast();
 
-  final String _configuredAppToken;
+  final String? _configuredAppToken;
   final AppEnvironment _environment;
   final AdjustDeviceIdentifierReporter? _deviceIdentifierReporter;
   final AdjustDeeplinkDispatcher? _deferredDeeplinkDispatcher;
@@ -47,7 +46,7 @@ class AdjustService {
 
   Stream<AdjustEventResult> get eventResults => _eventResults.stream;
 
-  /// 初始化 Android Adjust SDK。
+  /// 初始化 Android 或 iOS Adjust SDK。
   ///
   /// `prod` 构建使用 Production；`dev` 和 `staging` 测试构建使用 Sandbox。
   /// Token 为空时安全跳过初始化，避免发送到错误的 Adjust App。
@@ -65,16 +64,24 @@ class AdjustService {
         }
         return;
       }
-      if (defaultTargetPlatform != TargetPlatform.android) return;
+      if (!_isAdjustSupportedPlatform(defaultTargetPlatform)) return;
 
-      if (_configuredAppToken.trim().isEmpty) {
+      final appToken =
+          _configuredAppToken ??
+          AdjustPlatformConfiguration.forPlatform(
+            defaultTargetPlatform,
+          ).appToken;
+
+      if (appToken.trim().isEmpty) {
         debugPrint('[Adjust] Initialization skipped: missing app token.');
         return;
       }
 
-      final config = AdjustConfig(_configuredAppToken, _adjustEnvironment);
+      final config = AdjustConfig(appToken, _adjustEnvironment);
       // Meta Install Referrer plugin 会在 Android 首次安装归因时读取此 App ID。
-      config.fbAppId = _metaAppId;
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        config.fbAppId = _metaAppId;
+      }
       // 保留本地补发使用的 deduplicationId，避免原生已接收但 Flutter 尚未来得及
       // 收到 success 回调时发生重复计数。
       config.eventDeduplicationIdsMaxSize = 100;
@@ -101,7 +108,7 @@ class AdjustService {
   ///
   /// 失败的标识由 reporter 持久化，成功前可安全重复调用（服务端需保持幂等）。
   Future<void> refreshDeviceIdentifiers() async {
-    if (defaultTargetPlatform != TargetPlatform.android ||
+    if (!_isAdjustSupportedPlatform(defaultTargetPlatform) ||
         _deviceIdentifierReporter == null ||
         _deviceIdentifierSyncInProgress ||
         _deviceIdentifiersReportedInProcess) {
@@ -215,10 +222,12 @@ class AdjustService {
 
   Future<bool> _reportDeviceIdentifiers(String adjustAdid) async {
     try {
-      final googleAdId = await Adjust.getGoogleAdId().timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => null,
-      );
+      final googleAdId = defaultTargetPlatform == TargetPlatform.android
+          ? await Adjust.getGoogleAdId().timeout(
+              const Duration(seconds: 5),
+              onTimeout: () => null,
+            )
+          : null;
       if (kDebugMode) {
         debugPrint(
           '[Adjust] Device identifiers: '
@@ -239,6 +248,9 @@ class AdjustService {
     }
   }
 }
+
+bool _isAdjustSupportedPlatform(TargetPlatform platform) =>
+    platform == TargetPlatform.android || platform == TargetPlatform.iOS;
 
 /// 原生 Adjust 对单个事件的最终回调。只有 success 才能安全清掉本地兜底记录。
 class AdjustEventResult {

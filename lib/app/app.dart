@@ -133,11 +133,15 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
   }
 
   Future<void> _requestStartupNotificationPermission() async {
-    await _notificationPermissionRequester.requestIfNeeded();
+    final result = await _notificationPermissionRequester.requestIfNeeded();
     if (!mounted) return;
-    await ref
-        .read(startupNotificationPermissionReporterProvider)
-        .syncForAccount(ref.read(userInfoStoreProvider).showId);
+    final reporter = ref.read(startupNotificationPermissionReporterProvider);
+    final showId = ref.read(userInfoStoreProvider).showId;
+    if (result == StartupNotificationPermissionRequestResult.granted) {
+      await reporter.recordGrantedForAccount(showId);
+      return;
+    }
+    await reporter.syncForAccount(showId);
   }
 
   Future<void> _initializeAdjust() async {
