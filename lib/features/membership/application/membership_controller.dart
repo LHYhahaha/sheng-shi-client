@@ -643,7 +643,7 @@ class MembershipController extends Notifier<MembershipState> {
   ) async {
     final productIds = <String>{};
     for (final plan in plans) {
-      if (!PayChannel.isGoogle(plan.payChannel)) {
+      if (!PayChannel.isCurrentStoreChannel(plan.payChannel)) {
         continue;
       }
       final productId = plan.platformProductId;
@@ -655,7 +655,7 @@ class MembershipController extends Notifier<MembershipState> {
       return const _MembershipIapLoadResult();
     }
     final service = ref.read(iapPriceServiceProvider);
-    if (!await service.isGooglePlayBillingAvailable()) {
+    if (!await service.isStoreAvailable()) {
       return const _MembershipIapLoadResult(isGoogleBillingUnavailable: true);
     }
     return _MembershipIapLoadResult(
@@ -672,12 +672,11 @@ class MembershipController extends Notifier<MembershipState> {
         : ref.read(iapPriceServiceProvider);
     return [
       for (final plan in plans)
-        if (PayChannel.isOther(plan.payChannel))
+        if (PayChannel.isOther(plan.payChannel) ||
+            plan.platformProductId == null ||
+            plan.platformProductId!.isEmpty)
           plan
-        else if (PayChannel.isApple(plan.payChannel) &&
-            defaultTargetPlatform == TargetPlatform.iOS)
-          plan
-        else if (PayChannel.isGoogle(plan.payChannel) &&
+        else if (PayChannel.isCurrentStoreChannel(plan.payChannel) &&
             iapDetails.containsKey(plan.platformProductId))
           _mergePlanPricing(
             plan,

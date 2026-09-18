@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// 服务端下发的支付渠道枚举。
 abstract final class PayChannel {
   static const google = 'PAY_CHANNEL_GOOGLE';
@@ -15,6 +17,13 @@ abstract final class PayChannel {
 
   static bool isApple(String? value) => value?.trim() == apple;
   static bool isOther(String? value) => value?.trim() == other;
+
+  /// 当前系统能通过原生商店查询并购买的 IAP 渠道。
+  static bool isCurrentStoreChannel(String? value) {
+    return defaultTargetPlatform == TargetPlatform.iOS
+        ? isApple(value)
+        : isGoogle(value);
+  }
 
   /// 埋点表约定的支付方式类型，不直接透传后端 `PAY_CHANNEL_*` 枚举。
   static String analyticsPaymentMethodTypeFor(String? value) {

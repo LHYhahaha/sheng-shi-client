@@ -4,9 +4,12 @@ import 'package:drama_client/features/membership/domain/membership_plan.dart';
 import 'package:drama_client/features/membership/domain/membership_repository.dart';
 import 'package:drama_client/features/pay/application/iap_price_service.dart';
 import 'package:drama_client/features/pay/provider/iap_price_service_provider.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
+import 'package:in_app_purchase_storekit/store_kit_wrappers.dart';
 
 class _Repository implements MembershipRepository {
   bool fail = false;
@@ -32,7 +35,7 @@ class _Billing implements IapPriceService {
   bool fail = false;
   Map<String, ProductDetails> products = {};
   @override
-  Future<bool> isGooglePlayBillingAvailable() async => available;
+  Future<bool> isStoreAvailable() async => available;
   @override
   Future<Map<String, ProductDetails>> queryProducts({
     required Set<String> productIds,
@@ -99,6 +102,72 @@ void main() {
       (await load()).vipProductLoadResult?.result,
       'google_request_failed',
     );
+  });
+  test('iOS Apple catalog price replaces the backend display price', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    repository.plans = [
+      const MembershipPlan(
+        id: 'vip.monthly',
+        title: 'Backend title',
+        priceLabel: r'US$99.99',
+        dailyPriceLabel: r'US$3.33',
+        platformProductId: 'vip.monthly',
+        payChannel: 'PAY_CHANNEL_APPLE',
+      ),
+    ];
+    billing.products = {
+      'vip.monthly': ProductDetails(
+        id: 'vip.monthly',
+        title: 'VIP Monthly',
+        description: '',
+        price: r'$4.99',
+        rawPrice: 4.99,
+        currencyCode: 'USD',
+      ),
+    };
+
+    final state = await load();
+
+    expect(state.plans.single.priceLabel, r'$4.99');
+    expect(state.plans.single.title, 'VIP Monthly');
+  });
+  test('iOS introductory price is exposed as a promotion', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final locale = SKPriceLocaleWrapper(
+      currencySymbol: r'$',
+      currencyCode: 'USD',
+      countryCode: 'US',
+    );
+    final product = AppStoreProductDetails.fromSKProduct(
+      SKProductWrapper(
+        productIdentifier: 'vip.monthly',
+        localizedTitle: 'VIP Monthly',
+        localizedDescription: '',
+        priceLocale: locale,
+        price: '9.99',
+        introductoryPrice: SKProductDiscountWrapper(
+          price: '1.99',
+          priceLocale: locale,
+          numberOfPeriods: 1,
+          paymentMode: SKProductDiscountPaymentMode.payAsYouGo,
+          subscriptionPeriod: SKProductSubscriptionPeriodWrapper(
+            numberOfUnits: 1,
+            unit: SKSubscriptionPeriodUnit.month,
+          ),
+          identifier: null,
+          type: SKProductDiscountType.introductory,
+        ),
+      ),
+    );
+
+    final promo = IapPriceService().extractPromoInfo(product);
+
+    expect(promo?['hasPromo'], isTrue);
+    expect(promo?['promoPrice'], r'$1.99');
+    expect(promo?['regularPrice'], r'$9.99');
+    expect(promo?['promoPeriod'], 'P1M');
   });
   test(
     'partial catalog succeeds with only matched cards and retry has new identity',

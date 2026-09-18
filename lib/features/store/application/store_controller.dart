@@ -218,7 +218,7 @@ class StoreController extends Notifier<StoreState> {
 
       final channelProductIds = <String>{};
       for (final package in coinPackagesRaw) {
-        if (!PayChannel.isGoogle(package.payChannel)) {
+        if (!PayChannel.isCurrentStoreChannel(package.payChannel)) {
           continue;
         }
         final productId = package.platformProductId;
@@ -227,7 +227,7 @@ class StoreController extends Notifier<StoreState> {
         }
       }
       for (final package in vipPackagesRaw) {
-        if (!PayChannel.isGoogle(package.payChannel)) {
+        if (!PayChannel.isCurrentStoreChannel(package.payChannel)) {
           continue;
         }
         final productId = package.platformProductId;
@@ -241,7 +241,7 @@ class StoreController extends Notifier<StoreState> {
       if (channelProductIds.isNotEmpty) {
         queryingGoogle = true;
         final service = ref.read(iapPriceServiceProvider);
-        if (!await service.isGooglePlayBillingAvailable()) {
+        if (!await service.isStoreAvailable()) {
           isGoogleBillingUnavailable = true;
         } else {
           iapDetails = await service.queryProducts(
@@ -642,12 +642,11 @@ class StoreController extends Notifier<StoreState> {
   ) {
     return [
       for (final package in packages)
-        if (PayChannel.isOther(package.payChannel))
+        if (PayChannel.isOther(package.payChannel) ||
+            package.platformProductId == null ||
+            package.platformProductId!.isEmpty)
           package
-        else if (PayChannel.isApple(package.payChannel) &&
-            defaultTargetPlatform == TargetPlatform.iOS)
-          package
-        else if (PayChannel.isGoogle(package.payChannel) &&
+        else if (PayChannel.isCurrentStoreChannel(package.payChannel) &&
             iapDetails.containsKey(package.platformProductId))
           _mergePackagePricing(
             package,

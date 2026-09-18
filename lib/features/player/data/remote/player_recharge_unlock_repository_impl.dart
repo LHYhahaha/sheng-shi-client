@@ -36,14 +36,14 @@ class PlayerRechargeUnlockRepositoryImpl
       // 如果用户已是会员，不需要查询会员商品价格
       final channelProductIds = <String>{};
       for (final pkg in dto.coinProducts) {
-        if (PayChannel.isGoogle(pkg.payChannel) &&
+        if (PayChannel.isCurrentStoreChannel(pkg.payChannel) &&
             pkg.channelProductId.isNotEmpty) {
           channelProductIds.add(pkg.channelProductId);
         }
       }
       if (!isMember) {
         for (final pkg in dto.memberProducts) {
-          if (PayChannel.isGoogle(pkg.payChannel) &&
+          if (PayChannel.isCurrentStoreChannel(pkg.payChannel) &&
               pkg.channelProductId.isNotEmpty) {
             channelProductIds.add(pkg.channelProductId);
           }
@@ -55,8 +55,7 @@ class PlayerRechargeUnlockRepositoryImpl
       var isGoogleBillingUnavailable = false;
       if (channelProductIds.isNotEmpty) {
         queryingGoogle = true;
-        final billingAvailable = await iapPriceService
-            .isGooglePlayBillingAvailable();
+        final billingAvailable = await iapPriceService.isStoreAvailable();
         if (!billingAvailable) {
           isGoogleBillingUnavailable = true;
         } else {

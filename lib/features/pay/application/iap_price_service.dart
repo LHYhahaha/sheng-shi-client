@@ -3,12 +3,14 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
+import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
+import 'package:in_app_purchase_storekit/store_kit_wrappers.dart';
 
 import '../../../core/utils/period_iso_parser.dart';
 import '../domain/iap_product_info.dart';
 import 'google_play_pricing_extractor.dart';
 
-/// Google Play 商品目录暂时无法读取。
+/// 当前系统商店的商品目录暂时无法读取。
 ///
 /// `isAvailable == false` 是明确的设备/商店不可用，会正常返回空目录；只有
 /// 超时、平台异常和商品查询错误才抛出本异常，让界面展示真实的网络错误与重试。
@@ -34,7 +36,7 @@ class IapPriceService {
 
   /// 仅当 Billing 明确返回不可用时返回 false；超时和平台异常交给调用方展示
   /// 网络错误并提供重试，不能误判成设备不支持。
-  Future<bool> isGooglePlayBillingAvailable() async {
+  Future<bool> isStoreAvailable() async {
     try {
       return await _iap.isAvailable().timeout(_availabilityTimeout);
     } catch (error) {
@@ -52,11 +54,11 @@ class IapPriceService {
     try {
       debugPrint('[IapPrice] 开始查询商品: $productIds');
 
-      // 明确不可用时不再调用 Google Play 商品查询。这样无 GMS/Play Store 的
-      // 设备会直接走 Other 支付渠道或空态，而不是卡在原生 Billing 回调上。
-      final available = await isGooglePlayBillingAvailable();
+      // 明确不可用时不再调用当前系统商店。这样商店服务不可用的设备会直接走
+      // Other 支付渠道或空态，而不是卡在原生 Billing 回调上。
+      final available = await isStoreAvailable();
       if (!available) {
-        debugPrint('[IapPrice] Billing unavailable; Google products skipped.');
+        debugPrint('[IapPrice] Store unavailable; IAP products skipped.');
         return const {};
       }
 
@@ -167,11 +169,7 @@ class IapPriceService {
 
   /// 将 ProductDetails 转换为 IapProductInfo
   IapProductInfo _toIapProductInfo(ProductDetails product) {
-    if (!Platform.isAndroid) {
-      return IapProductInfo(productDetails: product, hasPromo: false);
-    }
-
-    final promoInfo = GooglePlayPricingExtractor.extractPromoPricing(product);
+    final promoInfo = extractPromoInfo(product);
 
     if (promoInfo == null || promoInfo['hasPromo'] != true) {
       return IapProductInfo(productDetails: product, hasPromo: false);
@@ -194,7 +192,7 @@ class IapPriceService {
       regularPeriod: promoInfo['regularPeriod'] as String?,
       regularCycles: promoInfo['regularCycles'] as int?,
 
-      // 购买时使用的 Offer Token。
+      // Google Play 购买时使用的 Offer Token；Apple 首购优惠不需要该字段。
       offerToken: promoInfo['offerToken'] as String?,
 
       basePlanId: promoInfo['basePlanId'] as String?,
@@ -279,12 +277,69 @@ class IapPriceService {
     return existing;
   }
 
-  /// 提取商品的促销信息（仅 Android/Google Play）
+  /// 提取当前商店商品的促销信息。
   ///
   /// 返回包含促销价、续费价、周期的 Map，如果不是促销商品则返回 null
   Map<String, dynamic>? extractPromoInfo(ProductDetails product) {
-    if (!Platform.isAndroid) return null;
-    return GooglePlayPricingExtractor.extractPromoPricing(product);
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return GooglePlayPricingExtractor.extractPromoPricing(product);
+    }
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return _extractAppleIntroPricing(product);
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _extractAppleIntroPricing(ProductDetails product) {
+    if (product is! AppStoreProductDetails) {
+      return null;
+    }
+    final introductoryPrice = product.skProduct.introductoryPrice;
+    if (introductoryPrice == null) {
+      return null;
+    }
+    final currencySymbol = introductoryPrice.priceLocale.currencySymbol.isEmpty
+        ? introductoryPrice.priceLocale.currencyCode
+        : introductoryPrice.priceLocale.currencySymbol;
+    final regularSymbol = product.currencySymbol.isEmpty
+        ? product.currencyCode
+        : product.currencySymbol;
+    return <String, dynamic>{
+      'hasPromo': true,
+      'hasFreeTrial':
+          introductoryPrice.paymentMode ==
+          SKProductDiscountPaymentMode.freeTrail,
+      'promoPrice': '$currencySymbol${introductoryPrice.price}',
+      'promoPriceMicros': _micros(introductoryPrice.price),
+      'promoPeriod': _applePeriodIso(introductoryPrice.subscriptionPeriod),
+      'promoCycles': introductoryPrice.numberOfPeriods,
+      'regularPrice': '$regularSymbol${product.skProduct.price}',
+      'regularPriceMicros': _micros(product.skProduct.price),
+      'regularPeriod': _applePeriodIso(product.skProduct.subscriptionPeriod),
+      'regularCycles': null,
+      'offerToken': null,
+      'basePlanId': null,
+      'offerId': introductoryPrice.identifier,
+      'offerTags': const <String>[],
+    };
+  }
+
+  int? _micros(String price) {
+    final value = double.tryParse(price);
+    return value == null ? null : (value * 1000000).round();
+  }
+
+  String? _applePeriodIso(SKProductSubscriptionPeriodWrapper? period) {
+    if (period == null || period.numberOfUnits <= 0) {
+      return null;
+    }
+    final unit = switch (period.unit) {
+      SKSubscriptionPeriodUnit.day => 'D',
+      SKSubscriptionPeriodUnit.week => 'W',
+      SKSubscriptionPeriodUnit.month => 'M',
+      SKSubscriptionPeriodUnit.year => 'Y',
+    };
+    return 'P${period.numberOfUnits}$unit';
   }
 
   /// 获取商品的 IAP 价格文案
@@ -292,7 +347,6 @@ class IapPriceService {
 
   /// 获取商品的原始价格文案（如果有促销）
   String? getOriginalPriceLabel(ProductDetails product) {
-    if (!Platform.isAndroid) return null;
     final promo = extractPromoInfo(product);
     if (promo != null) {
       return promo['regularPrice'] as String?;
@@ -302,7 +356,6 @@ class IapPriceService {
 
   /// 获取商品的促销价格文案（如果有促销）
   String? getPromotionPriceLabel(ProductDetails product) {
-    if (!Platform.isAndroid) return null;
     final promo = extractPromoInfo(product);
     if (promo != null) {
       return promo['promoPrice'] as String?;
@@ -316,7 +369,6 @@ class IapPriceService {
   /// - 中文： "前2周 $14.99/周，之后 $19.99/周。"
   /// - 英文： "$14.99/week for first 2 weeks, then $19.99/week"
   String? getPromoDescription(ProductDetails product, {String? languageCode}) {
-    if (!Platform.isAndroid) return null;
     final promo = extractPromoInfo(product);
     if (promo == null || promo['hasPromo'] != true) return null;
 
@@ -393,7 +445,6 @@ class IapPriceService {
       final isSelected = offerIndex == selectedIndex;
 
       final offerId = offer.offerId;
-      final offerTags = offer.offerTags;
       final phases = offer.pricingPhases;
 
       final hasOfferId =
