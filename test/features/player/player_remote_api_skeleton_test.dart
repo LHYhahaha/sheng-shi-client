@@ -348,6 +348,27 @@ void main() {
     },
   );
 
+  test(
+    'remote playback source repository resolves a CDN root through playback source API',
+    () async {
+      final remoteDataSource = _FakePlaybackSourceRemoteDataSource(
+        source: _playbackSource(hlsUrl: 'https://cdn.example.com/episode.m3u8'),
+      );
+      final repository = RemotePlayerPlaybackSourceRepository(
+        remoteDataSource: remoteDataSource,
+        preloadManager: MockPlayerPlaybackPreloadManager(
+          preloadDelay: Duration.zero,
+        ),
+      );
+      final item = _feedItem(videoSource: 'https://cdn.example.com/');
+
+      final resolved = await repository.resolve(item);
+
+      expect(resolved.remoteUrl, 'https://cdn.example.com/episode.m3u8');
+      expect(remoteDataSource.requestedEpisodeIds, ['ep-1']);
+    },
+  );
+
   test('playback source remote datasource requires auth policy', () async {
     final adapter = _FakeHttpClientAdapter(
       responseData: {
@@ -589,7 +610,7 @@ const _unavailableEpisode = PlayerEpisodeDto(
   isVipOnly: 0,
 );
 
-PlayerFeedItem _feedItem() {
+PlayerFeedItem _feedItem({String? videoSource}) {
   final content = PlayerContent(
     id: 'found-you',
     title: 'Found You',
@@ -608,6 +629,7 @@ PlayerFeedItem _feedItem() {
     number: 1,
     isLocked: false,
     videoAspectRatio: 16 / 9,
+    videoUrl: videoSource,
   );
   return PlayerFeedItem(
     id: 'single:found-you:ep-1',
@@ -649,11 +671,13 @@ class _FakePlaybackSourceRemoteDataSource
   _FakePlaybackSourceRemoteDataSource({required this.source});
 
   final PlaybackSourceDto source;
+  final requestedEpisodeIds = <String>[];
 
   @override
   Future<PlaybackSourceDto> getPlaybackSource({
     required String episodeId,
   }) async {
+    requestedEpisodeIds.add(episodeId);
     return source;
   }
 }

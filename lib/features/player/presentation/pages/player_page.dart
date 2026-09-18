@@ -401,6 +401,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _isReloadingForYouAfterSessionRecovery = false;
   bool _hasPendingForYouLanguageReload = false;
   bool _isRefreshingForYouFeed = false;
+  Future<void> _forYouRestoreOperation = Future<void>.value();
   bool _isLeavingRoute = false;
   bool _isDisposing = false;
   bool _isPressingPlaybackSurface = false;
@@ -681,15 +682,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   Future<void> _restoreAfterCoveredRoutePops(bool shouldResumePlayback) async {
     if (widget.feedMode == PlayerFeedMode.forYou) {
-      await _playbackController.resumeAfterCompetingPlayer();
-      if (ref
-              .read(playerPlaybackControllerProvider(_sessionKey))
-              .currentSource ==
-          null) {
-        ref
-            .read(playerViewportControllerProvider(_sessionKey).notifier)
-            .replaySettled();
-      }
+      await _restoreForYouPlayback('covered_route_return');
     } else if (shouldResumePlayback) {
       await _resumePlaybackAfterLifecyclePause();
     } else {
@@ -772,6 +765,25 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _playbackController = ref.read(
       playerPlaybackControllerProvider(_sessionKey).notifier,
     );
+    if (widget.feedMode == PlayerFeedMode.forYou) {
+      // The shell can select For You before this indexed-stack page has built.
+      // A build-time listener without fireImmediately misses that first tab
+      // selection, leaving an already-settled feed paused until the user
+      // touches the page or refreshes it.
+      ref.listenManual<int>(appShellCurrentTabIndexProvider, (_, next) {
+        if (next != AppShellDestinations.forYouIndex) {
+          _stopDailyWatch();
+        }
+        if (next != AppShellDestinations.forYouIndex) {
+          return;
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            unawaited(_handleForYouTabSelected());
+          }
+        });
+      }, fireImmediately: true);
+    }
     _dailyWatch = ref.read(dailyEffectiveWatchControllerProvider.notifier);
     _playbackController.onEffectiveWatchPosition = _onEffectiveWatchPosition;
     if (widget.feedMode == PlayerFeedMode.singleDrama) {
@@ -943,6 +955,28 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       return;
     }
     final stopwatch = Stopwatch()..start();
+    final forYouPlayback = ref.read(
+      playerPlaybackControllerProvider(
+        PlayerPlaybackSessionKeys.forYouTab,
+      ).notifier,
+    );
+    final forYouState = ref.read(
+      playerPlaybackControllerProvider(PlayerPlaybackSessionKeys.forYouTab),
+    );
+    final canRetainForQuickReturn =
+        ref.read(playerPerformancePolicyProvider).isRich &&
+        forYouState.currentSource != null &&
+        forYouState.hasRenderedFirstFrame &&
+        !forYouState.isBuffering;
+    if (canRetainForQuickReturn) {
+      await forYouPlayback.retainForCompetingPlayer();
+      _playbackController.recordPlaybackTiming(
+        'retain competing forYou session',
+        elapsed: stopwatch.elapsed,
+        details: 'reason=rich_device_quick_return current_only=true',
+      );
+      return;
+    }
     _playbackController.recordPlaybackTiming(
       'release competing forYou decoder start',
     );
@@ -951,19 +985,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     // 路由进入永久卡在 loading；原暂停任务仍在后台继续完成。
     var timedOut = false;
     try {
-      await ref
-          .read(
-            playerPlaybackControllerProvider(
-              PlayerPlaybackSessionKeys.forYouTab,
-            ).notifier,
-          )
-          .suspendForCompetingPlayer()
-          .timeout(
-            const Duration(milliseconds: 600),
-            onTimeout: () {
-              timedOut = true;
-            },
-          );
+      await forYouPlayback.suspendForCompetingPlayer().timeout(
+        const Duration(milliseconds: 600),
+        onTimeout: () {
+          timedOut = true;
+        },
+      );
     } catch (error, stackTrace) {
       developer.log(
         'release competing For You decoder failed; continue player startup',
@@ -1090,6 +1117,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   }
 
   Future<void> _resumePlaybackAfterLifecyclePause() async {
+    if (widget.feedMode == PlayerFeedMode.forYou) {
+      await _restoreForYouPlayback('app_lifecycle_resume');
+      if (mounted) {
+        _restoreChromeAfterReturningToPlayer();
+      }
+      return;
+    }
     await _playbackController.resumeAfterVisibilityPause();
     if (!mounted) {
       return;
@@ -1184,33 +1218,59 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     // opens the visibility gate before re-settling the replacement feed.
     await _playbackController.resumeAfterCompetingPlayer();
     await _reloadForYouAfterSessionRecovery();
-    await _restoreRecoveredForYouPlaybackOnReturn();
+    await _restoreForYouPlayback('tab_selected');
   }
 
-  /// Session recovery may finish while this indexed-stack page is hidden. The
-  /// shell only resumes a player that was active when the user left For You;
-  /// after logout there is intentionally no active source yet. Re-settle the
-  /// recovered item on tab entry so the normal settled-only playback path can
-  /// open it, or resume the source that was opened while hidden.
-  Future<void> _restoreRecoveredForYouPlaybackOnReturn() async {
+  Future<void> _restoreForYouPlayback(String trigger) {
+    // Serialize tab, route, lifecycle and refresh restoration so a stale
+    // callback cannot revive or dispose a newer playback session.
     if (widget.feedMode != PlayerFeedMode.forYou) {
+      return Future<void>.value();
+    }
+    final next = _forYouRestoreOperation.then<void>(
+      (_) => _restoreForYouPlaybackNow(trigger),
+      onError: (_, _) => _restoreForYouPlaybackNow(trigger),
+    );
+    _forYouRestoreOperation = next.then<void>((_) {}, onError: (_, _) {});
+    return next;
+  }
+
+  Future<void> _restoreForYouPlaybackNow(String trigger) async {
+    if (!mounted || !_isPlaybackViewVisible) {
       return;
     }
-    final feed = ref.read(playerFeedControllerProvider(_sessionKey));
-    final item = feed.currentItem;
-    if (item == null) {
+    await _playbackController.resumeAfterCompetingPlayer();
+    if (!mounted || !_isPlaybackViewVisible) {
+      return;
+    }
+    await _recoverForYouPlaybackIfFailed(trigger);
+    if (!mounted || !_isPlaybackViewVisible) {
       return;
     }
     final playback = ref.read(playerPlaybackControllerProvider(_sessionKey));
-    if (playback.currentSource != null) {
-      await _playbackController.resumeAfterCompetingPlayer();
+    final item = ref
+        .read(playerFeedControllerProvider(_sessionKey))
+        .currentItem;
+    if (playback.currentSource == null && item != null) {
+      ref
+          .read(playerViewportControllerProvider(_sessionKey).notifier)
+          .replaySettled();
+    }
+  }
+
+  Future<void> _recoverForYouPlaybackIfFailed(String trigger) async {
+    // The persistent page/widget does not prove its native decoder still
+    // works after a route, tab or lifecycle transition.
+    if (widget.feedMode != PlayerFeedMode.forYou || !_isPlaybackViewVisible) {
       return;
     }
-    ref.invalidate(playerViewportControllerProvider(_sessionKey));
-    _feedEngine.initializeViewport(index: feed.currentIndex, itemId: item.id);
-    ref
-        .read(playerViewportControllerProvider(_sessionKey).notifier)
-        .replaySettled();
+    final item = ref
+        .read(playerFeedControllerProvider(_sessionKey))
+        .currentItem;
+    await _playbackController.recoverForYouPlaybackIfFailed(
+      item,
+      trigger: trigger,
+    );
   }
 
   bool _shouldResumePlaybackWhenForYouReturns(PlayerPlaybackState playback) {
@@ -1789,16 +1849,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         return;
       }
       unawaited(_reloadForYouAfterLanguageChange());
-    });
-
-    // A locale change may have occurred while this indexed-stack page was
-    // hidden.  Refresh only after navigation makes the player visible, which
-    // keeps the feed current without allowing background audio.
-    ref.listen(appShellCurrentTabIndexProvider, (previous, next) {
-      if (!_isPlaybackViewVisible) _stopDailyWatch();
-      if (next == AppShellDestinations.forYouIndex) {
-        unawaited(_handleForYouTabSelected());
-      }
     });
 
     // TODO(next release): 恢复播放器赠送影片分享时，根据会员状态清理并刷新资格。
@@ -2543,6 +2593,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       }
       _feedEngine.initializeViewport(index: firstIndex, itemId: firstItem.id);
       _syncActiveVideoPagePosition();
+      // A refresh can return the same first item. Re-emit the settled item
+      // when needed and rebuild a terminal session.
+      await _restoreForYouPlayback('pull_to_refresh');
     } finally {
       _isRefreshingForYouFeed = false;
     }
@@ -3459,6 +3512,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (!mounted) {
       return;
     }
+    await forYouPlayback.recoverForYouPlaybackIfFailed(
+      updatedItem,
+      trigger: 'ordinary_player_handoff_return',
+    );
+    if (!mounted) {
+      return;
+    }
     await forYouPlayback.synchronizeExternalProgress(
       item: updatedItem,
       position: _forYouResumePosition(snapshot.position, snapshot.duration),
@@ -3624,7 +3684,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         return;
       }
       if (_previousLifecycleState == AppLifecycleState.resumed) {
-        await _playbackController.resumeAfterVisibilityPause();
+        await _restoreForYouPlayback('search_return');
       }
     } finally {
       _isOpeningSearch = false;

@@ -3552,9 +3552,12 @@ void main() {
   test(
     'For You automatically reopens once before exposing a retryable error',
     () async {
-      final session = _FakePlaybackSession(emitWidthOnOpen: false);
+      final failedSession = _FakePlaybackSession(emitWidthOnOpen: false);
+      final rebuiltSession = _FakePlaybackSession(emitWidthOnOpen: false);
+      var sessionIndex = 0;
       final container = _createContainer(
-        session,
+        failedSession,
+        sessionFactory: () => [failedSession, rebuiltSession][sessionIndex++],
         sourceRepository: _CountingPlaybackSourceRepository(),
         firstFrameTimeout: const Duration(milliseconds: 10),
       );
@@ -3566,7 +3569,9 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 60));
 
       final state = container.read(provider);
-      expect(session.openedSources, hasLength(2));
+      expect(failedSession.openedSources, hasLength(1));
+      expect(rebuiltSession.openedSources, hasLength(1));
+      expect(failedSession.isDisposed, isTrue);
       expect(state.currentItemId, isNotNull);
       expect(state.status, PlayerPlaybackStatus.error);
       expect(
