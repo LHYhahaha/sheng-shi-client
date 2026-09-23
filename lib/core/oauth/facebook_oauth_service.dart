@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:drama_client/core/logging/app_log.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
@@ -126,15 +127,15 @@ class FacebookOAuthService implements OAuthService {
           }
           if (accessToken is! ClassicToken) {
             final limitedToken = accessToken as LimitedToken;
-            debugPrint(
+            log(
               '[FacebookOAuth] Limited Login JWT: '
               '${limitedToken.tokenString}',
             );
-            debugPrint(
+            log(
               '[FacebookOAuth] Limited Login response: '
               '${jsonEncode(limitedToken.toJson())}',
             );
-            debugPrint(
+            log(
               '[FacebookOAuth] Limited Login JWT payload: '
               '${jsonEncode(decodeJwtPayloadForLogging(limitedToken.tokenString))}',
             );
@@ -275,7 +276,7 @@ class FacebookOAuthService implements OAuthService {
   }
 
   @override
-  Future<String?> signInWithApple() async {
+  Future<AppleLoginCredential?> signInWithApple() async {
     try {
       debugPrint('[AppleOAuth] Starting native authorization.');
       final credential = await _requestAppleCredential();
@@ -298,7 +299,16 @@ class FacebookOAuthService implements OAuthService {
         'authorizationCode=${credential.authorizationCode}, '
         'identityToken=$identityToken',
       );
-      return identityToken;
+      final fullName = [
+        credential.givenName,
+        credential.familyName,
+      ].whereType<String>().where((part) => part.trim().isNotEmpty).join(' ');
+      return AppleLoginCredential(
+        identityToken: identityToken,
+        authorizationCode: credential.authorizationCode,
+        email: credential.email,
+        fullName: fullName.isEmpty ? null : fullName,
+      );
     } on SignInWithAppleAuthorizationException catch (error) {
       if (error.code == AuthorizationErrorCode.canceled) {
         return null;

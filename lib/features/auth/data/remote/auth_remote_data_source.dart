@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/network/api_client.dart';
 import '../dto/auth_session_dto.dart';
 import '../dto/auth_token_dto.dart';
+import '../dto/apple_login_request_dto.dart';
 import '../dto/delete_account_request_dto.dart';
 import '../dto/delete_account_response_dto.dart';
 import '../dto/login_request_dto.dart';
@@ -55,6 +56,7 @@ class AuthRemoteDataSource {
     final path = switch (request.provider) {
       'google' => '/api/user/google/login',
       'facebook' => '/api/user/facebook/login',
+      'apple' => '/api/user/apple/login',
       _ => throw ArgumentError.value(
         request.provider,
         'request.provider',
@@ -71,6 +73,17 @@ class AuthRemoteDataSource {
       // 三方登录用于将当前游客会话升级为正式账号，需携带已有 App token。
       authPolicy: ApiAuthPolicy.required,
       // 登录页会将 3116 显示为 toast，不应打开全局封禁遮罩。
+      options: Options(extra: {apiSkipAccountBanReportExtraKey: true}),
+      decoder: AuthSessionDto.fromJson,
+    );
+  }
+
+  Future<AuthSessionDto> loginApple(AppleLoginRequestDto request) {
+    return _apiClient.post<AuthSessionDto>(
+      '/api/user/apple/login',
+      data: request.toJson(),
+      // 与 Google/Facebook 相同：将当前游客会话升级为正式账号。
+      authPolicy: ApiAuthPolicy.required,
       options: Options(extra: {apiSkipAccountBanReportExtraKey: true}),
       decoder: AuthSessionDto.fromJson,
     );

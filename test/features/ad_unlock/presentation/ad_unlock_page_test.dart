@@ -3,6 +3,7 @@ import 'package:drama_client/features/ad_unlock/presentation/ad_unlock_page.dart
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -24,10 +25,13 @@ void main() {
         child: MaterialApp(
           localizationsDelegates: const [AppLocalizations.delegate],
           supportedLocales: AppLocalizations.supportedLocales,
-          home: AdUnlockPage(
-            session: _session,
-            dramaId: '100',
-            episodeId: '200',
+          home: ScreenUtilInit(
+            designSize: const Size(375, 812),
+            builder: (_, _) => AdUnlockPage(
+              session: _session,
+              dramaId: '100',
+              episodeId: '200',
+            ),
           ),
         ),
       ),
@@ -41,18 +45,21 @@ void main() {
         child: MaterialApp(
           localizationsDelegates: const [AppLocalizations.delegate],
           supportedLocales: AppLocalizations.supportedLocales,
-          home: AdUnlockPage(
-            session: _pendingSession,
-            dramaId: '100',
-            episodeId: '200',
+          home: ScreenUtilInit(
+            designSize: const Size(375, 812),
+            builder: (_, _) => AdUnlockPage(
+              session: _pendingSession,
+              dramaId: '100',
+              episodeId: '200',
+            ),
           ),
         ),
       ),
     );
 
-    expect(find.text('Close in 12s'), findsOneWidget);
+    expect(find.text('12s'), findsOneWidget);
     final closeGesture = find.ancestor(
-      of: find.text('Close in 12s'),
+      of: find.text('12s'),
       matching: find.byType(GestureDetector),
     );
     expect(tester.widget<GestureDetector>(closeGesture).onTap, isNull);
@@ -64,8 +71,37 @@ void main() {
     expect(
       tester
           .getRect(materialGesture)
-          .contains(tester.getCenter(find.text('Close in 12s'))),
+          .contains(tester.getCenter(find.text('12s'))),
       isFalse,
+    );
+  });
+
+  testWidgets('scales ad-view chrome for a narrow iPhone', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          localizationsDelegates: const [AppLocalizations.delegate],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ScreenUtilInit(
+            designSize: const Size(375, 812),
+            builder: (_, _) => AdUnlockPage(
+              session: _pendingSession,
+              dramaId: '100',
+              episodeId: '200',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      tester.getSize(find.byType(LinearProgressIndicator)).height,
+      closeTo(4 * 320 / 375, 0.01),
     );
   });
 }

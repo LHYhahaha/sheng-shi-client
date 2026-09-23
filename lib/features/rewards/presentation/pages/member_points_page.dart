@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gradient_borders/box_borders/gradient_box_border.dart';
 import 'package:permission_handler/permission_handler.dart' as permissions;
@@ -28,7 +29,6 @@ import '../../domain/member_point_daily_detail.dart';
 import '../../domain/member_point_exchange_options.dart';
 import '../widget/member_points_claim_success_dialog.dart';
 import '../widget/member_points_exchange_confirm_dialog.dart';
-import '../widget/reward_coins_claim_success_toast.dart';
 import '../widget/reward_rules_sheet.dart';
 
 const _purple = Color(0xFF8800FF);
@@ -238,13 +238,13 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
         physics: const ClampingScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
           0,
-          8,
+          8.w,
           0,
           MediaQuery.paddingOf(context).bottom,
         ),
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            padding: EdgeInsets.symmetric(horizontal: 10.w),
             child: _DailyRewardsPanel(
               isMember: isMember,
               onJoinMembership: () => unawaited(_openMembership()),
@@ -256,9 +256,9 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
             ),
           ),
           if (isMember) ...[
-            const SizedBox(height: 12),
+            SizedBox(height: 12.w),
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 10),
+              padding: EdgeInsets.symmetric(horizontal: 10.w),
               child: _MemberTasksPanel(
                 isMember: isMember,
                 tasks: dailyDetail?.tasks,
@@ -267,15 +267,15 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
               ),
             ),
           ],
-          const SizedBox(height: 16),
+          SizedBox(height: 16.w),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            padding: EdgeInsets.symmetric(horizontal: 10.w),
             child: _RedeemPointsPanel(
               isMember: isMember,
               exchangeOptions: exchangeOptions,
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16.w),
           if (isMember)
             VipOnlyDramasSection(
               exposurePageSession: _dramaExposureSession,
@@ -283,7 +283,7 @@ class _MemberPointsPageState extends ConsumerState<MemberPointsPage>
               border: Border(
                 top: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
               ),
-              listPadding: EdgeInsetsGeometry.only(left: 16),
+              listPadding: EdgeInsetsGeometry.only(left: 16.w),
               backgroundColor: const Color(0XFF0E0016),
               onDramaTap: (drama, position) {
                 unawaited(
@@ -354,30 +354,30 @@ class _DailyRewardsPanel extends StatelessWidget {
               copy: RewardRulesCopy.memberPoints,
             ),
             style: TextButton.styleFrom(
-              minimumSize: const Size(58, 30),
+              minimumSize: Size(58.w, 30.w),
               alignment: Alignment.topCenter,
-              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 3),
+              padding: EdgeInsets.symmetric(horizontal: 13.w, vertical: 3.w),
               foregroundColor: const Color(0xFFB8A7BE),
               backgroundColor: const Color(0xFF33213A),
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(8.w)),
               ),
             ),
             child: Text(
               AppLocalizations.maybeOf(context).memberPointsRule,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight(400)),
+              style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight(400)),
             ),
           ),
         ),
         Padding(
-          padding: const EdgeInsets.only(top: 32),
+          padding: EdgeInsets.only(top: 32.w),
           child: ClipRRect(
             key: const Key('daily_rewards_card'),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(8.w),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: const Color(0XFF1B1024),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(8.w),
                 border: GradientBoxBorder(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
@@ -428,17 +428,17 @@ class _LockedDailyRewards extends StatelessWidget {
     return Container(
       key: const Key('member_points_locked_daily'),
       width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(0, 9, 0, 0),
-      padding: const EdgeInsets.fromLTRB(17, 24, 17, 16),
+      margin: EdgeInsets.fromLTRB(0, 9.w, 0, 0),
+      padding: EdgeInsets.fromLTRB(17.w, 24.w, 17.w, 16.w),
       decoration: _dailyRewardsContentDecoration(),
       child: Column(
         children: [
           Image.asset(
             'assets/images/rewards/points_lock_icon.png',
-            width: 24,
-            height: 24,
+            width: 24.w,
+            height: 24.w,
           ),
-          const SizedBox(height: 7),
+          SizedBox(height: 7.w),
           ShaderMask(
             blendMode: BlendMode.srcIn,
             shaderCallback: (bounds) => LinearGradient(
@@ -449,22 +449,22 @@ class _LockedDailyRewards extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 20,
+                fontSize: 20.sp,
                 height: 1.22,
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10.w),
           Text(
             l10n.memberPointsPaidMemberOnly,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.6),
-              fontSize: 14,
+              fontSize: 14.sp,
               fontWeight: FontWeight(400),
             ),
           ),
-          const SizedBox(height: 33),
+          SizedBox(height: 33.w),
           Row(
             children: [
               Expanded(
@@ -473,7 +473,7 @@ class _LockedDailyRewards extends StatelessWidget {
                   label: l10n.memberPointsDailyPoints,
                 ),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10.w),
               Expanded(
                 child: _RewardFeatureTile(
                   imagePath: 'assets/images/rewards/points_free.png',
@@ -482,15 +482,15 @@ class _LockedDailyRewards extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16.w),
           Row(
             children: [
               Expanded(
                 child: _MemberPointsActionButton(
                   key: const Key('member_points_join_now'),
                   label: l10n.membershipBuyNow,
-                  fontSize: 16,
-                  boxPadding: EdgeInsetsGeometry.symmetric(vertical: 10),
+                  fontSize: 16.sp,
+                  boxPadding: EdgeInsetsGeometry.symmetric(vertical: 10.h),
                   fontWeight: FontWeight.w600,
                   onTap: onJoinMembership,
                 ),
@@ -512,10 +512,10 @@ class _RewardFeatureTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 154,
-      padding: const EdgeInsets.fromLTRB(8, 14, 8, 14),
+      height: 154.w,
+      padding: EdgeInsets.fromLTRB(8.w, 14.w, 8.w, 14.w),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(7.w),
         image: DecorationImage(
           alignment: Alignment(0.0, -0.7),
           image: AssetImage("assets/images/rewards/v_purple.png"),
@@ -539,12 +539,12 @@ class _RewardFeatureTile extends StatelessWidget {
       child: Column(
         children: [
           Expanded(child: Image.asset(imagePath, fit: BoxFit.contain)),
-          const SizedBox(height: 4),
+          SizedBox(height: 4.w),
           Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white, fontSize: 12),
+            style: TextStyle(color: Colors.white, fontSize: 12.sp),
           ),
         ],
       ),
@@ -573,8 +573,8 @@ class _MemberDailyRewards extends StatelessWidget {
 
     return Container(
       key: const Key('member_points_active_daily'),
-      margin: const EdgeInsets.fromLTRB(0, 9, 0, 0),
-      padding: const EdgeInsets.fromLTRB(17, 24, 17, 16),
+      margin: EdgeInsets.fromLTRB(0, 9.w, 0, 0),
+      padding: EdgeInsets.fromLTRB(17.w, 24.w, 17.w, 16.w),
       decoration: _dailyRewardsContentDecoration(),
       child: Column(
         children: [
@@ -583,17 +583,17 @@ class _MemberDailyRewards extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: _titleColor,
-              fontSize: 16,
+              fontSize: 16.sp,
               height: 1.25,
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 22),
+          SizedBox(height: 22.w),
           _DailyPointsRow(progress: progress, currentIndex: currentIndex),
-          const SizedBox(height: 10),
+          SizedBox(height: 10.w),
           SizedBox(
             width: double.infinity,
-            height: 22,
+            height: 22.w,
             child: CustomPaint(
               key: const Key('member_daily_rewards_progress'),
               painter: _DailyRewardsProgressPainter(
@@ -602,7 +602,7 @@ class _MemberDailyRewards extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 7),
+          SizedBox(height: 7.w),
           _DailyLabelsRow(progress: progress, currentIndex: currentIndex),
         ],
       ),
@@ -617,9 +617,9 @@ class _MemberDailyRewardsLoading extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const Key('member_points_active_daily_loading'),
-      height: 171,
-      margin: const EdgeInsets.fromLTRB(0, 9, 0, 0),
-      padding: const EdgeInsets.fromLTRB(17, 24, 17, 16),
+      height: 171.w,
+      margin: EdgeInsets.fromLTRB(0, 9.w, 0, 0),
+      padding: EdgeInsets.fromLTRB(17.w, 24.w, 17.w, 16.w),
       decoration: _dailyRewardsContentDecoration(),
       child: Center(child: AppPegTopLoader(size: 28, noBackground: true)),
     );
@@ -637,7 +637,7 @@ class _DailyPointsRow extends StatelessWidget {
     return Row(
       children: [
         for (var index = 0; index < progress.length; index++) ...[
-          if (index > 0) const SizedBox(width: 9),
+          if (index > 0) SizedBox(width: 9.w),
           Expanded(
             child: _DailyPoint(
               day: progress[index].memberDay,
@@ -665,7 +665,7 @@ class _DailyLabelsRow extends StatelessWidget {
     return Row(
       children: [
         for (var index = 0; index < progress.length; index++) ...[
-          if (index > 0) const SizedBox(width: 9),
+          if (index > 0) SizedBox(width: 9.w),
           Expanded(
             child: _DailyLabel(
               day: progress[index].memberDay,
@@ -773,7 +773,7 @@ class _DailyPoint extends StatelessWidget {
       opacity: opacity,
       child: Container(
         key: Key('member_daily_reward_day_$day'),
-        height: 78,
+        height: 78.w,
         decoration: BoxDecoration(
           gradient: isCurrent
               ? const LinearGradient(
@@ -786,7 +786,7 @@ class _DailyPoint extends StatelessWidget {
                   end: Alignment.bottomCenter,
                   colors: [Color(0xFF380053), Color(0xFF130719)],
                 ),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(8.w),
           border: GradientBoxBorder(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
@@ -802,19 +802,19 @@ class _DailyPoint extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (isPast)
-              const Icon(Icons.check_rounded, color: _titleColor, size: 26)
+              Icon(Icons.check_rounded, color: _titleColor, size: 26.w)
             else
               Image.asset(
                 'assets/images/rewards/points_icon.png',
-                width: 28,
-                height: 28,
+                width: 28.w,
+                height: 28.w,
               ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10.w),
             Text(
               _pointsText,
               style: TextStyle(
                 color: Color(0XFF9D64DD),
-                fontSize: 14,
+                fontSize: 14.sp,
                 height: 1,
                 fontWeight: FontWeight.w500,
               ),
@@ -851,7 +851,7 @@ class _DailyLabel extends StatelessWidget {
       textAlign: TextAlign.center,
       style: TextStyle(
         color: Colors.white.withValues(alpha: opacity),
-        fontSize: 10,
+        fontSize: 10.sp,
         fontWeight: FontWeight.w500,
       ),
     );
@@ -1367,7 +1367,7 @@ class _RedeemPointsPanel extends ConsumerWidget {
               : Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(6),
+                      top: Radius.circular(6.w),
                     ),
                     gradient: LinearGradient(
                       colors: [Color(0XFF4D0071), Color(0XFF130719)],
@@ -1381,14 +1381,14 @@ class _RedeemPointsPanel extends ConsumerWidget {
                         showRules: true,
                       ),
                       Padding(
-                        padding: EdgeInsets.fromLTRB(16, 0, 14, 14),
+                        padding: EdgeInsets.fromLTRB(16.w, 0, 14.w, 14.w),
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
                             l10n.memberPointsPaidMemberOnly,
                             style: TextStyle(
                               color: _mutedColor,
-                              fontSize: 12,
+                              fontSize: 12.sp,
                               height: 1.5,
                             ),
                           ),
@@ -1504,7 +1504,7 @@ class _PanelHeader extends StatelessWidget {
           : HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 13, 16, 0),
+        padding: EdgeInsets.fromLTRB(16.w, 13.w, 16.w, 0),
         child: Row(
           children: [
             Expanded(
@@ -1512,7 +1512,7 @@ class _PanelHeader extends StatelessWidget {
                 title,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: showRules ? 0.8 : 0.6),
-                  fontSize: 14,
+                  fontSize: 14.sp,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -1529,15 +1529,15 @@ class _PanelHeader extends StatelessWidget {
             else if (trailingPoints != null) ...[
               Image.asset(
                 'assets/images/rewards/points_icon.png',
-                width: 26,
-                height: 26,
+                width: 26.w,
+                height: 26.w,
               ),
-              const SizedBox(width: 3),
+              SizedBox(width: 3.w),
               Text(
                 trailingPoints!,
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white,
-                  fontSize: 18,
+                  fontSize: 18.sp,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -1555,16 +1555,16 @@ class _RulesPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      padding: EdgeInsets.symmetric(horizontal: 9.w, vertical: 3.w),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(40),
+        borderRadius: BorderRadius.circular(40.w),
       ),
       child: Text(
         AppLocalizations.maybeOf(context).rewardsRuleEntry,
         style: TextStyle(
           color: Colors.white.withValues(alpha: 0.6),
-          fontSize: 12,
+          fontSize: 12.sp,
           fontWeight: FontWeight(510),
         ),
       ),
@@ -1596,7 +1596,7 @@ class _ActionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      padding: EdgeInsets.fromLTRB(16.w, 16.w, 16.w, 16.w),
       child: Row(
         children: [
           Expanded(
@@ -1608,18 +1608,18 @@ class _ActionRow extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    style: TextStyle(color: Colors.white, fontSize: 14.sp),
                   )
                 else
                   Text.rich(
                     TextSpan(
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      style: TextStyle(color: Colors.white, fontSize: 14.sp),
                       children: [
                         TextSpan(text: '$title '),
                         TextSpan(
                           text: note,
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 11.sp,
                             color: Colors.white.withValues(alpha: 0.5),
                           ),
                         ),
@@ -1628,20 +1628,20 @@ class _ActionRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                const SizedBox(height: 5),
+                SizedBox(height: 5.w),
                 Row(
                   children: [
                     Image.asset(
                       'assets/images/rewards/points_icon.png',
-                      width: 18,
-                      height: 18,
+                      width: 18.w,
+                      height: 18.w,
                     ),
-                    const SizedBox(width: 4),
+                    SizedBox(width: 4.w),
                     Text(
                       points,
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.5),
-                        fontSize: 14,
+                        fontSize: 14.sp,
                       ),
                     ),
                   ],
@@ -1649,7 +1649,7 @@ class _ActionRow extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8.w),
           _MemberPointsActionButton(
             key: Key(
               'member_points_action_${keySuffix ?? title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_')}',
@@ -1694,7 +1694,7 @@ class _MemberPointsActionButton extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: disabled ? const Color(0xFF615668) : _purple,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(4.w),
           border: disabled
               ? null
               : const GradientBoxBorder(
@@ -1721,11 +1721,11 @@ class _MemberPointsActionButton extends StatelessWidget {
             color: Colors.transparent,
             child: InkWell(
               onTap: disabled ? disabledOnTap : onTap,
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(4.w),
               splashColor: Colors.white.withValues(alpha: 0.08),
               highlightColor: Colors.white.withValues(alpha: 0.04),
               child: Container(
-                width: 78,
+                width: 78.w,
                 alignment: Alignment.center,
                 padding:
                     boxPadding ??
@@ -1737,7 +1737,7 @@ class _MemberPointsActionButton extends StatelessWidget {
                     color: disabled
                         ? Colors.white.withValues(alpha: 0.6)
                         : Colors.white,
-                    fontSize: fontSize,
+                    fontSize: fontSize.sp,
                     fontWeight: fontWeight,
                   ),
                 ),
@@ -1810,16 +1810,16 @@ class _VipBenefitsPanel extends StatelessWidget {
           image: AssetImage("assets/images/rewards/purple_benefit_bac.png"),
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 20),
+      padding: EdgeInsets.fromLTRB(16.w, 24.w, 16.w, 20.w),
       child: Column(
         children: [
           _SectionTitle(title: l10n.membershipBenefits),
-          const SizedBox(height: 24),
+          SizedBox(height: 24.w),
           for (var index = 0; index < benefits.length; index++) ...[
             Row(
               children: [
-                Image.asset(benefits[index].$1, width: 30, height: 30),
-                const SizedBox(width: 8),
+                Image.asset(benefits[index].$1, width: 30.w, height: 30.w),
+                SizedBox(width: 8.w),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1833,7 +1833,7 @@ class _VipBenefitsPanel extends StatelessWidget {
                           benefits[index].$3!,
                           style: TextStyle(
                             color: _titleColor.withValues(alpha: 0.4),
-                            fontSize: 12,
+                            fontSize: 12.sp,
                           ),
                         ),
                     ],
@@ -1841,7 +1841,7 @@ class _VipBenefitsPanel extends StatelessWidget {
                 ),
               ],
             ),
-            if (index < benefits.length - 1) const SizedBox(height: 15),
+            if (index < benefits.length - 1) SizedBox(height: 15.w),
           ],
         ],
       ),
@@ -1859,7 +1859,7 @@ class _VipBenefitTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     final baseStyle = TextStyle(
       color: _titleColor.withValues(alpha: 0.6),
-      fontSize: 14,
+      fontSize: 14.sp,
       fontWeight: FontWeight.w400,
     );
     final highlightText = highlight;
@@ -1911,7 +1911,7 @@ class _VipSeriesPanel extends ConsumerWidget {
           exposureAnalytics: analytics,
           topPadding: 0,
           needDivider: true,
-          listPadding: EdgeInsetsGeometry.only(left: 16),
+          listPadding: EdgeInsetsGeometry.only(left: 16.w),
           backgroundColor: const Color(0xFF0E0016),
           onDramaTap: (drama, position) {
             unawaited(
@@ -1946,47 +1946,6 @@ class _VipSeriesPanel extends ConsumerWidget {
   }
 }
 
-class _VipBenefitsTopBorderPainter extends CustomPainter {
-  const _VipBenefitsTopBorderPainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) return;
-
-    const borderHeight = 33.0;
-    const curveWidth = 54.0;
-
-    final path = Path()
-      ..moveTo(0.5, borderHeight)
-      ..quadraticBezierTo(0.5, 0.5, curveWidth, 0.5)
-      ..lineTo(size.width - curveWidth, 0.5)
-      ..quadraticBezierTo(
-        size.width - 0.5,
-        0.5,
-        size.width - 0.5,
-        borderHeight,
-      );
-    final paint = Paint()
-      ..shader = LinearGradient(
-        colors: [
-          Color(0XFF585858).withValues(alpha: 0.3),
-          Color(0XFFDA8AFF).withValues(alpha: 0.4),
-          Color(0XFF585858).withValues(alpha: 0.3),
-        ],
-        stops: const [0, 0.5, 1],
-      ).createShader(Offset.zero & size)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(_VipBenefitsTopBorderPainter oldDelegate) =>
-      oldDelegate.color != color;
-}
-
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle({required this.title});
 
@@ -1999,7 +1958,7 @@ class _SectionTitle extends StatelessWidget {
       children: [
         Expanded(
           child: Container(
-            height: 1,
+            height: 1.w,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
@@ -2011,20 +1970,20 @@ class _SectionTitle extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          padding: EdgeInsets.symmetric(horizontal: 8.w),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 220),
+            constraints: BoxConstraints(maxWidth: 220.w),
             child: Text(
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: _titleColor, fontSize: 14),
+              style: TextStyle(color: _titleColor, fontSize: 14.sp),
             ),
           ),
         ),
         Expanded(
           child: Container(
-            height: 1,
+            height: 1.w,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
@@ -2062,14 +2021,14 @@ class _OutlinedPanel extends StatelessWidget {
     final backgroundGradientColors = boxGradientColor;
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(7),
+      borderRadius: BorderRadius.circular(7.w),
       child: Container(
         // DecoratedBox 不会像带 border 的 Container 一样把 child 向内缩进。
         // 因此外框先绘制，内部区域随后在相同坐标绘制自己的边框，两种颜色
         // 得以保留，同时左右和底部不会出现并排的双线。
         decoration: BoxDecoration(
           color: boxColor ?? const Color(0XFF1B1024),
-          borderRadius: BorderRadius.circular(7),
+          borderRadius: BorderRadius.circular(7.w),
           border: GradientBoxBorder(
             gradient: LinearGradient(
               begin: beginAlign ?? Alignment.topCenter,

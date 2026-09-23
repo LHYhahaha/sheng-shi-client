@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../theme/app_colors.dart';
 
@@ -28,13 +29,13 @@ class AppSecondaryPageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: height,
+      height: height.w,
       child: Row(
         children: [
           SizedBox(
-            width: actionSlotWidth,
+            width: actionSlotWidth.w,
             child: Padding(
-              padding: const EdgeInsets.only(left: horizontalInset),
+              padding: EdgeInsets.only(left: horizontalInset.w),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: AppSecondaryPageBackButton(
@@ -46,7 +47,7 @@ class AppSecondaryPageHeader extends StatelessWidget {
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
+              padding: EdgeInsets.symmetric(horizontal: 4.w),
               child: Text(
                 title,
                 maxLines: 1,
@@ -54,7 +55,7 @@ class AppSecondaryPageHeader extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: AppColors.textPrimary,
-                  fontSize: 16,
+                  fontSize: 16.sp,
                   fontWeight: FontWeight.w600,
                   height: 1.5,
                 ),
@@ -62,11 +63,11 @@ class AppSecondaryPageHeader extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: actionSlotWidth,
+            width: actionSlotWidth.w,
             child: trailing == null
                 ? null
                 : Padding(
-                    padding: const EdgeInsets.only(right: horizontalInset),
+                    padding: EdgeInsets.only(right: horizontalInset.w),
                     child: Align(
                       alignment: Alignment.centerRight,
                       child: trailing!,
@@ -91,14 +92,14 @@ class AppSecondaryPageBackButton extends StatelessWidget {
       padding: EdgeInsets.zero,
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
-      constraints: const BoxConstraints.tightFor(
-        width: AppSecondaryPageHeader.backButtonSize,
-        height: AppSecondaryPageHeader.backButtonSize,
+      constraints: BoxConstraints.tightFor(
+        width: AppSecondaryPageHeader.backButtonSize.w,
+        height: AppSecondaryPageHeader.backButtonSize.w,
       ),
       icon: Image.asset(
         'assets/images/common/come_back.png',
-        width: AppSecondaryPageHeader.backIconSize,
-        height: AppSecondaryPageHeader.backIconSize,
+        width: AppSecondaryPageHeader.backIconSize.w,
+        height: AppSecondaryPageHeader.backIconSize.w,
       ),
     );
   }

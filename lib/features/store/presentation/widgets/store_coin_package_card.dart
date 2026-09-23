@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../shared/theme/app_colors.dart';
 import '../../../../shared/theme/app_radii.dart';
@@ -31,15 +32,15 @@ class StoreCoinPackageCard extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
           width: width,
-          height: 85,
+          height: 85.w,
           decoration: BoxDecoration(
             color: const Color(0x80414143),
-            borderRadius: BorderRadius.circular(AppRadii.sm),
+            borderRadius: BorderRadius.circular(AppRadii.sm.w),
           ),
           child: Stack(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                padding: EdgeInsets.fromLTRB(16.w, 14.w, 16.w, 12.w),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -48,10 +49,10 @@ class StoreCoinPackageCard extends StatelessWidget {
                       children: [
                         Image.asset(
                           'assets/images/profile/coin.png',
-                          width: 20,
-                          height: 20,
+                          width: 20.w,
+                          height: 20.w,
                         ),
-                        const SizedBox(width: AppSpacing.xs),
+                        SizedBox(width: AppSpacing.xs.w),
                         Flexible(
                           child: Text(
                             package.title,
@@ -62,14 +63,14 @@ class StoreCoinPackageCard extends StatelessWidget {
                                   color: AppColors.textPrimary,
                                   fontWeight: FontWeight.bold,
                                   height: 1.3,
-                                  fontSize: 18,
+                                  fontSize: 18.sp,
                                 ),
                           ),
                         ),
                       ],
                     ),
                     if (package.bonusLabel != null) ...[
-                      const SizedBox(height: AppSpacing.xs),
+                      SizedBox(height: AppSpacing.xs.w),
                       Text(
                         package.bonusLabel!,
                         maxLines: 1,
@@ -102,12 +103,12 @@ class StoreCoinPackageCard extends StatelessWidget {
                   top: 0,
                   right: 0,
                   child: Container(
-                    height: 19,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: 2,
+                    height: 19.w,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm.w,
+                      vertical: 2.w,
                     ),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
                           Color(0xFFFF9E53),
@@ -116,8 +117,8 @@ class StoreCoinPackageCard extends StatelessWidget {
                         ],
                       ),
                       borderRadius: BorderRadius.only(
-                        topRight: Radius.circular(AppRadii.sm),
-                        bottomLeft: Radius.circular(AppRadii.sm),
+                        topRight: Radius.circular(AppRadii.sm.w),
+                        bottomLeft: Radius.circular(AppRadii.sm.w),
                       ),
                     ),
                     child: Text(
@@ -125,7 +126,7 @@ class StoreCoinPackageCard extends StatelessWidget {
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w600,
-                        fontSize: 10,
+                        fontSize: 10.sp,
                         height: 1.5,
                       ),
                     ),

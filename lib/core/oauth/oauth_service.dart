@@ -18,12 +18,12 @@ abstract class OAuthService {
   /// 返回 null 表示用户取消登录。抛出异常表示登录失败。
   Future<String?> signInWithFacebook();
 
-  /// 使用 Apple 登录，返回 ID Token（iOS 专用）。
+  /// 使用 Apple 登录，返回服务端换取应用会话所需的授权凭证（iOS 专用）。
   ///
   /// 返回 null 表示用户取消登录。抛出异常表示登录失败。
   ///
   /// 注意：当前项目暂不支持 Apple 登录，此方法预留给未来使用。
-  Future<String?> signInWithApple() {
+  Future<AppleLoginCredential?> signInWithApple() {
     throw UnimplementedError('Apple login not implemented yet');
   }
 
@@ -36,6 +36,23 @@ abstract class OAuthService {
 
   /// 登出 Facebook 账号（清除本地缓存）。
   Future<void> signOutFacebook();
+}
+
+/// Apple 原生授权返回、且服务端 Apple 登录接口需要的凭证。
+///
+/// email 和姓名仅会在首次授权时返回；不能因为后续为空而覆盖服务端已有资料。
+class AppleLoginCredential {
+  const AppleLoginCredential({
+    required this.identityToken,
+    this.authorizationCode,
+    this.email,
+    this.fullName,
+  });
+
+  final String identityToken;
+  final String? authorizationCode;
+  final String? email;
+  final String? fullName;
 }
 
 /// OAuth 登录异常。

@@ -3,12 +3,18 @@ import 'package:drama_client/core/analytics/analytics_service.dart';
 import 'package:drama_client/features/ad_unlock/presentation/ad_unlock_prompt_dialog.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('returns true when the watch-ad action is tapped', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     bool? result;
     final sink = AnalyticsInMemoryEventSink();
     final analytics = AnalyticsService(
@@ -21,6 +27,8 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
+        builder: (context, child) =>
+            ScreenUtilInit(designSize: const Size(375, 812), child: child),
         localizationsDelegates: const [AppLocalizations.delegate],
         supportedLocales: AppLocalizations.supportedLocales,
         home: Builder(
@@ -48,6 +56,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Watch this episode free?'), findsOneWidget);
     expect(find.text('Watched today (0/5)'), findsOneWidget);
+    final placeholder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SizedBox &&
+          widget.width != null &&
+          widget.height != null &&
+          (widget.width! - 126 * 320 / 375).abs() < .01 &&
+          (widget.height! - 166 * 320 / 375).abs() < .01,
+    );
+    expect(tester.getSize(placeholder).height, closeTo(166 * 320 / 375, .01));
 
     await tester.tap(find.text('Watch Ad to unlock'));
     await tester.pumpAndSettle();

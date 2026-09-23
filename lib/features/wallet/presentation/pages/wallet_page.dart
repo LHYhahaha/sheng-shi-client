@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
@@ -125,7 +126,7 @@ class _WalletBody extends ConsumerWidget {
     final entitlementState = ref.watch(entitlementControllerProvider);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 33, 16, 32),
+      padding: EdgeInsets.fromLTRB(16.w, 33.w, 16.w, 32.w),
       children: [
         Row(
           children: [
@@ -143,16 +144,16 @@ class _WalletBody extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: 39),
+        SizedBox(height: 39.w),
         SizedBox(
-          height: 44,
+          height: 44.w,
           child: FilledButton(
             onPressed: onTopUp,
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: AppColors.textPrimary,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(8.w),
               ),
               textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
@@ -162,22 +163,22 @@ class _WalletBody extends ConsumerWidget {
             child: Text(context.l10n.walletTopUp),
           ),
         ),
-        const SizedBox(height: 28),
+        SizedBox(height: 28.w),
         _WalletMenuRow(
           label: context.l10n.walletMenuTransactionHistory,
           onTap: onTransactionHistory,
         ),
-        const SizedBox(height: 28),
+        SizedBox(height: 28.w),
         _WalletMenuRow(
           label: context.l10n.walletMenuConsumptionHistory,
           onTap: onConsumptionHistory,
         ),
-        const SizedBox(height: 28),
+        SizedBox(height: 28.w),
         _WalletMenuRow(
           label: context.l10n.walletMenuClaimCoins,
           onTap: onRecordCoins,
         ),
-        const SizedBox(height: 28),
+        SizedBox(height: 28.w),
         _WalletSwitchRow(
           label: context.l10n.autoUnlockNext,
           value: entitlementState.autoUnlockEnabled,
@@ -236,7 +237,7 @@ class _WalletMenuRow extends StatelessWidget {
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       child: SizedBox(
-        height: 24,
+        height: 24.w,
         child: Row(
           children: [
             Expanded(
@@ -254,7 +255,7 @@ class _WalletMenuRow extends StatelessWidget {
             Icon(
               Icons.chevron_right_rounded,
               color: Color(0XFF818181).withValues(alpha: 0.7),
-              size: 24,
+              size: 24.w,
             ),
           ],
         ),
@@ -277,7 +278,7 @@ class _WalletSwitchRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 28,
+      height: 28.w,
       child: Row(
         children: [
           Expanded(

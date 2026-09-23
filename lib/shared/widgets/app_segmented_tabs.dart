@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_radii.dart';
@@ -28,9 +29,9 @@ class AppSegmentedTabs extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceElevated,
-        borderRadius: BorderRadius.circular(AppRadii.sm),
+        borderRadius: BorderRadius.circular(AppRadii.sm.w),
       ),
-      padding: const EdgeInsets.all(3),
+      padding: EdgeInsets.all(3.w),
       child: Row(
         children: [
           for (final entry in tabs.indexed)
@@ -62,12 +63,12 @@ class _Segment extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: selected ? AppColors.surfaceMuted : Colors.transparent,
-      borderRadius: BorderRadius.circular(AppRadii.sm),
+      borderRadius: BorderRadius.circular(AppRadii.sm.w),
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadii.sm),
+        borderRadius: BorderRadius.circular(AppRadii.sm.w),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: EdgeInsets.symmetric(vertical: 8.w),
           child: Text(
             label,
             textAlign: TextAlign.center,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
@@ -24,10 +25,10 @@ class ProfileCoinsCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+      padding: EdgeInsets.fromLTRB(16.w, 14.w, 16.w, 12.w),
       decoration: BoxDecoration(
         color: Color(0XFFFFFFFF).withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppRadii.sm),
+        borderRadius: BorderRadius.circular(AppRadii.sm.w),
         border: Border.all(color: Color(0XFF312838), width: 0.5),
       ),
       child: Column(
@@ -56,32 +57,29 @@ class ProfileCoinsCard extends StatelessWidget {
                         fontWeight: FontWeight.normal,
                       ),
                     ),
-                    SizedBox(width: 3),
+                    SizedBox(width: 3.w),
                     Image.asset(
                       "assets/images/profile/log_icon.png",
-                      height: 15,
-                      width: 15,
-                    )
+                      height: 15.w,
+                      width: 15.w,
+                    ),
                   ],
                 ),
               ),
             ],
           ),
-          Divider(
-            color: Color(0XFFFFFFFF).withValues(alpha: 0.06),
-            height: 28,
-          ),
+          Divider(color: Color(0XFFFFFFFF).withValues(alpha: 0.06), height: 28),
 
           Row(
             children: [
               Image.asset(
                 'assets/images/profile/coin.png',
-                width: 24,
-                height: 24,
+                width: 24.w,
+                height: 24.w,
                 fit: BoxFit.contain,
                 filterQuality: FilterQuality.high,
               ),
-              const SizedBox(width: AppSpacing.xs),
+              SizedBox(width: AppSpacing.xs.w),
               Expanded(
                 child: Text(
                   '${coins.balance}',
@@ -89,7 +87,7 @@ class ProfileCoinsCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: textTheme.titleLarge?.copyWith(
                     color: AppColors.textPrimary,
-                    fontSize: 20,
+                    fontSize: 20.sp,
                     fontWeight: FontWeight.w700,
                     height: 1.5,
                   ),
@@ -100,18 +98,18 @@ class ProfileCoinsCard extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 onTap: coins.topUpEnabled ? onTopUpTap : null,
                 child: Container(
-                  width: 73,
-                  height: 34,
+                  width: 73.w,
+                  height: 34.w,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(6.w),
                   ),
                   child: Text(
                     l10n.profileTopUp,
                     style: textTheme.labelMedium?.copyWith(
                       color: AppColors.textPrimary,
-                      fontSize: 12,
+                      fontSize: 12.sp,
                       height: 1.3,
                       fontWeight: FontWeight(510),
                     ),

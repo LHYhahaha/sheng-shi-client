@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../core/modal/app_modal_result.dart';
 import '../../../../shared/theme/app_colors.dart';
@@ -75,26 +76,26 @@ class _AuthLoginModalSheetState extends ConsumerState<AuthLoginModalSheet> {
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
       child: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.black,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20.w)),
         ),
         child: SafeArea(
           top: false,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            padding: EdgeInsets.fromLTRB(16.w, 8.w, 16.w, 24.w),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 36,
-                  height: 4,
+                  width: 36.w,
+                  height: 4.w,
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(2),
+                    borderRadius: BorderRadius.circular(2.w),
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8.w),
                 Align(
                   alignment: Alignment.centerRight,
                   child: IconButton(
@@ -103,20 +104,20 @@ class _AuthLoginModalSheetState extends ConsumerState<AuthLoginModalSheet> {
                         context,
                       ).pop(const LoginModalResult.cancelled());
                     },
-                    icon: const Icon(Icons.close_rounded, size: 20),
+                    icon: Icon(Icons.close_rounded, size: 20.w),
                     color: AppColors.textPrimary,
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 40,
-                      height: 40,
+                    constraints: BoxConstraints.tightFor(
+                      width: 40.w,
+                      height: 40.w,
                     ),
                   ),
                 ),
                 if (state.isLoading && !state.isLoggedIn) ...[
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 32),
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: 32.w),
                     child: Center(
-                      child: AppPegTopLoader(size: 24, noBackground: true),
+                      child: AppPegTopLoader(size: 24.w, noBackground: true),
                     ),
                   ),
                 ] else

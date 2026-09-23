@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
@@ -312,15 +313,18 @@ class _MyListPageState extends ConsumerState<MyListPage> {
           ? l10n.myListEmptyFollowing
           : l10n.myListEmptyHistory;
       children.add(
-        SizedBox(height: 220, child: _EmptyMyList(description: emptyText)),
+        SizedBox(
+          height: 220.w,
+          child: _EmptyMyList(description: emptyText),
+        ),
       );
     } else {
       for (final (index, item) in state.items.indexed) {
         children.add(
           Padding(
             padding: EdgeInsets.only(
-              bottom: 16,
-              right: state.isCollectionEditing ? 4 : 0,
+              bottom: 16.w,
+              right: state.isCollectionEditing ? 4.w : 0,
             ),
             child: DramaCardExposure(
               pageSession: _dramaExposureSession,
@@ -390,12 +394,12 @@ class _MyListPageState extends ConsumerState<MyListPage> {
     return ListView(
       controller: _scrollController,
       padding: EdgeInsets.fromLTRB(
-        16,
-        15,
+        16.w,
+        15.w,
         0,
         state.isCollectionEditing
-            ? 108 + MediaQuery.viewPaddingOf(context).bottom
-            : 24,
+            ? 108.w + MediaQuery.viewPaddingOf(context).bottom
+            : 24.w,
       ),
       children: children,
     );
@@ -501,7 +505,7 @@ class _HotPlaysSection extends StatelessWidget {
     final hasTagRow = dramas.any((drama) => drama.tags.isNotEmpty);
 
     return Padding(
-      padding: const EdgeInsets.only(top: 20, right: 16),
+      padding: EdgeInsets.only(top: 20.w, right: 16.w),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -509,11 +513,11 @@ class _HotPlaysSection extends StatelessWidget {
             context.l10n.favoriteSectionHotRecommend,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: AppColors.textPrimary.withValues(alpha: 0.6),
-              fontSize: 16,
+              fontSize: 16.sp,
               fontWeight: FontWeight.w400,
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12.w),
           AppCompactDramaGrid(
             itemCount: dramas.length,
             hasTagRow: hasTagRow,
@@ -549,19 +553,19 @@ class _HotPlayRankBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 24,
-      height: 14,
+      width: 24.w,
+      height: 14.w,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: _rankingColor(ranking),
-        borderRadius: const BorderRadius.only(bottomRight: Radius.circular(4)),
+        borderRadius: BorderRadius.only(bottomRight: Radius.circular(4.w)),
       ),
       child: Text(
         '$ranking',
-        style: const TextStyle(
+        style: TextStyle(
           height: 1,
           color: Colors.white,
-          fontSize: 11,
+          fontSize: 11.sp,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -594,7 +598,7 @@ class _MyListLoadMoreFooter extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+        padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 18.w),
         child: Center(
           child: isLoading
               ? const AppLoadMoreIndicator(padding: EdgeInsets.zero)
@@ -635,20 +639,20 @@ class _MyListHeader extends StatelessWidget {
     final showTrailing = choosing || canEdit;
 
     return SizedBox(
-      height: 72,
+      height: 72.w,
       child: Stack(
         children: [
           if (choosing)
             Positioned(
               left: 0,
               right: 0,
-              top: 27,
+              top: 27.w,
               child: Text(
                 l10n.myListChoose,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   color: AppColors.textPrimary,
-                  fontSize: 16,
+                  fontSize: 16.sp,
                   fontWeight: FontWeight.w600,
                   height: 1.1,
                 ),
@@ -656,13 +660,13 @@ class _MyListHeader extends StatelessWidget {
             )
           else
             Positioned(
-              left: 17,
-              top: 24,
+              left: 17.w,
+              top: 24.w,
               child: Text(
                 l10n.navMyList,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   color: AppColors.textPrimary,
-                  fontSize: 20,
+                  fontSize: 20.sp,
                   fontWeight: FontWeight.w700,
                   height: 1.1,
                 ),
@@ -670,20 +674,20 @@ class _MyListHeader extends StatelessWidget {
             ),
           if (choosing)
             Positioned(
-              left: 16,
-              top: 18,
+              left: 16.w,
+              top: 18.w,
               child: TextButton(
                 onPressed: onSelectAll,
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.textDisabled,
                   padding: EdgeInsets.zero,
-                  minimumSize: const Size(82, 36),
+                  minimumSize: Size(82.w, 36.w),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 child: Text(
                   allSelected ? l10n.myListDeselectAll : l10n.myListSelectAll,
-                  style: const TextStyle(
-                    fontSize: 14,
+                  style: TextStyle(
+                    fontSize: 14.sp,
                     fontWeight: FontWeight.w400,
                     color: Color(0XFF909090),
                     height: 1.1,
@@ -693,21 +697,21 @@ class _MyListHeader extends StatelessWidget {
             ),
           if (showTrailing)
             Positioned(
-              right: 16,
-              top: choosing ? 18 : 22,
+              right: 16.w,
+              top: choosing ? 18.w : 22.w,
               child: choosing
                   ? TextButton(
                       onPressed: onCancel,
                       style: TextButton.styleFrom(
                         foregroundColor: AppColors.textDisabled,
                         padding: EdgeInsets.zero,
-                        minimumSize: const Size(58, 36),
+                        minimumSize: Size(58.w, 36.w),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       child: Text(
                         l10n.myListCancel,
-                        style: const TextStyle(
-                          fontSize: 14,
+                        style: TextStyle(
+                          fontSize: 14.sp,
                           fontWeight: FontWeight.w400,
                           color: Color(0XFF909090),
                           height: 1.1,
@@ -762,8 +766,8 @@ class _HeaderMoreMenu extends StatelessWidget {
       onTap: () => onEdit(),
       child: SvgPicture.asset(
         "assets/images/my_list/mylist_edit.svg",
-        width: 24,
-        height: 24,
+        width: 24.w,
+        height: 24.w,
       ),
     );
   }
@@ -780,11 +784,11 @@ class _MyListTabs extends StatelessWidget {
     final l10n = context.l10n;
 
     return SizedBox(
-      height: 28,
+      height: 28.w,
       child: Stack(
         children: [
           Positioned(
-            left: 16,
+            left: 16.w,
             top: 0,
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -794,7 +798,7 @@ class _MyListTabs extends StatelessWidget {
                   active: selectedTab == MyListTab.collection,
                   onTap: () => onSelected(MyListTab.collection),
                 ),
-                const SizedBox(width: 32),
+                SizedBox(width: 32.w),
                 _TabLabel(
                   text: l10n.myListPlayTab,
                   active: selectedTab == MyListTab.play,
@@ -835,7 +839,7 @@ class _TabLabel extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: SizedBox(
-        height: 28,
+        height: 28.w,
         child: IntrinsicWidth(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -846,14 +850,14 @@ class _TabLabel extends StatelessWidget {
                   color: active
                       ? AppColors.textPrimary
                       : AppColors.textDisabled,
-                  fontSize: 14,
+                  fontSize: 14.sp,
                   fontWeight: FontWeight.normal,
                   height: 1.18,
                 ),
               ),
               const Spacer(),
               SizedBox(
-                height: 2,
+                height: 2.w,
                 child: ColoredBox(
                   color: active ? AppColors.primary : Colors.transparent,
                 ),
@@ -914,16 +918,16 @@ class _MyListRowSwipeAction extends StatelessWidget {
                 children: [
                   SvgPicture.asset(
                     "assets/images/my_list/delete_white.svg",
-                    width: 18,
-                    height: 18,
+                    width: 18.w,
+                    height: 18.w,
                     fit: BoxFit.contain,
                   ),
-                  const SizedBox(height: 3),
+                  SizedBox(height: 3.w),
                   Text(
                     context.l10n.myListDelete,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: AppColors.textPrimary,
-                      fontSize: 10,
+                      fontSize: 10.sp,
                       fontWeight: FontWeight.w400,
                       height: 1.1,
                     ),
@@ -1012,14 +1016,14 @@ class _MyListRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final row = SizedBox(
-      height: 101,
+      height: 101.w,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (choosing) ...[
             SizedBox(
-              width: 32,
-              height: 101,
+              width: 32.w,
+              height: 101.w,
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: _SelectionCircle(selected: selected),
@@ -1031,7 +1035,7 @@ class _MyListRow extends StatelessWidget {
             currentEpisode: item.currentEpisode,
             episodeCount: item.episodeCount,
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12.w),
           Expanded(child: _RowCopy(item: item)),
         ],
       ),
@@ -1062,19 +1066,19 @@ class _CoverImage extends StatelessWidget {
     final progress = episodeCount > 0
         ? (currentEpisode / episodeCount).clamp(0.0, 1.0)
         : 0.0;
-    final progressWidth = 74 * progress;
+    final progressWidth = 74.w * progress;
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(AppRadii.xs),
+      borderRadius: BorderRadius.circular(AppRadii.xs.w),
       child: Stack(
         children: [
           _buildCoverImage(assetPath),
-          const Positioned(
+          Positioned(
             left: 0,
             bottom: 0,
             child: ColoredBox(
               color: Color(0x33FFFFFF),
-              child: SizedBox(width: 74, height: 2),
+              child: SizedBox(width: 74.w, height: 2.w),
             ),
           ),
           Positioned(
@@ -1082,7 +1086,7 @@ class _CoverImage extends StatelessWidget {
             bottom: 0,
             child: ColoredBox(
               color: AppColors.primary,
-              child: SizedBox(width: progressWidth, height: 2),
+              child: SizedBox(width: progressWidth, height: 2.w),
             ),
           ),
         ],
@@ -1096,8 +1100,8 @@ class _CoverImage extends StatelessWidget {
       return AppCachedNetworkImage(
         imageUrl: assetPath,
         fit: BoxFit.cover,
-        width: 74,
-        height: 101,
+        width: 74.w,
+        height: 101.w,
         filterQuality: FilterQuality.medium,
       );
     }
@@ -1105,14 +1109,14 @@ class _CoverImage extends StatelessWidget {
     // 本地 asset
     return Image.asset(
       assetPath,
-      width: 74,
-      height: 101,
+      width: 74.w,
+      height: 101.w,
       fit: BoxFit.cover,
       filterQuality: FilterQuality.medium,
       errorBuilder: (context, error, stackTrace) {
         return Container(
-          width: 74,
-          height: 101,
+          width: 74.w,
+          height: 101.w,
           color: Colors.grey[800],
           child: const Center(
             child: Icon(Icons.image_not_supported, color: Colors.grey),
@@ -1131,7 +1135,7 @@ class _RowCopy extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 7),
+      padding: EdgeInsets.only(top: 7.w),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1141,19 +1145,19 @@ class _RowCopy extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
               color: AppColors.textPrimary,
-              fontSize: 14,
+              fontSize: 14.sp,
               fontWeight: FontWeight.w600,
               height: 1.15,
             ),
           ),
-          const SizedBox(height: 9),
+          SizedBox(height: 9.w),
           Text(
             limitTextLines(item.introduction, 2),
             maxLines: 2,
             overflow: TextOverflow.clip,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: AppColors.textPrimary.withValues(alpha: 0.5),
-              fontSize: 12,
+              fontSize: 12.sp,
               fontWeight: FontWeight.w400,
               height: 1.55,
             ),
@@ -1162,7 +1166,7 @@ class _RowCopy extends StatelessWidget {
           RichText(
             text: TextSpan(
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                fontSize: 12,
+                fontSize: 12.sp,
                 fontWeight: FontWeight.w500,
                 height: 1.15,
               ),
@@ -1181,7 +1185,7 @@ class _RowCopy extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6.w),
         ],
       ),
     );
@@ -1197,8 +1201,8 @@ class _SelectionCircle extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 140),
-      width: 20,
-      height: 20,
+      width: 20.w,
+      height: 20.w,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: selected ? AppColors.primary : Colors.transparent,
@@ -1207,7 +1211,7 @@ class _SelectionCircle extends StatelessWidget {
         ),
       ),
       child: selected
-          ? const Icon(Icons.check_rounded, size: 15, color: Colors.white)
+          ? Icon(Icons.check_rounded, size: 15.w, color: Colors.white)
           : null,
     );
   }
@@ -1224,7 +1228,7 @@ class _DeleteBar extends StatelessWidget {
     final enabled = count > 0;
     final isIos = Theme.of(context).platform == TargetPlatform.iOS;
     final bottomInset = isIos ? 0.0 : MediaQuery.viewPaddingOf(context).bottom;
-    final contentHeight = isIos ? 84.0 : 64.0;
+    final contentHeight = isIos ? 84.w : 64.w;
 
     return ColoredBox(
       color: AppColors.surfacePanel,
@@ -1242,8 +1246,8 @@ class _DeleteBar extends StatelessWidget {
                   onPressed: enabled ? onDelete : null,
                   icon: SvgPicture.asset(
                     "assets/images/my_list/delete.svg",
-                    width: 18,
-                    height: 18,
+                    width: 18.w,
+                    height: 18.w,
                     fit: BoxFit.contain,
                     color: enabled
                         ? AppColors.textPrimary
@@ -1264,8 +1268,8 @@ class _DeleteBar extends StatelessWidget {
                     disabledForegroundColor: AppColors.textPrimary.withValues(
                       alpha: 0.42,
                     ),
-                    textStyle: const TextStyle(
-                      fontSize: 14,
+                    textStyle: TextStyle(
+                      fontSize: 14.sp,
                       fontWeight: FontWeight.w500,
                       height: 1.2,
                     ),
@@ -1290,12 +1294,12 @@ class _EmptyMyList extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
+        padding: EdgeInsets.symmetric(horizontal: 32.w),
         child: AppEmptyState(
           message: description,
           textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: AppColors.textMuted,
-            fontSize: 12,
+            fontSize: 12.sp,
             height: 16 / 12,
           ),
         ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
 
 import '../../../../core/modal/app_modal_root_sheet.dart';
@@ -41,30 +42,30 @@ class RewardRulesSheet extends StatelessWidget {
         maxHeight: MediaQuery.sizeOf(context).height * 0.5,
       ),
       child: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: Color(0xFF1C1C1E),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26.w)),
         ),
         child: Padding(
-          padding: EdgeInsets.fromLTRB(20, 0, 16, bottomPadding+20),
+          padding: EdgeInsets.fromLTRB(20.w, 0, 16.w, bottomPadding + 20.w),
           child: Stack(
             children: [
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(height: 23),
+                  SizedBox(height: 23.w),
                   Center(
                     child: Text(
                       title,
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 18,
+                        fontSize: 18.sp,
                         height: 1.25,
                         fontWeight: FontWeight(510),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 28),
+                  SizedBox(height: 28.w),
                   Flexible(
                     fit: FlexFit.loose,
                     child: SingleChildScrollView(
@@ -72,9 +73,9 @@ class RewardRulesSheet extends StatelessWidget {
                       child: Text(
                         content,
                         key: const Key('reward_rules_content'),
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
-                          fontSize: 14,
+                          fontSize: 14.sp,
                           height: 1.42,
                           fontWeight: FontWeight.w400,
                         ),
@@ -84,7 +85,7 @@ class RewardRulesSheet extends StatelessWidget {
                 ],
               ),
               Positioned(
-                top: 15,
+                top: 15.w,
                 right: 0,
                 child: _RewardRulesCloseButton(
                   onTap: () => Navigator.of(context).pop(),
@@ -114,8 +115,8 @@ class _RewardRulesCloseButton extends StatelessWidget {
         customBorder: const CircleBorder(),
         child: SvgPicture.asset(
           "assets/images/player/close.svg",
-          width: 40,
-          height: 40,
+          width: 40.w,
+          height: 40.w,
         ),
       ),
     );

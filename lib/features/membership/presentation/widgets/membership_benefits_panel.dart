@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -95,10 +96,10 @@ class MembershipBenefitsPanel extends StatelessWidget {
               ),
             ),
             padding: EdgeInsets.fromLTRB(
-              MembershipLayout.horizontalPadding,
-              MembershipLayout.benefitsTitlePaddingTop,
-              MembershipLayout.horizontalPadding,
-              20,
+              MembershipLayout.horizontalPadding.w,
+              MembershipLayout.benefitsTitlePaddingTop.w,
+              MembershipLayout.horizontalPadding.w,
+              20.w,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,12 +109,12 @@ class MembershipBenefitsPanel extends StatelessWidget {
                   children: [
                     const _BenefitTitleLine(reverse: true),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      padding: EdgeInsets.symmetric(horizontal: 8.w),
                       child: Text(
                         l10n.membershipBenefits,
                         style: textTheme.bodyMedium?.copyWith(
                           color: _gold,
-                          fontSize: 14,
+                          fontSize: 14.sp,
                           fontWeight: FontWeight(510),
                           height: 1.5,
                         ),
@@ -122,11 +123,11 @@ class MembershipBenefitsPanel extends StatelessWidget {
                     const _BenefitTitleLine(),
                   ],
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: 24.w),
                 for (var index = 0; index < benefits.length; index++) ...[
                   _BenefitRow(benefit: benefits[index]),
                   if (index < benefits.length - 1)
-                    const SizedBox(height: MembershipLayout.benefitsRowGap),
+                    SizedBox(height: MembershipLayout.benefitsRowGap.w),
                 ],
               ],
             ),
@@ -142,10 +143,10 @@ class MembershipBenefitsPanel extends StatelessWidget {
             ),
           Padding(
             padding: EdgeInsets.fromLTRB(
-              MembershipLayout.horizontalPadding,
-              16,
-              MembershipLayout.horizontalPadding,
-              28 + bottomInset,
+              MembershipLayout.horizontalPadding.w,
+              16.w,
+              MembershipLayout.horizontalPadding.w,
+              28.w + bottomInset,
             ),
             child: _MembershipTips(tips: tips),
           ),
@@ -168,8 +169,8 @@ class _BenefitTitleLine extends StatelessWidget {
         : [gold.withValues(alpha: 0.22), Colors.transparent];
 
     return SizedBox(
-      width: MembershipLayout.benefitsTitleLineWidth,
-      height: 1,
+      width: MembershipLayout.benefitsTitleLineWidth.w,
+      height: 1.w,
       child: DecoratedBox(
         decoration: BoxDecoration(gradient: LinearGradient(colors: colors)),
       ),
@@ -192,8 +193,8 @@ class _BenefitRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(
-          width: MembershipLayout.benefitsIconSize,
-          height: MembershipLayout.benefitsIconSize,
+          width: MembershipLayout.benefitsIconSize.w,
+          height: MembershipLayout.benefitsIconSize.w,
           child: Image.asset(
             benefit.iconPath,
             fit: BoxFit.contain,
@@ -201,7 +202,7 @@ class _BenefitRow extends StatelessWidget {
                 const SizedBox.shrink(),
           ),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: 12.w),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -212,7 +213,7 @@ class _BenefitRow extends StatelessWidget {
                 text: TextSpan(
                   style: textTheme.bodyMedium?.copyWith(
                     color: _gold.withValues(alpha: 0.6),
-                    fontSize: 14,
+                    fontSize: 14.sp,
                     height: 1.3,
                     fontWeight: FontWeight.normal,
                   ),
@@ -227,14 +228,14 @@ class _BenefitRow extends StatelessWidget {
                 ),
               ),
               if (benefit.description != null) ...[
-                const SizedBox(height: 2),
+                SizedBox(height: 2.w),
                 Text(
                   benefit.description!,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: textTheme.labelMedium?.copyWith(
                     color: _gold.withValues(alpha: 0.4),
-                    fontSize: 12,
+                    fontSize: 12.sp,
                     height: 1.3,
                     fontWeight: FontWeight.normal,
                   ),

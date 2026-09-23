@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'app_peg_top_loader.dart';
 
@@ -24,13 +25,13 @@ class AppBlockingLoadingOverlay extends StatelessWidget {
                 children: [
                   const AppPegTopLoader(size: 20),
                   if (label != null && label!.isNotEmpty) ...[
-                    const SizedBox(height: 20),
+                    SizedBox(height: 20.w),
                     Text(
                       label!,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white,
-                        fontSize: 14,
+                        fontSize: 14.sp,
                         fontWeight: FontWeight.w600,
                         height: 1.25,
                       ),

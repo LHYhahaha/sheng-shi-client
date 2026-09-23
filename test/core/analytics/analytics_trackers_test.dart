@@ -307,6 +307,10 @@ void main() {
     expect(analyticsPageNameForRoute('wallet'), AnalyticsPageNames.wallet);
     expect(analyticsPageNameForRoute('store'), AnalyticsPageNames.coinRecharge);
     expect(analyticsPageNameForRoute('auth'), AnalyticsPageNames.login);
+    expect(
+      analyticsPageNameForRoute('phone-login'),
+      AnalyticsPageNames.phoneLogin,
+    );
   });
 }
 

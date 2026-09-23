@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:drama_client/core/auth/auth_token_store.dart';
+import 'package:drama_client/core/oauth/oauth_service.dart';
 import 'package:drama_client/core/network/api_client.dart';
 import 'package:drama_client/core/network/api_mapping_exception.dart';
 import 'package:drama_client/core/network/api_request_context.dart';
@@ -14,6 +15,8 @@ import 'package:drama_client/features/auth/data/auth_repository_provider.dart';
 import 'package:drama_client/features/auth/data/dto/auth_session_dto.dart';
 import 'package:drama_client/features/auth/data/dto/auth_token_dto.dart';
 import 'package:drama_client/features/auth/data/dto/auth_user_dto.dart';
+import 'package:drama_client/features/auth/data/dto/apple_login_request_dto.dart';
+import 'package:drama_client/features/auth/data/dto/oauth_login_request_dto.dart';
 import 'package:drama_client/features/auth/data/dto/refresh_token_request_dto.dart';
 import 'package:drama_client/features/auth/data/mapper/auth_mapper.dart';
 import 'package:drama_client/features/auth/data/mock_auth_repository.dart';
@@ -146,6 +149,74 @@ void main() {
         containsPair('googleToken', 'mock-google-id-token'),
       );
     });
+
+    test(
+      'Apple OAuth sends the identity token to the Apple login endpoint',
+      () async {
+        final adapter = _FakeHttpClientAdapter(
+          responseData: _ok(_authSessionJson),
+        );
+        final source = AuthRemoteDataSource(apiClient: _apiClient(adapter));
+
+        await source.loginOAuth(
+          const OAuthLoginRequestDto(
+            provider: 'apple',
+            token: 'apple-identity-token',
+          ),
+        );
+
+        expect(adapter.lastOptions?.path, '/api/user/apple/login');
+        expect(
+          adapter.lastOptions?.headers['Authorization'],
+          'Bearer test-token',
+        );
+        expect(adapter.lastOptions?.data, {
+          'identityToken': 'apple-identity-token',
+        });
+      },
+    );
+
+    test('Apple login preserves first-authorization profile fields', () {
+      const request = AppleLoginRequestDto(
+        identityToken: 'apple-identity-token',
+        authorizationCode: 'apple-authorization-code',
+        email: 'relay@privaterelay.appleid.com',
+        fullName: 'Apple User',
+      );
+
+      expect(request.toJson(), {
+        'identityToken': 'apple-identity-token',
+        'authorizationCode': 'apple-authorization-code',
+        'email': 'relay@privaterelay.appleid.com',
+        'fullName': 'Apple User',
+      });
+    });
+
+    test(
+      'Apple repository login forwards all native credential fields',
+      () async {
+        final adapter = _FakeHttpClientAdapter(
+          responseData: _ok(_authSessionJson),
+        );
+        final repository = RemoteAuthRepository(
+          remoteDataSource: AuthRemoteDataSource(
+            apiClient: _apiClient(adapter),
+          ),
+          requestContext: _requestContext,
+          oauthService: _AppleCredentialOAuthService(),
+        );
+
+        await repository.login(AuthProviderType.apple);
+
+        expect(adapter.lastOptions?.path, '/api/user/apple/login');
+        expect(adapter.lastOptions?.data, {
+          'identityToken': 'apple-identity-token',
+          'authorizationCode': 'apple-authorization-code',
+          'email': 'relay@privaterelay.appleid.com',
+          'fullName': 'Apple User',
+        });
+      },
+    );
 
     test('device login does not request user info during startup', () async {
       final adapter = _FakeHttpClientAdapter(
@@ -390,6 +461,29 @@ class _FakeHttpClientAdapter implements HttpClientAdapter {
 
   @override
   void close({bool force = false}) {}
+}
+
+class _AppleCredentialOAuthService implements OAuthService {
+  @override
+  Future<AppleLoginCredential?> signInWithApple() async =>
+      const AppleLoginCredential(
+        identityToken: 'apple-identity-token',
+        authorizationCode: 'apple-authorization-code',
+        email: 'relay@privaterelay.appleid.com',
+        fullName: 'Apple User',
+      );
+
+  @override
+  Future<String?> signInWithFacebook() async => null;
+
+  @override
+  Future<String?> signInWithGoogle() async => null;
+
+  @override
+  Future<void> signOutFacebook() async {}
+
+  @override
+  Future<void> signOutGoogle() async {}
 }
 
 const _authUserJson = {

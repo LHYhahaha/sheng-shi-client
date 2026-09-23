@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:drama_client/core/utils/compact_count_formatter.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../shared/theme/app_colors.dart';
@@ -79,15 +80,15 @@ class _PlayerExitRecommendationDialogState
         .max(
           0.0,
           math.min(
-            _coverHeight,
+            _coverHeight.w,
             dialogHeight -
-                _topPadding -
-                _bottomPadding -
+                _topPadding.w -
+                _bottomPadding.w -
                 bottomInset -
-                _headerHeight -
-                _headerToCoverGap -
-                _detailsSectionHeight -
-                _buttonHeight,
+                _headerHeight.w -
+                _headerToCoverGap.w -
+                _detailsSectionHeight.w -
+                _buttonHeight.w,
           ),
         )
         .toDouble();
@@ -103,12 +104,12 @@ class _PlayerExitRecommendationDialogState
           width: double.infinity,
           height: dialogHeight,
           padding: EdgeInsets.only(
-            top: _topPadding,
-            bottom: _bottomPadding + bottomInset,
+            top: _topPadding.w,
+            bottom: _bottomPadding.w + bottomInset,
           ),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: Color(0xFF141414),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22.w)),
           ),
           child: Column(
             children: [
@@ -116,12 +117,12 @@ class _PlayerExitRecommendationDialogState
                 context.l10n.popupDramaExitTitle,
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 16,
+                  fontSize: 16.sp,
                   fontWeight: FontWeight.w600,
                   height: 1.3,
                 ),
               ),
-              const SizedBox(height: _headerToCoverGap),
+              SizedBox(height: _headerToCoverGap.w),
               const Spacer(),
               SizedBox(
                 width: screenSize.width,
@@ -184,13 +185,13 @@ class _PlayerExitRecommendationDialogState
                 ),
               ),
               SizedBox(
-                height: _detailsSectionHeight,
+                height: _detailsSectionHeight.w,
                 child: Center(
                   child: SizedBox(
                     width: coverWidth,
                     child: Column(
                       children: [
-                        const SizedBox(height: 16),
+                        SizedBox(height: 16.w),
                         Text(
                           item.title,
                           key: ValueKey(
@@ -199,14 +200,14 @@ class _PlayerExitRecommendationDialogState
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 16,
+                            fontSize: 16.sp,
                             fontWeight: FontWeight(510),
                             height: 1.3,
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        SizedBox(height: 12.w),
                         _RecommendationTags(item: item),
                         const Spacer(),
                       ],
@@ -215,11 +216,9 @@ class _PlayerExitRecommendationDialogState
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: _horizontalPadding,
-                ),
+                padding: EdgeInsets.symmetric(horizontal: _horizontalPadding.w),
                 child: SizedBox(
-                  height: _buttonHeight,
+                  height: _buttonHeight.w,
                   child: Row(
                     children: [
                       Expanded(
@@ -233,7 +232,7 @@ class _PlayerExitRecommendationDialogState
                           onTap: widget.onExit,
                         ),
                       ),
-                      const SizedBox(width: 15),
+                      SizedBox(width: 15.w),
                       Expanded(
                         child: _ExitRecommendationButton(
                           key: const ValueKey(
@@ -412,7 +411,7 @@ class _RecommendationCover extends StatelessWidget {
     return Stack(
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(12.w),
           child: AppCachedNetworkImage(
             imageUrl: recommendation.coverUrl,
             width: width,
@@ -422,20 +421,20 @@ class _RecommendationCover extends StatelessWidget {
           ),
         ),
         Positioned(
-          bottom: 10,
-          right: 10,
+          bottom: 10.w,
+          right: 10.w,
           child: Row(
             children: [
               SvgPicture.asset(
                 "assets/images/home/play_icon.svg",
-                width: 8,
-                height: 8,
+                width: 8.w,
+                height: 8.w,
               ),
-              SizedBox(width: 2),
+              SizedBox(width: 2.w),
               Text(
                 formatCompactCount(recommendation.playCount),
                 style: TextStyle(
-                  fontSize: 9,
+                  fontSize: 9.sp,
                   color: Color(0XFFE0E0E0),
                   fontWeight: FontWeight(510),
                 ),

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
@@ -190,7 +191,7 @@ class _LanguageOptionsError extends StatelessWidget {
               context,
             ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12.w),
           AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
         ],
       ),
@@ -222,14 +223,14 @@ class _LanguageHeader extends StatelessWidget {
               style: ButtonStyle(
                 padding: WidgetStateProperty.all(EdgeInsets.zero),
                 overlayColor: WidgetStateProperty.all(Colors.transparent),
-                minimumSize: WidgetStateProperty.all(const Size(40, 40)),
+                minimumSize: WidgetStateProperty.all(Size(40.w, 40.w)),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               child: Text(
                 context.l10n.languagePageButton,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   color: AppColors.primary,
-                  fontSize: 16,
+                  fontSize: 16.sp,
                   fontWeight: FontWeight.w500,
                   height: 1.5,
                 ),
@@ -257,7 +258,7 @@ class _LanguageOption extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 15.w),
         child: Row(
           children: [
             Expanded(
@@ -265,7 +266,7 @@ class _LanguageOption extends StatelessWidget {
                 label,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: AppColors.textPrimary,
-                  fontSize: 16,
+                  fontSize: 16.sp,
                   height: 1.5,
                   fontWeight: FontWeight.normal,
                 ),
@@ -273,16 +274,17 @@ class _LanguageOption extends StatelessWidget {
             ),
             if (selected)
               Container(
-                width: 18,
-                height: 18,
+                key: const ValueKey('language_selected_indicator'),
+                width: 18.w,
+                height: 18.w,
                 decoration: const BoxDecoration(
                   color: AppColors.primary,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.check_rounded,
                   color: AppColors.textPrimary,
-                  size: 14,
+                  size: 14.w,
                 ),
               ),
           ],

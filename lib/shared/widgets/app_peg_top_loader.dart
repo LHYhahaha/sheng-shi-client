@@ -1,6 +1,7 @@
 import 'dart:ui' show PathMetric;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../l10n/app_localizations.dart';
 
@@ -85,7 +86,8 @@ class _AppPegTopLoaderState extends State<AppPegTopLoader>
   Widget build(BuildContext context) {
     // The chart is intentionally compact within its square background, with
     // room around the peak and trough like the reference loading mark.
-    final lineSize = Size(widget.size * 2, widget.size * 1.55);
+    final scaledSize = widget.size.w;
+    final lineSize = Size(scaledSize * 2, scaledSize * 1.55);
     final loader = Semantics(
       label: widget.semanticLabel ?? AppLocalizations.maybeOf(context).loading,
       liveRegion: true,
@@ -106,7 +108,7 @@ class _AppPegTopLoaderState extends State<AppPegTopLoader>
                     progress: (_controller.value / motionFraction)
                         .clamp(0, 1)
                         .toDouble(),
-                    strokeWidth: widget.size * .11,
+                    strokeWidth: scaledSize * .11,
                   ),
                 );
               },
@@ -118,7 +120,7 @@ class _AppPegTopLoaderState extends State<AppPegTopLoader>
     return widget.noBackground
         ? loader
         : SizedBox.square(
-            dimension: widget.size * 4.2,
+            dimension: scaledSize * 4.2,
             child: AppPegTopLoaderBackground(child: Center(child: loader)),
           );
   }
@@ -130,19 +132,22 @@ class AppPegTopLoaderBackground extends StatelessWidget {
     required this.child,
     this.padding = EdgeInsets.zero,
     this.color = const Color(0xE60A0014),
-    this.borderRadius = const BorderRadius.all(Radius.circular(12)),
+    this.borderRadius,
     super.key,
   });
 
   final Widget child;
   final EdgeInsetsGeometry padding;
   final Color color;
-  final BorderRadiusGeometry borderRadius;
+  final BorderRadiusGeometry? borderRadius;
 
   @override
   Widget build(BuildContext context) => Container(
     padding: padding,
-    decoration: BoxDecoration(color: color, borderRadius: borderRadius),
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: borderRadius ?? BorderRadius.circular(12.w),
+    ),
     child: child,
   );
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gradient_borders/box_borders/gradient_box_border.dart';
 import 'package:permission_handler/permission_handler.dart' as permissions;
@@ -133,10 +134,10 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage>
       child: ListView(
         physics: const ClampingScrollPhysics(),
         padding: EdgeInsets.fromLTRB(
-          10,
-          8,
-          10,
-          MediaQuery.paddingOf(context).bottom + 24,
+          10.w,
+          8.w,
+          10.w,
+          MediaQuery.paddingOf(context).bottom + 24.w,
         ),
         children: [
           _BalanceHeader(
@@ -171,17 +172,17 @@ class _RewardsCoinsPageState extends ConsumerState<RewardsCoinsPage>
             const _RewardsSectionNoData(
               key: Key('rewards_coins_check_in_empty'),
             ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20.w),
           Text(
             context.l10n.rewardsTabRewardTaskTitle,
             style: TextStyle(
               color: Colors.white,
-              fontSize: 16,
+              fontSize: 16.sp,
               fontWeight: FontWeight.w700,
             ),
           ),
           for (final task in supportedTasks) ...[
-            const SizedBox(height: 8),
+            SizedBox(height: 8.w),
             _RewardTaskCard(
               key: Key('reward_task_${task.taskKey}'),
               task: task,
@@ -319,12 +320,12 @@ class _BalanceHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       key: const Key('rewards_coins_balance'),
-      height: 102,
+      height: 102.w,
       child: Stack(
         children: [
           Positioned(
-            left: 10,
-            top: 33,
+            left: 10.w,
+            top: 33.w,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -332,17 +333,17 @@ class _BalanceHeader extends StatelessWidget {
                   '$balance',
                   style: TextStyle(
                     color: _gold,
-                    fontSize: 28,
+                    fontSize: 28.sp,
                     height: 1,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                SizedBox(height: 6),
+                SizedBox(height: 6.w),
                 Text(
                   context.l10n.rewardsCoinBalanceCurrent,
                   style: TextStyle(
                     color: Color(0xFF756A57),
-                    fontSize: 13,
+                    fontSize: 13.sp,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -350,23 +351,23 @@ class _BalanceHeader extends StatelessWidget {
             ),
           ),
           Positioned(
-            right: 1,
-            bottom: -30,
+            right: 1.w,
+            bottom: -30.w,
             child: Stack(
               children: [
                 Image.asset(
                   'assets/images/rewards/coins_icon.png',
-                  width: 142,
-                  height: 142,
+                  width: 142.w,
+                  height: 142.w,
                   fit: BoxFit.contain,
                 ),
                 Positioned(
-                  bottom: 26,
+                  bottom: 26.w,
                   left: 0,
                   right: 0,
                   child: Container(
-                    width: 142,
-                    height: 29,
+                    width: 142.w,
+                    height: 29.w,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
@@ -394,8 +395,8 @@ class _RewardsSectionLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SizedBox(
-      height: 96,
+    return SizedBox(
+      height: 96.w,
       child: Center(child: AppPegTopLoader(size: 20, noBackground: true)),
     );
   }
@@ -416,10 +417,10 @@ class _RewardsSectionLoadFailed extends StatelessWidget {
             context.l10n.networkError,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.7),
-              fontSize: 14,
+              fontSize: 14.sp,
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12.w),
           AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
         ],
       ),
@@ -437,7 +438,7 @@ class _RewardsSectionNoData extends StatelessWidget {
         context.l10n.noData,
         style: TextStyle(
           color: Colors.white.withValues(alpha: 0.7),
-          fontSize: 14,
+          fontSize: 14.sp,
         ),
       ),
     );
@@ -452,11 +453,11 @@ class _RewardsSectionStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 112,
+      height: 112.w,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: _card,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(8.w),
       ),
       child: child,
     );
@@ -485,10 +486,10 @@ class _CheckInPanel extends StatelessWidget {
 
     return Container(
       key: const Key('rewards_coins_check_in_panel'),
-      padding: const EdgeInsets.fromLTRB(12, 20, 12, 12),
+      padding: EdgeInsets.fromLTRB(12.w, 20.w, 12.w, 12.w),
       decoration: BoxDecoration(
         color: _card,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(8.w),
         image: const DecorationImage(
           image: AssetImage('assets/images/rewards/coins_bac.png'),
           fit: BoxFit.fill,
@@ -512,7 +513,7 @@ class _CheckInPanel extends StatelessWidget {
                     maxLines: 1,
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 19,
+                      fontSize: 19.sp,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -523,28 +524,25 @@ class _CheckInPanel extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 onTap: () => showRewardRulesSheet(context),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
+                  padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.w),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(16.w),
                   ),
                   child: Text(
                     context.l10n.rewardsRuleEntry,
-                    style: TextStyle(color: Color(0xFFAAA49D), fontSize: 11),
+                    style: TextStyle(color: Color(0xFFAAA49D), fontSize: 11.sp),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: 24.w),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: _buildDayWidgets(days, checkInStatus.currentDay),
           ),
-          const SizedBox(height: 17),
+          SizedBox(height: 17.w),
           GestureDetector(
             key: const Key('rewards_coins_sign_in'),
             behavior: HitTestBehavior.opaque,
@@ -553,10 +551,10 @@ class _CheckInPanel extends StatelessWidget {
                 : null,
             child: Container(
               width: double.infinity,
-              height: 44,
+              height: 44.w,
               decoration: BoxDecoration(
                 color: canCheckIn ? null : _disabledButton,
-                borderRadius: BorderRadius.circular(5),
+                borderRadius: BorderRadius.circular(5.w),
                 border: canCheckIn ? _goldButtonBorder : null,
                 gradient: canCheckIn
                     ? const LinearGradient(
@@ -578,7 +576,7 @@ class _CheckInPanel extends StatelessWidget {
                       color: canCheckIn
                           ? _goldButtonText
                           : Colors.white.withValues(alpha: 0.6),
-                      fontSize: 16,
+                      fontSize: 16.sp,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -597,7 +595,7 @@ class _CheckInPanel extends StatelessWidget {
   ) {
     return [
       for (var index = 0; index < days.length; index++) ...[
-        if (index > 0) const SizedBox(width: 4),
+        if (index > 0) SizedBox(width: 4.w),
         Expanded(
           child: _CheckInDay(
             day: days[index].day,
@@ -631,13 +629,13 @@ class _CheckInDay extends StatelessWidget {
         Stack(
           children: [
             Container(
-              height: 67,
-              width: 44,
+              height: 67.w,
+              width: 44.w,
               decoration: BoxDecoration(
                 color: checked
                     ? const Color(0xFF373737)
                     : const Color(0xFFAF6E37),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(4.w),
                 gradient: checked
                     ? null
                     : const LinearGradient(
@@ -651,8 +649,8 @@ class _CheckInDay extends StatelessWidget {
                 children: [
                   if (checked)
                     Container(
-                      width: 24,
-                      height: 24,
+                      width: 24.w,
+                      height: 24.w,
                       decoration: const BoxDecoration(
                         color: Color(0xFF929397),
                         shape: BoxShape.circle,
@@ -664,15 +662,15 @@ class _CheckInDay extends StatelessWidget {
                   else
                     Image.asset(
                       'assets/images/rewards/coins.png',
-                      width: 24,
-                      height: 24,
+                      width: 24.w,
+                      height: 24.w,
                     ),
-                  const SizedBox(height: 6),
+                  SizedBox(height: 6.w),
                   Text(
                     '+$rewardCoin',
                     style: TextStyle(
                       color: checked ? const Color(0xFF8C8D91) : Colors.white,
-                      fontSize: 14,
+                      fontSize: 14.sp,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -687,11 +685,11 @@ class _CheckInDay extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: 7),
+        SizedBox(height: 7.w),
         if (checked)
           SizedBox(
-            height: 13,
-            width: 12,
+            height: 13.w,
+            width: 12.w,
             child: Image.asset("assets/images/rewards/check.png"),
           )
         else
@@ -700,7 +698,7 @@ class _CheckInDay extends StatelessWidget {
             maxLines: 1,
             style: TextStyle(
               color: active ? Colors.white : _muted,
-              fontSize: 10,
+              fontSize: 10.sp,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -770,15 +768,15 @@ class _RewardTaskCard extends StatelessWidget {
         ? l10n.claim
         : l10n.goComplete;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.w),
       decoration: BoxDecoration(
         color: _card,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(8.w),
       ),
       child: Row(
         children: [
-          Image.asset(imagePath, width: 32, height: 32),
-          const SizedBox(width: 8),
+          Image.asset(imagePath, width: 32.w, height: 32.w),
+          SizedBox(width: 8.w),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -788,13 +786,13 @@ class _RewardTaskCard extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 14,
+                    fontSize: 14.sp,
                     fontWeight: FontWeight.w400,
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2.w),
                 Text.rich(
                   TextSpan(
                     children: [
@@ -810,12 +808,12 @@ class _RewardTaskCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  style: TextStyle(fontSize: 12),
+                  style: TextStyle(fontSize: 12.sp),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8.w),
           Container(
             decoration: BoxDecoration(
               color: task.claimed ? const Color(0xFF696A6E) : null,
@@ -824,7 +822,7 @@ class _RewardTaskCard extends StatelessWidget {
                   : const LinearGradient(
                       colors: [Color(0xFFD4864E), Color(0xFFFFF0BE)],
                     ),
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(4.w),
               border: task.claimed ? null : _goldButtonBorder,
             ),
             child: CustomPaint(
@@ -835,14 +833,14 @@ class _RewardTaskCard extends StatelessWidget {
                 color: Colors.transparent,
                 child: InkWell(
                   onTap: task.claimed ? null : onTap,
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(4.w),
                   child: Center(
                     child: Container(
-                      width: 78,
+                      width: 78.w,
                       alignment: Alignment.center,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 2,
-                        vertical: 6,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 2.w,
+                        vertical: 6.w,
                       ),
                       child: Text(
                         label,
@@ -850,7 +848,7 @@ class _RewardTaskCard extends StatelessWidget {
                           color: task.claimed
                               ? Colors.white.withValues(alpha: 0.6)
                               : _goldButtonText,
-                          fontSize: 12,
+                          fontSize: 12.sp,
                           fontWeight: FontWeight.w600,
                         ),
                       ),

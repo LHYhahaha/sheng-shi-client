@@ -8,6 +8,7 @@ class OAuthLoginRequestDto {
     return switch (provider) {
       'google' => {'googleToken': token},
       'facebook' => {'facebookToken': token},
+      'apple' => {'identityToken': token},
       _ => throw ArgumentError.value(
         provider,
         'provider',

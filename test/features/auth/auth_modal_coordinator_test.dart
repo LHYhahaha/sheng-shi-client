@@ -271,6 +271,7 @@ AuthSession _sessionFor(AuthProviderType provider) {
         AuthProviderType.phone => 'Phone User',
         AuthProviderType.google => 'Google User',
         AuthProviderType.facebook => 'Facebook User',
+        AuthProviderType.apple => 'Apple User',
       },
       avatarAssetPath: authDefaultAvatarAssetPath,
       provider: provider,

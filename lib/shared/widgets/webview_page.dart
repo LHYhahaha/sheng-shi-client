@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -210,13 +211,14 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
       appBar: widget.showAppBar
           ? AppBar(
               backgroundColor: AppColors.black,
-              toolbarHeight: AppSecondaryPageHeader.height,
+              toolbarHeight: AppSecondaryPageHeader.height.w,
               leadingWidth:
-                  AppSecondaryPageHeader.backButtonSize +
-                  AppSecondaryPageHeader.horizontalInset * 2,
+                  (AppSecondaryPageHeader.backButtonSize +
+                          AppSecondaryPageHeader.horizontalInset * 2)
+                      .w,
               leading: Padding(
-                padding: const EdgeInsets.only(
-                  left: AppSecondaryPageHeader.horizontalInset,
+                padding: EdgeInsets.only(
+                  left: AppSecondaryPageHeader.horizontalInset.w,
                 ),
                 child: AppSecondaryPageBackButton(
                   onPressed: () {
@@ -232,7 +234,7 @@ class _WebViewPageState extends ConsumerState<WebViewPage> {
                 widget.title,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: AppColors.textPrimary,
-                  fontSize: 16,
+                  fontSize: 16.sp,
                   fontWeight: FontWeight.w600,
                   height: 1.5,
                 ),

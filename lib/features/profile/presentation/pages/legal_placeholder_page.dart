@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
@@ -31,14 +32,14 @@ class LegalPlaceholderPage extends StatelessWidget {
               },
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+              padding: EdgeInsets.fromLTRB(16.w, 24.w, 16.w, 24.w),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
                   context.l10n.settingsLegalPlaceholder,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.58),
-                    fontSize: 14,
+                    fontSize: 14.sp,
                     height: 20 / 14,
                   ),
                 ),

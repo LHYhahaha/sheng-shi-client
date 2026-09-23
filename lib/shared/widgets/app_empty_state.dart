@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../theme/app_colors.dart';
 
@@ -37,7 +38,7 @@ class AppEmptyState extends StatelessWidget {
         textStyle ??
         Theme.of(context).textTheme.bodyMedium?.copyWith(
           color: AppColors.textPrimary.withValues(alpha: 0.3),
-          fontSize: 12,
+          fontSize: 12.sp,
           height: 16 / 12,
         );
     final showButton = buttonLabel != null && onButtonPressed != null;
@@ -50,27 +51,27 @@ class AppEmptyState extends StatelessWidget {
         children: [
           SvgPicture.asset(
             assetPath,
-            width: imageSize,
-            height: imageSize,
+            width: imageSize.w,
+            height: imageSize.w,
             fit: BoxFit.contain,
           ),
-          SizedBox(height: spacing),
+          SizedBox(height: spacing.w),
           Text(message, textAlign: TextAlign.center, style: effectiveTextStyle),
           if (showButton) ...[
-            SizedBox(height: buttonTopSpacing),
+            SizedBox(height: buttonTopSpacing.w),
             SizedBox(
-              width: buttonWidth,
-              height: 32,
+              width: buttonWidth.w,
+              height: 32.w,
               child: FilledButton(
                 onPressed: onButtonPressed,
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(5),
+                    borderRadius: BorderRadius.circular(5.w),
                   ),
                   textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontSize: 12,
+                    fontSize: 12.sp,
                     fontWeight: FontWeight.w500,
                     height: 16 / 12,
                   ),

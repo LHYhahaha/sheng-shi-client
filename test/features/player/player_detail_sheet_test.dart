@@ -5,6 +5,7 @@ import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:drama_client/shared/widgets/app_empty_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -228,6 +229,41 @@ void main() {
       );
     },
   );
+
+  testWidgets('wide iPhone layout does not overflow the detail header', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 932);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _openDetailSheet(
+      tester,
+      initialTab: PlayerDetailTab.episodes,
+      useScreenUtil: true,
+    );
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('detail header grows with the segmented control text', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 932);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _openDetailSheet(
+      tester,
+      initialTab: PlayerDetailTab.episodes,
+      textScaler: const TextScaler.linear(2),
+      useScreenUtil: true,
+    );
+
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _expandDetailSheetFromCover(WidgetTester tester) async {
@@ -244,6 +280,8 @@ Future<void> _openDetailSheet(
   List<PlayerEpisode>? episodes,
   List<PlayerRecommendation> recommendations = const [],
   Future<List<PlayerRecommendation>>? recommendationsFuture,
+  TextScaler? textScaler,
+  bool useScreenUtil = false,
 }) async {
   final detailEpisodes =
       episodes ??
@@ -279,49 +317,60 @@ Future<void> _openDetailSheet(
     episodeTotal: detailEpisodes.length,
   );
 
-  await tester.pumpWidget(
-    MaterialApp(
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ],
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: Builder(
-        builder: (context) {
-          return Scaffold(
-            body: Center(
-              child: ElevatedButton(
-                onPressed: () {
-                  showModalBottomSheet<void>(
-                    context: context,
-                    backgroundColor: Colors.transparent,
-                    isScrollControlled: true,
-                    builder: (sheetContext) {
-                      return PlayerDetailSheet(
-                        content: content,
-                        initialTab: initialTab,
-                        currentEpisode: currentEpisode,
-                        currentEpisodeId: currentEpisodeId,
-                        recommendationsFuture: recommendationsFuture,
-                        onEpisodeSelected: (episode) {
-                          if (onEpisodeSelected != null) {
-                            onEpisodeSelected(episode);
-                          }
-                          Navigator.of(sheetContext).pop();
-                        },
-                        onRecommendationSelected: (recommendation, position) {},
-                      );
-                    },
-                  );
-                },
-                child: const Text('Open sheet'),
-              ),
+  final app = MaterialApp(
+    builder: textScaler == null
+        ? null
+        : (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+            child: child!,
+          ),
+    localizationsDelegates: const [
+      AppLocalizations.delegate,
+      GlobalMaterialLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+    ],
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: Builder(
+      builder: (context) {
+        return Scaffold(
+          body: Center(
+            child: ElevatedButton(
+              onPressed: () {
+                showModalBottomSheet<void>(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  isScrollControlled: true,
+                  builder: (sheetContext) {
+                    return PlayerDetailSheet(
+                      content: content,
+                      initialTab: initialTab,
+                      currentEpisode: currentEpisode,
+                      currentEpisodeId: currentEpisodeId,
+                      recommendationsFuture: recommendationsFuture,
+                      onEpisodeSelected: (episode) {
+                        if (onEpisodeSelected != null) {
+                          onEpisodeSelected(episode);
+                        }
+                        Navigator.of(sheetContext).pop();
+                      },
+                      onRecommendationSelected: (recommendation, position) {},
+                    );
+                  },
+                );
+              },
+              child: const Text('Open sheet'),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
+    ),
+  );
+  await tester.pumpWidget(
+    ScreenUtilInit(
+      designSize: useScreenUtil ? const Size(375, 812) : const Size(800, 600),
+      builder: (_, child) => child!,
+      child: app,
     ),
   );
 

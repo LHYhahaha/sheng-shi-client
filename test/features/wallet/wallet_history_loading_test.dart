@@ -9,25 +9,33 @@ import 'package:drama_client/shared/widgets/app_peg_top_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   for (final type in WalletRecordType.values) {
-    testWidgets('$type shows loading until history request completes', (tester) async {
+    testWidgets('$type shows loading until history request completes', (
+      tester,
+    ) async {
       final controller = _PendingHistoryController();
-      await tester.pumpWidget(ProviderScope(
-        overrides: [walletControllerProvider.overrideWith(() => controller)],
-        child: MaterialApp(
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: WalletHistoryPage(type: type),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [walletControllerProvider.overrideWith(() => controller)],
+          child: ScreenUtilInit(
+            designSize: const Size(800, 600),
+            builder: (_, _) => MaterialApp(
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: WalletHistoryPage(type: type),
+            ),
+          ),
         ),
-      ));
+      );
       expect(find.byType(AppPegTopLoader), findsOneWidget);
       expect(find.byType(AppEmptyState), findsNothing);
       await tester.pump(const Duration(milliseconds: 100));
@@ -57,7 +65,8 @@ class _PendingHistoryController extends WalletController {
   @override
   Future<void> loadTransactionRecords({String? pageToken}) => _loadHistory();
   @override
-  Future<void> loadConsumptionRecords(WalletConsumptionStatus status) => _loadHistory();
+  Future<void> loadConsumptionRecords(WalletConsumptionStatus status) =>
+      _loadHistory();
   @override
   Future<void> loadRewardCoins({String? pageToken}) => _loadHistory();
 }

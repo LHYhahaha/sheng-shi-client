@@ -1,5 +1,6 @@
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gradient_borders/box_borders/gradient_box_border.dart';
 
 const _goldButtonBorder = GradientBoxBorder(
@@ -38,16 +39,19 @@ class _RewardCoinsCheckInSuccessDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = (MediaQuery.sizeOf(context).width - 64).clamp(280.0, 312.0);
+    final width = (MediaQuery.sizeOf(context).width - 64.w).clamp(
+      280.0.w,
+      312.0.w,
+    );
     return SafeArea(
       child: Center(
         child: Material(
           color: Colors.transparent,
           child: Container(
             width: width,
-            height: 240,
+            height: 240.w,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(12.w),
               border: GradientBoxBorder(
                 width: 1,
                 gradient: LinearGradient(
@@ -74,45 +78,45 @@ class _RewardCoinsCheckInSuccessDialog extends StatelessWidget {
               clipBehavior: Clip.none,
               children: [
                 Positioned(
-                  top: -65,
+                  top: -65.w,
                   child: Image.asset(
                     'assets/images/rewards/coins_pop_icon.png',
-                    width: 128,
-                    height: 128,
+                    width: 128.w,
+                    height: 128.w,
                     fit: BoxFit.contain,
                   ),
                 ),
                 Positioned(
-                  top: 65,
+                  top: 65.w,
                   child: Text(
                     context.l10n.rewardsSigninSuccessTitle,
-                    style: TextStyle(color: Colors.white, fontSize: 14),
+                    style: TextStyle(color: Colors.white, fontSize: 14.sp),
                   ),
                 ),
                 Positioned(
-                  top: 105,
+                  top: 105.w,
                   child: Text(
                     "+${context.l10n.rewardsSigninSuccessCoins(rewardAmount)}",
                     key: const Key('rewards_coins_claim_success_amount'),
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Color(0xFFFFD9B4),
-                      fontSize: 26,
+                      fontSize: 26.sp,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
                 Positioned(
-                  left: 16,
-                  right: 16,
-                  bottom: 18,
+                  left: 16.w,
+                  right: 16.w,
+                  bottom: 18.w,
                   child: GestureDetector(
                     key: const Key('rewards_coins_claim_success_ok'),
                     onTap: () => Navigator.of(context).pop(),
                     child: SizedBox(
-                      height: 44,
+                      height: 44.w,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(4.w),
                           border: _goldButtonBorder,
                           gradient: const LinearGradient(
                             colors: [Color(0xFFD48851), Color(0xFFFFF3C7)],
@@ -127,7 +131,7 @@ class _RewardCoinsCheckInSuccessDialog extends StatelessWidget {
                                 context.l10n.rewardsSigninSuccessConfirm,
                                 style: TextStyle(
                                   color: Color(0xFF743000),
-                                  fontSize: 14,
+                                  fontSize: 14.sp,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),

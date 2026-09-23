@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -48,7 +49,7 @@ class _MemberPointDetailsPageState
     if (!_scrollController.hasClients) {
       return;
     }
-    if (_scrollController.position.extentAfter > 240) {
+    if (_scrollController.position.extentAfter > 240.w) {
       _didTriggerLoadMoreNearEnd = false;
       return;
     }
@@ -120,16 +121,16 @@ class _MemberPointDetailsPageState
     return ListView.separated(
       key: const Key('member_point_details_list'),
       controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(16, 23, 16, 24),
+      padding: EdgeInsets.fromLTRB(16.w, 23.w, 16.w, 24.w),
       itemBuilder: (context, index) {
         if (index == state.items.length) {
-          return const AppLoadMoreIndicator(
-            padding: EdgeInsets.symmetric(vertical: 18),
+          return AppLoadMoreIndicator(
+            padding: EdgeInsets.symmetric(vertical: 18.w),
           );
         }
         return _MemberPointDetailItem(record: state.items[index]);
       },
-      separatorBuilder: (context, index) => const SizedBox(height: 22),
+      separatorBuilder: (context, index) => SizedBox(height: 22.w),
       itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
     );
   }
@@ -162,29 +163,29 @@ class _MemberPointDetailItem extends StatelessWidget {
       children: [
         Image.asset(
           'assets/images/rewards/points_icon.png',
-          width: 26,
-          height: 26,
+          width: 26.w,
+          height: 26.w,
         ),
-        const SizedBox(width: 10),
+        SizedBox(width: 10.w),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 _formatAmount(record),
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white,
-                  fontSize: 16,
+                  fontSize: 16.sp,
                   fontWeight: FontWeight(510),
                   height: 1.15,
                 ),
               ),
-              const SizedBox(height: 5),
+              SizedBox(height: 5.w),
               Text(
                 _formatTime(record.createdAt),
-                style: const TextStyle(
+                style: TextStyle(
                   color: _detailsMutedText,
-                  fontSize: 12,
+                  fontSize: 12.sp,
                   fontWeight: FontWeight.w400,
                   height: 1.15,
                 ),
@@ -192,15 +193,15 @@ class _MemberPointDetailItem extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: 12.w),
         Text(
           _recordLabel(context, record),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.right,
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.white,
-            fontSize: 12,
+            fontSize: 12.sp,
             fontWeight: FontWeight.w400,
           ),
         ),

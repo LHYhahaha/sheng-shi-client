@@ -2,6 +2,7 @@ import 'package:drama_client/features/player/presentation/widgets/player_action_
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -13,6 +14,8 @@ void main() {
     addTearDown(currentRate.dispose);
     await tester.pumpWidget(
       MaterialApp(
+        builder: (context, child) =>
+            ScreenUtilInit(designSize: const Size(800, 600), child: child),
         localizationsDelegates: const [
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,

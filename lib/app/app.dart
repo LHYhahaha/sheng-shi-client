@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import '../bootstrap/feature_session_cleanup.dart';
@@ -1038,40 +1039,49 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
         GlobalWidgetsLocalizations.delegate,
       ],
       builder: (context, child) {
-        final wrapped = botToastBuilder(context, child);
-        final paymentLoading = ref.watch(paymentLoadingControllerProvider);
-        final isPaymentLoading = paymentLoading.isVisible;
-        final accountBan = ref.watch(accountBanControllerProvider);
-        final isBanned = accountBan.isBanned;
-        final paymentLoadingLabel = switch (paymentLoading.label) {
-          PaymentLoadingLabel.none => null,
-          PaymentLoadingLabel.loading => context.l10n.loading,
-          PaymentLoadingLabel.confirmingPayment =>
-            context.l10n.storePurchaseProcessing,
-        };
-        return StartupSplashGate(
-          child: AccountBannedOverlay(
-            child: PopScope(
-              canPop:
-                  !isPaymentLoading &&
-                  (!isBanned || accountBan.isViewingFeedback),
-              child: Stack(
-                children: [
-                  AppModalHost(child: wrapped),
-                  if (!isBanned)
-                    PopupEntryOverlay(
-                      onImageTap: (popup) =>
-                          _handlePopupImageTap(router, popup),
-                      onPlayTap: (popup) => _handlePopupPlayTap(router, popup),
-                    ),
-                  if (isPaymentLoading && !isBanned)
-                    AppBlockingLoadingOverlay(label: paymentLoadingLabel),
-                  if (_isWaitingForExternalPlayerAuthentication && !isBanned)
-                    AppBlockingLoadingOverlay(label: context.l10n.loading),
-                ],
+        return ScreenUtilInit(
+          designSize: const Size(375, 812),
+          splitScreenMode: true,
+          child: child,
+          builder: (context, child) {
+            final wrapped = botToastBuilder(context, child);
+            final paymentLoading = ref.watch(paymentLoadingControllerProvider);
+            final isPaymentLoading = paymentLoading.isVisible;
+            final accountBan = ref.watch(accountBanControllerProvider);
+            final isBanned = accountBan.isBanned;
+            final paymentLoadingLabel = switch (paymentLoading.label) {
+              PaymentLoadingLabel.none => null,
+              PaymentLoadingLabel.loading => context.l10n.loading,
+              PaymentLoadingLabel.confirmingPayment =>
+                context.l10n.storePurchaseProcessing,
+            };
+            return StartupSplashGate(
+              child: AccountBannedOverlay(
+                child: PopScope(
+                  canPop:
+                      !isPaymentLoading &&
+                      (!isBanned || accountBan.isViewingFeedback),
+                  child: Stack(
+                    children: [
+                      AppModalHost(child: wrapped),
+                      if (!isBanned)
+                        PopupEntryOverlay(
+                          onImageTap: (popup) =>
+                              _handlePopupImageTap(router, popup),
+                          onPlayTap: (popup) =>
+                              _handlePopupPlayTap(router, popup),
+                        ),
+                      if (isPaymentLoading && !isBanned)
+                        AppBlockingLoadingOverlay(label: paymentLoadingLabel),
+                      if (_isWaitingForExternalPlayerAuthentication &&
+                          !isBanned)
+                        AppBlockingLoadingOverlay(label: context.l10n.loading),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
       routerConfig: router,

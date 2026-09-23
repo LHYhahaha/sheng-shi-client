@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
@@ -41,13 +42,13 @@ const _membershipPrimaryTitleGradient = LinearGradient(
 TextStyle _membershipPrimaryTitleStyle(BuildContext context) =>
     Theme.of(context).textTheme.headlineSmall?.copyWith(
       color: Colors.white,
-      fontSize: 26,
+      fontSize: 26.sp,
       fontWeight: FontWeight.w800,
       height: 1.2,
     ) ??
-    const TextStyle(
+    TextStyle(
       color: Colors.white,
-      fontSize: 26,
+      fontSize: 26.sp,
       fontWeight: FontWeight.w800,
       height: 1.2,
     );
@@ -440,7 +441,7 @@ class _MembershipBody extends StatelessWidget {
             isGoogleBillingUnavailable: state.isGoogleBillingUnavailable,
             onPlanTap: onPlanTap,
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16.w),
           // Padding(
           //   padding: const EdgeInsets.symmetric(
           //     horizontal: MembershipLayout.horizontalPadding,
@@ -530,7 +531,7 @@ class _MembershipPlanCardsColumn extends StatelessWidget {
       builder: (context, constraints) {
         if (plans.isEmpty) {
           return SizedBox(
-            height: 120,
+            height: 120.w,
             child: Center(
               child: AppEmptyState(
                 message: isGoogleBillingUnavailable
@@ -604,7 +605,7 @@ class _MembershipHeroContent extends StatelessWidget {
             child: Row(
               children: [
                 const _AvatarDots(),
-                const SizedBox(width: 8),
+                SizedBox(width: 8.w),
                 Expanded(
                   child: Text(
                     subtitle,
@@ -612,7 +613,7 @@ class _MembershipHeroContent extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: Colors.white,
-                      fontSize: 11,
+                      fontSize: 11.sp,
                       height: 1.5,
                       fontWeight: FontWeight.normal,
                     ),
@@ -646,7 +647,7 @@ class _MembershipStickyHeader extends StatelessWidget {
     final titleStyle = hasBackButton
         ? Theme.of(context).textTheme.titleMedium?.copyWith(
             color: Colors.white,
-            fontSize: 16,
+            fontSize: 16.sp,
             fontWeight: FontWeight.w700,
           )
         : _membershipPrimaryTitleStyle(context);
@@ -761,16 +762,16 @@ class _AvatarDots extends StatelessWidget {
     ];
 
     return SizedBox(
-      width: 36,
-      height: 16,
+      width: 36.w,
+      height: 16.w,
       child: Stack(
         children: [
           for (var index = 0; index < colors.length; index++)
             Positioned(
               left: index * 10.0,
               child: Container(
-                width: 16,
-                height: 16,
+                width: 16.w,
+                height: 16.w,
                 decoration: BoxDecoration(
                   color: colors[index],
                   shape: BoxShape.circle,
@@ -810,8 +811,8 @@ class _MembershipBottomButton extends StatelessWidget {
           child: GestureDetector(
             onTap: enabled ? onPurchase : null,
             child: Container(
-              width: 247,
-              height: 57,
+              width: 247.w,
+              height: 57.w,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(40),
@@ -840,7 +841,7 @@ class _MembershipBottomButton extends StatelessWidget {
                       color: enabled
                           ? const Color(0xFF230D06)
                           : Colors.white.withValues(alpha: 0.45),
-                      fontSize: 18,
+                      fontSize: 18.sp,
                       fontWeight: FontWeight(590),
                     ),
                   ),
@@ -850,7 +851,7 @@ class _MembershipBottomButton extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: const Color(0xFF230D06).withValues(alpha: 0.3),
-                      fontSize: 11,
+                      fontSize: 11.sp,
                       height: 1.3,
                     ),
                   ),
@@ -867,7 +868,7 @@ class _MembershipBottomButton extends StatelessWidget {
       right: 0,
       bottom: 0,
       child: Container(
-        padding: EdgeInsets.fromLTRB(16, 12, 16, bottomInset + 12),
+        padding: EdgeInsets.fromLTRB(16.w, 12.w, 16.w, bottomInset + 12.w),
         decoration: BoxDecoration(
           color: MembershipLayout.background,
           borderRadius: BorderRadius.only(
@@ -888,9 +889,9 @@ class _MembershipBottomButton extends StatelessWidget {
             GestureDetector(
               onTap: enabled ? onPurchase : null,
               child: Container(
-                height: 46,
+                height: 46.w,
                 width: double.infinity,
-                margin: EdgeInsets.symmetric(horizontal: 15),
+                margin: EdgeInsets.symmetric(horizontal: 15.w),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
@@ -909,18 +910,18 @@ class _MembershipBottomButton extends StatelessWidget {
                     color: enabled
                         ? const Color(0xFF1B1B1C)
                         : Colors.white.withValues(alpha: 0.45),
-                    fontSize: 14,
+                    fontSize: 14.sp,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
             ),
-            SizedBox(height: 10),
+            SizedBox(height: 10.w),
             Text(
               context.l10n.membershipAutoRenewCancel,
               style: TextStyle(
                 color: Color(0XFFFFFFFF).withValues(alpha: 0.4),
-                fontSize: 12,
+                fontSize: 12.sp,
                 fontWeight: FontWeight.normal,
               ),
             ),

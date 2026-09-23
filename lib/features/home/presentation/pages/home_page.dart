@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_swiper_plus/flutter_swiper_plus.dart';
@@ -428,7 +429,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final gridCrossAxisExtent = math
         .max(
           0,
-          MediaQuery.sizeOf(context).width - safeAreaPadding.horizontal - 32,
+          MediaQuery.sizeOf(context).width - safeAreaPadding.horizontal - 32.w,
         )
         .toDouble();
 
@@ -507,7 +508,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       )
                     else
                       SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 2, 16, 24),
+                        padding: EdgeInsets.fromLTRB(16.w, 2.w, 16.w, 24.w),
                         sliver: _HomeGridLayout(
                           crossAxisExtent: gridCrossAxisExtent,
                           builder: (context, crossAxisExtent) {
@@ -517,7 +518,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                               );
                             }
 
-                            const crossAxisSpacing = 8.0;
+                            final crossAxisSpacing = 8.w;
                             const featuredDramaCount = 9;
                             const featuredCoverAspectRatio = 109 / 147;
 
@@ -613,7 +614,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                               );
 
                               return SliverMasonryGrid(
-                                mainAxisSpacing: 8,
+                                mainAxisSpacing: 8.w,
                                 crossAxisSpacing: crossAxisSpacing,
                                 gridDelegate:
                                     SliverSimpleGridDelegateWithFixedCrossAxisCount(
@@ -646,7 +647,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                                 gridDelegate:
                                     SliverGridDelegateWithFixedCrossAxisCount(
                                       crossAxisCount: 3,
-                                      mainAxisSpacing: 8,
+                                      mainAxisSpacing: 8.w,
                                       crossAxisSpacing: crossAxisSpacing,
                                       mainAxisExtent:
                                           tileWidth / featuredCoverAspectRatio +
@@ -694,8 +695,8 @@ class _HomePageState extends ConsumerState<HomePage> {
                                   hasTagRow: !featuredCardsHaveNoTags,
                                 ),
                                 if (remainingCount > 0) ...[
-                                  const SliverToBoxAdapter(
-                                    child: SizedBox(height: 20),
+                                  SliverToBoxAdapter(
+                                    child: SizedBox(height: 20.w),
                                   ),
                                   buildDramaGrid(
                                     startIndex: firstSectionCount,
@@ -1041,10 +1042,10 @@ class _HomeRemoteBannerCarouselState extends State<_HomeRemoteBannerCarousel> {
   @override
   Widget build(BuildContext context) => Container(
     key: const Key('home_remote_banner_carousel'),
-    height: 200,
-    margin: const EdgeInsets.only(bottom: 10, left: 16, right: 16),
+    height: 200.w,
+    margin: EdgeInsets.only(bottom: 10.w, left: 16.w, right: 16.w),
     child: ClipRRect(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(6.w),
       child: Swiper(
         // All banner images are warmed in the Flutter image cache before the
         // first automatic transition, so every slide is ready when it appears.
@@ -1066,7 +1067,7 @@ class _HomeRemoteBannerCarouselState extends State<_HomeRemoteBannerCarousel> {
         onIndexChanged: _onIndexChanged,
         pagination: SwiperPagination(
           alignment: Alignment.bottomCenter,
-          margin: const EdgeInsets.only(bottom: 10),
+          margin: EdgeInsets.only(bottom: 10.w),
           builder: SwiperCustomPagination(
             builder: (context, config) => _HomeBannerSliderIndicator(
               activeIndex: config.activeIndex,
@@ -1091,7 +1092,7 @@ class _HomeBannerSliderIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const trackWidth = 72.0;
+    final trackWidth = 72.w;
     final count = itemCount < 1 ? 1 : itemCount;
     final index = activeIndex.clamp(0, count - 1).toDouble();
     final alignmentX = count <= 1 ? 0.0 : -1.0 + (2.0 * index / (count - 1));
@@ -1099,10 +1100,10 @@ class _HomeBannerSliderIndicator extends StatelessWidget {
 
     return Container(
       width: trackWidth,
-      height: 4,
+      height: 4.w,
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.24),
-        borderRadius: BorderRadius.circular(2),
+        borderRadius: BorderRadius.circular(2.w),
       ),
       clipBehavior: Clip.antiAlias,
       child: AnimatedAlign(
@@ -1111,10 +1112,10 @@ class _HomeBannerSliderIndicator extends StatelessWidget {
         alignment: Alignment(alignmentX, 0),
         child: Container(
           width: activeWidth,
-          height: 4,
+          height: 4.w,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.6),
-            borderRadius: BorderRadius.circular(2),
+            borderRadius: BorderRadius.circular(2.w),
           ),
         ),
       ),
@@ -1193,23 +1194,23 @@ class _HomeTitleBarState extends ConsumerState<_HomeTitleBar> {
               _openSearch();
             },
             child: Container(
-              padding: EdgeInsets.symmetric(vertical: 7, horizontal: 8),
+              padding: EdgeInsets.symmetric(vertical: 7.w, horizontal: 8.w),
               decoration: BoxDecoration(
                 color: Color(0XFF3A3A3A).withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(4.w),
               ),
               child: Row(
                 children: [
                   Image.asset(
                     "assets/images/home/search.png",
-                    width: 20,
-                    height: 20,
+                    width: 20.w,
+                    height: 20.w,
                     // colorFilter: ColorFilter.mode(
                     //   Color(0XFFFFFFFF).withValues(alpha: 0.4),
                     //   BlendMode.srcIn,
                     // ),
                   ),
-                  SizedBox(width: 6),
+                  SizedBox(width: 6.w),
                   Expanded(
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 320),
@@ -1243,7 +1244,7 @@ class _HomeTitleBarState extends ConsumerState<_HomeTitleBar> {
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           color: Color(0XFFFFFFFF).withValues(alpha: 0.4),
-                          fontSize: 14,
+                          fontSize: 14.sp,
                           fontWeight: FontWeight.normal,
                           height: 18 / 14,
                         ),
@@ -1275,8 +1276,8 @@ class _HomeTitleBarState extends ConsumerState<_HomeTitleBar> {
                   : RoutePaths.membershipLocation(returnToProfile: true),
             );
           },
-          child: const Padding(
-            padding: EdgeInsets.only(left: 7),
+          child: Padding(
+            padding: EdgeInsets.only(left: 7.w),
             child: _HeadIcon(
               imageUrl: 'assets/images/home/vip_crown_figma.png',
             ),
@@ -1352,9 +1353,9 @@ class _HomeRewardEntryState extends ConsumerState<_HomeRewardEntry> {
           child: Stack(
             alignment: Alignment.topRight,
             children: [
-              const SizedBox(
-                width: 44,
-                height: 44,
+              SizedBox(
+                width: 44.w,
+                height: 44.w,
                 child: Center(
                   child: _HeadIcon(
                     imageUrl: 'assets/images/home/gift.png',
@@ -1365,17 +1366,17 @@ class _HomeRewardEntryState extends ConsumerState<_HomeRewardEntry> {
               if (hasToken && remainingCoin?.isPositive == true)
                 Container(
                   key: const ValueKey('home_reward_badge'),
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  margin: EdgeInsets.only(top: 2),
+                  padding: EdgeInsets.symmetric(horizontal: 4.w),
+                  margin: EdgeInsets.only(top: 2.w),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8014F),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(12.w),
                   ),
                   child: Text(
                     '+${remainingCoin!.value}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
-                      fontSize: 9,
+                      fontSize: 9.sp,
                       fontWeight: FontWeight(330),
                       height: 1.5,
                     ),
@@ -1399,9 +1400,9 @@ class _HeadIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return Image.asset(
       imageUrl,
-      width: size ?? 44,
-      height: size ?? 44,
-      cacheWidth: ((size ?? 44) * MediaQuery.devicePixelRatioOf(context))
+      width: (size ?? 44).w,
+      height: (size ?? 44).w,
+      cacheWidth: ((size ?? 44).w * MediaQuery.devicePixelRatioOf(context))
           .round(),
       fit: BoxFit.contain,
       filterQuality: FilterQuality.low,
@@ -1421,10 +1422,10 @@ class _HomeFixedHeaderDelegate extends SliverPersistentHeaderDelegate {
   final ValueChanged<int> onTabChanged;
 
   @override
-  double get minExtent => 100;
+  double get minExtent => 100.w;
 
   @override
-  double get maxExtent => 100;
+  double get maxExtent => 100.w;
 
   @override
   Widget build(
@@ -1447,19 +1448,18 @@ class _HomeFixedHeaderDelegate extends SliverPersistentHeaderDelegate {
               : null,
         ),
         child: Padding(
-          padding: const EdgeInsets.only(left: 16, right: 16, top: 17),
+          padding: EdgeInsets.only(left: 16.w, right: 16.w, top: 17.w),
           child: Column(
             children: [
               _HomeTitleBar(),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.only(top: 9),
+                  padding: EdgeInsets.only(top: 9.w),
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     padding: EdgeInsets.zero,
                     itemCount: tabs.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(width: 20),
+                    separatorBuilder: (context, index) => SizedBox(width: 20.w),
                     itemBuilder: (context, index) {
                       return _HomeCategoryTab(
                         label: tabs[index].title,
@@ -1503,7 +1503,7 @@ class _HomeCategoryTab extends StatelessWidget {
         label,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
           color: selected ? AppColors.textPrimary : AppColors.textSecondary,
-          fontSize: 15,
+          fontSize: 15.sp,
           fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
           height: 1.5,
         ),
@@ -1619,14 +1619,14 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
 
     return Material(
       color: widget.compact ? Colors.transparent : Color(0XFF1C1821),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(Radius.circular(4)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(4.w)),
       ),
       // 列表滚动时不让整张卡片都进入抗锯齿裁剪层；仅封面需要裁剪圆角。
       clipBehavior: Clip.none,
       child: InkWell(
         onTap: widget.onTap,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(4.w),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1634,8 +1634,8 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
               aspectRatio: _HomeDramaCard.coverAspectRatio,
               child: ClipRRect(
                 borderRadius: widget.compact
-                    ? BorderRadius.circular(4)
-                    : const BorderRadius.vertical(top: Radius.circular(4)),
+                    ? BorderRadius.circular(4.w)
+                    : BorderRadius.vertical(top: Radius.circular(4.w)),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -1663,8 +1663,8 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
                         child: _ExclusiveBadge(),
                       ),
                     Positioned(
-                      right: 4,
-                      bottom: 4,
+                      right: 4.w,
+                      bottom: 4.w,
                       child: _ViewCount(label: widget.data.viewCountLabel),
                     ),
                   ],
@@ -1673,10 +1673,10 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
             ),
             Padding(
               padding: EdgeInsets.fromLTRB(
-                widget.compact ? 0 : 10,
-                widget.compact ? 4 : 10,
-                widget.compact ? 0 : 10,
-                widget.compact ? 0 : 10,
+                widget.compact ? 0 : 10.w,
+                widget.compact ? 4.w : 10.w,
+                widget.compact ? 0 : 10.w,
+                widget.compact ? 0 : 10.w,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1689,12 +1689,12 @@ class _HomeDramaCardState extends State<_HomeDramaCard> {
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: AppColors.textOnCard,
                       fontWeight: FontWeight.normal,
-                      fontSize: 12,
+                      fontSize: 12.sp,
                       height: 1.3,
                     ),
                   ),
                   if (visibleTags.isNotEmpty) ...[
-                    const SizedBox(height: 6),
+                    SizedBox(height: 6.w),
                     if (widget.compact)
                       Text(
                         visibleTags.first,
@@ -1751,24 +1751,24 @@ class _ExclusiveBadge extends StatelessWidget {
     return Container(
       // width: 60,
       // height: 18,
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.w),
       alignment: Alignment.center,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
           colors: [Color(0xFFFFEEBD), Color(0xFFFDB849)],
         ),
         borderRadius: BorderRadius.only(
-          topRight: Radius.circular(6),
-          bottomLeft: Radius.circular(6),
+          topRight: Radius.circular(6.w),
+          bottomLeft: Radius.circular(6.w),
         ),
       ),
       child: Text(
         context.l10n.exclusive,
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
           color: const Color(0xFF652400),
-          fontSize: 11,
+          fontSize: 11.sp,
           fontWeight: FontWeight.w500,
           height: 14 / 11,
         ),
@@ -1790,19 +1790,19 @@ class _ViewCount extends StatelessWidget {
         // const Icon(Icons.play_arrow, color: AppColors.textPrimary, size: 14),
         Image.asset(
           'assets/images/home/home_views.png',
-          width: 8,
-          height: 8,
-          cacheWidth: (8 * MediaQuery.devicePixelRatioOf(context)).round(),
+          width: 8.w,
+          height: 8.w,
+          cacheWidth: (8.w * MediaQuery.devicePixelRatioOf(context)).round(),
           fit: BoxFit.contain,
           filterQuality: FilterQuality.low,
         ),
-        const SizedBox(width: 2),
+        SizedBox(width: 2.w),
         Text(
           label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
             color: AppColors.textOnCard,
             fontWeight: FontWeight.normal,
-            fontSize: 9,
+            fontSize: 9.sp,
             height: 1.2,
           ),
         ),
@@ -1821,7 +1821,7 @@ class _HomeTag extends StatelessWidget {
   static TextStyle? textStyle(BuildContext context) {
     return Theme.of(context).textTheme.labelSmall?.copyWith(
       color: const Color(0xFFE3E3E3).withValues(alpha: 0.6),
-      fontSize: 9,
+      fontSize: 9.sp,
       height: 1.3,
     );
   }
@@ -1829,7 +1829,7 @@ class _HomeTag extends StatelessWidget {
   static TextStyle? compactTextStyle(BuildContext context) {
     return Theme.of(context).textTheme.bodyMedium?.copyWith(
       color: const Color(0xFFE3E3E3).withValues(alpha: 0.5),
-      fontSize: 12,
+      fontSize: 12.sp,
       fontWeight: FontWeight.w400,
       height: 1.3,
     );
@@ -1838,12 +1838,12 @@ class _HomeTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 16,
-      padding: const EdgeInsets.symmetric(horizontal: 6),
+      height: 16.w,
+      padding: EdgeInsets.symmetric(horizontal: 6.w),
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: const Color(0x3DD9D9D9).withValues(alpha: 0.24),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(4.w),
       ),
       child: Text(
         label,

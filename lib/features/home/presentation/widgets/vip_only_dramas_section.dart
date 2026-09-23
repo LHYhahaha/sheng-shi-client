@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../core/analytics/drama_card_exposure.dart';
 import '../../../../core/analytics/analytics_service.dart';
@@ -50,7 +51,7 @@ class VipOnlyDramasSection extends ConsumerWidget {
       padding: padding,
       decoration: BoxDecoration(color: backgroundColor, border: border),
       child: Padding(
-        padding: EdgeInsets.only(top: topPadding ?? 24),
+        padding: EdgeInsets.only(top: (topPadding ?? 24).w),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -63,23 +64,23 @@ class VipOnlyDramasSection extends ConsumerWidget {
                         color: Colors.white.withValues(alpha: 0.12),
                         height: 1,
                       ),
-                      SizedBox(height: 24),
+                      SizedBox(height: 24.w),
                     ],
                   ),
             Text(
               context.l10n.memberCenterSectionVipDramas,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 color: Colors.white.withValues(alpha: 0.7),
-                fontSize: 14,
+                fontSize: 14.sp,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12.w),
             LayoutBuilder(
               builder: (context, constraints) {
                 final cardWidth = constraints.maxWidth / _visibleCardCount;
                 final listHeight =
-                    cardWidth / _cardImageAspectRatio + _titleHeight + 6;
+                    cardWidth / _cardImageAspectRatio + _titleHeight.w + 6.w;
 
                 return SizedBox(
                   height: listHeight,
@@ -89,7 +90,7 @@ class VipOnlyDramasSection extends ConsumerWidget {
                     scrollDirection: Axis.horizontal,
                     physics: const ClampingScrollPhysics(),
                     itemCount: VipOnlyDramaCollection.minimumDisplayCount,
-                    separatorBuilder: (_, _) => const SizedBox(width: 8),
+                    separatorBuilder: (_, _) => SizedBox(width: 8.w),
                     itemBuilder: (context, index) {
                       final drama = collection.dramas[index];
                       final card = _VipOnlyDramaCard(
@@ -143,23 +144,23 @@ class _VipOnlyDramaCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
-              aspectRatio: 109/147,
+              aspectRatio: 109 / 147,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(4.w),
                 child: AppCachedNetworkImage(
                   imageUrl: drama.coverUrl,
                   fit: BoxFit.cover,
                 ),
               ),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: 6.w),
             Text(
               drama.title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: Color(0xFFFFFFFF).withValues(alpha: 0.9),
-                fontSize: 12,
+                fontSize: 12.sp,
                 height: 1.15,
               ),
             ),

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../core/analytics/analytics_definition.dart';
 import '../../../core/analytics/analytics_event.dart';
@@ -107,7 +108,9 @@ class _AdUnlockPromptDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = (MediaQuery.sizeOf(context).width - 82).clamp(280.0, 320.0);
+    final width = (MediaQuery.sizeOf(context).width - 82.w)
+        .clamp(280.0, 320.0)
+        .toDouble();
     final limitLabel = dailyLimit == -1 ? '∞' : '$dailyLimit';
     return SafeArea(
       child: Center(
@@ -117,10 +120,10 @@ class _AdUnlockPromptDialog extends StatelessWidget {
             children: [
               Container(
                 width: width,
-                padding: const EdgeInsets.fromLTRB(10, 37, 10, 11),
+                padding: EdgeInsets.fromLTRB(10.w, 37.w, 10.w, 11.w),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1C1C1E),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(12.w),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -131,15 +134,15 @@ class _AdUnlockPromptDialog extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 18,
+                        fontSize: 18.sp,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    SizedBox(height: 20.w),
                     Center(child: _CoverImage(coverUrl: coverUrl)),
-                    const SizedBox(height: 20),
+                    SizedBox(height: 20.w),
                     SizedBox(
-                      height: 52,
+                      height: 52.w,
                       child: FilledButton(
                         onPressed: () {
                           onWatchAdTap();
@@ -150,7 +153,7 @@ class _AdUnlockPromptDialog extends StatelessWidget {
                           foregroundColor: Colors.white,
                           padding: EdgeInsets.zero,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(8.w),
                           ),
                         ),
                         child: Column(
@@ -160,14 +163,14 @@ class _AdUnlockPromptDialog extends StatelessWidget {
                               context.l10n.adUnlockActionWatch,
                               style: TextStyle(fontWeight: FontWeight.w600),
                             ),
-                            const SizedBox(height: 2),
+                            SizedBox(height: 2.w),
                             Text(
                               context.l10n.adUnlockTodayProgress(
                                 watched: watchedToday,
                                 total: limitLabel,
                               ),
-                              style: const TextStyle(
-                                fontSize: 12,
+                              style: TextStyle(
+                                fontSize: 12.sp,
                                 color: Colors.white70,
                               ),
                             ),
@@ -180,19 +183,19 @@ class _AdUnlockPromptDialog extends StatelessWidget {
               ),
 
               Positioned(
-                top: 10,
-                right: 10,
+                top: 10.w,
+                right: 10.w,
                 child: GestureDetector(
                   onTap: () => Navigator.of(context).pop(false),
                   child: Container(
-                    padding: EdgeInsets.all(4),
+                    padding: EdgeInsets.all(4.w),
                     decoration: BoxDecoration(
                       color: Color(0xFF292929),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.close_rounded,
-                      size: 18,
+                      size: 18.w,
                       color: Colors.white60,
                     ),
                   ),
@@ -215,14 +218,14 @@ class _CoverImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final url = coverUrl;
     if (url == null || url.isEmpty) {
-      return const SizedBox(width: 126, height: 166);
+      return SizedBox(width: 126.w, height: 166.w);
     }
     return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(6.w),
       child: AppCachedNetworkImage(
         imageUrl: url,
-        width: 126,
-        height: 166,
+        width: 126.w,
+        height: 166.w,
         fit: BoxFit.cover,
       ),
     );

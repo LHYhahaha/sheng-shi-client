@@ -1,6 +1,7 @@
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
 
 import '../../../../shared/theme/app_radii.dart';
@@ -83,14 +84,14 @@ class StoreVipPackageCard extends ConsumerWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          height: 159,
+          height: 159.w,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [Color(0xFFFFF0D9), Color(0xFFF3CA92)],
             ),
-            borderRadius: BorderRadius.circular(AppRadii.sm),
+            borderRadius: BorderRadius.circular(AppRadii.sm.w),
           ),
           clipBehavior: Clip.antiAlias,
           child: Stack(
@@ -101,7 +102,7 @@ class StoreVipPackageCard extends ConsumerWidget {
                 right: 0,
                 child: Image.asset(
                   "assets/images/profile/vip_v.png",
-                  height: 98,
+                  height: 98.w,
                   fit: BoxFit.contain,
                 ),
               ),
@@ -110,22 +111,22 @@ class StoreVipPackageCard extends ConsumerWidget {
                   right: 0,
                   top: 0,
                   child: Container(
-                    height: 19,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: 2,
+                    height: 19.w,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm.w,
+                      vertical: 2.w,
                     ),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: Color(0xFFFE3273),
                       borderRadius: BorderRadius.only(
-                        bottomLeft: Radius.circular(AppRadii.sm),
+                        bottomLeft: Radius.circular(AppRadii.sm.w),
                       ),
                     ),
                     child: Text(
                       package.badgeLabel!,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: Colors.white,
-                        fontSize: 10,
+                        fontSize: 10.sp,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -133,8 +134,8 @@ class StoreVipPackageCard extends ConsumerWidget {
                 ),
               if (showPromo)
                 Positioned(
-                  right: -2,
-                  top: -1,
+                  right: -2.w,
+                  top: -1.w,
                   child: _PromoCountdownBadge(package: package),
                 ),
               Column(
@@ -142,7 +143,7 @@ class StoreVipPackageCard extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: EdgeInsets.symmetric(horizontal: 16.w),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
@@ -160,11 +161,11 @@ class StoreVipPackageCard extends ConsumerWidget {
                                         color: _ink,
                                         fontWeight: FontWeight.bold,
                                         height: 1.5,
-                                        fontSize: 18,
+                                        fontSize: 18.sp,
                                       ),
                                 ),
                                 if (package.showsAutoRenewNotice) ...[
-                                  const SizedBox(height: 9),
+                                  SizedBox(height: 9.w),
                                   Text(
                                     context.l10n.playerAutoRenewCancel,
                                     maxLines: 1,
@@ -173,7 +174,7 @@ class StoreVipPackageCard extends ConsumerWidget {
                                         .textTheme
                                         .labelSmall
                                         ?.copyWith(
-                                          fontSize: 10,
+                                          fontSize: 10.sp,
                                           fontWeight: FontWeight.normal,
                                           color: _ink.withValues(alpha: 0.6),
                                         ),
@@ -186,7 +187,7 @@ class StoreVipPackageCard extends ConsumerWidget {
                                         .textTheme
                                         .labelSmall
                                         ?.copyWith(
-                                          fontSize: 10,
+                                          fontSize: 10.sp,
                                           color: _ink.withValues(alpha: 0.6),
                                           fontWeight: FontWeight.normal,
                                         ),
@@ -194,7 +195,7 @@ class StoreVipPackageCard extends ConsumerWidget {
                               ],
                             ),
                           ),
-                          const SizedBox(width: AppSpacing.md),
+                          SizedBox(width: AppSpacing.md.w),
                           Column(
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.end,
@@ -206,7 +207,7 @@ class StoreVipPackageCard extends ConsumerWidget {
                                       color: _priceInk,
                                       fontWeight: FontWeight.bold,
                                       height: 1.5,
-                                      fontSize: 18,
+                                      fontSize: 18.sp,
                                     ),
                               ),
                               if (showPromo && displayOriginalPrice != null)
@@ -229,10 +230,10 @@ class StoreVipPackageCard extends ConsumerWidget {
                     ),
                   ),
                   Container(
-                    height: 60,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 7,
+                    height: 60.w,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 16.w,
+                      vertical: 7.w,
                     ),
                     color: const Color(0x33FFF8E7),
                     child: _BenefitGrid(benefits: package.benefits),
@@ -300,21 +301,21 @@ class _PromoCountdownBadgeState extends ConsumerState<_PromoCountdownBadge> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 2),
-      decoration: const BoxDecoration(
+      padding: EdgeInsets.symmetric(horizontal: 13.w, vertical: 2.w),
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xFFFF9E53), Color(0xFFFE1340), Color(0xFFFE3273)],
         ),
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(AppRadii.sm),
-          topRight: Radius.circular(AppRadii.sm),
+          bottomLeft: Radius.circular(AppRadii.sm.w),
+          topRight: Radius.circular(AppRadii.sm.w),
         ),
       ),
       child: Text(
         _formatCountdown(Duration(seconds: _remainingSeconds)),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
           color: Colors.white,
-          fontSize: 10,
+          fontSize: 10.sp,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -341,10 +342,10 @@ class _BenefitGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       padding: EdgeInsets.zero,
       itemCount: benefits.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        mainAxisExtent: 23,
-        crossAxisSpacing: 13,
+        mainAxisExtent: 23.w,
+        crossAxisSpacing: 13.w,
       ),
       itemBuilder: (context, index) {
         final benefit = benefits[index];
@@ -353,11 +354,11 @@ class _BenefitGrid extends StatelessWidget {
           children: [
             SvgPicture.asset(
               _iconFor(benefit.icon),
-              width: 20,
-              height: 20,
+              width: 20.w,
+              height: 20.w,
               fit: BoxFit.contain,
             ),
-            const SizedBox(width: AppSpacing.xs),
+            SizedBox(width: AppSpacing.xs.w),
             Expanded(
               child: Text(
                 label,
@@ -365,7 +366,7 @@ class _BenefitGrid extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: _ink,
-                  fontSize: 11,
+                  fontSize: 11.sp,
                   height: 1.5,
                   fontWeight: FontWeight.normal,
                 ),

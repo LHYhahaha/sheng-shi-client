@@ -1411,6 +1411,7 @@ class _SignedInAuthRepository implements AuthRepository {
           AuthProviderType.phone => 'Phone User',
           AuthProviderType.google => 'Google User',
           AuthProviderType.facebook => 'Facebook User',
+          AuthProviderType.apple => 'Apple User',
         },
         avatarAssetPath: authDefaultAvatarAssetPath,
         provider: provider,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../shared/theme/app_colors.dart';
 
@@ -27,7 +28,7 @@ class ProfileMenuRow extends StatelessWidget {
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       child: Padding(
-        padding: EdgeInsets.symmetric(vertical: 14),
+        padding: EdgeInsets.symmetric(vertical: 14.w),
         // subtitle != null ? 52 : 40,
         child: Row(
           crossAxisAlignment: subtitle != null
@@ -36,16 +37,16 @@ class ProfileMenuRow extends StatelessWidget {
           children: [
             Padding(
               padding: subtitle != null
-                  ? const EdgeInsets.only(top: 8.0)
+                  ? EdgeInsets.only(top: 8.w)
                   : EdgeInsets.zero,
               child: Image.asset(
                 iconAssetPath,
-                width: 24,
-                height: 24,
+                width: 24.w,
+                height: 24.w,
                 fit: BoxFit.contain,
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8.w),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -56,17 +57,17 @@ class ProfileMenuRow extends StatelessWidget {
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.9),
                       fontWeight: FontWeight(400),
-                      fontSize: 14,
+                      fontSize: 14.sp,
                       height: 1.5,
                     ),
                   ),
                   if (subtitle != null) ...[
-                    const SizedBox(height: 2),
+                    SizedBox(height: 2.w),
                     Text(
                       subtitle!,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.textPrimary.withValues(alpha: 0.5),
-                        fontSize: 12,
+                        fontSize: 12.sp,
                         height: 1.2,
                       ),
                     ),
@@ -77,32 +78,32 @@ class ProfileMenuRow extends StatelessWidget {
             if (badgeLabel != null) ...[
               Container(
                 key: const Key('profile_menu_reward_badge'),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.w),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFF007A),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(12.w),
                 ),
                 child: Text(
                   badgeLabel!,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 11,
+                    fontSize: 11.sp,
                     fontWeight: FontWeight.w400,
                     height: 1.5,
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
+              SizedBox(width: 6.w),
             ],
             Padding(
               padding: subtitle != null
-                  ? const EdgeInsets.only(top: 8.0)
+                  ? EdgeInsets.only(top: 8.w)
                   : EdgeInsets.zero,
               child: Image.asset(
                 "assets/images/common/grey_right_icon.png",
                 color: Colors.white.withValues(alpha: 0.4),
-                height: 20,
-                width: 20,
+                height: 20.w,
+                width: 20.w,
               ),
             ),
           ],

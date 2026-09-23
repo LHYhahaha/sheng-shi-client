@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
@@ -223,24 +224,24 @@ class _MemberPageState extends ConsumerState<MemberPage> {
         child: ListView(
           padding: EdgeInsets.fromLTRB(
             0,
-            12,
+            12.w,
             0,
-            MediaQuery.paddingOf(context).bottom + 32,
+            MediaQuery.paddingOf(context).bottom + 32.w,
           ),
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+              padding: EdgeInsets.symmetric(horizontal: 10.w),
               child: Column(
                 children: [
                   const _MemberNavBar(),
-                  const SizedBox(height: 32),
+                  SizedBox(height: 32.w),
                   ProfileHeader(
-                    isMemberPage:true,
+                    isMemberPage: true,
                     state: headerState,
                     secondaryText: membershipValidityText,
                     displayName: displayName,
                   ),
-                  const SizedBox(height: 42),
+                  SizedBox(height: 42.w),
                   if (hasMemberInfoError)
                     _MemberInfoLoadFailed(
                       onRetry: () => ref
@@ -256,17 +257,17 @@ class _MemberPageState extends ConsumerState<MemberPage> {
                       ),
                       onTap: () => context.push(RoutePaths.memberPointDetails),
                     ),
-                    const SizedBox(height: 10),
+                    SizedBox(height: 10.w),
                     for (var index = 0; index < tiers.length; index++) ...[
                       _RedeemCard(tier: tiers[index]),
-                      if (index < tiers.length - 1) const SizedBox(height: 8),
+                      if (index < tiers.length - 1) SizedBox(height: 8.w),
                     ],
                     if (dailyRewardPoints > 0) ...[
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8.w),
                       _DailyRewardCard(availablePoints: dailyRewardPoints),
                     ],
                   ],
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24.w),
                   _PrivilegesSection(
                     onGiftMemberTap: _showGiftMemberShareSheet,
                   ),
@@ -277,8 +278,8 @@ class _MemberPageState extends ConsumerState<MemberPage> {
               exposurePageSession: _dramaExposureSession,
               exposureAnalytics: ref.read(analyticsServiceProvider),
               needDivider: true,
-              topPadding: 20,
-              listPadding: EdgeInsetsGeometry.only(left: 16),
+              topPadding: 20.w,
+              listPadding: EdgeInsetsGeometry.only(left: 16.w),
               onDramaTap: (drama, position) {
                 unawaited(
                   ref
@@ -444,7 +445,7 @@ class _MemberNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 44,
+      height: 44.w,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -465,7 +466,7 @@ class _MemberNavBar extends StatelessWidget {
             context.l10n.memberCenterTitleMyMember,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               color: _memberText,
-              fontSize: 16,
+              fontSize: 16.sp,
               fontWeight: FontWeight(510),
               height: 1.1,
             ),
@@ -492,7 +493,7 @@ class _SectionTitleRow extends StatelessWidget {
             title,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               color: _memberText,
-              fontSize: 16,
+              fontSize: 16.sp,
               fontWeight: FontWeight.w800,
               height: 1.1,
             ),
@@ -522,26 +523,26 @@ class _PointsValue extends StatelessWidget {
       children: [
         Image.asset(
           'assets/images/rewards/points_icon.png',
-          width: 18,
-          height: 18,
+          width: 18.w,
+          height: 18.w,
           filterQuality: FilterQuality.low,
         ),
-        const SizedBox(width: 5),
+        SizedBox(width: 5.w),
         Text(
           '$value',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             color: _memberText,
-            fontSize: 14,
+            fontSize: 14.sp,
             fontWeight: FontWeight.w500,
             height: 1,
           ),
         ),
         if (showChevron) ...[
-          const SizedBox(width: 7),
-          const Icon(
+          SizedBox(width: 7.w),
+          Icon(
             Icons.chevron_right_rounded,
             color: Color(0xFFB5B2B8),
-            size: 26,
+            size: 26.w,
           ),
         ],
       ],
@@ -559,10 +560,10 @@ class _MemberInfoLoadFailed extends StatelessWidget {
     final l10n = AppLocalizations.maybeOf(context);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+      padding: EdgeInsets.fromLTRB(16.w, 24.w, 16.w, 24.w),
       decoration: BoxDecoration(
         color: _memberCard,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(6.w),
       ),
       child: Column(
         children: [
@@ -571,11 +572,11 @@ class _MemberInfoLoadFailed extends StatelessWidget {
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: _memberText,
-              fontSize: 14,
+              fontSize: 14.sp,
               fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14.w),
           AppRetryButton(onPressed: onRetry, label: l10n.retry),
         ],
       ),
@@ -595,10 +596,10 @@ class _RedeemCard extends ConsumerWidget {
     final isExchanging = ref.watch(memberPointsControllerProvider).isExchanging;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
         color: _memberCard,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(6.w),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -614,19 +615,19 @@ class _RedeemCard extends ConsumerWidget {
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: _memberText,
-                    fontSize: 14,
+                    fontSize: 14.sp,
                     fontWeight: FontWeight.w400,
                     height: 1.18,
                   ),
                 ),
-                const SizedBox(height: 9),
+                SizedBox(height: 9.w),
                 _CostLabel(cost: tier.pointCost),
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12.w),
           Container(
-            height: 30,
+            height: 30.w,
             alignment: Alignment.center,
             child: TextButton(
               key: Key('member_redeem_${tier.tierId}'),
@@ -684,20 +685,20 @@ class _RedeemCard extends ConsumerWidget {
                   : null,
               style: TextButton.styleFrom(
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: EdgeInsets.symmetric(horizontal: 20.w),
                 disabledForegroundColor: Colors.white.withValues(alpha: 0.48),
                 backgroundColor: isEnabled
                     ? _memberButton
                     : _memberButtonDisabled,
                 disabledBackgroundColor: _memberButtonDisabled,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(4.w),
                 ),
               ),
               child: Text(
                 l10n.memberCenterButtonExchange,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontSize: 12,
+                  fontSize: 12.sp,
                   fontWeight: FontWeight.w500,
                   color: Colors.white,
                 ),
@@ -731,16 +732,16 @@ class _CostLabel extends StatelessWidget {
       children: [
         Image.asset(
           'assets/images/rewards/points_icon.png',
-          width: 18,
-          height: 18,
+          width: 18.w,
+          height: 18.w,
           filterQuality: FilterQuality.low,
         ),
-        const SizedBox(width: 4),
+        SizedBox(width: 4.w),
         Text(
           '$cost',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             color: _memberMuted,
-            fontSize: 14,
+            fontSize: 14.sp,
             fontWeight: FontWeight.w400,
             height: 1,
           ),
@@ -761,11 +762,11 @@ class _DailyRewardCard extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: () => context.go(RoutePaths.member),
       child: Container(
-        height: 54,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        height: 54.w,
+        padding: EdgeInsets.symmetric(horizontal: 16.w),
         decoration: BoxDecoration(
           color: _memberCard,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(6.w),
         ),
         child: Row(
           children: [
@@ -774,17 +775,17 @@ class _DailyRewardCard extends StatelessWidget {
                 context.l10n.memberCenterSectionDailyReward,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: _memberText,
-                  fontSize: 14,
+                  fontSize: 14.sp,
                   fontWeight: FontWeight.w400,
                 ),
               ),
             ),
             _PointsValue(value: availablePoints),
-            const SizedBox(width: 2),
-            const Icon(
+            SizedBox(width: 2.w),
+            Icon(
               Icons.chevron_right_rounded,
               color: Color(0xFF9E98A8),
-              size: 26,
+              size: 26.w,
             ),
           ],
         ),
@@ -807,14 +808,14 @@ class _PrivilegesSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _PrivilegeTitle(),
-        const SizedBox(height: 12),
+        SizedBox(height: 12.w),
         _PrivilegeItem(
           icon: 'assets/images/membership/member_series.png',
           title: context.l10n.benefitSeriesTitle,
           highlightedText: '8,000+',
           subtitle: context.l10n.benefitSeriesHighlight,
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: 20.w),
         // _PrivilegeItem(
         //   icon: 'assets/images/membership/member_download.png',
         //   title: context.l10n.benefitDownload,
@@ -826,12 +827,12 @@ class _PrivilegesSection extends StatelessWidget {
           showChevron: true,
           onTap: () => context.go(RoutePaths.member),
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: 20.w),
         _PrivilegeItem(
           icon: 'assets/images/membership/member_only.png',
           title: context.l10n.benefitMembersOnly,
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: 20.w),
         _PrivilegeItem(
           icon: 'assets/images/membership/member_hd.png',
           title: context.l10n.benefitHd,
@@ -850,7 +851,7 @@ class _PrivilegesSection extends StatelessWidget {
         //   showChevron: true,
         //   onTap: onGiftMemberTap,
         // ),
-        const SizedBox(height: 20),
+        SizedBox(height: 20.w),
         _PrivilegeItem(
           icon: 'assets/images/membership/member_ad.png',
           title: context.l10n.benefitNoAds,
@@ -869,7 +870,7 @@ class _PrivilegeTitle extends StatelessWidget {
       context.l10n.memberCenterSectionMyPrivileges,
       style: Theme.of(context).textTheme.titleLarge?.copyWith(
         color: _memberText,
-        fontSize: 16,
+        fontSize: 16.sp,
         fontWeight: FontWeight.w700,
         height: 1.1,
       ),
@@ -900,11 +901,11 @@ class _PrivilegeItem extends StatelessWidget {
       children: [
         Image.asset(
           icon,
-          width: 30,
-          height: 30,
+          width: 30.w,
+          height: 30.w,
           filterQuality: FilterQuality.low,
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: 8.w),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -915,14 +916,14 @@ class _PrivilegeItem extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               if (subtitle != null) ...[
-                const SizedBox(height: 2),
+                SizedBox(height: 2.w),
                 Text(
                   subtitle!,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Colors.white.withValues(alpha: 0.42),
-                    fontSize: 12,
+                    fontSize: 12.sp,
                     fontWeight: FontWeight.w400,
                     height: 1.2,
                   ),
@@ -932,10 +933,10 @@ class _PrivilegeItem extends StatelessWidget {
           ),
         ),
         if (showChevron)
-          const Icon(
+          Icon(
             Icons.chevron_right_rounded,
             color: Color(0xFFB0AABD),
-            size: 26,
+            size: 26.w,
           ),
       ],
     );
@@ -952,7 +953,7 @@ class _PrivilegeItem extends StatelessWidget {
   TextSpan _titleSpan(BuildContext context) {
     final baseStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
       color: Colors.white.withValues(alpha: 0.66),
-      fontSize: 14,
+      fontSize: 14.sp,
       fontWeight: FontWeight.w400,
       height: 1.15,
     );

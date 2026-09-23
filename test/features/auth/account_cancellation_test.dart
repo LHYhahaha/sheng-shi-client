@@ -19,6 +19,7 @@ import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
@@ -186,6 +187,27 @@ void main() {
       expect(
         find.text('I accept the risk and agree to delete my account'),
         findsOneWidget,
+      );
+    });
+
+    testWidgets('delete action scales on narrow screens', (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(320, 640);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _buildRouterTestApp(initialLocation: RoutePaths.accountCancellation),
+      );
+      await tester.pump();
+
+      expect(
+        tester
+            .getSize(
+              find.byKey(const ValueKey('account_cancellation_delete_button')),
+            )
+            .height,
+        closeTo(44 * 320 / 375, .01),
       );
     });
 
@@ -449,10 +471,7 @@ class _CountingAuthRepository implements AuthRepository {
   Future<DeleteAccountResult> deleteAccount() async {
     deleteAccountCalls += 1;
     _session = const AuthSession.guest();
-    return DeleteAccountResult(
-      session: _session,
-      shouldExitApp: false,
-    );
+    return DeleteAccountResult(session: _session, shouldExitApp: false);
   }
 }
 
@@ -507,7 +526,10 @@ Widget _buildRouterTestApp({
       ...extraOverrides,
     ],
     child: MaterialApp.router(
-      builder: (context, child) => AppModalHost(child: child),
+      builder: (context, child) => ScreenUtilInit(
+        designSize: const Size(375, 812),
+        child: AppModalHost(child: child ?? const SizedBox.shrink()),
+      ),
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,

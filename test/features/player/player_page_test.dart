@@ -32,6 +32,7 @@ import 'package:drama_client/features/player/data/player_feed_repository_provide
 import 'package:drama_client/features/player/data/mock_player_playback_source_repository.dart';
 import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
 import 'package:drama_client/features/player/data/player_remote_data_source_provider.dart';
+import 'package:drama_client/features/player/data/player_recharge_unlock_repository_provider.dart';
 import 'package:drama_client/features/player/data/remote/player_remote_data_source.dart';
 import 'package:drama_client/features/player/data/shared_preferences_player_exit_recommendation_history_repository.dart';
 import 'package:drama_client/features/player/application/player_chrome_auto_immersive_config_provider.dart';
@@ -53,11 +54,14 @@ import 'package:drama_client/features/player/presentation/pages/player_page.dart
 import 'package:drama_client/features/player/presentation/widgets/player_payment_method_modal_layer.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_payment_method_sheet.dart';
 import 'package:drama_client/features/player/domain/player_recharge_unlock_offer.dart';
+import 'package:drama_client/features/player/domain/player_recharge_unlock_repository.dart';
+import 'package:drama_client/features/player/data/dto/player_episode_unlock_dto.dart';
 import '../../core/toast/recording_app_toast_service.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_chrome.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_detail_sheet.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_exit_recommendation_dialog.dart';
 import 'package:drama_client/features/player/presentation/widgets/player_playback_layer.dart';
+import 'package:drama_client/features/player/presentation/widgets/player_recharge_unlock_sheet.dart';
 import 'package:drama_client/features/popup/data/popup_repository.dart';
 import 'package:drama_client/features/popup/data/popup_repository_provider.dart';
 import 'package:drama_client/features/popup/domain/popup.dart';
@@ -65,6 +69,7 @@ import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -175,6 +180,39 @@ void main() {
 
     expect(find.text('Search'), findsNothing);
     expect(session.playCount, greaterThan(playCountBeforeSearch));
+  });
+
+  testWidgets('for you search inset scales with the design width', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _buildPlayerApp(
+        initialLocation: RoutePaths.forYou,
+        repository: _FakePlayerFeedRepository.unlocked(),
+        useDefaultRemoteDataSource: false,
+        providerOverrides: [
+          playerRemoteDataSourceProvider.overrideWithValue(
+            _FakePlayerRemoteDataSource(watchProgress: null),
+          ),
+        ],
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
+
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('player_for_you_search_button')),
+          )
+          .dy,
+      closeTo(8 * 320 / 800, 0.01),
+    );
   });
 
   testWidgets('for you watch now opens single drama at current position', (
@@ -1078,7 +1116,7 @@ void main() {
     );
   });
 
-  testWidgets('single drama pause control shows transient pause feedback', (
+  testWidgets('single drama pause control shows only one central icon', (
     tester,
   ) async {
     final playbackSession = _FakePlaybackSession();
@@ -1096,9 +1134,6 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('player_center_pause_button')));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('player_pause_feedback')), findsOneWidget);
-
-    await tester.pump(const Duration(milliseconds: 500));
     expect(find.byKey(const ValueKey('player_pause_feedback')), findsNothing);
   });
 
@@ -1692,6 +1727,55 @@ void main() {
     expect(find.byKey(const ValueKey('player_download_button')), findsNothing);
   });
 
+  testWidgets('PlayerChrome scales unlock controls on narrow screens', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) =>
+            ScreenUtilInit(designSize: const Size(375, 812), child: child),
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: PlayerChrome(
+          content: _content(const [
+            PlayerEpisode(
+              id: 'ep-1',
+              number: 1,
+              isLocked: true,
+              videoUrl: _mockVideoUrl,
+            ),
+          ]),
+          isPlaying: false,
+          showCenterPlayButton: false,
+          showChromeOverlays: false,
+          showUnlockButton: true,
+          unlockLabel: 'Unlock Now',
+          onTogglePlay: () {},
+          onWatchNowTap: () {},
+          onEpisodesTap: () {},
+          onShareTap: () {},
+          onMoreTap: () {},
+          onUnlockTap: () {},
+        ),
+      ),
+    );
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('player_unlock_button'))).width,
+      closeTo(315 * 320 / 375, 0.01),
+    );
+  });
+
   testWidgets('single drama seek bar uses episode metadata duration fallback', (
     tester,
   ) async {
@@ -2257,6 +2341,78 @@ void main() {
     );
   });
 
+  testWidgets(
+    'recharge coin packages shrink proportionally on narrow screens',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final container = ProviderContainer(
+        overrides: [
+          playerRechargeUnlockRepositoryProvider.overrideWithValue(
+            const _ScreenScaleRechargeRepository(),
+          ),
+          entitlementRepositoryProvider.overrideWithValue(
+            MockEntitlementRepository.loggedInNonMemberLowCoins(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container
+          .read(playerRechargeUnlockControllerProvider('screen-scale').notifier)
+          .open(itemId: 'episode-2', requiredCoins: 60);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            builder: (context, child) =>
+                ScreenUtilInit(designSize: const Size(375, 812), child: child),
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const Scaffold(
+              body: PlayerRechargeUnlockSheet(
+                sessionKey: 'screen-scale',
+                dramaId: 1,
+                episodeNo: 2,
+                shortTitle: 'Test drama',
+                cover: '',
+                episodeId: 2,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        tester
+            .getSize(
+              find.byKey(const ValueKey('player_recharge_coin_coins_300')),
+            )
+            .height,
+        closeTo(85 * 320 / 375, 0.01),
+      );
+      expect(
+        tester
+            .getSize(
+              find
+                  .byKey(const ValueKey('player_recharge_membership_weekly'))
+                  .last,
+            )
+            .height,
+        closeTo(159 * 320 / 375, 0.01),
+      );
+    },
+  );
+
   testWidgets('swiping into locked episode shows unlock before auto sheet', (
     tester,
   ) async {
@@ -2781,6 +2937,8 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
+          builder: (context, child) =>
+              ScreenUtilInit(designSize: const Size(800, 600), child: child),
           localizationsDelegates: const [
             AppLocalizations.delegate,
             GlobalMaterialLocalizations.delegate,
@@ -3970,7 +4128,10 @@ Widget _buildPlayerApp({
       ...providerOverrides,
     ],
     child: MaterialApp.router(
-      builder: (context, child) => AppModalHost(child: child),
+      builder: (context, child) => ScreenUtilInit(
+        designSize: const Size(800, 600),
+        child: AppModalHost(child: child),
+      ),
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
@@ -4532,6 +4693,57 @@ class _WatchAttempts implements WatchRewardAttemptStore {
     String dayKey,
     Map<String, WatchRewardAttempt> attempts,
   ) async {}
+}
+
+class _ScreenScaleRechargeRepository implements PlayerRechargeUnlockRepository {
+  const _ScreenScaleRechargeRepository();
+
+  @override
+  Future<PlayerRechargeUnlockOffer> fetchOffer({
+    required String itemId,
+    required int requiredCoins,
+    bool isMember = false,
+  }) async {
+    return const PlayerRechargeUnlockOffer(
+      requiredCoins: 60,
+      coinPackages: [
+        PlayerRechargeCoinPackage(
+          id: 'coins_300',
+          baseCoins: 300,
+          bonusCoins: 0,
+          googleProductId: 'coins_300',
+          googlePriceLabel: r'$2.99',
+        ),
+      ],
+      membershipPackages: [
+        PlayerRechargeMembershipPackage(
+          id: 'weekly',
+          periodLabel: 'Weekly',
+          googleProductId: 'vip_weekly',
+          googlePriceLabel: r'$4.99',
+        ),
+      ],
+      benefits: [
+        PlayerRechargeBenefit(
+          icon: PlayerRechargeBenefitIcon.series,
+          label: 'Unlock dramas',
+        ),
+      ],
+      tips: '',
+    );
+  }
+
+  @override
+  Future<PlayerEpisodeUnlockDto> unlockEpisodeWithCoin({
+    required bool autoUnlockNext,
+    required int coin,
+    required int dramaId,
+    required int episodeNo,
+    required String shortTitle,
+    required String cover,
+    required int episodeId,
+    required String requestId,
+  }) => throw UnimplementedError();
 }
 
 class _WatchTaskRepository implements WatchRewardRepository {

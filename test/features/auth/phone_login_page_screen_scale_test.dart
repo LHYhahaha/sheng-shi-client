@@ -1,0 +1,52 @@
+import 'package:drama_client/features/auth/application/phone_login_config_provider.dart';
+import 'package:drama_client/features/auth/presentation/pages/phone_login_page.dart';
+import 'package:drama_client/l10n/app_localizations.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  testWidgets('phone login logo scales on narrow screens', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          phoneRegionsProvider.overrideWith(
+            (ref) async => const [
+              PhoneRegion(
+                callingCode: '1',
+                isDefault: true,
+                expressions: [],
+                regionCode: 'us',
+              ),
+            ],
+          ),
+        ],
+        child: MaterialApp(
+          builder: (context, child) =>
+              ScreenUtilInit(designSize: const Size(375, 812), child: child),
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const PhoneLoginPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('phone_login_logo'))).width,
+      closeTo(80 * 320 / 375, .01),
+    );
+  });
+}

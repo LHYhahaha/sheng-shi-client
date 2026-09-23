@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../core/utils/period_iso_parser.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -106,18 +107,20 @@ class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
               decoration: BoxDecoration(
                 color: const Color(0xFF1B1B1C),
                 borderRadius: BorderRadius.circular(
-                  MembershipLayout.planCardRadius,
+                  MembershipLayout.planCardRadius.w,
                 ),
                 border: Border.all(
-                  width: 1,
-                  color: selected ? _gold : Colors.white.withValues(alpha: 0.12),
+                  width: 1.w,
+                  color: selected
+                      ? _gold
+                      : Colors.white.withValues(alpha: 0.12),
                 ),
               ),
               clipBehavior: Clip.antiAlias,
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 20,
+                padding: EdgeInsets.symmetric(
+                  horizontal: 16.w,
+                  vertical: 20.w,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -130,12 +133,12 @@ class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
                       overflow: TextOverflow.ellipsis,
                       style: textTheme.bodyMedium?.copyWith(
                         color: Colors.white,
-                        fontSize: 14,
+                        fontSize: 14.sp,
                         fontWeight: FontWeight.w400,
                         height: 21 / 14,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8.w),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -144,12 +147,12 @@ class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
                           color: Colors.white,
                         ),
                         if (_originalPrice(plan) case final originalPrice?) ...[
-                          const SizedBox(width: 6),
+                          SizedBox(width: 6.w),
                           Text(
                             originalPrice,
                             style: textTheme.labelMedium?.copyWith(
                               color: Colors.white.withValues(alpha: 0.5),
-                              fontSize: 12,
+                              fontSize: 12.sp,
                               height: 1.3,
                               decoration: TextDecoration.lineThrough,
                               decorationColor: Colors.white.withValues(
@@ -161,14 +164,14 @@ class _MembershipPlanCardState extends ConsumerState<MembershipPlanCard> {
                       ],
                     ),
                     if (promotionText != null) ...[
-                      const SizedBox(height: 6),
+                      SizedBox(height: 6.w),
                       Text(
                         promotionText,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: textTheme.bodySmall?.copyWith(
                           color: Colors.white.withValues(alpha: 0.3),
-                          fontSize: 12,
+                          fontSize: 12.sp,
                           height: 1.3,
                         ),
                       ),
@@ -239,7 +242,7 @@ class _PlanPriceText extends StatelessWidget {
         textAlign: TextAlign.center,
         style: textTheme.headlineSmall?.copyWith(
           color: color,
-          fontSize: 18,
+          fontSize: 18.sp,
           fontWeight: FontWeight(510),
           height: 1.3,
         ),
@@ -259,8 +262,8 @@ class _CountdownTag extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     return Container(
-      height: 19,
-      padding: const EdgeInsets.symmetric(horizontal: 10,vertical: 2),
+      height: 19.w,
+      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 2.w),
       decoration: BoxDecoration(
         image: DecorationImage(
           fit: BoxFit.cover,
@@ -268,8 +271,9 @@ class _CountdownTag extends StatelessWidget {
             "assets/images/membership/membership_time_down_bac.png",
           ),
         ),
-        borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(10),
-        topRight: Radius.circular(10)
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(10.w),
+          topRight: Radius.circular(10.w),
         ),
       ),
       child: Center(
@@ -277,7 +281,7 @@ class _CountdownTag extends StatelessWidget {
           _formatDuration(seconds),
           style: textTheme.labelSmall?.copyWith(
             color: Colors.white,
-            fontSize: 10,
+            fontSize: 10.sp,
             fontWeight: FontWeight.w600,
             height: 1.2,
           ),

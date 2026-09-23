@@ -81,6 +81,7 @@ abstract final class AnalyticsDefinitions {
   static const searchSubmit = 'search_submit';
   static const paymentStart = 'payment_start';
   static const loginFail = 'login_fail';
+  static const phoneLoginEntryExposure = 'phone_login_entry_exposure';
   static const episodeUnlockRequest = 'episode_unlock_request';
   static const pushPermissionResult = 'push_permission_result';
   static const pushNotificationOpen = 'push_notification_open';
@@ -517,6 +518,12 @@ abstract final class AnalyticsDefinitions {
           type: AnalyticsParameterType.string,
           requiredWhen: (params) => params['element_name'] == 'ad_material',
         ),
+        'phone_validation_result': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'phone_code_request_button',
+          allowedValues: {'passed', 'failed'},
+        ),
       },
       // 元素字典后续会为不同 element_name 注入短剧、商品等附加字段。
       allowAdditionalParameters: true,
@@ -590,6 +597,9 @@ abstract final class AnalyticsDefinitions {
           },
         ),
       },
+    ),
+    phoneLoginEntryExposure: const AnalyticsEventDefinition(
+      name: phoneLoginEntryExposure,
     ),
     episodeUnlockRequest: AnalyticsEventDefinition(
       name: episodeUnlockRequest,

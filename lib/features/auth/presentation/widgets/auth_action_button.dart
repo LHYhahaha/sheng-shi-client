@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 class AuthActionButton extends StatelessWidget {
   const AuthActionButton({
@@ -23,13 +24,13 @@ class AuthActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 48,
+      height: 48.w,
       width: double.infinity,
       child: FilledButton.icon(
         onPressed: isLoading ? null : onPressed,
         icon: assetIconPath == null
-            ? Icon(icon, size: 22)
-            : Image.asset(assetIconPath!, width: 22, height: 22),
+            ? Icon(icon, size: 22.w)
+            : Image.asset(assetIconPath!, width: 22.w, height: 22.w),
         label: Text(label),
         style: FilledButton.styleFrom(
           backgroundColor: backgroundColor,
@@ -37,7 +38,7 @@ class AuthActionButton extends StatelessWidget {
           disabledBackgroundColor: backgroundColor.withValues(alpha: 0.65),
           disabledForegroundColor: foregroundColor.withValues(alpha: 0.75),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(12.w),
           ),
           textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.w700,

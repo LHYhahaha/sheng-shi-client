@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -237,28 +238,6 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
     setState(() {});
   }
 
-  Widget _highlightedCountdown(String text, int seconds) {
-    final highlighted = seconds.toString();
-    final index = text.indexOf(highlighted);
-    final baseStyle = TextStyle(color: Colors.white.withValues(alpha: 0.5));
-    if (index < 0) {
-      return Text(text, style: baseStyle);
-    }
-    return Text.rich(
-      TextSpan(
-        style: baseStyle,
-        children: [
-          TextSpan(text: text.substring(0, index)),
-          TextSpan(
-            text: highlighted,
-            style: const TextStyle(color: Colors.white),
-          ),
-          TextSpan(text: text.substring(index + highlighted.length)),
-        ],
-      ),
-    );
-  }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _watch.setAppForeground(state == AppLifecycleState.resumed);
@@ -316,17 +295,20 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
           child: Column(
             children: [
               SizedBox(
-                height: 80,
+                height: 80.w,
                 child: Align(
                   alignment: Alignment.bottomRight,
                   child: Padding(
-                    padding: const EdgeInsets.only(right: 16, bottom: 12),
+                    padding: EdgeInsets.only(right: 16.w, bottom: 12.w),
                     child: GestureDetector(
                       onTap: canClose ? _closeAfterUnlock : null,
                       child: Container(
                         padding: canClose
-                            ? EdgeInsets.all(2)
-                            : EdgeInsets.symmetric(horizontal: 14, vertical: 1),
+                            ? EdgeInsets.all(2.w)
+                            : EdgeInsets.symmetric(
+                                horizontal: 14.w,
+                                vertical: 1.w,
+                              ),
                         decoration: BoxDecoration(
                           shape: canClose
                               ? BoxShape.circle
@@ -334,17 +316,17 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
                           color: Colors.white.withValues(alpha: 0.08),
                           borderRadius: canClose
                               ? null
-                              : BorderRadius.circular(12),
+                              : BorderRadius.circular(12.w),
                           border: Border.all(
                             color: Colors.white.withValues(alpha: 0.12),
                           ),
                         ),
                         child: canClose
-                            ? Icon(Icons.close,size: 18,)
+                            ? Icon(Icons.close, size: 18.w)
                             : Text(
                                 "${(required - seconds).clamp(0, required)}s",
                                 style: TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 12.sp,
                                   color: Colors.white,
                                 ),
                               ),
@@ -425,18 +407,18 @@ class _AdUnlockPageState extends ConsumerState<AdUnlockPage>
                 ),
               ),
               SizedBox(
-                height: 65,
+                height: 65.w,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+                  padding: EdgeInsets.fromLTRB(16.w, 12.w, 16.w, 18.w),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       LinearProgressIndicator(
-                        minHeight: 4,
+                        minHeight: 4.w,
                         value: required == 0 ? 1 : seconds / required,
                         color: const Color(0xFFFF007A),
                         backgroundColor: const Color(0x4DFFFFFF),
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(4.w),
                       ),
                     ],
                   ),

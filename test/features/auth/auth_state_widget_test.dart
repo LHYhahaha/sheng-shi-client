@@ -15,6 +15,7 @@ import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
@@ -32,6 +33,38 @@ void main() {
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(find.text('Continue with Device'), findsNothing);
+  });
+
+  testWidgets('account action row scales on narrow screens', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _buildRouterApp(
+        initialLocation: RoutePaths.account,
+        repository: _WidgetAuthRepository(
+          session: const AuthSession(
+            sessionId: 'session',
+            user: AuthUser(
+              userId: 'user',
+              nickname: 'User',
+              avatarAssetPath: authDefaultAvatarAssetPath,
+              provider: AuthProviderType.phone,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('account_delete_action')))
+          .height,
+      closeTo(48 * 320 / 375, .01),
+    );
   });
 
   testWidgets('auth load failure keeps login actions available', (
@@ -239,8 +272,10 @@ Widget _buildRouterApp({
       ],
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: router,
-      builder: (context, child) =>
-          AppModalHost(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => ScreenUtilInit(
+        designSize: const Size(375, 812),
+        child: AppModalHost(child: child ?? const SizedBox.shrink()),
+      ),
     ),
   );
 }
@@ -326,6 +361,7 @@ AuthSession _sessionFor(AuthProviderType provider) {
         AuthProviderType.phone => 'Phone User',
         AuthProviderType.google => 'Google User',
         AuthProviderType.facebook => 'Facebook User',
+        AuthProviderType.apple => 'Apple User',
       },
       avatarAssetPath: authDefaultAvatarAssetPath,
       provider: provider,

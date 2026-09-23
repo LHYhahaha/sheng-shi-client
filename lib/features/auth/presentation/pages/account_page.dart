@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
@@ -38,18 +39,18 @@ class _AccountPageState extends ConsumerState<AccountPage> {
             _AccountHeader(title: context.l10n.authAccountTitle),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 36, 16, 32),
+                padding: EdgeInsets.fromLTRB(16.w, 36.w, 16.w, 32.w),
                 children: [
                   Center(
                     child: Column(
                       children: [
                         CircleAvatar(
-                          radius: 36,
+                          radius: 36.w,
                           backgroundImage: AssetImage(
                             user?.avatarAssetPath ?? authDefaultAvatarAssetPath,
                           ),
                         ),
-                        const SizedBox(height: 14),
+                        SizedBox(height: 14.w),
                         Text(
                           user?.nickname ?? context.l10n.profileGuest,
                           style: Theme.of(context).textTheme.titleLarge
@@ -59,7 +60,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                                 height: 1.3,
                               ),
                         ),
-                        const SizedBox(height: 4),
+                        SizedBox(height: 4.w),
                         Text(
                           'ID:${user?.showId ?? '--'}',
                           style: Theme.of(context).textTheme.bodyMedium
@@ -71,7 +72,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 40),
+                  SizedBox(height: 40.w),
                   if (state.error != null) ...[
                     Text(
                       errorLabel,
@@ -81,7 +82,7 @@ class _AccountPageState extends ConsumerState<AccountPage> {
                         height: 1.35,
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    SizedBox(height: 18.w),
                   ],
                   _AccountActionRow(
                     label: context.l10n.authDeleteAccount,
@@ -148,12 +149,13 @@ class _AccountActionRow extends StatelessWidget {
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       child: Container(
-        height: 48,
+        key: const ValueKey('account_delete_action'),
+        height: 48.w,
         alignment: Alignment.centerLeft,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: EdgeInsets.symmetric(horizontal: 16.w),
         decoration: BoxDecoration(
           color: const Color(0xFF17101F),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(12.w),
         ),
         child: Row(
           children: [

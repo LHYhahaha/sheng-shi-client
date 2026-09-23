@@ -337,7 +337,7 @@ class AuthController extends Notifier<AuthState> {
 
     if (provider == AuthProviderType.google ||
         provider == AuthProviderType.facebook ||
-        provider.name == 'apple') {
+        provider == AuthProviderType.apple) {
       unawaited(
         ref
             .read(analyticsServiceProvider)
@@ -365,8 +365,11 @@ class AuthController extends Notifier<AuthState> {
       // 登录只持久化 token；完整用户信息由后台权益接口统一同步。
       final login = ref.read(authRepositoryProvider).login(provider);
       final repositorySession = switch (provider) {
-        AuthProviderType.google || AuthProviderType.facebook =>
-          await login.timeout(ref.read(thirdPartyLoginTimeoutProvider)),
+        AuthProviderType.google ||
+        AuthProviderType.facebook ||
+        AuthProviderType.apple => await login.timeout(
+          ref.read(thirdPartyLoginTimeoutProvider),
+        ),
         AuthProviderType.device || AuthProviderType.phone => await login,
       };
 
@@ -613,7 +616,7 @@ class AuthController extends Notifier<AuthState> {
   bool _isThirdPartyLoginProvider(AuthProviderType provider) =>
       provider == AuthProviderType.google ||
       provider == AuthProviderType.facebook ||
-      provider.name == 'apple';
+      provider == AuthProviderType.apple;
 
   String _loginFailureReason(Object error) {
     if (error is TimeoutException) return 'network_error';
@@ -804,6 +807,7 @@ class AuthController extends Notifier<AuthState> {
     return switch (value) {
       'facebook' => AuthProviderType.facebook,
       'google' => AuthProviderType.google,
+      'apple' => AuthProviderType.apple,
       'phone' => AuthProviderType.phone,
       'device' => AuthProviderType.device,
       _ => null,

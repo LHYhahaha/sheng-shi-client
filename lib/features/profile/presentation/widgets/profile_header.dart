@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../core/toast/app_center_toast.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -59,17 +60,17 @@ class ProfileHeader extends StatelessWidget {
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       child: SizedBox(
-        height: 52,
+        height: 52.w,
         child: Row(
           children: [
             Container(
-              width: 52,
-              height: 52,
+              width: 52.w,
+              height: 52.w,
               decoration: const BoxDecoration(shape: BoxShape.circle),
               clipBehavior: Clip.antiAlias,
               child: _buildAvatarImage(),
             ),
-            const SizedBox(width: 13),
+            SizedBox(width: 13.w),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,25 +88,25 @@ class ProfileHeader extends StatelessWidget {
                             style: Theme.of(context).textTheme.titleSmall
                                 ?.copyWith(
                                   color: AppColors.textPrimary,
-                                  fontSize: 17,
+                                  fontSize: 17.sp,
                                   fontWeight: FontWeight.w700,
                                   height: 1.3,
                                 ),
                           ),
-                          SizedBox(width: 4),
+                          SizedBox(width: 4.w),
                           state.isLoggedIn || isMemberPage == true
                               ? SizedBox()
                               : Image.asset(
                                   "assets/images/profile/log_icon.png",
-                                  height: 20,
-                                  width: 20,
+                                  height: 20.w,
+                                  width: 20.w,
                                 ),
                         ],
                       ),
                       if (!state.isLoggedIn && (loginRewardCoins ?? 0) > 0)
                         Positioned(
-                          top: -20,
-                          left: 13,
+                          top: -20.w,
+                          left: 13.w,
                           child: Stack(
                             key: const Key('profile_login_reward_badge'),
                             children: [
@@ -116,23 +117,28 @@ class ProfileHeader extends StatelessWidget {
                                 ),
                               ),
                               Container(
-                                constraints: const BoxConstraints(minWidth: 54),
-                                padding: const EdgeInsets.fromLTRB(6, 2, 6, 4),
+                                constraints: BoxConstraints(minWidth: 54.w),
+                                padding: EdgeInsets.fromLTRB(
+                                  6.w,
+                                  2.w,
+                                  6.w,
+                                  4.w,
+                                ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Image.asset(
                                       'assets/images/profile/coin.png',
-                                      width: 13,
-                                      height: 13,
+                                      width: 13.w,
+                                      height: 13.w,
                                     ),
-                                    const SizedBox(width: 2),
+                                    SizedBox(width: 2.w),
                                     Text(
                                       '+$loginRewardCoins',
-                                      style: const TextStyle(
+                                      style:  TextStyle(
                                         color: Colors.white,
-                                        fontSize: 10,
+                                        fontSize: 10.sp,
                                         fontWeight: FontWeight.w500,
                                         height: 1.3,
                                       ),
@@ -145,7 +151,7 @@ class ProfileHeader extends StatelessWidget {
                         ),
                     ],
                   ),
-                  const SizedBox(height: 1),
+                  SizedBox(height: 1.w),
                   GestureDetector(
                     onTap: secondaryText == null
                         ? () {
@@ -168,7 +174,7 @@ class ProfileHeader extends StatelessWidget {
                                   color: AppColors.textPrimary.withValues(
                                     alpha: 0.8,
                                   ),
-                                  fontSize: 12,
+                                  fontSize: 12.sp,
                                   fontWeight: FontWeight.w400,
                                   height: 1.3,
                                 ),

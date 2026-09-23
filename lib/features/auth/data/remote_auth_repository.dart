@@ -8,6 +8,7 @@ import '../domain/auth_repository.dart';
 import '../domain/auth_session.dart';
 import '../domain/delete_account_result.dart';
 import 'dto/auth_session_dto.dart';
+import 'dto/apple_login_request_dto.dart';
 import 'dto/delete_account_request_dto.dart';
 import 'dto/login_request_dto.dart';
 import 'dto/oauth_login_request_dto.dart';
@@ -57,6 +58,7 @@ class RemoteAuthRepository
       ),
       AuthProviderType.google ||
       AuthProviderType.facebook => await _loginWithOAuth(provider),
+      AuthProviderType.apple => await _loginWithApple(),
       AuthProviderType.phone => throw UnsupportedError(
         'Phone login requires SMS verification.',
       ),
@@ -193,6 +195,23 @@ class RemoteAuthRepository
     );
   }
 
+  Future<AuthSessionDto> _loginWithApple() async {
+    final credential = _oauthService == null
+        ? const AppleLoginCredential(identityToken: 'mock-apple-identity-token')
+        : await _oauthService.signInWithApple();
+    if (credential == null) {
+      throw const OAuthLoginCancelledException('apple');
+    }
+    return _remoteDataSource.loginApple(
+      AppleLoginRequestDto(
+        identityToken: credential.identityToken,
+        authorizationCode: credential.authorizationCode,
+        email: credential.email,
+        fullName: credential.fullName,
+      ),
+    );
+  }
+
   Future<void> _saveToken(
     AuthSessionDto dto, {
     required AuthProviderType provider,
@@ -258,6 +277,7 @@ class RemoteAuthRepository
     return switch (value) {
       'facebook' => AuthProviderType.facebook,
       'google' => AuthProviderType.google,
+      'apple' => AuthProviderType.apple,
       'phone' => AuthProviderType.phone,
       _ => AuthProviderType.device,
     };
@@ -270,6 +290,7 @@ class RemoteAuthRepository
           await _oauthService?.signOutFacebook();
         case AuthProviderType.google:
           await _oauthService?.signOutGoogle();
+        case AuthProviderType.apple:
         case AuthProviderType.phone:
         case AuthProviderType.device:
           break;

@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../features/bottom_tab_config/application/bottom_tab_config_controller.dart';
@@ -86,7 +87,7 @@ class AppBottomNavigation extends ConsumerWidget {
     final mediaQuery = MediaQuery.of(context);
     final platform = Theme.of(context).platform;
     final isIos = platform == TargetPlatform.iOS;
-    final contentHeight = isIos ? 84.0 : 64.0;
+    final contentHeight = isIos ? 84.w : 64.w;
     final bottomInset = isIos ? 0.0 : mediaQuery.viewPadding.bottom;
     final selectedItem = _items[currentIndex];
     final isSpecialSlot = currentIndex == 1 || currentIndex == 2;
@@ -112,8 +113,8 @@ class AppBottomNavigation extends ConsumerWidget {
     return Container(
       decoration: BoxDecoration(
         color: usesSpecialPalette ? Colors.black : _standardBackgroundColor,
-        border: const Border(
-          top: BorderSide(color: Color(0x14FFFFFF), width: 1),
+        border: Border(
+          top: BorderSide(color: Color(0x14FFFFFF), width: 1.w),
         ),
       ),
       child: SizedBox(
@@ -126,7 +127,7 @@ class AppBottomNavigation extends ConsumerWidget {
               top: 0,
               height: contentHeight,
               child: SizedBox(
-                width: _contentWidth,
+                width: _contentWidth.w,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -152,7 +153,11 @@ class AppBottomNavigation extends ConsumerWidget {
               ),
             ),
             if (isIos)
-              const Positioned(left: 120, bottom: 9, child: _HomeIndicator()),
+              Positioned(
+                left: 120.w,
+                bottom: 9.w,
+                child: const _HomeIndicator(),
+              ),
           ],
         ),
       ),
@@ -191,9 +196,9 @@ class _HomeIndicator extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(10.w),
       ),
-      child: const SizedBox(width: 135, height: 5),
+      child: SizedBox(width: 135.w, height: 5.w),
     );
   }
 }
@@ -235,7 +240,7 @@ class _AppBottomNavigationItem extends StatelessWidget {
         : AppBottomNavigation._standardInactiveColor;
 
     return SizedBox(
-      width: AppBottomNavigation._itemWidth,
+      width: AppBottomNavigation._itemWidth.w,
       height: height,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -244,14 +249,14 @@ class _AppBottomNavigationItem extends StatelessWidget {
           alignment: Alignment.topCenter,
           children: [
             Positioned(
-              top: 9,
+              top: 9.w,
               child: SizedBox.square(
-                dimension: AppBottomNavigation._iconSize,
+                dimension: AppBottomNavigation._iconSize.w,
                 child: _icon(color),
               ),
             ),
             Positioned(
-              top: 36,
+              top: 36.w,
               left: 0,
               right: 0,
               child: Text(
@@ -261,7 +266,7 @@ class _AppBottomNavigationItem extends StatelessWidget {
                 overflow: TextOverflow.visible,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: color,
-                  fontSize: 10,
+                  fontSize: 10.sp,
                   fontWeight: FontWeight.w500,
                   height: 1.3,
                 ),
@@ -283,8 +288,8 @@ class _AppBottomNavigationItem extends StatelessWidget {
       return _RemoteBottomTabIcon(
         imageUrl: url,
         preloadImageUrls: [normalIconUrl, selectedIconUrl],
-        width: AppBottomNavigation._iconSize,
-        height: AppBottomNavigation._iconSize,
+        width: AppBottomNavigation._iconSize.w,
+        height: AppBottomNavigation._iconSize.w,
         fallback: _localIcon(color),
       );
     }
@@ -299,12 +304,15 @@ class _AppBottomNavigationItem extends StatelessWidget {
         : unselectedAssetPath;
     return Image.asset(
       assetPath,
-      width: AppBottomNavigation._iconSize,
-      height: AppBottomNavigation._iconSize,
+      width: AppBottomNavigation._iconSize.w,
+      height: AppBottomNavigation._iconSize.w,
       fit: BoxFit.contain,
       filterQuality: FilterQuality.low,
-      errorBuilder: (context, error, stackTrace) =>
-          Icon(fallbackIcon, size: AppBottomNavigation._iconSize, color: color),
+      errorBuilder: (context, error, stackTrace) => Icon(
+        fallbackIcon,
+        size: AppBottomNavigation._iconSize.w,
+        color: color,
+      ),
     );
   }
 }

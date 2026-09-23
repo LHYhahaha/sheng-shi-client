@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../application/player_playback_controller.dart';
 import '../../application/player_viewport_controller.dart';
@@ -37,24 +38,24 @@ class PlayerSubtitleOverlay extends ConsumerWidget {
       left: 0,
       right: 0,
       top: switch (position) {
-        PlayerSubtitlePosition.top => 100,
+        PlayerSubtitlePosition.top => 100.w,
         PlayerSubtitlePosition.middle => 0,
         PlayerSubtitlePosition.bottom => null,
       },
       bottom: switch (position) {
-        PlayerSubtitlePosition.bottom => 160,
+        PlayerSubtitlePosition.bottom => 160.w,
         PlayerSubtitlePosition.middle => 0,
         PlayerSubtitlePosition.top => null,
       },
       child: IgnorePointer(
         child: Container(
           alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 70, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 70.w, vertical: 8.w),
           child: Text(
             text,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 20,
+            style: TextStyle(
+              fontSize: 20.sp,
               fontWeight: FontWeight.w600,
               color: Colors.white,
               shadows: [

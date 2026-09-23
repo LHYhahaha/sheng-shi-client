@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
@@ -30,9 +31,9 @@ class ProfileMembershipCard extends StatelessWidget {
         : l10n.profileBenefitsIntro;
 
     return Container(
-      padding: EdgeInsets.only(bottom: 6),
+      padding: EdgeInsets.only(bottom: 6.w),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadii.sm),
+        borderRadius: BorderRadius.circular(AppRadii.sm.w),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -42,7 +43,7 @@ class ProfileMembershipCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: Color(0xffffffff).withValues(alpha: 0.16),
-          borderRadius: BorderRadius.circular(AppRadii.sm),
+          borderRadius: BorderRadius.circular(AppRadii.sm.w),
         ),
         child: Column(
           children: [
@@ -51,11 +52,8 @@ class ProfileMembershipCard extends StatelessWidget {
               behavior: HitTestBehavior.opaque,
               onTap: membership.entryEnabled ? onTap : null,
               child: Container(
-                margin: EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 18,
-                ),
+                margin: EdgeInsets.only(bottom: 6.w),
+                padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 18.w),
                 decoration: BoxDecoration(
                   image: DecorationImage(
                     // fit: BoxFit.fill,
@@ -68,8 +66,8 @@ class ProfileMembershipCard extends StatelessWidget {
                     colors: [Color(0xFFFFD69B), Color(0xFFFFF0DC)],
                   ),
                   borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(AppRadii.sm),
-                    topRight: Radius.circular(AppRadii.sm),
+                    topLeft: Radius.circular(AppRadii.sm.w),
+                    topRight: Radius.circular(AppRadii.sm.w),
                   ),
                 ),
                 child: Row(
@@ -77,7 +75,7 @@ class ProfileMembershipCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.only(top: 3),
+                        padding: EdgeInsets.only(top: 3.w),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -87,7 +85,7 @@ class ProfileMembershipCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: textTheme.titleMedium?.copyWith(
                                 color: const Color(0xFF421C07),
-                                fontSize: 18,
+                                fontSize: 18.sp,
                                 fontWeight: FontWeight.w900,
                                 fontStyle: FontStyle.italic,
                                 height: 1.4,
@@ -102,7 +100,7 @@ class ProfileMembershipCard extends StatelessWidget {
                                 color: const Color(
                                   0xFF421C07,
                                 ).withValues(alpha: 0.5),
-                                fontSize: 12,
+                                fontSize: 12.sp,
                                 height: 1.3,
                                 fontWeight: FontWeight(400),
                               ),
@@ -111,7 +109,7 @@ class ProfileMembershipCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.md),
+                    SizedBox(width: AppSpacing.md.w),
                     _JoinButton(
                       enabled: membership.entryEnabled,
                       label: isActive ? l10n.profileMember : l10n.profileJoin,
@@ -173,12 +171,12 @@ class _JoinButton extends StatelessWidget {
     return Opacity(
       opacity: enabled ? 1 : 0.42,
       child: Container(
-        width: 91,
-        height: 38,
+        width: 91.w,
+        height: 38.w,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: const Color(0xFF421C07),
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(6.w),
         ),
         child: Text(
           label,
@@ -186,7 +184,7 @@ class _JoinButton extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
             color: enabled ? const Color(0xFFFEF4E4) : AppColors.black,
-            fontSize: 14,
+            fontSize: 14.sp,
             height: 1.25,
           ),
         ),
@@ -209,20 +207,20 @@ class _BenefitItem extends StatelessWidget {
         children: [
           SvgPicture.asset(
             iconAssetPath,
-            width: 20,
-            height: 20,
+            width: 20.w,
+            height: 20.w,
             fit: BoxFit.contain,
           ),
-          const SizedBox(height: 2),
+          SizedBox(height: 2.w),
           Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            style: TextStyle(
               color: const Color(0xFF743A13),
               fontWeight: FontWeight(400),
-              fontSize: 11,
+              fontSize: 11.sp,
               height: 1.5,
             ),
           ),

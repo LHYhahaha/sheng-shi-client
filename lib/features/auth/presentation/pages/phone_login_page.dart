@@ -6,9 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -100,7 +104,11 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
 
   Future<void> _requestCode() async {
     if (_secondsRemaining > 0 || _isSendingCode) return;
-    if (!_isPhoneValid) {
+    final isPhoneValid = _isPhoneValid;
+    _trackElementClick('phone_code_request_button', {
+      'phone_validation_result': isPhoneValid ? 'passed' : 'failed',
+    });
+    if (!isPhoneValid) {
       ref.read(appToastProvider).error(context.l10n.phoneLoginInvalidPhone);
       return;
     }
@@ -157,6 +165,7 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
 
   void _signIn() {
     if (!_canSignIn) return;
+    _trackElementClick('phone_login_submit_button');
     unawaited(
       ref
           .read(authControllerProvider.notifier)
@@ -165,6 +174,20 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
             number: _normalizedPhoneNumber ?? '',
             code: _codeController.text,
           ),
+    );
+  }
+
+  void _trackElementClick(
+    String elementName, [
+    Map<String, Object?> parameters = const {},
+  ]) {
+    unawaited(
+      ref.read(analyticsServiceProvider).track(
+        AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+          'element_name': elementName,
+          ...parameters,
+        }),
+      ),
     );
   }
 
@@ -226,8 +249,8 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
           child: LayoutBuilder(
             builder: (context, constraints) {
               // 键盘弹起后保留可滚动的最小内容高度，避免登录按钮被键盘遮挡。
-              final contentHeight = constraints.maxHeight < 520
-                  ? 520.0
+              final contentHeight = constraints.maxHeight < 520.w
+                  ? 520.w
                   : constraints.maxHeight;
               return SingleChildScrollView(
                 keyboardDismissBehavior:
@@ -235,7 +258,7 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
                 child: SizedBox(
                   height: contentHeight,
                   child: Padding(
-                    padding: const EdgeInsets.only(top: 8),
+                    padding: EdgeInsets.only(top: 8.w),
                     child: Column(
                       children: [
                         Align(
@@ -246,25 +269,26 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
                         ),
                         Expanded(
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            padding: EdgeInsets.symmetric(horizontal: 20.w),
                             child: Column(
                               children: [
                                 const Spacer(flex: 6),
                                 ClipRRect(
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius: BorderRadius.circular(20.w),
                                   child: Image.asset(
                                     'assets/images/profile/logo.png',
-                                    width: 80,
-                                    height: 80,
+                                    key: const ValueKey('phone_login_logo'),
+                                    width: 80.w,
+                                    height: 80.w,
                                   ),
                                 ),
-                                const SizedBox(height: 32),
+                                SizedBox(height: 32.w),
                                 _phoneField(),
-                                const SizedBox(height: 14),
+                                SizedBox(height: 14.w),
                                 _codeField(l10n),
-                                const SizedBox(height: 12),
+                                SizedBox(height: 12.w),
                                 _termsRow(l10n),
-                                const SizedBox(height: 34),
+                                SizedBox(height: 34.w),
                                 SizedBox(
                                   width: double.infinity,
                                   child: FilledButton(
@@ -273,8 +297,8 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
                                         ? _signIn
                                         : null,
                                     style: FilledButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 14,
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 14.w,
                                       ),
                                       backgroundColor: AppColors.primary,
                                       disabledBackgroundColor: AppColors.primary
@@ -283,13 +307,15 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
                                       disabledForegroundColor: Colors.white
                                           .withValues(alpha: .45),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(4),
+                                        borderRadius: BorderRadius.circular(
+                                          4.w,
+                                        ),
                                       ),
                                     ),
                                     child: isSigningIn
-                                        ? const SizedBox(
-                                            width: 18,
-                                            height: 18,
+                                        ? SizedBox(
+                                            width: 18.w,
+                                            height: 18.w,
                                             child: CircularProgressIndicator(
                                               strokeWidth: 2,
                                               color: Colors.white,
@@ -297,8 +323,8 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
                                           )
                                         : Text(
                                             l10n.phoneLoginSignIn,
-                                            style: const TextStyle(
-                                              fontSize: 14,
+                                            style: TextStyle(
+                                              fontSize: 14.sp,
                                               fontWeight: FontWeight.w600,
                                             ),
                                           ),
@@ -324,7 +350,7 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
   Widget _phoneField() => DecoratedBox(
     decoration: BoxDecoration(
       color: Color(0XFF3A3A3A).withValues(alpha: 0.6),
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(4.w),
     ),
     child: Row(
       children: [
@@ -332,7 +358,7 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
           onPressed: _chooseCountry,
           style: TextButton.styleFrom(
             foregroundColor: Colors.white,
-            padding: EdgeInsets.fromLTRB(14, 13, 9, 13),
+            padding: EdgeInsets.fromLTRB(14.w, 13.w, 9.w, 13.w),
             shape: const RoundedRectangleBorder(),
           ),
           child: Row(
@@ -341,18 +367,18 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
                 '${_selectedCountry.regionCode.toUpperCase()} ${_selectedCountry.callingCodeLabel}',
                 style: TextStyle(fontWeight: FontWeight(400)),
               ),
-              SizedBox(width: 4),
+              SizedBox(width: 4.w),
               SvgPicture.asset(
                 "assets/images/auth/login_drop_icon.svg",
-                height: 6,
-                width: 6,
+                height: 6.w,
+                width: 6.w,
               ),
             ],
           ),
         ),
         Container(
-          width: 1,
-          height: 24,
+          width: 1.w,
+          height: 24.w,
           color: Colors.white.withValues(alpha: .12),
         ),
         Expanded(
@@ -370,15 +396,15 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
             ],
             textInputAction: TextInputAction.next,
             onSubmitted: (_) => _codeFocusNode.requestFocus(),
-            style: const TextStyle(color: Colors.white, fontSize: 14),
+            style: TextStyle(color: Colors.white, fontSize: 14.sp),
             decoration: InputDecoration(
               hintText: context.l10n.phoneLoginPhoneHint,
               hintStyle: TextStyle(
                 color: Colors.white.withValues(alpha: 0.4),
-                fontSize: 14,
+                fontSize: 14.sp,
               ),
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12.w),
             ),
           ),
         ),
@@ -389,7 +415,7 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
   Widget _codeField(AppLocalizations l10n) => DecoratedBox(
     decoration: BoxDecoration(
       color: Color(0XFF3A3A3A).withValues(alpha: 0.6),
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(4.w),
     ),
     child: Row(
       children: [
@@ -406,15 +432,15 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
             ],
             textInputAction: TextInputAction.done,
             onSubmitted: (_) => _dismissKeyboard(),
-            style: const TextStyle(color: Colors.white, fontSize: 14),
+            style: TextStyle(color: Colors.white, fontSize: 14.sp),
             decoration: InputDecoration(
               hintText: l10n.phoneLoginCodeHint,
               hintStyle: TextStyle(
                 color: Colors.white.withValues(alpha: 0.4),
-                fontSize: 14,
+                fontSize: 14.sp,
               ),
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12.w),
             ),
           ),
         ),
@@ -454,7 +480,7 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
       text: TextSpan(
         style: TextStyle(
           color: Colors.white.withValues(alpha: 0.4),
-          fontSize: 11,
+          fontSize: 11.sp,
           height: 1.3,
         ),
         children: [
@@ -487,8 +513,8 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
       context: context,
       backgroundColor: const Color(0xFF202020),
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30.w)),
       ),
       builder: (context) {
         return SizedBox(
@@ -496,18 +522,18 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
           child: SafeArea(
             top: false,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+              padding: EdgeInsets.fromLTRB(16.w, 16.w, 16.w, 20.w),
               child: Column(
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const SizedBox(width: 40, height: 40),
+                      SizedBox(width: 40.w, height: 40.w),
                       Text(
                         context.l10n.phoneLoginChooseCountry,
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 18,
+                          fontSize: 18.sp,
                           fontWeight: FontWeight(510),
                         ),
                       ),
@@ -516,17 +542,17 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
                         behavior: HitTestBehavior.opaque,
                         onTap: () => Navigator.of(context).pop(),
                         child: SizedBox.square(
-                          dimension: 40,
+                          dimension: 40.w,
                           child: SvgPicture.asset(
                             "assets/images/player/close.svg",
-                            width: 40,
-                            height: 40,
+                            width: 40.w,
+                            height: 40.w,
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: 10.w),
                   Expanded(
                     child: regions.isEmpty
                         ? Center(
@@ -538,15 +564,15 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
                               for (final country in regions)
                                 Material(
                                   color: Colors.transparent,
-                                  borderRadius: BorderRadius.circular(4),
+                                  borderRadius: BorderRadius.circular(4.w),
                                   clipBehavior: Clip.antiAlias,
                                   child: InkWell(
-                                    borderRadius: BorderRadius.circular(4),
+                                    borderRadius: BorderRadius.circular(4.w),
                                     onTap: () =>
                                         Navigator.pop(context, country),
                                     child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 10,
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 10.w,
                                       ),
                                       child: Row(
                                         children: [
@@ -554,7 +580,7 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
                                             child: Text(
                                               country.displayName,
                                               style: TextStyle(
-                                                fontSize: 14,
+                                                fontSize: 14.sp,
                                                 height: 1.3,
                                                 color: Colors.white.withValues(
                                                   alpha: 0.5,
@@ -564,9 +590,9 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
                                           ),
                                           Text(
                                             country.callingCodeLabel,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               height: 1.3,
-                                              fontSize: 14,
+                                              fontSize: 14.sp,
                                               color: Colors.white,
                                               fontWeight: FontWeight(510),
                                             ),

@@ -1,13 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../core/account/account_ban_controller.dart';
+import '../../../../core/analytics/analytics_definition.dart';
+import '../../../../core/analytics/analytics_event.dart';
+import '../../../../core/analytics/analytics_provider.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/oauth/oauth_service.dart';
-import '../../../../core/oauth/oauth_service_provider.dart';
 import '../../../../core/toast/app_toast_provider.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
@@ -28,7 +33,7 @@ class AuthPage extends ConsumerStatefulWidget {
 class _AuthPageState extends ConsumerState<AuthPage> {
   bool _returnedAfterLogin = false;
   bool _loginConfigRequested = false;
-  bool _isAppleAuthorizing = false;
+  bool _hasReportedPhoneLoginEntryExposure = false;
 
   @override
   void didChangeDependencies() {
@@ -58,36 +63,27 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     });
   }
 
-  Future<void> _authorizeWithApple(BuildContext context) async {
-    if (_isAppleAuthorizing) {
+  void _reportPhoneLoginEntryExposureAfterLayout(BuildContext context) {
+    if (_hasReportedPhoneLoginEntryExposure) {
       return;
     }
-    setState(() => _isAppleAuthorizing = true);
-    try {
-      final identityToken = await ref
-          .read(facebookOAuthServiceProvider)
-          .signInWithApple();
-      if (!context.mounted) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _hasReportedPhoneLoginEntryExposure ||
+          !(ModalRoute.of(context)?.isCurrent ?? false)) {
         return;
       }
-      final toast = ref.read(appToastProvider);
-      if (identityToken == null) {
-        toast.info(context.l10n.authLoginCanceled);
-      } else {
-        // 后端 Apple 登录接口尚未接入；这里只确认原生授权能取得凭证。
-        toast.info(context.l10n.authAppleAuthorizationSucceeded);
-      }
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      debugPrint('[AuthPage] Apple authorization failed: $error');
-      ref.read(appToastProvider).error(context.l10n.authLoginFailedRetryLater);
-    } finally {
-      if (mounted) {
-        setState(() => _isAppleAuthorizing = false);
-      }
-    }
+      _hasReportedPhoneLoginEntryExposure = true;
+      unawaited(
+        ref
+            .read(analyticsServiceProvider)
+            .track(
+              const AnalyticsEvent(
+                AnalyticsDefinitions.phoneLoginEntryExposure,
+              ),
+            ),
+      );
+    });
   }
 
   @override
@@ -136,6 +132,9 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     if (state.isLoggedIn && (ModalRoute.of(context)?.isCurrent ?? false)) {
       _returnToSourceAfterLogin(context);
     }
+    if (isPhoneLoginEnabled && !state.isLoggedIn && !_returnedAfterLogin) {
+      _reportPhoneLoginEntryExposureAfterLayout(context);
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFF090012),
@@ -174,14 +173,15 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                           .read(authControllerProvider.notifier)
                           .login(AuthProviderType.facebook)
                     : null,
-                onApplePressed: _isAppleAuthorizing
-                    ? null
-                    : () => _authorizeWithApple(context),
+                onApplePressed: state.pendingProvider == null
+                    ? () => ref
+                          .read(authControllerProvider.notifier)
+                          .login(AuthProviderType.apple)
+                    : null,
                 isFacebookLoginEnabled: isFacebookLoginEnabled,
                 isPhoneLoginEnabled: isPhoneLoginEnabled,
                 isAppleSignInAvailable: isAppleSignInAvailable,
                 isGoogleSignInAvailable: isGoogleSignInAvailable,
-                isAppleAuthorizing: _isAppleAuthorizing,
                 onPhonePressed: () => context.push(RoutePaths.phoneLogin),
               ),
           ],
@@ -201,7 +201,6 @@ class _LoginBody extends StatelessWidget {
     required this.isPhoneLoginEnabled,
     required this.isAppleSignInAvailable,
     required this.isGoogleSignInAvailable,
-    required this.isAppleAuthorizing,
     required this.onPhonePressed,
   });
 
@@ -213,7 +212,6 @@ class _LoginBody extends StatelessWidget {
   final bool isPhoneLoginEnabled;
   final bool isAppleSignInAvailable;
   final bool isGoogleSignInAvailable;
-  final bool isAppleAuthorizing;
   final VoidCallback onPhonePressed;
 
   @override
@@ -223,24 +221,25 @@ class _LoginBody extends StatelessWidget {
     final bottomInset = mediaQuery.viewPadding.bottom;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(14, 0, 14, bottomInset + 176),
+      padding: EdgeInsets.fromLTRB(14.w, 0, 14.w, bottomInset + 176.w),
       child: Column(
         children: [
           const Spacer(flex: 145),
           ClipRRect(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(10.w),
             child: Image.asset(
               'assets/images/profile/logo.png',
-              width: 62,
-              height: 62,
+              key: const ValueKey('auth_login_logo'),
+              width: 62.w,
+              height: 62.w,
             ),
           ),
-          const SizedBox(height: 13),
+          SizedBox(height: 13.w),
           Text(
             context.l10n.appTitle,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: AppColors.textPrimary,
-              fontSize: 17,
+              fontSize: 17.sp,
               fontWeight: FontWeight.w700,
               height: 1.25,
             ),
@@ -254,9 +253,13 @@ class _LoginBody extends StatelessWidget {
               onPressed: onFacebookPressed,
               backgroundColor: const Color(0xFF5981EF),
               foregroundColor: AppColors.textPrimary,
-              icon: const Icon(Icons.facebook_rounded, size: 26),
+              icon: Image.asset(
+                "assets/images/auth/facebook_login.png",
+                height: 30.w,
+                width: 30.w,
+              ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12.w),
           ],
           if (isGoogleSignInAvailable) ...[
             _SocialLoginButton(
@@ -268,36 +271,27 @@ class _LoginBody extends StatelessWidget {
               foregroundColor: const Color(0xFF1A1A1A),
               icon: Image.asset(
                 'assets/images/auth/google_login.png',
-                width: 26,
-                height: 26,
+                width: 30.w,
+                height: 30.w,
               ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12.w),
           ],
           if (isAppleSignInAvailable) ...[
             _SocialLoginButton(
               key: const ValueKey('auth_apple_button'),
               label: l10n.loginButtonApple,
-              isLoading: isAppleAuthorizing,
+              isLoading: pendingProvider == AuthProviderType.apple,
               onPressed: onApplePressed,
               backgroundColor: AppColors.textPrimary,
               foregroundColor: const Color(0xFF1A1A1A),
               icon: Image.asset(
                 'assets/images/auth/apple.png',
-                width: 25,
-                height: 25,
+                width: 30.w,
+                height: 30.w,
               ),
             ),
-
-            // SizedBox(
-            //   key: const ValueKey('auth_apple_button'),
-            //   width: double.infinity,
-            //   child: SignInWithAppleButton(
-            //     text: l10n.loginButtonApple,
-            //     onPressed: onApplePressed,
-            //   ),
-            // ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12.w),
           ],
           if (isPhoneLoginEnabled) ...[
             _SocialLoginButton(
@@ -309,11 +303,11 @@ class _LoginBody extends StatelessWidget {
               foregroundColor: const Color(0xFF1A1A1A),
               icon: Image.asset(
                 'assets/images/auth/mobile.png',
-                width: 30,
-                height: 30,
+                width: 30.w,
+                height: 30.w,
               ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12.w),
           ],
           const AuthTermsText(width: double.infinity),
         ],
@@ -350,15 +344,17 @@ class _SocialLoginButton extends StatelessWidget {
         icon: icon,
         label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
         style: FilledButton.styleFrom(
-          padding: EdgeInsets.symmetric(vertical: 10),
+          padding: EdgeInsets.symmetric(vertical: 9.w),
           backgroundColor: backgroundColor,
           foregroundColor: foregroundColor,
           disabledBackgroundColor: backgroundColor.withValues(alpha: 0.65),
           disabledForegroundColor: foregroundColor.withValues(alpha: 0.75),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(40.r),
+          ),
           textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
+            fontSize: 14.sp,
+            fontWeight: FontWeight(590),
             height: 1.2,
           ),
         ),

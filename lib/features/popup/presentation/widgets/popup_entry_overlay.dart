@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
 
 import '../../../../app/router/app_router.dart';
@@ -268,8 +269,8 @@ class _PopupEntryContentState extends State<_PopupEntryContent> {
           image,
           if (_showsCloseButton)
             Positioned(
-              top: 6,
-              right: 6,
+              top: 6.w,
+              right: 6.w,
               child: _PopupCloseButton(
                 _actionLocked ? null : () => _runOnce(widget.onClose),
               ),
@@ -289,12 +290,12 @@ class _PopupEntryContentState extends State<_PopupEntryContent> {
           DecoratedBox(
             decoration: BoxDecoration(
               color: const Color(0xFF1C1C1E),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(12.w),
             ),
             child: Stack(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
+                  padding: EdgeInsets.fromLTRB(8.w, 16.w, 8.w, 8.w),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -305,12 +306,12 @@ class _PopupEntryContentState extends State<_PopupEntryContent> {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: AppColors.textPrimary,
-                          fontSize: 18,
+                          fontSize: 18.sp,
                           fontWeight: FontWeight(850),
                           height: 1.1,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4.w),
                       Text(
                         context.l10n.popupNextDramaSubtitle,
                         maxLines: 1,
@@ -318,18 +319,18 @@ class _PopupEntryContentState extends State<_PopupEntryContent> {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.5),
-                          fontSize: 12,
+                          fontSize: 12.sp,
                           fontWeight: FontWeight.w400,
                           height: 1.2,
                         ),
                       ),
-                      const SizedBox(height: 14),
+                      SizedBox(height: 14.w),
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () => _runOnceIfPresent(widget.onPlayTap),
                         child: _PopupImage(
                           imageUrl: popup.popupImage ?? '',
-                          width: width - 8,
+                          width: width - 8.w,
                           aspectRatio: _imageAspectRatio,
                           onError: widget.onImageError,
                         ),
@@ -339,8 +340,8 @@ class _PopupEntryContentState extends State<_PopupEntryContent> {
                 ),
                 if (_showsCloseButton)
                   Positioned(
-                    top: 8,
-                    right: 8,
+                    top: 8.w,
+                    right: 8.w,
                     child: _PopupCloseButton(
                       _actionLocked ? null : () => _runOnce(widget.onClose),
                     ),
@@ -348,10 +349,10 @@ class _PopupEntryContentState extends State<_PopupEntryContent> {
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10.w),
           SizedBox(
-            width: width - 16,
-            height: 44,
+            width: width - 16.w,
+            height: 44.w,
             child: FilledButton(
               onPressed: _actionLocked
                   ? null
@@ -363,10 +364,10 @@ class _PopupEntryContentState extends State<_PopupEntryContent> {
                 disabledForegroundColor: AppColors.textPrimary,
                 padding: EdgeInsets.zero,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(6.w),
                 ),
-                textStyle: const TextStyle(
-                  fontSize: 14,
+                textStyle: TextStyle(
+                  fontSize: 14.sp,
                   fontWeight: FontWeight.w600,
                   height: 1,
                 ),
@@ -377,13 +378,16 @@ class _PopupEntryContentState extends State<_PopupEntryContent> {
                 children: [
                   SvgPicture.asset(
                     "assets/images/home/play_icon.svg",
-                    width: 12,
-                    height: 12,
+                    width: 12.w,
+                    height: 12.w,
                   ),
-                  SizedBox(width: 5),
+                  SizedBox(width: 5.w),
                   Text(
                     context.l10n.popupDramaExitActionPlay,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight(590)),
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight(590),
+                    ),
                   ),
                 ],
               ),
@@ -396,7 +400,7 @@ class _PopupEntryContentState extends State<_PopupEntryContent> {
 
   double _dialogWidth(BuildContext context) {
     final screenWidth = MediaQuery.sizeOf(context).width;
-    return math.min(262, math.max(220, screenWidth - 96));
+    return math.min(262.w, math.max(220.w, screenWidth - 96.w));
   }
 }
 
@@ -417,7 +421,7 @@ class _PopupImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final height = width / aspectRatio;
     return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(8.w),
       child: AppCachedNetworkImage(
         imageUrl: imageUrl,
         width: width,
@@ -440,16 +444,20 @@ class _PopupCloseButton extends StatelessWidget {
     return AppTapTarget(
       onTap: onPressed,
       semanticLabel: 'Close popup',
-      minSize: 32,
+      minSize: 32.w,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: Color(0XFF292929),
           shape: BoxShape.circle,
         ),
-        child: const SizedBox(
-          width: 24,
-          height: 24,
-          child: Icon(Icons.close_rounded, color: Color(0xFFBCBCBC), size: 18),
+        child: SizedBox(
+          width: 24.w,
+          height: 24.w,
+          child: Icon(
+            Icons.close_rounded,
+            color: Color(0xFFBCBCBC),
+            size: 18.w,
+          ),
         ),
       ),
     );

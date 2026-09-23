@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:gradient_borders/box_borders/gradient_box_border.dart';
 
 import '../../../../l10n/app_localizations.dart';
 
 const _memberPointsButtonColor = Color(0xFF8800FF);
 
-Future<void> showMemberPointsClaimSuccessDialog(BuildContext context, {
+Future<void> showMemberPointsClaimSuccessDialog(
+  BuildContext context, {
   required int rewardAmount,
 }) {
   return showGeneralDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.72),
     barrierDismissible: true,
-    barrierLabel: MaterialLocalizations
-        .of(context)
-        .modalBarrierDismissLabel,
+    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
     transitionDuration: const Duration(milliseconds: 180),
     pageBuilder: (context, animation, secondaryAnimation) {
       return _MemberPointsClaimSuccessDialog(rewardAmount: rewardAmount);
@@ -43,11 +43,9 @@ class _MemberPointsClaimSuccessDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dialogWidth = (MediaQuery
-        .sizeOf(context)
-        .width - 64).clamp(
-      280.0,
-      312.0,
+    final dialogWidth = (MediaQuery.sizeOf(context).width - 64.w).clamp(
+      280.0.w,
+      312.0.w,
     );
     final l10n = AppLocalizations.maybeOf(context);
 
@@ -57,10 +55,10 @@ class _MemberPointsClaimSuccessDialog extends StatelessWidget {
           color: Colors.transparent,
           child: SizedBox(
             width: dialogWidth,
-            height: 350,
+            height: 350.w,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(14.w),
                 gradient: const LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -70,8 +68,8 @@ class _MemberPointsClaimSuccessDialog extends StatelessWidget {
                 boxShadow: [
                   BoxShadow(
                     color: const Color(0xFF11001D).withValues(alpha: 0.8),
-                    blurRadius: 28,
-                    offset: const Offset(0, 14),
+                    blurRadius: 28.w,
+                    offset: Offset(0, 14.w),
                   ),
                 ],
               ),
@@ -84,59 +82,59 @@ class _MemberPointsClaimSuccessDialog extends StatelessWidget {
                     left: 0,
                     right: 0,
                     child: ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(14),
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(14.w),
                       ),
                       child: Image.asset(
                         'assets/images/rewards/points_claime_pop_head_bac.png',
-                        height: 48,
+                        height: 48.w,
                         fit: BoxFit.fitHeight,
                       ),
                     ),
                   ),
                   Positioned(
-                    top: 12,
+                    top: 12.w,
                     child: Text(
                       l10n.memberPointsSuccessTitle,
                       key: Key('member_points_claim_success_title'),
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 16,
+                        fontSize: 16.sp,
                         height: 1.2,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
                   Positioned(
-                    top: 76,
+                    top: 76.w,
                     child: Stack(
                       alignment: Alignment.bottomCenter,
                       children: [
-                      Image.asset(
-                      'assets/images/rewards/points_claime_pop_bac.png',
-                      key: const Key('member_points_claim_success_image'),
-                      width: 123,
-                      height: 208,
-                      fit: BoxFit.fitWidth,
-                      alignment: Alignment.topCenter,
-                    ),
+                        Image.asset(
+                          'assets/images/rewards/points_claime_pop_bac.png',
+                          key: const Key('member_points_claim_success_image'),
+                          width: 123.w,
+                          height: 208.w,
+                          fit: BoxFit.fitWidth,
+                          alignment: Alignment.topCenter,
+                        ),
                         Positioned(
-                          top: 103,
-                          left: 15,
-                          right: 15,
+                          top: 103.w,
+                          left: 15.w,
+                          right: 15.w,
                           child: Center(
                             child: SizedBox(
-                              width: 100,
-                              height: 20,
+                              width: 100.w,
+                              height: 20.w,
                               child: FittedBox(
                                 fit: BoxFit.scaleDown,
                                 alignment: Alignment.center,
                                 child: Text(
                                   '+$rewardAmount',
                                   maxLines: 1,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     color: Colors.white,
-                                    fontSize: 20,
+                                    fontSize: 20.sp,
                                     height: 1,
                                     fontWeight: FontWeight.w900,
                                   ),
@@ -144,51 +142,51 @@ class _MemberPointsClaimSuccessDialog extends StatelessWidget {
                               ),
                             ),
                           ),
-                        )
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Positioned(
+                  //   top: 203,
+                  //   child: Container(
+                  //     key: const Key('member_points_claim_success_amount'),
+                  //     width: 86,
+                  //     height: 36,
+                  //     alignment: Alignment.center,
+                  //     decoration: BoxDecoration(
+                  //       borderRadius: BorderRadius.circular(18),
+                  //       gradient: const LinearGradient(
+                  //         begin: Alignment.topCenter,
+                  //         end: Alignment.bottomCenter,
+                  //         colors: [Color(0xFF7E42C8), Color(0xFF5E229C)],
+                  //       ),
+                  //     ),
+                  //     child: Text(
+                  //       '+$rewardAmount',
+                  //       style: const TextStyle(
+                  //         color: Colors.white,
+                  //         fontSize: 24,
+                  //         height: 1,
+                  //         fontWeight: FontWeight.w800,
+                  //       ),
+                  //     ),
+                  //   ),
+                  // ),
+                  Positioned(
+                    left: 16.w,
+                    right: 16.w,
+                    bottom: 16.w,
+                    child: _ClaimSuccessOkButton(
+                      label: l10n.ok,
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                  ),
                 ],
               ),
             ),
-            // Positioned(
-            //   top: 203,
-            //   child: Container(
-            //     key: const Key('member_points_claim_success_amount'),
-            //     width: 86,
-            //     height: 36,
-            //     alignment: Alignment.center,
-            //     decoration: BoxDecoration(
-            //       borderRadius: BorderRadius.circular(18),
-            //       gradient: const LinearGradient(
-            //         begin: Alignment.topCenter,
-            //         end: Alignment.bottomCenter,
-            //         colors: [Color(0xFF7E42C8), Color(0xFF5E229C)],
-            //       ),
-            //     ),
-            //     child: Text(
-            //       '+$rewardAmount',
-            //       style: const TextStyle(
-            //         color: Colors.white,
-            //         fontSize: 24,
-            //         height: 1,
-            //         fontWeight: FontWeight.w800,
-            //       ),
-            //     ),
-            //   ),
-            // ),
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 16,
-              child: _ClaimSuccessOkButton(
-                label: l10n.ok,
-                onTap: () => Navigator.of(context).pop(),
-              ),
-            ),
-            ],
           ),
         ),
       ),
-    ),)
-    ,
     );
   }
 }
@@ -207,7 +205,7 @@ class _ClaimSuccessOkButton extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: _memberPointsButtonColor,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(4.w),
           border: const GradientBoxBorder(
             width: 1,
             gradient: LinearGradient(
@@ -231,17 +229,17 @@ class _ClaimSuccessOkButton extends StatelessWidget {
             child: InkWell(
               key: const Key('member_points_claim_success_ok'),
               onTap: onTap,
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(4.w),
               splashColor: Colors.white.withValues(alpha: 0.08),
               highlightColor: Colors.white.withValues(alpha: 0.04),
               child: SizedBox(
-                height: 44,
+                height: 44.w,
                 child: Center(
                   child: Text(
                     label,
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 18,
+                      fontSize: 18.sp,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

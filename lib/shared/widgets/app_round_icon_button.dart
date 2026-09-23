@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'app_tap_target.dart';
@@ -57,8 +58,8 @@ class AppRoundIconButton extends StatelessWidget {
       onTap: onTap,
       child: SvgPicture.asset(
         "assets/images/player/close.svg",
-        width: size,
-        height: size,
+        width: size.w,
+        height: size.w,
       ),
       // Container(
       //   width: size,

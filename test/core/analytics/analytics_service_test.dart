@@ -567,6 +567,39 @@ void main() {
     );
   });
 
+  test('phone login entry exposure accepts no event parameters', () {
+    final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.phoneLoginEntryExposure),
+      ),
+      returnsNormally,
+    );
+  });
+
+  test('phone code request click requires a client validation result', () {
+    final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+          'element_name': 'phone_code_request_button',
+        }),
+      ),
+      throwsA(isA<AnalyticsValidationError>()),
+    );
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+          'element_name': 'phone_code_request_button',
+          'phone_validation_result': 'passed',
+        }),
+      ),
+      returnsNormally,
+    );
+  });
+
   test('rejects unknown parameters and invalid launch values', () {
     final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
 

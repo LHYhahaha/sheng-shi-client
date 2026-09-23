@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
@@ -173,31 +174,31 @@ class _AccountCancellationPageState
                 ),
                 Expanded(
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 140),
+                    padding: EdgeInsets.fromLTRB(16.w, 10.w, 16.w, 140.w),
                     children: [
                       Text(
                         l10n.accountCancellationDescription,
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.9),
-                          fontSize: 14,
+                          fontSize: 14.sp,
                           height: 20 / 14,
                           fontWeight: FontWeight.normal,
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      SizedBox(height: 10.w),
                       _DeletionInfoPanel(items: _deletionItems(l10n)),
-                      const SizedBox(height: 18),
+                      SizedBox(height: 18.w),
                       _CancellationRiskNotice(
                         firstLine: l10n.accountCancellationRiskLogoutDevices,
                         secondLine: l10n.accountCancellationRiskDeletionFinal,
                       ),
                       if (state.error != null) ...[
-                        const SizedBox(height: 16),
+                        SizedBox(height: 16.w),
                         Text(
                           _errorMessage(context, state.error!),
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.danger,
-                            fontSize: 13,
+                            fontSize: 13.sp,
                             height: 18 / 13,
                           ),
                         ),
@@ -288,10 +289,10 @@ class _DeleteConfirmSheet extends StatelessWidget {
     final bottomPadding = MediaQuery.paddingOf(context).bottom;
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.fromLTRB(16, 19, 16, 18 + bottomPadding),
-      decoration: const BoxDecoration(
+      padding: EdgeInsets.fromLTRB(16.w, 19.w, 16.w, 18.w + bottomPadding),
+      decoration: BoxDecoration(
         color: Color(0xFF1F1F22),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.w)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -300,27 +301,27 @@ class _DeleteConfirmSheet extends StatelessWidget {
             title,
             key: const ValueKey('account_cancellation_confirm_title'),
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
-              fontSize: 16,
+              fontSize: 16.sp,
               fontWeight: FontWeight.w600,
               height: 22 / 16,
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20.w),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 5),
+            padding: EdgeInsets.symmetric(horizontal: 5.w),
             child: Text(
               message,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.92),
-                fontSize: 13,
+                fontSize: 13.sp,
                 height: 18 / 13,
               ),
             ),
           ),
-          const SizedBox(height: 34),
+          SizedBox(height: 34.w),
           Row(
             children: [
               Expanded(
@@ -333,7 +334,7 @@ class _DeleteConfirmSheet extends StatelessWidget {
                   },
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12.w),
               Expanded(
                 child: _DeleteConfirmActionButton(
                   key: const ValueKey('account_cancellation_confirm_submit'),
@@ -367,16 +368,18 @@ class _DeleteConfirmActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 44,
+      height: 44.w,
       child: FilledButton(
         onPressed: onPressed,
         style: FilledButton.styleFrom(
           backgroundColor: backgroundColor,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(7.w),
+          ),
           padding: EdgeInsets.zero,
-          textStyle: const TextStyle(
-            fontSize: 14,
+          textStyle: TextStyle(
+            fontSize: 14.sp,
             fontWeight: FontWeight.w600,
             height: 18 / 14,
           ),
@@ -431,10 +434,10 @@ class _DeletionInfoPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('account_cancellation_info_card'),
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      padding: EdgeInsets.fromLTRB(14.w, 14.w, 14.w, 12.w),
       decoration: BoxDecoration(
         color: const Color(0xFFFFFFFF).withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(8.w),
       ),
       child: Column(
         children: [
@@ -442,7 +445,7 @@ class _DeletionInfoPanel extends StatelessWidget {
             _DeletionInfoRow(item: items[index]),
             if (index != items.length - 1)
               Padding(
-                padding: const EdgeInsets.only(left: 38, top: 14, bottom: 14),
+                padding: EdgeInsets.only(left: 38.w, top: 14.w, bottom: 14.w),
                 child: Divider(
                   height: 1,
                   thickness: 1,
@@ -468,29 +471,29 @@ class _DeletionInfoRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         _DeletionIconTile(item: item),
-        const SizedBox(width: 12),
+        SizedBox(width: 12.w),
         Expanded(
           child: Padding(
-            padding: EdgeInsets.only(top: subtitle == null ? 2 : 0),
+            padding: EdgeInsets.only(top: subtitle == null ? 2.w : 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   item.title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
+                    fontSize: 16.sp,
                     height: 22 / 16,
                     fontWeight: FontWeight.normal,
                   ),
                 ),
                 if (subtitle != null) ...[
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4.w),
                   Text(
                     subtitle,
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.5),
-                      fontSize: 12,
+                      fontSize: 12.sp,
                       height: 16 / 12,
                       fontWeight: FontWeight.normal,
                     ),
@@ -513,17 +516,17 @@ class _DeletionIconTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 26,
-      height: 26,
+      width: 26.w,
+      height: 26.w,
       decoration: BoxDecoration(
         color: item.backgroundColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(8.w),
       ),
       alignment: Alignment.center,
       child: Image.asset(
         item.assetPath,
-        width: 20,
-        height: 20,
+        width: 20.w,
+        height: 20.w,
         fit: BoxFit.contain,
       ),
     );
@@ -547,15 +550,15 @@ class _CancellationRiskNotice extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(top: 1),
+            padding: EdgeInsets.only(top: 1.w),
             child: Image.asset(
               '$_accountCancellationAssetRoot/warning.png',
-              width: 20,
-              height: 20,
+              width: 20.w,
+              height: 20.w,
               fit: BoxFit.contain,
             ),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10.w),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -564,13 +567,13 @@ class _CancellationRiskNotice extends StatelessWidget {
                   firstLine,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 12,
+                    fontSize: 12.sp,
                     height: 16 / 12,
                     fontWeight: FontWeight.normal,
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 9),
+                  padding: EdgeInsets.symmetric(vertical: 9.w),
                   child: Divider(
                     height: 1,
                     thickness: 1,
@@ -581,7 +584,7 @@ class _CancellationRiskNotice extends StatelessWidget {
                   secondLine,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 12,
+                    fontSize: 12.sp,
                     height: 16 / 12,
                     fontWeight: FontWeight.normal,
                   ),
@@ -619,12 +622,12 @@ class _CancellationBottomBar extends StatelessWidget {
     final bottomPadding = MediaQuery.paddingOf(context).bottom;
     return Container(
       // height: 108 + bottomPadding,
-      padding: EdgeInsets.fromLTRB(30, 16, 30, 30 + bottomPadding),
+      padding: EdgeInsets.fromLTRB(30.w, 16.w, 30.w, 30.w + bottomPadding),
       decoration: BoxDecoration(
         color: Color(0XFFFFFFFF).withValues(alpha: 0.12),
         borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
+          topLeft: Radius.circular(20.w),
+          topRight: Radius.circular(20.w),
         ),
       ),
       // decoration: const BoxDecoration(
@@ -643,9 +646,9 @@ class _CancellationBottomBar extends StatelessWidget {
             value: acceptedRisk,
             onChanged: onAcceptedRiskChanged,
           ),
-          SizedBox(height: 12),
+          SizedBox(height: 12.w),
           SizedBox(
-            height: 44,
+            height: 44.w,
             child: FilledButton(
               key: const ValueKey('account_cancellation_delete_button'),
               onPressed: canSubmit ? onSubmit : null,
@@ -657,14 +660,14 @@ class _CancellationBottomBar extends StatelessWidget {
                 foregroundColor: Colors.white,
                 disabledForegroundColor: Colors.white.withValues(alpha: 0.3),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(8.w),
                 ),
                 padding: EdgeInsets.zero,
               ),
               child: Text(
                 buttonLabel,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 16.sp,
                   fontWeight: FontWeight.w600,
                   height: 20 / 16,
                   color: canSubmit
@@ -701,7 +704,7 @@ class _RiskCheckboxRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           _RiskCheckboxIndicator(value: value),
-          const SizedBox(width: 8),
+          SizedBox(width: 8.w),
           Expanded(
             child: Text(
               label,
@@ -710,7 +713,7 @@ class _RiskCheckboxRow extends StatelessWidget {
               overflow: TextOverflow.visible,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.5),
-                fontSize: 11,
+                fontSize: 11.sp,
                 height: 15 / 11,
                 fontWeight: FontWeight.normal,
               ),
@@ -730,19 +733,17 @@ class _RiskCheckboxIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 14,
-      height: 14,
+      width: 14.w,
+      height: 14.w,
       decoration: BoxDecoration(
         color: value ? const Color(0xFFFF0D83) : Colors.transparent,
         shape: BoxShape.circle,
         border: Border.all(
           color: Colors.white.withValues(alpha: value ? 1 : 0.45),
-          width: 1,
+          width: 1.w,
         ),
       ),
-      child: value
-          ? const Icon(Icons.check, size: 10, color: Colors.white)
-          : null,
+      child: value ? Icon(Icons.check, size: 10.w, color: Colors.white) : null,
     );
   }
 }

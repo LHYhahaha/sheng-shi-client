@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
@@ -211,7 +212,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         onTap: () => FocusScope.of(context).unfocus(),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            padding: EdgeInsets.symmetric(horizontal: 8.w),
             child: Column(
               children: [
                 _SearchBar(
@@ -300,8 +301,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                                     return SizedBox(
                                       width: itemWidth,
                                       child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: 6.w,
                                         ),
                                         child: _RankingPanel(
                                           pageSession: _dramaExposureSession,
@@ -558,27 +559,27 @@ class _SearchBarState extends State<_SearchBar> {
     final fallbackHint = context.l10n.searchHint;
     final recommendation = _recommendedKeyword;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 12, 8, 20),
+      padding: EdgeInsets.fromLTRB(0, 12.w, 8.w, 20.w),
       child: Row(
         children: [
           GestureDetector(
             key: const ValueKey('search_back_button'),
             onTap: widget.onBack,
             child: Container(
-              width: 30,
-              height: 30,
-              margin: EdgeInsets.only(right: 3),
+              width: 30.w,
+              height: 30.w,
+              margin: EdgeInsets.only(right: 3.w),
               alignment: Alignment.center,
               child: Image.asset(
                 'assets/images/common/come_back.png',
-                width: 20,
-                height: 20,
+                width: 20.w,
+                height: 20.w,
               ),
             ),
           ),
           Expanded(
             child: SizedBox(
-              height: 38,
+              height: 38.w,
               child: Stack(
                 alignment: Alignment.centerLeft,
                 children: [
@@ -587,35 +588,35 @@ class _SearchBarState extends State<_SearchBar> {
                     onSubmitted: (_) => _submitSearch(),
                     onChanged: widget.onChanged,
                     textInputAction: TextInputAction.search,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    style: TextStyle(color: Colors.white, fontSize: 14.sp),
                     decoration: InputDecoration(
                       isDense: true,
                       hintText: recommendation.isEmpty ? fallbackHint : '',
                       hintStyle: TextStyle(
                         fontWeight: FontWeight.normal,
                         color: AppColors.textPrimary.withValues(alpha: 0.4),
-                        fontSize: 14,
+                        fontSize: 14.sp,
                       ),
-                      prefixIconConstraints: const BoxConstraints(
-                        minWidth: 32,
-                        minHeight: 32,
+                      prefixIconConstraints: BoxConstraints(
+                        minWidth: 32.w,
+                        minHeight: 32.w,
                       ),
                       prefixIcon: Padding(
-                        padding: const EdgeInsets.only(left: 15, right: 2),
+                        padding: EdgeInsets.only(left: 15.w, right: 2.w),
                         child: GestureDetector(
                           key: const ValueKey('search_submit_button'),
                           behavior: HitTestBehavior.opaque,
                           onTap: _submitSearch,
                           child: Image.asset(
                             'assets/images/search/search_grey.png',
-                            width: 14,
-                            height: 14,
+                            width: 14.w,
+                            height: 14.w,
                           ),
                         ),
                       ),
-                      suffixIconConstraints: const BoxConstraints(
-                        minWidth: 24,
-                        minHeight: 24,
+                      suffixIconConstraints: BoxConstraints(
+                        minWidth: 24.w,
+                        minHeight: 24.w,
                       ),
                       suffixIcon: ValueListenableBuilder<TextEditingValue>(
                         valueListenable: widget.controller,
@@ -628,17 +629,17 @@ class _SearchBarState extends State<_SearchBar> {
                             behavior: HitTestBehavior.opaque,
                             onTap: widget.onClear,
                             child: Container(
-                              width: 18,
-                              height: 18,
-                              margin: const EdgeInsets.all(6),
+                              width: 18.w,
+                              height: 18.w,
+                              margin: EdgeInsets.all(6.w),
                               decoration: BoxDecoration(
                                 color: Color(0xFF353535),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.close,
                                 color: Colors.white,
-                                size: 13,
+                                size: 13.w,
                               ),
                             ),
                           );
@@ -646,16 +647,16 @@ class _SearchBarState extends State<_SearchBar> {
                       ),
                       filled: true,
                       fillColor: AppColors.textPrimary.withValues(alpha: 0.14),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                      contentPadding: EdgeInsets.symmetric(vertical: 10.w),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(4.w),
                         // borderSide: BorderSide(
                         //   width: 0.5,
                         //   color: AppColors.textPrimary.withValues(alpha: 0.2),
                         // ),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(4.w),
                         // borderSide: BorderSide(
                         //   width: 0.5,
                         //   color: AppColors.textPrimary.withValues(alpha: 0.2),
@@ -665,8 +666,8 @@ class _SearchBarState extends State<_SearchBar> {
                   ),
                   if (recommendation.isNotEmpty)
                     Positioned.fill(
-                      left: _recommendationLeftPadding,
-                      right: _recommendationRightPadding,
+                      left: _recommendationLeftPadding.w,
+                      right: _recommendationRightPadding.w,
                       child: ValueListenableBuilder<TextEditingValue>(
                         valueListenable: widget.controller,
                         builder: (context, value, child) {
@@ -719,7 +720,7 @@ class _SearchBarState extends State<_SearchBar> {
                                       color: AppColors.textPrimary.withValues(
                                         alpha: 0.4,
                                       ),
-                                      fontSize: 14,
+                                      fontSize: 14.sp,
                                       fontWeight: FontWeight.normal,
                                     ),
                                   ),
@@ -766,7 +767,7 @@ class _SuggestionResults extends ConsumerWidget {
           context.l10n.networkError,
           style: TextStyle(
             color: AppColors.textPrimary.withValues(alpha: 0.6),
-            fontSize: 13,
+            fontSize: 13.sp,
           ),
         ),
       );
@@ -782,10 +783,10 @@ class _SuggestionResults extends ConsumerWidget {
         return false;
       },
       child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(6, 0, 16, 24),
+        padding: EdgeInsets.fromLTRB(6.w, 0, 16.w, 24.w),
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         itemCount: dramas.length + 1,
-        separatorBuilder: (_, _) => const SizedBox(height: 16),
+        separatorBuilder: (_, _) => SizedBox(height: 16.w),
         itemBuilder: (context, index) {
           if (index < dramas.length) {
             final drama = dramas[index];
@@ -829,7 +830,7 @@ class _ResultSortTabs extends StatelessWidget {
       SearchSortType.unwatched: context.l10n.searchTabUnwatched,
     };
     return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 0, 16, 20),
+      padding: EdgeInsets.fromLTRB(6.w, 0, 16.w, 20.w),
       child: Row(
         children: [
           for (final type in SearchSortType.values)
@@ -838,14 +839,14 @@ class _ResultSortTabs extends StatelessWidget {
               behavior: HitTestBehavior.opaque,
               onTap: () => onSelected(type),
               child: Padding(
-                padding: const EdgeInsets.only(right: 24),
+                padding: EdgeInsets.only(right: 24.w),
                 child: Text(
                   labels[type]!,
                   style: TextStyle(
                     color: selected == type
                         ? const Color(0xFFFF007A)
                         : const Color(0xFF858585),
-                    fontSize: 15,
+                    fontSize: 15.sp,
                     fontWeight: selected == type
                         ? FontWeight.w700
                         : FontWeight.w400,
@@ -891,7 +892,7 @@ class _SubmittedSearchResults extends ConsumerWidget {
     if (dramas.isEmpty) {
       if (recommendationItems == null) {
         return Padding(
-          padding: const EdgeInsets.only(top: 120),
+          padding: EdgeInsets.only(top: 120.w),
           child: AppEmptyState(message: context.l10n.searchEmptyNoResult),
         );
       }
@@ -901,7 +902,7 @@ class _SubmittedSearchResults extends ConsumerWidget {
         slivers: [
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.only(top: 25, bottom: 120),
+              padding: EdgeInsets.only(top: 25.w, bottom: 120.w),
               child: AppEmptyState(message: context.l10n.searchEmptyNoResult),
             ),
           ),
@@ -922,10 +923,10 @@ class _SubmittedSearchResults extends ConsumerWidget {
         key: scrollKey,
         slivers: [
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(6, 0, 16, 0),
+            padding: EdgeInsets.fromLTRB(6.w, 0, 16.w, 0),
             sliver: SliverList.separated(
               itemCount: dramas.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 16),
+              separatorBuilder: (_, _) => SizedBox(height: 16.w),
               itemBuilder: (context, index) {
                 final drama = dramas[index];
                 return DramaCardExposure(
@@ -966,7 +967,7 @@ class _SubmittedSearchResults extends ConsumerWidget {
           ),
           if (recommendationItems != null)
             ..._recommendationSlivers(context, ref, recommendationItems),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          SliverToBoxAdapter(child: SizedBox(height: 24.w)),
         ],
       ),
     );
@@ -990,18 +991,18 @@ class _SubmittedSearchResults extends ConsumerWidget {
     return [
       SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(6, 0, 16, 12),
+          padding: EdgeInsets.fromLTRB(6.w, 0, 16.w, 12.w),
           child: Text(
             context.l10n.searchRecommendGuessLike,
-            style: const TextStyle(color: Color(0xFF999999), fontSize: 14),
+            style: TextStyle(color: Color(0xFF999999), fontSize: 14.sp),
           ),
         ),
       ),
       SliverList.separated(
         itemCount: items.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 16),
+        separatorBuilder: (_, _) => SizedBox(height: 16.w),
         itemBuilder: (context, index) => Padding(
-          padding: const EdgeInsets.only(left: 6, right: 16),
+          padding: EdgeInsets.only(left: 6.w, right: 16.w),
           child: DramaCardExposure(
             pageSession: pageSession,
             analytics: ref.read(analyticsServiceProvider),
@@ -1081,7 +1082,7 @@ class _SearchResultsFooter extends StatelessWidget {
             context.l10n.feedNoMore,
             style: TextStyle(
               color: AppColors.textPrimary.withValues(alpha: 0.4),
-              fontSize: 12,
+              fontSize: 12.sp,
             ),
           ),
         ),
@@ -1147,41 +1148,40 @@ class _DramaTileLayout extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: SizedBox(
-        height: 96,
+        height: 111.w,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(4.w),
               child: AppCachedNetworkImage(
                 imageUrl: coverUrl,
-                width: 82,
-                height: 111,
+                width: 82.w,
+                height: 111.w,
                 fit: BoxFit.cover,
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10.w),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   Text(
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    style: TextStyle(color: Colors.white, fontSize: 14.sp),
                   ),
-                  const SizedBox(height: 8),
-                  SizedBox(height: 20, child: _SearchTagsRow(tags: tags)),
-                  const SizedBox(height: 10),
+                  _SearchTagsRow(tags: tags),
                   Text(
                     summary,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: AppColors.textPrimary.withValues(alpha: 0.5),
-                      fontSize: 12,
-                      height: 1.45,
+                      fontSize: 12.sp,
+                      height: 1.2,
                     ),
                   ),
                 ],
@@ -1197,9 +1197,12 @@ class _DramaTileLayout extends StatelessWidget {
 class _SearchTagsRow extends StatelessWidget {
   const _SearchTagsRow({required this.tags});
 
-  static const _gap = 6.0;
-  static const _horizontalPadding = 16.0;
-  static const _textStyle = TextStyle(color: Color(0xFF999999), fontSize: 12);
+  static double get _gap => 6.w;
+  static double get _horizontalPadding => 16.w;
+  static final _textStyle = TextStyle(
+    color: const Color(0xFF999999),
+    fontSize: 12.sp,
+  );
 
   final List<String> tags;
 
@@ -1219,11 +1222,11 @@ class _SearchTagsRow extends StatelessWidget {
           children: [
             for (final tag in visibleTags.indexed) ...[
               Container(
-                height: 20,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                alignment: Alignment.center,
+                padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.w),
                 decoration: BoxDecoration(
                   color: AppColors.textPrimary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(3),
+                  borderRadius: BorderRadius.circular(3.w),
                 ),
                 child: Text(
                   tag.$2,
@@ -1232,7 +1235,7 @@ class _SearchTagsRow extends StatelessWidget {
                   style: effectiveTextStyle,
                 ),
               ),
-              if (tag.$1 != visibleTags.length - 1) const SizedBox(width: _gap),
+              if (tag.$1 != visibleTags.length - 1) SizedBox(width: _gap),
             ],
           ],
         );
@@ -1280,15 +1283,15 @@ class _NetworkRetry extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: EdgeInsets.all(compact ? 10 : 24),
+        padding: EdgeInsets.all((compact ? 10 : 24).w),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               context.l10n.networkError,
-              style: TextStyle(color: Color(0xFF888888), fontSize: 13),
+              style: TextStyle(color: Color(0xFF888888), fontSize: 13.sp),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10.w),
             AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
           ],
         ),
@@ -1344,14 +1347,14 @@ class _SearchHistory extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final availableWidth = MediaQuery.sizeOf(context).width - 34;
+    final availableWidth = MediaQuery.sizeOf(context).width - 34.w;
     final collapsedCount = _collapsedItemCount(context, availableWidth);
     final hasOverflow = collapsedCount < items.length;
     final visibleItems = isEditing || showAll
         ? items
         : items.take(collapsedCount).toList();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 8, 6, 28),
+      padding: EdgeInsets.fromLTRB(6.w, 8.w, 6.w, 28.w),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1362,7 +1365,7 @@ class _SearchHistory extends StatelessWidget {
                   context.l10n.searchHistory,
                   style: TextStyle(
                     color: AppColors.textPrimary.withValues(alpha: 0.6),
-                    fontSize: 16,
+                    fontSize: 16.sp,
                   ),
                 ),
               ),
@@ -1371,33 +1374,36 @@ class _SearchHistory extends StatelessWidget {
                   onTap: onCancelEdit,
                   behavior: HitTestBehavior.opaque,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 8.w,
+                      vertical: 4.w,
                     ),
                     child: Text(
                       context.l10n.searchHistoryCancel,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      style: TextStyle(color: Colors.white, fontSize: 12.sp),
                     ),
                   ),
                 ),
                 Container(
-                  width: 1,
-                  height: 14,
-                  margin: const EdgeInsets.symmetric(horizontal: 12),
+                  width: 1.w,
+                  height: 14.w,
+                  margin: EdgeInsets.symmetric(horizontal: 12.w),
                   color: AppColors.textPrimary.withValues(alpha: 0.2),
                 ),
                 GestureDetector(
                   onTap: onClear,
                   behavior: HitTestBehavior.opaque,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 4,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 4.w,
+                      vertical: 4.w,
                     ),
                     child: Text(
                       context.l10n.searchHistoryClearAll,
-                      style: TextStyle(color: Color(0XFFFF4063), fontSize: 12),
+                      style: TextStyle(
+                        color: Color(0XFFFF4063),
+                        fontSize: 12.sp,
+                      ),
                     ),
                   ),
                 ),
@@ -1406,20 +1412,20 @@ class _SearchHistory extends StatelessWidget {
                   onTap: onEdit,
                   behavior: HitTestBehavior.opaque,
                   child: Padding(
-                    padding: const EdgeInsets.all(4),
+                    padding: EdgeInsets.all(4.w),
                     child: Image.asset(
                       'assets/images/search/delete.png',
-                      width: 24,
-                      height: 24,
+                      width: 24.w,
+                      height: 24.w,
                     ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8.w),
           Wrap(
-            spacing: 12,
-            runSpacing: 12,
+            spacing: 12.w,
+            runSpacing: 12.w,
             children: [
               for (final item in visibleItems)
                 _HistoryChip(
@@ -1432,19 +1438,19 @@ class _SearchHistory extends StatelessWidget {
                 GestureDetector(
                   onTap: onToggle,
                   child: Container(
-                    width: 32,
-                    height: 27,
+                    width: 32.w,
+                    height: 27.w,
                     decoration: BoxDecoration(
                       color: const Color(0xFF242424),
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.circular(4.w),
                     ),
                     child: AnimatedRotation(
                       turns: showAll ? 0.5 : 0,
                       duration: const Duration(milliseconds: 180),
-                      child: const Icon(
+                      child: Icon(
                         Icons.keyboard_arrow_down,
                         color: Colors.white,
-                        size: 20,
+                        size: 20.w,
                       ),
                     ),
                   ),
@@ -1462,7 +1468,7 @@ class _SearchHistory extends StatelessWidget {
       return items.length;
     }
 
-    const expandButtonWidth = 32.0;
+    final expandButtonWidth = 32.w;
     var visibleCount = 0;
     for (var count = 1; count <= widths.length; count++) {
       final candidateWidths = [...widths.take(count), expandButtonWidth];
@@ -1476,12 +1482,15 @@ class _SearchHistory extends StatelessWidget {
 
   double _historyChipWidth(BuildContext context, String label) {
     final painter = TextPainter(
-      text: TextSpan(text: label, style: const TextStyle(fontSize: 12)),
+      text: TextSpan(
+        text: label,
+        style: TextStyle(fontSize: 12.sp),
+      ),
       maxLines: 1,
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
-    )..layout(maxWidth: 125);
-    return (painter.width + 20).clamp(20, 145);
+    )..layout(maxWidth: 125.w);
+    return (painter.width + 20.w).clamp(20.w, 145.w);
   }
 
   bool _fitsWithinRows(
@@ -1489,7 +1498,7 @@ class _SearchHistory extends StatelessWidget {
     double availableWidth,
     int maxRows,
   ) {
-    const spacing = 8.0;
+    final spacing = 12.w;
     var rows = 1;
     var usedWidth = 0.0;
     for (final width in widths) {
@@ -1526,11 +1535,11 @@ class _HistoryChip extends StatelessWidget {
     return GestureDetector(
       onTap: isEditing ? null : onTap,
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 145),
-        padding: EdgeInsets.fromLTRB(10, 6, isEditing ? 5 : 10, 6),
+        constraints: BoxConstraints(maxWidth: 145.w),
+        padding: EdgeInsets.fromLTRB(10.w, 6.w, (isEditing ? 5 : 10).w, 6.w),
         decoration: BoxDecoration(
           color: const Color(0xFF242424),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(4.w),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1540,22 +1549,22 @@ class _HistoryChip extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Color(0xFFE0E0E0), fontSize: 12),
+                style: TextStyle(color: Color(0xFFE0E0E0), fontSize: 12.sp),
               ),
             ),
             if (isEditing) ...[
-              const SizedBox(width: 5),
+              SizedBox(width: 5.w),
               GestureDetector(
                 onTap: onRemove,
                 behavior: HitTestBehavior.opaque,
                 child: Container(
-                  width: 18,
-                  height: 18,
+                  width: 18.w,
+                  height: 18.w,
                   decoration: const BoxDecoration(
                     color: Color(0xFF353535),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.close, color: Colors.white, size: 13),
+                  child: Icon(Icons.close, color: Colors.white, size: 13.w),
                 ),
               ),
             ],
@@ -1595,9 +1604,9 @@ class _RankingTabs extends StatelessWidget {
               onTap: () => onSelected(index),
               child: Padding(
                 padding: EdgeInsets.only(
-                  left: index == 0 ? 6 : 10,
-                  right: 7,
-                  bottom: 12,
+                  left: (index == 0 ? 6 : 10).w,
+                  right: 7.w,
+                  bottom: 12.w,
                 ),
                 child: Text(
                   labels[index],
@@ -1607,7 +1616,7 @@ class _RankingTabs extends StatelessWidget {
                     color: selectedIndex == index
                         ? colors[index]
                         : const Color(0xFF858585),
-                    fontSize: 14,
+                    fontSize: 14.sp,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -1641,7 +1650,7 @@ class _RankingPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Container(
-      padding: EdgeInsets.only(top: 4, left: 10, right: 10),
+      padding: EdgeInsets.only(top: 4.w, left: 10.w, right: 10.w),
       decoration: BoxDecoration(
         image: DecorationImage(
           image: AssetImage(_backgroundAsset),
@@ -1655,9 +1664,9 @@ class _RankingPanel extends ConsumerWidget {
           : state.isEmpty
           ? Center(child: AppEmptyState(message: context.l10n.searchRankEmpty))
           : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(0, 6, 0, 28),
+              padding: EdgeInsets.fromLTRB(0, 6.w, 0, 28.w),
               itemCount: state.data?.dramas.length ?? 0,
-              separatorBuilder: (_, _) => const SizedBox(height: 16),
+              separatorBuilder: (_, _) => SizedBox(height: 16.w),
               itemBuilder: (context, index) {
                 final drama = state.data!.dramas[index];
                 return DramaCardExposure(
@@ -1728,26 +1737,26 @@ class _RankingDramaTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(4.w),
       child: SizedBox(
-        height: 73,
+        height: 73.w,
         child: Row(
           children: [
             Stack(
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(4.w),
                   child: AppCachedNetworkImage(
                     imageUrl: drama.coverUrl,
-                    width: 60,
-                    height: 82,
+                    width: 60.w,
+                    height: 82.w,
                     fit: BoxFit.cover,
                   ),
                 ),
                 if (ranking <= 4) _RankBadge(ranking: ranking),
               ],
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10.w),
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1757,32 +1766,32 @@ class _RankingDramaTile extends StatelessWidget {
                     drama.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    style: TextStyle(color: Colors.white, fontSize: 14.sp),
                   ),
-                  const SizedBox(height: 10),
+                  SizedBox(height: 10.w),
                   Row(
                     children: [
                       Flexible(
                         child: SizedBox(
-                          height: 20,
+                          height: 20.w,
                           child: _SearchTagsRow(tags: drama.tags),
                         ),
                       ),
-                      const SizedBox(width: 5),
+                      SizedBox(width: 5.w),
                       Image.asset(
                         'assets/images/search/hot.png',
-                        width: 21,
-                        height: 21,
+                        width: 21.w,
+                        height: 21.w,
                       ),
-                      const SizedBox(width: 3),
+                      SizedBox(width: 3.w),
                       Text(
                         formatCompactCount(
                           drama.hotValue,
                           lowercaseSuffix: false,
                         ),
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Color(0xFFECECEC),
-                          fontSize: 14,
+                          fontSize: 14.sp,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -1812,21 +1821,21 @@ class _RankBadge extends StatelessWidget {
       _ => const Color(0xFF424242),
     };
     return Container(
-      width: 24,
-      height: 14,
+      width: 24.w,
+      height: 14.w,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: color,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(4),
-          bottomRight: Radius.circular(4),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(4.w),
+          bottomRight: Radius.circular(4.w),
         ),
       ),
       child: Text(
         '$ranking',
-        style: const TextStyle(
+        style: TextStyle(
           color: Colors.white,
-          fontSize: 11,
+          fontSize: 11.sp,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -1855,12 +1864,9 @@ class _SearchErrorState extends StatelessWidget {
         children: [
           Text(
             context.l10n.networkError,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 13,
-            ),
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13.sp),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12.w),
           AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
         ],
       ),

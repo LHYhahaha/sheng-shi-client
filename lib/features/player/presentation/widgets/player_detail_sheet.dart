@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:readmore/readmore.dart';
 
 import '../../../../l10n/app_localizations.dart';
@@ -56,7 +57,6 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
   static const _maxSize = 0.95;
   static const _topChromeHeight = 66.0;
   static const _contentTopInset = _topChromeHeight + 8;
-  static const _headerAndTabsHeight = _contentTopInset + 91 + 18 + 36 + 18;
   static const _episodeRangeHeight = 48.0;
 
   late final DraggableScrollableController _sheetController;
@@ -95,12 +95,12 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
   Widget _buildHeaderAndTabs() {
     return Container(
       color: _sheetColor,
-      padding: const EdgeInsets.fromLTRB(16, _contentTopInset, 16, 18),
+      padding: EdgeInsets.fromLTRB(16.w, _contentTopInset.w, 16.w, 18.w),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _Header(content: widget.content),
-          const SizedBox(height: 18),
+          SizedBox(height: 18.w),
           _SegmentedControl(
             selectedTab: _selectedTab,
             onChanged: (tab) => setState(() => _selectedTab = tab),
@@ -115,13 +115,13 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
 
     return Container(
       color: _sheetColor,
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 12.w),
       child: SizedBox(
-        height: 36,
+        height: 36.w,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           itemCount: ranges.length,
-          separatorBuilder: (context, index) => const SizedBox(width: 20),
+          separatorBuilder: (context, index) => SizedBox(width: 20.w),
           itemBuilder: (context, index) {
             final range = ranges[index];
             return _RangeButton(
@@ -150,7 +150,12 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
         SliverPersistentHeader(
           pinned: pinHeaders,
           delegate: _FixedExtentHeaderDelegate(
-            extent: _headerAndTabsHeight,
+            extent:
+                _contentTopInset.w +
+                _Header.preferredHeight(context, widget.content) +
+                18.w +
+                _SegmentedControl.preferredHeight(context) +
+                18.w,
             child: _buildHeaderAndTabs(),
           ),
         ),
@@ -158,12 +163,12 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
           SliverPersistentHeader(
             pinned: pinHeaders,
             delegate: _FixedExtentHeaderDelegate(
-              extent: _episodeRangeHeight,
+              extent: _episodeRangeHeight.w,
               child: _buildEpisodeRangeSelector(),
             ),
           ),
           SliverPadding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 32),
+            padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, bottomInset + 32.w),
             sliver: SliverToBoxAdapter(
               child: _EpisodesPanel(
                 key: _episodesPanelKey,
@@ -181,7 +186,7 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
           ),
         ] else
           SliverPadding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset + 32),
+            padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, bottomInset + 32.w),
             sliver: SliverToBoxAdapter(
               child: _SynopsisPanel(
                 content: widget.content,
@@ -211,7 +216,7 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
         return Material(
           key: const ValueKey('player_detail_sheet_surface'),
           color: _sheetColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28.w)),
           clipBehavior: Clip.antiAlias,
           child: Stack(
             fit: StackFit.expand,
@@ -225,8 +230,8 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
               Positioned(
                 left: 0,
                 right: 0,
-                top: _topChromeHeight,
-                height: 20,
+                top: _topChromeHeight.w,
+                height: 20.w,
                 child: IgnorePointer(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
@@ -243,7 +248,7 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                height: bottomInset + 40,
+                height: bottomInset + 40.w,
                 child: IgnorePointer(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
@@ -261,25 +266,25 @@ class _PlayerDetailSheetState extends State<PlayerDetailSheet> {
                 left: 0,
                 right: 0,
                 top: 0,
-                height: _topChromeHeight,
+                height: _topChromeHeight.w,
                 child: DecoratedBox(
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     color: _sheetColor,
                     borderRadius: BorderRadius.vertical(
-                      top: Radius.circular(28),
+                      top: Radius.circular(28.w),
                     ),
                   ),
                   child: Stack(
                     children: [
-                      const Positioned(
+                      Positioned(
                         left: 0,
                         right: 0,
-                        top: 8,
-                        child: AppSheetHandle(),
+                        top: 8.w,
+                        child: const AppSheetHandle(),
                       ),
                       Positioned(
-                        right: 16,
-                        top: 18,
+                        right: 16.w,
+                        top: 18.w,
                         child: AppRoundIconButton(
                           key: const ValueKey('player_detail_sheet_close'),
                           icon: Icons.close_rounded,
@@ -327,19 +332,61 @@ class _Header extends StatelessWidget {
 
   final PlayerContent content;
 
+  static TextStyle _titleStyle(BuildContext context) => TextStyle(
+    color: Colors.white,
+    fontSize: 16.sp,
+    fontWeight: FontWeight.w600,
+    height: 20 / 16,
+  );
+
+  static TextStyle _viewCountStyle(BuildContext context) => TextStyle(
+    color: AppColors.primary,
+    fontSize: 12.sp,
+    fontWeight: FontWeight.w500,
+    height: 16 / 12,
+  );
+
+  static double preferredHeight(BuildContext context, PlayerContent content) {
+    final contentWidth = MediaQuery.sizeOf(context).width - 32.w;
+    final textWidth = (contentWidth - 68.w - 12.w)
+        .clamp(0.0, double.infinity)
+        .toDouble();
+    final textScaler = MediaQuery.textScalerOf(context);
+    final titlePainter = TextPainter(
+      text: TextSpan(text: content.title, style: _titleStyle(context)),
+      textDirection: Directionality.of(context),
+      textScaler: textScaler,
+      maxLines: 2,
+      ellipsis: '…',
+    )..layout(maxWidth: textWidth);
+    final viewCountPainter = TextPainter(
+      text: TextSpan(
+        text: '${content.viewCountLabel} ${context.l10n.episodeModalViews}',
+        style: _viewCountStyle(context),
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: textScaler,
+    )..layout(maxWidth: textWidth);
+
+    return [
+      91.w,
+      titlePainter.height + 4.w + viewCountPainter.height,
+    ].reduce((largest, height) => largest > height ? largest : height);
+  }
+
   Widget _buildCoverImage() {
     final coverUrl = content.coverUrl;
 
     if (coverUrl != null && coverUrl.isNotEmpty) {
       return AppCachedNetworkImage(
         imageUrl: coverUrl,
-        width: 68,
-        height: 91,
+        width: 68.w,
+        height: 91.w,
         fit: BoxFit.cover,
       );
     }
 
-    return SizedBox(width: 68, height: 91);
+    return SizedBox(width: 68.w, height: 91.w);
   }
 
   @override
@@ -348,10 +395,10 @@ class _Header extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(4.r),
           child: _buildCoverImage(),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: 12.w),
         Expanded(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -361,22 +408,12 @@ class _Header extends StatelessWidget {
                 content.title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  height: 20 / 16,
-                ),
+                style: _titleStyle(context),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: 4.w),
               Text(
                 "${content.viewCountLabel} ${context.l10n.episodeModalViews}",
-                style: const TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  height: 16 / 12,
-                ),
+                style: _viewCountStyle(context),
               ),
             ],
           ),
@@ -389,17 +426,34 @@ class _Header extends StatelessWidget {
 class _SegmentedControl extends StatelessWidget {
   const _SegmentedControl({required this.selectedTab, required this.onChanged});
 
+  static const _verticalPadding = 4.0;
+  static const _segmentVerticalPadding = 5.0;
+
+  static TextStyle _labelStyle(BuildContext context) =>
+      TextStyle(color: Colors.white, fontSize: 14.sp, height: 18 / 14);
+
+  static double preferredHeight(BuildContext context) {
+    final painter = TextPainter(
+      text: TextSpan(text: 'M', style: _labelStyle(context)),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    return painter.height +
+        _segmentVerticalPadding.w * 2 +
+        _verticalPadding.w * 2;
+  }
+
   final PlayerDetailTab selectedTab;
   final ValueChanged<PlayerDetailTab> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 36,
-      padding: const EdgeInsets.all(4),
+      padding: EdgeInsets.all(_verticalPadding.w),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(100),
+        borderRadius: BorderRadius.circular(100.w),
       ),
       child: Row(
         children: [
@@ -437,13 +491,16 @@ class _Segment extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: AnimatedContainer(
+          padding: EdgeInsets.symmetric(
+            vertical: _SegmentedControl._segmentVerticalPadding.w,
+          ),
           duration: const Duration(milliseconds: 160),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: selected
                 ? Colors.white.withValues(alpha: 0.24)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(20.w),
           ),
           child: Text(
             label,
@@ -451,7 +508,7 @@ class _Segment extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: Colors.white,
-              fontSize: 14,
+              fontSize: 14.sp,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
               height: 18 / 14,
             ),
@@ -494,7 +551,7 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
     final synopsis = widget.content.synopsis;
     final textStyle = TextStyle(
       color: Colors.white.withValues(alpha: 0.4),
-      fontSize: 12,
+      fontSize: 12.sp,
       height: 16 / 12,
       fontWeight: FontWeight.normal,
     );
@@ -514,28 +571,28 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
           style: textStyle,
           lessStyle: TextStyle(
             color: Colors.white,
-            fontSize: 12,
+            fontSize: 12.sp,
             height: 16 / 12,
             fontWeight: FontWeight.w600,
           ),
           moreStyle: TextStyle(
             color: Colors.white,
-            fontSize: 12,
+            fontSize: 12.sp,
             height: 16 / 12,
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 24),
+        SizedBox(height: 24.w),
         Text(
           context.l10n.playerMoreLikeThis,
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.white,
-            fontSize: 14,
+            fontSize: 14.sp,
             fontWeight: FontWeight.w600,
             height: 18 / 14,
           ),
         ),
-        const SizedBox(height: 10),
+        SizedBox(height: 10.w),
         // 根据是否有 future 来决定使用异步加载还是同步显示
         if (future != null)
           // 异步加载推荐列表
@@ -544,9 +601,9 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 // 加载中 - 显示 loading 指示器（跟首页一样）
-                return const Center(
+                return Center(
                   child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 32),
+                    padding: EdgeInsets.symmetric(vertical: 32.w),
                     child: AppPegTopLoader(),
                   ),
                 );
@@ -563,10 +620,10 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
                 physics: const NeverScrollableScrollPhysics(),
                 shrinkWrap: true,
                 itemCount: recommendations.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 3,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 8.w,
+                  mainAxisSpacing: 16.w,
                   childAspectRatio: 109 / 218,
                 ),
                 itemBuilder: (context, index) {
@@ -595,10 +652,10 @@ class _SynopsisPanelState extends State<_SynopsisPanel> {
             physics: const NeverScrollableScrollPhysics(),
             shrinkWrap: true,
             itemCount: widget.content.recommendations.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 16,
+              crossAxisSpacing: 8.w,
+              mainAxisSpacing: 16.w,
               childAspectRatio: 109 / 218,
             ),
             itemBuilder: (context, index) {
@@ -623,7 +680,7 @@ class _RecommendationEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 32),
+        padding: EdgeInsets.symmetric(vertical: 32.w),
         child: AppEmptyState(message: context.l10n.recommendTabEmptyNoContent),
       ),
     );
@@ -642,28 +699,28 @@ class _RecommendationCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(4.r),
           child: AspectRatio(aspectRatio: 109 / 147, child: _buildCoverImage()),
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: 4.w),
         Text(
           recommendation.title,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.white,
-            fontSize: 12,
+            fontSize: 12.sp,
             height: 16 / 12,
           ),
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: 6.w),
         Text(
           recommendation.subtitle,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.5),
-            fontSize: 12,
+            fontSize: 12.sp,
             height: 16 / 12,
           ),
         ),
@@ -783,8 +840,8 @@ class _EpisodesPanelState extends State<_EpisodesPanel> {
     }
 
     // 计算选中项的位置
-    const itemWidth = 60.0; // 估算每个range button的宽度
-    const separatorWidth = 20.0;
+    final itemWidth = 60.w; // 估算每个range button的宽度
+    final separatorWidth = 20.w;
     final targetOffset = selectedIndex * (itemWidth + separatorWidth);
     final maxOffset = _rangeScrollController.position.maxScrollExtent;
 
@@ -876,7 +933,7 @@ class _EpisodesPanelState extends State<_EpisodesPanel> {
 
   double _episodeRowStride(RenderBox gridBox) {
     const crossAxisCount = 5;
-    const spacing = 4.0;
+    final spacing = 4.w;
     const childAspectRatio = 66 / 54;
     final childWidth =
         (gridBox.size.width - spacing * (crossAxisCount - 1)) / crossAxisCount;
@@ -966,7 +1023,7 @@ class _EpisodesPanelState extends State<_EpisodesPanel> {
           context.l10n.playerNoEpisodes,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.5),
-            fontSize: 14,
+            fontSize: 14.sp,
             height: 18 / 14,
           ),
         ),
@@ -981,12 +1038,12 @@ class _EpisodesPanelState extends State<_EpisodesPanel> {
           key: _episodeGridKey,
           physics: const NeverScrollableScrollPhysics(),
           shrinkWrap: true,
-          padding: const EdgeInsets.only(bottom: 24),
+          padding: EdgeInsets.only(bottom: 24.w),
           itemCount: widget.episodes.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 5,
-            crossAxisSpacing: 4,
-            mainAxisSpacing: 4,
+            crossAxisSpacing: 4.w,
+            mainAxisSpacing: 4.w,
             childAspectRatio: 66 / 54,
           ),
           itemBuilder: (context, index) {
@@ -1028,7 +1085,7 @@ class _RangeButton extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: SizedBox(
-        height: 36,
+        height: 36.w,
         child: Center(
           child: Text(
             label,
@@ -1036,7 +1093,7 @@ class _RangeButton extends StatelessWidget {
               color: selected
                   ? Colors.white
                   : Colors.white.withValues(alpha: 0.5),
-              fontSize: 14,
+              fontSize: 14.sp,
               fontWeight: FontWeight.w600,
               height: 21 / 14,
             ),
@@ -1086,13 +1143,13 @@ class _EpisodeTile extends StatelessWidget {
                 color: selected
                     ? const Color(0xFF494A50)
                     : const Color(0xFF313136),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(8.r),
               ),
               child: selected
-                  ? const Icon(
+                  ? Icon(
                       Icons.graphic_eq_rounded,
                       color: Colors.white,
-                      size: 24,
+                      size: 24.w,
                     )
                   : Text(
                       episode.number.toString(),
@@ -1100,7 +1157,7 @@ class _EpisodeTile extends StatelessWidget {
                         color: !isEffectivelyUnlocked || episode.isUnavailable
                             ? Colors.white.withValues(alpha: 0.3)
                             : Colors.white,
-                        fontSize: 16,
+                        fontSize: 16.sp,
                         fontWeight: FontWeight.w700,
                         height: 1.3,
                       ),
@@ -1109,22 +1166,22 @@ class _EpisodeTile extends StatelessWidget {
           ),
           if (!isEffectivelyUnlocked)
             Positioned(
-              right: 4,
-              top: 3,
+              right: 4.w,
+              top: 3.w,
               child: Icon(
                 Icons.lock_rounded,
                 color: Colors.white.withValues(alpha: 0.28),
-                size: 12,
+                size: 12.w,
               ),
             ),
           if (episode.isUnavailable)
             Positioned(
-              right: 4,
-              top: 3,
+              right: 4.w,
+              top: 3.w,
               child: Icon(
                 Icons.block_rounded,
                 color: Colors.white.withValues(alpha: 0.28),
-                size: 12,
+                size: 12.w,
               ),
             ),
           if (!isEffectivelyUnlocked && episode.number == currentEpisode + 1)
@@ -1141,16 +1198,16 @@ class _GiftBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 18,
-      height: 18,
-      decoration: const BoxDecoration(
+      width: 18.w,
+      height: 18.w,
+      decoration: BoxDecoration(
         color: AppColors.primary,
         borderRadius: BorderRadius.only(
-          topRight: Radius.circular(8),
-          bottomLeft: Radius.circular(8),
+          topRight: Radius.circular(8.r),
+          bottomLeft: Radius.circular(8.r),
         ),
       ),
-      child: const Icon(Icons.lock_rounded, color: Colors.white, size: 12),
+      child: Icon(Icons.lock_rounded, color: Colors.white, size: 12.w),
     );
   }
 }

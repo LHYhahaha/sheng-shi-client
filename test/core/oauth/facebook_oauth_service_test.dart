@@ -13,19 +13,28 @@ void main() {
     });
   });
 
-  test('returns the Apple identity token after native authorization', () async {
-    final service = FacebookOAuthService(
-      requestAppleCredential: () async => const AuthorizationCredentialAppleID(
-        userIdentifier: 'apple-user-id',
-        givenName: 'Test',
-        familyName: 'User',
-        email: 'test@example.com',
-        authorizationCode: 'apple-authorization-code',
-        identityToken: 'apple-identity-token',
-        state: null,
-      ),
-    );
+  test(
+    'preserves all available Apple fields after native authorization',
+    () async {
+      final service = FacebookOAuthService(
+        requestAppleCredential: () async =>
+            const AuthorizationCredentialAppleID(
+              userIdentifier: 'apple-user-id',
+              givenName: 'Test',
+              familyName: 'User',
+              email: 'test@example.com',
+              authorizationCode: 'apple-authorization-code',
+              identityToken: 'apple-identity-token',
+              state: null,
+            ),
+      );
 
-    expect(await service.signInWithApple(), 'apple-identity-token');
-  });
+      final credential = await service.signInWithApple();
+
+      expect(credential?.identityToken, 'apple-identity-token');
+      expect(credential?.authorizationCode, 'apple-authorization-code');
+      expect(credential?.email, 'test@example.com');
+      expect(credential?.fullName, 'Test User');
+    },
+  );
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../l10n/app_localizations.dart';
@@ -50,11 +51,11 @@ class AuthLoginModalContent extends ConsumerWidget {
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Colors.white.withValues(alpha: 0.72),
-              fontSize: 12,
+              fontSize: 12.sp,
               height: 1.35,
             ),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14.w),
         ],
         if (state.error != null &&
             (state.failedAction == AuthFailureAction.login ||
@@ -64,11 +65,11 @@ class AuthLoginModalContent extends ConsumerWidget {
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: AppColors.primary,
-              fontSize: 12,
+              fontSize: 12.sp,
               height: 1.35,
             ),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14.w),
         ],
         // TODO(暂未开放): Device登录按钮 - 2026-06-15
         // AuthActionButton(
@@ -93,7 +94,7 @@ class AuthLoginModalContent extends ConsumerWidget {
               ? () => controller.login(AuthProviderType.google)
               : null,
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12.w),
         if (isPhoneLoginEnabled) ...[
           AuthActionButton(
             key: const ValueKey('auth_modal_phone_button'),
@@ -108,7 +109,7 @@ class AuthLoginModalContent extends ConsumerWidget {
               router.push(RoutePaths.phoneLogin);
             },
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12.w),
         ],
         Stack(
           clipBehavior: Clip.none,
@@ -130,7 +131,7 @@ class AuthLoginModalContent extends ConsumerWidget {
             // ),
           ],
         ),
-        const SizedBox(height: 18),
+        SizedBox(height: 18.w),
         const AuthTermsText(),
       ],
     );
@@ -155,19 +156,19 @@ class _ClaimBadge extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.primary,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(8.w),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+        padding: EdgeInsets.symmetric(horizontal: 9.w, vertical: 2.w),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Image.asset(
               'assets/images/profile/coin.png',
-              width: 14,
-              height: 14,
+              width: 14.w,
+              height: 14.w,
             ),
-            const SizedBox(width: 3),
+            SizedBox(width: 3.w),
             Text(
               label,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -226,7 +227,7 @@ class _AuthTermsTextState extends State<AuthTermsText> {
     );
 
     return SizedBox(
-      width: widget.width,
+      width: widget.width?.w,
       child: RichText(
         textAlign: TextAlign.center,
         text: TextSpan(

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../core/analytics/analytics_definition.dart';
 import '../../../../core/analytics/analytics_event.dart';
@@ -82,9 +83,9 @@ class _MemberPointsExchangeConfirmDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.maybeOf(context);
-    final dialogWidth = (MediaQuery.sizeOf(context).width - 64).clamp(
-      280.0,
-      340.0,
+    final dialogWidth = (MediaQuery.sizeOf(context).width - 64.w).clamp(
+      280.0.w,
+      340.0.w,
     );
 
     return SafeArea(
@@ -94,22 +95,22 @@ class _MemberPointsExchangeConfirmDialog extends StatelessWidget {
           child: Container(
             key: const Key('member_points_exchange_confirm_dialog'),
             width: dialogWidth,
-            padding: const EdgeInsets.fromLTRB(0, 0, 0, 16),
+            padding: EdgeInsets.fromLTRB(0, 0, 0, 16.w),
             decoration: BoxDecoration(
               color: const Color(0xFF211F22),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(12.w),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.4),
-                  blurRadius: 24,
-                  offset: const Offset(0, 12),
+                  blurRadius: 24.w,
+                  offset: Offset(0, 12.w),
                 ),
               ],
             ),
             child: Stack(
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(top: 24, left: 16, right: 16),
+                  padding: EdgeInsets.only(top: 24.w, left: 16.w, right: 16.w),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -118,23 +119,23 @@ class _MemberPointsExchangeConfirmDialog extends StatelessWidget {
                         l10n.memberCenterExchangeDaysMember(memberDays),
                         key: const Key('member_points_exchange_confirm_title'),
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
-                          fontSize: 18,
+                          fontSize: 18.sp,
                           height: 1.2,
                           fontWeight: FontWeight(510),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: 16.w),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Image.asset(
                             'assets/images/rewards/points_icon.png',
-                            width: 24,
-                            height: 24,
+                            width: 24.w,
+                            height: 24.w,
                           ),
-                          const SizedBox(width: 4),
+                          SizedBox(width: 4.w),
                           Flexible(
                             child: Text(
                               "$pointCost",
@@ -144,7 +145,7 @@ class _MemberPointsExchangeConfirmDialog extends StatelessWidget {
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.5),
-                                fontSize: 18,
+                                fontSize: 18.sp,
                                 height: 1.2,
                                 fontWeight: FontWeight.w400,
                               ),
@@ -152,20 +153,20 @@ class _MemberPointsExchangeConfirmDialog extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: 16.w),
                       Text(
                         l10n.memberCenterModalExchangeRules(memberDays),
                         key: const Key('member_points_exchange_confirm_rules'),
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.5),
-                          fontSize: 11,
+                          fontSize: 11.sp,
                           height: 1.55,
                           fontWeight: FontWeight.w400,
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      SizedBox(height: 24.w),
                       SizedBox(
-                        height: 44,
+                        height: 44.w,
                         child: FilledButton(
                           key: const Key(
                             'member_points_exchange_confirm_button',
@@ -190,13 +191,13 @@ class _MemberPointsExchangeConfirmDialog extends StatelessWidget {
                             backgroundColor: const Color(0xFFFF0080),
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(4.w),
                             ),
                           ),
                           child: Text(
                             l10n.memberCenterModalExchangeConfirmButton,
-                            style: const TextStyle(
-                              fontSize: 16,
+                            style: TextStyle(
+                              fontSize: 16.sp,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -218,7 +219,7 @@ class _MemberPointsExchangeConfirmDialog extends StatelessWidget {
                     icon: Icon(
                       Icons.close,
                       color: Colors.white.withValues(alpha: 0.5),
-                      size: 20,
+                      size: 20.w,
                     ),
                   ),
                 ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 /// 底部弹层拖拽提示条。
 ///
@@ -27,11 +28,11 @@ class AppSheetHandle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        width: width,
-        height: height,
+        width: width.w,
+        height: height.w,
         decoration: BoxDecoration(
           color: color ?? Colors.white.withValues(alpha: 0.22),
-          borderRadius: BorderRadius.circular(99),
+          borderRadius: BorderRadius.circular(99.w),
         ),
       ),
     );

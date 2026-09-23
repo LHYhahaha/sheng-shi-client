@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -164,7 +165,7 @@ class _RewardsNavigation extends StatelessWidget {
     final l10n = AppLocalizations.maybeOf(context);
 
     return SizedBox(
-      height: 58,
+      height: 58.w,
       child: Stack(
         children: [
           Align(
@@ -189,7 +190,7 @@ class _RewardsNavigation extends StatelessWidget {
                   selectedUnderColor: Color(0XFFF7DFB9),
                   onTap: () => onSelected(RewardTab.rewardsCoins),
                 ),
-                const SizedBox(width: 34),
+                SizedBox(width: 34.w),
                 _RewardTabButton(
                   tabKey: 'member_points',
                   label: l10n.memberPointsTitle,
@@ -238,7 +239,7 @@ class _RewardTabButton extends StatelessWidget {
         splashColor: Colors.transparent,
         highlightColor: Colors.transparent,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(0, 18, 0, 10),
+          padding: EdgeInsets.fromLTRB(0, 18.w, 0, 10.w),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -253,9 +254,9 @@ class _RewardTabButton extends StatelessWidget {
                   ).createShader(bounds),
                   child: Text(
                     label,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
-                      fontSize: 14,
+                      fontSize: 14.sp,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -263,21 +264,21 @@ class _RewardTabButton extends StatelessWidget {
               else
                 Text(
                   label,
-                  style:  TextStyle(
+                  style: TextStyle(
                     color: Color(0xFFFFFFFF).withValues(alpha: 0.4),
-                    fontSize: 14,
+                    fontSize: 14.sp,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              const SizedBox(height: 2),
+              SizedBox(height: 2.w),
               AnimatedContainer(
                 key: Key('rewards_tab_indicator_$tabKey'),
                 duration: const Duration(milliseconds: 160),
-                width: 22,
-                height: 2,
+                width: 22.w,
+                height: 2.w,
                 decoration: BoxDecoration(
                   color: selected ? selectedUnderColor : Colors.transparent,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.circular(2.w),
                 ),
               ),
             ],

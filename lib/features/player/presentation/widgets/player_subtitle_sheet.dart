@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../core/logging/app_log.dart' as developer;
 import '../../application/player_playback_controller.dart';
@@ -8,10 +9,7 @@ import '../../application/player_playback_controller.dart';
 ///
 /// 展示当前可用的字幕轨道列表，并允许用户在字幕间切换或关闭字幕。
 class PlayerSubtitleSheet extends ConsumerWidget {
-  const PlayerSubtitleSheet({
-    super.key,
-    required this.sessionKey,
-  });
+  const PlayerSubtitleSheet({super.key, required this.sessionKey});
 
   final String sessionKey;
 
@@ -33,34 +31,34 @@ class PlayerSubtitleSheet extends ConsumerWidget {
     }
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16.w)),
       ),
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(vertical: 8.w),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // 手柄条
           Container(
-            width: 36,
-            height: 4,
+            width: 36.w,
+            height: 4.w,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: BorderRadius.circular(2.w),
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16.w),
           // 标题
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: EdgeInsets.symmetric(horizontal: 20.w),
             child: Row(
               children: [
                 Text(
                   _localizedLabel(context),
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
+                    fontSize: 16.sp,
                     fontWeight: FontWeight.w600,
                     height: 22 / 16,
                   ),
@@ -68,14 +66,18 @@ class PlayerSubtitleSheet extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12.w),
           // 关闭字幕选项
           _SubtitleOption(
             label: _localizedOffLabel(context),
             isSelected: currentUrl == null,
             onTap: () async {
-              developer.log('PlayerSubtitleSheet: 关闭字幕 - currentUrl=$currentUrl');
-              final controller = ref.read(playerPlaybackControllerProvider(sessionKey).notifier);
+              developer.log(
+                'PlayerSubtitleSheet: 关闭字幕 - currentUrl=$currentUrl',
+              );
+              final controller = ref.read(
+                playerPlaybackControllerProvider(sessionKey).notifier,
+              );
               await controller.setSubtitle(null);
               developer.log('PlayerSubtitleSheet: 关闭字幕完成');
             },
@@ -91,13 +93,15 @@ class PlayerSubtitleSheet extends ConsumerWidget {
                 developer.log(
                   'PlayerSubtitleSheet: 选择字幕 - ${subtitle.name}, url=${subtitle.url}',
                 );
-                final controller = ref.read(playerPlaybackControllerProvider(sessionKey).notifier);
+                final controller = ref.read(
+                  playerPlaybackControllerProvider(sessionKey).notifier,
+                );
                 await controller.setSubtitle(subtitle.url);
                 developer.log('PlayerSubtitleSheet: 字幕切换完成');
               },
             );
           }),
-          const SizedBox(height: 16),
+          SizedBox(height: 16.w),
         ],
       ),
     );
@@ -131,26 +135,24 @@ class _SubtitleOption extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 14.w),
         child: Row(
           children: [
             Expanded(
               child: Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.6),
-                  fontSize: 14,
+                  color: isSelected
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.6),
+                  fontSize: 14.sp,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                   height: 20 / 14,
                 ),
               ),
             ),
             if (isSelected)
-              const Icon(
-                Icons.check_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
+              Icon(Icons.check_rounded, color: Colors.white, size: 20.w),
           ],
         ),
       ),

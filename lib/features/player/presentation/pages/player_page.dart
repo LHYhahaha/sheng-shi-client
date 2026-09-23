@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -2489,7 +2490,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               : pageView,
           if (widget.feedMode == PlayerFeedMode.forYou && !_isSeekDragging)
             PlayerForYouSearchButton(
-              top: 8,
+              top: 8.w,
               onTap: () => unawaited(_openSearch()),
             ),
           if (widget.feedMode == PlayerFeedMode.singleDrama &&

@@ -1,10 +1,9 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../../l10n/app_localizations.dart';
@@ -687,15 +686,6 @@ class PlayerPlaybackControlsConsumer extends ConsumerStatefulWidget {
 
 class PlayerPlaybackControlsConsumerState
     extends ConsumerState<PlayerPlaybackControlsConsumer> {
-  bool _showPauseFeedback = false;
-  Timer? _feedbackTimer;
-
-  @override
-  void dispose() {
-    _feedbackTimer?.cancel();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final snapshot = ref.watch(
@@ -747,11 +737,10 @@ class PlayerPlaybackControlsConsumerState
               onTap: _handleVideoTap,
             ),
           ),
-        // 字幕在视频画面之上，但需低于播放/暂停反馈图标和中间播放按钮。
+        // 字幕在视频画面之上，但需低于中间播放按钮。
         PlayerSubtitleOverlay(sessionKey: widget.sessionKey),
-        if (showCenterPlayButton) CenterPlayButton(onTap: _playWithFeedback),
-        if (showCenterPauseButton) CenterPauseButton(onTap: _pauseWithFeedback),
-        if (_showPauseFeedback) const PauseFeedbackIcon(),
+        if (showCenterPlayButton) CenterPlayButton(onTap: _play),
+        if (showCenterPauseButton) CenterPauseButton(onTap: _pause),
       ],
     );
   }
@@ -761,58 +750,30 @@ class PlayerPlaybackControlsConsumerState
       _handleSingleDramaVideoTap();
       return;
     }
-    _togglePlayWithFeedback();
+    _togglePlay();
   }
 
   void _handleSingleDramaVideoTap() {
     widget.onExitImmersiveChrome?.call();
   }
 
-  void _togglePlayWithFeedback() {
+  void _togglePlay() {
     final snapshot = ref.read(
       playerPlaybackControllerProvider(
         widget.sessionKey,
       ).select(PlayerPlaybackRenderSnapshot.fromState),
     );
-    if (snapshot.isPlaying) {
-      _showTransientFeedback(_PlaybackFeedbackIcon.pause);
-    }
     widget.onTogglePlay(pauseRequested: snapshot.isPlaying);
   }
 
-  void _playWithFeedback() {
-    // 暂停态已展示常驻播放按钮；恢复播放时不再叠加反馈图标，
-    // 避免状态切换前与常驻按钮的黑色背景重叠。
+  void _play() {
     widget.onTogglePlay(pauseRequested: false);
   }
 
-  void _pauseWithFeedback() {
-    _showTransientFeedback(_PlaybackFeedbackIcon.pause);
+  void _pause() {
     widget.onTogglePlay(pauseRequested: true);
   }
-
-  void _showTransientFeedback(_PlaybackFeedbackIcon icon) {
-    final allowScaleFeedback = ref
-        .read(playerPerformancePolicyProvider)
-        .allowPlayPauseScaleFeedback;
-    if (icon == _PlaybackFeedbackIcon.pause && !allowScaleFeedback) {
-      return;
-    }
-    _feedbackTimer?.cancel();
-    setState(() {
-      _showPauseFeedback = icon == _PlaybackFeedbackIcon.pause;
-    });
-    _feedbackTimer = Timer(const Duration(milliseconds: 420), () {
-      if (mounted) {
-        setState(() {
-          _showPauseFeedback = false;
-        });
-      }
-    });
-  }
 }
-
-enum _PlaybackFeedbackIcon { pause }
 
 class PlayerSeekBarConsumer extends ConsumerStatefulWidget {
   const PlayerSeekBarConsumer({
@@ -957,11 +918,11 @@ class PlaybackRetryOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 38),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        margin: EdgeInsets.symmetric(horizontal: 38.w),
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.w),
         decoration: BoxDecoration(
           color: Colors.black.withValues(alpha: 0.56),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(10.w),
           border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: Column(
@@ -970,14 +931,14 @@ class PlaybackRetryOverlay extends StatelessWidget {
             Text(
               context.l10n.playerFeedLoadFailed,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textPrimary,
-                fontSize: 13,
+                fontSize: 13.sp,
                 fontWeight: FontWeight.w600,
                 height: 18 / 13,
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8.w),
             AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
           ],
         ),
@@ -1000,8 +961,8 @@ class CenterPlayButton extends StatelessWidget {
         onTap: onTap,
         child: Image.asset(
           'assets/images/player/pause.png',
-          height: 70,
-          width: 70,
+          height: 70.w,
+          width: 70.w,
         ),
       ),
     );
@@ -1022,42 +983,8 @@ class CenterPauseButton extends StatelessWidget {
         onTap: onTap,
         child: Image.asset(
           'assets/images/player/play.png',
-          width: 70,
-          height: 70,
-        ),
-      ),
-    );
-  }
-}
-
-class PauseFeedbackIcon extends StatelessWidget {
-  const PauseFeedbackIcon({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Center(
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.92, end: 1),
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOutCubic,
-          builder: (context, scale, child) {
-            return Transform.scale(scale: scale, child: child);
-          },
-          child: Container(
-            key: const ValueKey('player_pause_feedback'),
-            width: 70,
-            height: 70,
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.48),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.pause_rounded,
-              color: Colors.white,
-              size: 42,
-            ),
-          ),
+          width: 70.w,
+          height: 70.w,
         ),
       ),
     );
@@ -1234,22 +1161,22 @@ class PlayerTopBarContent extends StatelessWidget {
                 child: Center(
                   child: Image.asset(
                     "assets/images/common/white_left.png",
-                    width: 24,
-                    height: 24,
+                    width: 24.w,
+                    height: 24.w,
                   ),
                 ),
               ),
               if (!showBackOnly) ...[
-                const SizedBox(width: 2),
+                SizedBox(width: 2.w),
                 Text(
                   key: const ValueKey('player_episode_label'),
                   context.l10n.myListEpisode(
                     episodeNumber.toString().padLeft(2, '0'),
                   ),
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight(510),
-                    fontSize: 14,
+                    fontSize: 14.sp,
                     height: 18 / 14,
                   ),
                 ),
@@ -1261,24 +1188,24 @@ class PlayerTopBarContent extends StatelessWidget {
                   behavior: HitTestBehavior.opaque,
                   onTap: onSpeedTap,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 10,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 8.w,
+                      vertical: 10.w,
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Image.asset(
                           "assets/images/player/speed.png",
-                          width: 24,
-                          height: 24,
+                          width: 24.w,
+                          height: 24.w,
                         ),
-                        const SizedBox(width: 2),
+                        SizedBox(width: 2.w),
                         Text(
                           context.l10n.playerSpeed,
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.9),
-                            fontSize: 12,
+                            fontSize: 12.sp,
                             height: 14 / 12,
                           ),
                         ),
@@ -1292,11 +1219,11 @@ class PlayerTopBarContent extends StatelessWidget {
                   behavior: HitTestBehavior.opaque,
                   onTap: onSettingsTap,
                   child: Padding(
-                    padding: const EdgeInsets.all(6),
+                    padding: EdgeInsets.all(6.w),
                     child: Image.asset(
                       'assets/images/player/player_more.png',
-                      width: 24,
-                      height: 24,
+                      width: 24.w,
+                      height: 24.w,
                     ),
                   ),
                 )
@@ -1383,7 +1310,7 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
         behavior: HitTestBehavior.opaque,
         onTap: _toggleMenu,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
+          padding: EdgeInsets.symmetric(vertical: 6.w),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1393,17 +1320,17 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
                   color: !_isVisible
                       ? Colors.white.withValues(alpha: 0.5)
                       : Colors.white,
-                  fontSize: 14,
+                  fontSize: 14.sp,
                   height: 18 / 14,
                 ),
               ),
-              const SizedBox(width: 4),
+              SizedBox(width: 4.w),
               Icon(
                 _isMenuOpen
                     ? Icons.keyboard_arrow_up_rounded
                     : Icons.keyboard_arrow_down_rounded,
                 color: Colors.white,
-                size: 20,
+                size: 20.w,
               ),
             ],
           ),
@@ -1418,7 +1345,8 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
   static const _menuOptionHeight = 20.0;
   static const _menuOptionGap = 20.0;
   static const _maxVisibleMenuOptions = 3.8;
-  static const _menuTextStyle = TextStyle(color: Colors.white, fontSize: 14);
+  static TextStyle get _menuTextStyle =>
+      TextStyle(color: Colors.white, fontSize: 14.sp);
 
   List<({String label, String value})> get _menuOptions => [
     // 只要存在内嵌字幕视频，语言入口完全由它驱动。外挂字幕仅自动匹配
@@ -1472,10 +1400,10 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
               color: Colors.transparent,
               child: Container(
                 width: _menuWidth(context),
-                padding: const EdgeInsets.all(_menuHorizontalPadding),
+                padding: EdgeInsets.all(_menuHorizontalPadding.w),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.65),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(8.r),
                 ),
                 child: SizedBox(
                   height: _menuHeightFor(_menuOptions.length),
@@ -1489,9 +1417,9 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
                           index < _menuOptions.length;
                           index++
                         ) ...[
-                          if (index > 0) const SizedBox(height: _menuOptionGap),
+                          if (index > 0) SizedBox(height: _menuOptionGap.w),
                           SizedBox(
-                            height: _menuOptionHeight,
+                            height: _menuOptionHeight.w,
                             child: _SubtitleMenuOption(
                               label: _menuOptions[index].label,
                               selected: _isSelected(_menuOptions[index].value),
@@ -1547,15 +1475,15 @@ class _PlayerSubtitleMenuButtonState extends State<_PlayerSubtitleMenuButton> {
       widestText = math.max(widestText, painter.width);
     }
     return widestText.ceilToDouble() +
-        _menuHorizontalPadding * 2 +
-        _selectedIndicatorWidth;
+        _menuHorizontalPadding.w * 2 +
+        _selectedIndicatorWidth.w;
   }
 
   double _menuHeightFor(int optionCount) {
     final visibleCount = math.min(optionCount, _maxVisibleMenuOptions);
     if (visibleCount == 0) return 0;
-    return visibleCount * _menuOptionHeight +
-        (visibleCount - 1) * _menuOptionGap;
+    return visibleCount * _menuOptionHeight.w +
+        (visibleCount - 1) * _menuOptionGap.w;
   }
 
   String _currentSubtitleLabel() {
@@ -1621,7 +1549,7 @@ class _SubtitleMenuOption extends StatelessWidget {
             ),
           ),
           if (selected)
-            const Icon(Icons.check_rounded, color: AppColors.primary, size: 18),
+            Icon(Icons.check_rounded, color: AppColors.primary, size: 18.w),
         ],
       ),
     );
@@ -1646,23 +1574,23 @@ class PlayerStateMessage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
+        padding: EdgeInsets.symmetric(horizontal: 32.w),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: AppColors.textPrimary, size: 32),
-            const SizedBox(height: 12),
+            Icon(icon, color: AppColors.textPrimary, size: 32.w),
+            SizedBox(height: 12.w),
             Text(
               message,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.textPrimary.withValues(alpha: 0.82),
-                fontSize: 14,
+                fontSize: 14.sp,
                 height: 18 / 14,
               ),
             ),
             if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 16),
+              SizedBox(height: 16.w),
               AppRetryButton(onPressed: onAction, label: actionLabel!),
             ],
           ],
@@ -1685,29 +1613,29 @@ class UnavailableEpisodeOverlay extends StatelessWidget {
           color: Colors.black.withValues(alpha: 0.32),
           child: Center(
             child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 42),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              margin: EdgeInsets.symmetric(horizontal: 42.w),
+              padding: EdgeInsets.symmetric(horizontal: 18.w, vertical: 14.w),
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.58),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(12.r),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.block_rounded,
                     color: AppColors.textPrimary,
-                    size: 18,
+                    size: 18.w,
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8.w),
                   Flexible(
                     child: Text(
                       message,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.textPrimary,
-                        fontSize: 13,
+                        fontSize: 13.sp,
                         fontWeight: FontWeight.w600,
                         height: 18 / 13,
                       ),

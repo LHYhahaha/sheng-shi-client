@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -42,14 +43,16 @@ class AppPaymentMethodSheet extends StatelessWidget {
     final viewPadding = MediaQuery.viewPaddingOf(context);
     final maxSheetHeight =
         MediaQuery.sizeOf(context).height - viewPadding.top - 24;
-    final bottomSpacing = viewPadding.bottom + AppSpacing.xl;
+    final bottomSpacing = viewPadding.bottom + AppSpacing.xl.w;
 
     return Material(
       color: const Color(0xFF1D1D20),
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28.w)),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: height ?? maxSheetHeight),
+        constraints: BoxConstraints(
+          maxHeight: height == null ? maxSheetHeight : height!.w,
+        ),
         child: SingleChildScrollView(
           physics: const ClampingScrollPhysics(),
           child: Column(
@@ -60,15 +63,15 @@ class AppPaymentMethodSheet extends StatelessWidget {
                 alignment: Alignment.centerRight,
                 children: [
                   Container(
-                    padding: EdgeInsets.symmetric(vertical: 26),
+                    padding: EdgeInsets.symmetric(vertical: 26.w),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
                           context.l10n.membershipPayment,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.textPrimary,
-                            fontSize: 18,
+                            fontSize: 18.sp,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -76,15 +79,16 @@ class AppPaymentMethodSheet extends StatelessWidget {
                     ),
                   ),
                   Positioned(
-                    right: 16,
-                    top: 18,
+                    right: 16.w,
+                    top: 18.w,
                     child: GestureDetector(
+                      key: closeButtonKey,
                       behavior: HitTestBehavior.opaque,
                       onTap: isProcessing ? null : onClose,
                       child: SvgPicture.asset(
                         "assets/images/player/close.svg",
-                        width: 40,
-                        height: 40,
+                        width: 40.w,
+                        height: 40.w,
                       ),
                     ),
                   ),
@@ -99,9 +103,9 @@ class AppPaymentMethodSheet extends StatelessWidget {
                   onTap: () => onPaymentMethodSelected(method.id),
                 ),
               Divider(height: 1, color: Colors.white.withValues(alpha: 0.08)),
-              const SizedBox(height: 20),
+              SizedBox(height: 20.w),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: EdgeInsets.symmetric(horizontal: 16.w),
                 child: Column(
                   children: [
                     _PaymentDetailRow(
@@ -109,7 +113,7 @@ class AppPaymentMethodSheet extends StatelessWidget {
                       value: orderTitle,
                       valueKey: const ValueKey('app_payment_order_title'),
                     ),
-                    const SizedBox(height: 22),
+                    SizedBox(height: 22.w),
                     _PaymentDetailRow(
                       label: '${context.l10n.paymentModalAmountTotal}:',
                       value: totalLabel,
@@ -117,9 +121,9 @@ class AppPaymentMethodSheet extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 40),
+              SizedBox(height: 40.w),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 30),
+                padding: EdgeInsets.symmetric(horizontal: 30.w),
                 child: SizedBox(
                   width: double.infinity,
                   child: FilledButton(
@@ -130,14 +134,14 @@ class AppPaymentMethodSheet extends StatelessWidget {
                         ? onClose
                         : onBuyNow,
                     style: FilledButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 13),
+                      padding: EdgeInsets.symmetric(vertical: 13.w),
                       backgroundColor: AppColors.primary,
                       disabledBackgroundColor: AppColors.primary.withValues(
                         alpha: 0.58,
                       ),
                       foregroundColor: AppColors.textPrimary,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(8.w),
                       ),
                     ),
                     child: _PaymentButtonContent(
@@ -191,29 +195,29 @@ class _PaymentMethodRow extends StatelessWidget {
         InkWell(
           onTap: enabled ? onTap : null,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 17.w),
             child: Row(
               children: [
                 _PaymentRadio(selected: selected),
-                const SizedBox(width: 12),
-                Image.asset(method.iconAsset, width: 22, height: 22),
-                const SizedBox(width: 8),
+                SizedBox(width: 12.w),
+                Image.asset(method.iconAsset, width: 22.w, height: 22.w),
+                SizedBox(width: 8.w),
                 Text(
                   method.label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.textPrimary,
-                    fontSize: 14,
+                    fontSize: 14.sp,
                     fontWeight: FontWeight.normal,
                     height: 1.25,
                   ),
                 ),
                 if (method.priceLabel != null) ...[
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8.w),
                   Text(
                     method.priceLabel!,
                     style: TextStyle(
                       color: AppColors.textPrimary.withValues(alpha: 0.45),
-                      fontSize: 12,
+                      fontSize: 12.sp,
                     ),
                   ),
                 ],
@@ -234,12 +238,12 @@ class _PaymentRadio extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    width: 18,
-    height: 18,
-    padding: const EdgeInsets.all(2),
+    width: 18.w,
+    height: 18.w,
+    padding: EdgeInsets.all(2.w),
     decoration: BoxDecoration(
       shape: BoxShape.circle,
-      border: Border.all(color: Colors.white, width: 1.4),
+      border: Border.all(color: Colors.white, width: 1.4.w),
     ),
     child: selected
         ? const DecoratedBox(
@@ -263,8 +267,8 @@ class _PaymentButtonContent extends StatelessWidget {
       label,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(
-        fontSize: 14,
+      style: TextStyle(
+        fontSize: 14.sp,
         fontWeight: FontWeight.w600,
         height: 1.25,
       ),
@@ -293,13 +297,13 @@ class _PaymentDetailRow extends StatelessWidget {
             label,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.5),
-              fontSize: 14,
+              fontSize: 14.sp,
               height: 1.25,
               fontWeight: FontWeight.normal,
             ),
           ),
         ),
-        const SizedBox(width: 16),
+        SizedBox(width: 16.w),
         Flexible(
           child: Text(
             value,
@@ -307,9 +311,9 @@ class _PaymentDetailRow extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.right,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textPrimary,
-              fontSize: 14,
+              fontSize: 14.sp,
               fontWeight: FontWeight.w500,
               height: 1.25,
             ),

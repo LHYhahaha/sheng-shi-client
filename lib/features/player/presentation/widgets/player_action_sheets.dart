@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
 
 import '../../../entitlement/application/entitlement_controller.dart';
@@ -36,26 +37,29 @@ class PlayerPlaybackSettingsSheet extends StatelessWidget {
         children: [
           Row(
             children: [
-              SizedBox(height: 40, width: 40),
-              const Spacer(),
-              Text(
-                context.l10n.playerSettingsTitle,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight(510),
+              SizedBox(height: 40.w, width: 40.w),
+              Expanded(
+                child: Text(
+                  context.l10n.playerSettingsTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18.sp,
+                    fontWeight: FontWeight(510),
+                  ),
                 ),
               ),
-              const Spacer(),
               _CloseButton(onTap: () => Navigator.of(context).pop()),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12.w),
           Container(
-            padding: EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+            padding: EdgeInsets.symmetric(vertical: 18.w, horizontal: 16.w),
             decoration: BoxDecoration(
               color: const Color(0xFF2C2C2E),
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(24.w),
             ),
             child: Column(
               children: [
@@ -69,7 +73,7 @@ class PlayerPlaybackSettingsSheet extends StatelessWidget {
                       context,
                     ).pop(PlayerPlaybackSettingsDestination.language),
                   ),
-                if (canShowLanguage && canShowQuality) SizedBox(height: 32),
+                if (canShowLanguage && canShowQuality) SizedBox(height: 32.w),
                 if (canShowQuality)
                   _SettingsRow(
                     key: const ValueKey('player_settings_quality'),
@@ -113,7 +117,7 @@ class PlayerLanguageSheet extends StatelessWidget {
       child: ListView.separated(
         shrinkWrap: true,
         itemCount: options.length + (showCloseSubtitleOption ? 1 : 0),
-        separatorBuilder: (_, _) => const SizedBox(height: 3),
+        separatorBuilder: (_, _) => SizedBox(height: 3.w),
         itemBuilder: (context, index) {
           if (showCloseSubtitleOption && index == 0) {
             return _SelectionRow(
@@ -169,7 +173,7 @@ class PlayerQualitySheet extends StatelessWidget {
           : ListView.separated(
               shrinkWrap: true,
               itemCount: qualities.length + (isSingleQuality ? 0 : 1),
-              separatorBuilder: (_, _) => const SizedBox(height: 3),
+              separatorBuilder: (_, _) => SizedBox(height: 3.w),
               itemBuilder: (context, index) {
                 if (!isSingleQuality && index == 0) {
                   return _SelectionRow(
@@ -220,21 +224,25 @@ class _PlayerSelectionSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _CompactPlayerSheet(
     height: MediaQuery.sizeOf(context).height * .52,
+    scaleHeight: false,
     child: Column(
       children: [
         Row(
           children: [
-            SizedBox(width: 40, height: 40),
-            const Spacer(),
-            Text(
-              title,
-              style: const TextStyle(color: Colors.white, fontSize: 18),
+            SizedBox(width: 40.w, height: 40.w),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 18.sp),
+              ),
             ),
-            const Spacer(),
             _CloseButton(onTap: () => Navigator.of(context).pop()),
           ],
         ),
-        const SizedBox(height: 18),
+        SizedBox(height: 18.w),
         Expanded(child: child),
       ],
     ),
@@ -258,33 +266,40 @@ class _SettingsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InkWell(
     onTap: onTap,
-    borderRadius: BorderRadius.circular(24),
+    borderRadius: BorderRadius.circular(24.w),
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 0),
       child: Row(
         children: [
-          Image.asset(iconAsset, width: 20, height: 20),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.9),
-              fontSize: 16,
+          Image.asset(iconAsset, width: 20.w, height: 20.w),
+          SizedBox(width: 6.w),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.9),
+                fontSize: 16.sp,
+              ),
             ),
           ),
-          const Spacer(),
+          SizedBox(width: 12.w),
           Text(
             value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.end,
             style: TextStyle(
               color: Colors.white.withValues(alpha: .50),
-              fontSize: 16,
+              fontSize: 16.sp,
             ),
           ),
-          const SizedBox(width: 3),
+          SizedBox(width: 3.w),
           Image.asset(
             "assets/images/common/white_right.png",
-            height: 20,
-            width: 20,
+            height: 20.w,
+            width: 20.w,
             color: Colors.white.withValues(alpha: .5),
           ),
         ],
@@ -310,35 +325,39 @@ class _SelectionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InkWell(
     onTap: onTap,
-    borderRadius: BorderRadius.circular(22),
+    borderRadius: BorderRadius.circular(22.w),
     child: Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      height: 56.w,
+      padding: EdgeInsets.symmetric(horizontal: 16.w),
       decoration: BoxDecoration(
         color: selected ? const Color(0xFF2C2C2E) : Colors.transparent,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(24.w),
       ),
       child: Row(
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: memberOnly
-                  ? const Color(0xFFF5D28A)
-                  : Colors.white.withValues(alpha: selected ? 1 : .5),
-              fontSize: 16,
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: memberOnly
+                    ? const Color(0xFFF5D28A)
+                    : Colors.white.withValues(alpha: selected ? 1 : .5),
+                fontSize: 16.sp,
+              ),
             ),
           ),
-          if (memberOnly) const SizedBox(width: 7),
+          if (memberOnly) SizedBox(width: 7.w),
           if (memberOnly)
             Image.asset(
               'assets/images/player/player_vip.png',
-              width: 16,
-              height: 16,
+              width: 16.w,
+              height: 16.w,
             ),
           const Spacer(),
           if (selected)
-            const Icon(Icons.check_rounded, color: Colors.white, size: 21),
+            Icon(Icons.check_rounded, color: Colors.white, size: 21.w),
         ],
       ),
     ),
@@ -370,12 +389,12 @@ class PlayerShareSheet extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              SizedBox(width: 40, height: 40),
+              SizedBox(width: 40.w, height: 40.w),
               Text(
                 context.l10n.playerShare,
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white,
-                  fontSize: 16,
+                  fontSize: 16.sp,
                   fontWeight: FontWeight.w600,
                   height: 20 / 16,
                 ),
@@ -384,9 +403,9 @@ class PlayerShareSheet extends StatelessWidget {
               _CloseButton(onTap: () => Navigator.of(context).pop()),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16.w),
           _ShareHintBanner(label: shareHint),
-          const SizedBox(height: 24),
+          SizedBox(height: 24.w),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -480,12 +499,12 @@ class PlayerShareLoadingSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _CompactPlayerSheet(
+    return _CompactPlayerSheet(
       height: 249,
       child: Center(
         child: SizedBox.square(
-          dimension: 24,
-          child: CircularProgressIndicator(strokeWidth: 2),
+          dimension: 24.w,
+          child: CircularProgressIndicator(strokeWidth: 2.w),
         ),
       ),
     );
@@ -519,12 +538,12 @@ class GiftShareSheet extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const SizedBox(width: 40, height: 40),
+              SizedBox(width: 40.w, height: 40.w),
               Text(
                 context.l10n.shareTitle,
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white,
-                  fontSize: 16,
+                  fontSize: 16.sp,
                   fontWeight: FontWeight(510),
                 ),
               ),
@@ -532,9 +551,9 @@ class GiftShareSheet extends StatelessWidget {
             ],
           ),
           if (isEligible) ...[
-            const SizedBox(height: 16),
+            SizedBox(height: 16.w),
             _GiftQuotaBanner(label: quotaLabel),
-            const SizedBox(height: 24),
+            SizedBox(height: 24.w),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -554,14 +573,14 @@ class GiftShareSheet extends StatelessWidget {
               ],
             ),
           ] else ...[
-            const SizedBox(height: 18),
+            SizedBox(height: 18.w),
             Image.asset(
               'assets/images/membership/share_gift.png',
-              width: 82,
-              height: 82,
+              width: 82.w,
+              height: 82.w,
               filterQuality: FilterQuality.low,
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14.w),
             Text(
               context.l10n.giftShareUnavailableTitle,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -569,9 +588,9 @@ class GiftShareSheet extends StatelessWidget {
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: 6.w),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: EdgeInsets.symmetric(horizontal: 12.w),
               child: Text(
                 unavailableDescription ?? '',
                 textAlign: TextAlign.center,
@@ -582,7 +601,7 @@ class GiftShareSheet extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: 45),
+          SizedBox(height: 45.w),
         ],
       ),
     );
@@ -630,15 +649,15 @@ class _PlayerGiftShareSheetState extends State<PlayerGiftShareSheet> {
         children: [
           Row(
             children: [
-              const SizedBox(width: 40, height: 40),
+              SizedBox(width: 40.w, height: 40.w),
               Expanded(
                 child: Container(
-                  height: 36,
-                  padding: const EdgeInsets.all(4),
-                  margin: EdgeInsets.symmetric(horizontal: 10),
+                  height: 36.w,
+                  padding: EdgeInsets.all(4.w),
+                  margin: EdgeInsets.symmetric(horizontal: 10.w),
                   decoration: BoxDecoration(
                     color: const Color(0xFF313136),
-                    borderRadius: BorderRadius.circular(40),
+                    borderRadius: BorderRadius.circular(40.w),
                   ),
                   child: Row(
                     children: [
@@ -660,40 +679,40 @@ class _PlayerGiftShareSheetState extends State<PlayerGiftShareSheet> {
             ],
           ),
           if (!giftSelected) ...[
-            const SizedBox(height: 16),
+            SizedBox(height: 16.w),
             _ShareHintBanner(label: widget.shareHint),
-            const SizedBox(height: 24),
+            SizedBox(height: 24.w),
             _GiftShareTargets(
               onFacebookTap: widget.onShareFacebookTap,
               onCopyLinkTap: widget.onShareCopyLinkTap,
             ),
           ] else if (widget.isGiftAvailable) ...[
-            const SizedBox(height: 16),
+            SizedBox(height: 16.w),
             _GiftQuotaBanner(label: widget.quotaLabel),
-            const SizedBox(height: 24),
+            SizedBox(height: 24.w),
             _GiftShareTargets(
               onFacebookTap: widget.onGiftFacebookTap,
               onCopyLinkTap: widget.onGiftCopyLinkTap,
             ),
           ] else ...[
-            const SizedBox(height: 18),
+            SizedBox(height: 18.w),
             Image.asset(
               'assets/images/membership/share_gift.png',
-              width: 82,
-              height: 82,
+              width: 82.w,
+              height: 82.w,
             ),
-            const SizedBox(height: 14),
+            SizedBox(height: 14.w),
             Text(
               context.l10n.giftShareUnavailableTitle,
-              style: const TextStyle(color: Colors.white, fontSize: 15),
+              style: TextStyle(color: Colors.white, fontSize: 15.sp),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: 6.w),
             Text(
               widget.unavailableDescription,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.48),
-                fontSize: 12,
+                fontSize: 12.sp,
               ),
             ),
           ],
@@ -724,13 +743,13 @@ class _PlayerShareTab extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected ? const Color(0xFF696971) : Colors.transparent,
-          borderRadius: BorderRadius.circular(40),
+          borderRadius: BorderRadius.circular(40.w),
         ),
         child: Text(
           label,
           style: TextStyle(
             color: Colors.white,
-            fontSize: 14,
+            fontSize: 14.sp,
             height: 14 / 18,
             fontWeight: FontWeight(selected ? 510 : 400),
           ),
@@ -777,19 +796,19 @@ class _GiftQuotaBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.w),
       decoration: BoxDecoration(
         color: const Color(0xFF2C2C2E),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(24.w),
       ),
       child: Row(
         children: [
           Image.asset(
             'assets/images/player/share_member_icon.png',
-            width: 16,
-            height: 20,
+            width: 16.w,
+            height: 20.w,
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: 6.w),
           Expanded(
             child: Text(
               label,
@@ -816,20 +835,20 @@ class _ShareHintBanner extends StatelessWidget {
     return Container(
       key: const Key('player_share_hint'),
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.w),
       decoration: BoxDecoration(
         color: const Color(0xFF2C2C2E),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(24.w),
       ),
       child: Row(
         children: [
           Image.asset(
             'assets/images/profile/coin.png',
-            width: 20,
-            height: 20,
+            width: 20.w,
+            height: 20.w,
             filterQuality: FilterQuality.low,
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8.w),
           Expanded(
             child: Text(
               label,
@@ -898,7 +917,7 @@ class _PlayerCoinUnlockSheetState extends ConsumerState<PlayerCoinUnlockSheet> {
               ),
             ],
           ),
-          SizedBox(height: 2),
+          SizedBox(height: 2.w),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -910,8 +929,8 @@ class _PlayerCoinUnlockSheetState extends ConsumerState<PlayerCoinUnlockSheet> {
                       alignment: PlaceholderAlignment.middle,
                       child: Image.asset(
                         'assets/images/profile/coin.png',
-                        width: 16,
-                        height: 16,
+                        width: 16.w,
+                        height: 16.w,
                       ),
                     ),
                     TextSpan(
@@ -923,7 +942,7 @@ class _PlayerCoinUnlockSheetState extends ConsumerState<PlayerCoinUnlockSheet> {
                 key: const ValueKey('player_coin_unlock_price'),
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 14,
+                  fontSize: 14.sp,
                   height: 16 / 12,
                   fontWeight: FontWeight.normal,
                 ),
@@ -936,8 +955,8 @@ class _PlayerCoinUnlockSheetState extends ConsumerState<PlayerCoinUnlockSheet> {
                       alignment: PlaceholderAlignment.middle,
                       child: Image.asset(
                         'assets/images/profile/coin.png',
-                        width: 16,
-                        height: 16,
+                        width: 16.w,
+                        height: 16.w,
                       ),
                     ),
                     TextSpan(
@@ -949,16 +968,16 @@ class _PlayerCoinUnlockSheetState extends ConsumerState<PlayerCoinUnlockSheet> {
                 key: const ValueKey('player_coin_unlock_balance'),
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 14,
+                  fontSize: 14.sp,
                   height: 16 / 12,
                   fontWeight: FontWeight.normal,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 28),
+          SizedBox(height: 28.w),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
+            padding: EdgeInsets.symmetric(horizontal: 6.w),
             child: AppPrimaryButton(
               key: const ValueKey('player_coin_unlock_confirm'),
               label: context.l10n.playerPlay,
@@ -966,12 +985,9 @@ class _PlayerCoinUnlockSheetState extends ConsumerState<PlayerCoinUnlockSheet> {
               onPressed: _isSubmitting ? null : () => unawaited(_submit()),
             ),
           ),
-          const SizedBox(height: 24),
-          Divider(
-            color: Colors.white.withValues(alpha: 0.08),
-            height: 1,
-          ),
-          const SizedBox(height: 20),
+          SizedBox(height: 24.w),
+          Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
+          SizedBox(height: 20.w),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -981,11 +997,11 @@ class _PlayerCoinUnlockSheetState extends ConsumerState<PlayerCoinUnlockSheet> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.45),
-                  fontSize: 12,
+                  fontSize: 12.sp,
                   height: 16 / 12,
                 ),
               ),
-              SizedBox(width: 27),
+              SizedBox(width: 27.w),
               CustomSwitch(
                 key: const ValueKey('player_coin_unlock_auto_next_switch'),
                 value: autoUnlockEnabled,
@@ -1021,25 +1037,25 @@ class PlayerSpeedSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: const Color(0xFF1C1C1C),
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(32.w)),
       clipBehavior: Clip.antiAlias,
       child: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          padding: EdgeInsets.fromLTRB(16.w, 16.w, 16.w, 24.w),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 children: [
-                  const SizedBox(width: 40),
+                  SizedBox(width: 40.w),
                   Expanded(
                     child: Text(
                       context.l10n.playerSpeed,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white,
-                        fontSize: 18,
+                        fontSize: 18.sp,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -1047,14 +1063,14 @@ class PlayerSpeedSheet extends StatelessWidget {
                   _CloseButton(onTap: () => Navigator.of(context).pop()),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12.w),
               for (final rate in rates)
                 Semantics(
                   selected: selectedRate == rate,
                   button: true,
                   child: InkWell(
                     key: ValueKey('player_speed_option_$rate'),
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(24.w),
                     splashFactory: NoSplash.splashFactory,
                     highlightColor: Colors.transparent,
                     hoverColor: Colors.transparent,
@@ -1063,20 +1079,20 @@ class PlayerSpeedSheet extends StatelessWidget {
                       Navigator.of(context).pop();
                     },
                     child: Container(
-                      height: 56,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      height: 56.w,
+                      padding: EdgeInsets.symmetric(horizontal: 16.w),
                       decoration: BoxDecoration(
                         color: selectedRate == rate
                             ? const Color(0xFF2C2C2E)
                             : Colors.transparent,
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(24.w),
                       ),
                       child: Row(
                         children: [
                           Text(
                             '${rate}x',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 16.sp,
                               color: selectedRate == rate
                                   ? Colors.white.withValues(alpha: .9)
                                   : Colors.white.withValues(alpha: .4),
@@ -1084,11 +1100,11 @@ class PlayerSpeedSheet extends StatelessWidget {
                           ),
                           const Spacer(),
                           if (selectedRate == rate)
-                            const Icon(
+                            Icon(
                               Icons.check_rounded,
                               key: ValueKey('player_speed_selected_check'),
                               color: Colors.white,
-                              size: 20,
+                              size: 20.w,
                             ),
                         ],
                       ),
@@ -1144,8 +1160,8 @@ class PlayerPaywallOverlay extends StatelessWidget {
             child: GestureDetector(
               onTap: () {},
               child: SizedBox(
-                width: 275,
-                height: 44,
+                width: 275.w,
+                height: 44.w,
                 child: FilledButton(
                   onPressed: onTap,
                   style: FilledButton.styleFrom(
@@ -1155,10 +1171,10 @@ class PlayerPaywallOverlay extends StatelessWidget {
                       alpha: 0.45,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(6.w),
                     ),
-                    textStyle: const TextStyle(
-                      fontSize: 14,
+                    textStyle: TextStyle(
+                      fontSize: 14.sp,
                       fontWeight: FontWeight.w700,
                       height: 18 / 14,
                     ),
@@ -1175,9 +1191,14 @@ class PlayerPaywallOverlay extends StatelessWidget {
 }
 
 class _CompactPlayerSheet extends StatelessWidget {
-  const _CompactPlayerSheet({this.height, required this.child});
+  const _CompactPlayerSheet({
+    this.height,
+    this.scaleHeight = true,
+    required this.child,
+  });
 
   final double? height;
+  final bool scaleHeight;
   final Widget child;
 
   @override
@@ -1187,8 +1208,9 @@ class _CompactPlayerSheet extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
       child: Material(
+        key: const ValueKey('player_compact_sheet_surface'),
         color: const Color(0xFF202123),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20.w)),
         clipBehavior: Clip.antiAlias,
         child: height == null
             ? ConstrainedBox(
@@ -1196,15 +1218,15 @@ class _CompactPlayerSheet extends StatelessWidget {
                   maxHeight: MediaQuery.sizeOf(context).height * 0.75,
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+                  padding: EdgeInsets.fromLTRB(16.w, 16.w, 16.w, 18.w),
                   child: child,
                 ),
               )
             : SizedBox(
-                height: height,
+                height: scaleHeight ? height!.w : height,
                 width: double.infinity,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+                  padding: EdgeInsets.fromLTRB(16.w, 16.w, 16.w, 18.w),
                   child: child,
                 ),
               ),
@@ -1240,18 +1262,18 @@ class _ShareTarget extends StatelessWidget {
         children: [
           Image.asset(
             "assets/images/player/$imageUrl.png",
-            width: 56,
-            height: 56,
+            width: 56.w,
+            height: 56.w,
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6.w),
           Text(
             label,
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
-              fontSize: 12,
+              fontSize: 12.sp,
               fontWeight: FontWeight(510),
               height: 16 / 12,
             ),
@@ -1273,11 +1295,11 @@ class _CloseButton extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: SizedBox.square(
-        dimension: 40,
+        dimension: 40.w,
         child: SvgPicture.asset(
           "assets/images/player/close.svg",
-          width: 40,
-          height: 40,
+          width: 40.w,
+          height: 40.w,
         ),
       ),
     );

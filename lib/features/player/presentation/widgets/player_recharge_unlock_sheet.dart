@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:go_router/go_router.dart';
 
@@ -286,7 +287,7 @@ class _PlayerRechargeUnlockSheetState
 
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final sheetHeight = math.min(654.0, screenHeight - 72);
+    final sheetHeight = math.min(654.w, screenHeight - 72.w);
 
     // 获取用户金币余额和所需金币
     final entitlement = ref.watch(entitlementControllerProvider);
@@ -355,7 +356,7 @@ class _PlayerRechargeUnlockSheetState
       padding: EdgeInsets.only(bottom: bottomInset),
       child: Material(
         color: const Color(0xFF1D1D20),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28.w)),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
           height: sheetHeight,
@@ -418,12 +419,9 @@ class _LoadingOrError extends StatelessWidget {
           children: [
             Text(
               context.l10n.networkError,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: AppColors.textPrimary, fontSize: 14.sp),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12.w),
             AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
           ],
         ),
@@ -464,11 +462,11 @@ class _RechargeTipsSection extends StatelessWidget {
             fontWeight: FontWeight.normal,
           ),
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: 6.w),
         RichText(
           text: TextSpan(
-            style: const TextStyle(
-              fontSize: 12,
+            style: TextStyle(
+              fontSize: 12.sp,
               color: Color(0xFFFFFFFF),
               fontWeight: FontWeight.normal,
             ),
@@ -487,10 +485,10 @@ class _RechargeTipsSection extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12.w),
         for (var index = 0; index < items.length; index++)
           Padding(
-            padding: const EdgeInsets.only(bottom: 6),
+            padding: EdgeInsets.only(bottom: 6.w),
             child: Text(
               '${index + 1}. ${items[index]}',
               style: textTheme.labelMedium?.copyWith(
@@ -548,10 +546,10 @@ class _OfferContent extends ConsumerWidget {
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             padding: EdgeInsets.fromLTRB(
-              16,
+              16.w,
               0,
-              16,
-              28 + MediaQuery.paddingOf(context).bottom,
+              16.w,
+              28.w + MediaQuery.paddingOf(context).bottom,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -573,10 +571,10 @@ class _OfferContent extends ConsumerWidget {
                 //   const SizedBox(height: 16),
                 // ],
                 _UnlockInfo(offer: offer),
-                const SizedBox(height: 19),
+                SizedBox(height: 19.w),
                 if (hasNoPackages)
                   Container(
-                    height: 180,
+                    height: 180.w,
                     alignment: Alignment.center,
                     child: AppEmptyState(
                       message: offer.isGoogleBillingUnavailable
@@ -589,10 +587,10 @@ class _OfferContent extends ConsumerWidget {
                 else ...[
                   if (!isVipOnly) ...[
                     SizedBox(
-                      height: 85,
+                      height: 85.w,
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          const gap = 8.0;
+                          final gap = 8.w;
                           const visibleCardCount = 2.2;
                           const visibleGapCount = 2;
                           final cardWidth =
@@ -605,7 +603,7 @@ class _OfferContent extends ConsumerWidget {
                             physics: const BouncingScrollPhysics(),
                             itemCount: offer.coinPackages.length,
                             separatorBuilder: (context, index) =>
-                                const SizedBox(width: gap),
+                                SizedBox(width: gap),
                             itemBuilder: (context, index) {
                               final package = offer.coinPackages[index];
                               return _CoinPackageCard(
@@ -622,7 +620,7 @@ class _OfferContent extends ConsumerWidget {
                         },
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    SizedBox(height: 20.w),
                   ],
                   // 如果用户不是会员，显示会员商品
                   if (!isMember)
@@ -639,10 +637,10 @@ class _OfferContent extends ConsumerWidget {
                         enabled: !isProcessing,
                         onTap: () => onMembershipTap(package.id),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8.w),
                     ],
                 ],
-                const SizedBox(height: 12),
+                SizedBox(height: 12.w),
                 const _RechargeTipsSection(
                   key: ValueKey('player_recharge_unlock_tips'),
                 ),
@@ -674,12 +672,12 @@ class _CoinUnlockButton extends StatelessWidget {
       onTap: isProcessing ? null : onTap,
       child: Container(
         width: double.infinity,
-        height: 56,
+        height: 56.w,
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
           ),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(12.w),
         ),
         alignment: Alignment.center,
         child: Row(
@@ -687,16 +685,16 @@ class _CoinUnlockButton extends StatelessWidget {
           children: [
             Image.asset(
               'assets/images/profile/coin.png',
-              width: 24,
-              height: 24,
+              width: 24.w,
+              height: 24.w,
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8.w),
             Text(
               '$coinCost ${context.l10n.unitCoin} '
               '${context.l10n.playerUnlockNow}',
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.black,
-                fontSize: 16,
+                fontSize: 16.sp,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -742,7 +740,7 @@ class _RechargeHeader extends ConsumerWidget {
         ? context.l10n.paywallJumpTitle
         : context.l10n.paywallVipTitle;
     return DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
@@ -750,7 +748,7 @@ class _RechargeHeader extends ConsumerWidget {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+        padding: EdgeInsets.fromLTRB(16.w, 16.w, 16.w, 4.w),
         child: Column(
           children: [
             if (isVipOnly)
@@ -762,33 +760,34 @@ class _RechargeHeader extends ConsumerWidget {
                 onClose: onClose,
               )
             else ...[
-              SizedBox(
-                child: Row(
-                  children: [
-                    _InlineCoinMetric(
+              Row(
+                children: [
+                  Expanded(
+                    child: _InlineCoinMetric(
                       label: '${context.l10n.unitCoin}:',
                       value: offer.requiredCoins,
                     ),
-                    const SizedBox(width: 34),
-                    _InlineCoinMetric(
+                  ),
+                  // SizedBox(width: 34.w),
+                  Expanded(
+                    child: _InlineCoinMetric(
                       key: const ValueKey('player_recharge_unlock_balance'),
                       label: '${context.l10n.playerBalance}:',
                       value: totalCoinBalance,
                     ),
-                    const Spacer(),
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: onClose,
-                      child: SvgPicture.asset(
-                        "assets/images/player/close.svg",
-                        width: 40,
-                        height: 40,
-                      ),
+                  ),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onClose,
+                    child: SvgPicture.asset(
+                      "assets/images/player/close.svg",
+                      width: 40.w,
+                      height: 40.w,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16.w),
               Divider(height: 1, color: Colors.white.withValues(alpha: 0.09)),
             ],
           ],
@@ -815,14 +814,14 @@ class _VipOnlyRechargeHeader extends StatelessWidget {
       children: [
         Row(
           children: [
-            SizedBox(width: 40, height: 40),
+            SizedBox(width: 40.w, height: 40.w),
             Expanded(
               child: Text(
                 title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.textPrimary,
-                  fontSize: 18,
+                  fontSize: 18.sp,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -832,20 +831,20 @@ class _VipOnlyRechargeHeader extends StatelessWidget {
               onTap: onClose,
               child: SvgPicture.asset(
                 "assets/images/player/close.svg",
-                width: 40,
-                height: 40,
+                width: 40.w,
+                height: 40.w,
               ),
             ),
           ],
         ),
         if (description != null) ...[
-          const SizedBox(height: 10),
+          SizedBox(height: 10.w),
           Text(
             description!,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.55),
-              fontSize: 13,
+              fontSize: 13.sp,
               height: 1.35,
             ),
           ),
@@ -868,27 +867,39 @@ class _InlineCoinMetric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
+      // mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.5),
-            fontSize: 14,
-            height: 18 / 14,
-            fontWeight: FontWeight.normal,
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.5),
+              fontSize: 14.sp,
+              height: 18 / 14,
+              fontWeight: FontWeight.normal,
+            ),
           ),
         ),
-        const SizedBox(width: 6),
-        Image.asset('assets/images/profile/coin.png', width: 16, height: 16),
-        const SizedBox(width: 4),
-        Text(
-          '$value',
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 14,
-            fontWeight: FontWeight.normal,
-            height: 18 / 14,
+        SizedBox(width: 6.w),
+        Image.asset(
+          'assets/images/profile/coin.png',
+          width: 16.w,
+          height: 16.w,
+        ),
+        SizedBox(width: 4.w),
+        Flexible(
+          child: Text(
+            '$value',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 14.sp,
+              fontWeight: FontWeight.normal,
+              height: 18 / 14,
+            ),
           ),
         ),
       ],
@@ -909,10 +920,10 @@ class _CoinAmountText extends StatelessWidget {
       children: [
         Image.asset(
           'assets/images/profile/coin.png',
-          width: fontSize + 2,
-          height: fontSize + 2,
+          width: (fontSize + 2).w,
+          height: (fontSize + 2).w,
         ),
-        const SizedBox(width: 2),
+        SizedBox(width: 2.w),
         Flexible(
           child: Text(
             '$value',
@@ -920,7 +931,7 @@ class _CoinAmountText extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: AppColors.textPrimary,
-              fontSize: fontSize,
+              fontSize: fontSize.sp,
               fontWeight: FontWeight.bold,
               height: 1.3,
             ),
@@ -939,21 +950,21 @@ class _BonusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: const BoxDecoration(
+      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.w),
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xFFFF9E53), Color(0xFFFE1340), Color(0xFFFE3273)],
         ),
         borderRadius: BorderRadius.only(
-          topRight: Radius.circular(8),
-          bottomLeft: Radius.circular(8),
+          topRight: Radius.circular(8.w),
+          bottomLeft: Radius.circular(8.w),
         ),
       ),
       child: Text(
         '+$percent%',
-        style: const TextStyle(
+        style: TextStyle(
           color: AppColors.textPrimary,
-          fontSize: 10,
+          fontSize: 10.sp,
           fontWeight: FontWeight.w600,
           height: 15 / 10,
         ),
@@ -971,18 +982,18 @@ class _CoinCardContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 13, 12, 11),
+      padding: EdgeInsets.fromLTRB(16.w, 13.w, 12.w, 11.w),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _CoinAmountText(value: package.baseCoins, fontSize: 18),
           if (package.hasBonus) ...[
-            const SizedBox(height: 4),
+            SizedBox(height: 4.w),
             Text(
               '+${package.bonusCoins}',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.5),
-                fontSize: 10,
+                fontSize: 10.sp,
                 height: 13 / 10,
                 fontWeight: FontWeight.normal,
               ),
@@ -993,9 +1004,9 @@ class _CoinCardContent extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: Text(
               displayPrice,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textPrimary,
-                fontSize: 12,
+                fontSize: 12.sp,
                 height: 16 / 12,
                 fontWeight: FontWeight.normal,
               ),
@@ -1022,10 +1033,10 @@ class _CoinPackageCardFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: width,
-      height: 85,
+      height: 85.w,
       decoration: BoxDecoration(
         color: const Color(0xFF414143).withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(8.w),
         border: Border.all(color: Colors.transparent, width: 0),
       ),
       child: child,
@@ -1122,21 +1133,21 @@ class _PromoCountdownBadgeState extends ConsumerState<_PromoCountdownBadge> {
 
         return Container(
           key: const ValueKey('player_recharge_promo_badge'),
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 2),
-          decoration: const BoxDecoration(
+          padding: EdgeInsets.symmetric(horizontal: 13.w, vertical: 2.w),
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [Color(0xFFFF9E53), Color(0xFFFE1340), Color(0xFFFE3273)],
             ),
             borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(AppRadii.sm),
-              topRight: Radius.circular(AppRadii.sm),
+              bottomLeft: Radius.circular(AppRadii.sm.w),
+              topRight: Radius.circular(AppRadii.sm.w),
             ),
           ),
           child: Text(
             _formatCountdown(remaining),
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: Colors.white,
-              fontSize: 10,
+              fontSize: 10.sp,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -1177,9 +1188,9 @@ class _MembershipPriceBlock extends StatelessWidget {
       children: [
         Text(
           price,
-          style: const TextStyle(
+          style: TextStyle(
             color: Color(0xFF411803),
-            fontSize: 18,
+            fontSize: 18.sp,
             fontWeight: FontWeight.bold,
             height: 1.5,
           ),
@@ -1191,6 +1202,7 @@ class _MembershipPriceBlock extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: const Color(0xFF411803).withValues(alpha: 0.6),
+              fontSize: 12.sp,
               fontWeight: FontWeight.normal,
               decoration: TextDecoration.lineThrough,
               decorationColor: const Color(0xFF411803).withValues(alpha: 0.6),
@@ -1226,7 +1238,7 @@ class _MembershipInfoArea extends StatelessWidget {
       fallbackTitle: package.title,
     );
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.symmetric(horizontal: 16.w),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -1239,22 +1251,22 @@ class _MembershipInfoArea extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Color(0xFF401908),
-                    fontSize: 18,
+                    fontSize: 18.sp,
                     fontWeight: FontWeight.bold,
                     height: 1.5,
                   ),
                 ),
                 if (description != null) ...[
-                  const SizedBox(height: 9),
+                  SizedBox(height: 9.w),
                   Text(
                     description!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: const Color(0xFF401908).withValues(alpha: 0.6),
-                      fontSize: 10,
+                      fontSize: 10.sp,
                       fontWeight: FontWeight.normal,
                     ),
                   ),
@@ -1265,14 +1277,14 @@ class _MembershipInfoArea extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: const Color(0xFF401908).withValues(alpha: 0.6),
-                      fontSize: 10,
+                      fontSize: 10.sp,
                       fontWeight: FontWeight.normal,
                     ),
                   ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8.w),
           _MembershipPriceBlock(
             package: package,
             showPromo: showPromo,
@@ -1302,8 +1314,8 @@ class _BenefitIcon extends StatelessWidget {
       alignment: Alignment.center,
       child: SvgPicture.asset(
         _iconFor(icon),
-        width: 20,
-        height: 20,
+        width: 20.w,
+        height: 20.w,
         fit: BoxFit.contain,
       ),
     );
@@ -1344,10 +1356,10 @@ class _BenefitGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       padding: EdgeInsets.zero,
       itemCount: benefits.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        mainAxisExtent: 23,
-        crossAxisSpacing: 13,
+        mainAxisExtent: 23.w,
+        crossAxisSpacing: 13.w,
       ),
       itemBuilder: (context, index) {
         final benefit = benefits[index];
@@ -1355,15 +1367,15 @@ class _BenefitGrid extends StatelessWidget {
         return Row(
           children: [
             _BenefitIcon(icon: benefit.icon),
-            const SizedBox(width: AppSpacing.xs),
+            SizedBox(width: AppSpacing.xs.w),
             Expanded(
               child: Text(
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   color: Color(0xFF401908),
-                  fontSize: 11,
+                  fontSize: 11.sp,
                   fontWeight: FontWeight.normal,
                   height: 1.5,
                 ),
@@ -1397,8 +1409,8 @@ class _MembershipBenefitBand extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+      height: 60.w,
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 7.w),
       color: const Color(0x33FFF8E7),
       child: _BenefitGrid(benefits: benefits),
     );
@@ -1464,14 +1476,14 @@ class _MembershipPackageCard extends ConsumerWidget {
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
           width: double.infinity,
-          height: 159,
+          height: 159.w,
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [Color(0xFFFFF0D9), Color(0xFFF3CA92)],
             ),
-            borderRadius: BorderRadius.circular(AppRadii.sm),
+            borderRadius: BorderRadius.circular(AppRadii.sm.w),
           ),
           clipBehavior: Clip.antiAlias,
           child: Stack(
@@ -1482,7 +1494,7 @@ class _MembershipPackageCard extends ConsumerWidget {
                 right: 0,
                 child: Image.asset(
                   'assets/images/profile/vip_v.png',
-                  height: 98,
+                  height: 98.w,
                   fit: BoxFit.contain,
                 ),
               ),
@@ -1504,8 +1516,8 @@ class _MembershipPackageCard extends ConsumerWidget {
               ),
               if (showPromo)
                 Positioned(
-                  right: -2,
-                  top: -1,
+                  right: -2.w,
+                  top: -1.w,
                   child: _PromoCountdownBadge(
                     sessionKey: sessionKey,
                     packageId: package.id,

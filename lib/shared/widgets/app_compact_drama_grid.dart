@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../theme/app_colors.dart';
 import 'app_cached_network_image.dart';
@@ -23,8 +24,9 @@ class AppCompactDramaGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        final scaledSpacing = spacing.w;
         final tileWidth =
-            (constraints.maxWidth - spacing * (crossAxisCount - 1)) /
+            (constraints.maxWidth - scaledSpacing * (crossAxisCount - 1)) /
             crossAxisCount;
         return GridView.builder(
           shrinkWrap: true,
@@ -32,13 +34,13 @@ class AppCompactDramaGrid extends StatelessWidget {
           itemCount: itemCount,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
-            crossAxisSpacing: spacing,
-            mainAxisSpacing: spacing,
+            crossAxisSpacing: scaledSpacing,
+            mainAxisSpacing: scaledSpacing,
             mainAxisExtent:
                 tileWidth / AppCompactDramaCard.coverAspectRatio +
                 (hasTagRow
-                    ? AppCompactDramaCard.textHeightWithTag
-                    : AppCompactDramaCard.textHeightWithoutTag),
+                    ? AppCompactDramaCard.textHeightWithTag.w
+                    : AppCompactDramaCard.textHeightWithoutTag.w),
           ),
           itemBuilder: itemBuilder,
         );
@@ -80,7 +82,7 @@ class AppCompactDramaCard extends StatelessWidget {
           AspectRatio(
             aspectRatio: coverAspectRatio,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(4.r),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -91,38 +93,45 @@ class AppCompactDramaCard extends StatelessWidget {
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(top: 8, bottom: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                    height: 16/12,
-                  ),
-                ),
-                if (tags.isNotEmpty) ...[
-                  const SizedBox(height: 6),
+          SizedBox(
+            height: tags.isNotEmpty
+                ? textHeightWithTag.w
+                : textHeightWithoutTag.w,
+            child: Padding(
+              padding: EdgeInsets.only(top: 4.w, bottom: 8.w),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   Text(
-                    tags.first,
-                    maxLines: 1,
+                    title,
+                    textScaler: TextScaler.noScaling,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: AppColors.textPrimary.withValues(alpha: 0.5),
-                      fontSize: 12,
+                      color: AppColors.textPrimary,
+                      fontSize: 12.sp,
                       fontWeight: FontWeight.w400,
-                      height: 16/12,
+                      // height: 16 / 12,
                     ),
                   ),
+                  if (tags.isNotEmpty) ...[
+                    SizedBox(height: 6.w),
+                    Text(
+                      tags.first,
+                      textScaler: TextScaler.noScaling,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textPrimary.withValues(alpha: 0.5),
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w400,
+                        // height: 16 / 12,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ],

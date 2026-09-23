@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
 import '../../../../core/i18n/ui_text.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/theme/app_colors.dart';
-import '../../../../shared/theme/app_spacing.dart';
 import '../../../../shared/widgets/app_cached_network_image.dart';
 import '../../../../shared/widgets/app_empty_state.dart';
 import '../../../../shared/widgets/app_load_more_indicator.dart';
@@ -144,7 +144,7 @@ class _WalletHistoryPageState extends ConsumerState<WalletHistoryPage> {
             ),
             if (widget.type == WalletRecordType.consumption)
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                padding: EdgeInsets.fromLTRB(16.w, 4.w, 16.w, 8.w),
                 child: _ConsumptionSegmentedControl(
                   value: state.consumptionFilter,
                   onChanged: (value) {
@@ -209,7 +209,12 @@ class _HistoryBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Column(children: [SizedBox(height: 240), AppPegTopLoader()]);
+      return Column(
+        children: [
+          SizedBox(height: 240.w),
+          const AppPegTopLoader(),
+        ],
+      );
     }
 
     if (state.historyError != null) {
@@ -223,7 +228,7 @@ class _HistoryBody extends StatelessWidget {
                 context,
               ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12.w),
             AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
           ],
         ),
@@ -240,10 +245,10 @@ class _HistoryBody extends StatelessWidget {
     return ListView(
       controller: scrollController,
       padding: EdgeInsets.fromLTRB(
-        16,
-        8,
-        16,
-        MediaQuery.paddingOf(context).bottom + 32,
+        16.w,
+        8.w,
+        16.w,
+        MediaQuery.paddingOf(context).bottom + 32.w,
       ),
       children: [
         if (records.isEmpty)
@@ -264,11 +269,10 @@ class _HistoryBody extends StatelessWidget {
                 record: records[index],
               ),
             },
-            if (index != records.length - 1)
-              SizedBox(height: type == WalletRecordType.consumption ? 20 : 20),
+            if (index != records.length - 1) SizedBox(height: 20.w),
           ],
           if (hasFooter) ...[
-            const SizedBox(height: 16),
+            SizedBox(height: 16.w),
             _HistoryLoadMoreFooter(
               isLoading: state.isHistoryLoadingMore,
               hasMore: state.nextPageTokenFor(type) != null,
@@ -300,7 +304,7 @@ class _HistoryLoadMoreFooter extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+        padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 6.w),
         child: Center(
           child: isLoading
               ? const AppLoadMoreIndicator(padding: EdgeInsets.zero)
@@ -324,7 +328,7 @@ class _HistoryEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 200),
+      padding: EdgeInsets.only(top: 200.w),
       child: AppEmptyState(message: context.l10n.walletHistoryEmpty),
     );
   }
@@ -342,11 +346,11 @@ class _ConsumptionSegmentedControl extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 36,
-      padding: const EdgeInsets.all(4),
+      height: 36.w,
+      padding: EdgeInsets.all(4.w),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(100),
+        borderRadius: BorderRadius.circular(100.w),
       ),
       child: Row(
         children: [
@@ -390,7 +394,7 @@ class _SegmentButton extends StatelessWidget {
             color: selected
                 ? Colors.white.withValues(alpha: 0.24)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(20.w),
           ),
           child: Text(
             label,
@@ -398,8 +402,8 @@ class _SegmentButton extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: AppColors.textPrimary,
-              fontSize: 14,
-              height: 18/14,
+              fontSize: 14.sp,
+              height: 18 / 14,
             ),
           ),
         ),
@@ -420,8 +424,8 @@ class _ConsumptionRecordRow extends StatelessWidget {
       final url = record.posterResource!.value;
       return AppCachedNetworkImage(
         imageUrl: url,
-        width: 61,
-        height: 83,
+        width: 61.w,
+        height: 83.w,
         fit: BoxFit.cover,
       );
     }
@@ -429,8 +433,8 @@ class _ConsumptionRecordRow extends StatelessWidget {
     // 否则使用本地图片或默认图片
     return Image.asset(
       record.posterAssetPath ?? 'assets/images/my_list/cover_1.png',
-      width: 61,
-      height: 83,
+      width: 61.w,
+      height: 83.w,
       fit: BoxFit.cover,
       errorBuilder: (context, error, stackTrace) {
         return _buildErrorPlaceholder();
@@ -441,13 +445,13 @@ class _ConsumptionRecordRow extends StatelessWidget {
   /// 构建加载失败的占位符
   Widget _buildErrorPlaceholder() {
     return Container(
-      width: 53,
-      height: 73,
+      width: 53.w,
+      height: 73.w,
       color: Colors.grey[800],
-      child: const Icon(
+      child: Icon(
         Icons.broken_image_outlined,
         color: Colors.white54,
-        size: 24,
+        size: 24.w,
       ),
     );
   }
@@ -457,10 +461,10 @@ class _ConsumptionRecordRow extends StatelessWidget {
     return Row(
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(4.r),
           child: _buildPosterImage(),
         ),
-        const SizedBox(width: 10),
+        SizedBox(width: 10.w),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,10 +477,10 @@ class _ConsumptionRecordRow extends StatelessWidget {
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight(510),
                   height: 1.5,
-                  fontSize: 14
+                  fontSize: 14.sp,
                 ),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: 4.w),
               Text(
                 record.subtitleText == null
                     ? ''
@@ -486,11 +490,11 @@ class _ConsumptionRecordRow extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: Colors.white.withValues(alpha: 0.5),
                   height: 1.5,
-                  fontSize: 12,
+                  fontSize: 12.sp,
                   fontWeight: FontWeight.normal,
                 ),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: 4.w),
               Text(
                 record.dateLabel,
                 maxLines: 1,
@@ -498,14 +502,14 @@ class _ConsumptionRecordRow extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: Colors.white.withValues(alpha: 0.5),
                   height: 1.5,
-                  fontSize: 12,
+                  fontSize: 12.sp,
                   fontWeight: FontWeight.normal,
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(width: AppSpacing.md),
+        SizedBox(width: 12.w),
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -567,8 +571,12 @@ class _ExpiredConsumptionRecordRow extends StatelessWidget {
 
     return Row(
       children: [
-        Image.asset('assets/images/profile/coin.png', width: 26, height: 26),
-        const SizedBox(width: 10),
+        Image.asset(
+          'assets/images/profile/coin.png',
+          width: 26.w,
+          height: 26.w,
+        ),
+        SizedBox(width: 10.w),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -584,14 +592,14 @@ class _ExpiredConsumptionRecordRow extends StatelessWidget {
                   height: 1.5,
                 ),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: 4.w),
               Text(
                 _sourceTypeLabel(context),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: secondaryStyle,
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: 4.w),
               Text(
                 record.dateLabel,
                 maxLines: 1,
@@ -601,7 +609,7 @@ class _ExpiredConsumptionRecordRow extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(width: AppSpacing.md),
+        SizedBox(width: 12.w),
         Text(
           context.l10n.walletText(record.trailingLabelText),
           maxLines: 1,
@@ -637,8 +645,12 @@ class _CoinRewardRecordRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Image.asset('assets/images/profile/coin.png', width: 26, height: 26),
-        SizedBox(width: 8),
+        Image.asset(
+          'assets/images/profile/coin.png',
+          width: 26.w,
+          height: 26.w,
+        ),
+        SizedBox(width: 8.w),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -653,7 +665,7 @@ class _CoinRewardRecordRow extends StatelessWidget {
                   height: 1.5,
                 ),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: 4.w),
               Text(
                 record.validityLabelText == null
                     ? record.dateLabel
@@ -669,7 +681,7 @@ class _CoinRewardRecordRow extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(width: AppSpacing.md),
+        SizedBox(width: 12.w),
         Text(
           _sourceTypeLabel(context),
           maxLines: 1,
@@ -761,10 +773,10 @@ class _HistoryRecordRow extends StatelessWidget {
                   if (record.showCoinIcon) ...[
                     Image.asset(
                       'assets/images/profile/coin.png',
-                      width: 20,
-                      height: 20,
+                      width: 20.w,
+                      height: 20.w,
                     ),
-                    const SizedBox(width: 4),
+                    SizedBox(width: 4.w),
                   ],
                   Flexible(
                     child: Text(
@@ -774,14 +786,14 @@ class _HistoryRecordRow extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w500,
-                        fontSize: 16,
+                        fontSize: 16.sp,
                         height: 1.5,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: 4.w),
               Text(
                 record.dateLabel,
                 maxLines: 1,
@@ -789,14 +801,14 @@ class _HistoryRecordRow extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: Colors.white.withValues(alpha: 0.5),
                   height: 1.5,
-                  fontSize: 12,
+                  fontSize: 12.sp,
                   fontWeight: FontWeight.normal,
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(width: AppSpacing.md),
+        SizedBox(width: 12.w),
         Text(
           displayAmount,
           maxLines: 1,
@@ -806,7 +818,7 @@ class _HistoryRecordRow extends StatelessWidget {
             color: AppColors.textPrimary.withValues(alpha: 0.5),
             fontWeight: FontWeight.w500,
             height: 1.5,
-            fontSize: 14,
+            fontSize: 14.sp,
           ),
         ),
       ],

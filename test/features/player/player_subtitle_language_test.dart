@@ -7,6 +7,7 @@ import 'package:drama_client/features/player/presentation/widgets/player_playbac
 import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:drama_client/shared/theme/app_colors.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -533,6 +534,8 @@ void main() {
     String? selectedCode = 'en';
     await tester.pumpWidget(
       MaterialApp(
+        builder: (context, child) =>
+            ScreenUtilInit(designSize: const Size(800, 600), child: child),
         localizationsDelegates: const [AppLocalizations.delegate],
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
@@ -558,6 +561,8 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
+        builder: (context, child) =>
+            ScreenUtilInit(designSize: const Size(800, 600), child: child),
         localizationsDelegates: const [AppLocalizations.delegate],
         supportedLocales: AppLocalizations.supportedLocales,
         home: const Scaffold(

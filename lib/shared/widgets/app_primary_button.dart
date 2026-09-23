@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 /// 应用主按钮。
 ///
@@ -24,8 +25,13 @@ class AppPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final labelStyle = TextStyle(
+      fontSize: 14.sp,
+      height: 18 / 14,
+      fontWeight: FontWeight(590),
+    );
     final child = icon == null
-        ? Text(label)
+        ? Text(label, style: labelStyle)
         : Row(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
@@ -33,19 +39,12 @@ class AppPrimaryButton extends StatelessWidget {
               icon == Icons.play_arrow_rounded
                   ? Image.asset(
                       "assets/images/player/play_button_icon.png",
-                      height: 12,
-                      width: 12,
+                      height: 12.w,
+                      width: 12.w,
                     )
-                  : Icon(icon, size: 18),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  height: 18 / 14,
-                  fontWeight: FontWeight(590),
-                ),
-              ),
+                  : Icon(icon, size: 18.w),
+              SizedBox(width: 4.w),
+              Text(label, style: labelStyle),
             ],
           );
 
@@ -53,7 +52,7 @@ class AppPrimaryButton extends StatelessWidget {
       width: double.infinity,
       child: FilledButton(
         style: FilledButton.styleFrom(
-          padding: EdgeInsets.symmetric(vertical: 13),
+          padding: EdgeInsets.symmetric(vertical: 13.w),
           // backgroundColor: AppColors.primary,
           // foregroundColor: AppColors.textPrimary,
           // disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.45),

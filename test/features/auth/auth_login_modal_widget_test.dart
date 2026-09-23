@@ -1,4 +1,8 @@
 import 'package:drama_client/core/runtime/install_id_provider.dart';
+import 'package:drama_client/core/analytics/analytics_context.dart';
+import 'package:drama_client/core/analytics/analytics_definition.dart';
+import 'package:drama_client/core/analytics/analytics_provider.dart';
+import 'package:drama_client/core/analytics/analytics_service.dart';
 import 'package:drama_client/core/oauth/oauth_service.dart';
 import 'package:drama_client/core/oauth/oauth_service_provider.dart';
 import 'package:drama_client/core/toast/app_toast_provider.dart';
@@ -17,6 +21,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
@@ -63,37 +68,30 @@ void main() {
     expect(find.text('Sign in with Facebook'), findsNothing);
   });
 
-  testWidgets(
-    'iOS Apple button requests a credential without repository login',
-    (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-      final oauthService = _AppleAuthorizationOAuthService();
-      final toast = RecordingAppToastService();
+  testWidgets('iOS Apple button starts Apple repository login', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    final authRepository = _GuestAuthRepository();
+    final toast = RecordingAppToastService();
 
-      await tester.pumpWidget(
-        _buildRoutedAuthTestApp(
-          authRepository: _GuestAuthRepository(),
-          oauthService: oauthService,
-          initialLocation: '/auth',
-          loginConfig: const LoginConfig(
-            facebookVisible: true,
-            phoneVisible: false,
-          ),
-          toast: toast,
+    await tester.pumpWidget(
+      _buildRoutedAuthTestApp(
+        authRepository: authRepository,
+        initialLocation: '/auth',
+        loginConfig: const LoginConfig(
+          facebookVisible: true,
+          phoneVisible: false,
         ),
-      );
-      await tester.pump();
+        toast: toast,
+      ),
+    );
+    await tester.pump();
 
-      expect(find.byKey(const ValueKey('auth_google_button')), findsNothing);
-      expect(find.byKey(const ValueKey('auth_apple_button')), findsWidgets);
+    expect(find.byKey(const ValueKey('auth_google_button')), findsNothing);
+    expect(find.byKey(const ValueKey('auth_apple_button')), findsWidgets);
 
-      await tester.tap(find.byKey(const ValueKey('auth_apple_button')).first);
-      await tester.pump();
-
-      expect(oauthService.appleAuthorizationRequested, isTrue);
-      debugDefaultTargetPlatformOverride = null;
-    },
-  );
+    expect(authRepository.lastLoginProvider, isNull);
+    debugDefaultTargetPlatformOverride = null;
+  });
 
   testWidgets('Android shows Google login and hides Apple login', (
     tester,
@@ -116,6 +114,84 @@ void main() {
     expect(find.byKey(const ValueKey('auth_apple_button')), findsNothing);
     debugDefaultTargetPlatformOverride = null;
   });
+
+  testWidgets('reports a visible phone login entry once per login page visit', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1170, 2532);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final sink = AnalyticsInMemoryEventSink();
+    final analytics = AnalyticsService(
+      contextReader: () => const AnalyticsContext(
+        platform: 'ios',
+        appVersion: '1.0.4',
+        language: 'en',
+      ),
+      eventSink: sink,
+    );
+
+    await tester.pumpWidget(
+      _buildRoutedAuthTestApp(
+        authRepository: _GuestAuthRepository(),
+        initialLocation: '/auth',
+        loginConfig: const LoginConfig(
+          facebookVisible: false,
+          phoneVisible: true,
+        ),
+        analytics: analytics,
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+      expect(find.byKey(const ValueKey('auth_phone_button')), findsWidgets);
+    expect(
+      sink.events
+          .where(
+            (event) =>
+                event.eventName == AnalyticsDefinitions.phoneLoginEntryExposure,
+          )
+          .length,
+      1,
+    );
+
+    await tester.pump();
+    expect(
+      sink.events
+          .where(
+            (event) =>
+                event.eventName == AnalyticsDefinitions.phoneLoginEntryExposure,
+          )
+          .length,
+      1,
+    );
+  });
+
+  testWidgets('login logo scales on narrow screens', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _buildRoutedAuthTestApp(
+        authRepository: _GuestAuthRepository(),
+        initialLocation: '/auth',
+        loginConfig: const LoginConfig(
+          facebookVisible: true,
+          phoneVisible: false,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('auth_login_logo'))).width,
+      closeTo(62 * 320 / 375, .01),
+    );
+  });
 }
 
 Widget _buildRoutedAuthTestApp({
@@ -123,6 +199,7 @@ Widget _buildRoutedAuthTestApp({
   OAuthService? oauthService,
   String initialLocation = '/profile',
   LoginConfig? loginConfig,
+  AnalyticsService? analytics,
   AppToastService? toast,
 }) {
   final router = GoRouter(
@@ -144,6 +221,8 @@ Widget _buildRoutedAuthTestApp({
       if (oauthService != null)
         facebookOAuthServiceProvider.overrideWithValue(oauthService),
       if (toast != null) appToastProvider.overrideWithValue(toast),
+      if (analytics != null)
+        analyticsServiceProvider.overrideWithValue(analytics),
       facebookLoginEnabledProvider.overrideWith((ref) async => true),
       installIdProvider.overrideWith((ref) async => 'test-install-id'),
       entitlementRepositoryProvider.overrideWithValue(
@@ -151,6 +230,10 @@ Widget _buildRoutedAuthTestApp({
       ),
     ],
     child: MaterialApp.router(
+      builder: (context, child) => ScreenUtilInit(
+        designSize: const Size(375, 812),
+        child: child ?? const SizedBox.shrink(),
+      ),
       routerConfig: router,
       localizationsDelegates: const [
         AppLocalizations.delegate,
@@ -163,36 +246,16 @@ Widget _buildRoutedAuthTestApp({
   );
 }
 
-class _AppleAuthorizationOAuthService implements OAuthService {
-  bool appleAuthorizationRequested = false;
-
-  @override
-  Future<String?> signInWithApple() async {
-    appleAuthorizationRequested = true;
-    return 'apple-identity-token';
-  }
-
-  @override
-  Future<String?> signInWithFacebook() async => null;
-
-  @override
-  Future<String?> signInWithGoogle() async => null;
-
-  @override
-  Future<void> signOutFacebook() async {}
-
-  @override
-  Future<void> signOutGoogle() async {}
-}
-
 class _GuestAuthRepository implements AuthRepository {
   AuthSession _session = const AuthSession.guest(
     sessionId: 'guest-sess',
     guestId: 'guest-1',
   );
+  AuthProviderType? lastLoginProvider;
 
   @override
   Future<AuthSession> login(AuthProviderType provider) async {
+    lastLoginProvider = provider;
     final guestId = _session.guestId;
     _session = AuthSession(
       user: AuthUser(

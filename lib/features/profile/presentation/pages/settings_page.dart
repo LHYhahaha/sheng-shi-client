@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
@@ -30,8 +31,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _cacheBusy = false;
   bool _isClearingCache = false;
   int _cacheBytes = 0;
-  // About remains UI-only until its behavior is defined.
-  bool _aboutEnabled = false;
   bool _confirmingCellularDownload = false;
 
   Future<void> _setCellularDownload(bool value) async {
@@ -176,7 +175,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 Expanded(
                   child: ListView(
                     children: [
-                      const SizedBox(height: 12),
+                      SizedBox(height: 12.w),
                       _SettingsRow(
                         key: const ValueKey(
                           'settings_account_cancellation_row',
@@ -212,15 +211,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                               SettingsCacheService.formatBytes(_cacheBytes),
                               style: TextStyle(
                                 color: Color(0XFF818181).withValues(alpha: 0.7),
-                                fontSize: 16,
+                                fontSize: 16.sp,
                                 height: 1.5,
                                 fontWeight: FontWeight.w400,
                               ),
                             ),
                             Image.asset(
                               "assets/images/profile/trash.png",
-                              width: 24,
-                              height: 24,
+                              width: 24.w,
+                              height: 24.w,
                               fit: BoxFit.contain,
                             ),
                           ],
@@ -261,22 +260,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           highlightColor: Colors.transparent,
                           child: Container(
                             alignment: Alignment.center,
-                            padding: const EdgeInsets.symmetric(vertical: 13),
-                            margin: const EdgeInsets.symmetric(
-                              horizontal: 50,
-                              vertical: 40,
+                            padding: EdgeInsets.symmetric(vertical: 13.w),
+                            margin: EdgeInsets.symmetric(
+                              horizontal: 50.w,
+                              vertical: 40.w,
                             ),
                             decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(8.w),
                               color: const Color(
                                 0xFFFFFFFF,
                               ).withValues(alpha: 0.12),
                             ),
                             child: Text(
                               context.l10n.settingsButtonLogout,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: Color(0XFFFF007A),
-                                fontSize: 14,
+                                fontSize: 14.sp,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -286,7 +285,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.only(top: 16, bottom: 16),
+                  padding: EdgeInsets.only(top: 16.w, bottom: 16.w),
                   child: Text(
                     ref
                         .watch(packageInfoProvider)
@@ -299,7 +298,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: const Color(0xFF818181).withValues(alpha: 0.7),
-                      fontSize: 16,
+                      fontSize: 16.sp,
                     ),
                   ),
                 ),
@@ -354,9 +353,9 @@ class _SettingsRow extends StatelessWidget {
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
       child: SizedBox(
-        height: 52,
+        height: 52.w,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: EdgeInsets.symmetric(horizontal: 16.w),
           child: Row(
             children: [
               Expanded(
@@ -364,7 +363,7 @@ class _SettingsRow extends StatelessWidget {
                   title,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.88),
-                    fontSize: 16,
+                    fontSize: 16.sp,
                     height: 22 / 16,
                     fontWeight: FontWeight.normal,
                   ),
@@ -374,7 +373,7 @@ class _SettingsRow extends StatelessWidget {
                   Icon(
                     Icons.chevron_right_rounded,
                     color: Color(0XFF818181).withValues(alpha: 0.7),
-                    size: 24,
+                    size: 24.w,
                   ),
             ],
           ),

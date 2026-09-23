@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
@@ -165,20 +166,20 @@ class _StorePageState extends ConsumerState<StorePage> {
           child: Stack(
             children: [
               Positioned(
-                top: -121,
-                left: -8,
+                top: -121.w,
+                left: -8.w,
                 child: _StoreGlow(
-                  width: 338,
-                  height: 215,
+                  width: 338.w,
+                  height: 215.w,
                   color: AppColors.primary.withValues(alpha: 0.28),
                 ),
               ),
               Positioned(
-                top: -121,
-                left: -94,
+                top: -121.w,
+                left: -94.w,
                 child: _StoreGlow(
-                  width: 287,
-                  height: 215,
+                  width: 287.w,
+                  height: 215.w,
                   color: const Color(0xFF75154A).withValues(alpha: 0.35),
                 ),
               ),
@@ -330,11 +331,11 @@ class _StoreBody extends StatelessWidget {
         state.coinPackages.isEmpty && state.vipPackages.isEmpty;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+      padding: EdgeInsets.fromLTRB(16.w, 4.w, 16.w, 24.w),
       children: [
         if (hasNoPackages)
           Container(
-            height: 180,
+            height: 180.w,
             alignment: Alignment.center,
             child: AppEmptyState(
               message: state.isGoogleBillingUnavailable
@@ -346,13 +347,13 @@ class _StoreBody extends StatelessWidget {
           )
         else ...[
           SizedBox(
-            height: 85,
+            height: 85.w,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 const visibleCardCount = 2.2;
                 const visibleGapCount = 2;
                 final cardWidth =
-                    (constraints.maxWidth - AppSpacing.sm * visibleGapCount) /
+                    (constraints.maxWidth - AppSpacing.sm.w * visibleGapCount) /
                     visibleCardCount;
 
                 return ListView.separated(
@@ -360,7 +361,7 @@ class _StoreBody extends StatelessWidget {
                   clipBehavior: Clip.none,
                   itemCount: state.coinPackages.length,
                   separatorBuilder: (context, index) =>
-                      const SizedBox(width: AppSpacing.sm),
+                      SizedBox(width: AppSpacing.sm.w),
                   itemBuilder: (context, index) {
                     final package = state.coinPackages[index];
                     return StoreCoinPackageCard(
@@ -374,14 +375,14 @@ class _StoreBody extends StatelessWidget {
               },
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20.w),
           for (var index = 0; index < state.vipPackages.length; index++) ...[
             StoreVipPackageCard(
               package: state.vipPackages[index],
               selected: state.selectedPackageId == state.vipPackages[index].id,
               onTap: () => onSelect(state.vipPackages[index], index + 1),
             ),
-            const SizedBox(height: AppSpacing.sm),
+            SizedBox(height: AppSpacing.sm.w),
           ],
         ],
         if (tips != null) ...[const SizedBox(height: 4), StoreTipsSection()],

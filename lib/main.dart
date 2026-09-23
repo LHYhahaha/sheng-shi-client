@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -79,7 +80,7 @@ class _StartupBootstrapState extends State<_StartupBootstrap> {
       builder: (context, snapshot) {
         final preferences = snapshot.data;
         if (preferences == null) {
-          return const MaterialApp(
+          return MaterialApp(
             debugShowCheckedModeBanner: false,
             supportedLocales: AppLocalizations.supportedLocales,
             localizationsDelegates: [
@@ -88,7 +89,9 @@ class _StartupBootstrapState extends State<_StartupBootstrap> {
               GlobalCupertinoLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,
             ],
-            home: NovaShortSplashPage(),
+            builder: (context, child) =>
+                ScreenUtilInit(designSize: const Size(375, 812), child: child),
+            home: const NovaShortSplashPage(),
           );
         }
 

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
 
 import '../../../../l10n/app_localizations.dart';
@@ -146,7 +147,7 @@ class PlayerChrome extends StatefulWidget {
     if (forYouLayout) {
       return bottomInset;
     }
-    return _PlayerLayoutMetrics.singleBottomFrameHeight + bottomInset;
+    return _PlayerLayoutMetrics.singleBottomFrameHeight.w + bottomInset;
   }
 
   @override
@@ -255,7 +256,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
       bottomInset: bottomInset,
     );
     final forYouWatchNowBottom =
-        bottomInset + _PlayerLayoutMetrics.forYouWatchNowBottom;
+        bottomInset + _PlayerLayoutMetrics.forYouWatchNowBottom.w;
 
     return Stack(
       fit: StackFit.expand,
@@ -335,7 +336,7 @@ class _PlayerChromeState extends State<PlayerChrome> {
               episodeNumber: episodeNumber,
               bottom: forYouLayout
                   ? forYouWatchNowBottom
-                  : bottomInset + _PlayerLayoutMetrics.singleMetaBottom,
+                  : bottomInset + _PlayerLayoutMetrics.singleMetaBottom.w,
               forYouLayout: forYouLayout,
               onWatchNowTap: onWatchNowTap,
               overlayOpacity: overlayOpacity,
@@ -348,13 +349,13 @@ class _PlayerChromeState extends State<PlayerChrome> {
         // 非沉浸模式下，拖动时仍保留进度条与预览提示。
         if (showChromeOverlays)
           Positioned(
-            left: 16,
-            right: 16,
+            left: 16.w,
+            right: 16.w,
             bottom:
                 bottomInset +
                 (forYouLayout
-                    ? _PlayerLayoutMetrics.forYouSeekBarBottom
-                    : _PlayerLayoutMetrics.singleSeekBarBottom),
+                    ? _PlayerLayoutMetrics.forYouSeekBarBottom.w
+                    : _PlayerLayoutMetrics.singleSeekBarBottom.w),
             child: RepaintBoundary(
               key: const ValueKey('player_seekbar_repaint_boundary'),
               child:
@@ -530,12 +531,12 @@ class _PlayerActionRailLayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      right: _PlayerLayoutMetrics.actionRailRight,
+      right: _PlayerLayoutMetrics.actionRailRight.w,
       bottom:
           bottomInset +
           (forYouLayout
-              ? _PlayerLayoutMetrics.forYouActionRailBottom
-              : _PlayerLayoutMetrics.singleActionRailBottom),
+              ? _PlayerLayoutMetrics.forYouActionRailBottom.w
+              : _PlayerLayoutMetrics.singleActionRailBottom.w),
       child: AnimatedOpacity(
         key: const ValueKey('player_chrome_visibility_action_rail'),
         opacity: showChromeOverlays ? 1 : 0,
@@ -596,8 +597,8 @@ class _PlayerMetaLayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      left: 16,
-      right: 90,
+      left: 16.w,
+      right: 90.w,
       bottom: bottom,
       child: AnimatedOpacity(
         key: const ValueKey('player_chrome_visibility_meta'),
@@ -624,7 +625,7 @@ class _PlayerMetaLayer extends StatelessWidget {
                     onTap: onTap,
                   ),
                   if (forYouLayout) ...[
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12.w),
                     RepaintBoundary(
                       key: const ValueKey('player_watch_now_repaint_boundary'),
                       child: _WatchNowButton(onTap: onWatchNowTap),
@@ -699,11 +700,11 @@ class _PlaybackRetryOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 38),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        margin: EdgeInsets.symmetric(horizontal: 38.w),
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.w),
         decoration: BoxDecoration(
           color: Colors.black.withValues(alpha: 0.56),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(10.w),
           border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: Column(
@@ -712,14 +713,14 @@ class _PlaybackRetryOverlay extends StatelessWidget {
             Text(
               context.l10n.playerFeedLoadFailed,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textPrimary,
-                fontSize: 13,
+                fontSize: 13.sp,
                 fontWeight: FontWeight.w600,
                 height: 18 / 13,
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8.w),
             AppRetryButton(onPressed: onRetry, label: context.l10n.retry),
           ],
         ),
@@ -741,16 +742,16 @@ class _CenterPlayButton extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: Container(
-          width: 70,
-          height: 70,
+          width: 70.w,
+          height: 70.w,
           decoration: BoxDecoration(
             color: Colors.black.withValues(alpha: 0.48),
             shape: BoxShape.circle,
           ),
-          child: const Icon(
+          child: Icon(
             Icons.play_arrow_rounded,
             color: Colors.white,
-            size: 46,
+            size: 46.w,
           ),
         ),
       ),
@@ -795,7 +796,7 @@ class _PlayerUnlockOverlay extends StatelessWidget {
                 onTap: onTap,
               ),
               if (showAdUnlockButton) ...[
-                const SizedBox(height: 8),
+                SizedBox(height: 8.w),
                 _UnlockButton(
                   key: const ValueKey('player_ad_unlock_button'),
                   label: context.l10n.playerUnlockWatchAd,
@@ -832,12 +833,12 @@ class _UnlockButton extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        width: 315,
-        height: subtitle == null ? 52 : 52,
+        width: 315.w,
+        height: 52.w,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: color,
-          borderRadius: BorderRadius.circular(7),
+          borderRadius: BorderRadius.circular(7.w),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -846,9 +847,9 @@ class _UnlockButton extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white,
-                fontSize: 14,
+                fontSize: 14.sp,
                 fontWeight: FontWeight.w600,
                 height: 18 / 14,
               ),
@@ -856,9 +857,9 @@ class _UnlockButton extends StatelessWidget {
             if (subtitle != null)
               Text(
                 subtitle!,
-                style: const TextStyle(
+                style: TextStyle(
                   color: Color(0xFFCECECE),
-                  fontSize: 12,
+                  fontSize: 12.sp,
                   height: 16 / 12,
                 ),
               ),
@@ -885,17 +886,13 @@ class _PauseFeedbackIcon extends StatelessWidget {
           },
           child: Container(
             key: const ValueKey('player_pause_feedback'),
-            width: 70,
-            height: 70,
+            width: 70.w,
+            height: 70.w,
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.48),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.pause_rounded,
-              color: Colors.white,
-              size: 42,
-            ),
+            child: Icon(Icons.pause_rounded, color: Colors.white, size: 42.w),
           ),
         ),
       ),
@@ -945,15 +942,15 @@ class _PlayerActionRailContent extends ConsumerWidget {
           isLoading: isLikeLoading,
           onTap: onLikeTap,
         ),
-        const SizedBox(height: 18),
+        SizedBox(height: 18.w),
         if (!forYouLayout)
           Padding(
-            padding: const EdgeInsets.only(bottom: 18),
+            padding: EdgeInsets.only(bottom: 18.w),
             child: _ActionItem(
               icon: Icons.layers_rounded,
               imageIcon: Image.asset(
                 'assets/images/player/episodes.png',
-                height: 28,
+                height: 28.w,
               ),
               label: context.l10n.playerEpisodes,
               onTap: onEpisodesTap,
@@ -963,8 +960,8 @@ class _PlayerActionRailContent extends ConsumerWidget {
           icon: Icons.share_rounded,
           imageIcon: Image.asset(
             'assets/images/player/share.png',
-            width: 28,
-            height: 28,
+            width: 28.w,
+            height: 28.w,
           ),
           label: context.l10n.playerShare,
           onTap: onShareTap,
@@ -988,17 +985,17 @@ class PlayerForYouSearchButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Positioned(
       top: top,
-      right: _PlayerLayoutMetrics.searchButtonRight,
+      right: _PlayerLayoutMetrics.searchButtonRight.w,
       child: GestureDetector(
         key: const ValueKey('player_for_you_search_button'),
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(8),
+          padding: EdgeInsets.all(8.w),
           child: SvgPicture.asset(
             'assets/images/player/search.svg',
-            width: 24,
-            height: 24,
+            width: 24.w,
+            height: 24.w,
           ),
         ),
       ),
@@ -1018,17 +1015,17 @@ class _WatchNowButton extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
-        height: 36,
+        height: 36.w,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(3),
+          borderRadius: BorderRadius.circular(3.w),
         ),
         child: Text(
           context.l10n.recommendTabActionViewAllEpisodes,
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.white,
-            fontSize: 14,
+            fontSize: 14.sp,
             fontWeight: FontWeight.w600,
             height: 18 / 14,
           ),
@@ -1073,9 +1070,9 @@ class PlayerBottomMeta extends StatelessWidget {
                   content.playTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
+                    fontSize: 16.sp,
                     fontWeight: FontWeight(510),
                     height: 20 / 16,
                   ),
@@ -1083,12 +1080,12 @@ class PlayerBottomMeta extends StatelessWidget {
               ),
               if (showChevron)
                 Padding(
-                  padding: const EdgeInsets.only(left: 6),
+                  padding: EdgeInsets.only(left: 6.w),
                   child: Image.asset(
                     'assets/images/common/white_right.png',
-                    width: 20,
-                    height: 20,
-                    cacheWidth: (20 * MediaQuery.devicePixelRatioOf(context))
+                    width: 20.w,
+                    height: 20.w,
+                    cacheWidth: (20.w * MediaQuery.devicePixelRatioOf(context))
                         .round(),
                     fit: BoxFit.contain,
                     filterQuality: FilterQuality.low,
@@ -1097,10 +1094,13 @@ class PlayerBottomMeta extends StatelessWidget {
             ],
           ),
           if (showTags && content.tags.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            SizedBox(height: 16, child: _PlayerTagsRow(tags: content.tags)),
+            SizedBox(height: 8.w),
+            SizedBox(
+              height: 16.w,
+              child: _PlayerTagsRow(tags: content.tags),
+            ),
           ],
-          const SizedBox(height: 8),
+          SizedBox(height: 8.w),
           _SynopsisPreviewText(
             text: _synopsisText(context),
             moreLabel: context.l10n.playerMore,
@@ -1124,7 +1124,7 @@ class PlayerBottomMeta extends StatelessWidget {
 class _PlayerTag extends StatelessWidget {
   const _PlayerTag({required this.label});
 
-  static const horizontalPadding = 12.0;
+  static const horizontalPadding = 12;
 
   final String label;
 
@@ -1156,9 +1156,9 @@ class _PlayerTag extends StatelessWidget {
 }
 
 class _PlayerTagsRow extends StatelessWidget {
-  const _PlayerTagsRow({required this.tags});
+  _PlayerTagsRow({required this.tags});
 
-  static const _gap = 8.0;
+  final _gap = 8.0.w;
 
   final List<String> tags;
 
@@ -1171,7 +1171,7 @@ class _PlayerTagsRow extends StatelessWidget {
           children: [
             for (final tag in visibleTags.indexed) ...[
               _PlayerTag(label: tag.$2),
-              if (tag.$1 != visibleTags.length - 1) const SizedBox(width: _gap),
+              if (tag.$1 != visibleTags.length - 1)  SizedBox(width: _gap),
             ],
           ],
         );
@@ -1255,7 +1255,7 @@ class _SynopsisPreviewTextState extends State<_SynopsisPreviewText> {
     final style = DefaultTextStyle.of(context).style.merge(
       TextStyle(
         color: Colors.white.withValues(alpha: 0.7),
-        fontSize: 14,
+        fontSize: 14.sp,
         height: 18 / 14,
       ),
     );
@@ -1636,10 +1636,10 @@ class _SeekThumbnailPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('player_seek_thumbnail_preview'),
-      height: 70,
+      height: 70.w,
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(8.w),
         border: Border.all(color: Colors.white.withValues(alpha: 0.34)),
         boxShadow: useShadow
             ? [
@@ -1670,9 +1670,9 @@ class _SeekThumbnailPreview extends StatelessWidget {
               ),
             ),
           Positioned(
-            left: 8,
-            right: 8,
-            bottom: 6,
+            left: 8.w,
+            right: 8.w,
+            bottom: 6.w,
             child: Text(
               '${_SeekTimeLabel.format(position)} / ${_SeekTimeLabel.format(duration)}',
               textAlign: TextAlign.center,
@@ -1680,7 +1680,7 @@ class _SeekThumbnailPreview extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 11,
+                fontSize: 11.sp,
                 fontWeight: FontWeight.w700,
                 height: 13 / 11,
                 shadows: useShadow
@@ -1712,19 +1712,19 @@ class _SeekTimeBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('player_seek_time_bubble'),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.w),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(6.w),
       ),
       child: Text(
         '${_SeekTimeLabel.format(position)} / ${_SeekTimeLabel.format(duration)}',
         textAlign: TextAlign.center,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
+        style: TextStyle(
           color: Colors.white,
-          fontSize: 11,
+          fontSize: 11.sp,
           fontWeight: FontWeight.w600,
           height: 13 / 11,
         ),
@@ -1759,7 +1759,7 @@ class _ActionItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconWidget = Icon(icon, color: Colors.white, size: 30);
+    final iconWidget = Icon(icon, color: Colors.white, size: 30.w);
 
     return Semantics(
       button: true,
@@ -1768,24 +1768,24 @@ class _ActionItem extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: SizedBox(
-          width: 58,
-          height: 54,
+          width: 58.w,
+          height: 54.w,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               flipIcon
                   ? Transform.flip(flipX: true, child: iconWidget)
                   : imageIcon ?? iconWidget,
-              const SizedBox(height: 3),
+              SizedBox(height: 3.w),
               Flexible(
                 child: Text(
                   label,
                   textAlign: TextAlign.center,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 12,
+                    fontSize: 12.sp,
                     fontWeight: FontWeight.w500,
                     height: 16 / 12,
                   ),
@@ -1823,8 +1823,8 @@ class _LikeActionItem extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: isLoading ? null : onTap,
         child: SizedBox(
-          width: 58,
-          height: 54,
+          width: 58.w,
+          height: 54.w,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -1832,10 +1832,10 @@ class _LikeActionItem extends StatelessWidget {
                 isLiked
                     ? "assets/images/player/click_like.png"
                     : "assets/images/player/unclick_like.png",
-                width: 28,
-                height: 28,
+                width: 28.w,
+                height: 28.w,
               ),
-              const SizedBox(height: 3),
+              SizedBox(height: 3.w),
               Flexible(
                 child: Text(
                   label,
@@ -1844,7 +1844,7 @@ class _LikeActionItem extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 12,
+                    fontSize: 12.sp,
                     fontWeight: FontWeight.w500,
                     height: 16 / 12,
                   ),

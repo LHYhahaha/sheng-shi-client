@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
@@ -26,16 +27,16 @@ class AppBottomSheetFrame extends StatelessWidget {
     return Material(
       key: const ValueKey('app_bottom_sheet_frame_surface'),
       color: AppColors.surface,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24.w)),
       clipBehavior: Clip.antiAlias,
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.md,
-            AppSpacing.lg,
-            AppSpacing.lg,
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.lg.w,
+            AppSpacing.md.w,
+            AppSpacing.lg.w,
+            AppSpacing.lg.w,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -43,17 +44,17 @@ class AppBottomSheetFrame extends StatelessWidget {
             children: [
               Center(
                 child: Container(
-                  width: 36,
-                  height: 4,
+                  width: 36.w,
+                  height: 4.w,
                   decoration: BoxDecoration(
                     color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(999),
+                    borderRadius: BorderRadius.circular(999.w),
                   ),
                 ),
               ),
-              const SizedBox(height: AppSpacing.lg),
+              SizedBox(height: AppSpacing.lg.w),
               Text(title, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: AppSpacing.lg),
+              SizedBox(height: AppSpacing.lg.w),
               ...children,
             ],
           ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../theme/app_spacing.dart';
 import 'app_secondary_page_header.dart';
@@ -30,13 +31,14 @@ class AppPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: AppSecondaryPageHeader.height,
+        toolbarHeight: AppSecondaryPageHeader.height.w,
         leadingWidth:
-            AppSecondaryPageHeader.backButtonSize +
-            AppSecondaryPageHeader.horizontalInset * 2,
+            (AppSecondaryPageHeader.backButtonSize +
+                    AppSecondaryPageHeader.horizontalInset * 2)
+                .w,
         leading: Padding(
-          padding: const EdgeInsets.only(
-            left: AppSecondaryPageHeader.horizontalInset,
+          padding: EdgeInsets.only(
+            left: AppSecondaryPageHeader.horizontalInset.w,
           ),
           child: AppSecondaryPageBackButton(
             onPressed: () => Navigator.of(context).maybePop(),
@@ -48,7 +50,7 @@ class AppPage extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontSize: 16,
+            fontSize: 16.sp,
             fontWeight: FontWeight.w600,
             height: 1.5,
           ),
@@ -56,13 +58,13 @@ class AppPage extends StatelessWidget {
         actions: [
           if (trailing != null)
             Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.lg),
+              padding: EdgeInsets.only(right: AppSpacing.lg.w),
               child: trailing,
             ),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
+        padding: EdgeInsets.all(AppSpacing.lg.w),
         children: children,
       ),
     );

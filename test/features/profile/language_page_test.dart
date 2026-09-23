@@ -10,6 +10,7 @@ import 'package:drama_client/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -176,6 +177,36 @@ void main() {
       expect(find.text('Retry'), findsOneWidget);
     },
   );
+
+  testWidgets('scales the selected language indicator on narrow screens', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          languageOptionsRepositoryProvider.overrideWithValue(
+            const _FakeLanguageOptionsRepository([
+              LanguageOption(label: 'English', code: 'en'),
+            ]),
+          ),
+        ],
+        child: _LanguageTestApp(router: _languageRouter()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('language_selected_indicator')))
+          .width,
+      closeTo(18 * 320 / 375, .01),
+    );
+  });
 }
 
 GoRouter _languageRouter() {
@@ -222,15 +253,18 @@ class _LanguageTestApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ],
-      supportedLocales: AppLocalizations.supportedLocales,
-      routerConfig: router,
+    return ScreenUtilInit(
+      designSize: const Size(375, 812),
+      child: MaterialApp.router(
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        routerConfig: router,
+      ),
     );
   }
 }

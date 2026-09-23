@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/router/route_paths.dart';
@@ -117,7 +118,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       backgroundColor: AppColors.black,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 28, 16, 24),
+          key: const ValueKey('profile_page_list'),
+          padding: EdgeInsets.fromLTRB(16.w, 28.w, 16.w, 24.w),
           children: [
             ProfileHeader(
               state: state,
@@ -130,7 +132,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               onAccountTap: () => context.push(RoutePaths.account),
               onGuestTap: onHeaderTap,
             ),
-            const SizedBox(height: 21),
+            SizedBox(height: 21.w),
             ProfileMembershipCard(
               membership: state.membership,
               onTap: () {
@@ -153,13 +155,13 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 );
               },
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12.w),
             ProfileCoinsCard(
               coins: state.coins,
               onTopUpTap: () => context.push(RoutePaths.store),
               onWalletTap: () => context.push(RoutePaths.wallet),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12.w),
             // ProfileMenuRow(
             //   title: l10n.profileHistory,
             //   iconAssetPath: 'assets/images/profile/history.png',
