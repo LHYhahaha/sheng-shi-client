@@ -471,6 +471,45 @@ void main() {
     );
   });
 
+  test('requires a documented provider for login analytics events', () {
+    final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
+
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+          'element_name': 'phone_login_submit_button',
+        }),
+      ),
+      throwsA(
+        isA<AnalyticsValidationError>().having(
+          (error) => error.parameterName,
+          'parameterName',
+          'login_provider',
+        ),
+      ),
+    );
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.loginFail, {
+          'login_provider': 'phone',
+          'result_status': 'failed',
+          'login_fail_reason': 'verification_code_invalid',
+        }),
+      ),
+      returnsNormally,
+    );
+    expect(
+      () => validator.validate(
+        const AnalyticsEvent(AnalyticsDefinitions.loginFail, {
+          'login_provider': 'phone',
+          'result_status': 'failed',
+          'login_fail_reason': 'verification_code_expired',
+        }),
+      ),
+      returnsNormally,
+    );
+  });
+
   test('recharge popup requires the documented episode context', () {
     final validator = AnalyticsEventValidator(AnalyticsDefinitions.events);
 

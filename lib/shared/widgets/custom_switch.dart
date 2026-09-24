@@ -17,6 +17,7 @@ class CustomSwitch extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: disabled ? null : () => onChanged!(!value),
       child: AnimatedContainer(
+        padding: EdgeInsets.symmetric(horizontal: 2.w),
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
         width: 48.w,

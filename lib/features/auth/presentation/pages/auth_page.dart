@@ -221,7 +221,7 @@ class _LoginBody extends StatelessWidget {
     final bottomInset = mediaQuery.viewPadding.bottom;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(14.w, 0, 14.w, bottomInset + 176.w),
+      padding: EdgeInsets.fromLTRB(24.w, 0, 24.w, bottomInset + 176.w),
       child: Column(
         children: [
           const Spacer(flex: 145),
@@ -230,18 +230,17 @@ class _LoginBody extends StatelessWidget {
             child: Image.asset(
               'assets/images/profile/logo.png',
               key: const ValueKey('auth_login_logo'),
-              width: 62.w,
-              height: 62.w,
+              width: 80.w,
+              height: 80.w,
             ),
           ),
-          SizedBox(height: 13.w),
           Text(
             context.l10n.appTitle,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: AppColors.textPrimary,
-              fontSize: 17.sp,
-              fontWeight: FontWeight.w700,
-              height: 1.25,
+              fontSize: 24.sp,
+              fontWeight: FontWeight(860),
+              height: 1.5,
             ),
           ),
           const Spacer(flex: 181),
@@ -307,7 +306,7 @@ class _LoginBody extends StatelessWidget {
                 height: 30.w,
               ),
             ),
-            SizedBox(height: 12.w),
+            SizedBox(height: 10.w),
           ],
           const AuthTermsText(width: double.infinity),
         ],

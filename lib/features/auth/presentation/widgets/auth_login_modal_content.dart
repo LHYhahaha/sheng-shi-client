@@ -221,9 +221,10 @@ class _AuthTermsTextState extends State<AuthTermsText> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final linkColor = Colors.white.withValues(alpha: 0.7);
-    final baseStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
+    final baseStyle = TextStyle(
+      fontSize: 12.sp,
       color: Colors.white.withValues(alpha: 0.7),
-      height: 1.35,
+      height: 1.5,
     );
 
     return SizedBox(
@@ -235,7 +236,7 @@ class _AuthTermsTextState extends State<AuthTermsText> {
           children: [
             TextSpan(
               text: l10n.loginAgreementPrefix,
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
             ),
             TextSpan(
               text: l10n.appCommonLegalTermsOfUse,
@@ -244,7 +245,7 @@ class _AuthTermsTextState extends State<AuthTermsText> {
             ),
             TextSpan(
               text: l10n.loginAgreementConnector,
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
             ),
             TextSpan(
               text: l10n.appCommonLegalPrivacyPolicy,

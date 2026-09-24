@@ -395,7 +395,7 @@ class AuthController extends Notifier<AuthState> {
           'releasing retry state: $error',
         );
       }
-      if (_isThirdPartyLoginProvider(provider)) {
+      if (_isTrackedLoginProvider(provider)) {
         _trackLoginFailure(provider, error);
       }
       state = state.copyWith(
@@ -451,6 +451,7 @@ class AuthController extends Notifier<AuthState> {
         clearFailedAction: true,
       );
     } catch (error) {
+      _trackLoginFailure(AuthProviderType.phone, error);
       state = state.copyWith(
         isLoading: false,
         error: error,
@@ -613,6 +614,10 @@ class AuthController extends Notifier<AuthState> {
     );
   }
 
+  bool _isTrackedLoginProvider(AuthProviderType provider) =>
+      _isThirdPartyLoginProvider(provider) ||
+      provider == AuthProviderType.phone;
+
   bool _isThirdPartyLoginProvider(AuthProviderType provider) =>
       provider == AuthProviderType.google ||
       provider == AuthProviderType.facebook ||
@@ -620,10 +625,20 @@ class AuthController extends Notifier<AuthState> {
 
   String _loginFailureReason(Object error) {
     if (error is TimeoutException) return 'network_error';
-    if (error is ApiException &&
-        (error.code == ApiErrorCode.network ||
-            error.code == ApiErrorCode.timeout)) {
-      return 'network_error';
+    if (error is ApiException) {
+      if (error.code == ApiErrorCode.network ||
+          error.code == ApiErrorCode.timeout) {
+        return 'network_error';
+      }
+      switch (error.message) {
+        case 'login.sms.code_invalid':
+          return 'verification_code_invalid';
+        case 'login.sms.code_expired':
+          return 'verification_code_expired';
+      }
+      if (error.businessCode != null || error.statusCode != null) {
+        return 'system_error';
+      }
     }
     if (error is OAuthException &&
         error.reason == OAuthFailureReason.credentialMissing) {

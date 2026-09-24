@@ -342,12 +342,11 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                           cardScene: 'search_typing',
                           searchKeyword: _searchController.text.trim(),
                         );
-                        _searchController
-                          ..text = drama.title
-                          ..selection = TextSelection.collapsed(
-                            offset: drama.title.length,
-                          );
-                        _submitSearch(drama.title);
+                        _openDrama(
+                          context,
+                          drama.id,
+                          watchProgress: drama.watchProgress,
+                        );
                       },
                     ),
                   )

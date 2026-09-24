@@ -524,6 +524,13 @@ abstract final class AnalyticsDefinitions {
               params['element_name'] == 'phone_code_request_button',
           allowedValues: {'passed', 'failed'},
         ),
+        'login_provider': AnalyticsParameterRule(
+          type: AnalyticsParameterType.string,
+          requiredWhen: (params) =>
+              params['element_name'] == 'login_provider_button' ||
+              params['element_name'] == 'phone_login_submit_button',
+          allowedValues: {'facebook', 'google', 'apple', 'phone'},
+        ),
       },
       // 元素字典后续会为不同 element_name 注入短剧、商品等附加字段。
       allowAdditionalParameters: true,
@@ -579,7 +586,7 @@ abstract final class AnalyticsDefinitions {
         'login_provider': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
           required: true,
-          allowedValues: {'facebook', 'google', 'apple'},
+          allowedValues: {'facebook', 'google', 'apple', 'phone'},
         ),
         'result_status': AnalyticsParameterRule(
           type: AnalyticsParameterType.string,
@@ -593,7 +600,15 @@ abstract final class AnalyticsDefinitions {
             'network_error',
             'sdk_error',
             'credential_missing',
+            'invalid_credential',
+            'credential_expired',
+            'provider_verify_failed',
+            'account_restricted',
+            'account_conflict',
+            'system_error',
             'unknown_error',
+            'verification_code_invalid',
+            'verification_code_expired',
           },
         ),
       },

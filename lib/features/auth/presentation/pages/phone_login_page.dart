@@ -165,13 +165,20 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
 
   void _signIn() {
     if (!_canSignIn) return;
-    _trackElementClick('phone_login_submit_button');
+    final number = _normalizedPhoneNumber;
+    if (number == null) {
+      ref.read(appToastProvider).error(context.l10n.phoneLoginInvalidPhone);
+      return;
+    }
+    _trackElementClick('phone_login_submit_button', {
+      'login_provider': 'phone',
+    });
     unawaited(
       ref
           .read(authControllerProvider.notifier)
           .loginWithPhone(
             callingCode: _selectedCountry.callingCode,
-            number: _normalizedPhoneNumber ?? '',
+            number: number,
             code: _codeController.text,
           ),
     );
@@ -182,12 +189,14 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
     Map<String, Object?> parameters = const {},
   ]) {
     unawaited(
-      ref.read(analyticsServiceProvider).track(
-        AnalyticsEvent(AnalyticsDefinitions.elementClick, {
-          'element_name': elementName,
-          ...parameters,
-        }),
-      ),
+      ref
+          .read(analyticsServiceProvider)
+          .track(
+            AnalyticsEvent(AnalyticsDefinitions.elementClick, {
+              'element_name': elementName,
+              ...parameters,
+            }),
+          ),
     );
   }
 
@@ -298,14 +307,14 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
                                         : null,
                                     style: FilledButton.styleFrom(
                                       padding: EdgeInsets.symmetric(
-                                        vertical: 14.w,
+                                        vertical: 13.w,
                                       ),
                                       backgroundColor: AppColors.primary,
-                                      disabledBackgroundColor: AppColors.primary
-                                          .withValues(alpha: 0.4),
+                                      disabledBackgroundColor: AppColors.white
+                                          .withValues(alpha: 0.3),
                                       foregroundColor: Colors.white,
                                       disabledForegroundColor: Colors.white
-                                          .withValues(alpha: .45),
+                                          .withValues(alpha: .3),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(
                                           4.w,
@@ -518,7 +527,7 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
       ),
       builder: (context) {
         return SizedBox(
-          height: sheetHeight,
+          height: sheetHeight * 0.4,
           child: SafeArea(
             top: false,
             child: Padding(
@@ -562,45 +571,68 @@ class _PhoneLoginPageState extends ConsumerState<PhoneLoginPage> {
                             padding: EdgeInsets.zero,
                             children: [
                               for (final country in regions)
-                                Material(
-                                  color: Colors.transparent,
-                                  borderRadius: BorderRadius.circular(4.w),
-                                  clipBehavior: Clip.antiAlias,
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(4.w),
-                                    onTap: () =>
-                                        Navigator.pop(context, country),
-                                    child: Padding(
-                                      padding: EdgeInsets.symmetric(
-                                        vertical: 10.w,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              country.displayName,
-                                              style: TextStyle(
-                                                fontSize: 14.sp,
-                                                height: 1.3,
-                                                color: Colors.white.withValues(
-                                                  alpha: 0.5,
+                                Builder(
+                                  builder: (context) {
+                                    final isSelected =
+                                        country.regionCode ==
+                                            _selectedCountry.regionCode &&
+                                        country.callingCode ==
+                                            _selectedCountry.callingCode;
+                                    return Semantics(
+                                      selected: isSelected,
+                                      child: Material(
+                                        key: ValueKey(
+                                          'country_option_${country.regionCode}',
+                                        ),
+                                        color: isSelected
+                                            ? const Color(0xFF3A3A3A)
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(
+                                          24.w,
+                                        ),
+                                        clipBehavior: Clip.antiAlias,
+                                        child: InkWell(
+                                          borderRadius: BorderRadius.circular(
+                                            24.w,
+                                          ),
+                                          onTap: () =>
+                                              Navigator.pop(context, country),
+                                          child: Padding(
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: 16.w,
+                                              vertical: 18.w,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    country.displayName,
+                                                    style: TextStyle(
+                                                      fontSize: 16.sp,
+                                                      height: 1.3,
+                                                      color: Colors.white
+                                                          .withValues(
+                                                            alpha: 0.5,
+                                                          ),
+                                                    ),
+                                                  ),
                                                 ),
-                                              ),
+                                                Text(
+                                                  country.callingCodeLabel,
+                                                  style: TextStyle(
+                                                    height: 1.3,
+                                                    fontSize: 16.sp,
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight(400),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                          Text(
-                                            country.callingCodeLabel,
-                                            style: TextStyle(
-                                              height: 1.3,
-                                              fontSize: 14.sp,
-                                              color: Colors.white,
-                                              fontWeight: FontWeight(510),
-                                            ),
-                                          ),
-                                        ],
+                                        ),
                                       ),
-                                    ),
-                                  ),
+                                    );
+                                  },
                                 ),
                             ],
                           ),

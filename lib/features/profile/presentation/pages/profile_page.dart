@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -10,9 +11,10 @@ import '../../../../app/shell/app_shell.dart';
 import '../../../../core/analytics/analytics_definition.dart';
 import '../../../../core/analytics/analytics_event.dart';
 import '../../../../core/analytics/analytics_provider.dart';
-import '../../../../core/auth/user_info_store.dart';
+import '../../../../core/auth/auth_token_store.dart';
 import '../../../../core/network/test_network_config.dart';
 import '../../../../core/network/test_network_config_dialog.dart';
+import '../../../../core/toast/app_toast_provider.dart';
 import '../../../auth/application/auth_controller.dart';
 import '../../../entitlement/application/entitlement_controller.dart';
 import '../../../rewards/application/reward_coins_controller.dart';
@@ -39,6 +41,8 @@ class ProfilePage extends ConsumerStatefulWidget {
 }
 
 class _ProfilePageState extends ConsumerState<ProfilePage> {
+  bool _isClearingLoginCredentials = false;
+
   @override
   void initState() {
     super.initState();
@@ -55,6 +59,26 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         ref.read(rewardCoinsControllerProvider.notifier).loadRemainingCoin(),
       );
     });
+  }
+
+  Future<void> _clearLoginCredentials() async {
+    if (_isClearingLoginCredentials) return;
+    setState(() => _isClearingLoginCredentials = true);
+    try {
+      // App 启动时注入的 AuthTokenStorage 是 FlutterSecureAuthTokenStorage，
+      // 此处会删除该 App Keychain 中的 access / refresh token 快照。
+      await ref.read(authTokenStoreProvider.notifier).clear();
+      if (!mounted) return;
+      ref.read(appToastProvider).success('登录凭证已清除，请重启 App');
+    } catch (_) {
+      if (mounted) {
+        ref.read(appToastProvider).error('清除登录凭证失败');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isClearingLoginCredentials = false);
+      }
+    }
   }
 
   @override
@@ -189,6 +213,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               ProfileMenuRow(
                 title: '测试网络配置 / 清理代理',
                 onTap: () => showTestNetworkConfigDialog(context, ref),
+              ),
+            if (kDebugMode && TestNetworkTools.enabled)
+              ProfileMenuRow(
+                title: _isClearingLoginCredentials ? '正在清除登录凭证…' : '清除登录凭证',
+                onTap: () => unawaited(_clearLoginCredentials()),
               ),
 
             ProfileMenuRow(
