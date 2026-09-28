@@ -1642,6 +1642,27 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
               itemId: item.id,
               sourceUrl: item.episode.videoSource!,
             );
+      } else if (startupPreload.status == PlayerStartupPreloadStatus.pending) {
+        // 首帧路径只能服务当前前台视频。不同剧的 Home 预热不能和当前
+        // manifest/首段抢带宽；它既无法被本次播放复用，也不应继续占用唯一
+        // startup preload slot。
+        _logTiming(
+          'startup preload cancelled for foreground playback',
+          itemId: item.id,
+          source: item.episode.videoSource,
+          details: _timingDetails([
+            'startupItemId=${startupPreload.itemId ?? 'null'}',
+            'startupSource=${startupPreload.sourceUrl ?? 'null'}',
+          ]),
+        );
+        unawaited(
+          ref
+              .read(playerStartupPreloadControllerProvider.notifier)
+              .cancel(
+                reason: 'foreground playback target differs',
+                syncState: false,
+              ),
+        );
       }
     }
 

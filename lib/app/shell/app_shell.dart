@@ -278,12 +278,24 @@ class _AppShellState extends ConsumerState<AppShell> {
     await ref.read(feedProvider.notifier).load(const PlayerFeedConfig.forYou());
     if (!mounted ||
         widget.navigationShell.currentIndex ==
-            AppShellDestinations.forYouIndex) {
+            AppShellDestinations.forYouIndex ||
+        !ref.read(appShellBottomNavigationVisibleProvider)) {
       return;
     }
-    // 不在首页为隐藏的 For You 页面建立真实 media_kit session。列表和 HLS 网络
-    // 预取已完成，用户真正切到推荐页时再创建 decoder，避免与通知/Deep Link 的
-    // 普通播放器或刚退出的播放器 surface 发生原生资源重叠。
+    final firstItem = ref.read(feedProvider).currentItem;
+    if (firstItem == null) {
+      return;
+    }
+    // feed 与首条 HLS 已经在首页首帧后完成。此处只为 For You 的稳定 session
+    // 准备一个静音 decoder；用户切入时由同一 controller 接管，避免首条再从冷
+    // HLS/decoder 开始。普通播放器覆盖 Shell 时底栏会隐藏，上方门控会跳过它。
+    await ref
+        .read(
+          playerPlaybackControllerProvider(
+            PlayerPlaybackSessionKeys.forYouTab,
+          ).notifier,
+        )
+        .warmUpForYouEntry(firstItem);
   }
 
   /// Handles both bottom-navigation taps and router-driven branch changes.

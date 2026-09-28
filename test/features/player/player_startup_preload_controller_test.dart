@@ -196,6 +196,45 @@ void main() {
     );
   });
 
+  test(
+    'foreground playback cancels an unmatched pending startup preload',
+    () async {
+      final completer = Completer<PlaybackPreloadState>();
+      final sourceRepository = _FakePlaybackSourceRepository(
+        preloadCompleter: completer,
+      );
+      final startupManager = _FakePreloadManager();
+      final playbackSession = _FakePlaybackSession();
+      final container = _createContainer(
+        sourceRepository: sourceRepository,
+        preloadManager: startupManager,
+        playbackSession: playbackSession,
+      );
+      addTearDown(container.dispose);
+      final startup = container.read(
+        playerStartupPreloadControllerProvider.notifier,
+      );
+      final playback = container.read(
+        playerPlaybackControllerProvider('for-you-tab').notifier,
+      );
+
+      final startupFuture = startup.preloadFirstPlayableDrama(_drama);
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      await playback.playItem(_item2);
+
+      expect(startupManager.releasePendingCount, greaterThanOrEqualTo(1));
+      expect(
+        playback.exportTimingReport(),
+        contains('startup preload cancelled for foreground playback'),
+      );
+
+      completer.complete(_successPreloadState());
+      await startupFuture;
+    },
+  );
+
   test('startup cancel does not cancel playback preload', () async {
     final startupCompleter = Completer<PlaybackPreloadState>();
     final playbackCompleter = Completer<PlaybackPreloadState>();

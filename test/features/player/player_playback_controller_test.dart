@@ -3494,6 +3494,33 @@ void main() {
   );
 
   test(
+    'For You entry warmup is taken over without reopening the source',
+    () async {
+      final currentSession = _FakePlaybackSession();
+      final preparedSession = _FakePlaybackSession();
+      var index = 0;
+      final sessions = [currentSession, preparedSession];
+      PlayerPlaybackSession sessionFactory() => sessions[index++];
+      final container = _createPrepareContainer(sessionFactory);
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('for-you-tab');
+      final controller = container.read(provider.notifier);
+      final item = _item(1, mode: PlayerFeedMode.forYou);
+
+      await controller.warmUpForYouEntry(item);
+      await controller.playItem(item);
+
+      expect(currentSession.openedSources, isEmpty);
+      expect(preparedSession.openedSources, hasLength(1));
+      expect(
+        controller.exportTimingReport(),
+        contains('for you initial prepare end'),
+      );
+      expect(controller.exportTimingReport(), contains('take window session'));
+    },
+  );
+
+  test(
     'prepared playback advanced without width is reused without fallback open',
     () async {
       final currentSession = _FakePlaybackSession();
