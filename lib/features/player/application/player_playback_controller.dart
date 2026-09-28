@@ -721,6 +721,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   String? _firstFrameAutoRetryItemId;
   Future<void> _forYouRecoveryOperation = Future<void>.value();
   Duration _currentPlaybackPosition = Duration.zero;
+  Duration _lastNativePlaybackPosition = Duration.zero;
   Duration _currentPlaybackDuration = Duration.zero;
   Duration _currentPlaybackBufferedPosition = Duration.zero;
   Duration? _preloadReadinessStartPosition;
@@ -979,6 +980,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         videoController: _session.videoController,
         surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
       );
+      _lastAppliedResumeGeneration = _generation;
+      _lastAppliedResumeItemId = item.id;
+      _lastAppliedResumePosition = target;
+      _resumeGuardRepairAttempts = 0;
+      _armRestoreFloor(target, _generation);
+      unawaited(_confirmRestoreSeek(target, _generation));
       _syncWatchProgressReportTimer();
       return;
     }
@@ -3835,6 +3842,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       return;
     }
     final clamped = _clampToDuration(position);
+    _lastNativePlaybackPosition = clamped;
     final restoreFloor = _restoreFloorPosition;
     if (restoreFloor != null &&
         _restoreFloorGeneration == _generation &&
@@ -5064,9 +5072,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (!ref.mounted || !_isCurrent(generation) || _isSessionDisposed) {
       return;
     }
-    final currentPosition = _currentPlaybackPosition > Duration.zero
-        ? _currentPlaybackPosition
-        : state.position;
+    final currentPosition = _lastNativePlaybackPosition;
     if (state.hasEnded ||
         (currentPosition > Duration.zero &&
             currentPosition >= position - const Duration(milliseconds: 250))) {
@@ -5831,6 +5837,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _firstFrameVideoRecoveryTimer?.cancel();
     _currentPlaybackHasFirstFrame = false;
     _currentPlaybackPosition = Duration.zero;
+    _lastNativePlaybackPosition = Duration.zero;
     _currentPlaybackDuration = Duration.zero;
     _currentPlaybackBufferedPosition = Duration.zero;
     _preloadReadinessStartPosition = null;

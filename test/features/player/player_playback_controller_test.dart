@@ -1630,6 +1630,28 @@ void main() {
     },
   );
 
+  test('ordinary-player return retries an unconfirmed For You seek', () async {
+    final session = _FakePlaybackSession(ignoredSeekPositionEvents: 1);
+    final container = _createContainer(session);
+    addTearDown(container.dispose);
+    final provider = playerPlaybackControllerProvider('for-you-tab');
+    final controller = container.read(provider.notifier);
+    final item = _item(1, mode: PlayerFeedMode.forYou);
+
+    await controller.playItem(item);
+    await controller.synchronizeExternalProgress(
+      item: item,
+      position: const Duration(seconds: 27),
+      duration: const Duration(seconds: 100),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+
+    expect(session.seekedPositions, [
+      const Duration(seconds: 27),
+      const Duration(seconds: 27),
+    ]);
+  });
+
   test('locked item pauses playback and detaches video surface', () async {
     final session = _FakePlaybackSession();
     final container = _createContainer(session);
@@ -4310,6 +4332,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     this.emitWidthOnOpen = true,
     this.positionOnOpen,
     this.emitPositionOnSeek = true,
+    this.ignoredSeekPositionEvents = 0,
     this.emitPlayingFalseOnPlay = false,
   });
 
@@ -4318,6 +4341,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   final Object? openError;
   final Duration? positionOnOpen;
   final bool emitPositionOnSeek;
+  int ignoredSeekPositionEvents;
   final bool emitPlayingFalseOnPlay;
   bool shouldThrowOnOpen;
   final _bufferingController = StreamController<bool>.broadcast();
@@ -4446,7 +4470,9 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   @override
   Future<void> seek(Duration position) async {
     seekedPositions.add(position);
-    if (emitPositionOnSeek) {
+    if (ignoredSeekPositionEvents > 0) {
+      ignoredSeekPositionEvents -= 1;
+    } else if (emitPositionOnSeek) {
       _positionController.add(position);
     }
     _completedController.add(false);
