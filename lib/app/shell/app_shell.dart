@@ -10,6 +10,8 @@ import '../../core/analytics/analytics_page_tracker.dart';
 import '../../core/analytics/analytics_entry_source.dart';
 import '../../features/bottom_tab_config/application/bottom_tab_config_controller.dart';
 import '../../features/player/application/player_feed_controller.dart';
+import '../../features/player/application/playback_experience_coordinator.dart';
+import '../../features/player/application/playback_experience_state.dart';
 import '../../features/player/application/player_playback_controller.dart';
 import '../../features/player/domain/player_feed.dart';
 import '../../features/popup/application/popup_entry_controller.dart';
@@ -299,8 +301,15 @@ class _AppShellState extends ConsumerState<AppShell> {
     final playbackProvider = playerPlaybackControllerProvider(
       PlayerPlaybackSessionKeys.forYouTab,
     );
+    final experience = ref.read(
+      playbackExperienceCoordinatorProvider(
+        PlayerPlaybackSessionKeys.forYouTab,
+      ).notifier,
+    );
     if (from == AppShellDestinations.forYouIndex &&
         to != AppShellDestinations.forYouIndex) {
+      experience.setVisibility(PlaybackExperienceVisibility.hidden);
+      unawaited(experience.synchronize());
       // 先同步关闭播放闸门，再排队做耗时的 session/preload 清理。否则 loading
       // 中的 open 在清理完成前返回时，可能会在已隐藏的 For You 里开始播放。
       ref.read(playbackProvider.notifier).markHiddenForVisibility();
@@ -311,6 +320,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
     if (from != AppShellDestinations.forYouIndex &&
         to == AppShellDestinations.forYouIndex) {
+      experience.setVisibility(PlaybackExperienceVisibility.visible);
+      unawaited(experience.synchronize());
       // 离开时可能还没有 currentSource（视频正处于 source resolve/open 前）。
       // 即使没有可恢复的媒体，也必须重新打开可见性闸门；否则回到 For You 后的
       // playItem 会被永久当作隐藏播放而保持 paused，表现为黑屏。

@@ -77,6 +77,32 @@ void main() {
     expect(config.effectiveRetainedBackwardSessionCount, 1);
   });
 
+  test('iOS keeps HLS preload but disables native session prewarming', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    final container = ProviderContainer(
+      overrides: [
+        playerPerformancePolicyOverrideProvider.overrideWithValue(
+          PlayerPerformancePolicy.stable,
+        ),
+        appRuntimeConfigOverrideProvider.overrideWithValue(
+          const AppRuntimeConfig(
+            player: RuntimePlayerConfig(singleDramaForwardHlsPreloadCount: 1),
+            localization: RuntimeLocalizationConfig.defaults,
+            featureFlags: RuntimeFeatureFlagConfig.defaults,
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final config = container.read(playerPreloadConfigProvider);
+    expect(config.forwardHlsPreloadCountFor(false), 1);
+    expect(config.effectivePreparedForwardSessionCount, 0);
+    expect(config.effectiveRetainedBackwardSessionCount, 0);
+  });
+
   test('完整 policy override 仍可显式放开（测试）', () {
     final container = ProviderContainer(
       overrides: [

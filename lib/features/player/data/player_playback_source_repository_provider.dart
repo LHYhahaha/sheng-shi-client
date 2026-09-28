@@ -78,9 +78,10 @@ final forYouPredictivePlaybackPreloadManagerProvider =
 
 /// local HLS proxy 的配置入口。
 ///
-/// 当前已解锁 source_url 统一返回 HLS m3u8，因此默认经由本地代理消费 App 私有
-/// 分片缓存。若未来接口支持多种媒体封装，应改为根据后端 `stream_format` 按 source
-/// 启用；在异常源时可用编译期开关紧急关闭。
+/// 当前已解锁 source_url 统一返回 HLS m3u8，因此默认经由本地代理转发分片请求。
+/// iOS 原生播放器直接访问部分 CDN 时可能在 TLS 读取首段失败；代理失败仍会自动回退
+/// 远端 source。若未来接口支持多种媒体封装，应根据后端 `stream_format` 按 source
+/// 启用。
 final hlsLocalProxyConfigProvider = Provider<HlsLocalProxyConfig>((ref) {
   const disabled = bool.fromEnvironment('PLAYER_DISABLE_HLS_LOCAL_PROXY');
   return HlsLocalProxyConfig(enabled: !disabled);
@@ -182,6 +183,7 @@ final playerPlaybackSourceRepositoryProvider =
           ),
           preloadManager: ref.watch(playerPlaybackPreloadManagerProvider),
           proxyResolver: ref.watch(hlsProxyPlaybackSourceResolverProvider),
+          directRenditionInspector: ref.watch(hlsPlaylistPreloaderProvider),
         );
       }
       return MockPlayerPlaybackSourceRepository(
@@ -203,6 +205,9 @@ final forYouPredictivePlaybackSourceRepositoryProvider =
             forYouPredictivePlaybackPreloadManagerProvider,
           ),
           proxyResolver: ref.watch(hlsProxyPlaybackSourceResolverProvider),
+          directRenditionInspector: ref.watch(
+            forYouPredictiveHlsPlaylistPreloaderProvider,
+          ),
         );
       }
       return MockPlayerPlaybackSourceRepository(
@@ -228,6 +233,9 @@ final playerStartupPlaybackSourceRepositoryProvider =
           ),
           preloadManager: ref.watch(playerStartupPreloadManagerProvider),
           proxyResolver: ref.watch(hlsProxyPlaybackSourceResolverProvider),
+          directRenditionInspector: ref.watch(
+            startupHlsPlaylistPreloaderProvider,
+          ),
         );
       }
       return MockPlayerPlaybackSourceRepository(

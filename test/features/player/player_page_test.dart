@@ -66,6 +66,7 @@ import 'package:drama_client/features/popup/data/popup_repository.dart';
 import 'package:drama_client/features/popup/data/popup_repository_provider.dart';
 import 'package:drama_client/features/popup/domain/popup.dart';
 import 'package:drama_client/l10n/app_localizations.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -75,6 +76,65 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  test(
+    'For You tab restoration replays when the live source belongs to another item',
+    () {
+      expect(
+        shouldReplayForYouSettledItem(
+          currentItemId: 'for-you-old-item',
+          hasCurrentSource: true,
+          settledItemId: 'for-you-current-item',
+        ),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'iOS For You return from ordinary player recreates its native surface',
+    () {
+      expect(
+        shouldRecreateForYouSessionAfterOrdinaryPlayerReturn(
+          TargetPlatform.iOS,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldRecreateForYouSessionAfterOrdinaryPlayerReturn(
+          TargetPlatform.android,
+        ),
+        isFalse,
+      );
+    },
+  );
+
+  test('For You restores when its initial async feed item arrives visibly', () {
+    expect(
+      shouldRestoreForYouAfterInitialFeedItem(
+        hasObservedInitialFeedItem: false,
+        itemId: 'for-you:1447:7933',
+        isPlaybackViewVisible: true,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldRestoreForYouAfterInitialFeedItem(
+        hasObservedInitialFeedItem: true,
+        itemId: 'for-you:1447:7933',
+        isPlaybackViewVisible: true,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldRestoreForYouAfterInitialFeedItem(
+        hasObservedInitialFeedItem: false,
+        itemId: 'for-you:1447:7933',
+        isPlaybackViewVisible: false,
+      ),
+      isFalse,
+    );
+  });
+
   for (final forYou in [true, false]) {
     testWidgets(
       'watch task entry requests only on single drama: forYou=$forYou',
@@ -3007,6 +3067,70 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 1));
   });
+
+  test('iOS allows the system back-swipe on an ordinary player page', () {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    expect(
+      shouldAllowPlayerRoutePop(
+        feedMode: PlayerFeedMode.singleDrama,
+        hideShellNavigation: false,
+        isPaymentLoading: false,
+        showsPaywall: false,
+      ),
+      isTrue,
+    );
+  });
+
+  test(
+    'Android ordinary player and hidden For You keep blocking native pop',
+    () {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      expect(
+        shouldAllowPlayerRoutePop(
+          feedMode: PlayerFeedMode.singleDrama,
+          hideShellNavigation: false,
+          isPaymentLoading: false,
+          showsPaywall: false,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldAllowPlayerRoutePop(
+          feedMode: PlayerFeedMode.forYou,
+          hideShellNavigation: true,
+          isPaymentLoading: false,
+          showsPaywall: false,
+        ),
+        isFalse,
+      );
+    },
+  );
+
+  test(
+    'native player pop falls back to the cached For You handoff snapshot',
+    () {
+      final cachedSnapshot = ForYouPlaybackSnapshot(
+        originItemId: 'for-you-item',
+        dramaId: 'drama-a',
+        episode: _items().first.episode,
+        position: const Duration(seconds: 68),
+        duration: const Duration(seconds: 120),
+        updatedAt: DateTime(2026),
+      );
+
+      expect(
+        resolveForYouRouteReturnSnapshot(
+          returned: null,
+          cached: cachedSnapshot,
+        ),
+        same(cachedSnapshot),
+      );
+    },
+  );
 
   testWidgets('membership package success from recharge sheet plays episode', (
     tester,

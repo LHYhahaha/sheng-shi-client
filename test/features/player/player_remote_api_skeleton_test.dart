@@ -31,10 +31,39 @@ import 'package:drama_client/features/player/domain/player_content.dart';
 import 'package:drama_client/features/player/domain/player_feed.dart';
 import 'package:drama_client/features/player/domain/player_playback_source.dart';
 import 'package:drama_client/features/player/domain/player_preload_state.dart';
+import 'package:drama_client/features/player/domain/player_video_quality.dart';
 
 void main() {
   const contentMapper = PlayerContentMapper();
   const sourceMapper = PlaybackSourceMapper();
+
+  test(
+    'direct startup rendition chooses the highest quality within the cap',
+    () {
+      final selected = selectDirectStartupRendition(const [
+        PlayerVideoQuality(
+          id: '540p',
+          label: '540p',
+          playlistUrl: 'https://cdn.example.com/540.m3u8',
+          height: 540,
+        ),
+        PlayerVideoQuality(
+          id: '720p',
+          label: '720p',
+          playlistUrl: 'https://cdn.example.com/720.m3u8',
+          height: 720,
+        ),
+        PlayerVideoQuality(
+          id: '1080p',
+          label: '1080p',
+          playlistUrl: 'https://cdn.example.com/1080.m3u8',
+          height: 1080,
+        ),
+      ], maxVideoHeight: 540);
+
+      expect(selected?.id, '540p');
+    },
+  );
 
   test('player content dto maps to PlayerContent and episodes', () {
     final content = contentMapper.mapContent(

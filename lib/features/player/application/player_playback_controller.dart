@@ -76,8 +76,16 @@ final playerWatchProgressReportIntervalProvider = Provider<Duration>(
 ///
 /// 部分设备会出现音频开始播放但视频始终未渲染、且不主动报错的情况；超时后
 /// 统一进入可重试错误态，避免黑屏或无限 loading。
+/// iOS 的 HLS/texture 初始化在真机上可正常超过 8 秒；过早重建会丢弃即将
+/// 产出的首帧并额外增加一次完整开流，因此保留更长的首次等待窗口。
+Duration playerFirstFrameTimeoutFor(TargetPlatform platform) {
+  return platform == TargetPlatform.iOS
+      ? const Duration(seconds: 16)
+      : const Duration(seconds: 8);
+}
+
 final playerFirstFrameTimeoutProvider = Provider<Duration>(
-  (_) => const Duration(seconds: 8),
+  (_) => playerFirstFrameTimeoutFor(defaultTargetPlatform),
 );
 
 class PlayerPlaybackSessionKeys {
@@ -658,13 +666,15 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   bool _isSuspendedForCompetingPlayer = false;
   bool _isRetainedForCompetingPlayer = false;
   Future<void> _competingPlayerTransition = Future<void>.value();
-  // Android 上 next 的真实首帧预热会短时间内同时占用 previous/current/next 三个
-  // MediaCodec。部分机型会把正在播放的 current 异常切成 paused（并非一次新的
-  // playItem/open）。只在这个很小的危险窗口内恢复 current，避免用户看到播几秒又
-  // 从头开始，也不能把用户主动暂停或退后台当成异常恢复。
+  // next 的真实首帧预热或接管会短时间内与 current/previous 并存。部分原生播放器
+  // 会把正在播放的 current 异常切成 paused（并非一次新的 playItem/open）。只在这个
+  // 很小的危险窗口内恢复 current，避免用户看到播几秒又从头开始，也不能把用户主动
+  // 暂停或退后台当成异常恢复。
   DateTime? _unexpectedPauseRecoveryDeadline;
   bool _userPauseRequested = false;
   bool _unexpectedPauseRecoveryInFlight = false;
+  bool _preparedTakeoverPlayPending = false;
+  bool _preparedTakeoverPausedWhileOpening = false;
   bool _positionRollbackRecoveryInFlight = false;
   String? _accessOverlayPausedItemId;
   bool _isSessionDisposed = false;
@@ -1041,6 +1051,22 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       unawaited(initializeVideoQualityPreference());
     }
     _attachSessionStreams(_session);
+    // 真机日志显示 iOS 在第三次切集后，previous/current/next 三个原生会话同时
+    // 存在时可能仍持续拉取分片、position 也继续推进，但新 texture 不再出画面。
+    // 因此 iOS 固定为 current + next 两路。两台真机均已复现：即便先连续稳定
+    // 播放，再恢复 previous/current/next 三路，下一次 prepared takeover 仍可能让
+    // 新 Surface 变成 0x0。回滑改由 HLS 本地缓存快速重开，不保留第三个原生会话。
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      _decoderPressureActive = true;
+      _decoderPressureReason = 'iOS permanent two-session native cap';
+      _logTiming(
+        'iOS two-session window enabled',
+        details: _timingDetails([
+          'reason=permanent_native_surface_cap',
+          'maxNativeSessions=2',
+        ]),
+      );
+    }
     _logTiming('create current session', details: 'reason=build');
     ref.onDispose(() {
       // provider dispose 是最后一道兜底：必须同时释放流、HTTP 预加载、prepared
@@ -1707,6 +1733,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
     _unexpectedPauseRecoveryDeadline = null;
     _unexpectedPauseRecoveryInFlight = false;
+    _preparedTakeoverPlayPending = false;
+    _preparedTakeoverPausedWhileOpening = false;
     _positionRollbackRecoveryInFlight = false;
     _userPauseRequested = false;
     _resetWatchProgressReportTimer();
@@ -1872,10 +1900,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           surfaceLifecycle: PlayerVideoSurfaceLifecycle.attached,
           currentSource: prepared.source.playableSource,
           hasFirstFrame: prepared.hasFirstFrame,
-          // prepared/retained session 在后台已经实际出过视频帧。接管时 width stream
-          // 通常不会再次发射；若沿用新建 session 的 false，会导致画面、音频、字幕
-          // 均正常但 loading 永不消失。
-          hasRenderedFirstFrame: prepared.hasFirstFrame,
+          // 后台预热的解码首帧不等于当前 PageView 中的原生 Surface 已经上屏。
+          // iOS 接管同一个 session 时 width stream 通常不会再次发射，因此必须主动
+          // 等待新挂载的 Video widget 确认实际渲染，不能沿用预热阶段的首帧状态。
+          hasRenderedFirstFrame: false,
           position: prepared.position,
           duration: _effectiveDuration(
             prepared.duration,
@@ -1886,6 +1914,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         _currentPlaybackHasFirstFrame = prepared.hasFirstFrame;
         if (prepared.hasFirstFrame) {
           _cancelFirstFrameTimeout();
+          _waitForVideoSurfaceFirstFrameRendered();
         }
         _currentPlaybackPosition = prepared.position;
         _currentPlaybackDuration = _effectiveDuration(
@@ -1910,14 +1939,37 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           return;
         }
         await _session.setVolume(100);
+        // 接管后台已 warm-up 的 session 后，部分原生播放器可能在首个 play
+        // command 后立即回报 playing=false。沿用 prepare 期间的一次性恢复窗口，
+        // 避免画面已切换但播放没有真正开始。
+        _unexpectedPauseRecoveryDeadline = DateTime.now().add(
+          const Duration(seconds: 12),
+        );
+        _logTiming(
+          'prepared takeover interruption guard armed',
+          itemId: item.id,
+          source: prepared.source.playableSource,
+          details: 'guardMs=12000',
+        );
         _logTiming('session play called', itemId: item.id, source: sourceHint);
-        await _session.play();
+        _preparedTakeoverPlayPending = true;
+        var pausedWhileOpening = false;
+        try {
+          await _session.play();
+          pausedWhileOpening = _preparedTakeoverPausedWhileOpening;
+        } finally {
+          _preparedTakeoverPlayPending = false;
+          _preparedTakeoverPausedWhileOpening = false;
+        }
         if (!ref.mounted || !_isCurrent(generation)) {
           return;
         }
         _setPlayingStateAndSyncProgressTimer(
           isBuffering: !prepared.hasFirstFrame,
         );
+        if (pausedWhileOpening) {
+          unawaited(_recoverFromUnexpectedPause());
+        }
         // 页面在 prepared session 接管前可能已把“预热下一条”延迟到当前首帧。
         // 接管的 session 若本来已有首帧，width stream 不一定会再次发射，导致延迟
         // 任务永远不 flush，用户只看一两秒就继续下滑时第三条会变成冷开。
@@ -2173,10 +2225,10 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
     final currentItem = items[currentIndex];
     if (_shouldDeferPreloadUntilFirstFrame &&
-        state.status == PlayerPlaybackStatus.opening &&
-        state.currentItemId == currentItem.id &&
-        state.currentSource != null &&
-        !state.hasFirstFrame) {
+        (state.currentItemId != currentItem.id ||
+            state.currentSource == null ||
+            (state.status == PlayerPlaybackStatus.opening &&
+                !state.hasFirstFrame))) {
       _deferredPreloadItems = List<PlayerFeedItem>.unmodifiable(items);
       _deferredPreloadIndex = currentIndex;
       _logTiming(
@@ -2187,6 +2239,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           'currentIndex=$currentIndex',
           'itemCount=${items.length}',
           'status=${state.status.name}',
+          'playbackItemId=${state.currentItemId ?? 'none'}',
+          'hasSource=${state.currentSource != null}',
         ]),
       );
       return;
@@ -2195,11 +2249,12 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     final skipped = <String>[];
     final config = ref.read(playerPreloadConfigProvider);
     final isForYou = items[currentIndex].mode == PlayerFeedMode.forYou;
+    final isIos = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
     final forwardPreloadCount = config.forwardHlsPreloadCountFor(isForYou);
-    // For You 的网络优先级固定为 current > next。上一条的回滑体验由
-    // retained media session + 已落盘分片承担，不能再为它新开 HLS 回源；即使
-    // 未来远程配置误下发了 backward count，也不能抢 next 的首帧带宽。
-    final backwardPreloadCount = isForYou
+    // For You 和 iOS 的网络优先级固定为 current > next。iOS 单码率 HLS 的
+    // 反向首段下载会在当前集播放期间与当前分片抢带宽；回滑由已落盘分片承担。
+    // 即使未来远程配置误下发了 backward count，也不能抢当前集或下一集的首帧带宽。
+    final backwardPreloadCount = isForYou || isIos
         ? 0
         : config.backwardHlsPreloadCountFor(false);
     // HLS preload 只挑可播放的相邻 source。locked/unavailable/null source 不占有效名额，
@@ -3186,10 +3241,17 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   /// 普通播放器已返回或用户明确切回 For You，才解除其抢占状态。
-  Future<void> resumeAfterCompetingPlayer() =>
-      _enqueueCompetingPlayerTransition(_resumeAfterCompetingPlayer);
+  Future<void> resumeAfterCompetingPlayer({
+    bool restoreSuspendedPlayback = true,
+  }) => _enqueueCompetingPlayerTransition(
+    () => _resumeAfterCompetingPlayer(
+      restoreSuspendedPlayback: restoreSuspendedPlayback,
+    ),
+  );
 
-  Future<void> _resumeAfterCompetingPlayer() async {
+  Future<void> _resumeAfterCompetingPlayer({
+    required bool restoreSuspendedPlayback,
+  }) async {
     if (!ref.mounted) {
       return;
     }
@@ -3204,6 +3266,20 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     }
     _isSuspendedForCompetingPlayer = false;
     _isRetainedForCompetingPlayer = false;
+    if (!restoreSuspendedPlayback) {
+      // For You -> standard player -> For You may return on a different
+      // episode. Replaying _visibilitySuspendedItem here would open the old
+      // HLS source just before synchronizeExternalProgress opens the returned
+      // episode, which races iOS's native decoder. The caller will issue the
+      // single authoritative open/seek/play immediately afterwards.
+      _isPlaybackVisible = true;
+      _visibilitySuspendedItem = null;
+      _pauseWhenOpenCompletes = false;
+      if (sessionKey == PlayerPlaybackSessionKeys.forYouTab) {
+        ref.read(hlsTrafficGateProvider).resumeForYou();
+      }
+      return;
+    }
     await resumeAfterVisibilityPause();
   }
 
@@ -3507,8 +3583,42 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     if (!ref.mounted) {
       return;
     }
+    final pauseRecoveryDeadline = _unexpectedPauseRecoveryDeadline;
+    final now = DateTime.now();
+    final pauseRecoveryRemainingMs = pauseRecoveryDeadline
+        ?.difference(now)
+        .inMilliseconds;
+    final pauseRecoveryEligible = !isPlaying && _shouldRecoverUnexpectedPause();
+    if (!isPlaying) {
+      _logTiming(
+        'native playing false observed',
+        itemId: state.currentItemId,
+        source: state.currentSource,
+        details: _timingDetails([
+          'status=${state.status.name}',
+          'positionMs=${state.position.inMilliseconds}',
+          'hasFirstFrame=${state.hasFirstFrame}',
+          'hasEnded=${state.hasEnded}',
+          'isBuffering=${state.isBuffering}',
+          'visible=$_isPlaybackVisible',
+          'pauseWhenOpenCompletes=$_pauseWhenOpenCompletes',
+          'userPauseRequested=$_userPauseRequested',
+          'recoveryInFlight=$_unexpectedPauseRecoveryInFlight',
+          'recoveryRemainingMs=${pauseRecoveryRemainingMs ?? 'none'}',
+          'recoveryEligible=$pauseRecoveryEligible',
+          'windowItems=${_windowItemsText()}',
+        ]),
+      );
+    }
     if ((!_isPlaybackVisible || _pauseWhenOpenCompletes) && isPlaying) {
       unawaited(_session.pause());
+      return;
+    }
+    if (!isPlaying &&
+        state.status == PlayerPlaybackStatus.opening &&
+        _preparedTakeoverPlayPending &&
+        _unexpectedPauseRecoveryDeadline != null) {
+      _preparedTakeoverPausedWhileOpening = true;
       return;
     }
     if (state.currentSource == null ||
@@ -3519,7 +3629,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         state.status == PlayerPlaybackStatus.opening) {
       return;
     }
-    if (!isPlaying && _shouldRecoverUnexpectedPause()) {
+    if (pauseRecoveryEligible) {
       unawaited(
         _enterDecoderPressureMode(
           'current paused while next media session was warming',
@@ -5750,26 +5860,28 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
 
   /// 只在本会话已观察到真实压力时收紧。高分辨率不是触发条件；它只会增加某些
   /// 设备出现压力的概率，避免让所有 1080p 内容无条件牺牲回滑体验。
+  ///
+  /// iOS 在两台真机上都确认无法稳定承受 previous/current/next 三个原生 session。
+  /// 因此 iOS 永久限制为 current + next；Android 在观察到压力后才收紧，并在连续
+  /// 稳定播放后恢复三路资格。
   bool get _shouldConstrainNativeDecoderWindow {
-    if (defaultTargetPlatform != TargetPlatform.android) {
-      return false;
-    }
-    return _decoderPressureActive;
+    return _isIosNativeTwoSessionCap || _decoderPressureActive;
   }
+
+  bool get _isIosNativeTwoSessionCap =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   Future<List<String>> _releaseRetainedSessionsForDecoderPressure() async {
     if (_prepareManager is NoopPlayerPlaybackPrepareManager) {
       return const <String>[];
     }
     return _prepareManager.releaseRetained(
-      reason: 'android decoder pressure window',
+      reason: 'native decoder pressure window',
     );
   }
 
   Future<void> _enterDecoderPressureMode(String reason) async {
-    if (!ref.mounted ||
-        _isSessionDisposed ||
-        defaultTargetPlatform != TargetPlatform.android) {
+    if (!ref.mounted || _isSessionDisposed) {
       return;
     }
     final wasConstrained = _decoderPressureActive;
@@ -5816,6 +5928,9 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   }
 
   void _maybeRestoreDecoderWindowAfterStablePlayback() {
+    if (_isIosNativeTwoSessionCap) {
+      return;
+    }
     _updateDecoderPressureStability();
     final stableSince = _decoderPressureStableSince;
     if (!_decoderPressureActive || stableSince == null) {

@@ -950,14 +950,18 @@ class HlsPlayerPlaybackPreloadManager implements PlayerPlaybackPreloadManager {
     Duration? preferredPosition,
   }) async {
     final startedAt = DateTime.now();
+    // playableSource 在 iOS 上可能是 localhost proxy URL。预热必须始终走远端
+    // canonical URL，才能和 proxy 回源、startup preload 使用同一个 singleflight
+    // key 与缓存条目；否则同一首分片会被下载两次并抢占首帧带宽。
+    final preloadSource = source.remoteUrl;
     try {
       final result = await _preloader.prefetch(
-        source.playableSource,
+        preloadSource,
         preferredPosition: preferredPosition,
       );
       return PlaybackPreloadState(
         itemId: item.id,
-        sourceUrl: source.playableSource,
+        sourceUrl: preloadSource,
         status: PlaybackPreloadStatus.success,
         startedAt: startedAt,
         completedAt: DateTime.now(),
@@ -966,7 +970,7 @@ class HlsPlayerPlaybackPreloadManager implements PlayerPlaybackPreloadManager {
     } on HlsPlaylistPreloadCancelledException {
       return PlaybackPreloadState(
         itemId: item.id,
-        sourceUrl: source.playableSource,
+        sourceUrl: preloadSource,
         status: PlaybackPreloadStatus.cancelled,
         startedAt: startedAt,
         completedAt: DateTime.now(),
@@ -977,7 +981,7 @@ class HlsPlayerPlaybackPreloadManager implements PlayerPlaybackPreloadManager {
       // is useful degraded work rather than a playback failure.
       return PlaybackPreloadState(
         itemId: item.id,
-        sourceUrl: source.playableSource,
+        sourceUrl: preloadSource,
         status: PlaybackPreloadStatus.partial,
         startedAt: startedAt,
         completedAt: DateTime.now(),
@@ -987,7 +991,7 @@ class HlsPlayerPlaybackPreloadManager implements PlayerPlaybackPreloadManager {
     } catch (error) {
       return PlaybackPreloadState(
         itemId: item.id,
-        sourceUrl: source.playableSource,
+        sourceUrl: preloadSource,
         status: PlaybackPreloadStatus.failed,
         startedAt: startedAt,
         completedAt: DateTime.now(),

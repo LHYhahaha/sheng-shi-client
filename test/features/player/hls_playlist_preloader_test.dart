@@ -57,6 +57,38 @@ void main() {
     );
   });
 
+  test('preload uses remote HLS source when player uses local proxy', () async {
+    final client = _FakeHlsPlaylistHttpClient(
+      response: const HlsPlaylistHttpResponse(
+        statusCode: 200,
+        body: '#EXTM3U\n#EXT-X-TARGETDURATION:6\n',
+      ),
+    );
+    final manager = HlsPlayerPlaybackPreloadManager(
+      preloader: HlsPlaylistPreloader(client: client),
+    );
+    const remoteUrl = 'https://cdn.example.test/drama/ep1.m3u8';
+    const proxyUrl =
+        'http://localhost:12345/playlist.m3u8?url=https%3A%2F%2Fcdn.example.test%2Fdrama%2Fep1.m3u8';
+
+    final result = await manager.preload(
+      item: _item(1),
+      source: PlaybackSource(
+        itemId: 'drama-a-ep-1',
+        remoteUrl: remoteUrl,
+        playableSource: proxyUrl,
+        cacheKey: 'player:drama-a:ep-1',
+        expiresAt: DateTime.now().add(const Duration(minutes: 30)),
+        codecHint: 'hls',
+        status: PlaybackSourceStatus.preloaded,
+      ),
+    );
+
+    expect(result.status, PlaybackPreloadStatus.success);
+    expect(result.sourceUrl, remoteUrl);
+    expect(client.lastUri.toString(), remoteUrl);
+  });
+
   test(
     'master playlist resolves highest allowed variant and preheats first segments',
     () async {

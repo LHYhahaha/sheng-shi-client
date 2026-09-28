@@ -47,6 +47,20 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   test(
+    'iOS allows a longer first-frame window before retrying HLS playback',
+    () {
+      expect(
+        playerFirstFrameTimeoutFor(TargetPlatform.iOS),
+        const Duration(seconds: 16),
+      );
+      expect(
+        playerFirstFrameTimeoutFor(TargetPlatform.android),
+        const Duration(seconds: 8),
+      );
+    },
+  );
+
+  test(
     'effective watch samples exclude preview and break on replay seek',
     () async {
       final session = _FakePlaybackSession();
@@ -1585,6 +1599,37 @@ void main() {
     },
   );
 
+  test(
+    'For You handoff rebuilds its decoder without replaying the stale episode',
+    () async {
+      final currentSession = _FakePlaybackSession();
+      final resumedSession = _FakePlaybackSession();
+      var sessionIndex = 0;
+      final container = _createContainer(
+        currentSession,
+        sessionFactory: () => [currentSession, resumedSession][sessionIndex++],
+      );
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('for-you-tab');
+      final controller = container.read(provider.notifier);
+      final staleItem = _item(1, mode: PlayerFeedMode.forYou);
+      final returnedItem = _item(2, mode: PlayerFeedMode.forYou);
+
+      await controller.playItem(staleItem);
+      await controller.suspendForCompetingPlayer();
+      await controller.resumeAfterCompetingPlayer(
+        restoreSuspendedPlayback: false,
+      );
+      await controller.synchronizeExternalProgress(
+        item: returnedItem,
+        position: const Duration(seconds: 12),
+        duration: const Duration(seconds: 100),
+      );
+
+      expect(resumedSession.openedSources, [_secondVideoUrl]);
+    },
+  );
+
   test('locked item pauses playback and detaches video surface', () async {
     final session = _FakePlaybackSession();
     final container = _createContainer(session);
@@ -2547,6 +2592,29 @@ void main() {
     },
   );
 
+  test('iOS single drama does not preload the previous episode', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final session = _FakePlaybackSession();
+    final preloadManager = MockPlayerPlaybackPreloadManager();
+    final container = _createContainer(
+      session,
+      preloadManager: preloadManager,
+      preloadConfig: const PlayerPreloadConfig(
+        singleDramaForwardHlsPreloadCount: 0,
+        singleDramaBackwardHlsPreloadCount: 1,
+      ),
+    );
+    final provider = playerPlaybackControllerProvider('single:drama-a:1');
+    final controller = container.read(provider.notifier);
+
+    await controller.playItem(_item(3));
+    await controller.preloadAround([_item(1), _item(2), _item(3)], 2);
+
+    expect(container.read(provider).preloadedItemIds, isEmpty);
+    expect(preloadManager.preloadCount, 0);
+  });
+
   test(
     'for you and single drama can use different HLS preload counts',
     () async {
@@ -3363,12 +3431,45 @@ void main() {
     expect(preparedSession.openedSources, [_secondVideoUrl]);
     expect(preparedSession.playCount, 1);
     expect(container.read(provider).hasFirstFrame, isTrue);
-    expect(container.read(provider).hasRenderedFirstFrame, isTrue);
+    // 后台预热拿到的解码首帧不能当作已挂载到当前 PageView 的 Surface 首帧；
+    // 接管后必须等待当前 Video widget 的真实渲染确认。
+    expect(container.read(provider).hasRenderedFirstFrame, isFalse);
     expect(controller.exportTimingReport(), contains('prepared hit next'));
     expect(controller.exportTimingReport(), contains('take window session'));
     expect(controller.exportTimingReport(), contains('prepare manager take'));
     expect(controller.exportTimingReport(), contains('firstFrameReady=true'));
   });
+
+  test(
+    'prepared takeover resumes when native playback pauses unexpectedly',
+    () async {
+      final currentSession = _FakePlaybackSession();
+      final preparedSession = _FakePlaybackSession(
+        emitPlayingFalseOnPlay: true,
+      );
+      var index = 0;
+      final sessions = [currentSession, preparedSession];
+      PlayerPlaybackSession sessionFactory() => sessions[index++];
+      final container = _createPrepareContainer(sessionFactory);
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('prepared-takeover');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      await controller.preloadAround([_item(1), _item(2)], 0);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await controller.playItem(_item(2));
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      expect(preparedSession.playCount, 2);
+      expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+      expect(
+        controller.exportTimingReport(),
+        contains('recover current after prepare interruption'),
+      );
+    },
+  );
 
   test(
     'prepared playback advanced without width is reused without fallback open',
@@ -3439,9 +3540,9 @@ void main() {
   );
 
   test(
-    'prepare warm-up timeout enables a temporary decoder-pressure window',
+    'iOS prepare warm-up timeout enables a temporary decoder-pressure window',
     () async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
       addTearDown(() => debugDefaultTargetPlatformOverride = null);
       final currentSession = _FakePlaybackSession();
       final preparedSession = _FakePlaybackSession(emitWidthOnOpen: false);
@@ -3461,7 +3562,40 @@ void main() {
 
       final report = controller.exportTimingReport();
       expect(report, contains('prepare warm-up timeout'));
-      expect(report, contains('decoder pressure detected'));
+      expect(report, contains('decoder pressure observed again'));
+    },
+  );
+
+  test(
+    'iOS keeps a two-session window after stable playback during prepared takeover',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final currentSession = _FakePlaybackSession();
+      final preparedSession = _FakePlaybackSession();
+      var index = 0;
+      final sessions = [currentSession, preparedSession];
+      final container = _createPrepareContainer(() => sessions[index++]);
+      addTearDown(container.dispose);
+      final provider = playerPlaybackControllerProvider('ios-two-session');
+      final controller = container.read(provider.notifier);
+
+      await controller.playItem(_item(1));
+      await controller.preloadAround([_item(1), _item(2)], 0);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      // The old adaptive policy restored the third native session after 15
+      // seconds.  A real iOS device has shown that this leads to a 0x0 video
+      // surface on the following prepared takeover, so the cap must persist.
+      await Future<void>.delayed(const Duration(seconds: 16));
+      currentSession.emitPosition(const Duration(seconds: 16));
+      await Future<void>.delayed(Duration.zero);
+      await controller.playItem(_item(2));
+
+      expect(currentSession.isDisposed, isTrue);
+      expect(
+        controller.exportTimingReport(),
+        contains('iOS two-session window enabled'),
+      );
     },
   );
 
@@ -4176,6 +4310,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     this.emitWidthOnOpen = true,
     this.positionOnOpen,
     this.emitPositionOnSeek = true,
+    this.emitPlayingFalseOnPlay = false,
   });
 
   final Completer<void>? openCompleter;
@@ -4183,6 +4318,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   final Object? openError;
   final Duration? positionOnOpen;
   final bool emitPositionOnSeek;
+  final bool emitPlayingFalseOnPlay;
   bool shouldThrowOnOpen;
   final _bufferingController = StreamController<bool>.broadcast();
   final _playingController = StreamController<bool>.broadcast();
@@ -4304,7 +4440,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   @override
   Future<void> play() async {
     playCount += 1;
-    _playingController.add(true);
+    _playingController.add(!emitPlayingFalseOnPlay);
   }
 
   @override

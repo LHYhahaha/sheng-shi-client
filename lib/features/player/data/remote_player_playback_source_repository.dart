@@ -1,6 +1,8 @@
 import '../domain/player_feed.dart';
 import '../domain/player_playback_source.dart';
 import '../domain/player_preload_state.dart';
+import '../domain/player_video_quality.dart';
+import 'hls_playlist_preloader.dart';
 import 'mapper/playback_source_mapper.dart';
 import 'remote/playback_source_remote_data_source.dart';
 import 'hls_local_proxy_server.dart';
@@ -16,11 +18,13 @@ class RemotePlayerPlaybackSourceRepository
     required PlayerPlaybackPreloadManager preloadManager,
     Map<String, String>? httpHeaders,
     HlsProxyPlaybackSourceResolver? proxyResolver,
+    HlsPlaylistPreloader? directRenditionInspector,
     PlaybackSourceMapper mapper = const PlaybackSourceMapper(),
   }) : _remoteDataSource = remoteDataSource,
        _preloadManager = preloadManager,
        _httpHeaders = httpHeaders,
        _proxyResolver = proxyResolver,
+       _directRenditionInspector = directRenditionInspector,
        _mapper = mapper;
 
   final PlaybackSourceRemoteDataSource _remoteDataSource;
@@ -28,6 +32,7 @@ class RemotePlayerPlaybackSourceRepository
   final Map<String, String>? _httpHeaders;
   final PlaybackSourceMapper _mapper;
   final HlsProxyPlaybackSourceResolver? _proxyResolver;
+  final HlsPlaylistPreloader? _directRenditionInspector;
 
   @override
   Future<PlaybackSource> resolve(
@@ -138,15 +143,19 @@ class RemotePlayerPlaybackSourceRepository
     required PlayerFeedItem item,
     int? maxVideoHeight,
   }) async {
-    final playableSource =
-        await _proxyResolver?.resolvePlayableSource(
-          source.remoteUrl,
-          owner: item.mode == PlayerFeedMode.forYou
-              ? HlsTrafficOwner.forYou
-              : HlsTrafficOwner.playback,
-          maxVideoHeight: maxVideoHeight,
-        ) ??
-        source.remoteUrl;
+    final proxyResolver = _proxyResolver;
+    final playableSource = proxyResolver?.config.enabled == true
+        ? await proxyResolver!.resolvePlayableSource(
+            source.remoteUrl,
+            owner: item.mode == PlayerFeedMode.forYou
+                ? HlsTrafficOwner.forYou
+                : HlsTrafficOwner.playback,
+            maxVideoHeight: maxVideoHeight,
+          )
+        : await _resolveDirectStartupRendition(
+            source.remoteUrl,
+            maxVideoHeight: maxVideoHeight,
+          );
     return PlaybackSource(
       itemId: source.itemId,
       remoteUrl: source.remoteUrl,
@@ -157,6 +166,27 @@ class RemotePlayerPlaybackSourceRepository
       status: source.status,
       httpHeaders: source.httpHeaders ?? _httpHeaders,
     );
+  }
+
+  Future<String> _resolveDirectStartupRendition(
+    String sourceUrl, {
+    required int? maxVideoHeight,
+  }) async {
+    final inspector = _directRenditionInspector;
+    if (maxVideoHeight == null || inspector == null) {
+      return sourceUrl;
+    }
+    try {
+      final selected = selectDirectStartupRendition(
+        await inspector.inspectQualities(sourceUrl),
+        maxVideoHeight: maxVideoHeight,
+      );
+      return selected?.playlistUrl ?? sourceUrl;
+    } catch (_) {
+      // This is a startup optimization only. A malformed or auth-protected
+      // master playlist must retain the existing direct playback fallback.
+      return sourceUrl;
+    }
   }
 
   String _cacheKey(PlayerFeedItem item) {
@@ -177,4 +207,25 @@ class RemotePlayerPlaybackSourceRepository
     final path = uri.path;
     return path.isNotEmpty && path != '/';
   }
+}
+
+/// Selects one direct media playlist for automatic startup. The highest
+/// rendition at or below the automatic cap keeps portrait video readable while
+/// preventing the native HLS backend from probing every master variant first.
+PlayerVideoQuality? selectDirectStartupRendition(
+  List<PlayerVideoQuality> qualities, {
+  required int maxVideoHeight,
+}) {
+  final eligible =
+      qualities
+          .where(
+            (quality) => quality.height > 0 && quality.height <= maxVideoHeight,
+          )
+          .toList()
+        ..sort((left, right) => right.height.compareTo(left.height));
+  if (eligible.isNotEmpty) return eligible.first;
+  if (qualities.isEmpty) return null;
+  final fallback = List<PlayerVideoQuality>.from(qualities)
+    ..sort((left, right) => left.height.compareTo(right.height));
+  return fallback.first;
 }

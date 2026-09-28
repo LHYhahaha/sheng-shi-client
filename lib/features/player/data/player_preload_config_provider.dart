@@ -21,6 +21,25 @@ final playerPreloadConfigProvider = Provider<PlayerPreloadConfig>((ref) {
   final base = policy.toPreloadConfig();
   final runtimePlayer = ref.watch(appRuntimeConfigProvider).player;
   final merged = _mergePreloadConfig(base: base, runtimePlayer: runtimePlayer);
+  if (defaultTargetPlatform == TargetPlatform.iOS) {
+    // media_kit 在 iOS 上会延迟销毁底层 mpv context。连续切集时，即使 Dart
+    // session 已 dispose，旧 decoder 仍会与 current/next 重叠并卡住播放时钟。
+    // 因此 iOS 只保留 HLS HTTP 预热，不创建 prepared/retained native session。
+    return PlayerPreloadConfig(
+      homeStartupPreloadCount: merged.homeStartupPreloadCount,
+      singleDramaForwardHlsPreloadCount:
+          merged.singleDramaForwardHlsPreloadCount,
+      singleDramaBackwardHlsPreloadCount:
+          merged.singleDramaBackwardHlsPreloadCount,
+      forYouForwardHlsPreloadCount: merged.forYouForwardHlsPreloadCount,
+      forYouBackwardHlsPreloadCount: merged.forYouBackwardHlsPreloadCount,
+      maxConcurrentHlsPreloads: merged.maxConcurrentHlsPreloads,
+      maxPreloadBytes: merged.maxPreloadBytes,
+      preloadTimeout: merged.preloadTimeout,
+      preparedForwardSessionCount: 0,
+      retainedBackwardSessionCount: 0,
+    );
+  }
   if (defaultTargetPlatform != TargetPlatform.android) {
     return merged;
   }

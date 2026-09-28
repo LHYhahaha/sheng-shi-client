@@ -5,9 +5,18 @@ import 'dart:io';
 import 'package:drama_client/features/player/data/hls_local_proxy_server.dart';
 import 'package:drama_client/features/player/data/hls_network_request_coordinator.dart';
 import 'package:drama_client/features/player/data/hls_traffic_gate.dart';
+import 'package:drama_client/features/player/data/player_playback_source_repository_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 void main() {
+  test('iOS 播放默认通过本地代理转发 HLS', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    expect(container.read(hlsLocalProxyConfigProvider).enabled, isTrue);
+  });
+
   test(
     'parses the first media segment duration and resolved uri for timing logs',
     () {

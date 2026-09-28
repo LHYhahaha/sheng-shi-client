@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -54,6 +55,8 @@ import '../../../rewards/domain/reward_coins_check_in_claim_result.dart';
 import '../../../rewards/presentation/widget/reward_coins_claim_success_toast.dart';
 import '../../application/player_like_controller.dart';
 import '../../application/player_entry_preload_coordinator.dart';
+import '../../application/playback_experience_coordinator.dart';
+import '../../application/playback_experience_state.dart';
 import '../../application/player_feed_engine.dart';
 import '../../application/player_runtime_coordinator.dart';
 import '../../application/player_feed_engine_access_flow.dart';
@@ -98,6 +101,72 @@ import '../../../ad_unlock/data/ad_unlock_repository_provider.dart';
 import '../../../ad_unlock/domain/ad_unlock_models.dart';
 import '../../../ad_unlock/presentation/ad_unlock_page.dart';
 import '../../../ad_unlock/presentation/ad_unlock_prompt_dialog.dart';
+
+/// Whether the route may be dismissed by the platform's native back gesture.
+///
+/// Android invokes [PopScope.onPopInvokedWithResult] even when popping is
+/// blocked, so its existing callback can continue to show the exit flow. iOS
+/// checks this value before it begins an interactive edge-swipe; ordinary
+/// player pages must therefore opt in explicitly.
+bool shouldAllowPlayerRoutePop({
+  required PlayerFeedMode feedMode,
+  required bool hideShellNavigation,
+  required bool isPaymentLoading,
+  required bool showsPaywall,
+}) {
+  if (isPaymentLoading || showsPaywall) {
+    return false;
+  }
+
+  if (feedMode == PlayerFeedMode.forYou) {
+    return !hideShellNavigation;
+  }
+
+  return !kIsWeb &&
+      defaultTargetPlatform == TargetPlatform.iOS &&
+      !hideShellNavigation;
+}
+
+/// The persistent For You tab may still hold an old source while its feed has
+/// settled on another item.  A non-null source alone is therefore not enough
+/// to suppress the gesture-free autoplay restore.
+bool shouldReplayForYouSettledItem({
+  required String? currentItemId,
+  required bool hasCurrentSource,
+  required String settledItemId,
+}) {
+  return !hasCurrentSource || currentItemId != settledItemId;
+}
+
+/// The initial tab selection can happen while the For You request is still
+/// pending. Once the first item arrives, no viewport callback is emitted by
+/// default, so explicitly restore the player exactly once when it is visible.
+bool shouldRestoreForYouAfterInitialFeedItem({
+  required bool hasObservedInitialFeedItem,
+  required String? itemId,
+  required bool isPlaybackViewVisible,
+}) {
+  return !hasObservedInitialFeedItem && itemId != null && isPlaybackViewVisible;
+}
+
+/// iOS may keep an mpv session alive after its Flutter video texture has been
+/// detached for the ordinary player route. Reusing that session can leave the
+/// For You page black even though its playback source remains non-null.
+bool shouldRecreateForYouSessionAfterOrdinaryPlayerReturn(
+  TargetPlatform platform,
+) => platform == TargetPlatform.iOS;
+
+/// Returns the handoff state that should restore the For You player.
+///
+/// A normal player back action supplies [returned]. iOS's interactive
+/// edge-swipe completes the route pop directly and therefore supplies null;
+/// in that case the continuously saved [cached] snapshot is authoritative.
+ForYouPlaybackSnapshot? resolveForYouRouteReturnSnapshot({
+  required ForYouPlaybackSnapshot? returned,
+  required ForYouPlaybackSnapshot? cached,
+}) {
+  return returned ?? cached;
+}
 
 sealed class _ExitRecommendationDialogResult {
   const _ExitRecommendationDialogResult();
@@ -420,6 +489,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   bool _hasShownDramaTakenDownToast = false;
   bool _didRecordFirstBuild = false;
   bool _didReplayInitialViewport = false;
+  bool _hasObservedInitialForYouFeedItem = false;
   bool _allowRemoteResumeEpisodeSwitch = true;
   bool _enforceInitialHandoffRewindSeek = false;
   bool _isExitRecommendationRequestInFlight = false;
@@ -767,6 +837,36 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       playerPlaybackControllerProvider(_sessionKey).notifier,
     );
     if (widget.feedMode == PlayerFeedMode.forYou) {
+      ref.listenManual<String?>(
+        playerFeedControllerProvider(
+          _sessionKey,
+        ).select((state) => state.currentItem?.id),
+        (_, itemId) {
+          final shouldRestore = shouldRestoreForYouAfterInitialFeedItem(
+            hasObservedInitialFeedItem: _hasObservedInitialForYouFeedItem,
+            itemId: itemId,
+            isPlaybackViewVisible: _isPlaybackViewVisible,
+          );
+          if (itemId != null) {
+            // Mark this even while hidden. A later tab selection remains the
+            // authoritative visibility-gated restore point in that case.
+            _hasObservedInitialForYouFeedItem = true;
+          }
+          if (!shouldRestore) {
+            return;
+          }
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _isPlaybackViewVisible) {
+              final experience = ref.read(
+                playbackExperienceCoordinatorProvider(_sessionKey).notifier,
+              );
+              experience.setVisibility(PlaybackExperienceVisibility.visible);
+              unawaited(experience.synchronize());
+            }
+          });
+        },
+        fireImmediately: true,
+      );
       // The shell can select For You before this indexed-stack page has built.
       // A build-time listener without fireImmediately misses that first tab
       // selection, leaving an already-settled feed paused until the user
@@ -899,6 +999,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       }
       if (!mounted) return;
       await _loadFeedForTiming();
+      if (widget.feedMode == PlayerFeedMode.forYou && _isPlaybackViewVisible) {
+        final experience = ref.read(
+          playbackExperienceCoordinatorProvider(_sessionKey).notifier,
+        );
+        experience.setVisibility(PlaybackExperienceVisibility.visible);
+        await experience.synchronize();
+      }
       _playbackController.recordPlaybackTiming(
         'player startup microtask end',
         elapsed: startupStopwatch.elapsed,
@@ -1254,7 +1361,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     final item = ref
         .read(playerFeedControllerProvider(_sessionKey))
         .currentItem;
-    if (playback.currentSource == null && item != null) {
+    if (item != null &&
+        shouldReplayForYouSettledItem(
+          currentItemId: playback.currentItemId,
+          hasCurrentSource: playback.currentSource != null,
+          settledItemId: item.id,
+        )) {
       ref
           .read(playerViewportControllerProvider(_sessionKey).notifier)
           .replaySettled();
@@ -1894,6 +2006,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         if (next.index < 0 || next.index >= latestFeedState.items.length) {
           return;
         }
+        unawaited(
+          ref
+              .read(playbackExperienceCoordinatorProvider(sessionKey).notifier)
+              .onViewportSettled(
+                item: latestFeedState.items[next.index],
+                index: next.index,
+                feedRevision: latestFeedState.revision,
+              ),
+        );
         var settledItem = latestFeedState.items[next.index];
         if (settledItem.id != next.itemId) {
           return;
@@ -2175,11 +2296,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         left: false,
         right: false,
         child: PopScope(
-          canPop:
-              widget.feedMode == PlayerFeedMode.forYou &&
-              !widget.hideShellNavigation &&
-              !isPaymentLoading &&
-              !showsPaywall,
+          canPop: shouldAllowPlayerRoutePop(
+            feedMode: widget.feedMode,
+            hideShellNavigation: widget.hideShellNavigation,
+            isPaymentLoading: isPaymentLoading,
+            showsPaywall: showsPaywall,
+          ),
           onPopInvokedWithResult: (didPop, result) {
             if (didPop) {
               return;
@@ -3049,17 +3171,23 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         context.push<ForYouPlaybackSnapshot>(location, extra: handoff).then((
           returned,
         ) async {
-          if (!mounted || returned == null) {
+          final snapshot = resolveForYouRouteReturnSnapshot(
+            returned: returned,
+            cached: ref
+                .read(forYouPlaybackProgressControllerProvider.notifier)
+                .snapshotFor(handoff.dramaId),
+          );
+          if (!mounted || snapshot == null) {
             return;
           }
           ref
               .read(forYouPlaybackProgressControllerProvider.notifier)
-              .save(returned);
+              .save(snapshot);
           await WidgetsBinding.instance.endOfFrame;
           if (!mounted) {
             return;
           }
-          await _synchronizeReturnedForYouProgress(returned);
+          await _synchronizeReturnedForYouProgress(snapshot);
         }),
       );
       if (!mounted) {
@@ -3512,13 +3640,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     // For You decoder was deliberately released before the ordinary player
     // opened, so recreate it before applying the returned position. Otherwise
     // synchronizeExternalProgress exits early and leaves a black page.
-    await forYouPlayback.resumeAfterCompetingPlayer();
+    await forYouPlayback.resumeAfterCompetingPlayer(
+      restoreSuspendedPlayback: false,
+    );
     if (!mounted) {
       return;
     }
     await forYouPlayback.recoverForYouPlaybackIfFailed(
       updatedItem,
       trigger: 'ordinary_player_handoff_return',
+      forceRebuild: shouldRecreateForYouSessionAfterOrdinaryPlayerReturn(
+        defaultTargetPlatform,
+      ),
     );
     if (!mounted) {
       return;
