@@ -27,6 +27,7 @@ class PlayerFeedState {
     required this.items,
     required this.currentIndex,
     required this.isLoading,
+    this.revision = 0,
     this.isLoadingMore = false,
     this.hasMore = false,
     this.nextPage = 2,
@@ -42,6 +43,7 @@ class PlayerFeedState {
       isLoadingMore = false,
       hasMore = false,
       nextPage = 2,
+      revision = 0,
       error = null,
       loadMoreError = null;
 
@@ -68,6 +70,10 @@ class PlayerFeedState {
   /// 只覆盖内容列表加载，不表示播放器 opening/buffering。播放器 loading 由
   /// PlayerPlaybackState 管理。
   final bool isLoading;
+
+  /// Increments whenever a first-page response replaces this session's feed.
+  /// Viewport/playback work uses it to reject targets from an earlier feed.
+  final int revision;
 
   /// For You 是否正在追加下一页。
   final bool isLoadingMore;
@@ -101,6 +107,7 @@ class PlayerFeedState {
     List<PlayerFeedItem>? items,
     int? currentIndex,
     bool? isLoading,
+    int? revision,
     bool? isLoadingMore,
     bool? hasMore,
     int? nextPage,
@@ -114,6 +121,7 @@ class PlayerFeedState {
       items: items ?? this.items,
       currentIndex: currentIndex ?? this.currentIndex,
       isLoading: isLoading ?? this.isLoading,
+      revision: revision ?? this.revision,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       hasMore: hasMore ?? this.hasMore,
       nextPage: nextPage ?? this.nextPage,
@@ -255,6 +263,7 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
         items: List<PlayerFeedItem>.unmodifiable(loadedItems),
         currentIndex: initialIndex,
         isLoading: false,
+        revision: state.revision + 1,
         hasMore: forYouPage?.hasMore ?? false,
         nextPage: (forYouPage?.page ?? 1) + 1,
         clearError: true,
@@ -394,6 +403,7 @@ class PlayerFeedController extends Notifier<PlayerFeedState> {
         items: List<PlayerFeedItem>.unmodifiable(loadedItems),
         currentIndex: refreshedIndex,
         isLoading: false,
+        revision: state.revision + 1,
         clearError: true,
       );
       return state.currentItem;

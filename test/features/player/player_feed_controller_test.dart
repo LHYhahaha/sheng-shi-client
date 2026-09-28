@@ -84,6 +84,34 @@ void main() {
     },
   );
 
+  test('For You first-page replacement increments the feed revision', () async {
+    final repository = _PagedFakeFeedRepo();
+    final container = _createContainer(repository);
+    final provider = playerFeedControllerProvider('for-you-revision');
+    final controller = container.read(provider.notifier);
+
+    await controller.load(const PlayerFeedConfig.forYou());
+    final firstRevision = container.read(provider).revision;
+
+    await controller.refresh();
+
+    expect(container.read(provider).revision, firstRevision + 1);
+  });
+
+  test('For You loading more keeps the current feed revision', () async {
+    final repository = _PagedFakeFeedRepo();
+    final container = _createContainer(repository);
+    final provider = playerFeedControllerProvider('for-you-more-revision');
+    final controller = container.read(provider.notifier);
+
+    await controller.load(const PlayerFeedConfig.forYou());
+    final revision = container.read(provider).revision;
+
+    await controller.loadMore();
+
+    expect(container.read(provider).revision, revision);
+  });
+
   test('selects episode by moving to an existing feed item', () async {
     final container = _createContainer();
     final provider = playerFeedControllerProvider('single');
