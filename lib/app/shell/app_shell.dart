@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -284,6 +285,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
     final firstItem = ref.read(feedProvider).currentItem;
     if (firstItem == null) {
+      return;
+    }
+    if (!shouldWarmForYouEntryNativeSession(defaultTargetPlatform)) {
       return;
     }
     // feed 与首条 HLS 已经在首页首帧后完成。此处只为 For You 的稳定 session

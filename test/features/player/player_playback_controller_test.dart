@@ -60,6 +60,11 @@ void main() {
     },
   );
 
+  test('iOS does not create a hidden native For You entry session', () {
+    expect(shouldWarmForYouEntryNativeSession(TargetPlatform.iOS), isFalse);
+    expect(shouldWarmForYouEntryNativeSession(TargetPlatform.android), isTrue);
+  });
+
   test(
     'effective watch samples exclude preview and break on replay seek',
     () async {

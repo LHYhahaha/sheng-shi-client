@@ -156,6 +156,15 @@ bool shouldRecreateForYouSessionAfterOrdinaryPlayerReturn(
   TargetPlatform platform,
 ) => platform == TargetPlatform.iOS;
 
+/// Android's foreground decoder can be safely paused for the brief
+/// For You -> ordinary-player handoff. Releasing it makes both directions
+/// rebuild from a cold native decoder; rich devices retain the existing
+/// behaviour for the same quick-return path.
+bool shouldRetainForYouSessionForOrdinaryPlayer({
+  required TargetPlatform platform,
+  required bool richPerformanceMode,
+}) => richPerformanceMode || platform == TargetPlatform.android;
+
 /// Returns the handoff state that should restore the For You player.
 ///
 /// A normal player back action supplies [returned]. iOS's interactive
@@ -1072,7 +1081,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       playerPlaybackControllerProvider(PlayerPlaybackSessionKeys.forYouTab),
     );
     final canRetainForQuickReturn =
-        ref.read(playerPerformancePolicyProvider).isRich &&
+        shouldRetainForYouSessionForOrdinaryPlayer(
+          platform: defaultTargetPlatform,
+          richPerformanceMode: ref.read(playerPerformancePolicyProvider).isRich,
+        ) &&
         forYouState.currentSource != null &&
         forYouState.hasRenderedFirstFrame &&
         !forYouState.isBuffering;

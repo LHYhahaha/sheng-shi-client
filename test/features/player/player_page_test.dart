@@ -108,6 +108,26 @@ void main() {
     },
   );
 
+  test(
+    'Android retains a healthy For You session for an immediate handoff',
+    () {
+      expect(
+        shouldRetainForYouSessionForOrdinaryPlayer(
+          platform: TargetPlatform.android,
+          richPerformanceMode: false,
+        ),
+        isTrue,
+      );
+      expect(
+        shouldRetainForYouSessionForOrdinaryPlayer(
+          platform: TargetPlatform.iOS,
+          richPerformanceMode: false,
+        ),
+        isFalse,
+      );
+    },
+  );
+
   test('For You restores when its initial async feed item arrives visibly', () {
     expect(
       shouldRestoreForYouAfterInitialFeedItem(

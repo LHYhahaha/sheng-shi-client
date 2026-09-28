@@ -84,6 +84,12 @@ Duration playerFirstFrameTimeoutFor(TargetPlatform platform) {
       : const Duration(seconds: 8);
 }
 
+/// iOS keeps its native prepared-session window at zero to avoid stale mpv
+/// textures. A hidden entry decoder would therefore be released immediately
+/// and cannot accelerate the first visible frame.
+bool shouldWarmForYouEntryNativeSession(TargetPlatform platform) =>
+    platform == TargetPlatform.android;
+
 final playerFirstFrameTimeoutProvider = Provider<Duration>(
   (_) => playerFirstFrameTimeoutFor(defaultTargetPlatform),
 );
