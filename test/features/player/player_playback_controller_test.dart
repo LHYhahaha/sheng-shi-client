@@ -1574,7 +1574,7 @@ void main() {
       final state = container.read(provider);
       expect(session.openedSources, [_videoUrl, _videoUrl]);
       expect(state.status, PlayerPlaybackStatus.playing);
-      expect(state.hasFirstFrame, isFalse);
+      expect(state.hasFirstFrame, isTrue);
       expect(state.isBuffering, isTrue);
       expect(state.surfaceLifecycle, PlayerVideoSurfaceLifecycle.attached);
       expect(
@@ -3737,7 +3737,7 @@ void main() {
   );
 
   test(
-    'HLS network error after first frame enters retryable error state',
+    'HLS network error keeps the player opening for automatic recovery',
     () async {
       final session = _FakePlaybackSession();
       final container = _createContainer(session);
@@ -3751,10 +3751,10 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       final state = container.read(provider);
-      expect(state.status, PlayerPlaybackStatus.error);
-      expect(state.hasFirstFrame, isFalse);
-      expect(state.isBuffering, isFalse);
-      expect(state.errorKind, PlayerPlaybackErrorKind.recoverableNetwork);
+      expect(state.status, PlayerPlaybackStatus.opening);
+      expect(state.hasFirstFrame, isTrue);
+      expect(state.isBuffering, isTrue);
+      expect(state.error, isNull);
       expect(controller.exportTimingReport(), contains('error'));
       expect(
         controller.exportTimingReport(),

@@ -31,12 +31,16 @@ import '../domain/player_subtitle.dart';
 import '../domain/player_video_quality.dart';
 import 'player_feed_controller.dart';
 import 'player_playback_prepare_manager.dart';
+import 'player_playback_recovery_coordinator.dart';
+import 'player_playback_recovery_policy.dart';
 import 'player_playback_timing_trace.dart';
 import 'player_rebuild_diagnostics.dart';
 import 'player_session_controller.dart';
 import 'player_session_registry.dart';
 import 'player_startup_preload_controller.dart';
 import 'subtitle_parser.dart';
+
+export 'player_playback_recovery_policy.dart' show PlayerPlaybackErrorKind;
 
 final playerPlaybackSessionFactoryProvider =
     Provider<PlayerPlaybackSession Function()>((ref) {
@@ -129,13 +133,6 @@ enum PlayerPlaybackStatus {
 }
 
 enum PlayerVideoSurfaceLifecycle { attached, detaching, detached, disposing }
-
-enum PlayerPlaybackErrorKind {
-  recoverableNetwork,
-  sourceResolve,
-  mediaFatal,
-  unknown,
-}
 
 class PlayerPlaybackState {
   const PlayerPlaybackState({
@@ -566,6 +563,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   Timer? _firstFrameProgressProbeTimer;
   Timer? _firstFrameVideoRecoveryTimer;
   Timer? _firstFrameTimeoutTimer;
+  final _recoveryCoordinator = PlayerPlaybackRecoveryCoordinator();
 
   /// Raw confirmed media samples; null ends a continuous watch segment.
   void Function(Duration? position, int generation)? onEffectiveWatchPosition;
@@ -1090,6 +1088,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       _firstFrameProgressProbeTimer?.cancel();
       _firstFrameVideoRecoveryTimer?.cancel();
       _firstFrameTimeoutTimer?.cancel();
+      _recoveryCoordinator.dispose();
       _forYouEntryWarmReleaseTimer?.cancel();
       _stopWatchProgressReportTimer();
       unawaited(_disposePreloads(syncState: false));
@@ -4235,6 +4234,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     _firstFrameProgressProbeTimer?.cancel();
     _firstFrameVideoRecoveryTimer?.cancel();
     _cancelFirstFrameTimeout();
+    _recoveryCoordinator.markSucceeded();
     state = state.copyWith(
       status: state.status == PlayerPlaybackStatus.opening
           ? PlayerPlaybackStatus.playing
@@ -4423,6 +4423,16 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
         'status=${state.status.name}',
       ]),
     );
+    final item = _currentOriginalItem;
+    if (errorKind == PlayerPlaybackErrorKind.recoverableNetwork &&
+        item != null &&
+        _schedulePlaybackRecovery(
+          item: item,
+          generation: _generation,
+          trigger: 'native_network_error',
+        )) {
+      return;
+    }
     _markPlaybackFailed(error: error, errorKind: errorKind);
   }
 
@@ -4461,46 +4471,65 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           ),
         );
       }
-      if (_shouldAutoRetryFirstFrameTimeout(item)) {
-        _firstFrameAutoRetryItemId = item.id;
+      if (_schedulePlaybackRecovery(
+        item: item,
+        generation: generation,
+        trigger: 'first_frame_timeout',
+      )) {
+        return;
+      }
+    });
+  }
+
+  bool _schedulePlaybackRecovery({
+    required PlayerFeedItem item,
+    required int generation,
+    required String trigger,
+  }) {
+    final source = state.currentSource;
+    if (!ref.mounted ||
+        !_isCurrent(generation) ||
+        source == null ||
+        state.status == PlayerPlaybackStatus.paused) {
+      return false;
+    }
+    final taskKey = '$sessionKey:${item.id}:$source';
+    final scheduled = _recoveryCoordinator.scheduleRetry(
+      taskKey: taskKey,
+      onRetry: (attempt) {
+        if (!ref.mounted ||
+            !_isCurrent(generation) ||
+            state.currentItemId != item.id ||
+            state.status == PlayerPlaybackStatus.paused) {
+          return;
+        }
         _logTiming(
-          'first-frame timeout auto retry',
+          'playback recovery retry',
           itemId: item.id,
           source: state.currentSource,
-          details:
-              'reason=first_frame_timeout maxAttempts=1 mode=${item.mode.name}',
+          details: 'trigger=$trigger attempt=$attempt',
         );
         if (sessionKey == PlayerPlaybackSessionKeys.forYouTab) {
-          // For You may keep its widget alive in an IndexedStack while the
-          // native Android decoder/Surface is already unusable. Reopening the
-          // same session leaves that failure black forever; create a fresh
-          // native session instead.
           unawaited(
             recoverForYouPlaybackIfFailed(
               item,
-              trigger: 'first_frame_timeout',
+              trigger: trigger,
               forceRebuild: true,
             ),
           );
           return;
         }
         unawaited(playItem(item, forceReopen: true));
-        return;
-      }
-      _markPlaybackFailed(
-        error: error,
-        errorKind: PlayerPlaybackErrorKind.unknown,
-        expectedGeneration: generation,
+      },
+    );
+    if (scheduled) {
+      state = state.copyWith(
+        status: PlayerPlaybackStatus.opening,
+        isBuffering: true,
+        clearError: true,
       );
-    });
-  }
-
-  bool _shouldAutoRetryFirstFrameTimeout(PlayerFeedItem item) {
-    return _firstFrameAutoRetryItemId != item.id &&
-        state.currentItemId == item.id &&
-        state.currentSource != null &&
-        !state.hasFirstFrame &&
-        state.status != PlayerPlaybackStatus.paused;
+    }
+    return scheduled;
   }
 
   void _cancelFirstFrameTimeout() {
@@ -4538,36 +4567,8 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
     unawaited(_session.pause());
   }
 
-  PlayerPlaybackErrorKind _classifyPlaybackError(String error) {
-    final normalized = error.toLowerCase();
-    // 明确的 HTTP 4xx 表示 source、签名或权限有问题，不是播放器重试即可恢复的
-    // 短暂网络抖动。必须先于 `.ts` / `segment` 判断，否则失败的 HLS 分片会被误判
-    // 为 recoverable，导致黑屏时 position 和字幕仍继续推进。
-    if (normalized.contains('400') ||
-        normalized.contains('401') ||
-        normalized.contains('403') ||
-        normalized.contains('404')) {
-      return PlayerPlaybackErrorKind.sourceResolve;
-    }
-    if (normalized.contains('tcp') ||
-        normalized.contains('ffurl') ||
-        normalized.contains('segment') ||
-        normalized.contains('.ts') ||
-        normalized.contains('connection') ||
-        normalized.contains('timed out') ||
-        normalized.contains('timeout')) {
-      return PlayerPlaybackErrorKind.recoverableNetwork;
-    }
-    if (normalized.contains('source') || normalized.contains('resolve')) {
-      return PlayerPlaybackErrorKind.sourceResolve;
-    }
-    if (normalized.contains('fatal') ||
-        normalized.contains('invalid') ||
-        normalized.contains('failed to open')) {
-      return PlayerPlaybackErrorKind.mediaFatal;
-    }
-    return PlayerPlaybackErrorKind.unknown;
-  }
+  PlayerPlaybackErrorKind _classifyPlaybackError(String error) =>
+      const PlayerPlaybackRecoveryPolicy().classifyError(error);
 
   Duration _clampToDuration(Duration position) {
     if (position < Duration.zero) {

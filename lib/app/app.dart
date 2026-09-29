@@ -279,7 +279,11 @@ class _DramaClientAppState extends ConsumerState<DramaClientApp>
     _prepareEntrySource(type: 'share_deeplink');
 
     // 与通知再次打开已展示的目标页一致：GoRouter 对相同 location 不一定产生新的
-    // Navigator 回调，因此需要主动结束当前页面会话并强制生成目标 page_view，确保
+    // Navigator 回调，因此需要主动结束当前页面会话并强制生成目标 page_v
+    //
+    //
+    //
+    // view，确保
     // share_deeplink 只附着到这一次实际被重新打开的播放器页面。
     if (ref.read(analyticsPageContextProvider).currentPage ==
         AnalyticsPageNames.dramaPlay) {

@@ -72,6 +72,14 @@ android {
             resValue("string", "MERCHANT_ID", "333")
             resValue("string", "VEST_PKG_ID", "1001")
         }
+
+        create("special") {
+            dimension = "channel"
+            applicationId = "com.novashort.shortdrama"
+            resValue("string", "channel_flag", "app_special")
+            resValue("string", "MERCHANT_ID", "336")
+            resValue("string", "VEST_PKG_ID", "1001")
+        }
 //
 //        create("APPPRO") {
 //            dimension = "channel"
