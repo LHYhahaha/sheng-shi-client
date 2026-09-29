@@ -65,7 +65,7 @@ class AuthRemoteDataSource {
     };
     print('[AuthRemoteDataSource] loginOAuth request:');
     print('[AuthRemoteDataSource]   URL: POST $path');
-    print('[AuthRemoteDataSource]   Body: ${request.toJson()}');
+    print('[AuthRemoteDataSource]   Body: [redacted OAuth credential]');
 
     return _apiClient.post<AuthSessionDto>(
       path,

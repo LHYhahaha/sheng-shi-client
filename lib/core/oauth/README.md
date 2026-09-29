@@ -26,7 +26,7 @@ core/oauth/                             # OAuth 基础设施
 
 ## 🔧 使用方式
 
-### 1. 获取 Facebook Token
+### 1. 获取 Facebook 登录凭证
 
 ```dart
 // 在 Widget 中使用
@@ -38,13 +38,14 @@ class MyWidget extends ConsumerWidget {
         final oauthService = ref.read(facebookOAuthServiceProvider);
         
         try {
-          final token = await oauthService.signInWithFacebook();
+          final credential = await oauthService.signInWithFacebook();
           
-          if (token != null) {
-            print('Facebook Token: $token');
-            // 使用 Token 调用后端 API
+          if (credential != null) {
+            // 交由 Repository 根据 credential.type 选择服务端字段：
+            // limited -> authenticationToken，classic -> facebookToken。
+            // 不要记录或展示 credential.token。
           } else {
-            print('用户取消了登录');
+            // 用户取消了登录。
           }
         } catch (e) {
           print('登录失败: $e');
@@ -77,18 +78,18 @@ class RemoteAuthRepository implements AuthRepository {
   final OAuthService _facebookOAuthService;
   
   Future<AuthSession> loginWithFacebook() async {
-    // 1. 获取 Facebook Token
-    final token = await _facebookOAuthService.signInWithFacebook();
+    // 1. 获取 Facebook 凭证
+    final credential = await _facebookOAuthService.signInWithFacebook();
     
-    if (token == null) {
+    if (credential == null) {
       throw Exception('User cancelled login');
     }
     
-    // 2. 使用 Token 调用后端 API
-    final response = await _apiClient.post('/auth/login/oauth', data: {
-      'provider': 'facebook',
-      'accessToken': token,
-    });
+    // 2. 根据凭证类型调用后端 API（真实项目由 OAuthLoginRequestDto 完成）
+    final body = credential.type == FacebookLoginCredentialType.limited
+        ? {'authenticationToken': credential.token}
+        : {'facebookToken': credential.token};
+    final response = await _apiClient.post('/api/user/facebook/login', data: body);
     
     // 3. 返回 AuthSession
     return AuthSession.fromJson(response.data);
@@ -102,7 +103,7 @@ class RemoteAuthRepository implements AuthRepository {
 
 ```dart
 void main() {
-  test('Facebook login returns token', () async {
+  test('Facebook login returns a typed credential', () async {
     // Mock FacebookAuth
     final mockFacebookAuth = MockFacebookAuth();
     when(mockFacebookAuth.login()).thenAnswer((_) async => LoginResult(
@@ -114,8 +115,9 @@ void main() {
     final service = FacebookOAuthService(facebookAuth: mockFacebookAuth);
     
     // 测试
-    final token = await service.signInWithFacebook();
-    expect(token, 'mock-token');
+    final credential = await service.signInWithFacebook();
+    expect(credential?.token, 'mock-token');
+    expect(credential?.type, FacebookLoginCredentialType.classic);
   });
 }
 ```
@@ -133,7 +135,8 @@ context.push('/oauth-debug');
 
 ### 成功情况
 
-- **Facebook**：返回 Access Token（字符串）
+- **Facebook**：返回 `FacebookLoginCredential`；`limited` 使用
+  `authenticationToken`，`classic` 使用 `facebookToken`
 - **Google**：未实现（抛出 UnimplementedError）
 - **Apple**：未实现（抛出 UnimplementedError）
 

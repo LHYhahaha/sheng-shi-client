@@ -315,6 +315,34 @@ void main() {
     },
   );
 
+  test(
+    'retries the original source when the local HLS proxy cannot open',
+    () async {
+      const remoteSource = 'https://cdn.example.test/episode.m3u8';
+      const proxySource =
+          'http://localhost:39000/playlist.m3u8?url=https%3A%2F%2Fcdn.example.test%2Fepisode.m3u8';
+      final session = _FakePlaybackSession(
+        openErrorForSource: (source) => source == proxySource
+            ? StateError('Failed to open $proxySource')
+            : null,
+      );
+      final container = _createContainer(
+        session,
+        sourceRepository: _FixedPlaybackSourceRepository(
+          remoteSource: remoteSource,
+          playableSource: proxySource,
+        ),
+      );
+      final provider = playerPlaybackControllerProvider('single:drama-a:1');
+
+      await container.read(provider.notifier).playItem(_item(1));
+
+      expect(session.openedSources, [proxySource, remoteSource]);
+      expect(container.read(provider).status, PlayerPlaybackStatus.playing);
+      expect(container.read(provider).currentSource, remoteSource);
+    },
+  );
+
   test('window release never disposes the active takeover session', () async {
     final activeSession = _FakePlaybackSession();
     final nearbySession = _FakePlaybackSession();
@@ -4300,6 +4328,43 @@ class _CountingPlaybackSourceRepository
   }
 }
 
+class _FixedPlaybackSourceRepository implements PlayerPlaybackSourceRepository {
+  const _FixedPlaybackSourceRepository({
+    required this.remoteSource,
+    required this.playableSource,
+  });
+
+  final String remoteSource;
+  final String playableSource;
+
+  @override
+  Future<PlaybackSource> resolve(
+    PlayerFeedItem item, {
+    int? maxVideoHeight,
+  }) async => PlaybackSource(
+    itemId: item.id,
+    remoteUrl: remoteSource,
+    playableSource: playableSource,
+    cacheKey: remoteSource,
+    expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+    codecHint: 'hls',
+    status: PlaybackSourceStatus.resolved,
+  );
+
+  @override
+  Future<PlaybackPreloadState> preload(
+    PlayerFeedItem item, {
+    Duration? preferredPosition,
+    int? maxVideoHeight,
+  }) async => PlaybackPreloadState(
+    itemId: item.id,
+    sourceUrl: playableSource,
+    status: PlaybackPreloadStatus.success,
+    startedAt: DateTime.now(),
+    completedAt: DateTime.now(),
+  );
+}
+
 class _SequentialPreloadManager implements PlayerPlaybackPreloadManager {
   final startedItemIds = <String>[];
   final _pending = <_PendingPreload>[];
@@ -4361,6 +4426,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     this.openCompleter,
     this.shouldThrowOnOpen = false,
     this.openError,
+    this.openErrorForSource,
     this.emitWidthOnOpen = true,
     this.positionOnOpen,
     this.emitPositionOnSeek = true,
@@ -4371,6 +4437,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
   final Completer<void>? openCompleter;
   final bool emitWidthOnOpen;
   final Object? openError;
+  final Object? Function(String source)? openErrorForSource;
   final Duration? positionOnOpen;
   final bool emitPositionOnSeek;
   int ignoredSeekPositionEvents;
@@ -4440,7 +4507,7 @@ class _FakePlaybackSession implements PlayerPlaybackSession {
     openHttpHeaders.add(httpHeaders);
     _bufferingController.add(true);
     await (openCompleter?.future ?? Future<void>.value());
-    final error = openError;
+    final error = openErrorForSource?.call(source) ?? openError;
     if (error != null) {
       throw error;
     }

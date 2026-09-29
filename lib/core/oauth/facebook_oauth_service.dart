@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:drama_client/core/logging/app_log.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
@@ -13,7 +12,7 @@ import 'oauth_service.dart';
 /// Facebook OAuth 服务实现。
 ///
 /// 封装 flutter_facebook_auth SDK，处理登录流程和错误。上层只需要调用
-/// [signInWithFacebook] 获取 access token，不需要关心 SDK 细节。
+/// [signInWithFacebook] 获取带类型的登录凭证，不需要关心 SDK 细节。
 class FacebookOAuthService implements OAuthService {
   // 未安装 Facebook App 时会跳到浏览器，用户输入密码、二次验证的时间远超
   // 原先的 15 秒。过早超时会主动关闭 SDK Activity，导致网页已授权却无法回调。
@@ -80,7 +79,7 @@ class FacebookOAuthService implements OAuthService {
   }
 
   @override
-  Future<String?> signInWithFacebook() async {
+  Future<FacebookLoginCredential?> signInWithFacebook() async {
     try {
       debugPrint(
         '[FacebookOAuth] Starting native authorization '
@@ -125,26 +124,11 @@ class FacebookOAuthService implements OAuthService {
               OAuthFailureReason.credentialMissing,
             );
           }
-          if (accessToken is! ClassicToken) {
-            final limitedToken = accessToken as LimitedToken;
-            log(
-              '[FacebookOAuth] Limited Login JWT: '
-              '${limitedToken.tokenString}',
-            );
-            log(
-              '[FacebookOAuth] Limited Login response: '
-              '${jsonEncode(limitedToken.toJson())}',
-            );
-            log(
-              '[FacebookOAuth] Limited Login JWT payload: '
-              '${jsonEncode(decodeJwtPayloadForLogging(limitedToken.tokenString))}',
-            );
-            throw const OAuthException(
-              'facebook',
-              'Limited Facebook login is not supported by this backend.',
-            );
+          if (accessToken is LimitedToken) {
+            // 凭证会发送到后端校验，不能写入客户端日志。
+            debugPrint('[FacebookOAuth] Limited Login credential received.');
           }
-          return accessToken.tokenString;
+          return facebookLoginCredentialFromToken(accessToken);
 
         case LoginStatus.cancelled:
           // 用户取消登录，返回 null
@@ -177,6 +161,27 @@ class FacebookOAuthService implements OAuthService {
       await _resetFacebookLoginState();
       throw OAuthException('facebook', 'Unexpected error during login', error);
     }
+  }
+
+  /// Converts the SDK's concrete token type into the backend request type.
+  @visibleForTesting
+  static FacebookLoginCredential facebookLoginCredentialFromToken(
+    AccessToken accessToken,
+  ) {
+    return switch (accessToken) {
+      LimitedToken() => FacebookLoginCredential.limited(
+        accessToken.tokenString,
+      ),
+      ClassicToken() => FacebookLoginCredential.classic(
+        accessToken.tokenString,
+      ),
+      _ => throw OAuthException(
+        'facebook',
+        'Unsupported Facebook access token type: ${accessToken.runtimeType}',
+        null,
+        OAuthFailureReason.credentialMissing,
+      ),
+    };
   }
 
   Future<void> _resetFacebookLoginState() async {

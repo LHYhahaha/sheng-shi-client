@@ -157,30 +157,50 @@ class RemoteAuthRepository
     );
 
     // 获取 OAuth token
-    String? oauthToken;
+    late OAuthLoginRequestDto oauthRequest;
     try {
       if (_oauthService == null) {
         print(
           '[RemoteAuthRepository] _loginWithOAuth: oauthService is null, using mock token',
         );
-        oauthToken = 'mock-${provider.name}-id-token';
+        final mockToken = 'mock-${provider.name}-id-token';
+        oauthRequest = provider == AuthProviderType.facebook
+            ? OAuthLoginRequestDto.facebook(
+                FacebookLoginCredential.classic(mockToken),
+              )
+            : OAuthLoginRequestDto(provider: provider.name, token: mockToken);
       } else {
         print(
           '[RemoteAuthRepository] _loginWithOAuth: calling OAuth service...',
         );
-        oauthToken = switch (provider) {
-          AuthProviderType.facebook => await _oauthService.signInWithFacebook(),
-          AuthProviderType.google => await _oauthService.signInWithGoogle(),
-          _ => null,
-        };
-
-        if (oauthToken == null) {
-          print('[RemoteAuthRepository] _loginWithOAuth: user cancelled login');
-          throw OAuthLoginCancelledException(provider.name);
+        switch (provider) {
+          case AuthProviderType.facebook:
+            final credential = await _oauthService.signInWithFacebook();
+            if (credential == null) {
+              debugPrint(
+                '[RemoteAuthRepository] _loginWithOAuth: user cancelled login',
+              );
+              throw const OAuthLoginCancelledException('facebook');
+            }
+            oauthRequest = OAuthLoginRequestDto.facebook(credential);
+          case AuthProviderType.google:
+            final token = await _oauthService.signInWithGoogle();
+            if (token == null) {
+              debugPrint(
+                '[RemoteAuthRepository] _loginWithOAuth: user cancelled login',
+              );
+              throw const OAuthLoginCancelledException('google');
+            }
+            oauthRequest = OAuthLoginRequestDto(
+              provider: provider.name,
+              token: token,
+            );
+          default:
+            throw UnsupportedError('Unsupported OAuth provider: $provider');
         }
 
-        print(
-          '[RemoteAuthRepository] _loginWithOAuth: got token: ${oauthToken.substring(0, 20)}...',
+        debugPrint(
+          '[RemoteAuthRepository] _loginWithOAuth: OAuth credential received.',
         );
       }
     } catch (e) {
@@ -190,9 +210,7 @@ class RemoteAuthRepository
 
     // 调用后端登录接口
     print('[RemoteAuthRepository] _loginWithOAuth: calling backend API...');
-    return await _remoteDataSource.loginOAuth(
-      OAuthLoginRequestDto(provider: provider.name, token: oauthToken),
-    );
+    return await _remoteDataSource.loginOAuth(oauthRequest);
   }
 
   Future<AuthSessionDto> _loginWithApple() async {

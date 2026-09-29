@@ -8,6 +8,21 @@ import 'package:drama_client/core/network/api_request_context.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('redacts credential fields from HTTP logs', () {
+    expect(
+      ApiClient.redactForLogging({
+        'authenticationToken': 'limited-login-jwt',
+        'Authorization': 'Bearer app-session-token',
+        'nested': {'refreshToken': 'refresh-token', 'safe': 'value'},
+      }),
+      {
+        'authenticationToken': '[REDACTED]',
+        'Authorization': '[REDACTED]',
+        'nested': {'refreshToken': '[REDACTED]', 'safe': 'value'},
+      },
+    );
+  });
+
   test('all requests include base headers', () async {
     final adapter = _FakeHttpClientAdapter(
       responseData: {

@@ -150,6 +150,46 @@ void main() {
       );
     });
 
+    test('Facebook limited login sends an authentication token', () async {
+      final adapter = _FakeHttpClientAdapter(
+        responseData: _ok(_authSessionJson),
+      );
+      final repository = RemoteAuthRepository(
+        remoteDataSource: AuthRemoteDataSource(apiClient: _apiClient(adapter)),
+        requestContext: _requestContext,
+        oauthService: const _FacebookCredentialOAuthService(
+          FacebookLoginCredential.limited('limited-login-jwt'),
+        ),
+      );
+
+      await repository.login(AuthProviderType.facebook);
+
+      expect(adapter.lastOptions?.path, '/api/user/facebook/login');
+      expect(adapter.lastOptions?.data, {
+        'authenticationToken': 'limited-login-jwt',
+      });
+    });
+
+    test('Facebook classic login sends a Facebook token', () async {
+      final adapter = _FakeHttpClientAdapter(
+        responseData: _ok(_authSessionJson),
+      );
+      final repository = RemoteAuthRepository(
+        remoteDataSource: AuthRemoteDataSource(apiClient: _apiClient(adapter)),
+        requestContext: _requestContext,
+        oauthService: const _FacebookCredentialOAuthService(
+          FacebookLoginCredential.classic('classic-facebook-access-token'),
+        ),
+      );
+
+      await repository.login(AuthProviderType.facebook);
+
+      expect(adapter.lastOptions?.path, '/api/user/facebook/login');
+      expect(adapter.lastOptions?.data, {
+        'facebookToken': 'classic-facebook-access-token',
+      });
+    });
+
     test(
       'Apple OAuth sends the identity token to the Apple login endpoint',
       () async {
@@ -474,7 +514,28 @@ class _AppleCredentialOAuthService implements OAuthService {
       );
 
   @override
-  Future<String?> signInWithFacebook() async => null;
+  Future<FacebookLoginCredential?> signInWithFacebook() async => null;
+
+  @override
+  Future<String?> signInWithGoogle() async => null;
+
+  @override
+  Future<void> signOutFacebook() async {}
+
+  @override
+  Future<void> signOutGoogle() async {}
+}
+
+class _FacebookCredentialOAuthService implements OAuthService {
+  const _FacebookCredentialOAuthService(this.credential);
+
+  final FacebookLoginCredential credential;
+
+  @override
+  Future<AppleLoginCredential?> signInWithApple() async => null;
+
+  @override
+  Future<FacebookLoginCredential?> signInWithFacebook() async => credential;
 
   @override
   Future<String?> signInWithGoogle() async => null;

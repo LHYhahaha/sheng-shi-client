@@ -62,6 +62,23 @@ class PlaybackSource {
   ///
   /// 只用于观测链路，不改变播放权限。
   final PlaybackSourceStatus status;
+
+  /// Creates an equivalent source after the local playback transport changes.
+  ///
+  /// The server URL and all business metadata stay intact; only the address
+  /// handed to the native player changes (for example, proxy -> remote retry).
+  PlaybackSource withPlayableSource(String source) {
+    return PlaybackSource(
+      itemId: itemId,
+      remoteUrl: remoteUrl,
+      playableSource: source,
+      cacheKey: cacheKey,
+      expiresAt: expiresAt,
+      codecHint: codecHint,
+      status: status,
+      httpHeaders: httpHeaders,
+    );
+  }
 }
 
 /// 播放源仓库边界。

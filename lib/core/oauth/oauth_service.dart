@@ -13,10 +13,10 @@ abstract class OAuthService {
     throw UnimplementedError('Google login not implemented yet');
   }
 
-  /// 使用 Facebook 登录，返回 Access Token。
+  /// 使用 Facebook 登录，返回服务端登录所需的凭证及其类型。
   ///
   /// 返回 null 表示用户取消登录。抛出异常表示登录失败。
-  Future<String?> signInWithFacebook();
+  Future<FacebookLoginCredential?> signInWithFacebook();
 
   /// 使用 Apple 登录，返回服务端换取应用会话所需的授权凭证（iOS 专用）。
   ///
@@ -54,6 +54,24 @@ class AppleLoginCredential {
   final String? email;
   final String? fullName;
 }
+
+/// Facebook SDK 返回的登录凭证。
+///
+/// 受限登录和经典登录使用不同的服务端请求字段，不能只将 token 当作字符串传递。
+class FacebookLoginCredential {
+  const FacebookLoginCredential._(this.token, this.type);
+
+  const FacebookLoginCredential.classic(String token)
+    : this._(token, FacebookLoginCredentialType.classic);
+
+  const FacebookLoginCredential.limited(String token)
+    : this._(token, FacebookLoginCredentialType.limited);
+
+  final String token;
+  final FacebookLoginCredentialType type;
+}
+
+enum FacebookLoginCredentialType { classic, limited }
 
 /// OAuth 登录异常。
 enum OAuthFailureReason { sdkError, credentialMissing }

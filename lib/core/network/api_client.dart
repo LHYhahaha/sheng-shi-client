@@ -93,9 +93,9 @@ class ApiClient {
           print('[ApiClient] Full URL: ${options.method} $fullUrl');
           print('[ApiClient] Base URL: ${options.baseUrl}');
           print('[ApiClient] Path: ${options.path}');
-          print('[ApiClient] Headers: ${options.headers}');
+          print('[ApiClient] Headers: ${redactForLogging(options.headers)}');
           if (options.data != null) {
-            print('[ApiClient] Body: ${options.data}');
+            print('[ApiClient] Body: ${redactForLogging(options.data)}');
           }
           print('[ApiClient] Body queryParameters: ${options.queryParameters}');
 
@@ -111,7 +111,7 @@ class ApiClient {
             '[ApiClient] Full URL: ${response.requestOptions.method} $fullUrl',
           );
           print('[ApiClient] Status Code: ${response.statusCode}');
-          print('[ApiClient] Data: ${response.data}');
+          print('[ApiClient] Data: ${redactForLogging(response.data)}');
           print('[ApiClient] ==============================');
           handler.next(response);
         },
@@ -139,6 +139,30 @@ class ApiClient {
   final ApiBusinessErrorListener? _onBusinessError;
 
   Dio get dio => _dio;
+
+  /// Removes credentials from request/response logs without altering traffic.
+  @visibleForTesting
+  static Object? redactForLogging(Object? value) {
+    if (value is Map) {
+      return {
+        for (final entry in value.entries)
+          entry.key: _isSensitiveLogField(entry.key)
+              ? '[REDACTED]'
+              : redactForLogging(entry.value),
+      };
+    }
+    if (value is Iterable) {
+      return value.map(redactForLogging).toList(growable: false);
+    }
+    return value;
+  }
+
+  static bool _isSensitiveLogField(Object? key) {
+    final normalized = key?.toString().toLowerCase() ?? '';
+    return normalized.contains('token') ||
+        normalized.contains('authorization') ||
+        normalized.contains('password');
+  }
 
   /// 获取当前的请求上下文
   ApiRequestContext get requestContext => _readRequestContext();

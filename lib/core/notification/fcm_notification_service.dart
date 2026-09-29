@@ -19,6 +19,39 @@ const _androidNotificationChannel = AndroidNotificationChannel(
   importance: Importance.high,
 );
 
+const _apnsTokenRetryDelay = Duration(milliseconds: 500);
+const _maximumApnsTokenAttempts = 10;
+
+/// Returns an FCM token only after APNs has registered the iOS device.
+///
+/// Firebase Messaging requires the APNs token to be available before an iOS
+/// app requests its FCM token. The bounded wait keeps a broken APNs setup from
+/// delaying the rest of application startup indefinitely.
+Future<String?> getFcmTokenWhenApnsReady({
+  required bool isApplePlatform,
+  required Future<String?> Function() apnsTokenReader,
+  required Future<String?> Function() fcmTokenReader,
+  int maximumApnsTokenAttempts = _maximumApnsTokenAttempts,
+  Duration apnsTokenRetryDelay = _apnsTokenRetryDelay,
+  Future<void> Function(Duration duration)? wait,
+}) async {
+  if (!isApplePlatform) {
+    return fcmTokenReader();
+  }
+
+  final delay = wait ?? Future<void>.delayed;
+  for (var attempt = 0; attempt < maximumApnsTokenAttempts; attempt++) {
+    final apnsToken = await apnsTokenReader();
+    if (apnsToken != null && apnsToken.isNotEmpty) {
+      return fcmTokenReader();
+    }
+    if (attempt + 1 < maximumApnsTokenAttempts) {
+      await delay(apnsTokenRetryDelay);
+    }
+  }
+  return null;
+}
+
 /// FCM 后台消息入口。必须是顶层函数，且在 [main] 中注册。
 @pragma('vm:entry-point')
 Future<void> fcmBackgroundMessageHandler(RemoteMessage message) async {
@@ -183,7 +216,11 @@ class FcmNotificationService {
   /// 获取当前设备的 FCM token，供用户活跃上报等业务接口使用。
   ///
   /// iOS 在 APNs 初始化完成前可能暂时没有 token，因此调用方应能处理 `null`。
-  Future<String?> getPushToken() => _messaging.getToken();
+  Future<String?> getPushToken() => getFcmTokenWhenApnsReady(
+    isApplePlatform: Platform.isIOS,
+    apnsTokenReader: _messaging.getAPNSToken,
+    fcmTokenReader: _messaging.getToken,
+  );
 
   void _listenForTokenRefresh() {
     _tokenRefreshSubscription ??= _messaging.onTokenRefresh.listen(

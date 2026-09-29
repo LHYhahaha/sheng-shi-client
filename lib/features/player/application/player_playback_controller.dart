@@ -2030,7 +2030,7 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
       _logTiming('list entry normal open', itemId: item.id, source: sourceHint);
       final resolveStartedAt = DateTime.now();
       _logTiming('source resolve start', itemId: item.id, source: sourceHint);
-      final playbackSource = await ref
+      var playbackSource = await ref
           .read(playerPlaybackSourceRepositoryProvider)
           .resolve(item, maxVideoHeight: _automaticVideoHeightCap());
       didResolveSource = true;
@@ -2078,26 +2078,52 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
           httpHeaders: playbackSource.httpHeaders,
         );
       } catch (error) {
-        // A route/Video surface teardown can dispose the native Player just
-        // before a user retry reaches open. Do not reuse that session (or its
-        // VideoController): replace it once and retry this exact open. Other
-        // media errors retain the normal failure path below.
-        if (!_isDisposedPlayerError(error) ||
-            !await _replaceDisposedSessionForOpen(generation)) {
-          rethrow;
+        // The local proxy is an acceleration layer, never a prerequisite for
+        // playback. A failure can happen only after it has produced the local
+        // URL (for example when the proxy receives a CDN 403), so the source
+        // resolver cannot catch it. Retry the original server URL once before
+        // entering the normal media-failure path.
+        if (_isLocalHlsProxySource(playbackSource.playableSource) &&
+            playbackSource.remoteUrl != playbackSource.playableSource) {
+          _logTiming(
+            'media open retry with remote source',
+            itemId: item.id,
+            source: playbackSource.remoteUrl,
+            details: 'reason=local_hls_proxy_open_failed error=$error',
+          );
+          await _session.open(
+            playbackSource.remoteUrl,
+            play: _isPlaybackVisible && !_pauseWhenOpenCompletes,
+            start: resumeStart,
+            httpHeaders: playbackSource.httpHeaders,
+          );
+          playbackSource = playbackSource.withPlayableSource(
+            playbackSource.remoteUrl,
+          );
+          _currentPlaybackSource = playbackSource;
+          state = state.copyWith(currentSource: playbackSource.playableSource);
+        } else {
+          // A route/Video surface teardown can dispose the native Player just
+          // before a user retry reaches open. Do not reuse that session (or its
+          // VideoController): replace it once and retry this exact open. Other
+          // media errors retain the normal failure path below.
+          if (!_isDisposedPlayerError(error) ||
+              !await _replaceDisposedSessionForOpen(generation)) {
+            rethrow;
+          }
+          _logTiming(
+            'media open retry with replacement session',
+            itemId: item.id,
+            source: playbackSource.playableSource,
+            details: 'reason=disposed_player',
+          );
+          await _session.open(
+            playbackSource.playableSource,
+            play: _isPlaybackVisible && !_pauseWhenOpenCompletes,
+            start: resumeStart,
+            httpHeaders: playbackSource.httpHeaders,
+          );
         }
-        _logTiming(
-          'media open retry with replacement session',
-          itemId: item.id,
-          source: playbackSource.playableSource,
-          details: 'reason=disposed_player',
-        );
-        await _session.open(
-          playbackSource.playableSource,
-          play: _isPlaybackVisible && !_pauseWhenOpenCompletes,
-          start: resumeStart,
-          httpHeaders: playbackSource.httpHeaders,
-        );
       }
       if (_preferredPlaybackRate != 1.0) {
         await _session.setRate(_preferredPlaybackRate);
@@ -4659,6 +4685,14 @@ class PlayerPlaybackController extends Notifier<PlayerPlaybackState> {
   bool _isDisposedPlayerError(Object error) =>
       error is AssertionError &&
       error.toString().contains('[Player] has been disposed');
+
+  bool _isLocalHlsProxySource(String source) {
+    final uri = Uri.tryParse(source);
+    if (uri == null || uri.scheme != 'http') {
+      return false;
+    }
+    return uri.host == 'localhost' || uri.host == '127.0.0.1';
+  }
 
   Future<void> _replaceCurrentSession(PreparedPlaybackSession prepared) async {
     final previousSession = _session;
